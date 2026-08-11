@@ -44,7 +44,8 @@ public class ExerciseInstanceRepository(
             return [];
 
         var exercises = await Context.ExerciseInstances
-            .Where(i => i.UserId == user.Id && i.Exercise.IsEnabled && i.Exercise.TrainingCourseId == null)
+            .Where(i => i.UserId == user.Id && i.Exercise.IsEnabled &&
+                        i.Exercise.TrainingCourseId == null && i.Exercise.MinimumVisibleRole <= user.Role)
             .ToArrayAsync(token);
 
         await using var transaction = await Context.Database.BeginTransactionAsync(token);
@@ -74,6 +75,7 @@ public class ExerciseInstanceRepository(
             exercise.Id == exerciseId &&
             exercise.IsEnabled &&
             exercise.TrainingCourseId == null &&
+            exercise.MinimumVisibleRole <= user.Role &&
             Context.ExerciseDependencies
                 .Where(dependency => dependency.TargetId == exercise.Id)
                 .All(dependency => Context.ExerciseInstances.Any(instance =>
@@ -514,7 +516,8 @@ public class ExerciseInstanceRepository(
     internal ConfiguredCancelableAsyncEnumerable<int> FetchNewChallenges(UserInfo user,
         CancellationToken token = default)
         => Context.ExerciseChallenges.Where(chal =>
-                chal.IsEnabled && chal.TrainingCourseId == null && !Context.ExerciseInstances.Any(i =>
+                chal.IsEnabled && chal.TrainingCourseId == null && chal.MinimumVisibleRole <= user.Role &&
+                !Context.ExerciseInstances.Any(i =>
                     i.UserId == user.Id && i.ExerciseId == chal.Id) &&
                 Context.ExerciseDependencies
                     .Where(dep => dep.TargetId == chal.Id)

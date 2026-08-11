@@ -50,6 +50,8 @@ public class ExerciseDetailModel
     /// </summary>
     public ChallengeType Type { get; set; } = ChallengeType.StaticAttachment;
 
+    public ExercisePoolSource PoolSource { get; set; }
+
     /// <summary>
     /// Flag context
     /// </summary>
@@ -83,6 +85,7 @@ public class ExerciseDetailModel
             Tags = instance.Exercise.Tags,
             Title = instance.Exercise.Title,
             Type = instance.Exercise.Type,
+            PoolSource = instance.Exercise.PoolSource,
             Attempts = attempts,
             Limit = instance.Exercise.SubmissionLimit > 0 ? instance.Exercise.SubmissionLimit : null,
             Solved = instance.SolveTimeUtc > DateTimeOffset.FromUnixTimeSeconds(0),

@@ -132,6 +132,14 @@ public class OpenApiTests(GZCTFApplicationFactory factory, ITestOutputHelper out
             .TryGetProperty("post", out _));
         Assert.True(paths.GetProperty("/api/open/v1/operations/{id}")
             .TryGetProperty("get", out _));
+        Assert.True(paths.GetProperty("/api/open/v1/training/courses/import")
+            .TryGetProperty("post", out _));
+        Assert.True(paths.GetProperty("/api/open/v1/theory/questions/import")
+            .TryGetProperty("post", out _));
+        Assert.True(paths.GetProperty("/api/open/v1/theory/games/{gameId}/paper")
+            .TryGetProperty("put", out _));
+        Assert.True(paths.GetProperty("/api/open/v1/teams/import")
+            .TryGetProperty("post", out _));
     }
 
     [Fact]
@@ -197,6 +205,9 @@ public class OpenApiTests(GZCTFApplicationFactory factory, ITestOutputHelper out
                 .Select(operation => (Route: path.Name, Method: operation.Name, Operation: operation.Value)))
             .Where(item =>
                 item.Route is "/api/open/v1/images/docker-references" or "/api/open/v1/images/docker-archives" ||
+                item.Route.StartsWith("/api/open/v1/training", StringComparison.Ordinal) ||
+                item.Route.StartsWith("/api/open/v1/theory", StringComparison.Ordinal) ||
+                item.Route.StartsWith("/api/open/v1/teams", StringComparison.Ordinal) ||
                 item.Route.StartsWith("/api/open/v1/teamlab", StringComparison.Ordinal) &&
                 !item.Route.EndsWith("/validate", StringComparison.Ordinal) &&
                 !item.Route.EndsWith("/plan", StringComparison.Ordinal))
@@ -211,7 +222,10 @@ public class OpenApiTests(GZCTFApplicationFactory factory, ITestOutputHelper out
                 parameter.GetProperty("in").GetString() == "header" &&
                 parameter.GetProperty("required").GetBoolean()),
                 $"{write.Method.ToUpperInvariant()} {write.Route} must require Idempotency-Key.");
-            if (write.Route.StartsWith("/api/open/v1/teamlab", StringComparison.Ordinal))
+            if (write.Route.StartsWith("/api/open/v1/teamlab", StringComparison.Ordinal) ||
+                write.Route.StartsWith("/api/open/v1/training", StringComparison.Ordinal) ||
+                write.Route.StartsWith("/api/open/v1/theory", StringComparison.Ordinal) ||
+                write.Route.StartsWith("/api/open/v1/teams", StringComparison.Ordinal))
                 Assert.True(write.Operation.GetProperty("responses").TryGetProperty("202", out _),
                     $"{write.Method.ToUpperInvariant()} {write.Route} must return 202 Accepted.");
         }

@@ -30,11 +30,12 @@ public sealed class ExerciseService(
     public async Task<ExerciseInfoModel[]> GetExerciseListAsync(
         ExerciseFilter? filter,
         CancellationToken token = default,
-        Guid? userId = null)
+        Guid? userId = null,
+        Role role = Role.Student)
     {
         var query = context.ExerciseChallenges
             .AsNoTracking()
-            .Where(e => e.IsEnabled && e.TrainingCourseId == null);
+            .Where(e => e.IsEnabled && e.TrainingCourseId == null && e.MinimumVisibleRole <= role);
 
         if (filter is null)
             return await BuildInfoModels(query, userId).ToArrayAsync(token);
@@ -59,11 +60,19 @@ public sealed class ExerciseService(
         if (filter.Credit.HasValue)
             query = query.Where(e => e.Credit == filter.Credit.Value);
 
+        if (filter.Sources is { Length: > 0 })
+            query = query.Where(e => filter.Sources.Contains(e.PoolSource));
+
         return await BuildInfoModels(query, userId).ToArrayAsync(token);
     }
 
     public async Task<ExerciseDetailModel?> GetExerciseDetailAsync(UserInfo user, int exerciseId, CancellationToken token = default)
     {
+        var visible = await context.ExerciseChallenges.AsNoTracking().AnyAsync(exercise =>
+            exercise.Id == exerciseId && exercise.IsEnabled && exercise.TrainingCourseId == null &&
+            exercise.MinimumVisibleRole <= user.Role, token);
+        if (!visible)
+            return null;
         var instance = await instanceRepository.GetOrCreatePublicInstance(user, exerciseId, token);
         if (instance is null)
             return null;
@@ -220,6 +229,7 @@ public sealed class ExerciseService(
             IsEnabled = e.IsEnabled,
             Tags = e.Tags ?? new(),
             Credit = e.Credit,
+            PoolSource = e.PoolSource,
             AcceptedCount = context.ExerciseInstances.Count(i =>
                 i.ExerciseId == e.Id && i.SolveTimeUtc > DateTimeOffset.FromUnixTimeSeconds(0)),
             SubmissionCount = context.ExerciseSubmissions.Count(submission =>

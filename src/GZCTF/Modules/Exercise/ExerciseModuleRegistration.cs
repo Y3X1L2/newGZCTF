@@ -17,7 +17,8 @@ public static class ExerciseModuleRegistration
         services.AddScoped<IExerciseManagementService, ExerciseManagementService>();
         services.AddScoped<IExerciseMutationSubmissionStore, EfExerciseMutationSubmissionStore>();
         services.AddScoped<ExerciseExternalApplicationService>();
-        services.AddScoped<IApiOperationHandler, ExerciseMutationOperationHandler>();
+        services.AddKeyedScoped<IApiOperationHandler, ExerciseMutationOperationHandler>(
+            ExerciseExternalApplicationService.OperationKind);
         services.AddScoped<IApiOperationResultProvider, ExerciseMutationResultProvider>();
         services.AddScoped<IApiTokenResourceGrantPolicy, ExerciseApiTokenResourceGrantPolicy>();
         return services;

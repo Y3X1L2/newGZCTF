@@ -45,6 +45,8 @@ public class ExerciseInfoModel
     /// </summary>
     public bool Credit { get; set; }
 
+    public ExercisePoolSource PoolSource { get; set; }
+
     /// <summary>
     /// Number of people who solved the exercise
     /// </summary>

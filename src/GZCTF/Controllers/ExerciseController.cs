@@ -25,7 +25,7 @@ public class ExerciseController(
     public async Task<IActionResult> GetExercises([FromQuery] ExerciseFilter? filter, CancellationToken token)
     {
         var user = await CurrentUser();
-        var exercises = await exerciseService.GetExerciseListAsync(filter, token, user.Id);
+        var exercises = await exerciseService.GetExerciseListAsync(filter, token, user.Id, user.Role);
         return Ok(exercises);
     }
 
@@ -104,6 +104,14 @@ public class ExerciseController(
     public async Task<IActionResult> ImportFromGame([FromBody] ExerciseImportFromGameModel model, CancellationToken token)
     {
         var exercises = await managementService.ImportFromGameAsync(model.GameId, model.ChallengeIds, token);
+        return Ok(exercises);
+    }
+
+    [HttpPost("import/training")]
+    [RequireTeacher]
+    public async Task<IActionResult> ImportFromTraining([FromBody] ExerciseImportFromTrainingModel model, CancellationToken token)
+    {
+        var exercises = await managementService.ImportFromTrainingAsync(model.CourseId, model.ChallengeIds, token);
         return Ok(exercises);
     }
 

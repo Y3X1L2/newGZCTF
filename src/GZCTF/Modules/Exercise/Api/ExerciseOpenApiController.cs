@@ -33,6 +33,7 @@ public sealed class ExerciseOpenApiController(
         [FromQuery] string? category,
         [FromQuery] string? difficulty,
         [FromQuery] string? tags,
+        [FromQuery] string? source,
         [FromQuery, Range(1, 100)] int limit = 50,
         CancellationToken cancellationToken = default)
     {
@@ -43,8 +44,9 @@ public sealed class ExerciseOpenApiController(
             Categories = ParseCategories(category),
             Difficulties = ParseDifficulties(difficulty),
             Tags = ParseStringArray(tags),
+            Sources = ParseSources(source),
         };
-        var exercises = await exerciseService.GetExerciseListAsync(filter, cancellationToken);
+        var exercises = await exerciseService.GetExerciseListAsync(filter, cancellationToken, role: Role.Teacher);
         return Ok(new ExerciseExternalPageModel { Items = exercises.Take(limit).Select(toSummary).ToArray() });
     }
 
@@ -170,6 +172,7 @@ public sealed class ExerciseOpenApiController(
         Difficulty = exercise.Difficulty,
         Credit = exercise.Credit,
         Tags = exercise.Tags ?? [],
+        PoolSource = exercise.PoolSource,
         IsEnabled = exercise.IsEnabled,
     };
 
@@ -206,6 +209,7 @@ public sealed class ExerciseOpenApiController(
         Environment = exercise.Environment,
         ImageTemplateId = exercise.ImageTemplateId,
         FlagTemplate = exercise.FlagTemplate,
+        PoolSource = exercise.PoolSource,
         Attachment = toAttachmentModel(exercise.Attachment),
         Flags = (exercise.Flags ?? []).Select(toFlagInfoModel).ToList(),
     };
@@ -247,6 +251,17 @@ public sealed class ExerciseOpenApiController(
             .Select(s => Enum.TryParse<Difficulty>(s.Trim(), ignoreCase: true, out var d) ? d : (Difficulty?)null)
             .Where(d => d.HasValue)
             .Select(d => d!.Value)
+            .ToArray();
+    }
+
+    private static ExercisePoolSource[]? ParseSources(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        return value.Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .Select(item => Enum.TryParse<ExercisePoolSource>(item.Trim(), true, out var source)
+                ? source : (ExercisePoolSource?)null)
+            .Where(source => source.HasValue)
+            .Select(source => source!.Value)
             .ToArray();
     }
 

@@ -87,6 +87,35 @@ public class ApiTokenIssuerTests
     }
 
     [Fact]
+    public async Task IssueAsync_SeparatesAcademicTeacherScopesFromAdminTeamImport()
+    {
+        var teacherIssuer = new ApiTokenIssuer(new InMemoryApiTokenStore(), new ApiTokenSecretHasher());
+        var teacherToken = await teacherIssuer.IssueAsync(
+            new ActorContext(TeacherId, Role.Teacher),
+            new IssueApiTokenCommand(
+                "academic",
+                [ApiTokenScopes.TrainingWrite, ApiTokenScopes.TheoryWrite],
+                [],
+                60,
+                null),
+            CancellationToken.None);
+
+        Assert.Contains(teacherToken.Token.Scopes, grant => grant.Scope == ApiTokenScopes.TrainingWrite);
+        Assert.Contains(teacherToken.Token.Scopes, grant => grant.Scope == ApiTokenScopes.TheoryWrite);
+        await Assert.ThrowsAsync<ApiTokenScopeException>(() => teacherIssuer.IssueAsync(
+            new ActorContext(TeacherId, Role.Teacher),
+            new IssueApiTokenCommand("teams", [ApiTokenScopes.TeamsWrite], [], 60, null),
+            CancellationToken.None));
+
+        var adminIssuer = new ApiTokenIssuer(new InMemoryApiTokenStore(), new ApiTokenSecretHasher());
+        var adminToken = await adminIssuer.IssueAsync(
+            new ActorContext(TeacherId, Role.Admin),
+            new IssueApiTokenCommand("teams", [ApiTokenScopes.TeamsWrite], [], 60, null),
+            CancellationToken.None);
+        Assert.Contains(adminToken.Token.Scopes, grant => grant.Scope == ApiTokenScopes.TeamsWrite);
+    }
+
+    [Fact]
     public async Task ValidateAsync_RejectsTokenAfterCreatorIsDemoted()
     {
         var store = new InMemoryApiTokenStore();

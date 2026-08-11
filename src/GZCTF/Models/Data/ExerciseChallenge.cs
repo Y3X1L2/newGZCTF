@@ -24,6 +24,21 @@ public class ExerciseChallenge : Challenge
     /// </summary>
     public int? TrainingCourseId { get; set; }
 
+    /// <summary>Source classification shown in the public exercise pool.</summary>
+    public ExercisePoolSource PoolSource { get; set; } = ExercisePoolSource.Exercise;
+
+    /// <summary>Original game ID when this entry was collected from a game.</summary>
+    public int? SourceGameId { get; set; }
+
+    /// <summary>Original course ID when this entry was collected from training.</summary>
+    public int? SourceTrainingCourseId { get; set; }
+
+    /// <summary>Original source challenge ID used for idempotent collection.</summary>
+    public int? SourceChallengeId { get; set; }
+
+    /// <summary>Lowest role allowed to browse and run this pool entry.</summary>
+    public Role MinimumVisibleRole { get; set; } = Role.Student;
+
     [JsonIgnore]
     public TrainingCourse? TrainingCourse { get; set; }
 

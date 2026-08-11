@@ -2,6 +2,7 @@ using GZCTF.Modules.Audit;
 using GZCTF.Modules.Content;
 using GZCTF.Modules.Ctf;
 using GZCTF.Modules.Exercise;
+using GZCTF.Modules.Provisioning;
 using GZCTF.Modules.Identity;
 using GZCTF.Modules.TeamLab;
 using GZCTF.Modules.Penetration;
@@ -44,6 +45,7 @@ public static class ModuleRegistration
         services.AddPenetrationModule();
         services.AddTheoryModule();
         services.AddExerciseModule();
+        services.AddProvisioningModule();
         services.AddScoped<TheoryStatisticsProjectionService>();
         services.AddScoped<UserProfileQueryService>();
         services.AddSingleton<RedisDeploymentQueueWakeup>();

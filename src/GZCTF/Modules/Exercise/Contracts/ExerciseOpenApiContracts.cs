@@ -71,6 +71,7 @@ public sealed class ExerciseExternalModel
     public IReadOnlyList<string> Tags { get; set; } = [];
     public IReadOnlyList<string> Hints { get; set; } = [];
     public bool IsEnabled { get; set; }
+    public ExercisePoolSource PoolSource { get; set; }
     public string? ContainerImage { get; set; }
     public int? MemoryLimit { get; set; }
     public int? StorageLimit { get; set; }
@@ -94,6 +95,7 @@ public sealed class ExerciseExternalSummaryModel
     public bool Credit { get; set; }
     public IReadOnlyList<string> Tags { get; set; } = [];
     public bool IsEnabled { get; set; }
+    public ExercisePoolSource PoolSource { get; set; }
 }
 
 public sealed class ExerciseExternalPageModel

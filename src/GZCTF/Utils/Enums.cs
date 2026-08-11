@@ -740,6 +740,18 @@ public enum Difficulty : byte
 }
 
 /// <summary>
+/// Origin of a public exercise-pool entry. Source challenges are copied into the
+/// pool so their original game/course lifecycle remains isolated.
+/// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter<ExercisePoolSource>))]
+public enum ExercisePoolSource : byte
+{
+    Exercise = 0,
+    Game = 1,
+    Training = 2
+}
+
+/// <summary>
 /// Container network mode
 /// </summary>
 [JsonConverter(typeof(JsonStringEnumConverter<NetworkMode>))]

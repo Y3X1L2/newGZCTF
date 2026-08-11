@@ -75,6 +75,7 @@ export interface ExerciseInfoDto {
   solved: boolean
   userAcceptedCount: number
   userSubmissionCount: number
+  poolSource?: 'Exercise' | 'Game' | 'Training'
 }
 
 async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {

@@ -12,8 +12,9 @@
 Authorization: Bearer gzctf_pat_...
 ```
 
-Token 必须包含接口要求的 scope。资源授权可进一步限制到具体比赛、镜像或
-TeamLab 资源。平台不会因为调用者拥有写 scope 而绕过资源授权。
+Token 必须包含接口要求的 scope。资源授权可进一步限制到具体比赛、镜像、
+练习、培训、理论题库、战队或 TeamLab 资源。平台不会因为调用者拥有写 scope
+而绕过资源授权。
 
 ## 2. 幂等异步操作
 
@@ -212,9 +213,10 @@ curl "$GZCTF_BASE_URL/operations/$OPERATION_ID" \
 
 导入体为 `{ "items": [...] }`，每项必须有 `externalId`、`title`、`content`、
 `category`、`type`、`difficulty`；`flags` 最多 100 个，支持多 Flag。附件只能使用
-`attachment.remoteUrl`（http/https），Open API 不接收 multipart 题目附件；平台服务端
-会下载并复制远程内容。动态容器使用 `flagTemplate`，容器字段按 DTO/OpenAPI schema
-填写。`externalId` 只用于导入结果关联，不是平台主键。
+`attachment.remoteUrl`（http/https），Open API 不接收 multipart 题目附件；每道题
+保存独立的远程附件元数据，不与比赛或课程题目共享附件实体。动态容器使用
+`flagTemplate`，容器字段按 DTO/OpenAPI schema 填写。`externalId` 只用于导入结果
+关联，不是平台主键。
 
 ## 6.2 Token 责任与审计
 
@@ -223,6 +225,57 @@ Token 由平台管理员/教师在现有 API Token 管理界面签发，明文�
 Token ID、scope、resource grant、请求路由、IP 摘要、traceId、operationId 和幂等命中
 会写入 `ExternalApiRequestAudit`，因此管理员可按 Token 和创建者追溯“谁在何时上传了
 哪一批题”。Authorization 值、Flag 和附件内容不会写入审计日志。
+
+## 6.3 培训、理论和战队导入
+
+这些接口与 Exercise 一样使用持久化 `ApiOperation`，写请求必须携带稳定的
+`Idempotency-Key`，并通过 `/api/open/v1/operations/{operationId}` 轮询终态。
+
+| 方法 | 路径 | Scope | Resource grant | 角色 |
+|---|---|---|---|---|
+| POST | `/api/open/v1/training/courses/import` | `training:write` | `training-course:*` | Teacher+ |
+| POST | `/api/open/v1/theory/questions/import` | `theory:write` | `theory-bank:*` | Teacher+ |
+| PUT | `/api/open/v1/theory/games/{gameId}/paper` | `theory:write` | `game:{gameId}` | Teacher+ 且有比赛管理权 |
+| POST | `/api/open/v1/teams/import` | `teams:write` | `team:*` | Admin |
+
+培训导入体为 `{ "items": [...] }`，单批 1-50 门课程。每门课程使用稳定
+`externalId`，可一次携带 `chapters`、`exercises`、`theoryQuestions` 和
+`theoryPapers`；子项通过 `externalId`、`parentExternalId`、
+`chapterExternalId` 和 `sourceQuestionExternalId` 建立批次内引用。Token 创建者
+成为课程 Owner。Docker 实验必须引用平台中状态为 Ready、`registryUrl` 与
+`containerImage` 完全一致的镜像模板；Windows VM 使用 Ready 的
+`imageTemplateId`。附件只允许绝对 HTTP/HTTPS URL。
+
+理论题库导入体示例：
+
+```json
+{"items":[{
+  "externalId":"theory-web-001",
+  "type":"SingleChoice",
+  "bankName":"Web 基础",
+  "title":"HTTP 状态码",
+  "content":"哪个状态码表示资源不存在？",
+  "options":["200","301","404","500"],
+  "answerIndexes":[2],
+  "tags":["HTTP"]
+}]}
+```
+
+理论试卷接口对现有 Theory/Mixed 比赛执行全量替换；每题可直接提供题目字段，
+也可带 `sourceQuestionId` 记录题库来源。已存在提交答卷的试卷不能替换。战队导入
+按 `userId`、`userName` 或两者共同解析现有用户，不创建账号；两者同时提供时必须
+指向同一用户，队长最多拥有三支战队。
+
+成功 operation 的 `result.items` 为：
+
+```json
+[{"externalId":"caller-id","resourceType":"training-course","resourceId":"42","action":"created"}]
+```
+
+不同导入类型还会返回 `training-chapter`、`training-exercise`、
+`training-theory-question`、`training-theory-paper`、`theory-question`、
+`theory-paper` 或 `team` 资源类型。调用方必须保存该映射；`externalId` 不会替代
+平台主键，重复提交必须复用原幂等键。
 
 ## 7. TeamLab 组网 API
 

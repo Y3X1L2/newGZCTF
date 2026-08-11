@@ -7,13 +7,2024 @@
     "version": "v1"
   },
   "paths": {
+    "/api/open/v1/teamlab/preparations/releases/{releaseId}": {
+      "get": {
+        "tags": [
+          "TeamLab - Image Preparation"
+        ],
+        "summary": "获取镜像准备状态",
+        "description": "返回发布版本的就绪投影：planAvailable/preparing/readyToStart/blocked 与按模板统计的节点就绪计数。",
+        "operationId": "OpenTeamLabImagePreparations_Get",
+        "parameters": [
+          {
+            "name": "releaseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamLabReleasePreparationModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "TeamLab - Image Preparation"
+        ],
+        "summary": "提交镜像准备",
+        "description": "幂等提交发布版本的镜像预分发，适用于发布后或失败后的显式重试。",
+        "operationId": "OpenTeamLabImagePreparations_Queue",
+        "parameters": [
+          {
+            "name": "releaseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "Idempotency-Key",
+            "x-originalName": "idempotencyKey",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiOperationModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/teamlab/rollouts": {
+      "get": {
+        "tags": [
+          "TeamLab - Rollouts"
+        ],
+        "summary": "列出 TeamLab rollouts",
+        "description": "列出单个已授权 control scope 内的外部 rollouts",
+        "operationId": "OpenTeamLabRollouts_List",
+        "parameters": [
+          {
+            "name": "scopeId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 50,
+              "maximum": 100.0,
+              "minimum": 1.0
+            },
+            "x-position": 2
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "nullable": true
+            },
+            "x-position": 3
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamLabRolloutPageModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "TeamLab - Rollouts"
+        ],
+        "summary": "创建 TeamLab rollout",
+        "description": "基于不可变 release 与 target 快照创建外部 rollout",
+        "operationId": "OpenTeamLabRollouts_Create",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "x-originalName": "idempotencyKey",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "requestBody": {
+          "x-name": "model",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTeamLabRolloutModel"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "400": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiOperationModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/teamlab/rollouts/{rolloutId}": {
+      "get": {
+        "tags": [
+          "TeamLab - Rollouts"
+        ],
+        "summary": "获取 TeamLab rollout",
+        "description": "返回 rollout 状态、target 数量与生命周期时间戳",
+        "operationId": "OpenTeamLabRollouts_Get",
+        "parameters": [
+          {
+            "name": "rolloutId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamLabRolloutModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/teamlab/rollouts/{rolloutId}/targets": {
+      "get": {
+        "tags": [
+          "TeamLab - Rollouts"
+        ],
+        "summary": "列出 rollout targets",
+        "description": "使用稳定 cursor 返回 target 状态",
+        "operationId": "OpenTeamLabRollouts_Targets",
+        "parameters": [
+          {
+            "name": "rolloutId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 50,
+              "maximum": 100.0,
+              "minimum": 1.0
+            },
+            "x-position": 2
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "nullable": true
+            },
+            "x-position": 3
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamLabRolloutTargetPageModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "TeamLab - Rollouts"
+        ],
+        "summary": "替换 rollout targets",
+        "description": "替换期望的 target 快照；被移除的 targets 在显式清理前保持不变",
+        "operationId": "OpenTeamLabRollouts_ReplaceTargets",
+        "parameters": [
+          {
+            "name": "rolloutId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "Idempotency-Key",
+            "x-originalName": "idempotencyKey",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 3
+          }
+        ],
+        "requestBody": {
+          "x-name": "model",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplaceTeamLabRolloutTargetsModel"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 2
+        },
+        "responses": {
+          "400": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiOperationModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/teamlab/rollouts/{rolloutId}/prepare": {
+      "post": {
+        "tags": [
+          "TeamLab - Rollouts"
+        ],
+        "summary": "准备 TeamLab rollout",
+        "description": "启动 image 准备与 target 供给协调",
+        "operationId": "OpenTeamLabRollouts_Prepare",
+        "parameters": [
+          {
+            "name": "rolloutId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "Idempotency-Key",
+            "x-originalName": "idempotencyKey",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiOperationModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/teamlab/rollouts/{rolloutId}/open-access": {
+      "post": {
+        "tags": [
+          "TeamLab - Rollouts"
+        ],
+        "summary": "打开 rollout 访问",
+        "description": "仅在所有期望 targets 就绪后开放玩家访问",
+        "operationId": "OpenTeamLabRollouts_OpenAccess",
+        "parameters": [
+          {
+            "name": "rolloutId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "Idempotency-Key",
+            "x-originalName": "idempotencyKey",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiOperationModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/teamlab/rollouts/{rolloutId}/close-access": {
+      "post": {
+        "tags": [
+          "TeamLab - Rollouts"
+        ],
+        "summary": "关闭 rollout 访问",
+        "description": "关闭玩家访问而不销毁 rollout",
+        "operationId": "OpenTeamLabRollouts_CloseAccess",
+        "parameters": [
+          {
+            "name": "rolloutId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "Idempotency-Key",
+            "x-originalName": "idempotencyKey",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiOperationModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/teamlab/rollouts/{rolloutId}/drain": {
+      "post": {
+        "tags": [
+          "TeamLab - Rollouts"
+        ],
+        "summary": "清理 TeamLab rollout",
+        "description": "关闭访问并按有界批次销毁所有 target runtimes",
+        "operationId": "OpenTeamLabRollouts_Drain",
+        "parameters": [
+          {
+            "name": "rolloutId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "Idempotency-Key",
+            "x-originalName": "idempotencyKey",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiOperationModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/teamlab/rollouts/{rolloutId}/targets/{targetId}/rebuild": {
+      "post": {
+        "tags": [
+          "TeamLab - Rollouts"
+        ],
+        "summary": "重建失败的 rollout target",
+        "description": "请求显式重建单个失败的 target",
+        "operationId": "OpenTeamLabRollouts_Rebuild",
+        "parameters": [
+          {
+            "name": "rolloutId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "targetId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 2
+          },
+          {
+            "name": "Idempotency-Key",
+            "x-originalName": "idempotencyKey",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 3
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiOperationModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/teamlab/rollouts/{rolloutId}/targets/{targetId}/pause": {
+      "post": {
+        "tags": [
+          "TeamLab - Rollouts"
+        ],
+        "summary": "暂停单个 rollout target",
+        "description": "在原节点上挂起该 target 的运行时，保留运行时身份、网络与容量预留",
+        "operationId": "OpenTeamLabRollouts_PauseTarget",
+        "parameters": [
+          {
+            "name": "rolloutId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "targetId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 2
+          },
+          {
+            "name": "Idempotency-Key",
+            "x-originalName": "idempotencyKey",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 3
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiOperationModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/teamlab/rollouts/{rolloutId}/targets/{targetId}/resume": {
+      "post": {
+        "tags": [
+          "TeamLab - Rollouts"
+        ],
+        "summary": "恢复单个 rollout target",
+        "description": "仅在原始分配节点上恢复该 target 的运行时",
+        "operationId": "OpenTeamLabRollouts_ResumeTarget",
+        "parameters": [
+          {
+            "name": "rolloutId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "targetId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 2
+          },
+          {
+            "name": "Idempotency-Key",
+            "x-originalName": "idempotencyKey",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 3
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiOperationModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/teamlab/rollouts/{rolloutId}/targets/{targetId}/restart": {
+      "post": {
+        "tags": [
+          "TeamLab - Rollouts"
+        ],
+        "summary": "重启单个 rollout target",
+        "description": "按原发布版本受控清理并重新部署该 target 的运行时",
+        "operationId": "OpenTeamLabRollouts_RestartTarget",
+        "parameters": [
+          {
+            "name": "rolloutId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "targetId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 2
+          },
+          {
+            "name": "Idempotency-Key",
+            "x-originalName": "idempotencyKey",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 3
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiOperationModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/teamlab/rollouts/{rolloutId}/pause": {
+      "post": {
+        "tags": [
+          "TeamLab - Rollouts"
+        ],
+        "summary": "暂停 TeamLab rollout",
+        "description": "暂停 rollout 协调，已提交的目标与运行时保持不变",
+        "operationId": "OpenTeamLabRollouts_Pause",
+        "parameters": [
+          {
+            "name": "rolloutId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "Idempotency-Key",
+            "x-originalName": "idempotencyKey",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiOperationModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/teamlab/rollouts/{rolloutId}/resume": {
+      "post": {
+        "tags": [
+          "TeamLab - Rollouts"
+        ],
+        "summary": "恢复 TeamLab rollout",
+        "description": "从暂停状态恢复 rollout 协调",
+        "operationId": "OpenTeamLabRollouts_Resume",
+        "parameters": [
+          {
+            "name": "rolloutId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "Idempotency-Key",
+            "x-originalName": "idempotencyKey",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiOperationModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/teamlab/rollouts/{rolloutId}/archive": {
+      "post": {
+        "tags": [
+          "TeamLab - Rollouts"
+        ],
+        "summary": "归档 TeamLab rollout",
+        "description": "归档已完全清理的 rollout 并保留只读历史",
+        "operationId": "OpenTeamLabRollouts_Archive",
+        "parameters": [
+          {
+            "name": "rolloutId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "Idempotency-Key",
+            "x-originalName": "idempotencyKey",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiOperationModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
     "/api/open/v1/teamlab/runtimes": {
       "post": {
         "tags": [
           "TeamLab - Runtimes"
         ],
-        "summary": "Create a runtime",
-        "description": "Queues deployment of a released topology for one team or automation owner.",
+        "summary": "创建运行时",
+        "description": "为单个队伍或自动化属主提交已发布拓扑版本的部署任务。",
         "operationId": "OpenTeamLabRuntimes_Create",
         "parameters": [
           {
@@ -123,8 +2134,8 @@
         "tags": [
           "TeamLab - Runtimes"
         ],
-        "summary": "Get a runtime",
-        "description": "Returns the aggregated runtime, shard, network, and asset state.",
+        "summary": "获取运行时",
+        "description": "返回聚合的运行时、分片、网络与资产状态。",
         "operationId": "OpenTeamLabRuntimes_Get",
         "parameters": [
           {
@@ -220,8 +2231,8 @@
         "tags": [
           "TeamLab - Runtimes"
         ],
-        "summary": "Destroy a runtime",
-        "description": "Queues cleanup of all runtime shards, assets, routes, captures, and access grants.",
+        "summary": "销毁运行时",
+        "description": "提交清理运行时的所有分片、资产、路由、抓包与访问授权。",
         "operationId": "OpenTeamLabRuntimes_Destroy",
         "parameters": [
           {
@@ -329,8 +2340,8 @@
         "tags": [
           "TeamLab - Runtimes"
         ],
-        "summary": "Reset a runtime",
-        "description": "Queues a controlled cleanup and redeployment using the runtime release and optional overlays.",
+        "summary": "重置运行时",
+        "description": "按运行时的发布版本与可选覆盖配置提交受控清理并重新部署。",
         "operationId": "OpenTeamLabRuntimes_Reset",
         "parameters": [
           {
@@ -445,13 +2456,231 @@
         ]
       }
     },
+    "/api/open/v1/teamlab/runtimes/{runtimeId}/pause": {
+      "post": {
+        "tags": [
+          "TeamLab - Runtimes"
+        ],
+        "summary": "暂停运行时",
+        "description": "在原节点上挂起工作负载，同时保留运行时身份、网络、磁盘、地址、访问状态与容量预留。",
+        "operationId": "OpenTeamLabRuntimes_Pause",
+        "parameters": [
+          {
+            "name": "runtimeId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "Idempotency-Key",
+            "x-originalName": "idempotencyKey",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiOperationModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/teamlab/runtimes/{runtimeId}/resume": {
+      "post": {
+        "tags": [
+          "TeamLab - Runtimes"
+        ],
+        "summary": "恢复运行时",
+        "description": "仅在原始分配节点上恢复，不会重新调度或下载镜像；原节点不可用时返回 resume_blocked。",
+        "operationId": "OpenTeamLabRuntimes_Resume",
+        "parameters": [
+          {
+            "name": "runtimeId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "Idempotency-Key",
+            "x-originalName": "idempotencyKey",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiOperationModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
     "/api/open/v1/teamlab/runtimes/{runtimeId}/events": {
       "get": {
         "tags": [
           "TeamLab - Runtimes"
         ],
-        "summary": "List runtime events",
-        "description": "Returns cursor-paginated lifecycle and deployment events for troubleshooting and audit.",
+        "summary": "列出运行时事件",
+        "description": "返回 cursor 分页的生命周期与部署事件，用于排障与审计。",
         "operationId": "OpenTeamLabRuntimes_Events",
         "parameters": [
           {
@@ -484,6 +2713,25 @@
               "minimum": 1.0
             },
             "x-position": 3
+          },
+          {
+            "name": "generation",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "nullable": true
+            },
+            "x-position": 4
+          },
+          {
+            "name": "stage",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "nullable": true
+            },
+            "x-position": 5
           }
         ],
         "responses": {
@@ -570,8 +2818,8 @@
         "tags": [
           "TeamLab - Runtimes"
         ],
-        "summary": "Create a WireGuard access grant",
-        "description": "Queues creation of a short-lived, single-download player access configuration.",
+        "summary": "创建 WireGuard 访问授权",
+        "description": "提交创建短时效、单次下载的玩家访问配置。",
         "operationId": "OpenTeamLabRuntimes_CreateAccessGrant",
         "parameters": [
           {
@@ -691,8 +2939,8 @@
         "tags": [
           "TeamLab - Runtimes"
         ],
-        "summary": "Download an access configuration",
-        "description": "Consumes the one-time download token and returns the WireGuard configuration file.",
+        "summary": "下载访问配置",
+        "description": "消耗一次性下载 token 并返回 WireGuard 配置文件。",
         "operationId": "OpenTeamLabRuntimes_DownloadAccessConfiguration",
         "parameters": [
           {
@@ -801,8 +3049,8 @@
         "tags": [
           "TeamLab - Runtimes"
         ],
-        "summary": "Revoke an access grant",
-        "description": "Queues revocation and cleanup of an existing runtime access grant.",
+        "summary": "撤销访问授权",
+        "description": "提交撤销并清理现有的运行时访问授权。",
         "operationId": "OpenTeamLabRuntimes_RevokeAccessGrant",
         "parameters": [
           {
@@ -915,13 +3163,281 @@
         ]
       }
     },
+    "/api/open/v1/teamlab/scopes": {
+      "get": {
+        "tags": [
+          "TeamLab - Control scopes"
+        ],
+        "summary": "List TeamLab control scopes",
+        "description": "Lists only scopes granted to the current token, unless the token carries a wildcard teamlab-scope grant.",
+        "operationId": "OpenTeamLabScopes_List",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TeamLabControlScopeModel"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "TeamLab - Control scopes"
+        ],
+        "summary": "Create a TeamLab control scope",
+        "description": "Creates an external resource boundary. Only API tokens created by administrators may create scopes.",
+        "operationId": "OpenTeamLabScopes_Create",
+        "requestBody": {
+          "x-name": "model",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTeamLabControlScopeModel"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamLabControlScopeModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/teamlab/service-profiles": {
+      "get": {
+        "tags": [
+          "TeamLab - Service Profiles"
+        ],
+        "summary": "列出服务目录",
+        "description": "返回 cursor 分页的已发布服务目录条目及其参数概览。",
+        "operationId": "OpenTeamLabServiceProfiles_List",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 50,
+              "maximum": 100.0,
+              "minimum": 1.0
+            },
+            "x-position": 1
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "nullable": true
+            },
+            "x-position": 2
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamLabServiceProfilePageModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/teamlab/service-profiles/{profileId}": {
+      "get": {
+        "tags": [
+          "TeamLab - Service Profiles"
+        ],
+        "summary": "获取服务目录条目",
+        "description": "返回单个服务目录条目的参数 schema、默认值与执行特性；绝不包含脚本内容或密钥值。可通过 version 查询历史版本 schema。",
+        "operationId": "OpenTeamLabServiceProfiles_Get",
+        "parameters": [
+          {
+            "name": "profileId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "version",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "maximum": 2147483647.0,
+              "minimum": 1.0,
+              "nullable": true
+            },
+            "x-position": 2
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamLabServiceProfileDetailModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
     "/api/open/v1/teamlab/capabilities": {
       "get": {
         "tags": [
           "TeamLab - Topologies"
         ],
-        "summary": "Get TeamLab capabilities",
-        "description": "Returns the topology schema and feature capabilities supported by this platform version.",
+        "summary": "获取 TeamLab 能力",
+        "description": "返回本平台版本支持的拓扑 schema 与功能能力。",
         "operationId": "OpenTeamLabTopologies_Capabilities",
         "responses": {
           "400": {
@@ -1007,8 +3523,8 @@
         "tags": [
           "TeamLab - Topologies"
         ],
-        "summary": "Create a topology",
-        "description": "Queues creation of a reusable TeamLab topology draft.",
+        "summary": "创建拓扑",
+        "description": "提交创建可复用的 TeamLab 拓扑草稿。",
         "operationId": "OpenTeamLabTopologies_Create",
         "parameters": [
           {
@@ -1116,8 +3632,8 @@
         "tags": [
           "TeamLab - Topologies"
         ],
-        "summary": "List topologies",
-        "description": "Returns a cursor-paginated list of topologies visible to the current API token owner.",
+        "summary": "列出拓扑",
+        "description": "返回当前 API token 属主可见的 cursor 分页拓扑列表。",
         "operationId": "OpenTeamLabTopologies_List",
         "parameters": [
           {
@@ -1226,8 +3742,8 @@
         "tags": [
           "TeamLab - Topologies"
         ],
-        "summary": "Get a topology",
-        "description": "Returns the complete editable topology definition.",
+        "summary": "获取拓扑",
+        "description": "返回完整的可编辑拓扑定义。",
         "operationId": "OpenTeamLabTopologies_Get",
         "parameters": [
           {
@@ -1323,8 +3839,8 @@
         "tags": [
           "TeamLab - Topologies"
         ],
-        "summary": "Update a topology",
-        "description": "Queues replacement of the editable topology definition.",
+        "summary": "更新拓扑",
+        "description": "提交替换可编辑的拓扑定义。",
         "operationId": "OpenTeamLabTopologies_Update",
         "parameters": [
           {
@@ -1442,8 +3958,8 @@
         "tags": [
           "TeamLab - Topologies"
         ],
-        "summary": "Delete a topology",
-        "description": "Queues deletion of a topology that is no longer in use.",
+        "summary": "删除拓扑",
+        "description": "提交删除不再使用的拓扑。",
         "operationId": "OpenTeamLabTopologies_Delete",
         "parameters": [
           {
@@ -1551,8 +4067,8 @@
         "tags": [
           "TeamLab - Topologies"
         ],
-        "summary": "Validate a topology",
-        "description": "Validates topology structure, addressing, connectivity, assets, and deployment constraints without publishing it.",
+        "summary": "校验拓扑",
+        "description": "在不发布的情况下校验拓扑结构、寻址、连通性、资产与部署约束。",
         "operationId": "OpenTeamLabTopologies_Validate",
         "parameters": [
           {
@@ -1650,8 +4166,8 @@
         "tags": [
           "TeamLab - Topologies"
         ],
-        "summary": "Publish a topology release",
-        "description": "Validates and queues creation of an immutable topology release for runtime deployment.",
+        "summary": "发布拓扑版本",
+        "description": "校验并提交创建用于运行时部署的不可变拓扑版本。",
         "operationId": "OpenTeamLabTopologies_Publish",
         "parameters": [
           {
@@ -1769,8 +4285,8 @@
         "tags": [
           "TeamLab - Topologies"
         ],
-        "summary": "List topology releases",
-        "description": "Returns immutable releases for a topology using cursor pagination.",
+        "summary": "列出拓扑版本",
+        "description": "使用 cursor 分页返回拓扑的不可变版本列表。",
         "operationId": "OpenTeamLabTopologies_ListReleases",
         "parameters": [
           {
@@ -1889,8 +4405,8 @@
         "tags": [
           "TeamLab - Topologies"
         ],
-        "summary": "Get a topology release",
-        "description": "Returns one immutable topology release and its compiled definition.",
+        "summary": "获取拓扑版本",
+        "description": "返回一个不可变拓扑版本及其编译后的定义。",
         "operationId": "OpenTeamLabTopologies_GetRelease",
         "parameters": [
           {
@@ -1998,8 +4514,8 @@
         "tags": [
           "TeamLab - Topologies"
         ],
-        "summary": "Plan runtime placement",
-        "description": "Builds a deployment plan for the release without creating runtime resources.",
+        "summary": "规划运行时部署",
+        "description": "在不创建运行时资源的情况下为版本构建部署计划。",
         "operationId": "OpenTeamLabTopologies_Plan",
         "parameters": [
           {
@@ -2107,8 +4623,8 @@
         "tags": [
           "TeamLab - Traffic and Captures"
         ],
-        "summary": "List traffic flows",
-        "description": "Returns cursor-paginated, runtime-scoped flow metadata collected from the TeamLab data plane.",
+        "summary": "列出流量记录",
+        "description": "返回由 TeamLab 数据平面采集的 cursor 分页、运行时范围的流量元数据。",
         "operationId": "OpenTeamLabTraffic_GetFlows",
         "parameters": [
           {
@@ -2141,6 +4657,33 @@
               "minimum": 1.0
             },
             "x-position": 3
+          },
+          {
+            "name": "query",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "nullable": true
+            },
+            "x-position": 4
+          },
+          {
+            "name": "protocol",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "nullable": true
+            },
+            "x-position": 5
+          },
+          {
+            "name": "networkKey",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "nullable": true
+            },
+            "x-position": 6
           }
         ],
         "responses": {
@@ -2227,8 +4770,8 @@
         "tags": [
           "TeamLab - Traffic and Captures"
         ],
-        "summary": "List correlated traffic paths",
-        "description": "Returns end-to-end traffic path correlations across participating assets and network segments.",
+        "summary": "列出关联流量路径",
+        "description": "返回跨参与资产与网段的端到端流量路径关联。",
         "operationId": "OpenTeamLabTraffic_GetPaths",
         "parameters": [
           {
@@ -2261,6 +4804,33 @@
               "minimum": 1.0
             },
             "x-position": 3
+          },
+          {
+            "name": "query",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "nullable": true
+            },
+            "x-position": 4
+          },
+          {
+            "name": "protocol",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "nullable": true
+            },
+            "x-position": 5
+          },
+          {
+            "name": "confidence",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "nullable": true
+            },
+            "x-position": 6
           }
         ],
         "responses": {
@@ -2347,8 +4917,8 @@
         "tags": [
           "TeamLab - Traffic and Captures"
         ],
-        "summary": "Get a traffic path",
-        "description": "Returns the ordered hops and evidence for one correlated traffic path.",
+        "summary": "获取流量路径",
+        "description": "返回一条关联流量路径的有序跳点与证据。",
         "operationId": "OpenTeamLabTraffic_GetPath",
         "parameters": [
           {
@@ -2456,8 +5026,8 @@
         "tags": [
           "TeamLab - Traffic and Captures"
         ],
-        "summary": "Start a packet capture",
-        "description": "Queues a bounded packet capture for selected runtime shards or network segments.",
+        "summary": "开始抓包",
+        "description": "为选定的运行时分片或网段提交有上限的抓包任务。",
         "operationId": "OpenTeamLabTraffic_StartCapture",
         "parameters": [
           {
@@ -2577,8 +5147,8 @@
         "tags": [
           "TeamLab - Traffic and Captures"
         ],
-        "summary": "Get packet capture status",
-        "description": "Returns capture scope, limits, progress, artifact state, and retention metadata.",
+        "summary": "获取抓包状态",
+        "description": "返回抓包范围、限额、进度、产物状态与保留元数据。",
         "operationId": "OpenTeamLabTraffic_GetCapture",
         "parameters": [
           {
@@ -2686,8 +5256,8 @@
         "tags": [
           "TeamLab - Traffic and Captures"
         ],
-        "summary": "Stop a packet capture",
-        "description": "Queues an early stop and finalization of a running packet capture.",
+        "summary": "停止抓包",
+        "description": "提交提前停止并归档正在运行的抓包任务。",
         "operationId": "OpenTeamLabTraffic_StopCapture",
         "parameters": [
           {
@@ -2805,8 +5375,8 @@
         "tags": [
           "TeamLab - Traffic and Captures"
         ],
-        "summary": "Download a packet capture",
-        "description": "Streams the finalized runtime capture archive.",
+        "summary": "下载抓包文件",
+        "description": "流式返回已完成的运行时抓包归档文件。",
         "operationId": "OpenTeamLabTraffic_DownloadCapture",
         "parameters": [
           {
@@ -2902,6 +5472,769 @@
         ]
       }
     },
+    "/api/open/v1/teamlab/webhooks": {
+      "post": {
+        "tags": [
+          "TeamLab - Webhooks"
+        ],
+        "summary": "创建 webhook 订阅",
+        "description": "在指定控制范围内创建 https 端点的事件通知订阅；端点必须可公网解析。",
+        "operationId": "OpenTeamLabWebhooks_Create",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "x-originalName": "idempotencyKey",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "requestBody": {
+          "x-name": "model",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTeamLabWebhookModel"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "400": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiOperationModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      },
+      "get": {
+        "tags": [
+          "TeamLab - Webhooks"
+        ],
+        "summary": "列出 webhook 订阅",
+        "description": "按控制范围返回 cursor 分页的订阅列表。",
+        "operationId": "OpenTeamLabWebhooks_List",
+        "parameters": [
+          {
+            "name": "scopeId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 50,
+              "maximum": 100.0,
+              "minimum": 1.0
+            },
+            "x-position": 2
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "nullable": true
+            },
+            "x-position": 3
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamLabWebhookPageModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/teamlab/webhooks/{webhookId}": {
+      "get": {
+        "tags": [
+          "TeamLab - Webhooks"
+        ],
+        "summary": "获取 webhook 订阅",
+        "description": "返回订阅详情与最近投递失败记录；签名密钥永不返回。",
+        "operationId": "OpenTeamLabWebhooks_Get",
+        "parameters": [
+          {
+            "name": "webhookId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamLabWebhookModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "TeamLab - Webhooks"
+        ],
+        "summary": "撤销 webhook 订阅",
+        "description": "停止后续投递；已排队投递不会回滚。",
+        "operationId": "OpenTeamLabWebhooks_Revoke",
+        "parameters": [
+          {
+            "name": "webhookId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "Idempotency-Key",
+            "x-originalName": "idempotencyKey",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiOperationModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/teamlab/webhooks/{webhookId}/replay": {
+      "post": {
+        "tags": [
+          "TeamLab - Webhooks"
+        ],
+        "summary": "重放 webhook 事件",
+        "description": "从指定事件 ID 重新投递不可变信封；不推进投递游标，也不会创建新的运行时操作。",
+        "operationId": "OpenTeamLabWebhooks_Replay",
+        "parameters": [
+          {
+            "name": "webhookId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "fromEventId",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "maximum": 9223372036854780000.0,
+              "minimum": 1.0,
+              "nullable": true
+            },
+            "x-position": 2
+          },
+          {
+            "name": "Idempotency-Key",
+            "x-originalName": "idempotencyKey",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 3
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiOperationModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/teams/import": {
+      "post": {
+        "tags": [
+          "TeamsOpenApi"
+        ],
+        "operationId": "TeamsOpenApi_Import",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "x-originalName": "idempotencyKey",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "requestBody": {
+          "x-name": "model",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TeamImportBatchModel"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiOperationModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": [
+              "Admin"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/open/v1/theory/questions/import": {
+      "post": {
+        "tags": [
+          "TheoryOpenApi"
+        ],
+        "operationId": "TheoryOpenApi_ImportQuestions",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "x-originalName": "idempotencyKey",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "requestBody": {
+          "x-name": "model",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TheoryQuestionImportBatchModel"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiOperationModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/theory/games/{gameId}/paper": {
+      "put": {
+        "tags": [
+          "TheoryOpenApi"
+        ],
+        "operationId": "TheoryOpenApi_ImportPaper",
+        "parameters": [
+          {
+            "name": "gameId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "Idempotency-Key",
+            "x-originalName": "idempotencyKey",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 3
+          }
+        ],
+        "requestBody": {
+          "x-name": "model",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TheoryPaperImportModel"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 2
+        },
+        "responses": {
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiOperationModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/training/courses/import": {
+      "post": {
+        "tags": [
+          "TrainingOpenApi"
+        ],
+        "operationId": "TrainingOpenApi_Import",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "x-originalName": "idempotencyKey",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "requestBody": {
+          "x-name": "model",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TrainingCourseImportBatchModel"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiOperationModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
     "/api/open/v1/exercises": {
       "get": {
         "tags": [
@@ -2946,6 +6279,15 @@
             "x-position": 4
           },
           {
+            "name": "source",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "nullable": true
+            },
+            "x-position": 5
+          },
+          {
             "name": "limit",
             "in": "query",
             "schema": {
@@ -2955,7 +6297,7 @@
               "maximum": 100.0,
               "minimum": 1.0
             },
-            "x-position": 5
+            "x-position": 6
           }
         ],
         "responses": {
@@ -4383,6 +7725,116 @@
           }
         }
       },
+      "TeamLabReleasePreparationModel": {
+        "type": "object",
+        "description": "Release-level preparation state for external callers.",
+        "additionalProperties": false,
+        "properties": {
+          "releaseId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "state": {
+            "type": "string"
+          },
+          "planAvailable": {
+            "type": "boolean"
+          },
+          "readyToStart": {
+            "type": "boolean"
+          },
+          "blockers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "images": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TeamLabReleaseImagePreparationModel"
+            }
+          }
+        }
+      },
+      "TeamLabReleaseImagePreparationModel": {
+        "type": "object",
+        "description": "Per-template preparation projection. No worker address or Agent detail is exposed.",
+        "additionalProperties": false,
+        "properties": {
+          "templateId": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "templateName": {
+            "type": "string"
+          },
+          "imageType": {
+            "type": "string"
+          },
+          "digest": {
+            "type": "string"
+          },
+          "eligibleNodeCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "readyNodeCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "preparingNodeCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "failedNodeCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "failure": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/OpenTeamLabFailureModel"
+              }
+            ]
+          }
+        }
+      },
+      "OpenTeamLabFailureModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "stage": {
+            "type": "string"
+          },
+          "retryable": {
+            "type": "boolean"
+          },
+          "actions": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "type": "string"
+            }
+          },
+          "resourceType": {
+            "type": "string",
+            "nullable": true
+          },
+          "resourceId": {
+            "type": "string",
+            "nullable": true
+          },
+          "detail": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
       "ApiOperationModel": {
         "type": "object",
         "additionalProperties": false,
@@ -4471,6 +7923,291 @@
           2,
           3
         ]
+      },
+      "TeamLabRolloutPageModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TeamLabRolloutModel"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "TeamLabRolloutModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "releaseId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "status": {
+            "type": "string"
+          },
+          "preparationRequested": {
+            "type": "boolean"
+          },
+          "desiredAccessOpen": {
+            "type": "boolean"
+          },
+          "drainRequested": {
+            "type": "boolean"
+          },
+          "pauseRequested": {
+            "type": "boolean"
+          },
+          "counts": {
+            "$ref": "#/components/schemas/TeamLabRolloutCountsModel"
+          },
+          "preparedAt": {
+            "type": "integer",
+            "format": "uint64",
+            "nullable": true
+          },
+          "accessOpenedAt": {
+            "type": "integer",
+            "format": "uint64",
+            "nullable": true
+          },
+          "drainingAt": {
+            "type": "integer",
+            "format": "uint64",
+            "nullable": true
+          },
+          "completedAt": {
+            "type": "integer",
+            "format": "uint64",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "integer",
+            "format": "uint64"
+          },
+          "updatedAt": {
+            "type": "integer",
+            "format": "uint64"
+          },
+          "error": {
+            "type": "string",
+            "nullable": true
+          },
+          "controlScopeId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "adapterKind": {
+            "type": "string",
+            "nullable": true
+          },
+          "externalReference": {
+            "type": "string",
+            "nullable": true
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "TeamLabRolloutCountsModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "total": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pending": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "provisioning": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "ready": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "accessOpen": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "failed": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "draining": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "destroyed": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "paused": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "CreateTeamLabRolloutModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "controlScopeId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "releaseId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "externalReference": {
+            "type": "string"
+          },
+          "targets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TeamLabRolloutTargetInputModel"
+            }
+          }
+        }
+      },
+      "TeamLabRolloutTargetInputModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "externalSubject": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          }
+        }
+      },
+      "TeamLabRolloutTargetPageModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TeamLabRolloutTargetModel"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "TeamLabRolloutTargetModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "externalSubject": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "runtimeId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "status": {
+            "type": "string"
+          },
+          "operationId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "runtimeStatus": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/TeamLabRuntimeStatus"
+              }
+            ]
+          },
+          "runtimeStage": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "integer",
+            "format": "uint64"
+          },
+          "updatedAt": {
+            "type": "integer",
+            "format": "uint64"
+          },
+          "error": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "TeamLabRuntimeStatus": {
+        "type": "integer",
+        "description": "",
+        "x-enumNames": [
+          "Pending",
+          "Planning",
+          "Scheduled",
+          "Deploying",
+          "Probing",
+          "Running",
+          "Failed",
+          "CleanupPending",
+          "Paused",
+          "Destroying",
+          "Destroyed"
+        ],
+        "enum": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10
+        ]
+      },
+      "ReplaceTeamLabRolloutTargetsModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "targets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TeamLabRolloutTargetInputModel"
+            }
+          }
+        }
       },
       "CreateTeamLabRuntimeModel": {
         "type": "object",
@@ -4599,38 +8336,50 @@
                 "$ref": "#/components/schemas/OpenTeamLabFailureModel"
               }
             ]
+          },
+          "currentOperationId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "deploymentQueueTicketId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "queueStatus": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/DeploymentQueueTicketStatus"
+              }
+            ]
+          },
+          "subStages": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/OpenTeamLabRuntimeSubStageModel"
+            }
+          },
+          "controlScopeId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "releaseVersion": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "recoveryActions": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "type": "string"
+            }
           }
         }
-      },
-      "TeamLabRuntimeStatus": {
-        "type": "integer",
-        "description": "",
-        "x-enumNames": [
-          "Pending",
-          "Planning",
-          "Scheduled",
-          "Deploying",
-          "Probing",
-          "Running",
-          "Failed",
-          "CleanupPending",
-          "Stopped",
-          "Destroying",
-          "Destroyed"
-        ],
-        "enum": [
-          0,
-          1,
-          2,
-          3,
-          4,
-          5,
-          6,
-          7,
-          8,
-          9,
-          10
-        ]
       },
       "OpenTeamLabRuntimeShardModel": {
         "type": "object",
@@ -4662,21 +8411,6 @@
                 "$ref": "#/components/schemas/OpenTeamLabFailureModel"
               }
             ]
-          }
-        }
-      },
-      "OpenTeamLabFailureModel": {
-        "type": "object",
-        "additionalProperties": false,
-        "properties": {
-          "code": {
-            "type": "string"
-          },
-          "stage": {
-            "type": "string"
-          },
-          "retryable": {
-            "type": "boolean"
           }
         }
       },
@@ -4739,6 +8473,44 @@
           0,
           1
         ]
+      },
+      "DeploymentQueueTicketStatus": {
+        "type": "integer",
+        "description": "",
+        "x-enumNames": [
+          "Pending",
+          "Scheduling",
+          "Scheduled",
+          "Running",
+          "Succeeded",
+          "Failed",
+          "Cancelled"
+        ],
+        "enum": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ]
+      },
+      "OpenTeamLabRuntimeSubStageModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string",
+            "nullable": true
+          }
+        }
       },
       "ResetTeamLabRuntimeModel": {
         "type": "object",
@@ -4834,6 +8606,241 @@
           }
         }
       },
+      "TeamLabControlScopeModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "key": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "archived": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "integer",
+            "format": "uint64"
+          },
+          "updatedAt": {
+            "type": "integer",
+            "format": "uint64"
+          }
+        }
+      },
+      "CreateTeamLabControlScopeModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          }
+        }
+      },
+      "TeamLabServiceProfilePageModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TeamLabServiceProfileSummaryModel"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "TeamLabServiceProfileSummaryModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "availableVersions": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "assetKinds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TeamLabAssetKind"
+            }
+          },
+          "updatedAt": {
+            "type": "integer",
+            "format": "uint64"
+          },
+          "displayNameZh": {
+            "type": "string",
+            "nullable": true
+          },
+          "displayNameEn": {
+            "type": "string",
+            "nullable": true
+          },
+          "purpose": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string"
+          }
+        }
+      },
+      "TeamLabServiceProfileDetailModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "availableVersions": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "updatedAt": {
+            "type": "integer",
+            "format": "uint64"
+          },
+          "assetKinds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TeamLabAssetKind"
+            }
+          },
+          "parameters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TeamLabServiceProfileParameterModel"
+            }
+          },
+          "execution": {
+            "$ref": "#/components/schemas/TeamLabServiceProfileExecutionModel"
+          },
+          "status": {
+            "type": "string"
+          },
+          "documentationUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "secretSupply": {
+            "type": "string"
+          },
+          "publishedAt": {
+            "type": "integer",
+            "format": "uint64"
+          },
+          "displayNameZh": {
+            "type": "string",
+            "nullable": true
+          },
+          "displayNameEn": {
+            "type": "string",
+            "nullable": true
+          },
+          "purpose": {
+            "type": "string",
+            "nullable": true
+          },
+          "retiredAt": {
+            "type": "integer",
+            "format": "uint64",
+            "nullable": true
+          }
+        }
+      },
+      "TeamLabServiceProfileParameterModel": {
+        "type": "object",
+        "description": "Catalog parameter schema entry. Secret parameters never carry a default or sample value.",
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "secret": {
+            "type": "boolean"
+          },
+          "defaultValue": {
+            "type": "string",
+            "nullable": true
+          },
+          "sampleValue": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "TeamLabServiceProfileExecutionModel": {
+        "type": "object",
+        "description": "Deterministic summary of what the profile will execute at deploy time.",
+        "additionalProperties": false,
+        "properties": {
+          "steps": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "healthChecks": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxReboots": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "phase": {
+            "type": "string"
+          }
+        }
+      },
       "TeamLabCapabilitiesModel": {
         "type": "object",
         "additionalProperties": false,
@@ -4883,6 +8890,25 @@
           },
           "onDemandPcap": {
             "type": "boolean"
+          },
+          "editorLayout": {
+            "type": "boolean"
+          },
+          "editorLayoutVersion": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "networkRegions": {
+            "type": "boolean"
+          },
+          "serviceProfiles": {
+            "type": "boolean"
+          },
+          "rollouts": {
+            "type": "boolean"
+          },
+          "pauseResume": {
+            "type": "boolean"
           }
         }
       },
@@ -4929,6 +8955,14 @@
               "$ref": "#/components/schemas/TeamLabTopologyConnectionModel"
             }
           },
+          "editor": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/TeamLabTopologyEditorModel"
+              }
+            ]
+          },
           "infrastructure": {
             "type": "array",
             "nullable": true,
@@ -4954,6 +8988,11 @@
           "schemaVersion": {
             "type": "integer",
             "format": "int32"
+          },
+          "controlScopeId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
           }
         }
       },
@@ -5215,6 +9254,58 @@
           1
         ]
       },
+      "TeamLabTopologyEditorModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "networks": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/TeamLabEditorItemModel"
+            }
+          },
+          "assets": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/TeamLabEditorItemModel"
+            }
+          },
+          "infrastructure": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": {
+              "$ref": "#/components/schemas/TeamLabEditorItemModel"
+            }
+          }
+        }
+      },
+      "TeamLabEditorItemModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "x": {
+            "type": "number",
+            "format": "double"
+          },
+          "y": {
+            "type": "number",
+            "format": "double"
+          },
+          "width": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "height": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "collapsed": {
+            "type": "boolean"
+          }
+        }
+      },
       "TeamLabTopologyInfrastructureModel": {
         "type": "object",
         "additionalProperties": false,
@@ -5322,6 +9413,11 @@
             "type": "string",
             "format": "guid"
           },
+          "controlScopeId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
           "name": {
             "type": "string"
           },
@@ -5351,6 +9447,11 @@
             "type": "string",
             "format": "guid"
           },
+          "controlScopeId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
           "revision": {
             "type": "integer",
             "format": "int32"
@@ -5361,6 +9462,9 @@
           },
           "definition": {
             "$ref": "#/components/schemas/TeamLabTopologyDefinitionModel"
+          },
+          "editor": {
+            "$ref": "#/components/schemas/TeamLabTopologyEditorModel"
           },
           "createdAt": {
             "type": "integer",
@@ -5449,6 +9553,14 @@
             "items": {
               "$ref": "#/components/schemas/TeamLabTopologyConnectionModel"
             }
+          },
+          "editor": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/TeamLabTopologyEditorModel"
+              }
+            ]
           },
           "infrastructure": {
             "type": "array",
@@ -5571,6 +9683,14 @@
           "publishedAt": {
             "type": "integer",
             "format": "uint64"
+          },
+          "editor": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/TeamLabTopologyEditorModel"
+              }
+            ]
           }
         }
       },
@@ -5758,6 +9878,9 @@
           "nextCursor": {
             "type": "string",
             "nullable": true
+          },
+          "completeness": {
+            "$ref": "#/components/schemas/TeamLabTrafficCompletenessModel"
           }
         }
       },
@@ -5812,6 +9935,19 @@
           }
         }
       },
+      "TeamLabTrafficCompletenessModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "complete": {
+            "type": "boolean"
+          },
+          "droppedRecords": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
       "TeamLabTrafficPathPageModel": {
         "type": "object",
         "additionalProperties": false,
@@ -5825,6 +9961,9 @@
           "nextCursor": {
             "type": "string",
             "nullable": true
+          },
+          "completeness": {
+            "$ref": "#/components/schemas/TeamLabTrafficCompletenessModel"
           }
         }
       },
@@ -6208,14 +10347,41 @@
           8
         ]
       },
-      "ExerciseExternalPageModel": {
+      "CreateTeamLabWebhookModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "controlScopeId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "endpointUrl": {
+            "type": "string"
+          },
+          "eventTypes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "fromEventId": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          }
+        }
+      },
+      "TeamLabWebhookPageModel": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
           "items": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/ExerciseExternalSummaryModel"
+              "$ref": "#/components/schemas/TeamLabWebhookModel"
             }
           },
           "nextCursor": {
@@ -6224,16 +10390,555 @@
           }
         }
       },
-      "ExerciseExternalSummaryModel": {
+      "TeamLabWebhookModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "controlScopeId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "endpointUrl": {
+            "type": "string"
+          },
+          "eventTypes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "deliveryCursor": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "consecutiveFailures": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "nextDeliveryAt": {
+            "type": "integer",
+            "format": "uint64",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "integer",
+            "format": "uint64"
+          },
+          "revokedAt": {
+            "type": "integer",
+            "format": "uint64",
+            "nullable": true
+          },
+          "recentFailures": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TeamLabWebhookFailureModel"
+            }
+          }
+        }
+      },
+      "TeamLabWebhookFailureModel": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
           "id": {
             "type": "integer",
-            "format": "int32"
+            "format": "int64"
+          },
+          "eventId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "eventStage": {
+            "type": "string"
+          },
+          "error": {
+            "type": "string"
+          },
+          "occurredAt": {
+            "type": "integer",
+            "format": "uint64"
+          }
+        }
+      },
+      "TeamImportBatchModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "maxItems": 200,
+            "minItems": 1,
+            "items": {
+              "$ref": "#/components/schemas/TeamImportModel"
+            }
+          }
+        }
+      },
+      "TeamImportModel": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ExternalImportItemModel"
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "captain"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "maxLength": 20,
+                "minLength": 1
+              },
+              "bio": {
+                "type": "string",
+                "maxLength": 72,
+                "nullable": true
+              },
+              "locked": {
+                "type": "boolean"
+              },
+              "captain": {
+                "$ref": "#/components/schemas/ExternalUserReferenceModel"
+              },
+              "members": {
+                "type": "array",
+                "maxItems": 100,
+                "items": {
+                  "$ref": "#/components/schemas/ExternalUserReferenceModel"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "ExternalUserReferenceModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "userId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "userName": {
+            "type": "string",
+            "maxLength": 64,
+            "nullable": true
+          }
+        }
+      },
+      "ExternalImportItemModel": {
+        "type": "object",
+        "x-abstract": true,
+        "additionalProperties": false,
+        "required": [
+          "externalId"
+        ],
+        "properties": {
+          "externalId": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1
+          }
+        }
+      },
+      "TheoryQuestionImportBatchModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "maxItems": 1000,
+            "minItems": 1,
+            "items": {
+              "$ref": "#/components/schemas/TheoryQuestionImportModel"
+            }
+          }
+        }
+      },
+      "TheoryQuestionImportModel": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/TheoryQuestionEditModel"
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "externalId"
+            ],
+            "properties": {
+              "externalId": {
+                "type": "string",
+                "maxLength": 128,
+                "minLength": 1
+              }
+            }
+          }
+        ]
+      },
+      "TheoryQuestionEditModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "title"
+        ],
+        "properties": {
+          "type": {
+            "$ref": "#/components/schemas/TheoryQuestionType"
+          },
+          "bankName": {
+            "type": "string"
           },
           "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "content": {
             "type": "string"
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "answerIndexes": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "TheoryQuestionType": {
+        "type": "string",
+        "description": "Theory exam question type",
+        "x-enumNames": [
+          "SingleChoice",
+          "MultipleChoice",
+          "TrueFalse"
+        ],
+        "enum": [
+          "SingleChoice",
+          "MultipleChoice",
+          "TrueFalse"
+        ]
+      },
+      "TheoryPaperImportModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "title",
+          "questions"
+        ],
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 1
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 1000000
+          },
+          "publish": {
+            "type": "boolean"
+          },
+          "questions": {
+            "type": "array",
+            "maxItems": 1000,
+            "minItems": 1,
+            "items": {
+              "$ref": "#/components/schemas/TheoryPaperQuestionImportModel"
+            }
+          }
+        }
+      },
+      "TheoryPaperQuestionImportModel": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/TheoryQuestionEditModel"
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "sourceQuestionId": {
+                "type": "integer",
+                "format": "int32",
+                "nullable": true
+              },
+              "score": {
+                "type": "integer",
+                "format": "int32",
+                "maximum": 2147483647.0,
+                "minimum": 1.0
+              },
+              "order": {
+                "type": "integer",
+                "format": "int32"
+              }
+            }
+          }
+        ]
+      },
+      "TrainingCourseImportBatchModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "maxItems": 50,
+            "minItems": 1,
+            "items": {
+              "$ref": "#/components/schemas/TrainingCourseImportModel"
+            }
+          }
+        }
+      },
+      "TrainingCourseImportModel": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ExternalImportItemModel"
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "title"
+            ],
+            "properties": {
+              "title": {
+                "type": "string",
+                "maxLength": 128,
+                "minLength": 1
+              },
+              "slug": {
+                "type": "string",
+                "maxLength": 128
+              },
+              "summary": {
+                "type": "string",
+                "maxLength": 512
+              },
+              "description": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "tags": {
+                "type": "array",
+                "maxItems": 16,
+                "items": {
+                  "type": "string"
+                }
+              },
+              "enrollmentPolicy": {
+                "$ref": "#/components/schemas/TrainingCourseEnrollmentPolicy"
+              },
+              "publish": {
+                "type": "boolean"
+              },
+              "chapters": {
+                "type": "array",
+                "maxItems": 500,
+                "items": {
+                  "$ref": "#/components/schemas/TrainingChapterImportModel"
+                }
+              },
+              "exercises": {
+                "type": "array",
+                "maxItems": 500,
+                "items": {
+                  "$ref": "#/components/schemas/TrainingExerciseImportModel"
+                }
+              },
+              "theoryQuestions": {
+                "type": "array",
+                "maxItems": 1000,
+                "items": {
+                  "$ref": "#/components/schemas/TrainingTheoryQuestionImportModel"
+                }
+              },
+              "theoryPapers": {
+                "type": "array",
+                "maxItems": 500,
+                "items": {
+                  "$ref": "#/components/schemas/TrainingTheoryPaperImportModel"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "TrainingCourseEnrollmentPolicy": {
+        "type": "string",
+        "description": "Training course enrollment policy",
+        "x-enumNames": [
+          "TeacherApproval",
+          "AutoApprove"
+        ],
+        "enum": [
+          "TeacherApproval",
+          "AutoApprove"
+        ]
+      },
+      "TrainingChapterImportModel": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ExternalImportItemModel"
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "title"
+            ],
+            "properties": {
+              "parentExternalId": {
+                "type": "string",
+                "maxLength": 128,
+                "nullable": true
+              },
+              "title": {
+                "type": "string",
+                "maxLength": 128,
+                "minLength": 1
+              },
+              "summary": {
+                "type": "string",
+                "maxLength": 512
+              },
+              "content": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "contentType": {
+                "$ref": "#/components/schemas/TrainingArticleContentType"
+              },
+              "completionPolicy": {
+                "$ref": "#/components/schemas/TrainingChapterCompletionPolicy"
+              },
+              "videoProvider": {
+                "$ref": "#/components/schemas/TrainingCourseVideoProvider"
+              },
+              "videoUrl": {
+                "type": "string",
+                "maxLength": 1024,
+                "nullable": true
+              },
+              "order": {
+                "type": "integer",
+                "format": "int32"
+              },
+              "isPublished": {
+                "type": "boolean"
+              }
+            }
+          }
+        ]
+      },
+      "TrainingArticleContentType": {
+        "type": "string",
+        "description": "Training article format",
+        "x-enumNames": [
+          "Markdown",
+          "Html"
+        ],
+        "enum": [
+          "Markdown",
+          "Html"
+        ]
+      },
+      "TrainingChapterCompletionPolicy": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "requireContentRead": {
+            "type": "boolean"
+          },
+          "requireAllRequiredChallenges": {
+            "type": "boolean"
+          },
+          "requiredChallengeCount": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 2147483647.0,
+            "minimum": 0.0
+          },
+          "theoryPassRate": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 100.0,
+            "minimum": 0.0
+          }
+        }
+      },
+      "TrainingCourseVideoProvider": {
+        "type": "string",
+        "description": "Training course video provider",
+        "x-enumNames": [
+          "None",
+          "LocalFile",
+          "ExternalUrl"
+        ],
+        "enum": [
+          "None",
+          "LocalFile",
+          "ExternalUrl"
+        ]
+      },
+      "TrainingExerciseImportModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "externalId",
+          "title",
+          "content"
+        ],
+        "properties": {
+          "externalId": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 1
+          },
+          "content": {
+            "type": "string",
+            "maxLength": 1000000,
+            "minLength": 1
           },
           "category": {
             "$ref": "#/components/schemas/ChallengeCategory"
@@ -6247,14 +10952,103 @@
           "credit": {
             "type": "boolean"
           },
+          "isEnabled": {
+            "type": "boolean"
+          },
           "tags": {
             "type": "array",
+            "maxItems": 100,
+            "nullable": true,
             "items": {
               "type": "string"
             }
           },
-          "isEnabled": {
+          "hints": {
+            "type": "array",
+            "maxItems": 512,
+            "nullable": true,
+            "items": {
+              "type": "string"
+            }
+          },
+          "containerImage": {
+            "type": "string",
+            "maxLength": 512,
+            "nullable": true
+          },
+          "memoryLimit": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "storageLimit": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "cpuCount": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "exposePort": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "networkMode": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/NetworkMode"
+              }
+            ]
+          },
+          "environment": {
+            "$ref": "#/components/schemas/EnvironmentType"
+          },
+          "imageTemplateId": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "flagTemplate": {
+            "type": "string",
+            "maxLength": 120,
+            "nullable": true
+          },
+          "flags": {
+            "type": "array",
+            "maxItems": 100,
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/ExerciseOpenApiFlagModel"
+            }
+          },
+          "attachment": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ExerciseOpenApiAttachmentModel"
+              }
+            ]
+          },
+          "chapterExternalId": {
+            "type": "string",
+            "maxLength": 128,
+            "nullable": true
+          },
+          "order": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "isRequired": {
             "type": "boolean"
+          },
+          "displayTitle": {
+            "type": "string",
+            "maxLength": 128,
+            "nullable": true
           }
         }
       },
@@ -6334,6 +11128,304 @@
           "Insane"
         ]
       },
+      "NetworkMode": {
+        "type": "string",
+        "description": "Container network mode",
+        "x-enumNames": [
+          "Open",
+          "Isolated",
+          "Custom"
+        ],
+        "enum": [
+          "Open",
+          "Isolated",
+          "Custom"
+        ]
+      },
+      "EnvironmentType": {
+        "type": "string",
+        "description": "Environment type for challenge deployment",
+        "x-enumNames": [
+          "None",
+          "Docker",
+          "WindowsVM"
+        ],
+        "enum": [
+          "None",
+          "Docker",
+          "WindowsVM"
+        ]
+      },
+      "ExerciseOpenApiFlagModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "flag"
+        ],
+        "properties": {
+          "flag": {
+            "type": "string",
+            "maxLength": 127,
+            "minLength": 1
+          },
+          "orderIndex": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 10000.0,
+            "minimum": 0.0
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 512,
+            "nullable": true
+          },
+          "scoreMode": {
+            "$ref": "#/components/schemas/FlagScoreMode"
+          },
+          "fixedScore": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 1000000.0,
+            "minimum": 0.0
+          },
+          "maxAttempts": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 100000.0,
+            "minimum": 0.0
+          },
+          "attachmentHash": {
+            "type": "string",
+            "maxLength": 128,
+            "nullable": true
+          },
+          "answerType": {
+            "$ref": "#/components/schemas/AnswerType"
+          },
+          "customName": {
+            "type": "string",
+            "maxLength": 64,
+            "nullable": true
+          },
+          "attachment": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ExerciseOpenApiAttachmentModel"
+              }
+            ]
+          }
+        }
+      },
+      "FlagScoreMode": {
+        "type": "string",
+        "description": "Flag score mode",
+        "x-enumNames": [
+          "InheritDecay",
+          "FixedScore"
+        ],
+        "enum": [
+          "InheritDecay",
+          "FixedScore"
+        ]
+      },
+      "AnswerType": {
+        "type": "string",
+        "description": "Answer type for challenge submission",
+        "x-enumNames": [
+          "Flag",
+          "File",
+          "Custom"
+        ],
+        "enum": [
+          "Flag",
+          "File",
+          "Custom"
+        ]
+      },
+      "ExerciseOpenApiAttachmentModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "remoteUrl"
+        ],
+        "properties": {
+          "remoteUrl": {
+            "type": "string",
+            "maxLength": 2048,
+            "minLength": 1
+          }
+        }
+      },
+      "TrainingTheoryQuestionImportModel": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/TheoryQuestionEditModel"
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "externalId"
+            ],
+            "properties": {
+              "externalId": {
+                "type": "string",
+                "maxLength": 128,
+                "minLength": 1
+              }
+            }
+          }
+        ]
+      },
+      "TrainingTheoryPaperImportModel": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ExternalImportItemModel"
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "chapterExternalId",
+              "title"
+            ],
+            "properties": {
+              "chapterExternalId": {
+                "type": "string",
+                "maxLength": 128,
+                "minLength": 1
+              },
+              "title": {
+                "type": "string",
+                "maxLength": 128,
+                "minLength": 1
+              },
+              "description": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "passRate": {
+                "type": "integer",
+                "format": "int32",
+                "maximum": 100.0,
+                "minimum": 1.0
+              },
+              "allowRetake": {
+                "type": "boolean"
+              },
+              "showCorrectAnswerAfterSubmit": {
+                "type": "boolean"
+              },
+              "publish": {
+                "type": "boolean"
+              },
+              "questions": {
+                "type": "array",
+                "maxItems": 500,
+                "items": {
+                  "$ref": "#/components/schemas/TrainingTheoryPaperQuestionImportModel"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "TrainingTheoryPaperQuestionImportModel": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/TheoryQuestionEditModel"
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "sourceQuestionExternalId": {
+                "type": "string",
+                "maxLength": 128,
+                "nullable": true
+              },
+              "score": {
+                "type": "integer",
+                "format": "int32",
+                "maximum": 2147483647.0,
+                "minimum": 1.0
+              },
+              "order": {
+                "type": "integer",
+                "format": "int32"
+              }
+            }
+          }
+        ]
+      },
+      "ExerciseExternalPageModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExerciseExternalSummaryModel"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "ExerciseExternalSummaryModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "title": {
+            "type": "string"
+          },
+          "category": {
+            "$ref": "#/components/schemas/ChallengeCategory"
+          },
+          "type": {
+            "$ref": "#/components/schemas/ChallengeType"
+          },
+          "difficulty": {
+            "$ref": "#/components/schemas/Difficulty"
+          },
+          "credit": {
+            "type": "boolean"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "isEnabled": {
+            "type": "boolean"
+          },
+          "poolSource": {
+            "$ref": "#/components/schemas/ExercisePoolSource"
+          }
+        }
+      },
+      "ExercisePoolSource": {
+        "type": "string",
+        "description": "Origin of a public exercise-pool entry. Source challenges are copied into the\npool so their original game/course lifecycle remains isolated.",
+        "x-enumNames": [
+          "Exercise",
+          "Game",
+          "Training"
+        ],
+        "enum": [
+          "Exercise",
+          "Game",
+          "Training"
+        ]
+      },
       "ExerciseExternalModel": {
         "type": "object",
         "additionalProperties": false,
@@ -6374,6 +11466,9 @@
           },
           "isEnabled": {
             "type": "boolean"
+          },
+          "poolSource": {
+            "$ref": "#/components/schemas/ExercisePoolSource"
           },
           "containerImage": {
             "type": "string",
@@ -6435,48 +11530,6 @@
           }
         }
       },
-      "NetworkMode": {
-        "type": "string",
-        "description": "Container network mode",
-        "x-enumNames": [
-          "Open",
-          "Isolated",
-          "Custom"
-        ],
-        "enum": [
-          "Open",
-          "Isolated",
-          "Custom"
-        ]
-      },
-      "EnvironmentType": {
-        "type": "string",
-        "description": "Environment type for challenge deployment",
-        "x-enumNames": [
-          "None",
-          "Docker",
-          "WindowsVM"
-        ],
-        "enum": [
-          "None",
-          "Docker",
-          "WindowsVM"
-        ]
-      },
-      "ExerciseOpenApiAttachmentModel": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "remoteUrl"
-        ],
-        "properties": {
-          "remoteUrl": {
-            "type": "string",
-            "maxLength": 2048,
-            "minLength": 1
-          }
-        }
-      },
       "ExerciseOpenApiFlagInfoModel": {
         "type": "object",
         "additionalProperties": false,
@@ -6527,32 +11580,6 @@
             ]
           }
         }
-      },
-      "FlagScoreMode": {
-        "type": "string",
-        "description": "Flag score mode",
-        "x-enumNames": [
-          "InheritDecay",
-          "FixedScore"
-        ],
-        "enum": [
-          "InheritDecay",
-          "FixedScore"
-        ]
-      },
-      "AnswerType": {
-        "type": "string",
-        "description": "Answer type for challenge submission",
-        "x-enumNames": [
-          "Flag",
-          "File",
-          "Custom"
-        ],
-        "enum": [
-          "Flag",
-          "File",
-          "Custom"
-        ]
       },
       "ExerciseImportFromExternalModel": {
         "type": "object",
@@ -6633,67 +11660,6 @@
             "items": {
               "$ref": "#/components/schemas/ExerciseOpenApiFlagModel"
             }
-          },
-          "attachment": {
-            "nullable": true,
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/ExerciseOpenApiAttachmentModel"
-              }
-            ]
-          }
-        }
-      },
-      "ExerciseOpenApiFlagModel": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "flag"
-        ],
-        "properties": {
-          "flag": {
-            "type": "string",
-            "maxLength": 127,
-            "minLength": 1
-          },
-          "orderIndex": {
-            "type": "integer",
-            "format": "int32",
-            "maximum": 10000.0,
-            "minimum": 0.0
-          },
-          "description": {
-            "type": "string",
-            "maxLength": 512,
-            "nullable": true
-          },
-          "scoreMode": {
-            "$ref": "#/components/schemas/FlagScoreMode"
-          },
-          "fixedScore": {
-            "type": "integer",
-            "format": "int32",
-            "maximum": 1000000.0,
-            "minimum": 0.0
-          },
-          "maxAttempts": {
-            "type": "integer",
-            "format": "int32",
-            "maximum": 100000.0,
-            "minimum": 0.0
-          },
-          "attachmentHash": {
-            "type": "string",
-            "maxLength": 128,
-            "nullable": true
-          },
-          "answerType": {
-            "$ref": "#/components/schemas/AnswerType"
-          },
-          "customName": {
-            "type": "string",
-            "maxLength": 64,
-            "nullable": true
           },
           "attachment": {
             "nullable": true,
@@ -7598,8 +12564,22 @@
   },
   "tags": [
     {
+      "name": "TeamLab - Image Preparation",
+      "description": "Inspect and request release-scoped image preparation without querying node inventory."
+    },
+    {
+      "name": "TeamLab - Rollouts"
+    },
+    {
       "name": "TeamLab - Runtimes",
       "description": "Create, inspect, reset, destroy, and access deployed TeamLab environments."
+    },
+    {
+      "name": "TeamLab - Control scopes"
+    },
+    {
+      "name": "TeamLab - Service Profiles",
+      "description": "Browse the bootstrap service-profile catalog used by TeamLab topologies."
     },
     {
       "name": "TeamLab - Topologies",
@@ -7608,6 +12588,10 @@
     {
       "name": "TeamLab - Traffic and Captures",
       "description": "Query traffic flows and paths, and manage bounded packet captures for a TeamLab runtime."
+    },
+    {
+      "name": "TeamLab - Webhooks",
+      "description": "Subscribe to signed at-least-once TeamLab event notifications."
     }
   ]
 }

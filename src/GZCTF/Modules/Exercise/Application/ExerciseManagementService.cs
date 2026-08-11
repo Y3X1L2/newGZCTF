@@ -245,8 +245,13 @@ public sealed class ExerciseManagementService(
             .FirstOrDefaultAsync(gc => gc.Id == gameChallengeId, token)
             ?? throw new InvalidOperationException($"Game challenge {gameChallengeId} not found");
 
+        if (!CanCollect(gameChallenge))
+            throw new InvalidOperationException("Only source challenges with a runnable image and a flag can enter the exercise pool.");
+
         var existing = await context.ExerciseChallenges
-            .FirstOrDefaultAsync(e => e.Title == gameChallenge.Title && e.TrainingCourseId == null, token);
+            .FirstOrDefaultAsync(e => e.PoolSource == ExercisePoolSource.Game &&
+                                     e.SourceChallengeId == gameChallenge.Id &&
+                                     e.TrainingCourseId == null, token);
 
         if (existing is not null)
             return existing;
@@ -275,6 +280,10 @@ public sealed class ExerciseManagementService(
             Difficulty = Difficulty.Normal,
             Tags = [gameChallenge.Category.ToString()],
             Credit = false,
+            PoolSource = ExercisePoolSource.Game,
+            SourceGameId = gameChallenge.GameId,
+            SourceChallengeId = gameChallenge.Id,
+            MinimumVisibleRole = Role.Teacher,
             Attachment = await CloneAttachmentAsync(gameChallenge.Attachment, token)
         };
 
@@ -331,15 +340,110 @@ public sealed class ExerciseManagementService(
         if (challengeIds is { Length: > 0 })
             query = query.Where(gc => challengeIds.Contains(gc.Id));
 
-        var challenges = await query.ToArrayAsync(token);
+        var challenges = await query
+            .Include(challenge => challenge.Flags)
+            .ToArrayAsync(token);
         var results = new List<ExerciseChallenge>();
 
         foreach (var challenge in challenges)
         {
+            if (!CanCollect(challenge))
+                continue;
             var imported = await ImportFromGameChallengeAsync(challenge.Id, token);
             results.Add(imported);
         }
 
         return results.ToArray();
     }
+
+    public async Task<ExerciseChallenge[]> ImportFromTrainingAsync(
+        int courseId,
+        int[]? challengeIds = null,
+        CancellationToken token = default)
+    {
+        var query = context.ExerciseChallenges
+            .Where(challenge => challenge.TrainingCourseId == courseId);
+        if (challengeIds is { Length: > 0 })
+            query = query.Where(challenge => challengeIds.Contains(challenge.Id));
+
+        var sources = await query
+            .Include(challenge => challenge.Attachment)
+            .ThenInclude(attachment => attachment!.LocalFile)
+            .Include(challenge => challenge.Flags)
+            .ThenInclude(flag => flag.Attachment)
+            .ThenInclude(attachment => attachment!.LocalFile)
+            .ToArrayAsync(token);
+
+        var results = new List<ExerciseChallenge>();
+        foreach (var source in sources)
+        {
+            if (!CanCollect(source))
+                continue;
+            var existing = await context.ExerciseChallenges.FirstOrDefaultAsync(entry =>
+                entry.PoolSource == ExercisePoolSource.Training &&
+                entry.SourceChallengeId == source.Id && entry.TrainingCourseId == null, token);
+            if (existing is not null)
+            {
+                results.Add(existing);
+                continue;
+            }
+
+            await using var transaction = await context.Database.BeginTransactionAsync(token);
+            var exercise = new ExerciseChallenge
+            {
+                Title = source.Title,
+                Content = source.Content,
+                Category = source.Category,
+                Type = source.Type,
+                Hints = source.Hints,
+                IsEnabled = true,
+                ContainerImage = source.ContainerImage,
+                MemoryLimit = source.MemoryLimit,
+                StorageLimit = source.StorageLimit,
+                CPUCount = source.CPUCount,
+                ExposePort = source.ExposePort,
+                NetworkMode = source.NetworkMode,
+                FileName = source.FileName,
+                FlagTemplate = source.FlagTemplate,
+                SubmissionLimit = source.SubmissionLimit,
+                Environment = source.Environment,
+                ImageTemplateId = source.ImageTemplateId,
+                Difficulty = source.Difficulty,
+                Tags = source.Tags?.ToList() ?? [source.Category.ToString()],
+                Credit = source.Credit,
+                PoolSource = ExercisePoolSource.Training,
+                SourceTrainingCourseId = courseId,
+                SourceChallengeId = source.Id,
+                MinimumVisibleRole = Role.Teacher,
+                Attachment = await CloneAttachmentAsync(source.Attachment, token)
+            };
+            foreach (var flag in source.Flags)
+            {
+                exercise.Flags.Add(new FlagContext
+                {
+                    Flag = flag.Flag,
+                    Exercise = exercise,
+                    IsOccupied = false,
+                    OrderIndex = flag.OrderIndex,
+                    Description = flag.Description,
+                    ScoreMode = flag.ScoreMode,
+                    FixedScore = flag.FixedScore,
+                    MaxAttempts = flag.MaxAttempts,
+                    AttachmentHash = flag.AttachmentHash,
+                    AnswerType = flag.AnswerType,
+                    CustomName = flag.CustomName,
+                    Attachment = await CloneAttachmentAsync(flag.Attachment, token)
+                });
+            }
+            await exerciseRepository.CreateExercise(exercise, token);
+            await transaction.CommitAsync(token);
+            results.Add(exercise);
+        }
+        return results.ToArray();
+    }
+
+    static bool CanCollect(Challenge challenge) =>
+        challenge.Type.IsContainer() &&
+        (!string.IsNullOrWhiteSpace(challenge.ContainerImage) || challenge.ImageTemplateId is not null) &&
+        (challenge.Flags.Count > 0 || !string.IsNullOrWhiteSpace(challenge.FlagTemplate));
 }

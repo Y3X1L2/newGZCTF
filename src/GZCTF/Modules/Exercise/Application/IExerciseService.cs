@@ -10,7 +10,8 @@ public interface IExerciseService
     Task<ExerciseInfoModel[]> GetExerciseListAsync(
         ExerciseFilter? filter,
         CancellationToken token = default,
-        Guid? userId = null);
+        Guid? userId = null,
+        Role role = Role.Student);
     Task<ExerciseDetailModel?> GetExerciseDetailAsync(UserInfo user, int exerciseId, CancellationToken token = default);
     Task<(AnswerResult Status, int? FlagId)> SubmitFlagAsync(
         UserInfo user,

@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
-import { Link, useSearchParams } from 'react-router'
-import { Search, ChevronDown, X } from 'lucide-react'
+import { Link, useLocation, useSearchParams } from 'react-router'
+import { Check, ChevronDown, Search, Star, Tag } from 'lucide-react'
 import { useExercises } from './api/practiceApi'
+import { useCurrentAccount } from '../account/useCurrentAccount'
 import { useVNextPageTitle } from '../../shared/useVNextPageTitle'
 import { DataState, PageHeading } from '../../shared/Primitives'
 import styles from './PracticePage.module.css'
@@ -13,20 +14,48 @@ const categoryLabels: Record<string, string> = {
   Pentest: 'Pentest', OSINT: 'OSINT', IR: 'IR',
 }
 
-const difficultyOrder = ['Baby', 'Trivial', 'Easy', 'Normal', 'Medium', 'Hard', 'Expert', 'Insane']
-const allDifficulties = [...difficultyOrder]
+const difficultyStars: Record<string, number> = {
+  Baby: 1,
+  Trivial: 2,
+  Easy: 3,
+  Normal: 4,
+  Medium: 5,
+  Hard: 7,
+  Expert: 9,
+  Insane: 10,
+}
+const difficultyByStar = [
+  '', 'Baby', 'Trivial', 'Easy', 'Normal', 'Medium', 'Medium', 'Hard', 'Hard', 'Expert', 'Insane',
+]
+const maxDifficultyStars = 10
 const allCategories = Object.keys(categoryLabels)
+const sourceLabels = { Exercise: '练习题目', Game: '比赛题目', Training: '培训习题' } as const
+const statusLabels = { all: '全部', solved: '已攻克', unsolved: '未攻克' } as const
+type ExerciseStatus = keyof typeof statusLabels
 
 export function PracticeBrowsePage() {
-  useVNextPageTitle('题库浏览')
+  const { pathname } = useLocation()
+  const isBrowseRoute = pathname.endsWith('/browse')
+  useVNextPageTitle(isBrowseRoute ? '题库浏览' : '自主练习')
   const [searchParams, setSearchParams] = useSearchParams()
 
   const query = searchParams.get('q') ?? ''
   const selectedCats = useMemo(() => searchParams.getAll('category'), [searchParams])
-  const selectedDiffs = useMemo(() => searchParams.getAll('difficulty'), [searchParams])
+  const selectedDifficultyStars = Math.min(
+    maxDifficultyStars,
+    Math.max(0, Number.parseInt(searchParams.get('difficultyStars') ?? '0', 10) || 0)
+  )
+  const selectedDiffs = useMemo(() => {
+    const legacy = searchParams.getAll('difficulty')
+    if (selectedDifficultyStars === 0) return legacy
+    return [difficultyByStar[selectedDifficultyStars]]
+  }, [searchParams, selectedDifficultyStars])
   const selectedTags = useMemo(() => searchParams.getAll('tag'), [searchParams])
+  const selectedSources = useMemo(() => searchParams.getAll('source'), [searchParams])
+  const selectedStatus = (searchParams.get('status') as ExerciseStatus | null) ?? 'all'
+  const { isTeacher } = useCurrentAccount()
 
-  const [showFilters, setShowFilters] = useState(false)
+  const [showFilters, setShowFilters] = useState(true)
   const [localQuery, setLocalQuery] = useState(query)
 
   const filterStr = useMemo(() => {
@@ -34,9 +63,9 @@ export function PracticeBrowsePage() {
     if (query) params.set('Search', query)
     selectedCats.forEach(c => params.append('Categories', c))
     selectedDiffs.forEach(d => params.append('Difficulties', d))
-    selectedTags.forEach(t => params.append('Tags', t))
+    if (isTeacher) selectedSources.forEach(source => params.append('Sources', source))
     return params.toString()
-  }, [query, selectedCats, selectedDiffs, selectedTags])
+  }, [query, selectedCats, selectedDiffs, selectedSources, isTeacher])
 
   const { data: exercises, error } = useExercises(filterStr)
 
@@ -47,8 +76,12 @@ export function PracticeBrowsePage() {
 
   const filtered = useMemo(() => {
     if (!exercises) return []
-    return exercises
-  }, [exercises])
+    return exercises.filter(exercise => {
+      const matchesTags = selectedTags.length === 0 || selectedTags.some(tag => exercise.tags?.includes(tag))
+      const matchesStatus = selectedStatus === 'all' || (selectedStatus === 'solved' ? exercise.solved : !exercise.solved)
+      return matchesTags && matchesStatus
+    })
+  }, [exercises, selectedStatus, selectedTags])
 
   const updateParam = (key: string, values: string[]) => {
     const next = new URLSearchParams(searchParams)
@@ -64,11 +97,12 @@ export function PracticeBrowsePage() {
     updateParam('category', next)
   }
 
-  const toggleDifficulty = (diff: string) => {
-    const next = selectedDiffs.includes(diff)
-      ? selectedDiffs.filter(d => d !== diff)
-      : [...selectedDiffs, diff]
-    updateParam('difficulty', next)
+  const toggleDifficulty = (stars: number) => {
+    const next = new URLSearchParams(searchParams)
+    next.delete('difficulty')
+    next.delete('difficultyStars')
+    if (stars > 0) next.set('difficultyStars', String(stars))
+    setSearchParams(next, { replace: true })
   }
 
   const toggleTag = (tag: string) => {
@@ -76,6 +110,20 @@ export function PracticeBrowsePage() {
       ? selectedTags.filter(t => t !== tag)
       : [...selectedTags, tag]
     updateParam('tag', next)
+  }
+
+  const toggleSource = (source: string) => {
+    const next = selectedSources.includes(source)
+      ? selectedSources.filter(item => item !== source)
+      : [...selectedSources, source]
+    updateParam('source', next)
+  }
+
+  const setStatus = (status: ExerciseStatus) => {
+    const next = new URLSearchParams(searchParams)
+    if (status === 'all') next.delete('status')
+    else next.set('status', status)
+    setSearchParams(next, { replace: true })
   }
 
   const search = (value: string) => {
@@ -88,7 +136,11 @@ export function PracticeBrowsePage() {
 
   return (
     <div className={styles.page}>
-      <PageHeading eyebrow="EXERCISE CATALOG" title="题库浏览" description="筛选、搜索与查看所有练习题" />
+      <PageHeading
+        eyebrow="EXERCISE CATALOG"
+        title={isBrowseRoute ? '题库浏览' : '自主练习'}
+        description="筛选、搜索与查看所有练习题"
+      />
 
       <div className={styles.searchBar}>
         <Search size={18} />
@@ -108,11 +160,76 @@ export function PracticeBrowsePage() {
 
       {showFilters && (
         <div className={styles.filterPanel}>
+          <div className={styles.filterRow}>
+            <div className={styles.filterGroup}>
+              <span className={styles.filterLabel}>标签</span>
+              <details className={styles.tagDropdown}>
+                <summary className={styles.tagDropdownTrigger}>
+                  <Tag size={14} />
+                  {selectedTags.length ? `${selectedTags.length} 个标签` : '全部标签'}
+                  <ChevronDown size={14} />
+                </summary>
+                <div className={styles.tagDropdownMenu}>
+                  <button
+                    type="button"
+                    className={selectedTags.length === 0 ? styles.tagOptionActive : styles.tagOption}
+                    onClick={() => updateParam('tag', [])}
+                  >
+                    {selectedTags.length === 0 && <Check size={13} />}
+                    <span>全部标签</span>
+                  </button>
+                  {allTags.map(tag => (
+                    <button
+                      type="button"
+                      key={tag}
+                      className={selectedTags.includes(tag) ? styles.tagOptionActive : styles.tagOption}
+                      onClick={() => toggleTag(tag)}
+                    >
+                      {selectedTags.includes(tag) && <Check size={13} />}
+                      <span>{tag}</span>
+                    </button>
+                  ))}
+                </div>
+              </details>
+            </div>
+
+            <div className={styles.filterGroup}>
+              <span className={styles.filterLabel}>难度</span>
+              <div className={styles.starFilter} role="radiogroup" aria-label="难度星级">
+                <button
+                  type="button"
+                  className={selectedDifficultyStars === 0 ? styles.starResetActive : styles.starReset}
+                  onClick={() => toggleDifficulty(0)}
+                  aria-pressed={selectedDifficultyStars === 0}
+                >
+                  不限
+                </button>
+                {Array.from({ length: maxDifficultyStars }, (_, index) => {
+                  const stars = index + 1
+                  const active = stars <= selectedDifficultyStars
+                  return (
+                  <button
+                    type="button"
+                    key={stars}
+                    className={active ? styles.ratingStarActive : styles.ratingStar}
+                    onClick={() => toggleDifficulty(selectedDifficultyStars === stars ? 0 : stars)}
+                    aria-label={`${stars} 星难度`}
+                    aria-pressed={selectedDifficultyStars === stars}
+                  >
+                    <Star size={18} fill={active ? 'currentColor' : 'none'} />
+                  </button>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+
           <div className={styles.filterGroup}>
             <span className={styles.filterLabel}>分类</span>
             <div className={styles.filterChips}>
               {allCategories.map(cat => (
                 <button
+                  type="button"
                   key={cat}
                   className={selectedCats.includes(cat) ? styles.chipActive : styles.chip}
                   onClick={() => toggleCategory(cat)}
@@ -124,31 +241,33 @@ export function PracticeBrowsePage() {
           </div>
 
           <div className={styles.filterGroup}>
-            <span className={styles.filterLabel}>难度</span>
-            <div className={styles.filterChips}>
-              {allDifficulties.map(diff => (
+            <span className={styles.filterLabel}>状态</span>
+            <div className={styles.statusOptions} role="radiogroup" aria-label="题目状态">
+              {Object.entries(statusLabels).map(([status, label]) => (
                 <button
-                  key={diff}
-                  className={selectedDiffs.includes(diff) ? styles.chipActive : styles.chip}
-                  onClick={() => toggleDifficulty(diff)}
+                  type="button"
+                  key={status}
+                  className={selectedStatus === status ? styles.chipActive : styles.chip}
+                  onClick={() => setStatus(status as ExerciseStatus)}
+                  aria-pressed={selectedStatus === status}
                 >
-                  {diff}
+                  {label}
                 </button>
               ))}
             </div>
           </div>
 
-          {allTags.length > 0 && (
+          {isTeacher && (
             <div className={styles.filterGroup}>
-              <span className={styles.filterLabel}>标签</span>
+              <span className={styles.filterLabel}>题目来源</span>
               <div className={styles.filterChips}>
-                {allTags.map(tag => (
+                {Object.entries(sourceLabels).map(([source, label]) => (
                   <button
-                    key={tag}
-                    className={selectedTags.includes(tag) ? styles.chipActive : styles.chip}
-                    onClick={() => toggleTag(tag)}
+                    key={source}
+                    className={selectedSources.includes(source) ? styles.chipActive : styles.chip}
+                    onClick={() => toggleSource(source)}
                   >
-                    {tag}
+                    {label}
                   </button>
                 ))}
               </div>
@@ -156,24 +275,6 @@ export function PracticeBrowsePage() {
           )}
         </div>
       )}
-
-      <div className={styles.activeFilters}>
-        {selectedCats.map(c => (
-          <span key={c} className={styles.filterPill}>
-            {categoryLabels[c] ?? c} <X size={12} onClick={() => toggleCategory(c)} />
-          </span>
-        ))}
-        {selectedDiffs.map(d => (
-          <span key={d} className={styles.filterPill}>
-            {d} <X size={12} onClick={() => toggleDifficulty(d)} />
-          </span>
-        ))}
-        {selectedTags.map(t => (
-          <span key={t} className={styles.filterPill}>
-            {t} <X size={12} onClick={() => toggleTag(t)} />
-          </span>
-        ))}
-      </div>
 
       {!exercises && !error ? (
         <DataState description="正在读取题目和筛选条件。" loading title="题库加载中" />
@@ -185,13 +286,28 @@ export function PracticeBrowsePage() {
             <Link key={ex.id} to={`/practice/challenge/${ex.id}`} className={styles.challengeCard}>
               <div className={styles.challengeHeader}>
                 <span className={styles.challengeCategory}>{categoryLabels[ex.category as string] ?? ex.category}</span>
-                <span className={styles.challengeDifficulty}>{ex.difficulty}</span>
+                <span
+                  className={styles.challengeDifficulty}
+                  aria-label={`${difficultyStars[ex.difficulty ?? 'Baby'] ?? 1} 星难度`}
+                  title={`${ex.difficulty ?? 'Baby'} · ${difficultyStars[ex.difficulty ?? 'Baby'] ?? 1} 星`}
+                >
+                  {Array.from({ length: maxDifficultyStars }, (_, index) => (
+                    <Star
+                      key={index}
+                      size={13}
+                      fill={index < (difficultyStars[ex.difficulty ?? 'Baby'] ?? 1) ? 'currentColor' : 'none'}
+                    />
+                  ))}
+                </span>
               </div>
               <h3 className={styles.challengeTitle}>{ex.title}</h3>
               <div className={styles.challengeMeta}>
                 {ex.tags?.slice(0, 4).map(t => <span key={t} className={styles.tag}>{t}</span>)}
               </div>
               <div className={styles.challengeStats}>
+                <span className={ex.solved ? styles.solvedStatus : styles.unsolvedStatus}>
+                  {ex.solved ? '已攻克' : '未攻克'}
+                </span>
                 <span>{ex.acceptedCount ?? 0} 已完成</span>
                 <span>{ex.submissionCount ?? 0} 提交</span>
               </div>

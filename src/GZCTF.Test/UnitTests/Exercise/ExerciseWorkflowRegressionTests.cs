@@ -58,6 +58,8 @@ public class ExerciseWorkflowRegressionTests
             Title = "source",
             Content = "content",
             IsEnabled = true,
+            Type = ChallengeType.StaticContainer,
+            ContainerImage = "registry.example.test/ctf/source:latest",
             Attachment = new Attachment { Type = FileType.Remote, RemoteUrl = "https://example.test/exercise.zip" },
             Flags =
             [
@@ -84,12 +86,29 @@ public class ExerciseWorkflowRegressionTests
 
         var imported = await service.ImportFromGameChallengeAsync(challenge.Id);
 
+        Assert.Equal(ExercisePoolSource.Game, imported.PoolSource);
+        Assert.Equal(Role.Teacher, imported.MinimumVisibleRole);
         Assert.NotEqual(sourceAttachmentId, imported.AttachmentId);
         Assert.Equal("https://example.test/exercise.zip", imported.Attachment?.RemoteUrl);
         var importedFlag = Assert.Single(imported.Flags);
         Assert.False(importedFlag.IsOccupied);
         Assert.NotEqual(sourceFlagAttachmentId, importedFlag.AttachmentId);
         Assert.Equal("https://example.test/flag.zip", importedFlag.Attachment?.RemoteUrl);
+
+        context.GameChallenges.Add(new GameChallenge
+        {
+            GameId = challenge.GameId,
+            Title = "attachment-only",
+            Content = "content",
+            Type = ChallengeType.StaticAttachment,
+            IsEnabled = true,
+            Flags = [new FlagContext { Flag = "flag{attachment}", IsOccupied = false }]
+        });
+        await context.SaveChangesAsync();
+
+        var collected = await service.ImportFromGameAsync(challenge.GameId);
+        Assert.Single(collected);
+        Assert.Equal(imported.Id, collected[0].Id);
     }
 
     [Fact]

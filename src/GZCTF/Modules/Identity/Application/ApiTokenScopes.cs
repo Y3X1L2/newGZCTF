@@ -12,6 +12,9 @@ public static class ApiTokenScopes
     public const string ExercisesRead = "exercises:read";
     public const string ExercisesWrite = "exercises:write";
     public const string ExercisesDelete = "exercises:delete";
+    public const string TrainingWrite = "training:write";
+    public const string TheoryWrite = "theory:write";
+    public const string TeamsWrite = "teams:write";
     public const string TeamLabTopologiesRead = "teamlab.topologies:read";
     public const string TeamLabTopologiesWrite = "teamlab.topologies:write";
     public const string TeamLabRuntimesRead = "teamlab.runtimes:read";
@@ -34,6 +37,8 @@ public static class ApiTokenScopes
         ExercisesRead,
         ExercisesWrite,
         ExercisesDelete,
+        TrainingWrite,
+        TheoryWrite,
         TeamLabTopologiesRead,
         TeamLabTopologiesWrite,
         TeamLabRuntimesRead,
@@ -45,8 +50,17 @@ public static class ApiTokenScopes
         BootstrapProfilesWrite
     };
 
-    public static readonly IReadOnlySet<string> All = TeacherScopes;
+    public static readonly IReadOnlySet<string> AdminScopes = new HashSet<string>(StringComparer.Ordinal)
+    {
+        TeamsWrite
+    };
+
+    public static readonly IReadOnlySet<string> All = TeacherScopes
+        .Concat(AdminScopes)
+        .ToHashSet(StringComparer.Ordinal);
 
     public static bool IsAllowed(Role role, string scope) =>
-        role >= Role.Teacher && All.Contains(scope);
+        role >= Role.Admin
+            ? All.Contains(scope)
+            : role >= Role.Teacher && TeacherScopes.Contains(scope);
 }

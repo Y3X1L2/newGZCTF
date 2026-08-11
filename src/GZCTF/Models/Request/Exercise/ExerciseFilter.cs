@@ -7,4 +7,5 @@ public class ExerciseFilter
     public Difficulty[]? Difficulties { get; set; }
     public string[]? Tags { get; set; }
     public bool? Credit { get; set; }
+    public ExercisePoolSource[]? Sources { get; set; }
 }

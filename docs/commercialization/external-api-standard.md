@@ -78,6 +78,9 @@ scope 使用 `resource:action`：
 | `exercises:read` | 查询公共练习题库。 |
 | `exercises:write` | 创建、导入和修改公共练习题。 |
 | `exercises:delete` | 删除公共练习题。 |
+| `training:write` | 导入培训课程、章节、实验和课程试卷。 |
+| `theory:write` | 导入理论题库或替换 Theory/Mixed 比赛试卷。 |
+| `teams:write` | 由管理员批量创建战队并绑定现有用户。 |
 | `teamlab.topologies:read` | Phase 3 查询可访问拓扑和 release。 |
 | `teamlab.topologies:write` | Phase 3 编辑、验证和发布拓扑。 |
 | `teamlab.runtimes:read` | Phase 3 查询 runtime、事件和访问状态。 |
@@ -85,11 +88,15 @@ scope 使用 `resource:action`：
 | `teamlab.capture:read` | Phase 3 查询和下载授权范围内的 PCAP。 |
 | `teamlab.capture:write` | Phase 3 创建和停止抓包任务。 |
 
-resource grant 使用显式 `(resourceType, resourceId)` 行。比赛题目接口必须具有 `game:{gameId}` 或 `game:*`；教师只能签发自己拥有的具体比赛授权，`game:*` 和 `*:*` 只能由管理员签发。空 grant 不授予任何比赛。镜像接口仍按模板创建者和 `image:{name}` 授权；其他资源类型的 grant 会在签发时被拒绝。
+resource grant 使用显式 `(resourceType, resourceId)` 行。比赛题目接口必须具有 `game:{gameId}` 或 `game:*`；教师只能签发自己拥有的具体比赛授权，`game:*` 和 `*:*` 只能由管理员签发。空 grant 不授予任何比赛。镜像接口仍按模板创建者和 `image:{name}` 授权；其他已注册资源类型由对应 grant policy 校验，未知类型在签发时被拒绝。
 
 公共练习接口使用 `resourceType=exercise`：列表、创建和批量导入需要
 `exercise:*`，单题读取、更新和删除需要 `exercise:{exerciseId}`。培训课程题目
 (`TrainingCourseId != null`) 不属于公共练习资源，Exercise token 不能访问或修改。
+
+培训导入使用 `training-course:*`；理论题库导入使用 `theory-bank:*`；理论试卷
+使用既有 `game:{gameId}`；战队导入使用 `team:*`。`training:write` 和
+`theory:write` 可由 Teacher+ 签发，`teams:write` 与 `team:*` 仅 Admin 可签发。
 
 ## 3. HTTP 语义
 
@@ -231,7 +238,23 @@ DELETE /api/open/v1/exercises/{exerciseId}
 
 这些写接口均创建持久化 `ExerciseMutationJob` 和 `ApiOperation`，由可恢复 worker 执行；
 资源授权、幂等键和审计规则与本标准第 5、6、10 节相同。附件契约仅允许远程 URL，
-平台会在导入时复制附件，不共享比赛题目附件实体。
+平台会创建独立附件记录，不共享比赛题目附件实体。
+
+## 8.3 教学资源与战队导入接口
+
+```text
+POST   /api/open/v1/training/courses/import
+POST   /api/open/v1/theory/questions/import
+PUT    /api/open/v1/theory/games/{gameId}/paper
+POST   /api/open/v1/teams/import
+```
+
+- 四个接口均创建持久化 `AcademicImportJob` 和 `ApiOperation`，重启后由 worker 恢复。
+- 课程批次上限 50；理论题上限 1000；试卷题上限 1000；战队批次上限 200。
+- 课程导入可原子创建章节树、容器/远程附件实验、课程理论题和章节试卷；批次内引用使用调用方 `externalId`。
+- 理论试卷只允许目标为 Theory/Mixed 比赛；已有已提交答卷时禁止替换。
+- 战队导入只引用现有用户，不经 API 创建账号；管理员角色、`teams:write` 和 `team:*` 三项缺一不可。
+- operation `result.items` 返回 `externalId/resourceType/resourceId/action`，用于外部系统保存主键映射。
 
 ## 9. 并发与配额
 

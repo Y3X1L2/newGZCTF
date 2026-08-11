@@ -12,6 +12,7 @@ using GZCTF.Models.Request.Training;
 using GZCTF.Modules.Audit.Contracts;
 using GZCTF.Modules.Ctf.Contracts;
 using GZCTF.Modules.Penetration.Contracts;
+using GZCTF.Modules.Provisioning.Contracts;
 using GZCTF.Repositories.Interface;
 using GZCTF.Services.Container.Provider;
 using GZCTF.Services.TeamLab;
@@ -186,6 +187,11 @@ namespace GZCTF.Utils;
 [JsonSerializable(typeof(OpenChallengeSummaryModel))]
 [JsonSerializable(typeof(OpenChallengePageModel))]
 [JsonSerializable(typeof(OpenChallengeMutationResult))]
+[JsonSerializable(typeof(TrainingCourseImportBatchModel))]
+[JsonSerializable(typeof(TheoryQuestionImportBatchModel))]
+[JsonSerializable(typeof(TheoryPaperImportModel))]
+[JsonSerializable(typeof(TeamImportBatchModel))]
+[JsonSerializable(typeof(AcademicImportResult))]
 internal sealed partial class AppJsonSerializerContext : JsonSerializerContext;
 
 public class DateTimeOffsetJsonConverter : JsonConverter<DateTimeOffset>

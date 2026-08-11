@@ -37,6 +37,9 @@ public static class IdentityModuleRegistration
             AddScopePolicy(options, ApiTokenScopes.ExercisesRead);
             AddScopePolicy(options, ApiTokenScopes.ExercisesWrite);
             AddScopePolicy(options, ApiTokenScopes.ExercisesDelete);
+            AddScopePolicy(options, ApiTokenScopes.TrainingWrite);
+            AddScopePolicy(options, ApiTokenScopes.TheoryWrite);
+            AddScopePolicy(options, ApiTokenScopes.TeamsWrite);
             AddScopePolicy(options, ApiTokenScopes.TeamLabTopologiesRead);
             AddScopePolicy(options, ApiTokenScopes.TeamLabTopologiesWrite);
             AddScopePolicy(options, ApiTokenScopes.TeamLabRuntimesRead);

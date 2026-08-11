@@ -4,6 +4,7 @@ using System.Net;
 using GZCTF.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -12,9 +13,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace GZCTF.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260810145402_AddExercisePoolSources")]
+    partial class AddExercisePoolSources
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -5148,36 +5151,6 @@ namespace GZCTF.Migrations
                     b.ToTable("PenetrationTeamRuntimeBindings", (string)null);
                 });
 
-            modelBuilder.Entity("GZCTF.Modules.Provisioning.Domain.AcademicImportJob", b =>
-                {
-                    b.Property<Guid>("OperationId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset?>("CompletedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("Kind")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("PayloadJson")
-                        .HasColumnType("jsonb");
-
-                    b.Property<string>("ResultJson")
-                        .HasColumnType("jsonb");
-
-                    b.Property<int?>("TargetId")
-                        .HasColumnType("integer");
-
-                    b.HasKey("OperationId");
-
-                    b.HasIndex("Kind", "CompletedAt");
-
-                    b.ToTable("AcademicImportJobs", (string)null);
-                });
-
             modelBuilder.Entity("GZCTF.Modules.Runtime.Domain.AgentRuntimeSignal", b =>
                 {
                     b.Property<long>("Id")
@@ -9945,15 +9918,6 @@ namespace GZCTF.Migrations
                     b.HasOne("GZCTF.Models.Data.Team", null)
                         .WithMany()
                         .HasForeignKey("TeamId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("GZCTF.Modules.Provisioning.Domain.AcademicImportJob", b =>
-                {
-                    b.HasOne("GZCTF.Modules.Audit.Domain.ApiOperation", null)
-                        .WithOne()
-                        .HasForeignKey("GZCTF.Modules.Provisioning.Domain.AcademicImportJob", "OperationId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

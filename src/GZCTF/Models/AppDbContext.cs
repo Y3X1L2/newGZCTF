@@ -16,6 +16,7 @@ using TrainingCourseImageTemplateBindingEntity = GZCTF.Modules.Training.Domain.T
 using ImageImportJobEntity = GZCTF.Modules.Content.Domain.ImageImportJob;
 using ChallengeMutationJobEntity = GZCTF.Modules.Ctf.Domain.ChallengeMutationJob;
 using ExerciseMutationJobEntity = GZCTF.Modules.Exercise.Domain.ExerciseMutationJob;
+using AcademicImportJobEntity = GZCTF.Modules.Provisioning.Domain.AcademicImportJob;
 using ExternalApiRequestAuditEntity = GZCTF.Modules.Audit.Domain.ExternalApiRequestAudit;
 using OperationalEventEntity = GZCTF.Modules.Audit.Domain.OperationalEvent;
 using TeamLabTopologyEntity = GZCTF.Modules.TeamLab.Domain.TeamLabTopology;
@@ -93,6 +94,7 @@ public partial class AppDbContext(DbContextOptions<AppDbContext> options) :
     public DbSet<ImageImportJobEntity> ImageImportJobs { get; set; } = null!;
     public DbSet<ChallengeMutationJobEntity> ChallengeMutationJobs { get; set; } = null!;
     public DbSet<ExerciseMutationJobEntity> ExerciseMutationJobs { get; set; } = null!;
+    public DbSet<AcademicImportJobEntity> AcademicImportJobs { get; set; } = null!;
     public DbSet<ImageTemplate> ImageTemplates { get; set; } = null!;
     public DbSet<ImageTemplateRemoteAccessEntity> ImageTemplateRemoteAccesses => Set<ImageTemplateRemoteAccessEntity>();
     public DbSet<BootstrapProfile> BootstrapProfiles => Set<BootstrapProfile>();
@@ -499,6 +501,10 @@ public partial class AppDbContext(DbContextOptions<AppDbContext> options) :
             entity.Property(e => e.NetworkMode)
                 .HasConversion<byte>()
                 .HasDefaultValue(NetworkMode.Open);
+
+            entity.Property(e => e.MinimumVisibleRole)
+                .HasConversion<byte>()
+                .HasDefaultValue(Role.Student);
 
             entity.HasOne(e => e.Attachment)
                 .WithMany()
