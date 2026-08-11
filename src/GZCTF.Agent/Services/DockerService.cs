@@ -84,7 +84,9 @@ public class DockerService
                 ["ManagedBy"] = "GZCTF",
                 ["GZCTF.RuntimeId"] = request.RuntimeId.ToString(),
                 ["GZCTF.Generation"] = Math.Max(1, request.Generation).ToString(),
-                ["GZCTF.AssetKey"] = request.AssetKey ?? string.Empty
+                ["GZCTF.AssetKey"] = request.AssetKey ?? string.Empty,
+                ["GZCTF.TeamLabPlanDigest"] = request.TeamLabPlanDigest ?? string.Empty,
+                ["GZCTF.TeamLabShardKey"] = request.TeamLabShardKey ?? string.Empty
             },
             HostConfig = new HostConfig
             {
@@ -162,10 +164,20 @@ public class DockerService
                             existing.Config.Labels.TryGetValue("GZCTF.RuntimeId", out var runtimeLabel)
                 ? runtimeLabel
                 : null;
+            var planDigest = existing.Config.Labels is not null &&
+                             existing.Config.Labels.TryGetValue("GZCTF.TeamLabPlanDigest", out var digestLabel)
+                ? digestLabel
+                : null;
+            var shardKey = existing.Config.Labels is not null &&
+                           existing.Config.Labels.TryGetValue("GZCTF.TeamLabShardKey", out var shardLabel)
+                ? shardLabel
+                : null;
             if (!string.Equals(existing.Config.Image, request.Image, StringComparison.Ordinal) ||
                 !string.Equals(generation, Math.Max(1, request.Generation).ToString(), StringComparison.Ordinal) ||
                 gateForTeamLabNetwork &&
-                !string.Equals(runtimeId, request.RuntimeId.ToString(), StringComparison.Ordinal))
+                !string.Equals(runtimeId, request.RuntimeId.ToString(), StringComparison.Ordinal) ||
+                !string.Equals(planDigest, request.TeamLabPlanDigest ?? string.Empty, StringComparison.Ordinal) ||
+                !string.Equals(shardKey, request.TeamLabShardKey ?? string.Empty, StringComparison.Ordinal))
                 throw new InvalidOperationException(
                     $"runtime_identity_conflict: container {containerName} exists with a different image or generation.");
             if (request.StartImmediately && existing.State?.Running != true)
@@ -263,9 +275,10 @@ public class DockerService
     public async Task DestroyContainerAsync(
         string containerId,
         CancellationToken token,
-        int? expectedGeneration = null)
+        int? expectedGeneration = null,
+        string? expectedTeamLabPlanDigest = null)
     {
-        if (expectedGeneration is { } requiredGeneration)
+        if (expectedGeneration is not null || !string.IsNullOrWhiteSpace(expectedTeamLabPlanDigest))
         {
             ContainerInspectResponse existing;
             try
@@ -281,15 +294,26 @@ public class DockerService
                 return;
             }
 
-            if (!MatchesExpectedGeneration(existing.Config.Labels, requiredGeneration, out var legacyGeneration))
-                throw new AgentOperationException(
-                    "Conflict", "runtime.identity_conflict",
-                    "Container generation does not match the requested runtime identity.", false,
-                    StatusCodes.Status409Conflict);
-            if (legacyGeneration)
+            var legacyGeneration = false;
+            if (expectedGeneration is { } requiredGeneration)
+            {
+                if (!MatchesExpectedGeneration(existing.Config.Labels, requiredGeneration, out legacyGeneration))
+                    throw new AgentOperationException(
+                        "Conflict", "runtime.identity_conflict",
+                        "Container generation does not match the requested runtime identity.", false,
+                        StatusCodes.Status409Conflict);
+            }
+            if (expectedGeneration is not null && legacyGeneration)
                 _logger.LogWarning(
                     "Destroying legacy GZCTF container {ContainerId} without a generation label as generation 1",
                     containerId);
+            if (!string.IsNullOrWhiteSpace(expectedTeamLabPlanDigest) &&
+                (!existing.Config.Labels!.TryGetValue("GZCTF.TeamLabPlanDigest", out var existingPlanDigest) ||
+                 !string.Equals(existingPlanDigest, expectedTeamLabPlanDigest, StringComparison.OrdinalIgnoreCase)))
+                throw new AgentOperationException(
+                    "Conflict", "runtime.execution_plan_conflict",
+                    "Container does not belong to the requested execution plan.", false,
+                    StatusCodes.Status409Conflict);
         }
 
         try
@@ -774,6 +798,9 @@ public class DockerService
                     RuntimeId: runtimeId,
                     AssetKey: container.Labels.TryGetValue("GZCTF.AssetKey", out var assetKey)
                         ? assetKey
+                        : null,
+                    ShardKey: container.Labels.TryGetValue("GZCTF.TeamLabShardKey", out var shardKey)
+                        ? shardKey
                         : null);
             })
             .OfType<RuntimeInventoryResource>()

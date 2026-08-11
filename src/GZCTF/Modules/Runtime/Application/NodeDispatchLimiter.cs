@@ -58,32 +58,30 @@ public sealed class NodeDispatchLimiter
     public async Task RunAsync(Guid nodeId, NodeDispatchCategory category, int limit,
         Func<CancellationToken, Task> operation, CancellationToken token)
     {
-        var normalizedLimit = Math.Max(1, limit);
-        var gate = _gates.GetOrAdd((nodeId, category), _ => new DispatchGate(normalizedLimit));
-        await gate.Semaphore.WaitAsync(token);
+        var gate = _gates.GetOrAdd((nodeId, category), _ => new DispatchGate());
+        await gate.EnterAsync(limit, token);
         try
         {
             await operation(token);
         }
         finally
         {
-            gate.Semaphore.Release();
+            gate.Exit();
         }
     }
 
     public async Task<T> RunAsync<T>(Guid nodeId, NodeDispatchCategory category, int limit,
         Func<CancellationToken, Task<T>> operation, CancellationToken token)
     {
-        var normalizedLimit = Math.Max(1, limit);
-        var gate = _gates.GetOrAdd((nodeId, category), _ => new DispatchGate(normalizedLimit));
-        await gate.Semaphore.WaitAsync(token);
+        var gate = _gates.GetOrAdd((nodeId, category), _ => new DispatchGate());
+        await gate.EnterAsync(limit, token);
         try
         {
             return await operation(token);
         }
         finally
         {
-            gate.Semaphore.Release();
+            gate.Exit();
         }
     }
 
@@ -104,9 +102,69 @@ public sealed class NodeDispatchLimiter
         }
     }
 
-    sealed class DispatchGate(int capacity)
+    sealed class DispatchGate
     {
-        public int Capacity { get; } = capacity;
-        public SemaphoreSlim Semaphore { get; } = new(capacity, capacity);
+        readonly object sync = new();
+        SemaphoreSlim semaphore = new(1, 1);
+        int capacity = 1;
+        int desiredCapacity = 1;
+        int active;
+        int waiting;
+
+        public int Capacity
+        {
+            get { lock (sync) return capacity; }
+        }
+
+        public SemaphoreSlim Semaphore
+        {
+            get { lock (sync) return semaphore; }
+        }
+
+        public async Task EnterAsync(int limit, CancellationToken token)
+        {
+            SemaphoreSlim current;
+            lock (sync)
+            {
+                desiredCapacity = Math.Max(1, limit);
+                if (active == 0 && waiting == 0 && capacity != desiredCapacity)
+                {
+                    semaphore.Dispose();
+                    capacity = desiredCapacity;
+                    semaphore = new SemaphoreSlim(capacity, capacity);
+                }
+                current = semaphore;
+                waiting++;
+            }
+            try
+            {
+                await current.WaitAsync(token);
+                lock (sync)
+                {
+                    waiting--;
+                    active++;
+                }
+            }
+            catch
+            {
+                lock (sync) waiting--;
+                throw;
+            }
+        }
+
+        public void Exit()
+        {
+            lock (sync)
+            {
+                active--;
+                semaphore.Release();
+                if (active == 0 && waiting == 0 && capacity != desiredCapacity)
+                {
+                    semaphore.Dispose();
+                    capacity = desiredCapacity;
+                    semaphore = new SemaphoreSlim(capacity, capacity);
+                }
+            }
+        }
     }
 }

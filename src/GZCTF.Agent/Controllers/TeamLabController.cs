@@ -29,23 +29,27 @@ public class TeamLabController(
 
     [HttpPost("execution-plan/apply")]
     public async Task<IActionResult> ApplyExecutionPlan(
-        [FromBody] TeamLabExecutionPlanApplyRequest request,
+        [FromBody] TeamLabExecutionPlanApplyRequest? request,
         CancellationToken token)
     {
         if (!teamLabOptions.Value.EnableExecutionPlanV2)
             return NotFound();
+        if (request?.Plan is null) return BadRequest("Execution plan request is required.");
         await using var permit = await gate.EnterAsync(AgentOperationCategory.TeamLabExecution, token);
         return Ok(await executionPlans.ApplyAsync(request.Plan, token));
     }
 
     [HttpPost("execution-plan/cleanup")]
     public async Task<IActionResult> CleanupExecutionPlan(
-        [FromBody] TeamLabExecutionPlanCleanupRequest request,
+        [FromBody] TeamLabExecutionPlanCleanupRequest? request,
         CancellationToken token)
     {
         if (!teamLabOptions.Value.EnableExecutionPlanV2)
             return NotFound();
-        await using var permit = await gate.EnterAsync(AgentOperationCategory.TeamLabExecution, token);
+        if (request?.Plan is null) return BadRequest("Execution plan request is required.");
+        // Cleanup is a bounded, identity-fenced operation. It must not wait behind an unrelated
+        // long-running apply; the per-plan executor lease still serializes the same shard.
+        await using var permit = await gate.EnterAsync(AgentOperationCategory.Control, token);
         return Ok(await executionPlans.CleanupAsync(request.Plan, token));
     }
 
@@ -165,10 +169,17 @@ public class TeamLabController(
     }
 
     [HttpPost("observations/read")]
-    public IActionResult ReadObservations([FromBody] TeamLabObservationBatchRequest request)
+    public async Task<IActionResult> ReadObservations([FromBody] TeamLabObservationBatchRequest request,
+        CancellationToken token)
     {
-        if (request.RuntimeId <= 0 || request.Generation <= 0 || request.AfterSequence < 0)
+        if (request.RuntimeId <= 0 || request.Generation <= 0 || request.AfterSequence < 0 ||
+            request.AcknowledgeThroughSequence < 0)
             return BadRequest("Invalid TeamLab observation cursor.");
+        if (request.AcknowledgeThroughSequence > request.AfterSequence)
+            return BadRequest("Observation acknowledgement cannot exceed the read cursor.");
+        if (request.AcknowledgeThroughSequence > 0)
+            await observer.AcknowledgeAsync(
+                request.RuntimeId, request.Generation, request.AcknowledgeThroughSequence, token);
         return Ok(observer.Read(request));
     }
 

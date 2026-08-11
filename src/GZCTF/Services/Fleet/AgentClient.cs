@@ -307,22 +307,26 @@ public class AgentClient
     public virtual Task<TeamLabExecutionPlanApplyResponse?> ApplyTeamLabExecutionPlanAsync(
         Guid nodeId,
         TeamLabExecutionPlanV2 plan,
-        CancellationToken token) =>
+        CancellationToken token,
+        TimeSpan? requestTimeout = null) =>
         PostTeamLabAsync<TeamLabExecutionPlanApplyRequest, TeamLabExecutionPlanApplyResponse>(
             nodeId,
             "/api/teamlab/execution-plan/apply",
             new TeamLabExecutionPlanApplyRequest(plan),
-            token);
+            token,
+            requestTimeout);
 
     public virtual Task<TeamLabExecutionPlanCleanupResponse?> CleanupTeamLabExecutionPlanAsync(
         Guid nodeId,
         TeamLabExecutionPlanV2 plan,
-        CancellationToken token) =>
+        CancellationToken token,
+        TimeSpan? requestTimeout = null) =>
         PostTeamLabAsync<TeamLabExecutionPlanCleanupRequest, TeamLabExecutionPlanCleanupResponse>(
             nodeId,
             "/api/teamlab/execution-plan/cleanup",
             new TeamLabExecutionPlanCleanupRequest(plan),
-            token);
+            token,
+            requestTimeout);
 
     public virtual async Task<TeamLabDryRunResponse?> ConfigureTeamLabWireGuardAsync(Guid nodeId,
         TeamLabWireGuardRequest request, CancellationToken token) =>
@@ -1869,6 +1873,7 @@ public record AgentSyncRequest(
     string? WindowsSensorDownloadUrl = null,
     string? WindowsSensorSha256 = null,
     AgentVmControlPlaneSyncConfig? VmControlPlane = null,
+    TeamLabDataPlaneSyncConfig? TeamLabDataPlane = null,
     bool Restart = true);
 
 public sealed record AgentVmControlPlaneSyncConfig(
@@ -1878,6 +1883,16 @@ public sealed record AgentVmControlPlaneSyncConfig(
     int PrefixLength = 16,
     int ListenPort = 5443,
     string GuestStateRoot = "/var/lib/gzctf/teamlab/guest-control");
+
+public sealed record TeamLabDataPlaneSyncConfig(
+    bool Enabled,
+    bool ControlPlane,
+    string? NorthboundEndpoint,
+    string? SouthboundEndpoint,
+    string? NorthboundListenEndpoint,
+    string? SouthboundListenEndpoint,
+    string? ChassisEncapIp,
+    string IntegrationBridgeName = "br-int");
 
 public record AgentSyncResponse(
     bool Success,
@@ -2235,7 +2250,8 @@ public record TeamLabObservationBatchRequest(
     int Generation,
     long AfterSequence = 0,
     Guid? ObservationPointId = null,
-    int Limit = 500);
+    int Limit = 500,
+    long AcknowledgeThroughSequence = 0);
 
 public record TeamLabObservationRecord(
     long Sequence,

@@ -1,4 +1,5 @@
 using GZCTF.Agent.Models;
+using GZCTF.Agent.Services.TeamLab;
 using Microsoft.Extensions.Options;
 using System.Runtime.InteropServices;
 
@@ -6,6 +7,7 @@ namespace GZCTF.Agent.Services;
 
 public sealed class AgentCapabilityService(
     TeamLabNetworkService teamLab,
+    TeamLabDataPlanePreparationService dataPlane,
     IOptions<AgentConfig> options,
     IOptions<AgentTeamLabConfig> teamLabOptions)
 {
@@ -19,6 +21,7 @@ public sealed class AgentCapabilityService(
     public async Task<AgentCapabilityManifest> GetManifestAsync(string? binarySha256, CancellationToken token)
     {
         var teamLabStatus = await teamLab.GetStatusAsync(token);
+        var dataPlaneReadiness = await dataPlane.GetReadinessAsync(_teamLabConfig, token);
         var capabilities = teamLabStatus.Capabilities;
         var features = new List<string>();
         if (capabilities.Docker)
@@ -46,11 +49,11 @@ public sealed class AgentCapabilityService(
                 features.Add(AgentFeatureIds.TeamLabEndpointSensor);
             if (HasLibPcap())
                 features.Add(AgentFeatureIds.TeamLabObservation);
-            if (_teamLabConfig.EnableExecutionPlanV2 && HasNativeLibvirt())
+            if (HasNativeLibvirt())
                 features.Add(AgentFeatureIds.TeamLabNativeLibvirt);
-            if (_teamLabConfig.EnableExecutionPlanV2 && HasOvsdb())
+            if (dataPlaneReadiness.Ready)
                 features.Add(AgentFeatureIds.TeamLabOvnOvs);
-            if (_teamLabConfig.EnableExecutionPlanV2 && HasOvsdb() && (capabilities.Docker || kvm))
+            if (dataPlaneReadiness.Ready && (capabilities.Docker || kvm))
                 features.Add(AgentFeatureIds.TeamLabExecutionPlan);
             if (HasArtifactCacheRoot())
                 features.Add(AgentFeatureIds.TeamLabArtifactCache);
@@ -129,11 +132,6 @@ public sealed class AgentCapabilityService(
         if (handle != 0) NativeLibrary.Free(handle);
         return handle != 0;
     }
-
-    static bool HasOvsdb() =>
-        OperatingSystem.IsLinux() &&
-        (File.Exists("/var/run/openvswitch/db.sock") ||
-         File.Exists("/var/run/ovn/ovnnb_db.sock"));
 
     static bool HasArtifactCacheRoot() =>
         Directory.Exists("/var/lib/gzctf/images") || Directory.Exists("/var/lib/gzctf/teamlab");

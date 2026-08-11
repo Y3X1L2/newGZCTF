@@ -1,42 +1,15 @@
 using System.Runtime.InteropServices;
 using System.Text;
-using GZCTF.Agent.Models;
-using Microsoft.Extensions.Options;
 
 namespace GZCTF.Agent.Services.Vm;
 
 internal static partial class LibvirtNativeInterop
 {
-    internal const int DomainEventIdLifecycle = 0;
-    internal const int DomainEventDefined = 0;
-    internal const int DomainEventStarted = 2;
-    internal const int DomainEventSuspended = 3;
-    internal const int DomainEventStopped = 5;
-    internal const int DomainEventResumed = 7;
-
-    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-    internal delegate void DomainLifecycleCallback(nint connection, nint domain, int eventId, int detail, nint opaque);
-
     [DllImport("libvirt.so.0", EntryPoint = "virConnectOpen", CallingConvention = CallingConvention.Cdecl)]
     internal static extern nint ConnectOpen([MarshalAs(UnmanagedType.LPStr)] string uri);
 
     [DllImport("libvirt.so.0", EntryPoint = "virConnectClose", CallingConvention = CallingConvention.Cdecl)]
     internal static extern int ConnectClose(nint connection);
-
-    [DllImport("libvirt.so.0", EntryPoint = "virEventRegisterDefaultImpl", CallingConvention = CallingConvention.Cdecl)]
-    internal static extern int EventRegisterDefaultImpl();
-
-    [DllImport("libvirt.so.0", EntryPoint = "virEventRunDefaultImpl", CallingConvention = CallingConvention.Cdecl)]
-    internal static extern int EventRunDefaultImpl();
-
-    [DllImport("libvirt.so.0", EntryPoint = "virConnectDomainEventRegisterAny", CallingConvention = CallingConvention.Cdecl)]
-    internal static extern int RegisterDomainEvent(
-        nint connection,
-        nint domain,
-        int eventId,
-        DomainLifecycleCallback callback,
-        nint opaque,
-        nint freeCallback);
 
     [DllImport("libvirt.so.0", EntryPoint = "virDomainLookupByName", CallingConvention = CallingConvention.Cdecl)]
     internal static extern nint DomainLookupByName(
@@ -71,76 +44,17 @@ internal static partial class LibvirtNativeInterop
 
     [DllImport("libvirt.so.0", EntryPoint = "virDomainGetUUIDString", CallingConvention = CallingConvention.Cdecl)]
     internal static extern int DomainGetUuidString(nint domain, StringBuilder uuid);
-}
 
-public sealed class LibvirtEventDispatcher(
-    ILogger<LibvirtEventDispatcher> logger,
-    IOptions<KvmConfig> options) : IHostedService, IDisposable
-{
-    readonly object sync = new();
-    LibvirtConnection? connection;
-    Thread? eventThread;
+    [DllImport("libvirt.so.0", EntryPoint = "virDomainGetXMLDesc", CallingConvention = CallingConvention.Cdecl)]
+    internal static extern nint DomainGetXmlDesc(nint domain, uint flags);
 
-    public Task StartAsync(CancellationToken cancellationToken)
-    {
-        lock (sync)
-        {
-            if (eventThread is not null) return Task.CompletedTask;
-            try
-            {
-                connection = LibvirtConnection.TryOpen(logger, options.Value.LibvirtUri);
-                if (connection is null) return Task.CompletedTask;
-                LibvirtNativeInterop.EventRegisterDefaultImpl();
-                connection.RegisterLifecycleEvents();
-                eventThread = new Thread(RunEventLoop)
-                {
-                    IsBackground = true,
-                    Name = "gzctf-libvirt-events"
-                };
-                eventThread.Start();
-            }
-            catch (Exception exception) when (exception is DllNotFoundException or EntryPointNotFoundException or InvalidOperationException)
-            {
-                logger.LogInformation(exception, "Native libvirt events are unavailable on this Agent.");
-                connection?.Dispose();
-                connection = null;
-            }
-        }
-        return Task.CompletedTask;
-    }
-
-    void RunEventLoop()
-    {
-        while (connection is not null)
-        {
-            try
-            {
-                if (LibvirtNativeInterop.EventRunDefaultImpl() < 0) break;
-            }
-            catch (Exception exception)
-            {
-                logger.LogWarning(exception, "Native libvirt event loop stopped.");
-                break;
-            }
-        }
-    }
-
-    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
-
-    public void Dispose()
-    {
-        lock (sync)
-        {
-            connection?.Dispose();
-            connection = null;
-        }
-    }
+    [DllImport("libvirt.so.0", EntryPoint = "virFree", CallingConvention = CallingConvention.Cdecl)]
+    internal static extern void Free(nint pointer);
 }
 
 public sealed class LibvirtConnection : IDisposable
 {
     readonly nint handle;
-    LibvirtNativeInterop.DomainLifecycleCallback? callback;
 
     LibvirtConnection(nint handle) => this.handle = handle;
 
@@ -166,21 +80,16 @@ public sealed class LibvirtConnection : IDisposable
 
     public nint Define(string xml) => LibvirtNativeInterop.DomainDefineXml(handle, xml);
 
-    public void RegisterLifecycleEvents()
+    public string? GetXml(nint domain)
     {
-        callback = static (_, domain, eventId, _, _) =>
-        {
-            if (domain != 0)
-                LibvirtNativeInterop.DomainFree(domain);
-        };
-        if (LibvirtNativeInterop.RegisterDomainEvent(
-                handle, 0, LibvirtNativeInterop.DomainEventIdLifecycle, callback, 0, 0) < 0)
-            throw new InvalidOperationException("libvirt lifecycle event registration failed.");
+        var xml = LibvirtNativeInterop.DomainGetXmlDesc(domain, 0);
+        if (xml == 0) return null;
+        try { return Marshal.PtrToStringAnsi(xml); }
+        finally { LibvirtNativeInterop.Free(xml); }
     }
 
     public void Dispose()
     {
         if (handle != 0) LibvirtNativeInterop.ConnectClose(handle);
-        callback = null;
     }
 }

@@ -144,6 +144,26 @@ public sealed class ObservationBatchSpool : BackgroundService
             });
     }
 
+    public async Task AcknowledgeAsync(int runtimeId, int generation, long sequence,
+        CancellationToken cancellationToken)
+    {
+        if (sequence <= 0) return;
+        var key = new RuntimeKey(runtimeId, generation);
+        if (!_buffers.TryGetValue(key, out var buffer)) return;
+
+        var gate = MutationGate(key);
+        await gate.WaitAsync(cancellationToken);
+        try
+        {
+            if (_removed.ContainsKey(key) || !buffer.Acknowledge(sequence)) return;
+            await RewriteSpoolLockedAsync(key, buffer, cancellationToken);
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
     public void Remove(int runtimeId, int generation)
     {
         var key = new RuntimeKey(runtimeId, generation);
@@ -199,10 +219,12 @@ public sealed class ObservationBatchSpool : BackgroundService
         {
             batch.Clear();
             while (batch.Count < 256 && _writes.Reader.TryRead(out var item)) batch.Add(item);
-            foreach (var group in batch.GroupBy(item => (item.Key, item.Epoch)))
+            foreach (var group in batch.GroupBy(item => (item.Key, item.Epoch, item.SpoolVersion)))
             {
                 if (_removed.ContainsKey(group.Key.Key) ||
-                    _epochs.GetOrAdd(group.Key.Key, 0) != group.Key.Epoch)
+                    _epochs.GetOrAdd(group.Key.Key, 0) != group.Key.Epoch ||
+                    !_buffers.TryGetValue(group.Key.Key, out var buffer) ||
+                    !buffer.AcceptsSpoolVersion(group.Key.SpoolVersion))
                     continue;
                 try
                 {
@@ -237,10 +259,10 @@ public sealed class ObservationBatchSpool : BackgroundService
             buffer.RecordDrop();
             return false;
         }
-        buffer.Append(record);
+        var spoolVersion = buffer.Append(record);
         if (_removed.ContainsKey(buffer.Key) || _epochs.GetOrAdd(buffer.Key, 0) != epoch)
             return false;
-        if (!_writes.Writer.TryWrite(new SpoolWrite(buffer.Key, epoch, record))) buffer.RecordDrop();
+        if (!_writes.Writer.TryWrite(new SpoolWrite(buffer.Key, epoch, spoolVersion, record))) buffer.RecordDrop();
         return true;
     }
 
@@ -274,16 +296,19 @@ public sealed class ObservationBatchSpool : BackgroundService
             if (_removed.ContainsKey(key) || _epochs.GetOrAdd(key, 0) != epoch)
                 return;
 
+            if (!_buffers.TryGetValue(key, out var buffer)) return;
+            var pending = records.Where(record => record.Sequence > buffer.AcknowledgedThrough).ToArray();
+            if (pending.Length == 0) return;
             var path = SpoolPath(key);
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             await using (var stream = new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.Read))
             await using (var writer = new StreamWriter(stream))
             {
-                foreach (var record in records)
+                foreach (var record in pending)
                     await writer.WriteLineAsync(JsonSerializer.Serialize(record).AsMemory(), cancellationToken);
             }
             var length = new FileInfo(path).Length;
-            if (_buffers.TryGetValue(key, out var buffer)) buffer.SpoolBytes = length;
+            buffer.SpoolBytes = length;
             if (length > Math.Max(1_048_576, _config.ObservationSpoolMaxBytes))
                 await CompactLockedAsync(key, path, cancellationToken);
         }
@@ -306,6 +331,36 @@ public sealed class ObservationBatchSpool : BackgroundService
             {
                 foreach (var item in retained)
                     await stream.WriteAsync(item.Line, cancellationToken);
+            }
+            File.Move(temporary, path, true);
+            buffer.SpoolBytes = new FileInfo(path).Length;
+        }
+        finally
+        {
+            if (File.Exists(temporary)) File.Delete(temporary);
+        }
+    }
+
+    private async Task RewriteSpoolLockedAsync(RuntimeKey key, RuntimeBuffer buffer,
+        CancellationToken cancellationToken)
+    {
+        var path = SpoolPath(key);
+        if (!File.Exists(path))
+        {
+            buffer.SpoolBytes = 0;
+            return;
+        }
+        var temporary = $"{path}.{Guid.NewGuid():N}.tmp";
+        try
+        {
+            await using (var stream = File.Create(temporary))
+            {
+                foreach (var record in buffer.All())
+                {
+                    var payload = JsonSerializer.SerializeToUtf8Bytes(record);
+                    await stream.WriteAsync(payload, cancellationToken);
+                    await stream.WriteAsync("\n"u8.ToArray(), cancellationToken);
+                }
             }
             File.Move(temporary, path, true);
             buffer.SpoolBytes = new FileInfo(path).Length;
@@ -395,7 +450,11 @@ public sealed class ObservationBatchSpool : BackgroundService
     }
 
     private readonly record struct RuntimeKey(int RuntimeId, int Generation);
-    private readonly record struct SpoolWrite(RuntimeKey Key, long Epoch, TeamLabObservationRecord Record);
+    private readonly record struct SpoolWrite(
+        RuntimeKey Key,
+        long Epoch,
+        long SpoolVersion,
+        TeamLabObservationRecord Record);
     private sealed record SerializedObservation(TeamLabObservationRecord Record, byte[] Line);
 
     private static IReadOnlyList<SerializedObservation> RetainWithinBudget(
@@ -428,8 +487,10 @@ public sealed class ObservationBatchSpool : BackgroundService
         private long _nextSequence;
         private long _packetOrdinal;
         private long _dropped;
+        private long _spoolVersion;
         public RuntimeKey Key { get; } = key;
         public long SpoolBytes { get; set; }
+        public long AcknowledgedThrough { get; private set; }
 
         public long NextSequence()
         {
@@ -505,7 +566,7 @@ public sealed class ObservationBatchSpool : BackgroundService
             Packets: aggregate.Packets,
             Bytes: aggregate.Bytes);
 
-        public void Append(TeamLabObservationRecord record)
+        public long Append(TeamLabObservationRecord record)
         {
             lock (_records)
             {
@@ -515,6 +576,7 @@ public sealed class ObservationBatchSpool : BackgroundService
                     _records.RemoveFirst();
                     _dropped++;
                 }
+                return _spoolVersion;
             }
         }
 
@@ -535,6 +597,24 @@ public sealed class ObservationBatchSpool : BackgroundService
         public void RecordDrop()
         {
             lock (_records) _dropped++;
+        }
+
+        public bool Acknowledge(long sequence)
+        {
+            lock (_records)
+            {
+                if (sequence <= AcknowledgedThrough) return false;
+                AcknowledgedThrough = Math.Min(sequence, _nextSequence);
+                while (_records.First is { Value.Sequence: var value } && value <= AcknowledgedThrough)
+                    _records.RemoveFirst();
+                _spoolVersion++;
+                return true;
+            }
+        }
+
+        public bool AcceptsSpoolVersion(long version)
+        {
+            lock (_records) return version == _spoolVersion;
         }
 
         public RuntimeRead Read(long after, Guid? pointId, int limit)
@@ -565,6 +645,7 @@ public sealed class ObservationBatchSpool : BackgroundService
                 _dropped += Math.Max(0, _records.Count - records.Count);
                 _records.Clear();
                 foreach (var record in records) _records.AddLast(record);
+                _spoolVersion++;
             }
         }
 

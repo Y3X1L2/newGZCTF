@@ -21,7 +21,8 @@ public sealed class TeamLabTrafficApplicationService(
     IDistributedLeaseProvider locks,
     ITeamLabTrafficIngestor ingestor,
     TeamLabEventRecorder eventRecorder,
-    ILogger<TeamLabTrafficApplicationService> logger)
+    ILogger<TeamLabTrafficApplicationService> logger,
+    IServiceScopeFactory? scopeFactory = null)
 {
     public Task StartCollectorsAsync(TeamLabRuntime runtime, CancellationToken cancellationToken) =>
         Task.CompletedTask;
@@ -501,6 +502,11 @@ public sealed class TeamLabTrafficApplicationService(
                 item.UploadedAt)).ToArray());
     }
 
+    private const int ObservationReadPageSize = 2_000;
+    private const int ObservationMaxRecordsPerCollection = 16_000;
+    private const int ObservationCollectorConcurrency = 4;
+    private static readonly TimeSpan ObservationCollectionBudget = TimeSpan.FromSeconds(8);
+
     internal async Task CollectAvailableFlowsAsync(CancellationToken cancellationToken)
     {
         var sourceRows = await context.TeamLabObservationPoints.AsNoTracking()
@@ -516,17 +522,41 @@ public sealed class TeamLabTrafficApplicationService(
             .Select(item => new ObservationSource(item.RuntimeId, item.Generation, item.WorkerNodeId))
             .ToArray();
 
-        foreach (var source in sources)
+        if (scopeFactory is null)
         {
-            try
+            foreach (var source in sources)
             {
-                await CollectNodeObservationsAsync(source, cancellationToken);
+                try
+                {
+                    await CollectNodeObservationsAsync(source, cancellationToken);
+                }
+                catch (TimeoutException)
+                {
+                    // Another application instance owns this node collector lease.
+                }
             }
-            catch (TimeoutException)
-            {
-                // Another application instance owns this node collector lease.
-            }
+            return;
         }
+
+        await Parallel.ForEachAsync(sources,
+            new ParallelOptions
+            {
+                CancellationToken = cancellationToken,
+                MaxDegreeOfParallelism = ObservationCollectorConcurrency
+            },
+            async (source, token) =>
+            {
+                try
+                {
+                    await using var scope = scopeFactory.CreateAsyncScope();
+                    await scope.ServiceProvider.GetRequiredService<TeamLabTrafficApplicationService>()
+                        .CollectNodeObservationsAsync(source, token);
+                }
+                catch (TimeoutException)
+                {
+                    // Another application instance owns this node collector lease.
+                }
+            });
     }
 
     private async Task CollectNodeObservationsAsync(
@@ -572,14 +602,28 @@ public sealed class TeamLabTrafficApplicationService(
             context.TeamLabObservationCursors.Add(cursor);
             await context.SaveChangesAsync(cancellationToken);
         }
-
+        var pointsByPublicId = points.ToDictionary(item => item.PublicId);
+        var endpointPoints = points
+            .Where(item => item.Kind == TeamLabObservationPointKind.WorkloadEndpoint)
+            .GroupBy(item => item.TopologyKey, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
+        var networkCidrs = await context.TeamLabRuntimeNetworks.AsNoTracking()
+            .Where(item => item.RuntimeId == source.RuntimeId && item.Generation == source.Generation)
+            .Select(item => new { item.Id, item.Cidr })
+            .ToDictionaryAsync(item => item.Id, item => IPNetwork.Parse(item.Cidr), cancellationToken);
+        var deadline = DateTimeOffset.UtcNow + ObservationCollectionBudget;
+        var collected = 0;
+        while (collected < ObservationMaxRecordsPerCollection && DateTimeOffset.UtcNow < deadline)
+        {
+        var previousSequence = cursor.LastSequence;
         var result = await executor.ReadObservationsAsync(
             source.WorkerNodeId,
             source.RuntimeId,
             source.Generation,
             cursor.LastSequence,
+            cursor.LastSequence,
             null,
-            500,
+            ObservationReadPageSize,
             cancellationToken);
         var now = DateTimeOffset.UtcNow;
         var hadError = points.Any(item => !string.IsNullOrWhiteSpace(item.LastError));
@@ -612,15 +656,6 @@ public sealed class TeamLabTrafficApplicationService(
             return;
         }
 
-        var pointsByPublicId = points.ToDictionary(item => item.PublicId);
-        var endpointPoints = points
-            .Where(item => item.Kind == TeamLabObservationPointKind.WorkloadEndpoint)
-            .GroupBy(item => item.TopologyKey, StringComparer.Ordinal)
-            .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
-        var networkCidrs = await context.TeamLabRuntimeNetworks.AsNoTracking()
-            .Where(item => item.RuntimeId == source.RuntimeId && item.Generation == source.Generation)
-            .Select(item => new { item.Id, item.Cidr })
-            .ToDictionaryAsync(item => item.Id, item => IPNetwork.Parse(item.Cidr), cancellationToken);
         var prepared = PrepareObservationBatch(
             result.Records,
             cursor.LastSequence,
@@ -646,7 +681,10 @@ public sealed class TeamLabTrafficApplicationService(
 
         var previousDropped = cursor.DroppedCount;
         var previousRejected = cursor.SensorRejectedCount;
-        cursor.LastSequence = Math.Max(cursor.LastSequence, prepared.NextSequence);
+        var accepted = enqueue.DroppedCount == 0;
+        cursor.LastSequence = accepted
+            ? Math.Max(cursor.LastSequence, prepared.NextSequence)
+            : cursor.LastSequence;
         cursor.DroppedCount = Math.Max(cursor.DroppedCount, result.DroppedCount) + enqueue.DroppedCount;
         cursor.SensorRejectedCount = Math.Max(cursor.SensorRejectedCount, result.Health.SensorRejectedCount);
         cursor.LastSensorErrorCode = result.Health.LastSensorErrorCode;
@@ -717,6 +755,11 @@ public sealed class TeamLabTrafficApplicationService(
             PlatformTelemetry.RecordTeamLabObservation("recovered", "mixed");
         }
         await context.SaveChangesAsync(cancellationToken);
+        collected += result.Records.Count;
+        if (!accepted || prepared.BlockedByUnresolvedRecord ||
+            result.Records.Count < ObservationReadPageSize || cursor.LastSequence <= previousSequence)
+            return;
+        }
     }
 
     private static IReadOnlyDictionary<string, object?> ObservationDetail(

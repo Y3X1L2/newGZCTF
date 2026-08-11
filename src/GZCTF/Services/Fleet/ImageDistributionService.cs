@@ -252,7 +252,6 @@ public class ImageDistributionService(
                               (release.ControlScopeId == null || !release.ControlScope!.IsArchived))
             .Select(release => release.Id)
             .ToHashSetAsync(token);
-        var releaseRetentionCutoff = DateTimeOffset.UtcNow.AddHours(-24);
         foreach (var record in records)
         {
             var invalidReferences = record.References.Where(reference => reference.Kind switch
@@ -272,8 +271,7 @@ public class ImageDistributionService(
                     !activeTopologyIds.Contains(reference.ResourceId),
                 ImageDistributionReferenceKind.TeamLabRelease =>
                     reference.ResourcePublicId is not { } releaseId ||
-                    !activeReleaseIds.Contains(releaseId) ||
-                    reference.CreatedAt < releaseRetentionCutoff,
+                    !activeReleaseIds.Contains(releaseId),
                 _ => true
             }).ToList();
             if (invalidReferences.Count > 0)
@@ -295,33 +293,105 @@ public class ImageDistributionService(
 
     public async Task CleanupTemplateForDeletionAsync(int templateId, CancellationToken token)
     {
+        var candidates = await context.ImageDistributionRecords.AsNoTracking()
+            .Where(record => record.ImageTemplateId == templateId)
+            .Select(record => new TemplateCleanupCandidate(
+                record.Id,
+                record.ImageTemplateId,
+                record.WorkerNodeId,
+                record.Operation,
+                record.Status))
+            .OrderBy(record => record.ImageTemplateId)
+            .ThenBy(record => record.WorkerNodeId)
+            .ToArrayAsync(token);
+        if (candidates.Length == 0)
+            return;
+
+        var cleanupOwner = $"image-template-delete:{templateId}";
+        var now = DateTimeOffset.UtcNow;
+        await using var transaction = context.Database.CurrentTransaction is null && context.Database.IsRelational()
+            ? await context.Database.BeginTransactionAsync(token)
+            : null;
+
+        foreach (var candidate in candidates)
+            await AcquireDistributionLockAsync(candidate.ImageTemplateId, candidate.WorkerNodeId, token);
+
+        foreach (var candidate in candidates)
+        {
+            if (context.Database.IsRelational())
+            {
+                var claimed = await context.ImageDistributionRecords
+                    .Where(record => record.Id == candidate.Id &&
+                                     (record.ClaimOwner == null || record.ClaimExpiresAt <= now))
+                    .ExecuteUpdateAsync(setters => setters
+                        .SetProperty(record => record.Operation, ImageDistributionOperation.Cleanup)
+                        .SetProperty(record => record.Status, ImageDistributionStatus.CleanupPending)
+                        .SetProperty(record => record.Stage, ImageDistributionStage.Queued)
+                        .SetProperty(record => record.ClaimOwner, cleanupOwner)
+                        .SetProperty(record => record.ClaimExpiresAt, DateTimeOffset.MaxValue)
+                        .SetProperty(record => record.NextAttemptAt, now)
+                        .SetProperty(record => record.ErrorMessage, (string?)null)
+                        .SetProperty(record => record.LastErrorCode, (string?)null)
+                        .SetProperty(record => record.ErrorCategory, (OperationalErrorCategory?)null)
+                        .SetProperty(record => record.Retryable, false)
+                        .SetProperty(record => record.LastCorrelationId, record => record.Id), token);
+                if (claimed == 1)
+                    continue;
+            }
+            else
+            {
+                var record = await context.ImageDistributionRecords
+                    .SingleOrDefaultAsync(record => record.Id == candidate.Id, token);
+                if (record is not null &&
+                    (record.ClaimOwner is null || record.ClaimExpiresAt <= now))
+                {
+                    ClaimTemplateDeletionCleanup(record, cleanupOwner, now,
+                        candidate.Operation != ImageDistributionOperation.Cleanup ||
+                        candidate.Status != ImageDistributionStatus.CleanupPending);
+                    continue;
+                }
+            }
+
+            throw new InvalidOperationException(
+                $"Image template {templateId} cannot be deleted while node {candidate.WorkerNodeId} " +
+                "is processing its distribution or cleanup.");
+        }
+
+        var recordIds = candidates.Select(candidate => candidate.Id).ToArray();
         var records = await context.ImageDistributionRecords
+            .Include(record => record.References)
             .Include(record => record.WorkerNode)
             .Include(record => record.ImageTemplate)
-            .Where(record => record.ImageTemplateId == templateId)
+            .Where(record => recordIds.Contains(record.Id))
             .ToArrayAsync(token);
-
-        var active = records.FirstOrDefault(record =>
-            record.ClaimOwner is not null && record.ClaimExpiresAt > DateTimeOffset.UtcNow);
-        if (active is not null)
-            throw new InvalidOperationException(
-                $"Image template {templateId} cannot be deleted while node {active.WorkerNodeId} " +
-                "is processing its distribution or cleanup.");
-
         foreach (var record in records)
         {
-            var references = await context.ImageDistributionReferences
-                .Where(reference => reference.DistributionRecordId == record.Id)
-                .ToArrayAsync(token);
-            context.ImageDistributionReferences.RemoveRange(references);
-            QueueCleanup(record);
+            context.ImageDistributionReferences.RemoveRange(record.References);
+            var candidate = candidates.Single(item => item.Id == record.Id);
+            ClaimTemplateDeletionCleanup(record, cleanupOwner, now,
+                candidate.Operation != ImageDistributionOperation.Cleanup ||
+                candidate.Status != ImageDistributionStatus.CleanupPending);
         }
 
         await context.SaveChangesAsync(token);
-        foreach (var record in records)
-            await CleanupRecordAsync(record, token, removeOnSuccess: false);
+        if (transaction is not null)
+            await transaction.CommitAsync(token);
 
-        await context.SaveChangesAsync(token);
+        try
+        {
+            foreach (var record in records)
+                await CleanupRecordAsync(record, token, removeOnSuccess: false);
+        }
+        finally
+        {
+            foreach (var record in records.Where(record => record.ClaimOwner == cleanupOwner))
+            {
+                record.ClaimOwner = null;
+                record.ClaimExpiresAt = null;
+            }
+            await context.SaveChangesAsync(token.IsCancellationRequested ? CancellationToken.None : token);
+        }
+
         var failure = records.FirstOrDefault(record =>
             record.Status == ImageDistributionStatus.Failed ||
             !string.IsNullOrWhiteSpace(record.ErrorMessage));
@@ -855,11 +925,11 @@ public class ImageDistributionService(
     static TimeSpan RetryDelay(int attemptCount) =>
         TimeSpan.FromSeconds(Math.Min(300, 5 * Math.Pow(2, Math.Clamp(attemptCount - 1, 0, 6))));
 
-    void QueueCleanup(ImageDistributionRecord record)
+    bool QueueCleanup(ImageDistributionRecord record)
     {
         if (record.Status == ImageDistributionStatus.Pulling &&
             record.ClaimOwner is not null && record.ClaimExpiresAt > DateTimeOffset.UtcNow)
-            return;
+            return false;
         var transitioned = record.Operation != ImageDistributionOperation.Cleanup ||
                            record.Status != ImageDistributionStatus.CleanupPending;
         record.Operation = ImageDistributionOperation.Cleanup;
@@ -879,6 +949,7 @@ public class ImageDistributionService(
                 OperationalEventCodes.Image.CleanupQueued,
                 OperationalEventOutcome.Pending,
                 "Image cache cleanup was queued.");
+        return true;
     }
 
     async Task ReleaseReferenceAsync(
@@ -907,57 +978,86 @@ public class ImageDistributionService(
         if (candidates.Length == 0)
             return;
 
+        await using var transaction = context.Database.CurrentTransaction is null && context.Database.IsRelational()
+            ? await context.Database.BeginTransactionAsync(token)
+            : null;
         foreach (var candidate in candidates)
-        {
-            await using var transaction = context.Database.CurrentTransaction is null && context.Database.IsRelational()
-                ? await context.Database.BeginTransactionAsync(token)
-                : null;
             await AcquireDistributionLockAsync(candidate.ImageTemplateId, candidate.WorkerNodeId, token);
 
-            var currentReference = await context.ImageDistributionReferences.SingleOrDefaultAsync(item =>
-                item.DistributionRecordId == candidate.DistributionRecordId &&
-                item.Kind == reference.Kind && item.ResourceId == reference.ResourceId &&
-                item.ResourcePublicId == reference.ResourcePublicId, token);
-            if (currentReference is null)
-            {
-                if (transaction is not null)
-                    await transaction.CommitAsync(token);
-                continue;
-            }
+        var recordIds = candidates.Select(candidate => candidate.DistributionRecordId).ToArray();
+        var records = await context.ImageDistributionRecords
+            .Include(item => item.References)
+            .Include(item => item.WorkerNode)
+            .Include(item => item.ImageTemplate)
+            .Where(item => recordIds.Contains(item.Id))
+            .ToArrayAsync(token);
+        var released = records.SelectMany(record => record.References
+                .Where(item => item.Kind == reference.Kind && item.ResourceId == reference.ResourceId &&
+                               item.ResourcePublicId == reference.ResourcePublicId)
+                .Select(item => (Record: record, Reference: item)))
+            .ToArray();
+        if (released.Length == 0)
+        {
+            if (transaction is not null)
+                await transaction.CommitAsync(token);
+            return;
+        }
 
-            var record = await context.ImageDistributionRecords
-                .Include(item => item.WorkerNode)
-                .Include(item => item.ImageTemplate)
-                .SingleOrDefaultAsync(item => item.Id == candidate.DistributionRecordId, token);
-            if (record is null)
-            {
-                if (transaction is not null)
-                    await transaction.CommitAsync(token);
-                continue;
-            }
-
-            context.ImageDistributionReferences.Remove(currentReference);
+        context.ImageDistributionReferences.RemoveRange(released.Select(item => item.Reference));
+        var cleanupQueued = false;
+        foreach (var group in released.GroupBy(item => item.Record))
+        {
+            var record = group.Key;
             AppendImageEvent(
                 record,
                 OperationalEventCodes.Image.ReferenceReleased,
                 OperationalEventOutcome.Succeeded,
                 "An image distribution reference was released.");
-            await context.SaveChangesAsync(token);
-            if (await context.ImageDistributionReferences.AnyAsync(
-                    item => item.DistributionRecordId == candidate.DistributionRecordId, token))
-            {
-                if (transaction is not null)
-                    await transaction.CommitAsync(token);
-                continue;
-            }
-
-            QueueCleanup(record);
-            await context.SaveChangesAsync(token);
-            if (transaction is not null)
-                await transaction.CommitAsync(token);
-            coordinator.Wake();
+            var hasRemainingReference = record.References.Any(item =>
+                item.Kind != reference.Kind || item.ResourceId != reference.ResourceId ||
+                item.ResourcePublicId != reference.ResourcePublicId);
+            if (!hasRemainingReference)
+                cleanupQueued |= QueueCleanup(record);
         }
+
+        await context.SaveChangesAsync(token);
+        if (transaction is not null)
+            await transaction.CommitAsync(token);
+        if (cleanupQueued)
+            coordinator.Wake();
     }
+
+    void ClaimTemplateDeletionCleanup(
+        ImageDistributionRecord record,
+        string claimOwner,
+        DateTimeOffset now,
+        bool transitioned)
+    {
+        record.Operation = ImageDistributionOperation.Cleanup;
+        record.Status = ImageDistributionStatus.CleanupPending;
+        record.Stage = ImageDistributionStage.Queued;
+        record.ClaimOwner = claimOwner;
+        record.ClaimExpiresAt = DateTimeOffset.MaxValue;
+        record.NextAttemptAt = now;
+        record.ErrorMessage = null;
+        record.LastErrorCode = null;
+        record.ErrorCategory = null;
+        record.Retryable = false;
+        record.LastCorrelationId = record.Id;
+        if (transitioned)
+            AppendImageEvent(
+                record,
+                OperationalEventCodes.Image.CleanupQueued,
+                OperationalEventOutcome.Pending,
+                "Image cache cleanup was queued.");
+    }
+
+    sealed record TemplateCleanupCandidate(
+        Guid Id,
+        int ImageTemplateId,
+        Guid WorkerNodeId,
+        ImageDistributionOperation Operation,
+        ImageDistributionStatus Status);
 
     async Task CleanupRecordAsync(
         ImageDistributionRecord record,
@@ -983,12 +1083,11 @@ public class ImageDistributionService(
             if (record.ImageType == ImageType.Docker)
             {
                 var image = record.ImageTemplate?.RegistryUrl ?? record.ImageTemplate?.Name;
-                if (!string.IsNullOrWhiteSpace(image))
-                {
-                    var cleanup = await agentClient.DeleteDockerImageWithInventoryAsync(record.WorkerNodeId,
-                        dockerRegistry.ResolveInternalImageReferenceForConfiguredRegistry(image), token);
-                    EnsureCacheRemoved(cleanup, record);
-                }
+                if (string.IsNullOrWhiteSpace(image))
+                    throw new InvalidOperationException("Docker image identity is unavailable; cache deletion cannot be verified.");
+                var cleanup = await agentClient.DeleteDockerImageWithInventoryAsync(record.WorkerNodeId,
+                    dockerRegistry.ResolveInternalImageReferenceForConfiguredRegistry(image), token);
+                EnsureCacheRemoved(cleanup, record);
             }
             else
             {
@@ -1249,7 +1348,7 @@ public class ImageDistributionService(
     static void EnsureCacheRemoved(AgentImageCacheCleanupResult cleanup, ImageDistributionRecord record)
     {
         if (!cleanup.IsClean)
-            throw new InvalidOperationException(
+            throw new IOException(
                 $"Agent inventory still reports image cache for template {record.ImageTemplateId} " +
                 $"on node {record.WorkerNodeId} after cleanup.");
     }

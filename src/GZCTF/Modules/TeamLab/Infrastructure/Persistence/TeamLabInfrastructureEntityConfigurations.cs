@@ -48,6 +48,25 @@ public sealed class TeamLabRuntimeInfrastructureFragmentEntityConfiguration
     }
 }
 
+public sealed class TeamLabExecutionPlanSnapshotEntityConfiguration
+    : IEntityTypeConfiguration<TeamLabExecutionPlanSnapshot>
+{
+    public void Configure(EntityTypeBuilder<TeamLabExecutionPlanSnapshot> builder)
+    {
+        builder.ToTable("TeamLabExecutionPlanSnapshots");
+        builder.Property(item => item.PlanJson).HasColumnType("jsonb");
+        builder.HasIndex(item => new { item.RuntimeId, item.Generation, item.ShardId }).IsUnique();
+        builder.HasOne(item => item.Runtime)
+            .WithMany(item => item.ExecutionPlanSnapshots)
+            .HasForeignKey(item => item.RuntimeId)
+            .OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne(item => item.Shard)
+            .WithMany()
+            .HasForeignKey(item => item.ShardId)
+            .OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
 public sealed class TeamLabFabricLinkLeaseEntityConfiguration : IEntityTypeConfiguration<TeamLabFabricLinkLease>
 {
     public void Configure(EntityTypeBuilder<TeamLabFabricLinkLease> builder)

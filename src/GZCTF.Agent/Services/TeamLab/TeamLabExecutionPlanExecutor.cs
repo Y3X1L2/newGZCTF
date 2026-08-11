@@ -23,7 +23,7 @@ public sealed class TeamLabExecutionPlanExecutor(
 {
     static readonly TimeSpan HealthProbeTimeout = TimeSpan.FromSeconds(10);
     readonly AgentConfig agent = agentOptions.Value;
-    readonly ConcurrentDictionary<(int RuntimeId, int Generation, string ShardKey), SemaphoreSlim> executionLocks = new();
+    readonly KeyedSemaphoreRegistry<(int RuntimeId, int Generation, string ShardKey)> executionLocks = new();
 
     public async Task<TeamLabExecutionPlanApplyResponse> ApplyAsync(
         TeamLabExecutionPlanV2 plan,
@@ -31,24 +31,22 @@ public sealed class TeamLabExecutionPlanExecutor(
     {
         if (!plan.IsValid(out var validationError))
             return Failure(plan, "validation", validationError!);
-        var executionLock = executionLocks.GetOrAdd(
-            (plan.RuntimeId, plan.Generation, plan.ShardKey), _ => new SemaphoreSlim(1, 1));
-        await executionLock.WaitAsync(cancellationToken);
-        try
+        using var executionLock = await executionLocks.AcquireAsync(
+            (plan.RuntimeId, plan.Generation, plan.ShardKey), cancellationToken);
+        if (journal.TryGetIdentity(plan, out var existingDigest) &&
+            !string.Equals(existingDigest, plan.PlanDigest, StringComparison.OrdinalIgnoreCase))
+            return Failure(plan, "validation", "A different execution plan is already active for this runtime generation and shard.");
+        if (journal.TryGet(plan, out var existing))
         {
-            if (journal.TryGet(plan, out var existing))
-            {
-                var inventory = await ReadInventoryAsync(plan, cancellationToken);
-                if (plan.Assets.All(asset => inventory.Any(item =>
-                        item.AssetKey == asset.AssetKey &&
-                        item.Generation == plan.Generation &&
-                        item.State.Equals("running", StringComparison.OrdinalIgnoreCase))))
-                    return existing with { AlreadyApplied = true, Inventory = inventory };
-                journal.Remove(plan);
-            }
-            return await ApplyCoreAsync(plan, cancellationToken);
+            var inventory = await ReadInventoryAsync(plan, cancellationToken);
+            if (plan.Assets.All(asset => inventory.Any(item =>
+                    item.AssetKey == asset.AssetKey &&
+                    item.Generation == plan.Generation &&
+                    item.State.Equals("running", StringComparison.OrdinalIgnoreCase))))
+                return existing with { AlreadyApplied = true, Inventory = inventory };
+            journal.Remove(plan);
         }
-        finally { executionLock.Release(); }
+        return await ApplyCoreAsync(plan, cancellationToken);
     }
 
     async Task<TeamLabExecutionPlanApplyResponse> ApplyCoreAsync(
@@ -123,8 +121,26 @@ public sealed class TeamLabExecutionPlanExecutor(
             throw;
         }
 
-        var eventArray = events.OrderBy(item => item.OccurredAt).ToArray();
-        var inventory = await ReadInventoryAsync(plan, cancellationToken);
+        IReadOnlyList<TeamLabExecutionInventoryFactV2> inventory;
+        try
+        {
+            inventory = await ReadInventoryAsync(plan, cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            logger.LogWarning(exception,
+                "TeamLab execution inventory read failed after apply for runtime {RuntimeId}, generation {Generation}",
+                plan.RuntimeId, plan.Generation);
+            using var cleanupTimeout = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+            var compensation = await CleanupCoreAsync(plan, cleanupTimeout.Token);
+            events.Enqueue(Event(plan, null, "compute", "failed", "inventory_read_failed",
+                "Agent inventory could not be read after execution-plan apply."));
+            foreach (var cleanupEvent in compensation.Events)
+                events.Enqueue(cleanupEvent);
+            return new TeamLabExecutionPlanApplyResponse(
+                false, false, plan.PlanDigest, events.ToArray(), compensation.Inventory,
+                "compute", "inventory_read_failed", "Execution plan inventory verification failed.");
+        }
         foreach (var asset in plan.Assets)
         {
             var actual = inventory.FirstOrDefault(item => item.AssetKey == asset.AssetKey);
@@ -133,9 +149,9 @@ public sealed class TeamLabExecutionPlanExecutor(
                     "The requested asset is not present in the Agent inventory."));
             else if (!actual.State.Equals("running", StringComparison.OrdinalIgnoreCase))
                 events.Enqueue(Event(plan, asset.AssetKey, "compute", "failed", "resource_not_running",
-                    $"The requested asset is present but is in state {actual.State}."));
+                    "The requested asset is present but is not running."));
         }
-        eventArray = events.OrderBy(item => item.OccurredAt).ToArray();
+        var eventArray = events.ToArray();
         var success = eventArray.All(item => item.Outcome is "succeeded" or "already_applied");
         if (!success)
         {
@@ -155,9 +171,9 @@ public sealed class TeamLabExecutionPlanExecutor(
                 logger.LogError(exception,
                     "TeamLab execution compensation failed for runtime {RuntimeId}, generation {Generation}",
                     plan.RuntimeId, plan.Generation);
-                events.Enqueue(Event(plan, null, "cleanup", "failed", "compensation_failed", exception.Message));
+                events.Enqueue(Event(plan, null, "cleanup", "failed", "compensation_failed", "Execution plan compensation failed."));
             }
-            eventArray = events.OrderBy(item => item.OccurredAt).ToArray();
+            eventArray = events.ToArray();
         }
         var response = new TeamLabExecutionPlanApplyResponse(
             success,
@@ -180,15 +196,10 @@ public sealed class TeamLabExecutionPlanExecutor(
         if (!plan.IsValid(out var validationError))
             return CleanupFailure(plan, "validation", validationError!);
 
-        var executionLock = executionLocks.GetOrAdd(
-            (plan.RuntimeId, plan.Generation, plan.ShardKey), _ => new SemaphoreSlim(1, 1));
-        await executionLock.WaitAsync(cancellationToken);
-        try
-        {
-            journal.Remove(plan);
-            return await CleanupCoreAsync(plan, cancellationToken);
-        }
-        finally { executionLock.Release(); }
+        using var executionLock = await executionLocks.AcquireAsync(
+            (plan.RuntimeId, plan.Generation, plan.ShardKey), cancellationToken);
+        journal.Remove(plan);
+        return await CleanupCoreAsync(plan, cancellationToken);
     }
 
     async Task<TeamLabExecutionPlanCleanupResponse> CleanupCoreAsync(
@@ -205,14 +216,15 @@ public sealed class TeamLabExecutionPlanExecutor(
             },
             async (asset, token) => await CleanupAssetAsync(plan, asset, beforeCleanup, events, token));
 
-        foreach (var asset in plan.Assets)
+        foreach (var asset in plan.Assets.Where(asset =>
+                     asset.Kind.Equals("docker", StringComparison.OrdinalIgnoreCase)))
             foreach (var attachment in asset.NetworkAttachments)
             {
                 var local = await linuxNetwork.RemoveContainerAttachmentAsync(
                     plan, asset.AssetKey, attachment.NetworkKey, cancellationToken);
                 if (!local.Success)
                     events.Enqueue(Event(plan, asset.AssetKey, "cleanup", "failed", "veth_cleanup_failed", local.Message));
-                var ovsResult = await ovs.RemoveAsync(plan, StableHostInterface(plan, asset.AssetKey, attachment.NetworkKey),
+                var ovsResult = await ovs.RemoveAsync(plan, LinuxNetworkAttachmentService.HostInterfaceName(plan, asset.AssetKey, attachment.NetworkKey),
                     attachment.NetworkKey, cancellationToken);
                 if (!ovsResult.Success)
                     events.Enqueue(Event(plan, asset.AssetKey, "cleanup", "failed", "ovs_cleanup_failed", ovsResult.Message));
@@ -233,7 +245,7 @@ public sealed class TeamLabExecutionPlanExecutor(
         foreach (var resource in inventory)
             events.Enqueue(Event(plan, resource.AssetKey, "cleanup", "failed", "resource_remains",
                 $"Resource remains in state {resource.State}."));
-        var eventArray = events.OrderBy(item => item.OccurredAt).ToArray();
+        var eventArray = events.ToArray();
         var success = inventory.Count == 0 && eventArray.All(item => item.Outcome is "succeeded" or "already_applied");
         return new TeamLabExecutionPlanCleanupResponse(
             success, plan.PlanDigest, eventArray, inventory,
@@ -254,11 +266,11 @@ public sealed class TeamLabExecutionPlanExecutor(
             {
                 var item = beforeCleanup.FirstOrDefault(item => item.AssetKey == asset.AssetKey);
                 if (item is not null)
-                    await docker.DestroyContainerAsync(item.ResourceId, token, plan.Generation);
+                    await docker.DestroyContainerAsync(item.ResourceId, token, plan.Generation, plan.PlanDigest);
             }
             else if (asset.Kind.Equals("vm", StringComparison.OrdinalIgnoreCase))
             {
-                var result = libvirt.Destroy(plan, asset);
+                var result = await libvirt.DestroyAsync(plan, asset, token);
                 if (!result.Success)
                 {
                     events.Enqueue(Event(plan, asset.AssetKey, "cleanup", "failed", "vm_cleanup_failed", result.State));
@@ -286,7 +298,8 @@ public sealed class TeamLabExecutionPlanExecutor(
         CancellationToken cancellationToken)
     {
         var inventory = (await docker.GetManagedRuntimeInventoryAsync(cancellationToken))
-            .Where(item => item.RuntimeId == plan.RuntimeId && item.Generation == plan.Generation)
+            .Where(item => item.RuntimeId == plan.RuntimeId && item.Generation == plan.Generation &&
+                           string.Equals(item.ShardKey, plan.ShardKey, StringComparison.Ordinal))
             .Select(item => new TeamLabExecutionInventoryFactV2(
                 "docker", item.AssetKey ?? string.Empty, item.NativeId, item.State, item.Generation))
             .Where(item => !string.IsNullOrWhiteSpace(item.AssetKey))
@@ -296,13 +309,6 @@ public sealed class TeamLabExecutionPlanExecutor(
         return inventory;
     }
 
-    static string StableHostInterface(TeamLabExecutionPlanV2 plan, string assetKey, string networkKey)
-    {
-        var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
-            System.Text.Encoding.UTF8.GetBytes($"{plan.RuntimePublicId:D}:{plan.Generation}:{assetKey}:{networkKey}"))).ToLowerInvariant();
-        return $"tlh{hash[..12]}";
-    }
-
     async Task ApplyDockerAsync(TeamLabExecutionPlanV2 plan, TeamLabAssetExecutionSpecV2 asset,
         ConcurrentQueue<TeamLabExecutionEventV2> events, CancellationToken token)
     {
@@ -310,7 +316,7 @@ public sealed class TeamLabExecutionPlanExecutor(
         {
             RuntimeId = plan.RuntimeId,
             Generation = plan.Generation,
-            Image = asset.ImageReference ?? asset.ImageDigest,
+            Image = ImmutableDockerReference(asset),
             TeamId = plan.RuntimePublicId.ToString("N"),
             ChallengeId = StableChallengeId(asset.AssetKey),
             AssetKey = asset.AssetKey,
@@ -319,8 +325,12 @@ public sealed class TeamLabExecutionPlanExecutor(
             PublishPort = false,
             UseHostNetworkNone = true,
             NetworkMode = "None",
-            EnableTeamLabNetworkGate = true,
-            StartImmediately = true
+            EnableTeamLabNetworkGate = false,
+            StartImmediately = true,
+            MemoryLimit = Math.Max(64, asset.MemoryMiB),
+            CPUCount = Math.Max(1, asset.Cpu),
+            TeamLabPlanDigest = plan.PlanDigest,
+            TeamLabShardKey = plan.ShardKey
         };
         AgentContainerResponse? container = null;
         var attached = new List<TeamLabAssetNetworkAttachmentV2>();
@@ -350,20 +360,6 @@ public sealed class TeamLabExecutionPlanExecutor(
                     return;
                 }
             }
-            var readySignal = await docker.ExecuteContainerCommandAsync(
-                container.ContainerId,
-                ["sh", "-c", "touch /tmp/.gzctf-teamlab-network-ready"],
-                TimeSpan.FromSeconds(10),
-                token);
-            if (!readySignal.Succeeded)
-            {
-                events.Enqueue(Event(plan, asset.AssetKey, "guest", "failed", "network_gate_signal_failed",
-                    readySignal.Message ?? "Container network gate could not be released."));
-                return;
-            }
-            events.Enqueue(Event(plan, asset.AssetKey, "guest", "succeeded", null,
-                "Container network gate released."));
-            await docker.StartContainerAsync(container.ContainerId, plan.Generation, token);
             if (!await RunHealthChecksAsync(plan, asset, events, token))
                 return;
             events.Enqueue(Event(plan, asset.AssetKey, "compute", "succeeded", null, container.ContainerId));
@@ -374,11 +370,12 @@ public sealed class TeamLabExecutionPlanExecutor(
             if (!completed)
             {
                 if (container is not null)
-                    await docker.DestroyContainerAsync(container.ContainerId, CancellationToken.None, plan.Generation);
+                    await docker.DestroyContainerAsync(container.ContainerId, CancellationToken.None, plan.Generation,
+                        plan.PlanDigest);
                 foreach (var attachment in attached)
                 {
                     await linuxNetwork.RemoveContainerAttachmentAsync(plan, asset.AssetKey, attachment.NetworkKey, CancellationToken.None);
-                    await ovs.RemoveAsync(plan, StableHostInterface(plan, asset.AssetKey, attachment.NetworkKey),
+                    await ovs.RemoveAsync(plan, LinuxNetworkAttachmentService.HostInterfaceName(plan, asset.AssetKey, attachment.NetworkKey),
                         attachment.NetworkKey, CancellationToken.None);
                 }
             }
@@ -442,7 +439,7 @@ public sealed class TeamLabExecutionPlanExecutor(
                                                 InvalidOperationException or OperationCanceledException)
             {
                 events.Enqueue(Event(plan, asset.AssetKey, "service", "failed", "health_check_failed",
-                    $"{check.Protocol.ToUpperInvariant()} health check failed: {exception.Message}"));
+                    $"{check.Protocol.ToUpperInvariant()} health check failed."));
                 return false;
             }
         }
@@ -450,10 +447,15 @@ public sealed class TeamLabExecutionPlanExecutor(
     }
 
     static TeamLabExecutionEventV2 Event(TeamLabExecutionPlanV2 plan, string? assetKey, string stage,
-        string outcome, string? errorCode, string detail) =>
-        new(plan.RuntimeId, plan.RuntimePublicId, plan.Generation, plan.ShardKey, assetKey, stage, outcome,
+        string outcome, string? errorCode, string detail)
+    {
+        if (!TeamLabExecutionProtocolV2.IsStage(stage) || !TeamLabExecutionProtocolV2.IsOutcome(outcome))
+            throw new InvalidOperationException("TeamLab execution emitted an unsupported event protocol value.");
+        return new TeamLabExecutionEventV2(
+            plan.RuntimeId, plan.RuntimePublicId, plan.Generation, plan.ShardKey, assetKey, stage, outcome,
             outcome == "succeeded" ? null : stage, errorCode, DateTimeOffset.UtcNow,
-            new Dictionary<string, string> { ["message"] = detail });
+            new Dictionary<string, string> { ["summary"] = detail });
+    }
 
     static TeamLabExecutionPlanApplyResponse Failure(TeamLabExecutionPlanV2 plan, string stage, string message) =>
         new(false, false, plan.PlanDigest, [Event(plan, null, stage, "failed", $"{stage}_failed", message)], [], stage,
@@ -466,6 +468,20 @@ public sealed class TeamLabExecutionPlanExecutor(
             $"{stage}_failed", message);
 
     static int StableChallengeId(string key) =>
-        Math.Abs(BitConverter.ToInt32(System.Security.Cryptography.SHA256.HashData(
-            System.Text.Encoding.UTF8.GetBytes(key)), 0));
+        BitConverter.ToInt32(System.Security.Cryptography.SHA256.HashData(
+            System.Text.Encoding.UTF8.GetBytes(key)), 0) & int.MaxValue;
+
+    static string ImmutableDockerReference(TeamLabAssetExecutionSpecV2 asset)
+    {
+        if (string.IsNullOrWhiteSpace(asset.ImageReference)) return asset.ImageDigest;
+        var reference = asset.ImageReference.Trim();
+        var digestMarker = reference.IndexOf("@sha256:", StringComparison.OrdinalIgnoreCase);
+        if (digestMarker >= 0)
+            return reference[..digestMarker] + "@" + asset.ImageDigest;
+
+        var lastSlash = reference.LastIndexOf('/');
+        var lastColon = reference.LastIndexOf(':');
+        var repository = lastColon > lastSlash ? reference[..lastColon] : reference;
+        return repository + "@" + asset.ImageDigest;
+    }
 }

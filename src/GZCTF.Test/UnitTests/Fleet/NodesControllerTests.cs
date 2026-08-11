@@ -233,6 +233,10 @@ public class NodesControllerTests
         Assert.Contains("genisoimage", script);
         Assert.Contains("xorriso", script);
         Assert.Contains("cloud-image-utils", script);
+        Assert.Contains("openvswitch-switch", script);
+        Assert.Contains("ovn-host", script);
+        Assert.Contains("need_cmd ovs-vsctl", script);
+        Assert.Contains("need_cmd ovn-controller", script);
         Assert.Contains("cmp -s \"$tmp\" /etc/docker/daemon.json", script);
         Assert.Contains("KVM hardware: unavailable", script);
         Assert.Contains("install_dotnet_runtime", script);

@@ -21,11 +21,11 @@ public sealed class VmImageBackingChainInspector(ILogger<VmImageBackingChainInsp
     /// information is the only safe outcome.
     /// </summary>
     public async Task<IReadOnlyList<VmImageBackingReference>> FindReferencesAsync(
-        string storagePath,
+        IReadOnlyCollection<string> searchRoots,
         IReadOnlyCollection<string> candidatePaths,
         CancellationToken token)
     {
-        if (candidatePaths.Count == 0 || !Directory.Exists(storagePath))
+        if (candidatePaths.Count == 0)
             return [];
 
         var candidates = candidatePaths
@@ -33,7 +33,8 @@ public sealed class VmImageBackingChainInspector(ILogger<VmImageBackingChainInsp
             .ToHashSet(StringComparer.Ordinal);
         var references = new List<VmImageBackingReference>();
 
-        foreach (var overlay in Directory.EnumerateFiles(storagePath, "*.qcow2", SearchOption.TopDirectoryOnly))
+        foreach (var root in searchRoots.Where(Directory.Exists).Distinct(StringComparer.Ordinal))
+        foreach (var overlay in Directory.EnumerateFiles(root, "*.qcow2", SearchOption.AllDirectories))
         {
             token.ThrowIfCancellationRequested();
             var overlayPath = Path.GetFullPath(overlay);
@@ -45,7 +46,7 @@ public sealed class VmImageBackingChainInspector(ILogger<VmImageBackingChainInsp
                 continue;
             var resolved = Path.GetFullPath(Path.IsPathRooted(backing)
                 ? backing
-                : Path.Combine(storagePath, backing));
+                : Path.Combine(Path.GetDirectoryName(overlayPath)!, backing));
             if (candidates.Contains(resolved))
                 references.Add(new VmImageBackingReference(overlayPath, resolved));
         }

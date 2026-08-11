@@ -16,6 +16,7 @@ public class AgentTeamLabConfig
     public int ObservationAggregationIntervalMilliseconds { get; set; } = 1_000;
     public bool ObservationPacketFingerprintEnabled { get; set; }
     public string OvnNorthboundEndpoint { get; set; } = "unix:/var/run/ovn/ovnnb_db.sock";
+    public string OvnSouthboundEndpoint { get; set; } = "unix:/var/run/ovn/ovnsb_db.sock";
     public string OvnNorthboundDatabase { get; set; } = "OVN_Northbound";
     public string OvsLocalEndpoint { get; set; } = "unix:/var/run/openvswitch/db.sock";
     public string OvsLocalDatabase { get; set; } = "Open_vSwitch";
@@ -355,7 +356,8 @@ public record TeamLabObservationBatchRequest(
     int Generation,
     long AfterSequence = 0,
     Guid? ObservationPointId = null,
-    int Limit = 500);
+    int Limit = 500,
+    long AcknowledgeThroughSequence = 0);
 
 public record TeamLabObservationRecord(
     long Sequence,

@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using GZCTF.Agent.Services.TeamLab;
 using GZCTF.Modules.TeamLab.Application;
+using GZCTF.TeamLab.Contracts.Execution;
 using Xunit;
 
 namespace GZCTF.Test.UnitTests.TeamLab;
@@ -70,5 +71,20 @@ public class TeamLabInterfaceNamingTests
         Assert.Equal("eth7", names[^1]);
         Assert.Equal(names.Length, names.Distinct(StringComparer.Ordinal).Count());
         Assert.All(names, name => Assert.True(name.Length <= 15));
+    }
+
+    [Fact]
+    public void ContainerAttachmentCleanupUsesTheSameHostInterfaceNameAsApply()
+    {
+        var plan = new TeamLabExecutionPlanV2(
+            7, Guid.Parse("019fa217-fcee-73af-bb45-1bc400000001"), 2, "node-a",
+            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", [], [], []);
+
+        var first = LinuxNetworkAttachmentService.HostInterfaceName(plan, "web", "network-a");
+        var second = LinuxNetworkAttachmentService.HostInterfaceName(plan, "web", "network-a");
+
+        Assert.Equal(first, second);
+        Assert.StartsWith("tlh", first, StringComparison.Ordinal);
+        Assert.True(first.Length <= 15);
     }
 }

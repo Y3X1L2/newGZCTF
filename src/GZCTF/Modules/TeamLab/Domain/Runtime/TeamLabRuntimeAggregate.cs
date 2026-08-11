@@ -25,6 +25,7 @@ public class TeamLabRuntime
     public List<TeamLabRuntimeNetwork> Networks { get; set; } = [];
     public List<TeamLabRuntimeAsset> Assets { get; set; } = [];
     public List<TeamLabRuntimeInfrastructure> Infrastructure { get; set; } = [];
+    public List<TeamLabExecutionPlanSnapshot> ExecutionPlanSnapshots { get; set; } = [];
     public List<TeamLabRuntimeDependencyState> DependencyStates { get; set; } = [];
     public List<TeamLabObservationPoint> ObservationPoints { get; set; } = [];
     public List<TeamLabObservationCursor> ObservationCursors { get; set; } = [];
@@ -40,6 +41,25 @@ public class TeamLabRuntime
     public List<TeamLabTrafficCorrelationCursor> TrafficCorrelationCursors { get; set; } = [];
     public List<TeamLabTrafficCaptureJob> TrafficCaptureJobs { get; set; } = [];
     public TeamLabControlScope? ControlScope { get; set; }
+}
+
+/// <summary>
+/// Immutable V2 plan accepted for one runtime generation and node shard. This is the cleanup
+/// authority after deployment; it deliberately does not contain runtime secret overlays.
+/// </summary>
+public sealed class TeamLabExecutionPlanSnapshot
+{
+    [Key] public long Id { get; set; }
+    public int RuntimeId { get; set; }
+    public int Generation { get; set; }
+    public int ShardId { get; set; }
+    public Guid WorkerNodeId { get; set; }
+    [MaxLength(64)] public string PlanDigest { get; set; } = string.Empty;
+    [MaxLength(32)] public string SchemaVersion { get; set; } = "v2";
+    public string PlanJson { get; set; } = string.Empty;
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public TeamLabRuntime Runtime { get; set; } = null!;
+    public TeamLabRuntimeShard Shard { get; set; } = null!;
 }
 
 public class TeamLabRuntimeShard

@@ -7,6 +7,7 @@ namespace GZCTF.Agent.Services.TeamLab;
 
 public sealed class LinuxNetworkAttachmentService(ILogger<LinuxNetworkAttachmentService> logger)
 {
+    static readonly TimeSpan CommandTimeout = TimeSpan.FromSeconds(30);
     public async Task<TeamLabAttachmentResult> AttachContainerAsync(
         TeamLabExecutionPlanV2 plan,
         long pid,
@@ -19,9 +20,8 @@ public sealed class LinuxNetworkAttachmentService(ILogger<LinuxNetworkAttachment
         if (pid <= 0 || string.IsNullOrWhiteSpace(attachment.InterfaceName))
             return TeamLabAttachmentResult.Failed("validation", "Container network attachment identity is invalid.");
 
-        var identity = $"{plan.RuntimePublicId:D}:{plan.Generation}:{asset.AssetKey}:{attachment.NetworkKey}";
-        var hostInterface = StableName("tlh", identity, string.Empty);
-        var peerInterface = StableName("tlp", identity, string.Empty);
+        var hostInterface = HostInterfaceName(plan, asset.AssetKey, attachment.NetworkKey);
+        var peerInterface = PeerInterfaceName(plan, asset.AssetKey, attachment.NetworkKey);
         try
         {
             if (await SucceedsAsync("ip", ["link", "show", hostInterface], cancellationToken))
@@ -50,8 +50,7 @@ public sealed class LinuxNetworkAttachmentService(ILogger<LinuxNetworkAttachment
         CancellationToken cancellationToken)
     {
         if (!OperatingSystem.IsLinux()) return new TeamLabAttachmentResult(true, "Linux attachment is not present on this Agent.");
-        var identity = $"{plan.RuntimePublicId:D}:{plan.Generation}:{assetKey}:{networkKey}";
-        var hostInterface = StableName("tlh", identity, string.Empty);
+        var hostInterface = HostInterfaceName(plan, assetKey, networkKey);
         try
         {
             await RunAsync("ip", ["link", "delete", hostInterface], cancellationToken, allowFailure: true);
@@ -63,10 +62,16 @@ public sealed class LinuxNetworkAttachmentService(ILogger<LinuxNetworkAttachment
         }
     }
 
-    static string StableName(string prefix, string asset, string network)
+    public static string HostInterfaceName(TeamLabExecutionPlanV2 plan, string assetKey, string networkKey) =>
+        StableName("tlh", plan, assetKey, networkKey);
+
+    public static string PeerInterfaceName(TeamLabExecutionPlanV2 plan, string assetKey, string networkKey) =>
+        StableName("tlp", plan, assetKey, networkKey);
+
+    static string StableName(string prefix, TeamLabExecutionPlanV2 plan, string assetKey, string networkKey)
     {
         var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
-            Encoding.UTF8.GetBytes($"{asset}:{network}"))).ToLowerInvariant();
+            Encoding.UTF8.GetBytes($"{plan.RuntimePublicId:D}:{plan.Generation}:{assetKey}:{networkKey}"))).ToLowerInvariant();
         return $"{prefix}{hash[..Math.Min(12, hash.Length)]}"[..15];
     }
 
@@ -85,7 +90,18 @@ public sealed class LinuxNetworkAttachmentService(ILogger<LinuxNetworkAttachment
         };
         foreach (var argument in arguments) process.StartInfo.ArgumentList.Add(argument);
         process.Start();
-        await process.WaitForExitAsync(token);
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(token);
+        deadline.CancelAfter(CommandTimeout);
+        try
+        {
+            await process.WaitForExitAsync(deadline.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            if (!process.HasExited) process.Kill(entireProcessTree: true);
+            await process.WaitForExitAsync(CancellationToken.None);
+            throw;
+        }
         if (process.ExitCode != 0 && !allowFailure)
             throw new InvalidOperationException($"{fileName} failed: {await process.StandardError.ReadToEndAsync(token)}");
     }
@@ -105,7 +121,18 @@ public sealed class LinuxNetworkAttachmentService(ILogger<LinuxNetworkAttachment
         };
         foreach (var argument in arguments) process.StartInfo.ArgumentList.Add(argument);
         process.Start();
-        await process.WaitForExitAsync(token);
-        return process.ExitCode == 0;
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(token);
+        deadline.CancelAfter(CommandTimeout);
+        try
+        {
+            await process.WaitForExitAsync(deadline.Token);
+            return process.ExitCode == 0;
+        }
+        catch (OperationCanceledException)
+        {
+            if (!process.HasExited) process.Kill(entireProcessTree: true);
+            await process.WaitForExitAsync(CancellationToken.None);
+            throw;
+        }
     }
 }

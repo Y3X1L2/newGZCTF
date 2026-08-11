@@ -199,6 +199,26 @@ public sealed class TeamLabObservationTests
     }
 
     [Fact]
+    public async Task ObservationSpool_AcknowledgementReleasesOnlyPersistedRecords()
+    {
+        var spool = new ObservationBatchSpool(
+            Options.Create(new AgentTeamLabConfig { ObservationPacketFingerprintEnabled = true }),
+            NullLogger<ObservationBatchSpool>.Instance);
+        var registration = new ObservationPointRegistration(74, 1, Guid.NewGuid(), "entry", 0, "tl-entry");
+        var packet = new ParsedObservationPacket(
+            "10.0.0.2", 1000, "10.0.0.3", 80, "TCP", 0x18, 64,
+            "sha256:" + new string('a', 64), "sha256:" + new string('b', 64));
+
+        var first = spool.AppendPacket(registration, DateTimeOffset.UtcNow, packet);
+        var second = spool.AppendPacket(registration, DateTimeOffset.UtcNow, packet);
+        await spool.AcknowledgeAsync(74, 1, first, CancellationToken.None);
+
+        var remaining = spool.Read(new TeamLabObservationBatchRequest(74, 1), Health()).Records;
+        var record = Assert.Single(remaining);
+        Assert.Equal(second, record.Sequence);
+    }
+
+    [Fact]
     public void EndpointSensorSignature_IsAcceptedOnceAndRejectsReplay()
     {
         var key = RandomNumberGenerator.GetBytes(32);

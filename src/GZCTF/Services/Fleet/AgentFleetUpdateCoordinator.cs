@@ -40,6 +40,8 @@ public sealed class AgentFleetUpdateCoordinator(
         if (string.IsNullOrWhiteSpace(expectedSha))
             throw new InvalidOperationException("The bundled Agent binary is unavailable.");
         var priorCapabilities = node.Capabilities;
+        var controlPlaneNode = await context.WorkerNodes.AsNoTracking()
+            .SingleOrDefaultAsync(item => item.IsLocal && item.TeamLabNetworkEnabled, cancellationToken);
         var priorSchedulable = node.AgentUpdateState == AgentUpdateState.Failed
             ? node.AgentUpdateWasSchedulable
             : node.IsSchedulable;
@@ -70,7 +72,8 @@ public sealed class AgentFleetUpdateCoordinator(
                     WindowsSensorSha256: NodeDeployService.ComputeBundledArtifactSha256(
                         "agent", "endpoint-sensor", "win-x64", "gzctf-endpoint-sensor.exe"),
                     VmControlPlane: new AgentVmControlPlaneSyncConfig(
-                        node.TeamLabNetworkEnabled && priorCapabilities.HasFlag(NodeCapability.Kvm))),
+                        node.TeamLabNetworkEnabled && priorCapabilities.HasFlag(NodeCapability.Kvm)),
+                    TeamLabDataPlane: TeamLabDataPlaneSyncConfiguration.Create(node, controlPlaneNode)),
                 cancellationToken);
             if (!result.Success)
                 return await FailAsync(node, correlationId, result.Message, cancellationToken);

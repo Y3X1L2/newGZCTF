@@ -27,21 +27,35 @@ public static class TeamLabExecutionPlanCompiler
         ArgumentNullException.ThrowIfNull(assets);
         ArgumentNullException.ThrowIfNull(imageDigests);
 
+        var interfaceOwners = assets
+            .SelectMany(asset => asset.Interfaces.Select(item => new InterfaceOwner(
+                item.MacAddress, asset.AssetKey, item)))
+            .GroupBy(item => item.MacAddress, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                group => group.Key,
+                group => group.Count() == 1
+                    ? group.Single()
+                    : throw new InvalidOperationException(
+                        $"Network MAC address {group.Key} is assigned to more than one asset."),
+                StringComparer.OrdinalIgnoreCase);
+
         var networks = infrastructure.Switches
             .Select(switchIntent => new TeamLabNetworkIntentV2(
                 switchIntent.Network.Key,
-                "switch",
                 switchIntent.Network.Cidr,
                 switchIntent.Network.GatewayIp,
                 switchIntent.Records
-                    .Where(record => assets.Any(asset => asset.Interfaces.Any(item =>
-                        item.MacAddress.Equals(record.MacAddress, StringComparison.OrdinalIgnoreCase))))
-                    .Select(record => new TeamLabNetworkPortV2(
-                        PortKey(record, assets),
-                        AssetKey(record, assets),
-                        record.MacAddress,
-                        record.IpAddress,
-                        record.IsPrimary))
+                    .Where(record => interfaceOwners.ContainsKey(record.MacAddress))
+                    .Select(record =>
+                    {
+                        var owner = interfaceOwners[record.MacAddress];
+                        return new TeamLabNetworkPortV2(
+                            owner.Interface.Key,
+                            owner.AssetKey,
+                            record.MacAddress,
+                            AddressWithoutPrefix(record.IpAddress),
+                            record.IsPrimary);
+                    })
                     .Concat(assets.SelectMany(asset => asset.Interfaces
                         .Where(item => item.NetworkKey == switchIntent.Network.Key)
                         .Where(item => !switchIntent.Records.Any(record =>
@@ -73,17 +87,20 @@ public static class TeamLabExecutionPlanCompiler
             if (!imageDigests.TryGetValue(asset.ImageTemplateId, out var digest) ||
                 string.IsNullOrWhiteSpace(digest))
                 throw new InvalidOperationException($"Image digest is missing for template {asset.ImageTemplateId}.");
+            if (asset.Health is { Port: not > 0 or > 65535 })
+                throw new InvalidOperationException($"Health check port is invalid for asset {asset.AssetKey}.");
             var primary = asset.Interfaces.FirstOrDefault(item => item.Primary) ?? asset.Interfaces.FirstOrDefault();
             return new TeamLabAssetExecutionSpecV2(
                 asset.AssetKey,
                 asset.Kind == TeamLabAssetKind.Docker ? "docker" : "vm",
                 asset.Kind == TeamLabAssetKind.Vm
-                    ? StableDomainName(runtimePublicId, generation, asset.AssetKey)
+                    ? TeamLabExecutionIdentityV2.VmDomainName(runtimePublicId, generation, asset.AssetKey)
                     : asset.AssetKey,
                 digest,
                 asset.Kind == TeamLabAssetKind.Vm
-                    ? StableDomainName(runtimePublicId, generation, asset.AssetKey)
+                    ? TeamLabExecutionIdentityV2.VmDomainName(runtimePublicId, generation, asset.AssetKey)
                     : null,
+                asset.ImageTemplateId,
                 asset.CpuUnits,
                 asset.MemoryMiB,
                 asset.Interfaces.Select(item => new TeamLabAssetNetworkAttachmentV2(
@@ -102,10 +119,6 @@ public static class TeamLabExecutionPlanCompiler
                 asset.ImageReference);
         }).ToArray();
 
-        var artifacts = executionAssets
-            .Select(asset => new TeamLabArtifactReferenceV2(
-                asset.AssetKey, asset.ImageDigest, asset.Kind, 0L))
-            .ToArray();
         var observations = infrastructure.ObservationPoints
             .Select(point => new TeamLabObservationIntentV2(
                 point.PublicId,
@@ -115,20 +128,8 @@ public static class TeamLabExecutionPlanCompiler
                 CapturePackets: false))
             .ToArray();
         var control = new TeamLabNetworkControlIntentV2(
-            infrastructure.RouterNamespace,
-            infrastructure.RouteVersion,
             infrastructure.Routers.Select(router => new TeamLabRouterIntentV2(
                 router.Key, router.NetworkKeys)).ToArray(),
-            infrastructure.Fabric is { } fabric
-                ? new TeamLabFabricIntentV2(
-                    fabric.FabricIp,
-                    fabric.HubAddressCidr,
-                    fabric.NodeAddressCidr,
-                    fabric.HostInterfaceName,
-                    fabric.NamespaceInterfaceName,
-                    fabric.LocalRoutes.Select(ToRoute).ToArray(),
-                    fabric.RemoteRoutes.Select(ToRoute).ToArray())
-                : null,
             infrastructure.ForwardPolicies.Select(policy => new TeamLabForwardPolicyV2(
                 policy.SourceCidr, policy.DestinationCidr, policy.Allow)).ToArray());
 
@@ -140,7 +141,6 @@ public static class TeamLabExecutionPlanCompiler
             string.Empty,
             networks,
             executionAssets,
-            artifacts,
             observations,
             control);
         var digest = ComputeDigest(plan);
@@ -156,7 +156,7 @@ public static class TeamLabExecutionPlanCompiler
         infrastructure.Fabric.LocalRoutes.Concat(infrastructure.Fabric.RemoteRoutes)
             .Where(route => !string.IsNullOrWhiteSpace(route.TargetCidr))
             .Select(route => new TeamLabNetworkRouteV2(
-                route.TargetCidr, route.GatewayIp, string.Empty))
+                route.TargetCidr, route.GatewayIp))
             .DistinctBy(route => (route.DestinationCidr, route.NextHop))
             .ToArray();
 
@@ -167,32 +167,8 @@ public static class TeamLabExecutionPlanCompiler
                 policy.SourceCidr, policy.DestinationCidr, "any", null, policy.Allow))
             .ToArray();
 
-    static TeamLabNetworkRouteV2 ToRoute(TeamLabNodeRouteIntent route) =>
-        new(route.TargetCidr, route.GatewayIp, string.Empty);
-
-    static string PortKey(TeamLabNodeDnsRecord record,
-        IReadOnlyList<TeamLabNodeAssetCreateRequest> assets) =>
-        assets.SelectMany(asset => asset.Interfaces.Select(item => (asset.AssetKey, Interface: item)))
-            .Where(item => item.Interface.MacAddress.Equals(record.MacAddress, StringComparison.OrdinalIgnoreCase))
-            .Select(item => item.Interface.Key)
-            .FirstOrDefault() ?? $"port-{record.MacAddress}";
-
-    static string AssetKey(TeamLabNodeDnsRecord record,
-        IReadOnlyList<TeamLabNodeAssetCreateRequest> assets) =>
-        assets.SelectMany(asset => asset.Interfaces.Select(item => (asset.AssetKey, Interface: item)))
-            .Where(item => item.Interface.MacAddress.Equals(record.MacAddress, StringComparison.OrdinalIgnoreCase))
-            .Select(item => item.AssetKey)
-            .FirstOrDefault() ?? record.Hostname;
-
     static string AddressWithoutPrefix(string address) => address.Split('/', 2)[0];
 
-    public static string StableDomainName(Guid runtimePublicId, int generation, string assetKey)
-    {
-        var builder = new StringBuilder(assetKey.Length);
-        foreach (var character in assetKey)
-            if (char.IsLetterOrDigit(character) || character is '-' or '_')
-                builder.Append(character);
-        var safeAsset = builder.Length == 0 ? "asset" : builder.ToString()[..Math.Min(48, builder.Length)];
-        return $"gzctf-tl-{runtimePublicId:N}-{generation}-{safeAsset}";
-    }
+    sealed record InterfaceOwner(string MacAddress, string AssetKey, TeamLabNodeInterfaceIntent Interface);
+
 }

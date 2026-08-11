@@ -8,6 +8,7 @@ public record AgentSyncRequest(
     string? WindowsSensorDownloadUrl = null,
     string? WindowsSensorSha256 = null,
     AgentVmControlPlaneSyncConfig? VmControlPlane = null,
+    TeamLabDataPlaneSyncConfig? TeamLabDataPlane = null,
     bool Restart = true);
 
 public sealed record AgentVmControlPlaneSyncConfig(
@@ -17,6 +18,16 @@ public sealed record AgentVmControlPlaneSyncConfig(
     int PrefixLength = 16,
     int ListenPort = 5443,
     string GuestStateRoot = "/var/lib/gzctf/teamlab/guest-control");
+
+public sealed record TeamLabDataPlaneSyncConfig(
+    bool Enabled,
+    bool ControlPlane,
+    string? NorthboundEndpoint,
+    string? SouthboundEndpoint,
+    string? NorthboundListenEndpoint,
+    string? SouthboundListenEndpoint,
+    string? ChassisEncapIp,
+    string IntegrationBridgeName = "br-int");
 
 public record AgentSyncResponse(
     bool Success,

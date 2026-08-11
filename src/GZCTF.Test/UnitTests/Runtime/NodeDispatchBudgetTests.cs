@@ -98,13 +98,14 @@ public sealed class NodeDispatchBudgetTests
     [Fact]
     public void LimitPolicy_UsesManifestValuesAndPlatformSafetyCaps()
     {
-        var limits = new AgentExecutionLimits(100, 100, 100, 100, 100, 100);
+        var limits = new AgentExecutionLimits(100, 100, 100, 100, 100, 100, ArtifactCleanupOperations: 2);
 
         Assert.Equal(16, NodeDispatchLimitPolicy.Resolve(limits, NodeDispatchCategory.DockerCreate));
         Assert.Equal(4, NodeDispatchLimitPolicy.Resolve(limits, NodeDispatchCategory.VmCreate));
         Assert.Equal(4, NodeDispatchLimitPolicy.Resolve(limits, NodeDispatchCategory.TeamLabNetwork));
         Assert.Equal(16, NodeDispatchLimitPolicy.Resolve(limits, NodeDispatchCategory.Probe));
         Assert.Equal(4, NodeDispatchLimitPolicy.Resolve(limits, NodeDispatchCategory.Cleanup));
+        Assert.Equal(2, NodeDispatchLimitPolicy.Resolve(limits, NodeDispatchCategory.ArtifactCleanup));
         Assert.Equal(1, NodeDispatchLimitPolicy.Resolve(null, NodeDispatchCategory.Control));
     }
 

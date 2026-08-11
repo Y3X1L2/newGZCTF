@@ -348,6 +348,7 @@ public interface ITeamLabNodeExecutor
         int runtimeId,
         int generation,
         long afterSequence,
+        long acknowledgeThroughSequence,
         Guid? observationPointId,
         int limit,
         CancellationToken cancellationToken);

@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Security.Cryptography;
+using System.Text.Json;
 using GZCTF.Agent.Services.TeamLab;
 using GZCTF.Modules.TeamLab.Application;
 using GZCTF.Modules.TeamLab.Domain;
@@ -46,12 +48,54 @@ public sealed class TeamLabExecutionPlanV2Tests
         var plan = Plan() with
         {
             Networks = [new TeamLabNetworkIntentV2(
-                "network-a", "switch", "10.0.1.0/24", "10.0.1.1",
+                "network-a", "10.0.1.0/24", "10.0.1.1",
                 [new TeamLabNetworkPortV2("port-a", "missing", "02:00:00:00:00:01", "10.0.1.10", true)], [], [])]
         };
 
         Assert.False(plan.IsValid(out var error));
-        Assert.Contains("reference an asset", error, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("invalid network", error, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Plan_RejectsAttachmentToAnotherAssetsPort()
+    {
+        var plan = Plan() with
+        {
+            Networks = [new TeamLabNetworkIntentV2(
+                "network-a", "10.0.1.0/24", "10.0.1.1",
+                [
+                    new TeamLabNetworkPortV2("port-a", "docker-1", "02:00:00:00:00:01", "10.0.1.10", true),
+                    new TeamLabNetworkPortV2("port-b", "docker-2", "02:00:00:00:00:02", "10.0.1.11", false)
+                ], [], [])],
+            Assets =
+            [
+                Asset("docker-1", "network-a", "port-b"),
+                Asset("docker-2", "network-a", "port-b") with
+                {
+                    NetworkAttachments = [new TeamLabAssetNetworkAttachmentV2(
+                        "network-a", "port-b", "eth0", "10.0.1.11/24", true)]
+                }
+            ]
+        };
+
+        Assert.False(plan.IsValid(out var error));
+        Assert.Contains("invalid network", error, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Plan_RejectsDuplicateStaticRoutes()
+    {
+        var route = new TeamLabNetworkRouteV2("10.0.2.0/24", "10.0.1.1");
+        var plan = Plan() with
+        {
+            Networks = [new TeamLabNetworkIntentV2(
+                "network-a", "10.0.1.0/24", "10.0.1.1",
+                [new TeamLabNetworkPortV2("port-a", "docker-1", "02:00:00:00:00:01", "10.0.1.10", true)],
+                [route, route], [])]
+        };
+
+        Assert.False(plan.IsValid(out var error));
+        Assert.Contains("invalid network", error, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -60,9 +104,8 @@ public sealed class TeamLabExecutionPlanV2Tests
         var plan = Plan() with
         {
             NetworkControl = new TeamLabNetworkControlIntentV2(
-                "router-ns", 1,
                 [new TeamLabRouterIntentV2("router-a", ["network-a", "network-a"])],
-                null, [])
+                [])
         };
 
         Assert.False(plan.IsValid(out var error));
@@ -138,6 +181,7 @@ public sealed class TeamLabExecutionPlanV2Tests
         Assert.Equal("router-a", first.NetworkControl!.Routers[0].Key);
         Assert.Equal("sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", first.Assets[0].ImageDigest);
         Assert.Equal("registry.example/teamlab:latest", first.Assets[0].ImageReference);
+        Assert.Equal(3, first.Assets[0].TemplateId);
 
         var changed = first with
         {
@@ -147,19 +191,26 @@ public sealed class TeamLabExecutionPlanV2Tests
         Assert.Contains("digest", changedError, StringComparison.OrdinalIgnoreCase);
     }
 
-    static TeamLabExecutionPlanV2 Plan() => new(
-        7,
-        Guid.Parse("019fa217-fcee-73af-bb45-1bc400000001"),
-        1,
-        "node-a",
-        "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-        [new TeamLabNetworkIntentV2(
-            "network-a", "switch", "10.0.1.0/24", "10.0.1.1",
-            [new TeamLabNetworkPortV2("port-a", "docker-1", "02:00:00:00:00:01", "10.0.1.10", true)], [], [])],
-        [Asset("docker-1", "network-a", "port-a")],
-        [], []);
+    static TeamLabExecutionPlanV2 Plan()
+    {
+        var plan = new TeamLabExecutionPlanV2(
+            7,
+            Guid.Parse("019fa217-fcee-73af-bb45-1bc400000001"),
+            1,
+            "node-a",
+            string.Empty,
+            [new TeamLabNetworkIntentV2(
+                "network-a", "10.0.1.0/24", "10.0.1.1",
+                [new TeamLabNetworkPortV2("port-a", "docker-1", "02:00:00:00:00:01", "10.0.1.10", true)], [], [])],
+            [Asset("docker-1", "network-a", "port-a")],
+            []);
+        return plan with
+        {
+            PlanDigest = $"sha256:{Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(plan))).ToLowerInvariant()}"
+        };
+    }
 
     static TeamLabAssetExecutionSpecV2 Asset(string key, string network, string port) => new(
-        key, "docker", key, "registry.example/teamlab@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", null, 1, 256,
+        key, "docker", key, "registry.example/teamlab@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", null, 3, 1, 256,
         [new TeamLabAssetNetworkAttachmentV2(network, port, "eth0", "10.0.1.10/24", true)], []);
 }

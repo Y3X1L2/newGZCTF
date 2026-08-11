@@ -339,6 +339,108 @@ public class ImageDistributionServiceTests
     }
 
     [Fact]
+    public async Task ReleaseReference_QueuesCleanupForEveryNodeAfterLastReference()
+    {
+        await using var context = CreateContext();
+        var firstNode = SeedNode(context, "kvm-node-a", NodeCapability.Kvm);
+        var secondNode = SeedNode(context, "kvm-node-b", NodeCapability.Kvm);
+        var template = SeedVmTemplate(context);
+        context.ImageDistributionRecords.AddRange(
+            new ImageDistributionRecord
+            {
+                ImageTemplateId = template.Id,
+                WorkerNodeId = firstNode.Id,
+                ImageHash = template.ImageHash!,
+                ImageType = template.ImageType,
+                Status = ImageDistributionStatus.Ready,
+                References = [Reference(ImageDistributionReferenceKind.Game, 1)]
+            },
+            new ImageDistributionRecord
+            {
+                ImageTemplateId = template.Id,
+                WorkerNodeId = secondNode.Id,
+                ImageHash = template.ImageHash!,
+                ImageType = template.ImageType,
+                Status = ImageDistributionStatus.Ready,
+                References = [Reference(ImageDistributionReferenceKind.Game, 1)]
+            });
+        await context.SaveChangesAsync();
+
+        await CreateService(context, new RecordingAgentClient())
+            .ReleaseGameReferencesAsync(1, CancellationToken.None);
+
+        var records = await context.ImageDistributionRecords.OrderBy(record => record.WorkerNodeId).ToArrayAsync();
+        Assert.Equal(2, records.Length);
+        Assert.All(records, record =>
+        {
+            Assert.Equal(ImageDistributionOperation.Cleanup, record.Operation);
+            Assert.Equal(ImageDistributionStatus.CleanupPending, record.Status);
+        });
+        Assert.Empty(await context.ImageDistributionReferences.ToArrayAsync());
+    }
+
+    [Fact]
+    public async Task CleanupTemplateForDeletionAsync_DoesNotReleaseReferencesWhileClaimIsActive()
+    {
+        await using var context = CreateContext();
+        var node = SeedNode(context, "kvm-node", NodeCapability.Kvm);
+        var template = SeedVmTemplate(context);
+        context.ImageDistributionRecords.Add(new ImageDistributionRecord
+        {
+            ImageTemplateId = template.Id,
+            WorkerNodeId = node.Id,
+            ImageHash = template.ImageHash!,
+            ImageType = template.ImageType,
+            Status = ImageDistributionStatus.Pulling,
+            ClaimOwner = "worker-1",
+            ClaimExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5),
+            References = [Reference(ImageDistributionReferenceKind.Game, 1)]
+        });
+        await context.SaveChangesAsync();
+        var agent = new RecordingAgentClient();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            CreateService(context, agent).CleanupTemplateForDeletionAsync(template.Id, CancellationToken.None));
+
+        var record = await context.ImageDistributionRecords.SingleAsync();
+        Assert.Equal(ImageDistributionStatus.Pulling, record.Status);
+        Assert.Equal("worker-1", record.ClaimOwner);
+        Assert.Single(await context.ImageDistributionReferences.ToArrayAsync());
+        Assert.Empty(agent.DeletedVmNodes);
+    }
+
+    [Fact]
+    public async Task CleanupTemplateForDeletionAsync_RejectsCacheThatAgentStillReportsPresent()
+    {
+        await using var context = CreateContext();
+        var node = SeedNode(context, "kvm-node", NodeCapability.Kvm);
+        var template = SeedVmTemplate(context);
+        var record = new ImageDistributionRecord
+        {
+            ImageTemplateId = template.Id,
+            WorkerNodeId = node.Id,
+            ImageHash = template.ImageHash!,
+            ImageType = template.ImageType,
+            Status = ImageDistributionStatus.Ready,
+            References = [Reference(ImageDistributionReferenceKind.Game, 1)]
+        };
+        context.ImageDistributionRecords.Add(record);
+        await context.SaveChangesAsync();
+        var agent = new RecordingAgentClient { VmCacheRemainsAfterCleanup = true };
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            CreateService(context, agent).CleanupTemplateForDeletionAsync(template.Id, CancellationToken.None));
+
+        await context.Entry(record).ReloadAsync();
+        Assert.Equal(ImageDistributionStatus.Failed, record.Status);
+        Assert.True(record.Retryable);
+        Assert.Null(record.ClaimOwner);
+        Assert.NotNull(await context.ImageDistributionRecords.FindAsync(record.Id));
+        Assert.Empty(await context.ImageDistributionReferences.ToArrayAsync());
+        Assert.Single(agent.DeletedVmNodes);
+    }
+
+    [Fact]
     public async Task ProcessClaimedAsync_CleanupKeepsRecordWhenAgentInventoryStillHasCache()
     {
         await using var context = CreateContext();
@@ -364,7 +466,7 @@ public class ImageDistributionServiceTests
         await context.Entry(record).ReloadAsync();
         Assert.Equal(ImageDistributionStatus.Failed, record.Status);
         Assert.Equal("image.cleanup_failed", record.LastErrorCode);
-        Assert.False(record.Retryable);
+        Assert.True(record.Retryable);
         Assert.Single(agent.DeletedVmNodes);
         Assert.NotNull(await context.ImageDistributionRecords.FindAsync(record.Id));
     }

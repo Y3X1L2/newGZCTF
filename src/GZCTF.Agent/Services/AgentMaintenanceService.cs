@@ -5,12 +5,14 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using GZCTF.Agent.Models;
 using GZCTF.Agent.Services.GuestControl;
+using GZCTF.Agent.Services.TeamLab;
 
 namespace GZCTF.Agent.Services;
 
 public class AgentMaintenanceService(
     IHttpClientFactory httpClientFactory,
     GuestManagementNetworkService guestManagementNetwork,
+    TeamLabDataPlanePreparationService dataPlane,
     ILogger<AgentMaintenanceService> logger)
 {
     private const string InstalledAgentPath = "/usr/local/bin/gzctf-agent";
@@ -49,6 +51,11 @@ public class AgentMaintenanceService(
             }
             var configChanged = request.VmControlPlane is not null &&
                                 await SyncVmControlPlaneConfigAsync(request.VmControlPlane, token);
+            configChanged |= request.TeamLabDataPlane is not null &&
+                             await SyncTeamLabDataPlaneConfigAsync(request.TeamLabDataPlane, token);
+            var dataPlaneReadiness = request.TeamLabDataPlane is null
+                ? null
+                : await dataPlane.ApplyAsync(request.TeamLabDataPlane, token);
             var managedArtifactChanged = false;
             if (linuxSensorUri is not null)
                 managedArtifactChanged |= await SyncManagedArtifactAsync(
@@ -65,6 +72,10 @@ public class AgentMaintenanceService(
                     true,
                     configChanged && request.Restart
                         ? "Agent was current; VM control-plane configuration was synchronized and restart scheduled."
+                        : dataPlaneReadiness is { Ready: true }
+                        ? "Agent was current; OVS/OVN data-plane prerequisites were synchronized."
+                        : dataPlaneReadiness is not null
+                        ? $"Agent was current; local OVS/OVN prerequisites were prepared ({dataPlaneReadiness.Code})."
                         : managedArtifactChanged || configChanged
                         ? "Agent was current; managed runtime artifacts were synchronized."
                         : "Agent and managed runtime artifacts are already up to date.",
@@ -214,6 +225,51 @@ public class AgentMaintenanceService(
         {
             TryDelete(temporary);
         }
+    }
+
+    private static async Task<bool> SyncTeamLabDataPlaneConfigAsync(
+        TeamLabDataPlaneSyncConfig desired,
+        CancellationToken token)
+    {
+        if (!File.Exists(AgentConfigPath))
+            throw new InvalidOperationException("Agent configuration file is missing.");
+        var root = JsonNode.Parse(await File.ReadAllTextAsync(AgentConfigPath, token)) as JsonObject
+                   ?? throw new InvalidDataException("Agent configuration is invalid.");
+        var teamLab = root["TeamLab"] as JsonObject;
+        if (teamLab is null)
+        {
+            teamLab = new JsonObject();
+            root["TeamLab"] = teamLab;
+        }
+        var changed = Set(teamLab, "OvnNorthboundEndpoint", desired.NorthboundEndpoint) |
+                      Set(teamLab, "OvnSouthboundEndpoint", desired.SouthboundEndpoint) |
+                      Set(teamLab, "OvsIntegrationBridgeName", desired.IntegrationBridgeName);
+        if (!changed) return false;
+
+        var temporary = CreateSiblingTemporaryPath(AgentConfigPath);
+        try
+        {
+            await File.WriteAllTextAsync(
+                temporary,
+                root.ToJsonString(new JsonSerializerOptions(JsonSerializerDefaults.Web) { WriteIndented = true }),
+                token);
+            if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                File.SetUnixFileMode(temporary, File.GetUnixFileMode(AgentConfigPath));
+            File.Move(temporary, AgentConfigPath, true);
+            return true;
+        }
+        finally
+        {
+            TryDelete(temporary);
+        }
+    }
+
+    private static bool Set(JsonObject target, string name, string? value)
+    {
+        var next = value is null ? null : JsonValue.Create(value);
+        if (JsonNode.DeepEquals(target[name], next)) return false;
+        target[name] = next;
+        return true;
     }
 
     private static async Task RestartAgentAfterResponseAsync()

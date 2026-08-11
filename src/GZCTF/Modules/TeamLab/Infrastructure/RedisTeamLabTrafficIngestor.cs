@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Globalization;
+using System.Text.Json;
 using GZCTF.Infrastructure.Cache;
 using GZCTF.Modules.TeamLab.Application;
 using StackExchange.Redis;
@@ -18,13 +19,29 @@ public sealed class RedisTeamLabTrafficIngestor(
     public const string ConsumerGroup = "gzctf-teamlab-flow-v1";
     public const int MaxStreamLength = 250_000;
 
-    private static readonly LuaScript ProtectedTrimScript = LuaScript.Prepare(
-        "local p = redis.call('XPENDING', @stream, @group); " +
-        "if p[1] == 0 then return redis.call('XTRIM', @stream, 'MAXLEN', @targetLength); end; " +
-        "return redis.call('XTRIM', @stream, 'MINID', p[2]);");
+    private const string AppendBatchScript = """
+        local stream = KEYS[1]
+        local group = ARGV[1]
+        local maximum = tonumber(ARGV[2])
+        local count = #ARGV - 2
+        local pending = redis.call('XPENDING', stream, group)
+        if pending[1] == 0 then
+            redis.call('XTRIM', stream, 'MAXLEN', maximum - count)
+        else
+            redis.call('XTRIM', stream, 'MINID', pending[2])
+        end
+        if redis.call('XLEN', stream) + count > maximum then
+            return -1
+        end
+        for index = 3, #ARGV do
+            redis.call('XADD', stream, '*', 'payload', ARGV[index])
+        end
+        return count
+        """;
+
+    private static readonly JsonSerializerOptions StreamPayloadJson = new(JsonSerializerDefaults.Web);
 
     private readonly RedisKey _streamKey = keyspace.Create(RedisKeyPurpose.Stream, "teamlab-flow");
-    private readonly RedisKey _capacityLockKey = keyspace.Create(RedisKeyPurpose.Lock, "teamlab-flow-capacity");
     private readonly SemaphoreSlim _groupGate = new(1, 1);
     private readonly ConcurrentDictionary<string, RedisValue> _reclaimCursors = new(StringComparer.Ordinal);
     private int _groupReady;
@@ -183,36 +200,16 @@ public sealed class RedisTeamLabTrafficIngestor(
         IReadOnlyList<TeamLabTrafficEnvelope> batch,
         CancellationToken cancellationToken)
     {
-        var owner = Guid.NewGuid().ToString("N");
-        var deadline = DateTimeOffset.UtcNow.AddSeconds(5);
-        while (!await database.LockTakeAsync(_capacityLockKey, owner, TimeSpan.FromSeconds(30)))
-        {
-            if (DateTimeOffset.UtcNow >= deadline)
-                throw new TimeoutException("TeamLab traffic stream capacity lock timed out.");
-            await Task.Delay(25, cancellationToken);
-        }
-
-        try
-        {
-            await database.ScriptEvaluateAsync(ProtectedTrimScript, new
-            {
-                stream = _streamKey,
-                group = (RedisValue)ConsumerGroup,
-                targetLength = Math.Max(0, MaxStreamLength - batch.Count)
-            });
-            var length = await database.StreamLengthAsync(_streamKey);
-            if (length + batch.Count > MaxStreamLength)
-                throw new TeamLabTrafficStreamCapacityException();
-
-            var redisBatch = database.CreateBatch();
-            var writes = batch.Select(envelope => redisBatch.StreamAddAsync(_streamKey, ToEntries(envelope))).ToArray();
-            redisBatch.Execute();
-            await Task.WhenAll(writes);
-        }
-        finally
-        {
-            await database.LockReleaseAsync(_capacityLockKey, owner);
-        }
+        cancellationToken.ThrowIfCancellationRequested();
+        var arguments = new RedisValue[batch.Count + 2];
+        arguments[0] = ConsumerGroup;
+        arguments[1] = MaxStreamLength;
+        for (var index = 0; index < batch.Count; index++)
+            arguments[index + 2] = JsonSerializer.Serialize(batch[index], StreamPayloadJson);
+        var appended = (long)await database.ScriptEvaluateAsync(
+            AppendBatchScript, [_streamKey], arguments);
+        if (appended != batch.Count)
+            throw new TeamLabTrafficStreamCapacityException();
     }
 
     private async Task EnsureConsumerGroupAsync(IDatabase database)
@@ -329,6 +326,13 @@ public sealed class RedisTeamLabTrafficIngestor(
     {
         var values = entry.Values.ToDictionary(item => item.Name.ToString(), item => item.Value.ToString(),
             StringComparer.Ordinal);
+        if (values.TryGetValue("payload", out var payload))
+        {
+            var decoded = JsonSerializer.Deserialize<TeamLabTrafficEnvelope>(payload, StreamPayloadJson)
+                          ?? throw new FormatException("TeamLab stream payload is empty.");
+            decoded.Validate();
+            return decoded;
+        }
         string Required(string name) => values.TryGetValue(name, out var value) && value.Length > 0
             ? value
             : throw new FormatException($"Missing TeamLab stream field '{name}'.");

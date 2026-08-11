@@ -43,7 +43,9 @@ public sealed class GuestManagementControlPlaneTests
         Assert.Contains(plan, command => command.Contains("ip address replace '100.127.0.1/16'", StringComparison.Ordinal));
         var nft = Assert.Single(plan,
             command => command.Contains("gzctf_guest_mgmt", StringComparison.Ordinal));
-        Assert.Contains("destroy table inet gzctf_guest_mgmt", nft, StringComparison.Ordinal);
+        Assert.Contains("nft list table inet gzctf_guest_mgmt", nft, StringComparison.Ordinal);
+        Assert.Contains("nft delete table inet gzctf_guest_mgmt", nft, StringComparison.Ordinal);
+        Assert.DoesNotContain("destroy table inet gzctf_guest_mgmt", nft, StringComparison.Ordinal);
         Assert.Contains("tcp dport 5443 accept", nft, StringComparison.Ordinal);
         Assert.Contains("iifname \"gzmgt0\" drop", nft, StringComparison.Ordinal);
         Assert.Contains("oifname \"gzmgt0\" drop", nft, StringComparison.Ordinal);

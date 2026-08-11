@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using GZCTF.Models;
 using GZCTF.Models.Data;
 using GZCTF.Modules.Audit.Contracts;
@@ -20,8 +21,7 @@ public sealed class TeamLabRuntimeCleanupService(
     ITeamLabCaptureCleanup captureCleanup,
     IPublicUdpGatewayProvider publicGateway,
     TeamLabEventRecorder eventRecorder,
-    ITeamLabRemoteAccessService remoteAccess,
-    TeamLabShardDeploymentService? executionPlans = null)
+    ITeamLabRemoteAccessService remoteAccess)
 {
     public Task<TeamLabNodeResult> CleanupAsync(
         TeamLabRuntime runtime,
@@ -55,37 +55,25 @@ public sealed class TeamLabRuntimeCleanupService(
         await traffic.StopCollectorsAsync(runtime, cancellationToken);
         var errors = (await captureCleanup.ExpireGenerationAsync(
             runtime.Id, generation, cancellationToken)).ToList();
-        IReadOnlyDictionary<int, GZCTF.TeamLab.Contracts.Execution.TeamLabExecutionPlanV2>? plans = null;
-        string? planCompilationError = null;
-        if (shards.Any(shard => UsesExecutionPlanV2(runtime, shard, generation)))
-        {
-            try
-            {
-                plans = await CompileExecutionPlansAsync(runtime, cancellationToken);
-            }
-            catch (Exception exception) when (exception is TeamLabRuntimeExecutionException or InvalidOperationException)
-            {
-                planCompilationError = exception.Message;
-            }
-        }
+        var planSnapshots = await context.TeamLabExecutionPlanSnapshots.AsNoTracking()
+            .Where(item => item.RuntimeId == runtime.Id && item.Generation == generation)
+            .ToDictionaryAsync(item => item.ShardId, cancellationToken);
         var results = await Task.WhenAll(shards.Select(async shard =>
         {
             try
             {
-                if (UsesExecutionPlanV2(runtime, shard, generation))
+                if (planSnapshots.TryGetValue(shard.Id, out var snapshot))
                 {
-                    if (planCompilationError is not null)
-                        return TeamLabNodeResult.Failed(
-                            $"Failed to compile execution-plan cleanup for node {shard.WorkerNodeId}: {planCompilationError}");
-                    if (plans is null || !plans.TryGetValue(shard.Id, out var plan))
-                        return TeamLabNodeResult.Failed(
-                            $"Execution-plan cleanup is missing shard {shard.Id}.");
+                    var plan = DeserializeSnapshot(snapshot, runtime, generation);
                     var cleanup = await executor.CleanupExecutionPlanAsync(
-                        shard.WorkerNodeId, plan, cancellationToken);
+                        snapshot.WorkerNodeId, plan, cancellationToken);
                     return cleanup.Success
                         ? TeamLabNodeResult.Ok(cleanup.Message ?? "Execution plan cleaned.")
                         : TeamLabNodeResult.Failed(cleanup.Message ?? "Execution-plan cleanup failed.");
                 }
+                if (UsesExecutionPlanV2(runtime, shard, generation))
+                    return TeamLabNodeResult.Failed(
+                        $"Execution-plan cleanup snapshot is missing for shard {shard.Id}.");
                 var inventory = await executor.GetRuntimeInventoryAsync(shard.WorkerNodeId, cancellationToken);
                 return await executor.CleanupShardAsync(
                     shard.WorkerNodeId,
@@ -161,16 +149,22 @@ public sealed class TeamLabRuntimeCleanupService(
         return TeamLabNodeResult.Ok("Runtime resources cleaned.");
     }
 
-    private async Task<IReadOnlyDictionary<int, GZCTF.TeamLab.Contracts.Execution.TeamLabExecutionPlanV2>>
-        CompileExecutionPlansAsync(TeamLabRuntime runtime, CancellationToken cancellationToken)
+    private static GZCTF.TeamLab.Contracts.Execution.TeamLabExecutionPlanV2 DeserializeSnapshot(
+        TeamLabExecutionPlanSnapshot snapshot,
+        TeamLabRuntime runtime,
+        int generation)
     {
-        if (executionPlans is null)
-            throw new InvalidOperationException("TeamLab execution-plan compiler is not registered.");
-        var release = await context.TeamLabTopologyReleases.AsNoTracking()
-            .SingleOrDefaultAsync(item => item.Id == runtime.TopologyReleaseId, cancellationToken)
-            ?? throw new TeamLabRuntimeExecutionException("Runtime execution-plan release is missing.");
-        var definition = TeamLabReleaseCodec.DecodeExecution(release.SchemaVersion, release.CanonicalJson);
-        return await executionPlans.CompileExecutionPlansAsync(runtime, definition, cancellationToken);
+        var plan = JsonSerializer.Deserialize<GZCTF.TeamLab.Contracts.Execution.TeamLabExecutionPlanV2>(snapshot.PlanJson)
+            ?? throw new TeamLabRuntimeExecutionException(
+                $"Execution-plan cleanup snapshot is unreadable for shard {snapshot.ShardId}.");
+        if (plan.RuntimeId != runtime.Id || plan.RuntimePublicId != runtime.PublicId ||
+            plan.Generation != generation || !string.Equals(plan.ShardKey,
+                snapshot.ShardId.ToString(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal) ||
+            !string.Equals(plan.PlanDigest, snapshot.PlanDigest, StringComparison.Ordinal) ||
+            !plan.IsValid(out _))
+            throw new TeamLabRuntimeExecutionException(
+                $"Execution-plan cleanup snapshot is invalid for shard {snapshot.ShardId}.");
+        return plan;
     }
 
     private static bool UsesExecutionPlanV2(

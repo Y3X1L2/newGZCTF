@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Security.Cryptography;
+using Microsoft.Extensions.Options;
 
 namespace GZCTF.Agent.Controllers;
 
@@ -18,11 +19,13 @@ public class ImageController : ControllerBase
     private readonly ImageTransferSingleFlight _singleFlight;
     private readonly AgentOciArtifactUploader _ociUploader;
     private readonly VmImageBackingChainInspector _backingChain;
+    private readonly AgentTeamLabConfig _teamLab;
     private readonly ILogger<ImageController> _logger;
 
     public ImageController(DockerService docker, AgentOperationGate gate, AgentResourceLock resourceLock,
         ImageTransferSingleFlight singleFlight, AgentOciArtifactUploader ociUploader,
         VmImageBackingChainInspector backingChain,
+        IOptions<AgentTeamLabConfig> teamLabOptions,
         ILogger<ImageController> logger)
     {
         _docker = docker;
@@ -31,6 +34,7 @@ public class ImageController : ControllerBase
         _singleFlight = singleFlight;
         _ociUploader = ociUploader;
         _backingChain = backingChain;
+        _teamLab = teamLabOptions.Value;
         _logger = logger;
     }
 
@@ -118,7 +122,8 @@ public class ImageController : ControllerBase
             IReadOnlyList<VmImageBackingReference> references;
             try
             {
-                references = await _backingChain.FindReferencesAsync(storagePath, [destPath], token);
+                references = await _backingChain.FindReferencesAsync(
+                    [storagePath, _teamLab.RuntimeStateRoot], [destPath], token);
             }
             catch (InvalidOperationException exception)
             {
@@ -228,7 +233,8 @@ public class ImageController : ControllerBase
         IReadOnlyList<VmImageBackingReference> references;
         try
         {
-            references = await _backingChain.FindReferencesAsync(storagePath, targets, token);
+            references = await _backingChain.FindReferencesAsync(
+                [storagePath, _teamLab.RuntimeStateRoot], targets, token);
         }
         catch (InvalidOperationException exception)
         {

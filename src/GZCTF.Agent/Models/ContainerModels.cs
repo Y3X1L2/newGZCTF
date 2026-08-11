@@ -31,6 +31,8 @@ public class CreateContainerRequest
     public bool UseHostNetworkNone { get; set; }
     public bool EnableTeamLabNetworkGate { get; set; } = true;
     public bool StartImmediately { get; set; } = true;
+    public string? TeamLabPlanDigest { get; set; }
+    public string? TeamLabShardKey { get; set; }
     public bool EnableNetworkAdmin { get; set; }
     public bool RemoveDefaultRoute { get; set; }
     public bool EnableIpForwarding { get; set; }

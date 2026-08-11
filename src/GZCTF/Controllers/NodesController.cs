@@ -697,6 +697,8 @@ public class NodesController : ControllerBase
             HttpContext.RequestServices.GetRequiredService<IConfiguration>(),
             requestBaseUrl);
         var agentClient = HttpContext.RequestServices.GetRequiredService<AgentClient>();
+        var controlPlaneNode = await _context.WorkerNodes.AsNoTracking()
+            .SingleOrDefaultAsync(item => item.IsLocal && item.TeamLabNetworkEnabled, token);
         await _events.AppendAndSaveAsync(NodeOperationalEvents.Create(
             node,
             OperationalEventCodes.Agent.SyncStarted,
@@ -718,7 +720,8 @@ public class NodesController : ControllerBase
                     WindowsSensorSha256: NodeDeployService.ComputeBundledArtifactSha256(
                         "agent", "endpoint-sensor", "win-x64", "gzctf-endpoint-sensor.exe"),
                     VmControlPlane: new AgentVmControlPlaneSyncConfig(
-                        node.TeamLabNetworkEnabled && node.Capabilities.HasFlag(NodeCapability.Kvm))),
+                        node.TeamLabNetworkEnabled && node.Capabilities.HasFlag(NodeCapability.Kvm)),
+                    TeamLabDataPlane: TeamLabDataPlaneSyncConfiguration.Create(node, controlPlaneNode)),
                 token);
             await _events.AppendAndSaveAsync(NodeOperationalEvents.Create(
                 node,

@@ -9,7 +9,8 @@ public sealed record AgentRuntimeInventoryResource(
     string ResourceKind = "workload",
     int? RuntimeId = null,
     string? DesiredStateDigest = null,
-    string? AssetKey = null);
+    string? AssetKey = null,
+    string? ShardKey = null);
 
 public sealed record AgentRuntimeInventoryResponse(
     bool DockerSupported,
