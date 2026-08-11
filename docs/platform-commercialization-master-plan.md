@@ -765,12 +765,12 @@ Phase 编号表示依赖顺序，不表示所有团队串行开发。满足前�
 | --- | --- | --- |
 | 主站架构 | 模块化单体 + 独立 Agent 执行面 | 某模块需要独立扩缩容、独立发布且模块边界已通过 Phase 1 验收时，才评估拆服务。 |
 | 部署队列 | PostgreSQL 事实队列 + Redis wake-up/短期调度 lease + 独立 scheduling/execution worker | Phase 6 基准证明目标吞吐、故障恢复或跨实例协调无法达标时，才引入专用消息中间件。 |
-| TeamLab 网络 | WireGuard 玩家入口 + L3 Fabric | 产品明确要求同一二层广播域、二层协议训练或跨节点二层设备仿真时，才评估 VXLAN/OVS。 |
+| TeamLab 网络 | WireGuard 玩家入口 + OVN/OVS 逻辑交换/路由数据面 + Geneve 跨节点隧道 | 其他网络 Provider 只有在同一执行契约下证明隔离、收敛、观测或目标硬件性能更优时才替换；不恢复逐运行 shell/bridge/dnsmasq 主路径。 |
 | 高频流量存储 | Redis 缓冲 + PostgreSQL 聚合事实 | Phase 4 基准证明目标保留周期和查询 SLA 无法由 PostgreSQL 分区方案满足时，才引入列式或时序存储。 |
 | 前端样式 | design token + Mantine theme + 公共组件 + CSS module | 不切回单一超大 CSS，不允许页面私有视觉体系。 |
 | 前端部署 | 独立制品、独立流水线、生产同域反向代理 | 需要独立 CDN、跨域发布或多前端消费同一 API 时，再拆部署域名。 |
 | 外部 API | 版本化 REST + scoped token + 异步任务 | 实际调用场景需要事件订阅时，在稳定事件模型上增加 webhook；不复制业务接口。 |
-| VM | KVM/libvirt + cloud-init/Cloudbase-init + 协议化访问端点 | 不为单个镜像增加 VM 特判。 |
+| VM | KVM/QEMU + 原生 libvirt 生命周期 + 外部制作的不可变模板 + 协议化访问端点 | 不为单个镜像增加 VM 特判，不由主站或 Agent 制作、安装或改造模板。 |
 
 ### 12.2 数据迁移与旧代码删除
 
