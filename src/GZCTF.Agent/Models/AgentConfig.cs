@@ -32,6 +32,8 @@ public sealed class AgentExecutionLimitOverrides
     public int? VmImageTransfers { get; set; }
     public int? TeamLabNetworkOperations { get; set; }
     public int? ControlOperations { get; set; }
+    public int? TeamLabExecutionOperations { get; set; }
+    public int? ArtifactCleanupOperations { get; set; }
 }
 
 public class DockerConfig

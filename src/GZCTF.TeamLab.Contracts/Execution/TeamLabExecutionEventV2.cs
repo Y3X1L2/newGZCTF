@@ -15,6 +15,17 @@ public sealed record TeamLabExecutionEventV2(
 
 public sealed record TeamLabExecutionPlanApplyRequest(TeamLabExecutionPlanV2 Plan);
 
+public sealed record TeamLabExecutionPlanCleanupRequest(TeamLabExecutionPlanV2 Plan);
+
+public sealed record TeamLabExecutionPlanCleanupResponse(
+    bool Success,
+    string PlanDigest,
+    IReadOnlyList<TeamLabExecutionEventV2> Events,
+    IReadOnlyList<TeamLabExecutionInventoryFactV2> Inventory,
+    string? ErrorCategory = null,
+    string? ErrorCode = null,
+    string? Message = null);
+
 public sealed record TeamLabExecutionPlanApplyResponse(
     bool Success,
     bool AlreadyApplied,

@@ -339,6 +339,37 @@ public class ImageDistributionServiceTests
     }
 
     [Fact]
+    public async Task ProcessClaimedAsync_CleanupKeepsRecordWhenAgentInventoryStillHasCache()
+    {
+        await using var context = CreateContext();
+        var node = SeedNode(context, "kvm-node", NodeCapability.Kvm);
+        var template = SeedVmTemplate(context);
+        var record = new ImageDistributionRecord
+        {
+            ImageTemplateId = template.Id,
+            WorkerNodeId = node.Id,
+            ImageHash = template.ImageHash!,
+            ImageType = template.ImageType,
+            Operation = ImageDistributionOperation.Cleanup,
+            Status = ImageDistributionStatus.CleanupPending,
+            ClaimOwner = "worker-1",
+            ClaimExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5)
+        };
+        context.ImageDistributionRecords.Add(record);
+        await context.SaveChangesAsync();
+        var agent = new RecordingAgentClient { VmCacheRemainsAfterCleanup = true };
+
+        await CreateService(context, agent).ProcessClaimedAsync(record.Id, "worker-1", CancellationToken.None);
+
+        await context.Entry(record).ReloadAsync();
+        Assert.Equal(ImageDistributionStatus.Failed, record.Status);
+        Assert.Equal("image.cleanup_failed", record.LastErrorCode);
+        Assert.False(record.Retryable);
+        Assert.Single(agent.DeletedVmNodes);
+        Assert.NotNull(await context.ImageDistributionRecords.FindAsync(record.Id));
+    }
+
+    [Fact]
     public async Task ReconcileReferencesAsync_RemovesDeletedResourceReference()
     {
         await using var context = CreateContext();
@@ -509,6 +540,7 @@ public class ImageDistributionServiceTests
         public List<Guid> DownloadedPreparedVmNodes { get; } = [];
         public List<Guid> DeletedVmNodes { get; } = [];
         public Exception? DockerPullException { get; set; }
+        public bool VmCacheRemainsAfterCleanup { get; set; }
 
         public RecordingAgentClient() : base(new Mock<IHttpClientFactory>().Object,
             new ServiceCollection().BuildServiceProvider().GetRequiredService<IServiceScopeFactory>(),
@@ -551,6 +583,17 @@ public class ImageDistributionServiceTests
         {
             DeletedVmNodes.Add(nodeId);
             return Task.CompletedTask;
+        }
+
+        public override Task<AgentImageCacheCleanupResult> DeleteVmImageWithInventoryAsync(
+            Guid nodeId,
+            int templateId,
+            string hash,
+            CancellationToken token)
+        {
+            DeletedVmNodes.Add(nodeId);
+            return Task.FromResult(new AgentImageCacheCleanupResult(
+                [new AgentImageCacheInventoryEntry("vm", hash, VmCacheRemainsAfterCleanup)]));
         }
     }
 }

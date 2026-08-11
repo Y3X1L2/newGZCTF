@@ -12,7 +12,9 @@ public enum NodeDispatchCategory : byte
     TeamLabNetwork = 5,
     Control = 6,
     Probe = 7,
-    Cleanup = 8
+    Cleanup = 8,
+    TeamLabExecution = 9,
+    ArtifactCleanup = 10
 }
 
 public static class NodeDispatchLimitPolicy
@@ -26,6 +28,8 @@ public static class NodeDispatchLimitPolicy
             NodeDispatchCategory.DockerImageTransfer => limits?.DockerImageTransfers,
             NodeDispatchCategory.VmImageTransfer => limits?.VmImageTransfers,
             NodeDispatchCategory.TeamLabNetwork => limits?.TeamLabNetworkOperations,
+            NodeDispatchCategory.TeamLabExecution => limits?.TeamLabExecutionOperations,
+            NodeDispatchCategory.ArtifactCleanup => limits?.ArtifactCleanupOperations,
             NodeDispatchCategory.Control or NodeDispatchCategory.Probe or NodeDispatchCategory.Cleanup =>
                 limits?.ControlOperations,
             _ => null
@@ -36,6 +40,8 @@ public static class NodeDispatchLimitPolicy
             NodeDispatchCategory.VmCreate => 4,
             NodeDispatchCategory.DockerImageTransfer or NodeDispatchCategory.VmImageTransfer => 4,
             NodeDispatchCategory.TeamLabNetwork => 4,
+            NodeDispatchCategory.TeamLabExecution => 1,
+            NodeDispatchCategory.ArtifactCleanup => 2,
             NodeDispatchCategory.Probe => 16,
             NodeDispatchCategory.Control => 8,
             NodeDispatchCategory.Cleanup => 4,

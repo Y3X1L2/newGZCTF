@@ -1,0 +1,111 @@
+using System.Diagnostics;
+using System.ComponentModel;
+using System.Text;
+using GZCTF.TeamLab.Contracts.Execution;
+
+namespace GZCTF.Agent.Services.TeamLab;
+
+public sealed class LinuxNetworkAttachmentService(ILogger<LinuxNetworkAttachmentService> logger)
+{
+    public async Task<TeamLabAttachmentResult> AttachContainerAsync(
+        TeamLabExecutionPlanV2 plan,
+        long pid,
+        TeamLabAssetExecutionSpecV2 asset,
+        TeamLabAssetNetworkAttachmentV2 attachment,
+        CancellationToken cancellationToken)
+    {
+        if (!OperatingSystem.IsLinux())
+            return TeamLabAttachmentResult.Failed("network", "Linux container attachments are only available on Linux Agents.");
+        if (pid <= 0 || string.IsNullOrWhiteSpace(attachment.InterfaceName))
+            return TeamLabAttachmentResult.Failed("validation", "Container network attachment identity is invalid.");
+
+        var identity = $"{plan.RuntimePublicId:D}:{plan.Generation}:{asset.AssetKey}:{attachment.NetworkKey}";
+        var hostInterface = StableName("tlh", identity, string.Empty);
+        var peerInterface = StableName("tlp", identity, string.Empty);
+        try
+        {
+            if (await SucceedsAsync("ip", ["link", "show", hostInterface], cancellationToken))
+                return new TeamLabAttachmentResult(true, hostInterface);
+            await RunAsync("ip", ["link", "add", hostInterface, "type", "veth", "peer", "name", peerInterface], cancellationToken);
+            await RunAsync("ip", ["link", "set", peerInterface, "netns", pid.ToString()], cancellationToken);
+            await RunAsync("ip", ["link", "set", hostInterface, "up"], cancellationToken);
+            await RunAsync("nsenter", ["-t", pid.ToString(), "-n", "ip", "link", "set", peerInterface, "name", attachment.InterfaceName], cancellationToken);
+            await RunAsync("nsenter", ["-t", pid.ToString(), "-n", "ip", "link", "set", attachment.InterfaceName, "up"], cancellationToken);
+            if (!string.IsNullOrWhiteSpace(attachment.IpAddress))
+                await RunAsync("nsenter", ["-t", pid.ToString(), "-n", "ip", "address", "replace", attachment.IpAddress, "dev", attachment.InterfaceName], cancellationToken);
+            return new TeamLabAttachmentResult(true, hostInterface);
+        }
+        catch (Exception exception) when (exception is IOException or InvalidOperationException or Win32Exception)
+        {
+            logger.LogWarning(exception, "Failed to attach container interface {Interface} for asset {AssetKey}",
+                attachment.InterfaceName, asset.AssetKey);
+            return TeamLabAttachmentResult.Failed("network", exception.Message);
+        }
+    }
+
+    public async Task<TeamLabAttachmentResult> RemoveContainerAttachmentAsync(
+        TeamLabExecutionPlanV2 plan,
+        string assetKey,
+        string networkKey,
+        CancellationToken cancellationToken)
+    {
+        if (!OperatingSystem.IsLinux()) return new TeamLabAttachmentResult(true, "Linux attachment is not present on this Agent.");
+        var identity = $"{plan.RuntimePublicId:D}:{plan.Generation}:{assetKey}:{networkKey}";
+        var hostInterface = StableName("tlh", identity, string.Empty);
+        try
+        {
+            await RunAsync("ip", ["link", "delete", hostInterface], cancellationToken, allowFailure: true);
+            return new TeamLabAttachmentResult(true, "Attachment removed.");
+        }
+        catch (Exception exception) when (exception is IOException or InvalidOperationException or Win32Exception)
+        {
+            return TeamLabAttachmentResult.Failed("cleanup", exception.Message);
+        }
+    }
+
+    static string StableName(string prefix, string asset, string network)
+    {
+        var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+            Encoding.UTF8.GetBytes($"{asset}:{network}"))).ToLowerInvariant();
+        return $"{prefix}{hash[..Math.Min(12, hash.Length)]}"[..15];
+    }
+
+    static async Task RunAsync(string fileName, IReadOnlyList<string> arguments,
+        CancellationToken token, bool allowFailure = false)
+    {
+        using var process = new Process
+        {
+            StartInfo = new ProcessStartInfo
+            {
+                FileName = fileName,
+                UseShellExecute = false,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            }
+        };
+        foreach (var argument in arguments) process.StartInfo.ArgumentList.Add(argument);
+        process.Start();
+        await process.WaitForExitAsync(token);
+        if (process.ExitCode != 0 && !allowFailure)
+            throw new InvalidOperationException($"{fileName} failed: {await process.StandardError.ReadToEndAsync(token)}");
+    }
+
+    static async Task<bool> SucceedsAsync(string fileName, IReadOnlyList<string> arguments,
+        CancellationToken token)
+    {
+        using var process = new Process
+        {
+            StartInfo = new ProcessStartInfo
+            {
+                FileName = fileName,
+                UseShellExecute = false,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            }
+        };
+        foreach (var argument in arguments) process.StartInfo.ArgumentList.Add(argument);
+        process.Start();
+        await process.WaitForExitAsync(token);
+        return process.ExitCode == 0;
+    }
+}

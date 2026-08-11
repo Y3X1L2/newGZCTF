@@ -152,6 +152,51 @@ public sealed class TeamLabRouteApplicationService(
         await context.SaveChangesAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyDictionary<int, TeamLabNodeInfrastructureApplyRequest>>
+        BuildInfrastructureRequestsAsync(
+            TeamLabRuntime runtime,
+            TeamLabExecutionTopology definition,
+            CancellationToken cancellationToken)
+    {
+        var shards = runtime.Shards.Where(item => item.Generation == runtime.Generation)
+            .OrderBy(item => item.WorkerNodeId).ToArray();
+        if (shards.Length == 0)
+            throw new TeamLabRuntimeExecutionException("Runtime has no current shard.");
+        var nodeIds = shards.Select(item => item.WorkerNodeId).ToArray();
+        var nodes = await context.WorkerNodes.AsNoTracking()
+            .Where(item => nodeIds.Contains(item.Id))
+            .ToDictionaryAsync(item => item.Id, cancellationToken);
+        var links = await context.TeamLabFabricLinkLeases.AsNoTracking()
+            .Where(item => item.RuntimeId == runtime.Id && item.Generation == runtime.Generation &&
+                           item.ReleasedAt == null)
+            .ToDictionaryAsync(item => item.ShardId, cancellationToken);
+        if (links.Count != shards.Length)
+            throw new TeamLabRuntimeExecutionException("Runtime Fabric link leases are incomplete.");
+        var templateIds = runtime.Assets
+            .Where(asset => asset.Generation == runtime.Generation && asset.SourceTemplateId.HasValue)
+            .Select(asset => asset.SourceTemplateId!.Value)
+            .Distinct()
+            .ToArray();
+        var networkModes = await context.ImageTemplates.AsNoTracking()
+            .Where(template => templateIds.Contains(template.Id))
+            .ToDictionaryAsync(item => item.Id, item => item.VmNetworkMode, cancellationToken);
+        var allowedPairs = TeamLabReachabilityCompiler.Compile(definition);
+        var routedPairs = TeamLabReachabilityCompiler.CompileRouting(definition);
+        var requests = new Dictionary<int, TeamLabNodeInfrastructureApplyRequest>();
+        foreach (var shard in shards)
+        {
+            TeamLabNodeInfrastructureApplyRequest? request = null;
+            var result = await ApplyShardInfrastructureAsync(
+                runtime, shard, links[shard.Id], shards, nodes, networkModes,
+                allowedPairs, routedPairs, cancellationToken, execute: false,
+                requestBuilt: built => request = built);
+            if (!result.Success || request is null)
+                throw new TeamLabRuntimeExecutionException(result.Message);
+            requests.Add(shard.Id, request);
+        }
+        return requests;
+    }
+
     private async Task<TeamLabNodeInfrastructureResult> ApplyShardInfrastructureAsync(
         TeamLabRuntime runtime,
         TeamLabRuntimeShard shard,
@@ -161,7 +206,9 @@ public sealed class TeamLabRouteApplicationService(
         IReadOnlyDictionary<int, VmNetworkMode> networkModes,
         IReadOnlySet<string> allowedPairs,
         IReadOnlySet<string> routedPairs,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool execute = true,
+        Action<TeamLabNodeInfrastructureApplyRequest>? requestBuilt = null)
     {
         if (!nodes.TryGetValue(shard.WorkerNodeId, out var node))
             return TeamLabNodeInfrastructureResult.Failed($"WorkerNode {shard.WorkerNodeId} was not found.");
@@ -241,8 +288,7 @@ public sealed class TeamLabRouteApplicationService(
             .Select(item => new TeamLabNodeObservationPointIntent(
                 item.PublicId, item.TopologyKey, item.Kind, item.InterfaceToken))
             .ToArray();
-        return await executor.ApplyInfrastructureAsync(shard.WorkerNodeId,
-            new TeamLabNodeInfrastructureApplyRequest(
+        var request = new TeamLabNodeInfrastructureApplyRequest(
                 runtime.Id,
                 runtime.Generation,
                 runtime.Generation,
@@ -258,7 +304,11 @@ public sealed class TeamLabRouteApplicationService(
                     localRoutes,
                     remoteRoutes),
                 policies,
-                observations), cancellationToken);
+                observations);
+        requestBuilt?.Invoke(request);
+        return execute
+            ? await executor.ApplyInfrastructureAsync(shard.WorkerNodeId, request, cancellationToken)
+            : TeamLabNodeInfrastructureResult.Applied("Infrastructure request compiled.");
     }
 
     private static T[] Deserialize<T>(string json) =>

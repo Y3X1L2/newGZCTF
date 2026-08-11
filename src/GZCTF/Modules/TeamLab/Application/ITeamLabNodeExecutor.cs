@@ -1,5 +1,6 @@
 using GZCTF.Modules.TeamLab.Domain;
 using GZCTF.Modules.TeamLab.Domain.Runtime;
+using GZCTF.TeamLab.Contracts.Execution;
 
 namespace GZCTF.Modules.TeamLab.Application;
 
@@ -134,7 +135,8 @@ public sealed record TeamLabNodeAssetCreateRequest(
     string RouterNamespace = "",
     Guid? OperationId = null,
     VmRuntimeMode? VmRuntimeMode = null,
-    VmNetworkMode? VmNetworkMode = null);
+    VmNetworkMode? VmNetworkMode = null,
+    string? ImageReference = null);
 
 public sealed record TeamLabNodeHealthIntent(
     TeamLabHealthCheckKind Kind,
@@ -292,6 +294,15 @@ public sealed record TeamLabNodeCaptureResult(
 
 public interface ITeamLabNodeExecutor
 {
+    Task<TeamLabExecutionPlanApplyResponse> ApplyExecutionPlanAsync(
+        Guid workerNodeId,
+        TeamLabExecutionPlanV2 plan,
+        CancellationToken cancellationToken);
+    Task<TeamLabExecutionPlanCleanupResponse> CleanupExecutionPlanAsync(
+        Guid workerNodeId,
+        TeamLabExecutionPlanV2 plan,
+        CancellationToken cancellationToken);
+
     Task<TeamLabNodeRuntimeInventory> GetRuntimeInventoryAsync(
         Guid workerNodeId,
         CancellationToken cancellationToken);

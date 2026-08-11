@@ -8,7 +8,8 @@ public sealed record RuntimeInventoryResource(
     string? Image = null,
     string ResourceKind = "workload",
     int? RuntimeId = null,
-    string? DesiredStateDigest = null);
+    string? DesiredStateDigest = null,
+    string? AssetKey = null);
 
 public sealed record RuntimeInventoryResponse(
     bool DockerSupported,

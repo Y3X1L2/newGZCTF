@@ -48,6 +48,12 @@ builder.Services.AddSingleton<VmRuntimeReadinessCoordinator>();
 builder.Services.AddHostedService(serviceProvider =>
     serviceProvider.GetRequiredService<VmRuntimeReadinessCoordinator>());
 builder.Services.AddSingleton<TeamLabCommandRunner>();
+builder.Services.AddSingleton<OvsdbJsonRpcClient>();
+builder.Services.AddSingleton<TeamLabOvnNetworkProvider>();
+builder.Services.AddSingleton<TeamLabOvsAttachmentProvider>();
+builder.Services.AddSingleton<LinuxNetworkAttachmentService>();
+builder.Services.AddSingleton<TeamLabExecutionEventJournal>();
+builder.Services.AddSingleton<TeamLabExecutionPlanExecutor>();
 builder.Services.AddSingleton<TeamLabCommandExecutor>();
 builder.Services.AddSingleton<TeamLabBridgeService>();
 builder.Services.AddSingleton<TeamLabRouterService>();
@@ -81,6 +87,10 @@ builder.Services.AddSingleton<GuestEventIngestor>();
 builder.Services.AddSingleton<AgentOciArtifactUploader>();
 builder.Services.AddSingleton<AgentOperationReceiptStore>();
 builder.Services.AddSingleton<VmScenarioArtifactService>();
+builder.Services.AddSingleton<LibvirtTeamLabProvider>();
+builder.Services.AddSingleton<LibvirtEventDispatcher>();
+builder.Services.AddHostedService(serviceProvider =>
+    serviceProvider.GetRequiredService<LibvirtEventDispatcher>());
 builder.Services.AddSingleton<TeamLabTerminalSessionRegistry>();
 builder.Services.AddSingleton<RemoteAccessRelayService>();
 builder.Services.AddHostedService<HeartbeatWorker>();

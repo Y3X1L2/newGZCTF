@@ -164,6 +164,12 @@ public record DownloadVmImageResponse(
     long? Size,
     string? Digest);
 
+public sealed record ImageCacheInventoryEntry(string Kind, string Identity, bool Present);
+
+public sealed record ImageCacheCleanupResponse(
+    IReadOnlyList<ImageCacheInventoryEntry> Inventory,
+    int Removed = 0);
+
 public sealed record PublishVmImageRequest(
     int TemplateId,
     string Hash,

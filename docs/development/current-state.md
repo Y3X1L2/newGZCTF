@@ -18,7 +18,21 @@
 
 当前 HEAD 必须通过 `git rev-parse HEAD` 实时读取。开始新任务前仍须重新 `fetch`，不能假定本表中的代码基线或远端关系永久有效。
 
+### 2026-08-11 TeamLab 高性能执行面工作树（未部署）
+
+- 独立 worktree `codex/teamlab-high-performance-a` 已提交共享 `TeamLabExecutionPlanV2`/事件契约；执行面其余改动尚未合并到 `main`，默认 `EnableExecutionPlanV2=false`，现网继续使用既有执行路径。
+- 代码实现包括 Agent 能力门控、按节点完整计划提交、OVSDB/OVN 数据面、原生 libvirt 生命周期、节点执行事件、分片 inventory 和镜像引用回收。任一 V2 分片失败、取消或 inventory 不完整时会补偿已成功分片，避免部分成功资源被旧清理路径遗漏。
+- 镜像缓存清理由 Agent 返回实际目标缓存 inventory，主站确认物理缓存不存在才删除分发记录；模板库主制品不随运行时释放。
+- 本地 Release build 已通过；TeamLab 与镜像分发定向 `vstest` 为 `284/284`。OVN/OVS、KVM、Agent 重启、并发、故障注入和 4/20/50 资产实机验收尚未执行，不能启用 V2 或删除旧 bridge/router namespace/dnsmasq 路径。
+
 ## 1.1 TeamLab 现场验收状态（2026-08-09）
+
+### 高性能执行面工作分支（2026-08-11）
+
+- 分支 `codex/teamlab-high-performance-a` 正在实现 TeamLab V2 节点执行计划、OVSDB/OVN、原生 libvirt 和执行计划级资源回收。
+- 该分支尚未切换现有 TeamLab 运行时的主执行路径，未在 OVN/KVM 节点完成实机验收，不能作为生产部署结论。
+- 实际进度、已验证范围和阻断项见 `docs/development/teamlab-high-performance-execution-progress.md`。
+- 本分支已加入能力门控的 V2 分片计划接入；`TeamLabNetworkConfig.EnableExecutionPlanV2` 默认关闭，未通过 OVN/OVS、libvirt 和库存实机验收前不会切换正式运行时。
 
 - 候选提交 `0ee455b` 已部署到测试服务器的独立 release；主站、Agent、首页、`ApiOperationWorker` 和两个 Agent inventory 已通过发布后冒烟。
 - 数据库已前向应用 `20260809041834_NormalizeImageDistributionReferenceIdentity`，修复多个 TeamLab 发布版本共享镜像引用时的覆盖风险。

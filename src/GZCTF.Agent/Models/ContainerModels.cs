@@ -2,6 +2,7 @@ namespace GZCTF.Agent.Models;
 
 public class CreateContainerRequest
 {
+    public string? AssetKey { get; set; }
     public int RuntimeId { get; set; }
     public int Generation { get; set; } = 1;
     public string Image { get; set; } = string.Empty;
@@ -28,6 +29,8 @@ public class CreateContainerRequest
     public string? HealthCheck { get; set; }
     public bool UsePenetrationFabric { get; set; }
     public bool UseHostNetworkNone { get; set; }
+    public bool EnableTeamLabNetworkGate { get; set; } = true;
+    public bool StartImmediately { get; set; } = true;
     public bool EnableNetworkAdmin { get; set; }
     public bool RemoveDefaultRoute { get; set; }
     public bool EnableIpForwarding { get; set; }

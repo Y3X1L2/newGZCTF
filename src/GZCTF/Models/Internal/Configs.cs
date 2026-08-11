@@ -604,6 +604,13 @@ public class TeamLabNetworkConfig
     public bool Enable { get; set; }
 
     /// <summary>
+    /// Enables the versioned Agent execution-plan provider after every assigned node has
+    /// advertised the required native capabilities. It is intentionally off until a node fleet
+    /// has passed the real OVN/OVS and libvirt acceptance run.
+    /// </summary>
+    public bool EnableExecutionPlanV2 { get; set; }
+
+    /// <summary>
     /// Returns command plans without mutating WorkerNode state when true.
     /// </summary>
     public bool DryRun { get; set; }

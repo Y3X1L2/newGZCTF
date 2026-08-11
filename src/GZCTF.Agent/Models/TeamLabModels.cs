@@ -3,6 +3,7 @@ namespace GZCTF.Agent.Models;
 public class AgentTeamLabConfig
 {
     public bool Enable { get; set; } = true;
+    public bool EnableExecutionPlanV2 { get; set; }
     public bool DryRun { get; set; }
     public string RuntimeStateRoot { get; set; } = "/var/lib/gzctf/teamlab";
     public string FabricInterfaceName { get; set; } = "gzctf-fabric";
@@ -14,6 +15,11 @@ public class AgentTeamLabConfig
     public long ObservationSpoolMaxBytes { get; set; } = 64L * 1024 * 1024;
     public int ObservationAggregationIntervalMilliseconds { get; set; } = 1_000;
     public bool ObservationPacketFingerprintEnabled { get; set; }
+    public string OvnNorthboundEndpoint { get; set; } = "unix:/var/run/ovn/ovnnb_db.sock";
+    public string OvnNorthboundDatabase { get; set; } = "OVN_Northbound";
+    public string OvsLocalEndpoint { get; set; } = "unix:/var/run/openvswitch/db.sock";
+    public string OvsLocalDatabase { get; set; } = "Open_vSwitch";
+    public string OvsIntegrationBridgeName { get; set; } = "br-int";
 }
 
 public record TeamLabToolCapabilityReport(

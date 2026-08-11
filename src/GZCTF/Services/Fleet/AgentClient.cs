@@ -9,6 +9,7 @@ using GZCTF.Models.Internal;
 using GZCTF.Modules.Audit.Contracts;
 using GZCTF.Modules.Audit.Domain;
 using GZCTF.Modules.Runtime.Contracts;
+using GZCTF.TeamLab.Contracts.Execution;
 using GZCTF.Repositories.Interface;
 using GZCTF.Services.Container.Manager;
 using Microsoft.EntityFrameworkCore;
@@ -302,6 +303,26 @@ public class AgentClient
         return await ReadTeamLabResponseAsync<TeamLabStatusResponse>(
             response, "teamlab.status", node.Id, deadline.Token);
     }
+
+    public virtual Task<TeamLabExecutionPlanApplyResponse?> ApplyTeamLabExecutionPlanAsync(
+        Guid nodeId,
+        TeamLabExecutionPlanV2 plan,
+        CancellationToken token) =>
+        PostTeamLabAsync<TeamLabExecutionPlanApplyRequest, TeamLabExecutionPlanApplyResponse>(
+            nodeId,
+            "/api/teamlab/execution-plan/apply",
+            new TeamLabExecutionPlanApplyRequest(plan),
+            token);
+
+    public virtual Task<TeamLabExecutionPlanCleanupResponse?> CleanupTeamLabExecutionPlanAsync(
+        Guid nodeId,
+        TeamLabExecutionPlanV2 plan,
+        CancellationToken token) =>
+        PostTeamLabAsync<TeamLabExecutionPlanCleanupRequest, TeamLabExecutionPlanCleanupResponse>(
+            nodeId,
+            "/api/teamlab/execution-plan/cleanup",
+            new TeamLabExecutionPlanCleanupRequest(plan),
+            token);
 
     public virtual async Task<TeamLabDryRunResponse?> ConfigureTeamLabWireGuardAsync(Guid nodeId,
         TeamLabWireGuardRequest request, CancellationToken token) =>
@@ -1116,6 +1137,14 @@ public class AgentClient
 
     public virtual async Task DeleteDockerImageAsync(Guid nodeId, string image, CancellationToken token)
     {
+        _ = await DeleteDockerImageWithInventoryAsync(nodeId, image, token);
+    }
+
+    public virtual async Task<AgentImageCacheCleanupResult> DeleteDockerImageWithInventoryAsync(
+        Guid nodeId,
+        string image,
+        CancellationToken token)
+    {
         var node = await GetNodeAsync(nodeId, token);
         if (node is null)
             throw NodeNotFound(nodeId, "image.docker.delete");
@@ -1131,9 +1160,22 @@ public class AgentClient
                 $"Agent Docker image cleanup failed on node {node.Name} ({node.HostAddress}) for image {image}.",
                 token);
         }
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            return AgentImageCacheCleanupResult.Clean;
+        return await response.Content.ReadFromJsonAsync<AgentImageCacheCleanupResult>(token)
+               ?? throw InvalidAgentResponse(node.Id, "image.docker.delete", "Agent returned an empty image cache inventory.");
     }
 
     public virtual async Task DeleteVmImageAsync(Guid nodeId, int templateId, string hash, CancellationToken token)
+    {
+        _ = await DeleteVmImageWithInventoryAsync(nodeId, templateId, hash, token);
+    }
+
+    public virtual async Task<AgentImageCacheCleanupResult> DeleteVmImageWithInventoryAsync(
+        Guid nodeId,
+        int templateId,
+        string hash,
+        CancellationToken token)
     {
         var node = await GetNodeAsync(nodeId, token);
         if (node is null)
@@ -1151,6 +1193,10 @@ public class AgentClient
                 $"Agent VM image cleanup failed on node {node.Name} ({node.HostAddress}) for template {templateId}.",
                 token);
         }
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            return AgentImageCacheCleanupResult.Clean;
+        return await response.Content.ReadFromJsonAsync<AgentImageCacheCleanupResult>(token)
+               ?? throw InvalidAgentResponse(node.Id, "image.vm.delete", "Agent returned an empty image cache inventory.");
     }
 
     public async Task EnsureDockerRegistryAsync(Guid nodeId, int port, CancellationToken token)
@@ -1852,6 +1898,17 @@ public record AgentVmImageDownloadResult(
     public static AgentVmImageDownloadResult Failed(string message) =>
         new(false, message, false, false, null, null);
 }
+
+public sealed record AgentImageCacheCleanupResult(
+    IReadOnlyList<AgentImageCacheInventoryEntry> Inventory,
+    int Removed = 0)
+{
+    public static readonly AgentImageCacheCleanupResult Clean = new([], 0);
+
+    public bool IsClean => Inventory.All(item => !item.Present);
+}
+
+public sealed record AgentImageCacheInventoryEntry(string Kind, string Identity, bool Present);
 
 public sealed record AgentVmImagePublishResult(
     bool Success,

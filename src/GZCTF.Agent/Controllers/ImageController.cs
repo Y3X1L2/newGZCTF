@@ -57,7 +57,8 @@ public class ImageController : ControllerBase
             "docker-image:" + image.Trim().ToLowerInvariant(), token);
         await using var permit = await _gate.EnterAsync(AgentOperationCategory.Control, token);
         await _docker.DeleteImageAsync(image, token);
-        return Ok(new { message = "Docker image cache deleted" });
+        return Ok(new ImageCacheCleanupResponse(
+            [new ImageCacheInventoryEntry("docker", image, await _docker.ImageExistsAsync(image, token))]));
     }
 
     [HttpPost("ensure-docker-registry")]
@@ -218,7 +219,8 @@ public class ImageController : ControllerBase
             .Where(System.IO.File.Exists)
             .ToArray();
         if (targets.Length == 0)
-            return Ok(new { message = "VM image cache cleanup completed", removed = 0 });
+            return Ok(new ImageCacheCleanupResponse(
+                [new ImageCacheInventoryEntry("vm", cacheIdentity, false)]));
 
         // A cached template is the backing file of every VM overlay created from it, and that link
         // exists only in qcow2 metadata. Deleting it while an overlay still points at it leaves that
@@ -253,7 +255,10 @@ public class ImageController : ControllerBase
             removed++;
         }
 
-        return Ok(new { message = "VM image cache cleanup completed", removed });
+        var present = ResolveVmImageCachePaths(storagePath, templateId, hash)
+            .Any(System.IO.File.Exists);
+        return Ok(new ImageCacheCleanupResponse(
+            [new ImageCacheInventoryEntry("vm", cacheIdentity, present)], removed));
     }
 
     [HttpPost("download-bootstrap-artifact")]

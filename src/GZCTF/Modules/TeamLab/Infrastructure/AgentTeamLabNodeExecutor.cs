@@ -17,6 +17,7 @@ using GZCTF.Modules.TeamLab.Domain;
 using GZCTF.Services;
 using GZCTF.Services.Fleet;
 using GZCTF.Utils;
+using GZCTF.TeamLab.Contracts.Execution;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
@@ -34,6 +35,28 @@ public sealed class AgentTeamLabNodeExecutor(
 {
     private readonly TeamLabNetworkConfig _config = options.Value;
     private readonly ConcurrentDictionary<Guid, Task<AgentExecutionLimits?>> _dispatchLimits = new();
+
+    public async Task<TeamLabExecutionPlanApplyResponse> ApplyExecutionPlanAsync(
+        Guid workerNodeId,
+        TeamLabExecutionPlanV2 plan,
+        CancellationToken cancellationToken)
+    {
+        var response = await DispatchAsync(workerNodeId, NodeDispatchCategory.TeamLabExecution,
+            operationToken => agent.ApplyTeamLabExecutionPlanAsync(workerNodeId, plan, operationToken),
+            cancellationToken);
+        return response ?? ApplyPlanFailure(plan, "Agent returned no execution-plan response.");
+    }
+
+    public async Task<TeamLabExecutionPlanCleanupResponse> CleanupExecutionPlanAsync(
+        Guid workerNodeId,
+        TeamLabExecutionPlanV2 plan,
+        CancellationToken cancellationToken)
+    {
+        var response = await DispatchAsync(workerNodeId, NodeDispatchCategory.TeamLabExecution,
+            operationToken => agent.CleanupTeamLabExecutionPlanAsync(workerNodeId, plan, operationToken),
+            cancellationToken);
+        return response ?? CleanupPlanFailure(plan, "Agent returned no execution-plan cleanup response.");
+    }
 
     public async Task<TeamLabNodeRuntimeInventory> GetRuntimeInventoryAsync(
         Guid workerNodeId,
@@ -1121,6 +1144,14 @@ public sealed class AgentTeamLabNodeExecutor(
             operation,
             cancellationToken);
     }
+
+    private static TeamLabExecutionPlanApplyResponse ApplyPlanFailure(
+        TeamLabExecutionPlanV2 plan, string message) =>
+        new(false, false, plan.PlanDigest, [], [], "compute", "agent_empty_response", message);
+
+    private static TeamLabExecutionPlanCleanupResponse CleanupPlanFailure(
+        TeamLabExecutionPlanV2 plan, string message) =>
+        new(false, plan.PlanDigest, [], [], "cleanup", "agent_empty_response", message);
 
     private async Task<AgentExecutionLimits?> LoadDispatchLimitsAsync(Guid workerNodeId)
     {

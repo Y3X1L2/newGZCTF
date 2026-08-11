@@ -20,7 +20,8 @@ public sealed class TeamLabRuntimeCleanupService(
     ITeamLabCaptureCleanup captureCleanup,
     IPublicUdpGatewayProvider publicGateway,
     TeamLabEventRecorder eventRecorder,
-    ITeamLabRemoteAccessService remoteAccess)
+    ITeamLabRemoteAccessService remoteAccess,
+    TeamLabShardDeploymentService? executionPlans = null)
 {
     public Task<TeamLabNodeResult> CleanupAsync(
         TeamLabRuntime runtime,
@@ -54,10 +55,37 @@ public sealed class TeamLabRuntimeCleanupService(
         await traffic.StopCollectorsAsync(runtime, cancellationToken);
         var errors = (await captureCleanup.ExpireGenerationAsync(
             runtime.Id, generation, cancellationToken)).ToList();
+        IReadOnlyDictionary<int, GZCTF.TeamLab.Contracts.Execution.TeamLabExecutionPlanV2>? plans = null;
+        string? planCompilationError = null;
+        if (shards.Any(shard => UsesExecutionPlanV2(runtime, shard, generation)))
+        {
+            try
+            {
+                plans = await CompileExecutionPlansAsync(runtime, cancellationToken);
+            }
+            catch (Exception exception) when (exception is TeamLabRuntimeExecutionException or InvalidOperationException)
+            {
+                planCompilationError = exception.Message;
+            }
+        }
         var results = await Task.WhenAll(shards.Select(async shard =>
         {
             try
             {
+                if (UsesExecutionPlanV2(runtime, shard, generation))
+                {
+                    if (planCompilationError is not null)
+                        return TeamLabNodeResult.Failed(
+                            $"Failed to compile execution-plan cleanup for node {shard.WorkerNodeId}: {planCompilationError}");
+                    if (plans is null || !plans.TryGetValue(shard.Id, out var plan))
+                        return TeamLabNodeResult.Failed(
+                            $"Execution-plan cleanup is missing shard {shard.Id}.");
+                    var cleanup = await executor.CleanupExecutionPlanAsync(
+                        shard.WorkerNodeId, plan, cancellationToken);
+                    return cleanup.Success
+                        ? TeamLabNodeResult.Ok(cleanup.Message ?? "Execution plan cleaned.")
+                        : TeamLabNodeResult.Failed(cleanup.Message ?? "Execution-plan cleanup failed.");
+                }
                 var inventory = await executor.GetRuntimeInventoryAsync(shard.WorkerNodeId, cancellationToken);
                 return await executor.CleanupShardAsync(
                     shard.WorkerNodeId,
@@ -132,6 +160,28 @@ public sealed class TeamLabRuntimeCleanupService(
         await context.SaveChangesAsync(cancellationToken);
         return TeamLabNodeResult.Ok("Runtime resources cleaned.");
     }
+
+    private async Task<IReadOnlyDictionary<int, GZCTF.TeamLab.Contracts.Execution.TeamLabExecutionPlanV2>>
+        CompileExecutionPlansAsync(TeamLabRuntime runtime, CancellationToken cancellationToken)
+    {
+        if (executionPlans is null)
+            throw new InvalidOperationException("TeamLab execution-plan compiler is not registered.");
+        var release = await context.TeamLabTopologyReleases.AsNoTracking()
+            .SingleOrDefaultAsync(item => item.Id == runtime.TopologyReleaseId, cancellationToken)
+            ?? throw new TeamLabRuntimeExecutionException("Runtime execution-plan release is missing.");
+        var definition = TeamLabReleaseCodec.DecodeExecution(release.SchemaVersion, release.CanonicalJson);
+        return await executionPlans.CompileExecutionPlansAsync(runtime, definition, cancellationToken);
+    }
+
+    private static bool UsesExecutionPlanV2(
+        TeamLabRuntime runtime,
+        TeamLabRuntimeShard shard,
+        int generation) => runtime.Infrastructure
+        .Where(item => item.Generation == generation)
+        .SelectMany(item => item.Fragments)
+        .Any(fragment => fragment.ShardId == shard.Id &&
+                         string.Equals(fragment.NativeResourceId, $"execution-plan-v2/{shard.Id}",
+                             StringComparison.Ordinal));
 
     private async Task MarkCleanupStartedAsync(TeamLabRuntime runtime, CancellationToken cancellationToken)
     {

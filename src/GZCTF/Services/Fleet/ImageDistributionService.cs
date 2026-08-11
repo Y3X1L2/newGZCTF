@@ -984,8 +984,11 @@ public class ImageDistributionService(
             {
                 var image = record.ImageTemplate?.RegistryUrl ?? record.ImageTemplate?.Name;
                 if (!string.IsNullOrWhiteSpace(image))
-                    await agentClient.DeleteDockerImageAsync(record.WorkerNodeId,
+                {
+                    var cleanup = await agentClient.DeleteDockerImageWithInventoryAsync(record.WorkerNodeId,
                         dockerRegistry.ResolveInternalImageReferenceForConfiguredRegistry(image), token);
+                    EnsureCacheRemoved(cleanup, record);
+                }
             }
             else
             {
@@ -1012,8 +1015,9 @@ public class ImageDistributionService(
                     return;
                 }
 
-                await agentClient.DeleteVmImageAsync(record.WorkerNodeId, record.ImageTemplateId,
-                    record.ImageHash, token);
+                var cleanup = await agentClient.DeleteVmImageWithInventoryAsync(record.WorkerNodeId,
+                    record.ImageTemplateId, record.ImageHash, token);
+                EnsureCacheRemoved(cleanup, record);
             }
 
             if (removeOnSuccess)
@@ -1240,6 +1244,14 @@ public class ImageDistributionService(
             exception is HttpRequestException or IOException or TimeoutException,
             WorkerNodeId: record.WorkerNodeId,
             Operation: operation);
+    }
+
+    static void EnsureCacheRemoved(AgentImageCacheCleanupResult cleanup, ImageDistributionRecord record)
+    {
+        if (!cleanup.IsClean)
+            throw new InvalidOperationException(
+                $"Agent inventory still reports image cache for template {record.ImageTemplateId} " +
+                $"on node {record.WorkerNodeId} after cleanup.");
     }
 
     static IReadOnlyDictionary<string, object?> ImageDetail(

@@ -4,6 +4,8 @@ using GZCTF.Agent.Services.Observation;
 using GZCTF.Agent.Services.RuntimeSignals;
 using GZCTF.Agent.Services.TeamLab;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
+using GZCTF.TeamLab.Contracts.Execution;
 
 namespace GZCTF.Agent.Controllers;
 
@@ -18,10 +20,34 @@ public class TeamLabController(
     AgentRuntimeSignalJournal runtimeSignals,
     DockerService docker,
     KvmService kvm,
-    AgentOperationGate gate) : ControllerBase
+    AgentOperationGate gate,
+    TeamLabExecutionPlanExecutor executionPlans,
+    IOptions<AgentTeamLabConfig> teamLabOptions) : ControllerBase
 {
     [HttpGet("status")]
     public async Task<IActionResult> Status(CancellationToken token) => Ok(await service.GetStatusAsync(token));
+
+    [HttpPost("execution-plan/apply")]
+    public async Task<IActionResult> ApplyExecutionPlan(
+        [FromBody] TeamLabExecutionPlanApplyRequest request,
+        CancellationToken token)
+    {
+        if (!teamLabOptions.Value.EnableExecutionPlanV2)
+            return NotFound();
+        await using var permit = await gate.EnterAsync(AgentOperationCategory.TeamLabExecution, token);
+        return Ok(await executionPlans.ApplyAsync(request.Plan, token));
+    }
+
+    [HttpPost("execution-plan/cleanup")]
+    public async Task<IActionResult> CleanupExecutionPlan(
+        [FromBody] TeamLabExecutionPlanCleanupRequest request,
+        CancellationToken token)
+    {
+        if (!teamLabOptions.Value.EnableExecutionPlanV2)
+            return NotFound();
+        await using var permit = await gate.EnterAsync(AgentOperationCategory.TeamLabExecution, token);
+        return Ok(await executionPlans.CleanupAsync(request.Plan, token));
+    }
 
     [HttpPost("shards/apply")]
     public async Task<IActionResult> ApplyInfrastructure(

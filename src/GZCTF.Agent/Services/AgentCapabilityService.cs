@@ -6,10 +6,12 @@ namespace GZCTF.Agent.Services;
 
 public sealed class AgentCapabilityService(
     TeamLabNetworkService teamLab,
-    IOptions<AgentConfig> options)
+    IOptions<AgentConfig> options,
+    IOptions<AgentTeamLabConfig> teamLabOptions)
 {
     const int ManifestSchemaVersion = 1;
     readonly AgentConfig _config = options.Value;
+    readonly AgentTeamLabConfig _teamLabConfig = teamLabOptions.Value;
     readonly Lazy<Task<string?>> _binarySha256 = new(ComputeBinarySha256Async);
 
     public Task<string?> GetBinarySha256Async() => _binarySha256.Value;
@@ -44,6 +46,14 @@ public sealed class AgentCapabilityService(
                 features.Add(AgentFeatureIds.TeamLabEndpointSensor);
             if (HasLibPcap())
                 features.Add(AgentFeatureIds.TeamLabObservation);
+            if (_teamLabConfig.EnableExecutionPlanV2 && HasNativeLibvirt())
+                features.Add(AgentFeatureIds.TeamLabNativeLibvirt);
+            if (_teamLabConfig.EnableExecutionPlanV2 && HasOvsdb())
+                features.Add(AgentFeatureIds.TeamLabOvnOvs);
+            if (_teamLabConfig.EnableExecutionPlanV2 && HasOvsdb() && (capabilities.Docker || kvm))
+                features.Add(AgentFeatureIds.TeamLabExecutionPlan);
+            if (HasArtifactCacheRoot())
+                features.Add(AgentFeatureIds.TeamLabArtifactCache);
         }
         if (capabilities.WireGuard)
             features.Add(AgentFeatureIds.WireGuard);
@@ -74,7 +84,11 @@ public sealed class AgentCapabilityService(
             Resolve(_config.ExecutionLimits.DockerImageTransfers, 2, capabilities.Docker),
             Resolve(_config.ExecutionLimits.VmImageTransfers, 1, kvm),
             Resolve(_config.ExecutionLimits.TeamLabNetworkOperations, 4, teamLabStatus.Available),
-            Math.Max(1, _config.ExecutionLimits.ControlOperations ?? 2));
+            Math.Max(1, _config.ExecutionLimits.ControlOperations ?? 2),
+            Resolve(_config.ExecutionLimits.TeamLabExecutionOperations, 1,
+                features.Contains(AgentFeatureIds.TeamLabExecutionPlan)),
+            Resolve(_config.ExecutionLimits.ArtifactCleanupOperations, 1,
+                features.Contains(AgentFeatureIds.TeamLabArtifactCache)));
         return new AgentCapabilityManifest(
             typeof(AgentCapabilityService).Assembly.GetName().Version?.ToString() ?? "unknown",
             binarySha256,
@@ -103,6 +117,26 @@ public sealed class AgentCapabilityService(
         }
         return false;
     }
+
+    static bool HasNativeLibvirt() =>
+        OperatingSystem.IsLinux() &&
+        (NativeLibrary.TryLoad("libvirt.so.0", out var handle) ||
+         NativeLibrary.TryLoad("libvirt.so", out handle)) &&
+        Release(handle);
+
+    static bool Release(nint handle)
+    {
+        if (handle != 0) NativeLibrary.Free(handle);
+        return handle != 0;
+    }
+
+    static bool HasOvsdb() =>
+        OperatingSystem.IsLinux() &&
+        (File.Exists("/var/run/openvswitch/db.sock") ||
+         File.Exists("/var/run/ovn/ovnnb_db.sock"));
+
+    static bool HasArtifactCacheRoot() =>
+        Directory.Exists("/var/lib/gzctf/images") || Directory.Exists("/var/lib/gzctf/teamlab");
 
     static bool HasEndpointSensorArtifacts() =>
         File.Exists("/opt/gzctf/endpoint-sensor/linux-x64/gzctf-endpoint-sensor") &&
