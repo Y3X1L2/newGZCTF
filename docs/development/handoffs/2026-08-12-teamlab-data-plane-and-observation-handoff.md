@@ -78,3 +78,12 @@
 - `git diff --check`：通过。
 - `dotnet build src/GZCTF.slnx -c Release --no-restore`：通过，0 error；存在既有测试分析器 warning，未在本轮修改。
 - 未执行单元、集成、实机、压测、浏览器和故障注入测试。此前定向测试宿主无输出而被停止，不能写为通过。
+
+## 118 部署记录
+
+- 发布版本：`teamlab-hpa-b87c747`。
+- 源码提交：`b87c747ca3195b3137b5d5293c88eec226423847`。
+- 发布包 SHA-256：`e35c37f38693bbcee9865f7033818bdbcef39f9704bcca1c5a9426900e3cb31d`。
+- 发布目录：`/opt/gzctf/releases/teamlab-hpa-b87c747/publish`。
+- 发布后只读核验：`gzctf.service=active`、`gzctf-agent.service=active`、主站与 Agent 运行二进制均与本地发布物 SHA-256 一致、`http://127.0.0.1:8080/` 返回 `200`、`EnableExecutionPlanV2=false`。
+- 未在部署过程中创建、修改或销毁任何 TeamLab 场景、比赛、运行时、VM、容器或测试资源。

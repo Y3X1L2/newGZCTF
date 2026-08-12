@@ -189,6 +189,7 @@ vNext 正式路由和实现状态以以下文件为准：
 - Agent 能力清单仅在 OVS、OVN、Northbound 连通和本机执行条件同时满足时报告 `teamlab.ovs-ovn.v1` 与 `teamlab.execution-plan.v2`。`EnableExecutionPlanV2` 仍必须保持关闭，直到独立实机验收完成。
 - OVSDB 客户端已改为受限的持久连接，具备请求超时、响应 ID 校验、断线重建和释放逻辑；VM、Docker、执行计划快照和流量写入的审查修复详见 2026-08-12 交接文档。
 - 本次仅完成代码与发布门禁。执行计划 V2 的双节点、故障、并发、清理和观测实机验收尚未签收，必须由下一位验收人员按交接矩阵执行，不能将本候选写为已通过业务验收。
+- 2026-08-12 已部署到 118：release `teamlab-hpa-b87c747`，提交 `b87c747ca3195b3137b5d5293c88eec226423847`。主站与本机 Agent 均为 active，运行二进制摘要与发布物一致，首页 HTTP 200；`EnableExecutionPlanV2=false`。未执行 TeamLab 业务、压力或故障注入验收。
 
 ---
 
