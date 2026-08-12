@@ -45,19 +45,13 @@ public sealed class AgentFleetUpdateCoordinator(
         var priorSchedulable = node.AgentUpdateState == AgentUpdateState.Failed
             ? node.AgentUpdateWasSchedulable
             : node.IsSchedulable;
-        node.AgentUpdateWasSchedulable = priorSchedulable;
-        node.AgentUpdateExpectedSha256 = expectedSha;
-        node.AgentUpdateStartedAt = DateTimeOffset.UtcNow;
-        node.AgentUpdateCompletedAt = null;
-        node.AgentUpdateLastError = null;
-        node.AgentUpdateState = AgentUpdateState.Cordoned;
-        node.IsSchedulable = false;
+        await BeginUpdateAsync(node, priorSchedulable, expectedSha, cancellationToken);
         await RecordStageAsync(node, correlationId, "cordoned",
             "Worker node was cordoned before Agent synchronization.", cancellationToken);
 
         try
         {
-            node.AgentUpdateState = AgentUpdateState.Syncing;
+            await TransitionAsync(node, AgentUpdateState.Syncing, cancellationToken);
             await RecordStageAsync(node, correlationId, "binary-transfer",
                 "Agent binary is synchronizing from the main server.",
                 cancellationToken);
@@ -70,7 +64,7 @@ public sealed class AgentFleetUpdateCoordinator(
 
             // A database SHA is a cached report, not proof of the process currently serving
             // the Agent API. Always observe the expected heartbeat before sending host config.
-            node.AgentUpdateState = AgentUpdateState.AwaitingHeartbeat;
+            await TransitionAsync(node, AgentUpdateState.AwaitingHeartbeat, cancellationToken);
             await RecordStageAsync(node, correlationId, "awaiting-heartbeat",
                 "Agent restart completed; waiting for the target capability manifest.", cancellationToken);
             var deadline = DateTimeOffset.UtcNow + HeartbeatDeadline;
@@ -86,7 +80,7 @@ public sealed class AgentFleetUpdateCoordinator(
                     CreateSyncFailure(
                         "The target Agent manifest was not observed before the update deadline.", node));
 
-            node.AgentUpdateState = AgentUpdateState.Syncing;
+            await TransitionAsync(node, AgentUpdateState.Syncing, cancellationToken);
             await RecordStageAsync(node, correlationId, "node-configuration",
                 "The updated Agent is applying VM control-plane and TeamLab data-plane configuration.",
                 cancellationToken);
@@ -98,18 +92,14 @@ public sealed class AgentFleetUpdateCoordinator(
                     CreateSyncFailure(result.Message, node));
 
             await context.Entry(node).ReloadAsync(cancellationToken);
-            node.AgentUpdateState = AgentUpdateState.VerifyingFabric;
-            await context.SaveChangesAsync(cancellationToken);
+            await TransitionAsync(node, AgentUpdateState.VerifyingFabric, cancellationToken);
             if (!FabricReady(node))
                 return await FailAsync(node, correlationId,
                     "TeamLab Fabric health was not confirmed after Agent synchronization.", cancellationToken,
                     CreateSyncFailure(
                         "TeamLab Fabric health was not confirmed after Agent synchronization.", node));
 
-            node.AgentUpdateState = AgentUpdateState.Stable;
-            node.IsSchedulable = priorSchedulable;
-            node.AgentUpdateCompletedAt = DateTimeOffset.UtcNow;
-            node.AgentUpdateLastError = null;
+            await CompleteAsync(node, priorSchedulable, cancellationToken);
             await RecordStageAsync(node, correlationId, "completed",
                 "Agent binary, configuration and TeamLab Fabric health were confirmed.", cancellationToken,
                 OperationalEventCodes.Agent.SyncSucceeded,
@@ -211,6 +201,75 @@ public sealed class AgentFleetUpdateCoordinator(
         !node.TeamLabNetworkEnabled ||
         node.TeamLabTunnelStatus == TeamLabTunnelStatus.Healthy &&
         node.TeamLabFabricStatus == TeamLabFabricStatus.Healthy;
+
+    private async Task BeginUpdateAsync(WorkerNode node, bool priorSchedulable, string expectedSha,
+        CancellationToken cancellationToken)
+    {
+        var startedAt = DateTimeOffset.UtcNow;
+        if (context.Database.IsRelational())
+        {
+            await context.WorkerNodes.Where(item => item.Id == node.Id)
+                .ExecuteUpdateAsync(updates => updates
+                    .SetProperty(item => item.AgentUpdateWasSchedulable, priorSchedulable)
+                    .SetProperty(item => item.AgentUpdateExpectedSha256, expectedSha)
+                    .SetProperty(item => item.AgentUpdateStartedAt, startedAt)
+                    .SetProperty(item => item.AgentUpdateCompletedAt, (DateTimeOffset?)null)
+                    .SetProperty(item => item.AgentUpdateLastError, (string?)null)
+                    .SetProperty(item => item.AgentUpdateState, AgentUpdateState.Cordoned)
+                    .SetProperty(item => item.IsSchedulable, false), cancellationToken);
+        }
+        else
+        {
+            node.AgentUpdateWasSchedulable = priorSchedulable;
+            node.AgentUpdateExpectedSha256 = expectedSha;
+            node.AgentUpdateStartedAt = startedAt;
+            node.AgentUpdateCompletedAt = null;
+            node.AgentUpdateLastError = null;
+            node.AgentUpdateState = AgentUpdateState.Cordoned;
+            node.IsSchedulable = false;
+            await context.SaveChangesAsync(cancellationToken);
+        }
+        await context.Entry(node).ReloadAsync(cancellationToken);
+    }
+
+    private async Task TransitionAsync(WorkerNode node, AgentUpdateState state, CancellationToken cancellationToken)
+    {
+        if (context.Database.IsRelational())
+        {
+            await context.WorkerNodes.Where(item => item.Id == node.Id)
+                .ExecuteUpdateAsync(updates => updates
+                    .SetProperty(item => item.AgentUpdateState, state), cancellationToken);
+        }
+        else
+        {
+            node.AgentUpdateState = state;
+            await context.SaveChangesAsync(cancellationToken);
+        }
+        await context.Entry(node).ReloadAsync(cancellationToken);
+    }
+
+    private async Task CompleteAsync(WorkerNode node, bool schedulable, CancellationToken cancellationToken)
+    {
+        var completedAt = DateTimeOffset.UtcNow;
+        if (context.Database.IsRelational())
+        {
+            await context.WorkerNodes.Where(item => item.Id == node.Id)
+                .ExecuteUpdateAsync(updates => updates
+                    .SetProperty(item => item.AgentUpdateState, AgentUpdateState.Stable)
+                    .SetProperty(item => item.IsSchedulable, schedulable)
+                    .SetProperty(item => item.AgentUpdateCompletedAt, completedAt)
+                    .SetProperty(item => item.AgentUpdateLastError, (string?)null), cancellationToken);
+        }
+        else
+        {
+            node.AgentUpdateState = AgentUpdateState.Stable;
+            node.IsSchedulable = schedulable;
+            node.AgentUpdateCompletedAt = completedAt;
+            node.AgentUpdateLastError = null;
+            await context.SaveChangesAsync(cancellationToken);
+        }
+        await context.Entry(node).ReloadAsync(cancellationToken);
+    }
 
     private static AgentSyncRequest CreateSyncRequest(string serverUrl, string expectedSha, WorkerNode node,
         WorkerNode? controlPlaneNode, bool includeManagedArtifacts, bool includeNodeConfiguration) =>
