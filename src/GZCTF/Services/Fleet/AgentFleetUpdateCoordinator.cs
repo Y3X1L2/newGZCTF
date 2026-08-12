@@ -59,11 +59,11 @@ public sealed class AgentFleetUpdateCoordinator(
         {
             node.AgentUpdateState = AgentUpdateState.Syncing;
             await RecordStageAsync(node, correlationId, "binary-transfer",
-                "Agent and endpoint sensor artifacts are synchronizing from the main server.",
+                "Agent binary is synchronizing from the main server.",
                 cancellationToken);
             var result = await agent.SyncAgentAsync(node.Id,
-                CreateSyncRequest(serverUrl, expectedSha, node, controlPlaneNode,
-                    includeNodeConfiguration: false), cancellationToken);
+            CreateSyncRequest(serverUrl, expectedSha, node, controlPlaneNode,
+                    includeManagedArtifacts: false, includeNodeConfiguration: false), cancellationToken);
             if (!result.Success)
                 return await FailAsync(node, correlationId, result.Message, cancellationToken,
                     CreateSyncFailure(result.Message, node));
@@ -91,8 +91,8 @@ public sealed class AgentFleetUpdateCoordinator(
                 "The updated Agent is applying VM control-plane and TeamLab data-plane configuration.",
                 cancellationToken);
             result = await agent.SyncAgentAsync(node.Id,
-                CreateSyncRequest(serverUrl, expectedSha, node, controlPlaneNode,
-                    includeNodeConfiguration: true), cancellationToken);
+            CreateSyncRequest(serverUrl, expectedSha, node, controlPlaneNode,
+                    includeManagedArtifacts: true, includeNodeConfiguration: true), cancellationToken);
             if (!result.Success)
                 return await FailAsync(node, correlationId, result.Message, cancellationToken,
                     CreateSyncFailure(result.Message, node));
@@ -213,16 +213,24 @@ public sealed class AgentFleetUpdateCoordinator(
         node.TeamLabFabricStatus == TeamLabFabricStatus.Healthy;
 
     private static AgentSyncRequest CreateSyncRequest(string serverUrl, string expectedSha, WorkerNode node,
-        WorkerNode? controlPlaneNode, bool includeNodeConfiguration) =>
+        WorkerNode? controlPlaneNode, bool includeManagedArtifacts, bool includeNodeConfiguration) =>
         new(
             DownloadUrl: $"{serverUrl.TrimEnd('/')}/api/agent/download",
             ExpectedSha256: expectedSha,
-            LinuxSensorDownloadUrl: $"{serverUrl.TrimEnd('/')}/api/agent/endpoint-sensor/linux-x64/download",
-            LinuxSensorSha256: NodeDeployService.ComputeBundledArtifactSha256(
-                "agent", "endpoint-sensor", "linux-x64", "gzctf-endpoint-sensor"),
-            WindowsSensorDownloadUrl: $"{serverUrl.TrimEnd('/')}/api/agent/endpoint-sensor/win-x64/download",
-            WindowsSensorSha256: NodeDeployService.ComputeBundledArtifactSha256(
-                "agent", "endpoint-sensor", "win-x64", "gzctf-endpoint-sensor.exe"),
+            LinuxSensorDownloadUrl: includeManagedArtifacts
+                ? $"{serverUrl.TrimEnd('/')}/api/agent/endpoint-sensor/linux-x64/download"
+                : null,
+            LinuxSensorSha256: includeManagedArtifacts
+                ? NodeDeployService.ComputeBundledArtifactSha256(
+                    "agent", "endpoint-sensor", "linux-x64", "gzctf-endpoint-sensor")
+                : null,
+            WindowsSensorDownloadUrl: includeManagedArtifacts
+                ? $"{serverUrl.TrimEnd('/')}/api/agent/endpoint-sensor/win-x64/download"
+                : null,
+            WindowsSensorSha256: includeManagedArtifacts
+                ? NodeDeployService.ComputeBundledArtifactSha256(
+                    "agent", "endpoint-sensor", "win-x64", "gzctf-endpoint-sensor.exe")
+                : null,
             VmControlPlane: includeNodeConfiguration
                 ? new AgentVmControlPlaneSyncConfig(
                     node.TeamLabNetworkEnabled && node.Capabilities.HasFlag(NodeCapability.Kvm))

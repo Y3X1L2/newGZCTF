@@ -774,6 +774,13 @@ public class NodesControllerTests
         Assert.Equal("http://10.24.0.27/api/agent/download", agent.Request?.DownloadUrl);
         Assert.True(agent.Request?.Restart);
         Assert.False(string.IsNullOrWhiteSpace(agent.Request?.ExpectedSha256));
+        Assert.Equal(2, agent.Requests.Count);
+        Assert.Null(agent.Requests[0].LinuxSensorDownloadUrl);
+        Assert.Null(agent.Requests[0].WindowsSensorDownloadUrl);
+        Assert.Null(agent.Requests[0].VmControlPlane);
+        Assert.Null(agent.Requests[0].TeamLabDataPlane);
+        Assert.False(string.IsNullOrWhiteSpace(agent.Requests[1].LinuxSensorDownloadUrl));
+        Assert.False(string.IsNullOrWhiteSpace(agent.Requests[1].WindowsSensorDownloadUrl));
         Assert.False(agent.Request?.VmControlPlane?.Enabled);
     }
 
@@ -945,12 +952,14 @@ public class NodesControllerTests
 
         public Guid? NodeId { get; private set; }
         public AgentSyncRequest? Request { get; private set; }
+        public List<AgentSyncRequest> Requests { get; } = [];
 
         public override Task<AgentSyncResponse> SyncAgentAsync(Guid nodeId, AgentSyncRequest request,
             CancellationToken token)
         {
             NodeId = nodeId;
             Request = request;
+            Requests.Add(request);
             _onSync?.Invoke(request);
             return Task.FromResult(new AgentSyncResponse(true, "Agent sync requested.", "1.8.3-test"));
         }
