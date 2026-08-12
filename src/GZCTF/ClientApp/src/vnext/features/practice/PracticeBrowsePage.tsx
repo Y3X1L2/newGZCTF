@@ -195,15 +195,7 @@ export function PracticeBrowsePage() {
 
             <div className={styles.filterGroup}>
               <span className={styles.filterLabel}>难度</span>
-              <div className={styles.starFilter} role="radiogroup" aria-label="难度星级">
-                <button
-                  type="button"
-                  className={selectedDifficultyStars === 0 ? styles.starResetActive : styles.starReset}
-                  onClick={() => toggleDifficulty(0)}
-                  aria-pressed={selectedDifficultyStars === 0}
-                >
-                  不限
-                </button>
+              <div className={styles.starFilter} role="radiogroup" aria-label="难度星级，0 颗星表示不限">
                 {Array.from({ length: maxDifficultyStars }, (_, index) => {
                   const stars = index + 1
                   const active = stars <= selectedDifficultyStars

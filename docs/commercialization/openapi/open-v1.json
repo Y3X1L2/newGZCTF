@@ -6597,6 +6597,361 @@
         ]
       }
     },
+    "/api/open/v1/games/{gameId}/awdp-services": {
+      "get": {
+        "tags": [
+          "OpenAwdpServices"
+        ],
+        "operationId": "OpenAwdpServices_List",
+        "parameters": [
+          {
+            "name": "gameId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 50,
+              "maximum": 100.0,
+              "minimum": 1.0
+            },
+            "x-position": 2
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "nullable": true
+            },
+            "x-position": 3
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "OpenAwdpServices"
+        ],
+        "operationId": "OpenAwdpServices_ImportOne",
+        "parameters": [
+          {
+            "name": "gameId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "Idempotency-Key",
+            "x-originalName": "idempotencyKey",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 3
+          }
+        ],
+        "requestBody": {
+          "x-name": "model",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenAwdpServiceImportModel"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 2
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/games/{gameId}/awdp-services/{serviceId}": {
+      "get": {
+        "tags": [
+          "OpenAwdpServices"
+        ],
+        "operationId": "OpenAwdpServices_Get",
+        "parameters": [
+          {
+            "name": "gameId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "serviceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "x-position": 2
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "OpenAwdpServices"
+        ],
+        "operationId": "OpenAwdpServices_Delete",
+        "parameters": [
+          {
+            "name": "gameId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "serviceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "x-position": 2
+          },
+          {
+            "name": "Idempotency-Key",
+            "x-originalName": "idempotencyKey",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 3
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/games/{gameId}/awdp-services/batch": {
+      "post": {
+        "tags": [
+          "OpenAwdpServices"
+        ],
+        "operationId": "OpenAwdpServices_ImportBatch",
+        "parameters": [
+          {
+            "name": "gameId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "Idempotency-Key",
+            "x-originalName": "idempotencyKey",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 3
+          }
+        ],
+        "requestBody": {
+          "x-name": "model",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenAwdpServiceBatchImportModel"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 2
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/games/{gameId}/awdp-services/batch-delete": {
+      "post": {
+        "tags": [
+          "OpenAwdpServices"
+        ],
+        "operationId": "OpenAwdpServices_DeleteBatch",
+        "parameters": [
+          {
+            "name": "gameId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "Idempotency-Key",
+            "x-originalName": "idempotencyKey",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 3
+          },
+          {
+            "name": "routeKey",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "nullable": true
+            },
+            "x-position": 4
+          }
+        ],
+        "requestBody": {
+          "x-name": "serviceIds",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "format": "int32"
+                }
+              }
+            }
+          },
+          "required": true,
+          "x-position": 2
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
     "/api/open/v1/games/{gameId}/challenges": {
       "get": {
         "tags": [
@@ -11778,6 +12133,165 @@
                 "$ref": "#/components/schemas/ExerciseOpenApiAttachmentModel"
               }
             ]
+          }
+        }
+      },
+      "OpenAwdpServiceImportModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "externalId",
+          "name",
+          "flagTemplate",
+          "imageName"
+        ],
+        "properties": {
+          "externalId": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1
+          },
+          "content": {
+            "type": "string",
+            "maxLength": 1000000
+          },
+          "category": {
+            "$ref": "#/components/schemas/ChallengeCategory"
+          },
+          "difficulty": {
+            "$ref": "#/components/schemas/Difficulty"
+          },
+          "tags": {
+            "type": "array",
+            "maxItems": 100,
+            "nullable": true,
+            "items": {
+              "type": "string"
+            }
+          },
+          "flagTemplate": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1
+          },
+          "imageName": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 1
+          },
+          "exposePort": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 65535.0,
+            "minimum": 1.0
+          },
+          "checkerScript": {
+            "type": "string",
+            "maxLength": 65536,
+            "nullable": true
+          },
+          "checkerEntrypoint": {
+            "type": "string",
+            "maxLength": 256,
+            "nullable": true
+          },
+          "expScript": {
+            "type": "string",
+            "maxLength": 65536,
+            "nullable": true
+          },
+          "expEntrypoint": {
+            "type": "string",
+            "maxLength": 256,
+            "nullable": true
+          },
+          "originalScore": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 1000000.0,
+            "minimum": 0.0
+          },
+          "attackPoints": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 1000000.0,
+            "minimum": 0.0
+          },
+          "slaPoints": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 1000000.0,
+            "minimum": 0.0
+          },
+          "patchPoints": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 1000000.0,
+            "minimum": 0.0
+          },
+          "serviceAbnormalPenalty": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 1000000.0,
+            "minimum": 0.0
+          },
+          "maxAttackPerRound": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 100000.0,
+            "minimum": 1.0
+          },
+          "attackPhaseMinutes": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 100000.0,
+            "minimum": 1.0
+          },
+          "patchPhaseMinutes": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 100000.0,
+            "minimum": 1.0
+          },
+          "totalRounds": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 100000.0,
+            "minimum": 1.0
+          },
+          "maxResetCount": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 100000.0,
+            "minimum": 0.0
+          },
+          "maxRecoveryCount": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 100000.0,
+            "minimum": 0.0
+          }
+        }
+      },
+      "OpenAwdpServiceBatchImportModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "maxItems": 100,
+            "minItems": 1,
+            "items": {
+              "$ref": "#/components/schemas/OpenAwdpServiceImportModel"
+            }
           }
         }
       },
