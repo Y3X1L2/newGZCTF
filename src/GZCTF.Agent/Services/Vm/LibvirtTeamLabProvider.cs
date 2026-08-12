@@ -46,11 +46,14 @@ public sealed class LibvirtTeamLabProvider(
             {
                 try
                 {
-                    var state = GetState(existing);
+                    // Validate ownership before any destructive libvirt operation. A name is
+                    // deterministic, but it is not an ownership proof when a stale or foreign
+                    // domain occupies it.
                     if (!MatchesStableUuid(existing, plan, asset))
                         return LibvirtAssetResult.Failed("compute", "Existing VM domain has a conflicting stable identity.");
                     if (!MatchesExecutionPlan(native.GetXml(existing), plan))
                         return LibvirtAssetResult.Failed("compute", "Existing VM domain belongs to a different execution plan.");
+                    var state = GetState(existing);
                     if (state == "running")
                         return new LibvirtAssetResult(true, state, domainName);
                     var startResult = state == "paused"
@@ -135,16 +138,16 @@ public sealed class LibvirtTeamLabProvider(
         {
             if (domain != 0)
             {
+                if (!MatchesStableUuid(domain, plan, asset) ||
+                    !MatchesExecutionPlan(GetConnection().GetXml(domain), plan))
+                    return Task.FromResult(LibvirtAssetResult.Failed("cleanup",
+                        "VM domain does not belong to the requested execution plan."));
                 if (GetState(domain) is "running" or "paused" &&
                     LibvirtNativeInterop.DomainDestroy(domain) < 0)
                     return Task.FromResult(LibvirtAssetResult.Failed("cleanup", "libvirt failed to destroy the VM domain."));
                 if (LibvirtNativeInterop.DomainUndefineFlags(domain, UndefineManagedSave | UndefineNvram) < 0)
                     return Task.FromResult(LibvirtAssetResult.Failed("cleanup", "libvirt failed to undefine the VM domain."));
             }
-            if (domain != 0 &&
-                (!MatchesStableUuid(domain, plan, asset) || !MatchesExecutionPlan(GetConnection().GetXml(domain), plan)))
-                return Task.FromResult(LibvirtAssetResult.Failed("cleanup",
-                    "VM domain does not belong to the requested execution plan."));
             var overlay = OverlayPath(plan, asset);
             DeleteOverlay(overlay);
             cancellationToken.ThrowIfCancellationRequested();

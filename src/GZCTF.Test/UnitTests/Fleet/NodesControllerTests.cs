@@ -236,7 +236,10 @@ public class NodesControllerTests
         Assert.Contains("openvswitch-switch", script);
         Assert.Contains("ovn-host", script);
         Assert.Contains("need_cmd ovs-vsctl", script);
+        Assert.Contains("need_cmd ovsdb-client", script);
         Assert.Contains("need_cmd ovn-controller", script);
+        Assert.Contains("need_cmd ovn-nbctl", script);
+        Assert.Contains("need_cmd ovn-sbctl", script);
         Assert.Contains("cmp -s \"$tmp\" /etc/docker/daemon.json", script);
         Assert.Contains("KVM hardware: unavailable", script);
         Assert.Contains("install_dotnet_runtime", script);
@@ -737,7 +740,14 @@ public class NodesControllerTests
             AgentBinarySha256 = expectedSha
         });
         await context.SaveChangesAsync();
-        var agent = new RecordingAgentClient();
+        var heartbeatManifest = CreateManifest(includeKvm: false) with { BinarySha256 = expectedSha };
+        var agent = new RecordingAgentClient(_ =>
+        {
+            var heartbeat = context.WorkerNodes.Single(item => item.Id == nodeId);
+            heartbeat.AgentBinarySha256 = expectedSha;
+            heartbeat.CapabilityManifestJson = AgentCapabilityEvaluator.Normalize(heartbeatManifest).Json;
+            context.SaveChanges();
+        });
         var services = new ServiceCollection()
             .AddSingleton(context)
             .AddSingleton<IConfiguration>(new ConfigurationBuilder().Build())
@@ -814,9 +824,13 @@ public class NodesControllerTests
             AgentFeatureIds.DockerPull,
             AgentFeatureIds.TeamLabInfrastructure,
             AgentFeatureIds.TeamLabFabricLeasedLinks,
+            AgentFeatureIds.TeamLabContainerNetworkFinalize,
             AgentFeatureIds.TeamLabObservation,
             AgentFeatureIds.WireGuard,
-            AgentFeatureIds.Pcap
+            AgentFeatureIds.Pcap,
+            AgentFeatureIds.SelfUpdate,
+            AgentFeatureIds.RuntimeInventory,
+            AgentFeatureIds.RuntimeSignals
         };
         if (includeKvm)
         {
@@ -918,12 +932,15 @@ public class NodesControllerTests
 
     private sealed class RecordingAgentClient : AgentClient
     {
-        public RecordingAgentClient() : base(
+        private readonly Action<AgentSyncRequest>? _onSync;
+
+        public RecordingAgentClient(Action<AgentSyncRequest>? onSync = null) : base(
             new ServiceCollection().AddHttpClient().BuildServiceProvider().GetRequiredService<IHttpClientFactory>(),
             new ServiceCollection().BuildServiceProvider().GetRequiredService<IServiceScopeFactory>(),
             new ConfigurationBuilder().Build(),
             NullLogger<AgentClient>.Instance)
         {
+            _onSync = onSync;
         }
 
         public Guid? NodeId { get; private set; }
@@ -934,6 +951,7 @@ public class NodesControllerTests
         {
             NodeId = nodeId;
             Request = request;
+            _onSync?.Invoke(request);
             return Task.FromResult(new AgentSyncResponse(true, "Agent sync requested.", "1.8.3-test"));
         }
     }

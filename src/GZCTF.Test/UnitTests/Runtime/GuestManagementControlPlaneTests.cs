@@ -52,6 +52,18 @@ public sealed class GuestManagementControlPlaneTests
     }
 
     [Fact]
+    public async Task TeamLabCommandRunner_NormalizesStandardInputForLinuxTools()
+    {
+        if (OperatingSystem.IsWindows()) return;
+
+        var runner = new TeamLabCommandRunner(NullLogger<TeamLabCommandRunner>.Instance);
+        var result = await runner.RunAsync("cat", "first\r\nsecond\r\n", CancellationToken.None);
+
+        Assert.True(result.Success);
+        Assert.Equal("first\nsecond\n", result.Output);
+    }
+
+    [Fact]
     public async Task GuestEnrollment_UsesEncryptedOneTimeStateAndJournalsBeforeAcknowledge()
     {
         var root = Path.Combine(Path.GetTempPath(), $"gzctf-guest-control-{Guid.NewGuid():N}");

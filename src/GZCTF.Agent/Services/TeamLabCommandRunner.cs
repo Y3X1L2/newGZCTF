@@ -20,7 +20,7 @@ public class TeamLabCommandRunner(ILogger<TeamLabCommandRunner> logger)
 
         if (standardInput is not null)
         {
-            await process.StandardInput.WriteAsync(standardInput);
+            await process.StandardInput.WriteAsync(standardInput.ReplaceLineEndings("\n"));
             await process.StandardInput.FlushAsync(token);
             process.StandardInput.Close();
         }

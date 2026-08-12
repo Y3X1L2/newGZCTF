@@ -219,6 +219,33 @@ public sealed class TeamLabObservationTests
     }
 
     [Fact]
+    public void ObservationSpool_DoesNotCountWriterBacklogAsDroppedTraffic()
+    {
+        const int recordCount = 33_000;
+        var spool = new ObservationBatchSpool(
+            Options.Create(new AgentTeamLabConfig
+            {
+                ObservationPacketFingerprintEnabled = true,
+                ObservationMemoryRecordLimit = 1_000,
+                ObservationBatchSize = 2_000,
+                ObservationSpoolMaxBytes = 64L * 1024 * 1024
+            }),
+            NullLogger<ObservationBatchSpool>.Instance);
+        var registration = new ObservationPointRegistration(75, 1, Guid.NewGuid(), "entry", 0, "tl-entry");
+        var packet = new ParsedObservationPacket(
+            "10.0.0.2", 1000, "10.0.0.3", 80, "TCP", 0x18, 64,
+            "sha256:" + new string('a', 64), "sha256:" + new string('b', 64));
+
+        for (var index = 0; index < recordCount; index++)
+            Assert.True(spool.AppendPacket(registration, DateTimeOffset.UtcNow, packet) > 0);
+
+        var first = spool.Read(new TeamLabObservationBatchRequest(75, 1, 0, registration.PublicId, 2_000), Health());
+        Assert.Equal(0, first.DroppedCount);
+        Assert.Equal(2_000, first.Records.Length);
+        Assert.Equal(2_000, first.NextSequence);
+    }
+
+    [Fact]
     public void EndpointSensorSignature_IsAcceptedOnceAndRejectsReplay()
     {
         var key = RandomNumberGenerator.GetBytes(32);

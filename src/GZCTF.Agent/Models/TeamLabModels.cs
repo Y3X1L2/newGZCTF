@@ -33,7 +33,12 @@ public record TeamLabToolCapabilityReport(
     bool Nftables,
     bool Tcpdump,
     bool Dumpcap,
-    bool DnsProbe);
+    bool DnsProbe,
+    bool OvsVsctl = false,
+    bool OvsdbClient = false,
+    bool OvnController = false,
+    bool OvnNorthboundClient = false,
+    bool OvnSouthboundClient = false);
 
 public record TeamLabStatusResponse(
     bool Available,

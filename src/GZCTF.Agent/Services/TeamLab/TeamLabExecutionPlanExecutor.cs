@@ -151,8 +151,7 @@ public sealed class TeamLabExecutionPlanExecutor(
                 events.Enqueue(Event(plan, asset.AssetKey, "compute", "failed", "resource_not_running",
                     "The requested asset is present but is not running."));
         }
-        var eventArray = events.ToArray();
-        var success = eventArray.All(item => item.Outcome is "succeeded" or "already_applied");
+        var success = events.All(item => item.Outcome is "succeeded" or "already_applied");
         if (!success)
         {
             try
@@ -173,8 +172,8 @@ public sealed class TeamLabExecutionPlanExecutor(
                     plan.RuntimeId, plan.Generation);
                 events.Enqueue(Event(plan, null, "cleanup", "failed", "compensation_failed", "Execution plan compensation failed."));
             }
-            eventArray = events.ToArray();
         }
+        var eventArray = events.ToArray();
         var response = new TeamLabExecutionPlanApplyResponse(
             success,
             false,
@@ -370,13 +369,46 @@ public sealed class TeamLabExecutionPlanExecutor(
             if (!completed)
             {
                 if (container is not null)
-                    await docker.DestroyContainerAsync(container.ContainerId, CancellationToken.None, plan.Generation,
-                        plan.PlanDigest);
+                {
+                    try
+                    {
+                        await docker.DestroyContainerAsync(container.ContainerId, CancellationToken.None, plan.Generation,
+                            plan.PlanDigest);
+                    }
+                    catch (Exception exception) when (exception is not OperationCanceledException)
+                    {
+                        logger.LogWarning(exception,
+                            "TeamLab failed to remove a partially created container for runtime {RuntimeId}, asset {AssetKey}",
+                            plan.RuntimeId, asset.AssetKey);
+                        events.Enqueue(Event(plan, asset.AssetKey, "cleanup", "failed", "container_cleanup_failed",
+                            "Partially created container cleanup failed."));
+                    }
+                }
                 foreach (var attachment in attached)
                 {
-                    await linuxNetwork.RemoveContainerAttachmentAsync(plan, asset.AssetKey, attachment.NetworkKey, CancellationToken.None);
-                    await ovs.RemoveAsync(plan, LinuxNetworkAttachmentService.HostInterfaceName(plan, asset.AssetKey, attachment.NetworkKey),
-                        attachment.NetworkKey, CancellationToken.None);
+                    try
+                    {
+                        await linuxNetwork.RemoveContainerAttachmentAsync(plan, asset.AssetKey, attachment.NetworkKey,
+                            CancellationToken.None);
+                    }
+                    catch (Exception exception) when (exception is not OperationCanceledException)
+                    {
+                        logger.LogWarning(exception,
+                            "TeamLab failed to remove a partial container interface for runtime {RuntimeId}, asset {AssetKey}, network {NetworkKey}",
+                            plan.RuntimeId, asset.AssetKey, attachment.NetworkKey);
+                    }
+                    try
+                    {
+                        await ovs.RemoveAsync(plan,
+                            LinuxNetworkAttachmentService.HostInterfaceName(plan, asset.AssetKey, attachment.NetworkKey),
+                            attachment.NetworkKey, CancellationToken.None);
+                    }
+                    catch (Exception exception) when (exception is not OperationCanceledException)
+                    {
+                        logger.LogWarning(exception,
+                            "TeamLab failed to remove a partial OVS attachment for runtime {RuntimeId}, asset {AssetKey}, network {NetworkKey}",
+                            plan.RuntimeId, asset.AssetKey, attachment.NetworkKey);
+                    }
                 }
             }
         }
@@ -454,18 +486,34 @@ public sealed class TeamLabExecutionPlanExecutor(
         return new TeamLabExecutionEventV2(
             plan.RuntimeId, plan.RuntimePublicId, plan.Generation, plan.ShardKey, assetKey, stage, outcome,
             outcome == "succeeded" ? null : stage, errorCode, DateTimeOffset.UtcNow,
-            new Dictionary<string, string> { ["summary"] = detail });
+            new Dictionary<string, string> { ["summary"] = EventSummary(outcome, errorCode, detail) });
     }
 
     static TeamLabExecutionPlanApplyResponse Failure(TeamLabExecutionPlanV2 plan, string stage, string message) =>
         new(false, false, plan.PlanDigest, [Event(plan, null, stage, "failed", $"{stage}_failed", message)], [], stage,
-            $"{stage}_failed", message);
+            $"{stage}_failed", FailureMessage(stage));
 
     static TeamLabExecutionPlanCleanupResponse CleanupFailure(
         TeamLabExecutionPlanV2 plan, string stage, string message) =>
         new(false, plan.PlanDigest,
             [Event(plan, null, stage, "failed", $"{stage}_failed", message)], [], stage,
-            $"{stage}_failed", message);
+            $"{stage}_failed", FailureMessage(stage));
+
+    static string EventSummary(string outcome, string? errorCode, string detail)
+    {
+        if (outcome == "failed")
+            return errorCode is null ? "The requested execution operation failed." : FailureMessage(errorCode);
+        return detail.Length <= 256 ? detail : detail[..256];
+    }
+
+    static string FailureMessage(string stageOrCode) => stageOrCode switch
+    {
+        "validation" or "validation_failed" => "The execution plan was rejected by validation.",
+        "network" or "network_failed" or "network_cleanup_failed" => "The network operation did not complete.",
+        "observation" or "observation_failed" or "observation_cleanup_failed" => "The observation operation did not complete.",
+        "cleanup" or "cleanup_failed" => "The cleanup operation did not complete.",
+        _ => "The requested execution operation failed."
+    };
 
     static int StableChallengeId(string key) =>
         BitConverter.ToInt32(System.Security.Cryptography.SHA256.HashData(

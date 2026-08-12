@@ -1986,7 +1986,13 @@ public record TeamLabToolCapabilityReport(
     bool Iptables,
     bool Nftables,
     bool Tcpdump,
-    bool Dumpcap);
+    bool Dumpcap,
+    bool DnsProbe = false,
+    bool OvsVsctl = false,
+    bool OvsdbClient = false,
+    bool OvnController = false,
+    bool OvnNorthboundClient = false,
+    bool OvnSouthboundClient = false);
 
 public record TeamLabDryRunResponse(
     bool Success,

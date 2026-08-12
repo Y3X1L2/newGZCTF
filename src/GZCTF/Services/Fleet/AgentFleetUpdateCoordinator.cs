@@ -61,47 +61,50 @@ public sealed class AgentFleetUpdateCoordinator(
             await RecordStageAsync(node, correlationId, "binary-transfer",
                 "Agent and endpoint sensor artifacts are synchronizing from the main server.",
                 cancellationToken);
-            var binaryCurrent = string.Equals(NormalizeSha(node.AgentBinarySha256), NormalizeSha(expectedSha),
-                StringComparison.OrdinalIgnoreCase);
             var result = await agent.SyncAgentAsync(node.Id,
                 CreateSyncRequest(serverUrl, expectedSha, node, controlPlaneNode,
-                    includeNodeConfiguration: binaryCurrent), cancellationToken);
+                    includeNodeConfiguration: false), cancellationToken);
             if (!result.Success)
-                return await FailAsync(node, correlationId, result.Message, cancellationToken);
+                return await FailAsync(node, correlationId, result.Message, cancellationToken,
+                    CreateSyncFailure(result.Message, node));
 
-            if (!binaryCurrent)
+            // A database SHA is a cached report, not proof of the process currently serving
+            // the Agent API. Always observe the expected heartbeat before sending host config.
+            node.AgentUpdateState = AgentUpdateState.AwaitingHeartbeat;
+            await RecordStageAsync(node, correlationId, "awaiting-heartbeat",
+                "Agent restart completed; waiting for the target capability manifest.", cancellationToken);
+            var deadline = DateTimeOffset.UtcNow + HeartbeatDeadline;
+            while (DateTimeOffset.UtcNow < deadline)
             {
-                node.AgentUpdateState = AgentUpdateState.AwaitingHeartbeat;
-                await RecordStageAsync(node, correlationId, "awaiting-heartbeat",
-                    "Agent restart completed; waiting for the target capability manifest.", cancellationToken);
-                var deadline = DateTimeOffset.UtcNow + HeartbeatDeadline;
-                while (DateTimeOffset.UtcNow < deadline)
-                {
-                    await context.Entry(node).ReloadAsync(cancellationToken);
-                    if (HasExpectedManifest(node, expectedSha, priorCapabilities)) break;
-                    await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
-                }
-                if (!HasExpectedManifest(node, expectedSha, priorCapabilities))
-                    return await FailAsync(node, correlationId,
-                        "The target Agent manifest was not observed before the update deadline.", cancellationToken);
-
-                node.AgentUpdateState = AgentUpdateState.Syncing;
-                await RecordStageAsync(node, correlationId, "node-configuration",
-                    "The updated Agent is applying VM control-plane and TeamLab data-plane configuration.",
-                    cancellationToken);
-                result = await agent.SyncAgentAsync(node.Id,
-                    CreateSyncRequest(serverUrl, expectedSha, node, controlPlaneNode,
-                        includeNodeConfiguration: true), cancellationToken);
-                if (!result.Success)
-                    return await FailAsync(node, correlationId, result.Message, cancellationToken);
+                await context.Entry(node).ReloadAsync(cancellationToken);
+                if (HasExpectedManifest(node, expectedSha, priorCapabilities)) break;
+                await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
             }
+            if (!HasExpectedManifest(node, expectedSha, priorCapabilities))
+                return await FailAsync(node, correlationId,
+                    "The target Agent manifest was not observed before the update deadline.", cancellationToken,
+                    CreateSyncFailure(
+                        "The target Agent manifest was not observed before the update deadline.", node));
+
+            node.AgentUpdateState = AgentUpdateState.Syncing;
+            await RecordStageAsync(node, correlationId, "node-configuration",
+                "The updated Agent is applying VM control-plane and TeamLab data-plane configuration.",
+                cancellationToken);
+            result = await agent.SyncAgentAsync(node.Id,
+                CreateSyncRequest(serverUrl, expectedSha, node, controlPlaneNode,
+                    includeNodeConfiguration: true), cancellationToken);
+            if (!result.Success)
+                return await FailAsync(node, correlationId, result.Message, cancellationToken,
+                    CreateSyncFailure(result.Message, node));
 
             await context.Entry(node).ReloadAsync(cancellationToken);
             node.AgentUpdateState = AgentUpdateState.VerifyingFabric;
             await context.SaveChangesAsync(cancellationToken);
             if (!FabricReady(node))
                 return await FailAsync(node, correlationId,
-                    "TeamLab Fabric health was not confirmed after Agent synchronization.", cancellationToken);
+                    "TeamLab Fabric health was not confirmed after Agent synchronization.", cancellationToken,
+                    CreateSyncFailure(
+                        "TeamLab Fabric health was not confirmed after Agent synchronization.", node));
 
             node.AgentUpdateState = AgentUpdateState.Stable;
             node.IsSchedulable = priorSchedulable;
@@ -118,7 +121,10 @@ public sealed class AgentFleetUpdateCoordinator(
         catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
         {
             logger.LogWarning(exception, "Agent fleet update failed on node {NodeId}", node.Id);
-            return await FailAsync(node, correlationId, exception.Message, cancellationToken);
+            var error = exception is IOperationalFailureException failure
+                ? failure.Error
+                : OperationalErrorClassifier.FromException(exception, "maintenance.sync", node.Id);
+            return await FailAsync(node, correlationId, error.Message, cancellationToken, error);
         }
     }
 
@@ -229,12 +235,38 @@ public sealed class AgentFleetUpdateCoordinator(
         WorkerNode node,
         Guid correlationId,
         string message,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        OperationalError error)
     {
+        var completedAt = DateTimeOffset.UtcNow;
+        var boundedMessage = message.Length <= 1024 ? message : message[..1024];
+        // Heartbeat writes WorkerNode concurrently. Persist the terminal sync state with a
+        // targeted update so a stale tracked concurrency token cannot turn a known failure
+        // into HTTP 500. The audit event is saved separately below.
+        context.Entry(node).State = EntityState.Unchanged;
+        if (context.Database.IsRelational())
+        {
+            await context.WorkerNodes
+                .Where(item => item.Id == node.Id)
+                .ExecuteUpdateAsync(updates => updates
+                    .SetProperty(item => item.AgentUpdateState, AgentUpdateState.Failed)
+                    .SetProperty(item => item.IsSchedulable, false)
+                    .SetProperty(item => item.AgentUpdateCompletedAt, completedAt)
+                    .SetProperty(item => item.AgentUpdateLastError, boundedMessage), cancellationToken);
+        }
+        else
+        {
+            node.AgentUpdateState = AgentUpdateState.Failed;
+            node.IsSchedulable = false;
+            node.AgentUpdateCompletedAt = completedAt;
+            node.AgentUpdateLastError = boundedMessage;
+            await context.SaveChangesAsync(cancellationToken);
+            context.Entry(node).State = EntityState.Unchanged;
+        }
         node.AgentUpdateState = AgentUpdateState.Failed;
         node.IsSchedulable = false;
-        node.AgentUpdateCompletedAt = DateTimeOffset.UtcNow;
-        node.AgentUpdateLastError = message.Length <= 1024 ? message : message[..1024];
+        node.AgentUpdateCompletedAt = completedAt;
+        node.AgentUpdateLastError = boundedMessage;
         await RecordStageAsync(
             node,
             correlationId,
@@ -243,9 +275,19 @@ public sealed class AgentFleetUpdateCoordinator(
             cancellationToken,
             OperationalEventCodes.Agent.SyncFailed,
             OperationalEventOutcome.Failed,
-            OperationalEventSeverity.Error);
+            OperationalEventSeverity.Error,
+            error);
         return new AgentFleetUpdateResult(false, message, node.AgentUpdateState, node.IsSchedulable);
     }
+
+    private static OperationalError CreateSyncFailure(string message, WorkerNode node) =>
+        new(
+            OperationalErrorCategory.AgentProtocol,
+            OperationalErrorCodes.AgentSyncFailed,
+            message,
+            Retryable: true,
+            WorkerNodeId: node.Id,
+            Operation: "maintenance.sync");
 
     private async Task RecordStageAsync(
         WorkerNode node,
@@ -255,7 +297,8 @@ public sealed class AgentFleetUpdateCoordinator(
         CancellationToken cancellationToken,
         string eventCode = OperationalEventCodes.Agent.SyncStarted,
         OperationalEventOutcome outcome = OperationalEventOutcome.Started,
-        OperationalEventSeverity severity = OperationalEventSeverity.Information)
+        OperationalEventSeverity severity = OperationalEventSeverity.Information,
+        OperationalError? error = null)
     {
         events.Append(NodeOperationalEvents.Create(
             node,
@@ -263,6 +306,7 @@ public sealed class AgentFleetUpdateCoordinator(
             outcome,
             message,
             severity,
+            error,
             correlationId: correlationId,
             detail: new Dictionary<string, object?>
             {

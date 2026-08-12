@@ -183,6 +183,15 @@ vNext 正式路由和实现状态以以下文件为准：
 
 ---
 
+## 2026-08-12 TeamLab 高性能执行面修复候选
+
+- 候选分支 `codex/teamlab-high-performance-a` 已针对 2026-08-11 执行面审查收口：Agent 同步改为二阶段，只有新二进制心跳确认后才下发 VM/OVS/OVN 配置；配置或数据面就绪失败会保持节点不可调度。
+- Agent 能力清单仅在 OVS、OVN、Northbound 连通和本机执行条件同时满足时报告 `teamlab.ovs-ovn.v1` 与 `teamlab.execution-plan.v2`。`EnableExecutionPlanV2` 仍必须保持关闭，直到独立实机验收完成。
+- OVSDB 客户端已改为受限的持久连接，具备请求超时、响应 ID 校验、断线重建和释放逻辑；VM、Docker、执行计划快照和流量写入的审查修复详见 2026-08-12 交接文档。
+- 本次仅完成代码与发布门禁。执行计划 V2 的双节点、故障、并发、清理和观测实机验收尚未签收，必须由下一位验收人员按交接矩阵执行，不能将本候选写为已通过业务验收。
+
+---
+
 ## 2026-08-07 会话追加：TeamLab 外部控制面收尾（计划 2026-08-02-teamlab-external-control-plane.md Tasks 2/6/7/8/9/10）
 
 ### 已完成并验证（候选分支 `codex/phase-09-teamlab-networking`，服务器统一发布待执行）

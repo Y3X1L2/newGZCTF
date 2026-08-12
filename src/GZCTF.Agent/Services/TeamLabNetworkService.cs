@@ -44,6 +44,11 @@ public partial class TeamLabNetworkService(
         var hasTcpdump = HasCommand("tcpdump");
         var hasDumpcap = HasCommand("dumpcap");
         var hasDnsProbe = HasCommand("dig");
+        var hasOvsVsctl = HasCommand("ovs-vsctl");
+        var hasOvsdbClient = HasCommand("ovsdb-client");
+        var hasOvnController = HasCommand("ovn-controller");
+        var hasOvnNbctl = HasCommand("ovn-nbctl");
+        var hasOvnSbctl = HasCommand("ovn-sbctl");
         var fabric = ResolveFabricInterface();
         var available = hasIp && hasWg && (hasIptables || hasNft);
         var missing = new List<string>();
@@ -61,7 +66,12 @@ public partial class TeamLabNetworkService(
             hasNft,
             hasTcpdump,
             hasDumpcap,
-            hasDnsProbe);
+            hasDnsProbe,
+            hasOvsVsctl,
+            hasOvsdbClient,
+            hasOvnController,
+            hasOvnNbctl,
+            hasOvnSbctl);
 
         return Task.FromResult(new TeamLabStatusResponse(
             available,

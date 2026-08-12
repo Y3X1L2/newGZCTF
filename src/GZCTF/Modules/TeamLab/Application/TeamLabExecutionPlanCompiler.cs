@@ -87,8 +87,9 @@ public static class TeamLabExecutionPlanCompiler
             if (!imageDigests.TryGetValue(asset.ImageTemplateId, out var digest) ||
                 string.IsNullOrWhiteSpace(digest))
                 throw new InvalidOperationException($"Image digest is missing for template {asset.ImageTemplateId}.");
-            if (asset.Health is { Port: not > 0 or > 65535 })
-                throw new InvalidOperationException($"Health check port is invalid for asset {asset.AssetKey}.");
+            var health = asset.Health;
+            if (health is not null && health.Port is not (> 0 and <= 65535))
+                throw new InvalidOperationException($"Health check port is required and must be valid for asset {asset.AssetKey}.");
             var primary = asset.Interfaces.FirstOrDefault(item => item.Primary) ?? asset.Interfaces.FirstOrDefault();
             return new TeamLabAssetExecutionSpecV2(
                 asset.AssetKey,
@@ -109,11 +110,11 @@ public static class TeamLabExecutionPlanCompiler
                     item.Key,
                     AddressWithoutPrefix(item.IpAddress),
                     item.Primary)).ToArray(),
-                asset.Health is { } health
+                health is not null
                     ? [new TeamLabHealthCheckV2(
                         health.Kind == TeamLabHealthCheckKind.Http ? "http" : "tcp",
                         AddressWithoutPrefix(primary?.IpAddress ?? "127.0.0.1"),
-                        health.Port ?? 0,
+                        health.Port!.Value,
                         health.Kind == TeamLabHealthCheckKind.Http ? "/" : null)]
                     : [],
                 asset.ImageReference);

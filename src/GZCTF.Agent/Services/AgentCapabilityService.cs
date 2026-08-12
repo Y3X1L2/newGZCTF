@@ -51,9 +51,14 @@ public sealed class AgentCapabilityService(
                 features.Add(AgentFeatureIds.TeamLabObservation);
             if (HasNativeLibvirt())
                 features.Add(AgentFeatureIds.TeamLabNativeLibvirt);
-            if (dataPlaneReadiness.Ready)
+            if (dataPlaneReadiness.Ready &&
+                capabilities.OvsVsctl && capabilities.OvsdbClient && capabilities.OvnController &&
+                capabilities.OvnNorthboundClient && capabilities.OvnSouthboundClient)
                 features.Add(AgentFeatureIds.TeamLabOvnOvs);
-            if (dataPlaneReadiness.Ready && (capabilities.Docker || kvm))
+            if (dataPlaneReadiness.Ready &&
+                capabilities.OvsVsctl && capabilities.OvsdbClient && capabilities.OvnController &&
+                capabilities.OvnNorthboundClient && capabilities.OvnSouthboundClient &&
+                (capabilities.Docker || kvm))
                 features.Add(AgentFeatureIds.TeamLabExecutionPlan);
             if (HasArtifactCacheRoot())
                 features.Add(AgentFeatureIds.TeamLabArtifactCache);

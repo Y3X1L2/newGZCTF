@@ -1,83 +1,80 @@
-# TeamLab 数据面与流量观测交接
+# TeamLab 执行面修复与实机验收交接
 
-更新时间：2026-08-12（部署前候选）
+日期：2026-08-12
+范围：TeamLab 工作流 A，节点执行面、OVS/OVN 数据面、libvirt、镜像缓存引用、流量观测和 Agent 同步。
+不在范围：前端、公开 TeamLab API、权限/比赛作者模型、模板制作、镜像改造、服务注入和工作流 B。
 
-本文交接给负责实机验收和问题发现的维护者。它只记录已实现的代码事实与待验证项目；未写明“实机通过”的内容均不得视为已签收。
+## 交接结论
 
-## 本轮目标与边界
+本轮修复了审查报告中可在代码层确认的执行面问题，并完成 `git diff --check` 与 Release 构建。没有执行实机功能、压力、浏览器或故障注入测试；这些不是本轮职责，不能因代码构建通过而视为 V2 已可启用。
 
-- 继续使用模块化主站加 Agent 执行面。主站只下发已校验的计划、保存状态和调度；节点 Agent 执行宿主网络、容器、虚拟机和观测动作。
-- 不在场景创建、试运行或正式比赛启动路径安装软件包。
-- 不启用 `EnableExecutionPlanV2`，不删除现有 bridge/router namespace/dnsmasq 路径。新执行面仅在真实 OVS/OVN、Docker、libvirt 与回收验收结束后切换。
+`EnableExecutionPlanV2` 必须继续为 `false`，直到下列实机验收全部通过。旧执行路径仍是当前运行路径。
 
-## 已完成实现
+## 本轮修复
 
-### 1. 节点数据面准备与能力上报
+### 节点同步与能力
 
-- 新节点注册的依赖脚本会安装并检查 OVS/OVN 主机组件：`openvswitch-switch`/`ovn-host` 或对应发行版包；`ovs-vsctl` 与 `ovn-controller` 缺失时不会把依赖准备误判为完成。
-- 平台“同步 Agent”下发 `TeamLabDataPlaneSyncConfig`。节点根据自身和中心节点的 WireGuard 地址确定工作节点或中心节点角色，自动完成缺包安装、服务启动、`br-int` 创建、OVN 连接配置和配置文件写入。
-- 中心节点没有可用 Fabric 地址时只完成本地 OVS 准备，返回未就绪事实，不会监听公网或伪造 V2 可用。
-- Agent 能力清单改为事实检测：`teamlab.ovs-ovn.v1` 只有本地 `br-int`、相应 OVN 服务和 Northbound OVSDB 实连都成功时才出现。原生 libvirt 与执行计划能力不再被 V2 开关本身隐藏；是否采用 V2 仍由主站开关决定。
-- OVSDB TCP 端点同时兼容标准 `tcp:host:port` 与 `tcp://host:port`，避免原先只按 .NET URI 解释导致的连接错误。
+- Agent 同步分为二阶段：先传输并重启二进制，观察到目标 SHA 和能力清单后才同步 VM 与 TeamLab 数据面配置。
+- OVS/OVN 配置后会检查桥、服务和 Northbound 连接；未收敛时同步返回失败，节点继续保持不可调度，恢复任务也不会提前解封。
+- 能力探测明确检查 `ovs-vsctl`、`ovsdb-client`、`ovn-controller`、`ovn-nbctl`、`ovn-sbctl`。没有完整就绪事实时不报告 V2 执行能力。
 
-主要文件：
+### 计划、网络与执行
 
-- `src/GZCTF/Services/Fleet/NodeDeployService.cs`
-- `src/GZCTF/Services/Fleet/TeamLabDataPlaneSyncConfiguration.cs`
-- `src/GZCTF.Agent/Services/TeamLab/TeamLabDataPlanePreparationService.cs`
-- `src/GZCTF.Agent/Services/AgentCapabilityService.cs`
+- OVSDB JSON-RPC 改为受控复用连接：单会话串行、15 秒事务上限、greeting 处理、请求 ID 对应校验、连接异常后重建和服务释放。
+- 执行计划重复提交按 `runtime + generation + shard + digest` 收敛；不同 digest 不会覆盖现有资源。
+- 计划快照在向 Agent 发起执行前持久化。清理优先使用快照，避免释放网络/Fabric 租约后再从可变拓扑重编译。
+- 健康检查配置缺少端口时在计划编译阶段拒绝，不再生成 `Port=0` 的无效计划。
+- Docker 使用资源规格、不可变镜像摘要和运行身份标签；VM 使用稳定 UUID、计划摘要、overlay backing 校验和有界 `qemu-img` 调用。
+- libvirt、Docker 和 OVS 部分创建失败均记录分类结果并触发受限清理。失败补偿仍覆盖所有已提交的节点分片：对超时和断连，主站无法证明 Agent 未接收请求，幂等清理是唯一不会遗漏资源的处理方式。
 
-### 2. 流量观测持续丢记录根因修复
+### 缓存与观测
 
-此前持续丢记录并非单纯抓包问题，存在四个明确原因：
+- 镜像引用按运行、比赛准备、发布和认证用途区分；试运行/比赛结束释放运行引用，物理删除必须由 Agent inventory 确认后才记录完成。
+- 流量观测批次在短暂上行拥塞时写入节点磁盘 spool；只有主站 Redis 原子接收成功才推进游标，避免有界内存 Channel 直接丢失记录。
+- 计划事件对外只返回稳定阶段、分类和摘要；底层 socket、libvirt、Docker 异常原文保留在 Agent 结构化日志中，不通过事件契约扩散。
 
-1. 主站已落库/接受的记录不会从 Agent 内存和磁盘队列移除，运行足够久后必然触发内存上限淘汰。
-2. 主站每秒串行读取每个观测源最多 500 条，多个运行时持续流量时积压不可避免。
-3. Redis 写入通过全局分布式锁和 25ms 循环竞争，增加了高并发背压。
-4. Redis 异常时主站曾把记录放入易失内存后仍确认 Agent 游标；主站重启或该内存缓冲溢出会造成不可恢复丢失。
+## 审查报告处理状态
 
-现已完成：
+审查基线见 `docs/development/handoffs/2026-08-11-teamlab-high-performance-a-review-report.md`。
 
-- 观测读取契约增加可选的 `acknowledgeThroughSequence`。主站仅在上一页已经被 Redis 或本地持久缓冲接受后，才随下一次读取确认给 Agent。
-- Agent 确认后同时释放内存记录并原子重写对应磁盘队列。落盘工作携带每个运行时的落盘代次，确认/压缩后的旧异步写入会被围栏丢弃，不能把已确认或重复记录重新追加。
-- 主站每源读取页增至 2,000 条，在 8 秒或 16,000 条的明确预算内连续排空。不同源使用独立 DI scope，最多并行四路，不并发使用同一个 `DbContext`。
-- 若 Redis/本地缓冲发生真实丢弃，主站不再推进 Agent 游标，避免把未接受记录伪装成已送达。
-- Redis 流容量保护改为单个 Lua 原子操作：裁剪、容量检查和整批 `XADD` 同一事务完成，删除全局锁及短轮询。新条目使用单个 JSON `payload` 字段；读取端兼容历史多字段条目。
-- 主站不再保留 `TeamLabTrafficLocalBuffer` 易失回退。Redis 不可用或追加失败时，收集器不推进 Agent 游标；Agent 已存在的磁盘 spool 负责保留并在 Redis 恢复后重投。
+已在本候选处理的重点：OVS 清理命名、OVSDB 有界性/连接复用/响应关联、Agent 同步隔离、数据面能力准确上报、流量缓冲、计划快照、VM 稳定身份及 backing 校验、Docker 资源和摘要、执行锁回收、空请求体保护、健康检查端口语义、事件异常脱敏。
 
-主要文件：
+仍需实机确认而非静态宣告的重点：OVN 多路由器事务、DHCP/DNS 实际物化、V2 inventory 与主站投影、跨节点 chassis binding、Docker/VM 并发上限、部分创建后的补偿、缓存物理删除、流量 spool 恢复和全部故障恢复路径。
 
-- `src/GZCTF.Agent/Services/Observation/ObservationBatchSpool.cs`
-- `src/GZCTF.Agent/Controllers/TeamLabController.cs`
-- `src/GZCTF/Modules/TeamLab/Application/TeamLabTrafficApplicationService.cs`
-- `src/GZCTF/Modules/TeamLab/Infrastructure/RedisTeamLabTrafficIngestor.cs`
+没有为了覆盖报告中的每一条建议增加第二队列、第二状态机、Kubernetes 或额外公开接口。未被实际消费的字段和跨工作流内容保持不动，交由后续完整审查按真实调用链处置。
 
-## 已完成代码验证
+## 下一位验收人员的环境前置
+
+1. 仅使用独立 TeamLab 场景、独立比赛和独立运行时；不得修改既有比赛、镜像、VM、容器或历史数据。
+2. 先确认所有参与节点已通过平台 Agent 同步，节点同步状态为稳定，且主站记录的 Agent SHA 与进程实际 SHA 一致。
+3. 在控制节点安装并启动 OVS/OVN 后，确认 Northbound/Southbound 可用；其他节点确认 `ovn-controller`、`br-int` 和 chassis 连接正常。
+4. 确认能力清单包含 `teamlab.execution-plan.v2`、`teamlab.ovs-ovn.v1`、`teamlab.artifact-cache.v2`；包含 VM 时还需 `teamlab.libvirt.native.v1`。能力缺失时不得开启 V2。
+5. 配置只在验收窗口将 `EnableExecutionPlanV2` 设为 `true`。验收失败应关闭开关、保留第一份结构化日志与 inventory，再按快照执行清理；不要用重试或延长等待掩盖问题。
+
+## 必测矩阵
+
+### 正常链路
+
+- 单节点与双节点：Docker、Linux VM、Windows VM；4、20、50 资产；4 和 8 个网段。
+- 验证顺序：镜像预热完成且启动阶段传输字节为零，OVN 网络与 DHCP/DNS/路由/ACL 收敛，Docker/VM 运行，声明的来宾信号或端口健康检查完成，观测点开始采集。
+- 暂停、恢复、重置、销毁：地址、overlay、容量、计划代次和镜像引用必须符合设计；恢复不得重新下载镜像。
+- 清理后用 Agent inventory 与主站事实同时核对：容器、domain、overlay、OVS port/interface、逻辑交换机/路由器、抓包、会话、队列、容量预留和运行引用均无残留。模板主制品缓存不得误删。
+
+### 高风险链路
+
+- 同一计划重复提交、同身份不同 digest、不同 generation 并行、创建中客户端断连、Agent 重启、主站重启、Redis 暂断、OVN 控制面短暂中断、Registry 不可达、节点离线。
+- 并行启动 10、50、100 队和 300 个创建请求，检查统一 `DeploymentQueueTicket`、容量账本和 Agent 分类限流；不得出现重复运行时、容量超卖或跨代次清理。
+- 创建失败和销毁/重建冲突时，确认主站返回明确终态或中文错误，快照清理可重入且不会触碰下一代资源。
+- 流量生成 TCP、UDP、ICMP，停止主站上行或重启 Agent 后检查 spool 恢复、游标连续、筛选/路径/抓包引用同一 runtime/generation/资产/时间范围。
+
+## 证据要求
+
+- 保存每个阶段的主站事件、Agent 日志、OVN/OVS inventory、libvirt/Docker inventory、镜像引用记录和清理前后对比。
+- 浏览器验收、截图和页面交互由验收人员执行；本交接不以 API 或构建代替用户侧验收。
+- 记录 V2 开关、节点能力、完整 Git SHA、发布目录、数据库迁移头、测试资源名称和清理结果。任何凭据、Token、Cookie、私钥和完整连接串不得进入证据文档。
+
+## 本轮门禁
 
 - `git diff --check`：通过。
-- `dotnet build src/GZCTF.slnx -c Release --no-restore`：通过，项目自身无新增错误。
-- `dotnet vstest src/GZCTF.Test/bin/Release/net10.0/GZCTF.Test.dll --TestAdapterPath:src/GZCTF.Test/bin/Release/net10.0`：`830/830` 通过。
-- 当前部署前候选：Release build 通过；全量单元 `831/831` 通过，新增覆盖 Redis 不可用时必须延后接收而不能确认 Agent 游标，以及半完成 Agent 更新不能被恢复任务误标为稳定。
-- 新增单元覆盖：确认游标只释放已确认记录；注册脚本包含 OVS/OVN 依赖与命令检查。
-
-本机 Docker Engine 不可用，集成测试的 Testcontainers PostgreSQL 无法启动，因此没有把集成测试记为通过。
-
-## 实机验收清单
-
-在独立 TeamLab 场景、独立运行时和可清理节点上执行。不要改动现有比赛或运行资源。
-
-1. 在 118/125 分别执行平台“同步 Agent”，检查操作事件、Agent 心跳和能力清单。确认 OVS、OVN、`br-int` 与服务状态；没有 Fabric 地址或中心连接时必须是明确未就绪，而非出现 `teamlab.ovs-ovn.v1`。
-   - 125 当前仍是旧 Agent。必须先部署本交接候选，再从节点管理界面发起同步，验证先二进制后配置的两阶段事件顺序；旧 Agent 不得在第一阶段执行 OVS/OVN 或防火墙配置。
-2. 在 Fabric 地址齐全后再次同步，验证中心仅监听 Fabric 地址，125 通过 Fabric 到达 Northbound/Southbound；检查能力清单出现 `teamlab.ovs-ovn.v1`、`teamlab.execution-plan.v2`，但保持 V2 开关关闭。
-3. 在隔离环境开启 V2，完成 Docker、Linux VM、Windows VM 的 apply、重复 apply、pause/resume、cleanup 与 Agent inventory 复核。任一阶段失败时验证没有跨代次资源或无主 overlay。
-4. 制造持续 TCP、UDP、ICMP 流量并持续至少 30 分钟。记录 Agent 内存队列、spool 字节、`droppedRecords`、主站游标、Redis 流长度和 PostgreSQL 写入。正常压力下 `droppedRecords` 不应持续增加；人为让 Redis 不可用时游标不得前进，恢复后应继续排空。
-5. 测试超过 2,000 条单页和多个节点/运行时并发流量，确认不同观测源并行且每个源不超过预算；没有重复流、漏序、无限等待或 500。
-6. 测试 Agent 重启、主站重启、Redis 短暂中断、OVN 控制面短暂中断、节点离线、销毁与重建冲突。以数据库和 Agent inventory 为事实检查收敛。
-7. 试运行与正式比赛结束后，检查容器、domain、overlay、命名空间、veth、抓包会话、容量预留和运行时镜像引用均清理；模板库主制品和其他运行时正在使用的缓存不得删除。
-
-## 仍未签收的事项
-
-- OVS/OVN 安装、跨节点连接、V2 apply/cleanup 尚未实机验证。
-- 4/20/50 资产、10/50/100 队、高压流量和故障注入矩阵尚未执行。
-- Docker Engine 不可用导致本机集成测试未执行。
-- 旧网络路径仍保留，只有上述验收全部通过且旧运行时排空后才可开始切换和删除。
+- `dotnet build src/GZCTF.slnx -c Release --no-restore`：通过，0 error；存在既有测试分析器 warning，未在本轮修改。
+- 未执行单元、集成、实机、压测、浏览器和故障注入测试。此前定向测试宿主无输出而被停止，不能写为通过。

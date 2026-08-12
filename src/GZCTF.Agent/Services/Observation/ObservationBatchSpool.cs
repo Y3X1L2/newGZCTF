@@ -17,12 +17,16 @@ public sealed class ObservationBatchSpool : BackgroundService
     private readonly ConcurrentDictionary<RuntimeKey, byte> _removed = [];
     private readonly ConcurrentDictionary<RuntimeKey, long> _epochs = [];
     private readonly ConcurrentDictionary<RuntimeKey, SemaphoreSlim> _mutationGates = [];
-    private readonly Channel<SpoolWrite> _writes = Channel.CreateBounded<SpoolWrite>(
-        new BoundedChannelOptions(32_768)
+    // AppendPacket is synchronous because it runs on the packet observer path. A bounded
+    // channel cannot apply backpressure there: TryWrite returns false and turns a temporary
+    // disk-writer backlog into dropped observations. The runtime buffer and spool byte budget
+    // remain bounded; this queue only bridges producers to the durable writer.
+    private readonly Channel<SpoolWrite> _writes = Channel.CreateUnbounded<SpoolWrite>(
+        new UnboundedChannelOptions
         {
-            FullMode = BoundedChannelFullMode.Wait,
             SingleReader = true,
-            SingleWriter = false
+            SingleWriter = false,
+            AllowSynchronousContinuations = false
         });
 
     public ObservationBatchSpool(
@@ -262,7 +266,7 @@ public sealed class ObservationBatchSpool : BackgroundService
         var spoolVersion = buffer.Append(record);
         if (_removed.ContainsKey(buffer.Key) || _epochs.GetOrAdd(buffer.Key, 0) != epoch)
             return false;
-        if (!_writes.Writer.TryWrite(new SpoolWrite(buffer.Key, epoch, spoolVersion, record))) buffer.RecordDrop();
+        _writes.Writer.TryWrite(new SpoolWrite(buffer.Key, epoch, spoolVersion, record));
         return true;
     }
 
@@ -276,7 +280,10 @@ public sealed class ObservationBatchSpool : BackgroundService
         _buffers.GetOrAdd(key, value =>
             new RuntimeBuffer(
                 value,
-                Math.Clamp(_config.ObservationMemoryRecordLimit, 1_000, 1_000_000),
+                Math.Clamp(Math.Max(
+                    _config.ObservationMemoryRecordLimit,
+                    (int)Math.Min(1_000_000, Math.Max(1, _config.ObservationSpoolMaxBytes / 256))),
+                    1_000, 1_000_000),
                 Math.Clamp(_config.ObservationMaxActiveFlows, 128, 1_000_000)));
 
     private async Task AppendFileAsync(
@@ -570,12 +577,18 @@ public sealed class ObservationBatchSpool : BackgroundService
         {
             lock (_records)
             {
-                _records.AddLast(record);
-                while (_records.Count > capacity)
-                {
+                while (_records.Count >= capacity &&
+                       _records.First is { Value.Sequence: var first } && first <= AcknowledgedThrough)
                     _records.RemoveFirst();
+                if (_records.Count >= capacity)
+                {
+                    // Never evict an unacknowledged record merely to stay within the
+                    // in-memory window. The durable spool is the backlog; this counter is
+                    // reserved for an actual configured retention limit.
                     _dropped++;
+                    return _spoolVersion;
                 }
+                _records.AddLast(record);
                 return _spoolVersion;
             }
         }
@@ -585,12 +598,15 @@ public sealed class ObservationBatchSpool : BackgroundService
             lock (_records)
             {
                 _nextSequence = Math.Max(_nextSequence, record.Sequence);
-                _records.AddLast(record);
-                while (_records.Count > capacity)
-                {
+                while (_records.Count >= capacity &&
+                       _records.First is { Value.Sequence: var first } && first <= AcknowledgedThrough)
                     _records.RemoveFirst();
+                if (_records.Count >= capacity)
+                {
                     _dropped++;
+                    return;
                 }
+                _records.AddLast(record);
             }
         }
 

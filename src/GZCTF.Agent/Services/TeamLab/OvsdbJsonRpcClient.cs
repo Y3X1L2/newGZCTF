@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -6,10 +7,11 @@ using System.Text.Json.Nodes;
 
 namespace GZCTF.Agent.Services.TeamLab;
 
-public sealed class OvsdbJsonRpcClient(ILogger<OvsdbJsonRpcClient> logger)
+public sealed class OvsdbJsonRpcClient : IDisposable
 {
     static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     static readonly TimeSpan TransactionTimeout = TimeSpan.FromSeconds(15);
+    readonly ConcurrentDictionary<string, OvsdbSession> sessions = new(StringComparer.Ordinal);
 
     public async Task<JsonNode> TransactAsync(
         string endpoint,
@@ -22,59 +24,11 @@ public sealed class OvsdbJsonRpcClient(ILogger<OvsdbJsonRpcClient> logger)
         if (operations.Count == 0)
             throw new ArgumentException("An OVSDB transaction must contain an operation.");
 
-        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        deadline.CancelAfter(TransactionTimeout);
-        var token = deadline.Token;
-        using var socket = await ConnectAsync(endpoint, token);
-            await using var stream = new NetworkStream(socket, ownsSocket: false);
-            using var reader = new StreamReader(stream, new UTF8Encoding(false), false, 4096, leaveOpen: true);
-
-            // OVSDB sends a JSON-RPC greeting as soon as the connection opens. It
-            // must be consumed before the transaction request, otherwise the first
-            // response read is mistaken for the greeting and the transaction result
-            // is lost. Echo-style greetings also require a JSON-RPC response.
-            var greeting = await ReadJsonAsync(reader, token);
-            if (greeting["method"]?.GetValue<string>() is { } greetingMethod &&
-                greeting["id"] is { } greetingId)
-            {
-                var greetingResponse = new JsonObject
-                {
-                    ["jsonrpc"] = "2.0",
-                    ["result"] = greeting["params"]?.DeepClone() ?? new JsonArray(),
-                    ["id"] = greetingId.DeepClone()
-                };
-                await stream.WriteAsync(JsonSerializer.SerializeToUtf8Bytes(greetingResponse, JsonOptions), token);
-                await stream.WriteAsync("\n"u8.ToArray(), token);
-                await stream.FlushAsync(token);
-                logger.LogTrace("Answered OVSDB greeting method {Method}.", greetingMethod);
-            }
-            var request = new JsonObject
-            {
-                ["jsonrpc"] = "2.0",
-                ["method"] = "transact",
-                ["params"] = new JsonArray { database }
-            };
-            var parameters = (JsonArray)request["params"]!;
-            foreach (var operation in operations)
-                parameters.Add(operation);
-            var requestId = Guid.NewGuid().ToString("N");
-            request["id"] = requestId;
-
-            var payload = JsonSerializer.SerializeToUtf8Bytes(request, JsonOptions);
-            await stream.WriteAsync(payload, token);
-            await stream.WriteAsync("\n"u8.ToArray(), token);
-            await stream.FlushAsync(token);
-
-            var response = await ReadJsonAsync(reader, token);
-            if (!string.Equals(response["id"]?.GetValue<string>(), requestId, StringComparison.Ordinal))
-                throw new JsonException("OVSDB returned a response for a different request.");
-            if (response["error"] is not null)
-            {
-                logger.LogDebug("OVSDB transaction returned an error: {Error}", response["error"]);
-                throw new InvalidOperationException($"OVSDB transaction failed: {response["error"]}");
-            }
-            var result = response["result"]?.DeepClone()
-                         ?? throw new InvalidOperationException("OVSDB returned no transaction result.");
+        var key = $"{endpoint}\0{database}";
+        var session = sessions.GetOrAdd(key, _ => new OvsdbSession(endpoint, database));
+        try
+        {
+            var result = await session.TransactAsync(operations, cancellationToken);
             if (result is JsonArray transactionResults)
             {
                 var failed = transactionResults
@@ -84,6 +38,13 @@ public sealed class OvsdbJsonRpcClient(ILogger<OvsdbJsonRpcClient> logger)
                     throw new InvalidOperationException($"OVSDB transaction operation failed: {failed}");
             }
             return result;
+        }
+        catch (Exception exception) when (exception is IOException or SocketException or EndOfStreamException or
+                                             JsonException or InvalidOperationException or ObjectDisposedException)
+        {
+            session.Reset();
+            throw;
+        }
     }
 
     public async Task<JsonArray> SelectAsync(
@@ -124,11 +85,123 @@ public sealed class OvsdbJsonRpcClient(ILogger<OvsdbJsonRpcClient> logger)
             throw new JsonException("OVSDB batch select returned an invalid result count.");
         var rows = new JsonArray[results.Count];
         for (var index = 0; index < results.Count; index++)
-        {
             rows[index] = results[index]?["rows"] as JsonArray
                           ?? throw new JsonException($"OVSDB batch select result {index} is invalid.");
-        }
         return rows;
+    }
+
+    public void Dispose()
+    {
+        foreach (var session in sessions.Values)
+            session.Dispose();
+        sessions.Clear();
+    }
+
+    sealed class OvsdbSession(string endpoint, string database) : IDisposable
+    {
+        readonly SemaphoreSlim gate = new(1, 1);
+        Socket? socket;
+        NetworkStream? stream;
+        StreamReader? reader;
+
+        public async Task<JsonNode> TransactAsync(
+            IReadOnlyList<JsonObject> operations,
+            CancellationToken cancellationToken)
+        {
+            await gate.WaitAsync(cancellationToken);
+            try
+            {
+                using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                deadline.CancelAfter(TransactionTimeout);
+                var token = deadline.Token;
+                await EnsureConnectedAsync(token);
+
+                var requestId = Guid.NewGuid().ToString("N");
+                var request = new JsonObject
+                {
+                    ["jsonrpc"] = "2.0",
+                    ["method"] = "transact",
+                    ["params"] = new JsonArray { database },
+                    ["id"] = requestId
+                };
+                var parameters = (JsonArray)request["params"]!;
+                foreach (var operation in operations)
+                    parameters.Add(operation.DeepClone());
+
+                await WriteJsonAsync(request, token);
+                var response = await ReadJsonAsync(reader!, token);
+                if (!string.Equals(response["id"]?.GetValue<string>(), requestId, StringComparison.Ordinal))
+                    throw new JsonException("OVSDB returned a response for a different request.");
+                if (response["error"] is not null)
+                    throw new InvalidOperationException($"OVSDB transaction failed: {response["error"]}");
+                return response["result"]?.DeepClone()
+                       ?? throw new InvalidOperationException("OVSDB returned no transaction result.");
+            }
+            finally
+            {
+                gate.Release();
+            }
+        }
+
+        async Task EnsureConnectedAsync(CancellationToken cancellationToken)
+        {
+            if (socket is not null && stream is not null && reader is not null)
+                return;
+
+            var connected = await ConnectAsync(endpoint, cancellationToken);
+            var connectedStream = new NetworkStream(connected, ownsSocket: true);
+            var connectedReader = new StreamReader(connectedStream, new UTF8Encoding(false), false, 4096,
+                leaveOpen: true);
+            try
+            {
+                var greeting = await ReadJsonAsync(connectedReader, cancellationToken);
+                if (greeting["method"] is not null && greeting["id"] is { } greetingId)
+                {
+                    var greetingResponse = new JsonObject
+                    {
+                        ["jsonrpc"] = "2.0",
+                        ["result"] = greeting["params"]?.DeepClone() ?? new JsonArray(),
+                        ["id"] = greetingId.DeepClone()
+                    };
+                    await WriteJsonAsync(connectedStream, greetingResponse, cancellationToken);
+                }
+                socket = connected;
+                stream = connectedStream;
+                reader = connectedReader;
+            }
+            catch
+            {
+                connectedReader.Dispose();
+                connectedStream.Dispose();
+                throw;
+            }
+        }
+
+        async Task WriteJsonAsync(JsonObject value, CancellationToken cancellationToken) =>
+            await WriteJsonAsync(stream!, value, cancellationToken);
+
+        static async Task WriteJsonAsync(Stream target, JsonObject value, CancellationToken cancellationToken)
+        {
+            await target.WriteAsync(JsonSerializer.SerializeToUtf8Bytes(value, JsonOptions), cancellationToken);
+            await target.WriteAsync("\n"u8.ToArray(), cancellationToken);
+            await target.FlushAsync(cancellationToken);
+        }
+
+        public void Reset()
+        {
+            reader?.Dispose();
+            stream?.Dispose();
+            socket?.Dispose();
+            reader = null;
+            stream = null;
+            socket = null;
+        }
+
+        public void Dispose()
+        {
+            Reset();
+            gate.Dispose();
+        }
     }
 
     static async Task<Socket> ConnectAsync(string endpoint, CancellationToken token)
@@ -151,10 +224,10 @@ public sealed class OvsdbJsonRpcClient(ILogger<OvsdbJsonRpcClient> logger)
 
         if (!TryParseTcpEndpoint(endpoint, out var host, out var port))
             throw new ArgumentException("OVSDB endpoint must use unix:/path or tcp:host:port.", nameof(endpoint));
-        var tcp = new Socket(IPAddress.TryParse(host, out var address) && address.AddressFamily == AddressFamily.InterNetworkV6
+        var socketFamily = IPAddress.TryParse(host, out var address) && address.AddressFamily == AddressFamily.InterNetworkV6
             ? AddressFamily.InterNetworkV6
-            : AddressFamily.InterNetwork,
-            SocketType.Stream, ProtocolType.Tcp);
+            : AddressFamily.InterNetwork;
+        var tcp = new Socket(socketFamily, SocketType.Stream, ProtocolType.Tcp);
         try
         {
             await tcp.ConnectAsync(host, port, token);

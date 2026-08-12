@@ -56,6 +56,10 @@ public class AgentMaintenanceService(
             var dataPlaneReadiness = request.TeamLabDataPlane is null
                 ? null
                 : await dataPlane.ApplyAsync(request.TeamLabDataPlane, token);
+            if (request.TeamLabDataPlane is { Enabled: true } && dataPlaneReadiness is { Ready: false })
+                return new AgentSyncResponse(false,
+                    $"OVS/OVN data-plane preparation did not converge ({dataPlaneReadiness.Code}).",
+                    CurrentVersion());
             var managedArtifactChanged = false;
             if (linuxSensorUri is not null)
                 managedArtifactChanged |= await SyncManagedArtifactAsync(

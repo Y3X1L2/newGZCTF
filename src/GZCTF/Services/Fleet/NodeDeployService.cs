@@ -607,9 +607,12 @@ teamlab_tools_ready() {
   need_cmd wg || return 1
   { need_cmd iptables || need_cmd nft; } || return 1
   need_cmd tcpdump || return 1
-  need_cmd dumpcap || return 1
-  need_cmd ovs-vsctl || return 1
-  need_cmd ovn-controller || return 1
+      need_cmd dumpcap || return 1
+      need_cmd ovs-vsctl || return 1
+      need_cmd ovsdb-client || return 1
+      need_cmd ovn-controller || return 1
+      need_cmd ovn-nbctl || return 1
+      need_cmd ovn-sbctl || return 1
   { need_cmd genisoimage || need_cmd mkisofs || need_cmd xorriso || need_cmd cloud-localds; } || return 1
 }
 
