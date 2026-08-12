@@ -256,6 +256,24 @@ POST   /api/open/v1/teams/import
 - 战队导入只引用现有用户，不经 API 创建账号；管理员角色、`teams:write` 和 `team:*` 三项缺一不可。
 - operation `result.items` 返回 `externalId/resourceType/resourceId/action`，用于外部系统保存主键映射。
 
+## 8.4 AWDP 服务导入与题目池收录
+
+```text
+GET    /api/open/v1/games/{gameId}/awdp-services
+GET    /api/open/v1/games/{gameId}/awdp-services/{serviceId}
+POST   /api/open/v1/games/{gameId}/awdp-services
+POST   /api/open/v1/games/{gameId}/awdp-services/batch
+DELETE /api/open/v1/games/{gameId}/awdp-services/{serviceId}
+POST   /api/open/v1/games/{gameId}/awdp-services/batch-delete
+```
+
+AWDP 使用 `challenges:read/write/delete` 和 `game:{gameId}`。导入体包含稳定
+`externalId`、镜像/端口、有效 `flagTemplate`、Checker/Exp、轮次参数及题面元数据。
+平台验证镜像 Ready 后创建服务，并同步创建/更新 `ExerciseChallenge`：
+`PoolSource=Game`、`SourceAwdpServiceId` 指向服务、题型为 `DynamicContainer`。
+池副本独立管理练习实例和进度；源服务删除时仅禁用池副本。普通比赛题和培训题的
+创建、更新与 Open API 导入也调用同一幂等收录服务。
+
 ## 9. 并发与配额
 
 - token 每分钟请求配额使用 Redis 原子计数和 TTL；key 包含 token ID 和 UTC 分钟桶。

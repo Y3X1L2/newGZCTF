@@ -11,6 +11,7 @@ using GZCTF.Models.Request.Shared;
 using GZCTF.Models.Request.Training;
 using GZCTF.Modules.Audit.Contracts;
 using GZCTF.Modules.Ctf.Contracts;
+using GZCTF.Modules.Exercise.Application;
 using GZCTF.Modules.Penetration.Contracts;
 using GZCTF.Modules.Provisioning.Contracts;
 using GZCTF.Repositories.Interface;
@@ -187,6 +188,12 @@ namespace GZCTF.Utils;
 [JsonSerializable(typeof(OpenChallengeSummaryModel))]
 [JsonSerializable(typeof(OpenChallengePageModel))]
 [JsonSerializable(typeof(OpenChallengeMutationResult))]
+[JsonSerializable(typeof(OpenAwdpServiceImportModel))]
+[JsonSerializable(typeof(OpenAwdpServiceBatchImportModel))]
+[JsonSerializable(typeof(OpenAwdpServiceModel))]
+[JsonSerializable(typeof(OpenAwdpServicePageModel))]
+[JsonSerializable(typeof(OpenAwdpServiceImportResultItem))]
+[JsonSerializable(typeof(ExercisePoolBackfillResult))]
 [JsonSerializable(typeof(TrainingCourseImportBatchModel))]
 [JsonSerializable(typeof(TheoryQuestionImportBatchModel))]
 [JsonSerializable(typeof(TheoryPaperImportModel))]

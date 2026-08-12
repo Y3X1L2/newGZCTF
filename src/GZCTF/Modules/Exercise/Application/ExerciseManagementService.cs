@@ -8,11 +8,268 @@ using Microsoft.EntityFrameworkCore;
 
 namespace GZCTF.Modules.Exercise.Application;
 
+public sealed record ExercisePoolBackfillResult(
+    int GameCollected,
+    int TrainingCollected,
+    int AwdpCollected,
+    int Ineligible,
+    int Failed);
+
 public sealed class ExerciseManagementService(
     AppDbContext context,
     IExerciseChallengeRepository exerciseRepository,
     IBlobRepository blobRepository) : IExerciseManagementService
 {
+    public async Task<ExerciseChallenge?> CollectGameChallengeAsync(
+        int gameChallengeId, CancellationToken token = default)
+    {
+        var source = await context.GameChallenges.AsNoTracking()
+            .Include(item => item.Attachment).ThenInclude(item => item!.LocalFile)
+            .Include(item => item.Flags).ThenInclude(item => item.Attachment).ThenInclude(item => item!.LocalFile)
+            .SingleOrDefaultAsync(item => item.Id == gameChallengeId, token);
+        if (source is null)
+        {
+            await context.ExerciseChallenges
+                .Where(item => item.TrainingCourseId == null && item.PoolSource == ExercisePoolSource.Game &&
+                               item.SourceChallengeId == gameChallengeId)
+                .ExecuteUpdateAsync(setters => setters.SetProperty(item => item.IsEnabled, false), token);
+            return null;
+        }
+
+        var target = await context.ExerciseChallenges
+            .Include(item => item.Flags).ThenInclude(item => item.Attachment).ThenInclude(item => item!.LocalFile)
+            .SingleOrDefaultAsync(item => item.TrainingCourseId == null &&
+                                          item.PoolSource == ExercisePoolSource.Game &&
+                                          item.SourceChallengeId == source.Id,
+                token);
+        if (!CanCollect(source))
+        {
+            if (target is not null)
+            {
+                target.IsEnabled = false;
+                await context.SaveChangesAsync(token);
+            }
+            return null;
+        }
+
+        target ??= new ExerciseChallenge();
+        ApplyPoolMetadata(target, source, ExercisePoolSource.Game,
+            sourceGameId: source.GameId, sourceTrainingCourseId: null,
+            sourceChallengeId: source.Id, sourceAwdpServiceId: null,
+            minimumVisibleRole: Role.Teacher,
+            tags: [source.Category.ToString(), $"game:{source.GameId}"]);
+        await ReplacePoolRelationsAsync(target, source.Flags, source.Attachment, token);
+        if (target.Id == 0)
+            context.ExerciseChallenges.Add(target);
+        await context.SaveChangesAsync(token);
+        return target;
+    }
+
+    public async Task<ExerciseChallenge?> CollectTrainingChallengeAsync(
+        int exerciseChallengeId, CancellationToken token = default)
+    {
+        var source = await context.ExerciseChallenges.AsNoTracking()
+            .Include(item => item.Attachment).ThenInclude(item => item!.LocalFile)
+            .Include(item => item.Flags).ThenInclude(item => item.Attachment).ThenInclude(item => item!.LocalFile)
+            .SingleOrDefaultAsync(item => item.Id == exerciseChallengeId && item.TrainingCourseId != null, token);
+        if (source is null)
+        {
+            await context.ExerciseChallenges
+                .Where(item => item.TrainingCourseId == null && item.PoolSource == ExercisePoolSource.Training &&
+                               item.SourceChallengeId == exerciseChallengeId)
+                .ExecuteUpdateAsync(setters => setters.SetProperty(item => item.IsEnabled, false), token);
+            return null;
+        }
+
+        var target = await context.ExerciseChallenges
+            .Include(item => item.Flags).ThenInclude(item => item.Attachment).ThenInclude(item => item!.LocalFile)
+            .SingleOrDefaultAsync(item => item.TrainingCourseId == null &&
+                                          item.PoolSource == ExercisePoolSource.Training &&
+                                          item.SourceChallengeId == source.Id,
+                token);
+        if (!CanCollect(source))
+        {
+            if (target is not null)
+            {
+                target.IsEnabled = false;
+                await context.SaveChangesAsync(token);
+            }
+            return null;
+        }
+
+        target ??= new ExerciseChallenge();
+        ApplyPoolMetadata(target, source, ExercisePoolSource.Training,
+            sourceGameId: null, sourceTrainingCourseId: source.TrainingCourseId,
+            sourceChallengeId: source.Id, sourceAwdpServiceId: null,
+            minimumVisibleRole: Role.Teacher,
+            tags: (source.Tags ?? []).Append($"training:{source.TrainingCourseId}").Distinct(StringComparer.OrdinalIgnoreCase).ToList());
+        await ReplacePoolRelationsAsync(target, source.Flags, source.Attachment, token);
+        if (target.Id == 0)
+            context.ExerciseChallenges.Add(target);
+        await context.SaveChangesAsync(token);
+        return target;
+    }
+
+    public async Task<ExerciseChallenge?> CollectAwdpServiceAsync(
+        int awdpServiceId, CancellationToken token = default)
+    {
+        var source = await context.AwdpServices.AsNoTracking()
+            .SingleOrDefaultAsync(item => item.Id == awdpServiceId, token);
+        if (source is null)
+            return null;
+
+        var template = await context.ImageTemplates.AsNoTracking()
+            .Where(item => item.ImageType == ImageType.Docker && item.Status == ImageStatus.Ready &&
+                           item.RegistryUrl == source.ImageName)
+            .OrderBy(item => item.Id)
+            .FirstOrDefaultAsync(token);
+        var target = await context.ExerciseChallenges
+            .Include(item => item.Flags).ThenInclude(item => item.Attachment).ThenInclude(item => item!.LocalFile)
+            .SingleOrDefaultAsync(item => item.TrainingCourseId == null &&
+                                          item.PoolSource == ExercisePoolSource.Game &&
+                                          item.SourceAwdpServiceId == source.Id,
+                token);
+        if (template is null || string.IsNullOrWhiteSpace(source.FlagTemplate))
+        {
+            if (target is not null)
+            {
+                target.IsEnabled = false;
+                await context.SaveChangesAsync(token);
+            }
+            return null;
+        }
+
+        target ??= new ExerciseChallenge();
+        target.Title = source.Name;
+        target.Content = string.IsNullOrWhiteSpace(source.Content)
+            ? $"AWDP service {source.Name}"
+            : source.Content;
+        target.Category = source.Category;
+        target.Type = ChallengeType.DynamicContainer;
+        target.Hints = [];
+        target.IsEnabled = true;
+        target.ContainerImage = source.ImageName;
+        target.MemoryLimit = 512;
+        target.StorageLimit = 512;
+        target.CPUCount = 10;
+        target.ExposePort = source.ExposePort;
+        target.NetworkMode = NetworkMode.Isolated;
+        target.Environment = EnvironmentType.Docker;
+        target.ImageTemplateId = template.Id;
+        target.FlagTemplate = source.FlagTemplate;
+        target.SubmissionLimit = 0;
+        target.Difficulty = source.Difficulty;
+        target.Tags = (source.Tags ?? []).Append("AWDP").Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        target.Credit = false;
+        target.PoolSource = ExercisePoolSource.Game;
+        target.SourceGameId = source.GameId;
+        target.SourceChallengeId = null;
+        target.SourceAwdpServiceId = source.Id;
+        target.MinimumVisibleRole = Role.Teacher;
+        if (target.Id == 0)
+            context.ExerciseChallenges.Add(target);
+        await context.SaveChangesAsync(token);
+        return target;
+    }
+
+    public async Task<ExercisePoolBackfillResult> BackfillPoolAsync(CancellationToken token = default)
+    {
+        var gameIds = await context.GameChallenges.AsNoTracking().Select(item => item.Id).ToArrayAsync(token);
+        var trainingIds = await context.ExerciseChallenges.AsNoTracking()
+            .Where(item => item.TrainingCourseId != null).Select(item => item.Id).ToArrayAsync(token);
+        var awdpIds = await context.AwdpServices.AsNoTracking().Select(item => item.Id).ToArrayAsync(token);
+        var game = 0; var training = 0; var awdp = 0; var ineligible = 0; var failed = 0;
+        foreach (var id in gameIds)
+        {
+            try { if (await CollectGameChallengeAsync(id, token) is null) ineligible++; else game++; }
+            catch (InvalidOperationException) { failed++; }
+        }
+        foreach (var id in trainingIds)
+        {
+            try { if (await CollectTrainingChallengeAsync(id, token) is null) ineligible++; else training++; }
+            catch (InvalidOperationException) { failed++; }
+        }
+        foreach (var id in awdpIds)
+        {
+            try { if (await CollectAwdpServiceAsync(id, token) is null) ineligible++; else awdp++; }
+            catch (InvalidOperationException) { failed++; }
+        }
+        return new ExercisePoolBackfillResult(game, training, awdp, ineligible, failed);
+    }
+
+    static void ApplyPoolMetadata(
+        ExerciseChallenge target,
+        Challenge source,
+        ExercisePoolSource poolSource,
+        int? sourceGameId,
+        int? sourceTrainingCourseId,
+        int? sourceChallengeId,
+        int? sourceAwdpServiceId,
+        Role minimumVisibleRole,
+        IReadOnlyList<string> tags)
+    {
+        target.Title = source.Title;
+        target.Content = source.Content;
+        target.Category = source.Category;
+        target.Type = source.Type;
+        target.Hints = source.Hints?.ToList() ?? [];
+        target.IsEnabled = source.IsEnabled;
+        target.ContainerImage = source.ContainerImage;
+        target.MemoryLimit = source.MemoryLimit;
+        target.StorageLimit = source.StorageLimit;
+        target.CPUCount = source.CPUCount;
+        target.ExposePort = source.ExposePort;
+        target.NetworkMode = source.NetworkMode;
+        target.Environment = source.Environment;
+        target.ImageTemplateId = source.ImageTemplateId;
+        target.FileName = source.FileName;
+        target.FlagTemplate = source.FlagTemplate;
+        target.SubmissionLimit = source.SubmissionLimit;
+        target.Difficulty = source is GameChallenge game
+            ? (Difficulty)Math.Clamp((int)Math.Round(game.Difficulty), 0, (int)Difficulty.Insane)
+            : source is ExerciseChallenge exercise ? exercise.Difficulty : Difficulty.Normal;
+        target.Tags = tags.ToList();
+        target.Credit = source is ExerciseChallenge sourceExercise && sourceExercise.Credit;
+        target.PoolSource = poolSource;
+        target.SourceGameId = sourceGameId;
+        target.SourceTrainingCourseId = sourceTrainingCourseId;
+        target.SourceChallengeId = sourceChallengeId;
+        target.SourceAwdpServiceId = sourceAwdpServiceId;
+        target.MinimumVisibleRole = minimumVisibleRole;
+        target.TrainingCourseId = null;
+    }
+
+    async Task ReplacePoolRelationsAsync(
+        ExerciseChallenge target,
+        IEnumerable<FlagContext> sourceFlags,
+        Attachment? sourceAttachment,
+        CancellationToken token)
+    {
+        await blobRepository.DeleteAttachment(target.Attachment, token);
+        target.Attachment = await CloneAttachmentAsync(sourceAttachment, token);
+        foreach (var flag in target.Flags.ToArray())
+        {
+            await blobRepository.DeleteAttachment(flag.Attachment, token);
+            context.FlagContexts.Remove(flag);
+        }
+        target.Flags.Clear();
+        foreach (var flag in sourceFlags)
+            target.Flags.Add(new FlagContext
+            {
+                Flag = flag.Flag,
+                Exercise = target,
+                IsOccupied = false,
+                OrderIndex = flag.OrderIndex,
+                Description = flag.Description,
+                ScoreMode = flag.ScoreMode,
+                FixedScore = flag.FixedScore,
+                MaxAttempts = flag.MaxAttempts,
+                AttachmentHash = flag.AttachmentHash,
+                AnswerType = flag.AnswerType,
+                CustomName = flag.CustomName,
+                Attachment = await CloneAttachmentAsync(flag.Attachment, token)
+            });
+    }
     public async Task<ExerciseChallenge> CreateExerciseAsync(ExerciseChallenge exercise, CancellationToken token = default) =>
         await exerciseRepository.CreateExercise(exercise, token);
 

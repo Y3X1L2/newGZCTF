@@ -226,7 +226,26 @@ Token ID、scope、resource grant、请求路由、IP 摘要、traceId、operati
 会写入 `ExternalApiRequestAudit`，因此管理员可按 Token 和创建者追溯“谁在何时上传了
 哪一批题”。Authorization 值、Flag 和附件内容不会写入审计日志。
 
-## 6.3 培训、理论和战队导入
+## 6.3 比赛与 AWDP 自动收录题目池
+
+普通比赛题目继续使用 `/api/open/v1/games/{gameId}/challenges`。AWDP 服务使用同一
+`game:{gameId}` 资源和 `challenges:read/write/delete` scope，但路径为：
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/api/open/v1/games/{gameId}/awdp-services` | 分页查询服务 |
+| GET | `/api/open/v1/games/{gameId}/awdp-services/{serviceId}` | 查询服务详情 |
+| POST | `/api/open/v1/games/{gameId}/awdp-services` | 导入/按 externalId 更新一个服务 |
+| POST | `/api/open/v1/games/{gameId}/awdp-services/batch` | 1-100 个服务批量导入 |
+| DELETE | `/api/open/v1/games/{gameId}/awdp-services/{serviceId}` | 异步删除并禁用收录题 |
+
+AWDP 写请求需要 `Idempotency-Key`，镜像必须是 Ready Docker 模板，且必须提供有效
+`flagTemplate`。导入成功后，服务会自动以动态容器模式深复制到 Exercise 题目池，
+通过 `SourceAwdpServiceId` 溯源，不共享赛事实例、Flag 或附件。普通比赛题、培训课程题
+的创建/更新/批量导入同样会自动幂等收录；不满足“可运行容器/模板 + Flag（或动态
+Flag 模板）”条件的题会被禁用或跳过。
+
+## 6.4 培训、理论和战队导入
 
 这些接口与 Exercise 一样使用持久化 `ApiOperation`，写请求必须携带稳定的
 `Idempotency-Key`，并通过 `/api/open/v1/operations/{operationId}` 轮询终态。

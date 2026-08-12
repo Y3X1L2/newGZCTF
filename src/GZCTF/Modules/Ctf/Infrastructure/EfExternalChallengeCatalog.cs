@@ -71,6 +71,22 @@ public sealed class EfExternalChallengeCatalog(AppDbContext context) : IExternal
         return challenge is null ? null : Map(challenge);
     }
 
+    public async Task<OpenAwdpServicePageModel> ListAwdpAsync(int gameId, int limit, int? afterId, CancellationToken cancellationToken)
+    {
+        var query = context.AwdpServices.AsNoTracking().Where(item => item.GameId == gameId);
+        if (afterId.HasValue) query = query.Where(item => item.Id > afterId.Value);
+        var items = await query.OrderBy(item => item.Id).Take(Math.Clamp(limit, 1, 100) + 1).ToArrayAsync(cancellationToken);
+        var page = items.Take(Math.Clamp(limit, 1, 100)).Select(Map).ToArray();
+        return new OpenAwdpServicePageModel(page, items.Length > page.Length ? page[^1].Id.ToString() : null);
+    }
+
+    public async Task<OpenAwdpServiceModel?> FindAwdpAsync(int gameId, int serviceId, CancellationToken cancellationToken)
+    {
+        var service = await context.AwdpServices.AsNoTracking()
+            .SingleOrDefaultAsync(item => item.GameId == gameId && item.Id == serviceId, cancellationToken);
+        return service is null ? null : Map(service);
+    }
+
     private IQueryable<GameChallenge> Query() => context.GameChallenges.AsNoTracking()
         .Include(challenge => challenge.Attachment)
             .ThenInclude(attachment => attachment!.LocalFile)
@@ -118,6 +134,14 @@ public sealed class EfExternalChallengeCatalog(AppDbContext context) : IExternal
                 MapAttachment(flag.Attachment)))
             .ToArray(),
         MapAttachment(challenge.Attachment));
+
+    private static OpenAwdpServiceModel Map(AwdpService service) => new(
+        service.Id, service.Name, service.Content, service.Category, service.Difficulty,
+        service.Tags ?? [], service.FlagTemplate, service.ImageName, service.ExposePort,
+        service.CheckerScript, service.CheckerEntrypoint, service.ExpScript, service.ExpEntrypoint,
+        service.OriginalScore, service.AttackPoints, service.SlaPoints, service.PatchPoints,
+        service.ServiceAbnormalPenalty, service.MaxAttackPerRound, service.AttackPhaseMinutes,
+        service.PatchPhaseMinutes, service.TotalRounds, service.MaxResetCount, service.MaxRecoveryCount);
 
     private static OpenChallengeAttachmentInfoModel? MapAttachment(Attachment? attachment)
     {

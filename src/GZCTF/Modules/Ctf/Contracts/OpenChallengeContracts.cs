@@ -143,7 +143,9 @@ public sealed record OpenChallengeMutationResult(
     int GameId,
     IReadOnlyList<OpenChallengeImportResultItem> Imported,
     IReadOnlyList<int> Deleted,
-    IReadOnlyList<int> Missing);
+    IReadOnlyList<int> Missing,
+    IReadOnlyList<OpenAwdpServiceImportResultItem>? AwdpImported = null,
+    IReadOnlyList<int>? AwdpDeleted = null);
 
 public sealed record OpenChallengeModel(
     int Id,
@@ -186,4 +188,70 @@ public sealed record OpenChallengeSummaryModel(
 
 public sealed record OpenChallengePageModel(
     IReadOnlyList<OpenChallengeSummaryModel> Items,
+    string? NextCursor);
+
+public sealed class OpenAwdpServiceImportModel
+{
+    [Required, MaxLength(128)] public string ExternalId { get; set; } = string.Empty;
+    [Required, MaxLength(Limits.MaxServiceNameLength)] public string Name { get; set; } = string.Empty;
+    [MaxLength(1_000_000)] public string Content { get; set; } = string.Empty;
+    public ChallengeCategory Category { get; set; } = ChallengeCategory.Misc;
+    public Difficulty Difficulty { get; set; } = Difficulty.Normal;
+    [MaxLength(100)] public List<string>? Tags { get; set; } = [];
+    [Required, MaxLength(Limits.MaxFlagTemplateLength)] public string FlagTemplate { get; set; } = "flag{[GUID]}";
+    [Required, MaxLength(Limits.MaxImageNameLength)] public string ImageName { get; set; } = string.Empty;
+    [Range(1, 65535)] public int ExposePort { get; set; } = 80;
+    [MaxLength(Limits.MaxScriptLength)] public string? CheckerScript { get; set; }
+    [MaxLength(Limits.MaxEntrypointLength)] public string? CheckerEntrypoint { get; set; } = "python3 checker.py";
+    [MaxLength(Limits.MaxScriptLength)] public string? ExpScript { get; set; }
+    [MaxLength(Limits.MaxEntrypointLength)] public string? ExpEntrypoint { get; set; } = "python3 exp.py";
+    [Range(0, 1_000_000)] public int OriginalScore { get; set; } = 1000;
+    [Range(0, 1_000_000)] public int AttackPoints { get; set; } = 50;
+    [Range(0, 1_000_000)] public int SlaPoints { get; set; } = 20;
+    [Range(0, 1_000_000)] public int PatchPoints { get; set; } = 100;
+    [Range(0, 1_000_000)] public int ServiceAbnormalPenalty { get; set; } = 200;
+    [Range(1, 100_000)] public int MaxAttackPerRound { get; set; } = 3;
+    [Range(1, 100_000)] public int AttackPhaseMinutes { get; set; } = 15;
+    [Range(1, 100_000)] public int PatchPhaseMinutes { get; set; } = 10;
+    [Range(1, 100_000)] public int TotalRounds { get; set; } = 20;
+    [Range(0, 100_000)] public int MaxResetCount { get; set; } = 10;
+    [Range(0, 100_000)] public int MaxRecoveryCount { get; set; } = 5;
+}
+
+public sealed class OpenAwdpServiceBatchImportModel
+{
+    [Required, MinLength(1), MaxLength(100)]
+    public List<OpenAwdpServiceImportModel> Items { get; set; } = [];
+}
+
+public sealed record OpenAwdpServiceImportResultItem(string ExternalId, int ServiceId);
+
+public sealed record OpenAwdpServiceModel(
+    int Id,
+    string Name,
+    string Content,
+    ChallengeCategory Category,
+    Difficulty Difficulty,
+    IReadOnlyList<string> Tags,
+    string FlagTemplate,
+    string ImageName,
+    int ExposePort,
+    string? CheckerScript,
+    string? CheckerEntrypoint,
+    string? ExpScript,
+    string? ExpEntrypoint,
+    int OriginalScore,
+    int AttackPoints,
+    int SlaPoints,
+    int PatchPoints,
+    int ServiceAbnormalPenalty,
+    int MaxAttackPerRound,
+    int AttackPhaseMinutes,
+    int PatchPhaseMinutes,
+    int TotalRounds,
+    int MaxResetCount,
+    int MaxRecoveryCount);
+
+public sealed record OpenAwdpServicePageModel(
+    IReadOnlyList<OpenAwdpServiceModel> Items,
     string? NextCursor);

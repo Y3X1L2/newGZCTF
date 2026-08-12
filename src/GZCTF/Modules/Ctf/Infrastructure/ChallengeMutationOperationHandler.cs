@@ -5,9 +5,11 @@ using GZCTF.Modules.Ctf.Application;
 using GZCTF.Modules.Ctf.Contracts;
 using GZCTF.Modules.Ctf.Domain;
 using GZCTF.Modules.Runtime.Application;
+using GZCTF.Modules.Exercise.Application;
 using GZCTF.Repositories.Interface;
 using GZCTF.Infrastructure.Cache;
 using GZCTF.Services.Fleet;
+using GZCTF.Utils;
 using Microsoft.EntityFrameworkCore;
 
 namespace GZCTF.Modules.Ctf.Infrastructure;
@@ -20,6 +22,7 @@ public sealed class ChallengeMutationOperationHandler(
     NodeDispatchLimiter dispatchLimiter,
     IPlatformCache cache,
     ImageDistributionService distribution,
+    IExerciseManagementService exerciseManagement,
     ILogger<ChallengeMutationOperationHandler> logger) : IApiOperationHandler
 {
     public string Kind => ChallengeExternalApplicationService.OperationKind;
@@ -54,6 +57,12 @@ public sealed class ChallengeMutationOperationHandler(
                 case ChallengeMutationKind.Delete:
                     await DeleteAsync(job, operationId, leaseOwner, cancellationToken);
                     break;
+                case ChallengeMutationKind.ImportAwdp:
+                    await ImportAwdpAsync(job, operationId, leaseOwner, cancellationToken);
+                    break;
+                case ChallengeMutationKind.DeleteAwdp:
+                    await DeleteAwdpAsync(job, operationId, leaseOwner, cancellationToken);
+                    break;
                 default:
                     throw new ApiOperationTerminalException(
                         "challenge_operation_invalid", "The challenge operation kind is invalid.");
@@ -64,6 +73,88 @@ public sealed class ChallengeMutationOperationHandler(
             throw new ApiOperationTerminalException(
                 "challenge_payload_invalid", "The persisted challenge operation payload is invalid.");
         }
+    }
+
+    private async Task ImportAwdpAsync(
+        ChallengeMutationJob job, Guid operationId, string leaseOwner, CancellationToken cancellationToken)
+    {
+        var payload = JsonSerializer.Deserialize<AwdpImportPayload>(job.PayloadJson!, ChallengeExternalApplicationService.JsonOptions)
+            ?? throw new JsonException();
+        await RequireLeaseAsync(operationId, leaseOwner, "awdp-persisting", 0, payload.Items.Count, job.GameId, cancellationToken);
+        var game = await context.Games.SingleOrDefaultAsync(item => item.Id == job.GameId, cancellationToken)
+            ?? throw new ApiOperationTerminalException("game_not_found", "The target game no longer exists.");
+        if (game.GameType is not GameType.AWDP and not GameType.Mixed)
+            throw new ApiOperationTerminalException("awdp_game_required", "The target game is not an AWDP or mixed game.");
+
+        var imported = new List<OpenAwdpServiceImportResultItem>();
+        await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+        foreach (var item in payload.Items)
+        {
+            var service = await context.AwdpServices.SingleOrDefaultAsync(existing =>
+                existing.GameId == job.GameId && existing.ExternalId == item.ExternalId, cancellationToken);
+            service ??= new AwdpService { GameId = job.GameId, ExternalId = item.ExternalId };
+            service.Name = item.Name;
+            service.Content = item.Content;
+            service.Category = item.Category;
+            service.Difficulty = item.Difficulty;
+            service.Tags = item.Tags;
+            service.FlagTemplate = item.FlagTemplate;
+            service.ImageName = item.ImageName;
+            service.ExposePort = item.ExposePort;
+            service.CheckerScript = item.CheckerScript;
+            service.CheckerEntrypoint = item.CheckerEntrypoint;
+            service.ExpScript = item.ExpScript;
+            service.ExpEntrypoint = item.ExpEntrypoint;
+            service.OriginalScore = item.OriginalScore;
+            service.AttackPoints = item.AttackPoints;
+            service.SlaPoints = item.SlaPoints;
+            service.PatchPoints = item.PatchPoints;
+            service.ServiceAbnormalPenalty = item.ServiceAbnormalPenalty;
+            service.MaxAttackPerRound = item.MaxAttackPerRound;
+            service.AttackPhaseMinutes = item.AttackPhaseMinutes;
+            service.PatchPhaseMinutes = item.PatchPhaseMinutes;
+            service.TotalRounds = item.TotalRounds;
+            service.MaxResetCount = item.MaxResetCount;
+            service.MaxRecoveryCount = item.MaxRecoveryCount;
+            if (service.Id == 0)
+                context.AwdpServices.Add(service);
+            await context.SaveChangesAsync(cancellationToken);
+            await exerciseManagement.CollectAwdpServiceAsync(service.Id, cancellationToken);
+            imported.Add(new OpenAwdpServiceImportResultItem(item.ExternalId, service.Id));
+        }
+        var result = new OpenChallengeMutationResult(job.GameId, [], [], [], imported);
+        job.ResultJson = JsonSerializer.Serialize(result, ChallengeExternalApplicationService.JsonOptions);
+        job.PayloadJson = null;
+        job.CompletedAt = DateTimeOffset.UtcNow;
+        await context.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        await CompletePostProcessingAsync(job, operationId, leaseOwner, cancellationToken);
+    }
+
+    private async Task DeleteAwdpAsync(
+        ChallengeMutationJob job, Guid operationId, string leaseOwner, CancellationToken cancellationToken)
+    {
+        var payload = JsonSerializer.Deserialize<AwdpDeletePayload>(job.PayloadJson!, ChallengeExternalApplicationService.JsonOptions)
+            ?? throw new JsonException();
+        await RequireLeaseAsync(operationId, leaseOwner, "awdp-deleting", 0, payload.ServiceIds.Count, job.GameId, cancellationToken);
+        var services = await context.AwdpServices
+            .Where(item => item.GameId == job.GameId && payload.ServiceIds.Contains(item.Id))
+            .ToArrayAsync(cancellationToken);
+        var deleted = services.Select(item => item.Id).ToArray();
+        foreach (var service in services)
+        {
+            await context.ExerciseChallenges
+                .Where(item => item.SourceAwdpServiceId == service.Id && item.TrainingCourseId == null)
+                .ExecuteUpdateAsync(setters => setters.SetProperty(item => item.IsEnabled, false), cancellationToken);
+            context.AwdpServices.Remove(service);
+        }
+        await context.SaveChangesAsync(cancellationToken);
+        var result = new OpenChallengeMutationResult(job.GameId, [], [], payload.ServiceIds.Except(deleted).ToArray(), [], deleted);
+        job.ResultJson = JsonSerializer.Serialize(result, ChallengeExternalApplicationService.JsonOptions);
+        job.PayloadJson = null;
+        job.CompletedAt = DateTimeOffset.UtcNow;
+        await context.SaveChangesAsync(cancellationToken);
+        await CompletePostProcessingAsync(job, operationId, leaseOwner, cancellationToken);
     }
 
     public async Task OnTerminalFailureAsync(Guid operationId, CancellationToken cancellationToken)
@@ -167,6 +258,8 @@ public sealed class ChallengeMutationOperationHandler(
             }
 
             await context.SaveChangesAsync(cancellationToken);
+            foreach (var item in pending)
+                await exerciseManagement.CollectGameChallengeAsync(item.Challenge.Id, cancellationToken);
             var imported = pending.Select(item =>
                 new OpenChallengeImportResultItem(item.Item.ExternalId, item.Challenge.Id)).ToArray();
             var result = new OpenChallengeMutationResult(job.GameId, imported, [], []);

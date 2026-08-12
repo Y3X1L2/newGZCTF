@@ -15,6 +15,10 @@ public class AwdpService
     /// </summary>
     public int GameId { get; set; }
 
+    /// <summary>Stable caller-owned identifier used by the external import API.</summary>
+    [MaxLength(128)]
+    public string? ExternalId { get; set; }
+
     /// <summary>
     /// 关联比赛
     /// </summary>
@@ -26,6 +30,18 @@ public class AwdpService
     [Required]
     [MaxLength(Limits.MaxServiceNameLength)]
     public string Name { get; set; } = string.Empty;
+
+    /// <summary>Content shown when the service is collected into the exercise pool.</summary>
+    public string Content { get; set; } = string.Empty;
+
+    public ChallengeCategory Category { get; set; } = ChallengeCategory.Misc;
+
+    public Difficulty Difficulty { get; set; } = Difficulty.Normal;
+
+    public List<string>? Tags { get; set; } = [];
+
+    /// <summary>Dynamic flag template used by collected practice instances.</summary>
+    public string FlagTemplate { get; set; } = "flag{[GUID]}";
 
     /// <summary>
     /// 容器镜像名

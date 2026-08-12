@@ -13,6 +13,7 @@ using GZCTF.Services.Transfer;
 using GZCTF.Modules.Content.Application;
 using GZCTF.Modules.Penetration.Application;
 using GZCTF.Modules.TeamLab.Application;
+using GZCTF.Modules.Exercise.Application;
 using GZCTF.Utils;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -48,7 +49,8 @@ public class EditController(
     IStringLocalizer<Program> localizer,
     DeploymentQueueService deploymentQueue,
     ImageRemoteAccessService imageRemoteAccess,
-    IServiceScopeFactory scopeFactory) : Controller
+    IServiceScopeFactory scopeFactory,
+    IExerciseManagementService exerciseManagement) : Controller
 {
     bool HasContainerRuntimeConfig(GameChallenge challenge) =>
         challenge.Environment != EnvironmentType.Docker ||
@@ -661,6 +663,7 @@ public class EditController(
             }, token);
 
         await cacheHelper.InvalidateAsync(CachePolicyCatalog.Scoreboard, id.ToString(), token);
+        await exerciseManagement.CollectGameChallengeAsync(res.Id, token);
         QueueGameImageDistribution(game!.Id, "challenge create");
 
         return Ok(ChallengeEditDetailModel.FromChallenge(res));
@@ -840,6 +843,7 @@ public class EditController(
 
         // Always flush scoreboard
         await cacheHelper.InvalidateAsync(CachePolicyCatalog.Scoreboard, game.Id.ToString(), token);
+        await exerciseManagement.CollectGameChallengeAsync(res.Id, token);
         QueueGameImageDistribution(game.Id, "challenge update");
 
         return Ok(ChallengeEditDetailModel.FromChallenge(res));
@@ -1000,6 +1004,7 @@ public class EditController(
                 new RequestResponse(localizer[nameof(Resources.Program.Challenge_UseAssetsApiForDynamic)]));
 
         await challengeRepository.UpdateAttachment(challenge, model, token);
+        await exerciseManagement.CollectGameChallengeAsync(challenge.Id, token);
 
         await cacheHelper.InvalidateAsync(CachePolicyCatalog.Scoreboard, id.ToString(), token);
 
@@ -1033,6 +1038,7 @@ public class EditController(
                 StatusCodes.Status404NotFound));
 
         await challengeRepository.AddFlags(challenge, models, token);
+        await exerciseManagement.CollectGameChallengeAsync(challenge.Id, token);
 
         await cacheHelper.InvalidateAsync(CachePolicyCatalog.Scoreboard, id.ToString(), token);
 
@@ -1066,6 +1072,7 @@ public class EditController(
                 StatusCodes.Status404NotFound));
 
         var result = await challengeRepository.RemoveFlag(challenge, fId, token);
+        await exerciseManagement.CollectGameChallengeAsync(challenge.Id, token);
 
         await cacheHelper.InvalidateAsync(CachePolicyCatalog.Scoreboard, id.ToString(), token);
 
@@ -1118,6 +1125,7 @@ public class EditController(
         flag.CustomName = model.CustomName;
 
         await challengeRepository.SaveAsync(token);
+        await exerciseManagement.CollectGameChallengeAsync(challenge.Id, token);
 
         await cacheHelper.InvalidateAsync(CachePolicyCatalog.Scoreboard, id.ToString(), token);
 
@@ -1252,6 +1260,8 @@ public class EditController(
                     LogLevel.Warning);
                 return BadRequest(new RequestResponse(localizer[nameof(Resources.Program.Game_ImportFailed)]));
             }
+
+            await exerciseManagement.BackfillPoolAsync(token);
 
             await cacheHelper.InvalidateAsync(CachePolicyCatalog.RecentGames, "global", token);
 

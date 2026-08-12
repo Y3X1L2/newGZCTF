@@ -115,6 +115,11 @@ public class ExerciseController(
         return Ok(exercises);
     }
 
+    [HttpPost("pool/backfill")]
+    [RequireTeacher]
+    public async Task<IActionResult> BackfillPool(CancellationToken token) =>
+        Ok(await managementService.BackfillPoolAsync(token));
+
     [HttpPost]
     [RequireTeacher]
     public async Task<IActionResult> CreateExercise([FromBody] ExerciseCreateModel model, CancellationToken token)

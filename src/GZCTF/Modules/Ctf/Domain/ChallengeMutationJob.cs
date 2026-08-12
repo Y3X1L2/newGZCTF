@@ -3,7 +3,9 @@ namespace GZCTF.Modules.Ctf.Domain;
 public enum ChallengeMutationKind
 {
     Import = 0,
-    Delete = 1
+    Delete = 1,
+    ImportAwdp = 2,
+    DeleteAwdp = 3
 }
 
 public sealed class ChallengeMutationJob

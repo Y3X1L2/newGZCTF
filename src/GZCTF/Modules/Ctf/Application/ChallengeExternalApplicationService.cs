@@ -8,6 +8,7 @@ using GZCTF.Modules.Audit.Domain;
 using GZCTF.Modules.Ctf.Contracts;
 using GZCTF.Modules.Ctf.Domain;
 using GZCTF.Modules.Identity.Application;
+using GZCTF.Utils;
 
 namespace GZCTF.Modules.Ctf.Application;
 
@@ -44,10 +45,14 @@ public interface IExternalChallengeCatalog
         int gameId,
         int challengeId,
         CancellationToken cancellationToken);
+    Task<OpenAwdpServicePageModel> ListAwdpAsync(int gameId, int limit, int? afterId, CancellationToken cancellationToken);
+    Task<OpenAwdpServiceModel?> FindAwdpAsync(int gameId, int serviceId, CancellationToken cancellationToken);
 }
 
 public sealed record ChallengeImportPayload(IReadOnlyList<OpenChallengeImportModel> Items);
 public sealed record ChallengeDeletePayload(IReadOnlyList<int> ChallengeIds);
+public sealed record AwdpImportPayload(IReadOnlyList<OpenAwdpServiceImportModel> Items);
+public sealed record AwdpDeletePayload(IReadOnlyList<int> ServiceIds);
 
 public sealed class ChallengeExternalApplicationService(
     IChallengeMutationSubmissionStore submissions,
@@ -161,6 +166,40 @@ public sealed class ChallengeExternalApplicationService(
             ChallengeMutationKind.Delete,
             new ChallengeDeletePayload(normalized),
             cancellationToken);
+    }
+
+    public async Task<IdempotencyBeginResult> SubmitAwdpImportAsync(
+        int gameId, Guid apiTokenId, ActorContext actor, string idempotencyKey,
+        IReadOnlyList<OpenAwdpServiceImportModel> items, string routeKey,
+        CancellationToken cancellationToken)
+    {
+        var actorUserId = actor.UserId ?? throw new ChallengeApiContractException("authentication_required", "Authentication is required.", 401);
+        await RequireGameAsync(gameId, cancellationToken);
+        if (items is null || items.Count is < 1 or > MaximumBatchSize)
+            throw new ChallengeApiContractException("awdp_batch_size_invalid", $"An AWDP import must contain between 1 and {MaximumBatchSize} items.", 422);
+        var normalized = items.Select(NormalizeAwdp).ToArray();
+        if (normalized.GroupBy(item => item.ExternalId, StringComparer.Ordinal).Any(group => group.Count() > 1))
+            throw new ChallengeApiContractException("awdp_external_id_duplicate", "AWDP external IDs must be unique within a batch.", 422);
+        var images = normalized.Select(item => item.ImageName).Distinct(StringComparer.Ordinal).ToArray();
+        var ready = await catalog.FindReadyDockerImagesAsync(images, cancellationToken);
+        var invalid = images.FirstOrDefault(image => !ready.ContainsKey(image));
+        if (invalid is not null)
+            throw new ChallengeApiContractException("awdp_docker_image_unregistered", $"Docker image '{invalid}' is not a ready platform image template.", 422);
+        return await SubmitAsync(gameId, apiTokenId, actorUserId, routeKey, idempotencyKey,
+            ChallengeMutationKind.ImportAwdp, new AwdpImportPayload(normalized), cancellationToken);
+    }
+
+    public async Task<IdempotencyBeginResult> SubmitAwdpDeleteAsync(
+        int gameId, Guid apiTokenId, ActorContext actor, string idempotencyKey,
+        IReadOnlyList<int> serviceIds, string routeKey, CancellationToken cancellationToken)
+    {
+        var actorUserId = actor.UserId ?? throw new ChallengeApiContractException("authentication_required", "Authentication is required.", 401);
+        await RequireGameAsync(gameId, cancellationToken);
+        var normalized = serviceIds?.Distinct().Order().ToArray() ?? [];
+        if (normalized.Length is < 1 or > MaximumBatchSize || normalized.Any(id => id <= 0))
+            throw new ChallengeApiContractException("awdp_delete_set_invalid", "AWDP service IDs are invalid.", 422);
+        return await SubmitAsync(gameId, apiTokenId, actorUserId, routeKey, idempotencyKey,
+            ChallengeMutationKind.DeleteAwdp, new AwdpDeletePayload(normalized), cancellationToken);
     }
 
     public async Task<OpenChallengePageModel> ListAsync(
@@ -322,6 +361,25 @@ public sealed class ChallengeExternalApplicationService(
             Flags = flags.ToList(),
             Attachment = NormalizeAttachment(source.Attachment)
         };
+    }
+
+    private static OpenAwdpServiceImportModel NormalizeAwdp(OpenAwdpServiceImportModel source)
+    {
+        if (source is null || string.IsNullOrWhiteSpace(source.ExternalId) || string.IsNullOrWhiteSpace(source.Name) ||
+            string.IsNullOrWhiteSpace(source.ImageName))
+            throw new ChallengeApiContractException("awdp_item_invalid", "AWDP externalId, name, and imageName are required.", 422);
+        var flagTemplate = source.FlagTemplate?.Trim();
+        if (string.IsNullOrWhiteSpace(flagTemplate) || !new DynamicFlagGenerator(flagTemplate).IsValid())
+            throw new ChallengeApiContractException("awdp_flag_template_invalid", "A valid AWDP flagTemplate is required.", 422);
+        if (!Enum.IsDefined(source.Category) || !Enum.IsDefined(source.Difficulty))
+            throw new ChallengeApiContractException("awdp_enum_invalid", "AWDP category or difficulty is invalid.", 422);
+        source.ExternalId = source.ExternalId.Trim();
+        source.Name = source.Name.Trim();
+        source.ImageName = source.ImageName.Trim();
+        source.Content = source.Content?.Trim() ?? string.Empty;
+        source.FlagTemplate = flagTemplate;
+        source.Tags = source.Tags?.Where(tag => !string.IsNullOrWhiteSpace(tag)).Select(tag => tag.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).ToList() ?? [];
+        return source;
     }
 
     private static OpenChallengeFlagModel NormalizeFlag(OpenChallengeFlagModel source, int index)

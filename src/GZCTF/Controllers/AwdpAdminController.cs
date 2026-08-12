@@ -7,6 +7,8 @@ using GZCTF.Models.Request.Game;
 using GZCTF.Repositories.Interface;
 using GZCTF.Services;
 using GZCTF.Infrastructure.Cache;
+using GZCTF.Utils;
+using GZCTF.Modules.Exercise.Application;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -29,7 +31,8 @@ public class AwdpAdminController(
     AwdpRoundService roundService,
     AwdpInstanceService instanceService,
     AwdpScoreService scoreService,
-    IPlatformCache cacheHelper) : ControllerBase
+    IPlatformCache cacheHelper,
+    IExerciseManagementService exerciseManagement) : ControllerBase
 {
     [HttpGet("Games/{gameId:int}/Services")]
     [ProducesResponseType(typeof(AwdpServiceViewModel[]), StatusCodes.Status200OK)]
@@ -81,6 +84,7 @@ public class AwdpAdminController(
         }
 
         await cacheHelper.InvalidateAsync(CachePolicyCatalog.Scoreboard, gameId.ToString(), token);
+        await exerciseManagement.CollectAwdpServiceAsync(service.Id, token);
         return Ok(ToViewModel(service));
     }
 
@@ -113,6 +117,7 @@ public class AwdpAdminController(
         }
 
         await cacheHelper.InvalidateAsync(CachePolicyCatalog.Scoreboard, service.GameId.ToString(), token);
+        await exerciseManagement.CollectAwdpServiceAsync(service.Id, token);
         return Ok(ToViewModel(service));
     }
 
@@ -331,6 +336,10 @@ public class AwdpAdminController(
         if (model.MaxResetCount < 0 || model.MaxRecoveryCount < 0)
             return "Reset and recovery limits must be greater than or equal to 0.";
 
+        if (string.IsNullOrWhiteSpace(model.FlagTemplate) ||
+            !new DynamicFlagGenerator(model.FlagTemplate.Trim()).IsValid())
+            return "A valid flag template is required for exercise-pool collection.";
+
         if ((model.CheckerScript?.Length ?? 0) > Limits.MaxScriptLength ||
             (model.ExpScript?.Length ?? 0) > Limits.MaxScriptLength)
             return "Checker and Exp scripts are too long.";
@@ -345,6 +354,11 @@ public class AwdpAdminController(
     static void ApplyServiceModel(AwdpService service, AwdpServiceCreateModel model)
     {
         service.Name = model.Name.Trim();
+        service.Content = model.Content?.Trim() ?? string.Empty;
+        service.Category = model.Category;
+        service.Difficulty = model.Difficulty;
+        service.Tags = model.Tags?.Where(tag => !string.IsNullOrWhiteSpace(tag)).Select(tag => tag.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).ToList() ?? [];
+        service.FlagTemplate = string.IsNullOrWhiteSpace(model.FlagTemplate) ? "flag{[GUID]}" : model.FlagTemplate.Trim();
         service.ImageName = model.ImageName.Trim();
         service.ExposePort = model.ExposePort;
         service.CheckerScript = string.IsNullOrWhiteSpace(model.CheckerScript) ? null : model.CheckerScript;
@@ -372,6 +386,11 @@ public class AwdpAdminController(
     {
         Id = service.Id,
         Name = service.Name,
+        Content = service.Content,
+        Category = service.Category,
+        Difficulty = service.Difficulty,
+        Tags = service.Tags,
+        FlagTemplate = service.FlagTemplate,
         ImageName = service.ImageName,
         ExposePort = service.ExposePort,
         CheckerScript = service.CheckerScript,

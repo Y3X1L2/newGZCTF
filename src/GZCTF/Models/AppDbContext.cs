@@ -516,6 +516,9 @@ public partial class AppDbContext(DbContextOptions<AppDbContext> options) :
                 .Metadata
                 .SetValueComparer(listComparer);
 
+            entity.HasIndex(e => new { e.PoolSource, e.SourceChallengeId, e.SourceAwdpServiceId })
+                .HasFilter("\"TrainingCourseId\" IS NULL");
+
             entity.HasMany(e => e.Flags)
                 .WithOne(e => e.Exercise)
                 .HasForeignKey(e => e.ExerciseId);
@@ -1068,8 +1071,17 @@ public partial class AppDbContext(DbContextOptions<AppDbContext> options) :
 
         builder.Entity<AwdpService>(entity =>
         {
+            entity.Property(e => e.FlagTemplate)
+                .HasDefaultValue("flag{[GUID]}");
+            entity.Property(e => e.Tags)
+                .HasConversion(listConverter)
+                .Metadata
+                .SetValueComparer(listComparer);
+
             entity.HasIndex(e => e.GameId);
             entity.HasIndex(e => new { e.GameId, e.Name }).IsUnique();
+            entity.HasIndex(e => new { e.GameId, e.ExternalId }).IsUnique()
+                .HasFilter("\"ExternalId\" IS NOT NULL");
 
             entity.HasOne(e => e.Game)
                 .WithMany(e => e.AwdpServices)

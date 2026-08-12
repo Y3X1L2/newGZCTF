@@ -5,6 +5,7 @@ using GZCTF.Modules.Identity.Application;
 using GZCTF.Modules.Content.Application;
 using GZCTF.Modules.Content.Contracts;
 using GZCTF.Modules.Audit.Application;
+using GZCTF.Modules.Exercise.Application;
 using GZCTF.Modules.Runtime.Domain;
 using GZCTF.Infrastructure.Cache;
 using GZCTF.Models.Request.Edit;
@@ -38,7 +39,8 @@ public class TrainingCourseAdminController(
     ImageDistributionService imageDistribution,
     ImageImportApplicationService imageImports,
     IProjectionRevisionStore projectionRevisions,
-    ILogger<TrainingCourseAdminController> logger) : ControllerBase
+    ILogger<TrainingCourseAdminController> logger,
+    IExerciseManagementService exerciseManagement) : ControllerBase
 {
     private async Task<UserInfo> CurrentUser() =>
         await userManager.GetUserAsync(User) ?? throw new InvalidOperationException("Current user is missing.");
@@ -1965,6 +1967,7 @@ public class TrainingCourseAdminController(
             TaskStatus.Success, LogLevel.Information);
         await DistributeCourseImageAsync(
             courseId, exercise.ImageTemplateId, "training challenge create", token);
+        await exerciseManagement.CollectTrainingChallengeAsync(exercise.Id, token);
 
         return Ok(TrainingCourseChallengeModel.FromChallenge(link, model.ChapterId));
     }
@@ -2037,6 +2040,7 @@ public class TrainingCourseAdminController(
             TaskStatus.Success, LogLevel.Information);
         await DistributeCourseImageAsync(
             courseId, link.ExerciseChallenge.ImageTemplateId, "training challenge update", token);
+        await exerciseManagement.CollectTrainingChallengeAsync(link.ExerciseChallengeId, token);
 
         return await CourseChallengeEditDetail(courseId, exerciseChallengeId, token);
     }

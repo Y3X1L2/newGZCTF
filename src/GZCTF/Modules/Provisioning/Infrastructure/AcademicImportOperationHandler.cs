@@ -2,6 +2,7 @@ using System.Text.Json;
 using GZCTF.Models.Request.Game;
 using GZCTF.Modules.Audit.Application;
 using GZCTF.Modules.Exercise.Contracts;
+using GZCTF.Modules.Exercise.Application;
 using GZCTF.Modules.Provisioning.Application;
 using GZCTF.Modules.Provisioning.Contracts;
 using GZCTF.Modules.Provisioning.Domain;
@@ -19,7 +20,8 @@ public sealed class AcademicImportOperationHandler(
     TheoryExamService theoryService,
     ITheoryQuestionCatalog questionCatalog,
     TheoryStatisticsProjectionService statistics,
-    ImageDistributionService imageDistribution) : IApiOperationHandler
+    ImageDistributionService imageDistribution,
+    IExerciseManagementService exerciseManagement) : IApiOperationHandler
 {
     const int MaxCaptainTeams = 3;
 
@@ -230,6 +232,7 @@ public sealed class AcademicImportOperationHandler(
                     });
                 }
                 await context.SaveChangesAsync(cancellationToken);
+                await exerciseManagement.CollectTrainingChallengeAsync(exercise.Id, cancellationToken);
                 result.Add(Created(exerciseModel.ExternalId, "training-exercise", exercise.Id));
             }
 

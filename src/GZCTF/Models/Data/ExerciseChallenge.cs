@@ -36,6 +36,9 @@ public class ExerciseChallenge : Challenge
     /// <summary>Original source challenge ID used for idempotent collection.</summary>
     public int? SourceChallengeId { get; set; }
 
+    /// <summary>Original AWDP service ID when this entry was collected from an AWDP game.</summary>
+    public int? SourceAwdpServiceId { get; set; }
+
     /// <summary>Lowest role allowed to browse and run this pool entry.</summary>
     public Role MinimumVisibleRole { get; set; } = Role.Student;
 

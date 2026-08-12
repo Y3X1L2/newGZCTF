@@ -7,6 +7,10 @@ namespace GZCTF.Modules.Exercise.Application;
 
 public interface IExerciseManagementService
 {
+    Task<ExerciseChallenge?> CollectGameChallengeAsync(int gameChallengeId, CancellationToken token = default);
+    Task<ExerciseChallenge?> CollectTrainingChallengeAsync(int exerciseChallengeId, CancellationToken token = default);
+    Task<ExerciseChallenge?> CollectAwdpServiceAsync(int awdpServiceId, CancellationToken token = default);
+    Task<ExercisePoolBackfillResult> BackfillPoolAsync(CancellationToken token = default);
     Task<ExerciseChallenge> CreateExerciseAsync(ExerciseChallenge exercise, CancellationToken token = default);
     Task<ExerciseChallenge> CreateExerciseWithRelationsAsync(
         ExerciseChallenge exercise,

@@ -13,6 +13,12 @@ public class AwdpServiceCreateModel
     [Required]
     public string Name { get; set; } = string.Empty;
 
+    public string Content { get; set; } = string.Empty;
+    public ChallengeCategory Category { get; set; } = ChallengeCategory.Misc;
+    public Difficulty Difficulty { get; set; } = Difficulty.Normal;
+    public List<string>? Tags { get; set; } = [];
+    public string FlagTemplate { get; set; } = "flag{[GUID]}";
+
     /// <summary>
     /// 容器镜像名
     /// </summary>
@@ -114,6 +120,11 @@ public class AwdpServiceViewModel
 {
     public int Id { get; set; }
     public string Name { get; set; } = string.Empty;
+    public string Content { get; set; } = string.Empty;
+    public ChallengeCategory Category { get; set; }
+    public Difficulty Difficulty { get; set; }
+    public List<string>? Tags { get; set; }
+    public string FlagTemplate { get; set; } = "flag{[GUID]}";
     public string ImageName { get; set; } = string.Empty;
     public int ExposePort { get; set; }
     public string? CheckerScript { get; set; }
