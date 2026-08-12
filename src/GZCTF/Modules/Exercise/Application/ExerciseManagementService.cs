@@ -598,6 +598,7 @@ public sealed class ExerciseManagementService(
             query = query.Where(gc => challengeIds.Contains(gc.Id));
 
         var challenges = await query
+            .Include(challenge => challenge.Attachment)
             .Include(challenge => challenge.Flags)
             .ToArrayAsync(token);
         var results = new List<ExerciseChallenge>();
@@ -699,8 +700,12 @@ public sealed class ExerciseManagementService(
         return results.ToArray();
     }
 
-    static bool CanCollect(Challenge challenge) =>
-        challenge.Type.IsContainer() &&
-        (!string.IsNullOrWhiteSpace(challenge.ContainerImage) || challenge.ImageTemplateId is not null) &&
-        (challenge.Flags.Count > 0 || !string.IsNullOrWhiteSpace(challenge.FlagTemplate));
+    static bool CanCollect(Challenge challenge)
+    {
+        var hasFlag = challenge.Flags.Count > 0 || !string.IsNullOrWhiteSpace(challenge.FlagTemplate);
+        var hasRunnableContainer = challenge.Type.IsContainer() &&
+            (!string.IsNullOrWhiteSpace(challenge.ContainerImage) || challenge.ImageTemplateId is not null);
+        var hasAttachment = challenge.Attachment is { Type: not FileType.None };
+        return hasFlag && (hasRunnableContainer || hasAttachment);
+    }
 }
