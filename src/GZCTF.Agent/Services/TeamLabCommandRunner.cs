@@ -55,7 +55,7 @@ public class TeamLabCommandRunner(ILogger<TeamLabCommandRunner> logger)
             UseShellExecute = false
         };
         startInfo.ArgumentList.Add("-c");
-        startInfo.ArgumentList.Add(command);
+        startInfo.ArgumentList.Add(command.ReplaceLineEndings("\n"));
         return startInfo;
     }
 }

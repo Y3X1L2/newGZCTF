@@ -1268,6 +1268,14 @@ public class TeamLabCommandBuilderTests
     }
 
     [Fact]
+    public void TeamLabCommandRunner_NormalizesShellCommandLineEndings()
+    {
+        var startInfo = TeamLabCommandRunner.CreateStartInfo("first\r\nsecond\r\n", redirectStandardInput: false);
+
+        Assert.Equal(["-c", "first\nsecond\n"], startInfo.ArgumentList);
+    }
+
+    [Fact]
     public void TeamLabCommandRunner_ReportsExitCodeWhenCommandHasNoOutput()
     {
         Assert.Equal(
