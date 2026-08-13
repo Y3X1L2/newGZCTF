@@ -5,6 +5,10 @@ using GZCTF.Models.Request.Exercise;
 
 namespace GZCTF.Modules.Exercise.Application;
 
+public sealed record ExerciseManagementPage(
+    IReadOnlyList<ExerciseChallenge> Items,
+    bool HasMore);
+
 public interface IExerciseManagementService
 {
     Task<ExerciseChallenge?> CollectGameChallengeAsync(int gameChallengeId, CancellationToken token = default);
@@ -24,6 +28,11 @@ public interface IExerciseManagementService
     Task<ExerciseChallenge[]> ImportFromTrainingAsync(int courseId, int[]? challengeIds = null, CancellationToken token = default);
 
     Task<ExerciseChallenge?> GetExerciseForUpdateAsync(int exerciseId, CancellationToken token = default);
+    Task<ExerciseManagementPage> GetExercisePageAsync(
+        ExerciseFilter? filter,
+        int limit,
+        int? afterId,
+        CancellationToken token = default);
     Task<ExerciseChallenge> UpdateExerciseWithRelationsAsync(
         ExerciseChallenge exercise,
         List<ExerciseOpenApiFlagModel>? flags,

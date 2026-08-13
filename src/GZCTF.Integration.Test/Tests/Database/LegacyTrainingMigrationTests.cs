@@ -34,7 +34,9 @@ public sealed class LegacyTrainingMigrationTests : IAsyncLifetime
         {
             var migrator = context.Database.GetService<IMigrator>();
             await migrator.MigrateAsync(PreviousMigration);
+            await ExercisePoolMigrationTestCompatibility.AddCurrentExerciseColumnsAsync(context);
             await SeedLegacyTrainingTreeAsync(context);
+            await ExercisePoolMigrationTestCompatibility.RemoveCurrentExerciseColumnsAsync(context);
             await migrator.MigrateAsync(PhaseZeroMigration);
         }
 

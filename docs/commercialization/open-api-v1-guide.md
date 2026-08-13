@@ -199,6 +199,15 @@ Exercise 是不属于任何培训课程的公共练习题库。它与比赛题�
 `exercise:{exerciseId}`。所有写请求必须提供 `Idempotency-Key`。题目创建和导入
 均由 `ApiOperationWorker` 异步执行，重试同一请求必须复用原 operation：
 
+练习列表使用游标分页：`limit` 默认 50、最大 100；响应中的 `nextCursor` 不为空时，
+将它原样作为下一次请求的 `after` 参数。游标是不透明值，不应自行解码或拼接；没有下一页时
+`nextCursor` 为 `null`。
+
+```bash
+curl "$GZCTF_BASE_URL/exercises?limit=50&after=$NEXT_CURSOR" \
+  -H "Authorization: Bearer $GZCTF_TOKEN"
+```
+
 ```bash
 export GZCTF_BASE_URL=https://platform.example/api/open/v1
 export GZCTF_TOKEN='gzctf_pat_...'

@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Buffers.Binary;
 using System.Linq;
 using System.Net.Mime;
 using System.Security.Claims;
@@ -11,6 +12,7 @@ using GZCTF.Modules.Exercise.Application;
 using GZCTF.Modules.Exercise.Contracts;
 using GZCTF.Modules.Identity.Application;
 using GZCTF.Utils;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -21,7 +23,7 @@ namespace GZCTF.Modules.Exercise.Api;
 [Route("api/open/v1/exercises")]
 [Produces(MediaTypeNames.Application.Json, "application/problem+json")]
 public sealed class ExerciseOpenApiController(
-    IExerciseService exerciseService,
+    IExerciseManagementService exerciseManagement,
     ExerciseExternalApplicationService mutations,
     IAuthorizationService authorization) : ControllerBase
 {
@@ -34,6 +36,7 @@ public sealed class ExerciseOpenApiController(
         [FromQuery] string? difficulty,
         [FromQuery] string? tags,
         [FromQuery] string? source,
+        [FromQuery] string? after,
         [FromQuery, Range(1, 100)] int limit = 50,
         CancellationToken cancellationToken = default)
     {
@@ -46,8 +49,18 @@ public sealed class ExerciseOpenApiController(
             Tags = ParseStringArray(tags),
             Sources = ParseSources(source),
         };
-        var exercises = await exerciseService.GetExerciseListAsync(filter, cancellationToken, role: Role.Teacher);
-        return Ok(new ExerciseExternalPageModel { Items = exercises.Take(limit).Select(toSummary).ToArray() });
+        var page = await exerciseManagement.GetExercisePageAsync(
+            filter,
+            limit,
+            DecodeCursor(after),
+            cancellationToken);
+        return Ok(new ExerciseExternalPageModel
+        {
+            Items = page.Items.Select(toSummary).ToArray(),
+            NextCursor = page.HasMore && page.Items.Count > 0
+                ? EncodeCursor(page.Items[^1].Id)
+                : null
+        });
     }
 
     [HttpGet("{exerciseId:int}")]
@@ -59,7 +72,7 @@ public sealed class ExerciseOpenApiController(
         CancellationToken cancellationToken = default)
     {
         await AuthorizeExerciseAsync(exerciseId.ToString());
-        var exercise = await exerciseService.GetExerciseByIdAsync(exerciseId, cancellationToken);
+        var exercise = await exerciseManagement.GetExerciseForUpdateAsync(exerciseId, cancellationToken);
         if (exercise is null)
             throw new ExerciseApiContractException(
                 "exercise_not_found", $"Exercise {exerciseId} not found.", 404);
@@ -121,7 +134,7 @@ public sealed class ExerciseOpenApiController(
         CancellationToken cancellationToken = default)
     {
         await AuthorizeExerciseAsync(exerciseId.ToString());
-        var existing = await exerciseService.GetExerciseByIdAsync(exerciseId, cancellationToken);
+        var existing = await exerciseManagement.GetExerciseForUpdateAsync(exerciseId, cancellationToken);
         if (existing is null)
             throw new ExerciseApiContractException(
                 "exercise_not_found", $"Exercise {exerciseId} not found.", 404);
@@ -148,7 +161,7 @@ public sealed class ExerciseOpenApiController(
         CancellationToken cancellationToken = default)
     {
         await AuthorizeExerciseAsync(exerciseId.ToString());
-        var existing = await exerciseService.GetExerciseByIdAsync(exerciseId, cancellationToken);
+        var existing = await exerciseManagement.GetExerciseForUpdateAsync(exerciseId, cancellationToken);
         if (existing is null)
             throw new ExerciseApiContractException(
                 "exercise_not_found", $"Exercise {exerciseId} not found.", 404);
@@ -272,6 +285,35 @@ public sealed class ExerciseOpenApiController(
             .Select(s => s.Trim())
             .Where(s => !string.IsNullOrEmpty(s))
             .ToArray();
+    }
+
+    private static string EncodeCursor(int exerciseId)
+    {
+        Span<byte> bytes = stackalloc byte[4];
+        BinaryPrimitives.WriteInt32BigEndian(bytes, exerciseId);
+        return WebEncoders.Base64UrlEncode(bytes);
+    }
+
+    private static int? DecodeCursor(string? cursor)
+    {
+        if (string.IsNullOrWhiteSpace(cursor))
+            return null;
+
+        try
+        {
+            var bytes = WebEncoders.Base64UrlDecode(cursor.Trim());
+            if (bytes.Length != 4)
+                throw new FormatException();
+            var value = BinaryPrimitives.ReadInt32BigEndian(bytes);
+            if (value <= 0)
+                throw new FormatException();
+            return value;
+        }
+        catch (FormatException)
+        {
+            throw new ExerciseApiContractException(
+                "exercise_cursor_invalid", "The pagination cursor is invalid.", 400);
+        }
     }
 
     private static ExerciseImportItemModel NormalizeImportItem(ExerciseImportItemModel item)

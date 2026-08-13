@@ -6288,6 +6288,15 @@
             "x-position": 5
           },
           {
+            "name": "after",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "nullable": true
+            },
+            "x-position": 6
+          },
+          {
             "name": "limit",
             "in": "query",
             "schema": {
@@ -6297,7 +6306,7 @@
               "maximum": 100.0,
               "minimum": 1.0
             },
-            "x-position": 6
+            "x-position": 7
           }
         ],
         "responses": {

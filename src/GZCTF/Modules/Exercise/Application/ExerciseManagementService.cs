@@ -301,6 +301,41 @@ public sealed class ExerciseManagementService(
             .Include(e => e.Attachment)
             .FirstOrDefaultAsync(e => e.Id == exerciseId && e.TrainingCourseId == null, token);
 
+    public async Task<ExerciseManagementPage> GetExercisePageAsync(
+        ExerciseFilter? filter,
+        int limit,
+        int? afterId,
+        CancellationToken token = default)
+    {
+        var query = context.ExerciseChallenges.AsNoTracking()
+            .Where(exercise => exercise.TrainingCourseId == null);
+        if (afterId is > 0)
+            query = query.Where(exercise => exercise.Id > afterId.Value);
+        if (!string.IsNullOrWhiteSpace(filter?.Search))
+        {
+            var search = filter.Search.ToLower();
+            query = query.Where(exercise =>
+                EF.Functions.ILike(exercise.Title, $"%{search}%") ||
+                EF.Functions.ILike(exercise.Content, $"%{search}%"));
+        }
+        if (filter?.Categories is { Length: > 0 })
+            query = query.Where(exercise => filter.Categories.Contains(exercise.Category));
+        if (filter?.Difficulties is { Length: > 0 })
+            query = query.Where(exercise => filter.Difficulties.Contains(exercise.Difficulty));
+        if (filter?.Tags is { Length: > 0 })
+            query = query.Where(exercise =>
+                exercise.Tags != null && exercise.Tags.Any(tag => filter.Tags.Contains(tag)));
+        if (filter?.Credit is { } credit)
+            query = query.Where(exercise => exercise.Credit == credit);
+        if (filter?.Sources is { Length: > 0 })
+            query = query.Where(exercise => filter.Sources.Contains(exercise.PoolSource));
+
+        var rows = await query.OrderBy(exercise => exercise.Id)
+            .Take(limit + 1)
+            .ToArrayAsync(token);
+        return new ExerciseManagementPage(rows.Take(limit).ToArray(), rows.Length > limit);
+    }
+
     public async Task<ExerciseChallenge> UpdateExerciseWithRelationsAsync(
         ExerciseChallenge exercise,
         List<ExerciseOpenApiFlagModel>? flags,

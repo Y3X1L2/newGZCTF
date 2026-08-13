@@ -43,6 +43,7 @@ public sealed class DynamicInstanceFlagMigrationTests : IAsyncLifetime
         await using (var context = CreateContext())
         {
             await context.Database.GetService<IMigrator>().MigrateAsync(PreviousMigration);
+            await ExercisePoolMigrationTestCompatibility.AddCurrentExerciseColumnsAsync(context);
 
             var user = new UserInfo
             {
@@ -127,6 +128,7 @@ public sealed class DynamicInstanceFlagMigrationTests : IAsyncLifetime
             Assert.Equal(dynamicGameChallengeId, dynamicGameFlag.ChallengeId);
             Assert.Equal(dynamicExerciseId, dynamicExerciseFlag.ExerciseId);
 
+            await ExercisePoolMigrationTestCompatibility.RemoveCurrentExerciseColumnsAsync(context);
             await context.Database.GetService<IMigrator>().MigrateAsync(CurrentMigration);
         }
 

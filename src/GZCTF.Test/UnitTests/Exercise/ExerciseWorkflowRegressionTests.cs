@@ -50,6 +50,59 @@ public class ExerciseWorkflowRegressionTests
     }
 
     [Fact]
+    public async Task PublicManagement_CanLoadDisabledDraftForEditing()
+    {
+        await using var context = CreateContext();
+        var draft = new ExerciseChallenge
+        {
+            Title = "draft",
+            Content = "content",
+            IsEnabled = false
+        };
+        context.ExerciseChallenges.Add(draft);
+        await context.SaveChangesAsync();
+
+        var service = new ExerciseManagementService(
+            context,
+            new Mock<IExerciseChallengeRepository>(MockBehavior.Strict).Object,
+            new Mock<IBlobRepository>().Object);
+
+        Assert.NotNull(await service.GetExerciseForUpdateAsync(draft.Id));
+    }
+
+    [Fact]
+    public async Task PublicManagement_PageIncludesDraftsAndAdvancesById()
+    {
+        await using var context = CreateContext();
+        context.ExerciseChallenges.AddRange(
+            new ExerciseChallenge { Title = "first", Content = "content", IsEnabled = true },
+            new ExerciseChallenge { Title = "draft", Content = "content", IsEnabled = false },
+            new ExerciseChallenge
+            {
+                Title = "course-owned",
+                Content = "content",
+                IsEnabled = true,
+                TrainingCourseId = 42
+            });
+        await context.SaveChangesAsync();
+
+        var service = new ExerciseManagementService(
+            context,
+            new Mock<IExerciseChallengeRepository>(MockBehavior.Strict).Object,
+            new Mock<IBlobRepository>().Object);
+
+        var firstPage = await service.GetExercisePageAsync(null, 1, null);
+        var first = Assert.Single(firstPage.Items);
+        Assert.True(firstPage.HasMore);
+        Assert.Equal("first", first.Title);
+
+        var secondPage = await service.GetExercisePageAsync(null, 1, first.Id);
+        var second = Assert.Single(secondPage.Items);
+        Assert.False(secondPage.HasMore);
+        Assert.Equal("draft", second.Title);
+    }
+
+    [Fact]
     public async Task ImportFromGame_DeepCopiesExerciseAndFlagAttachments()
     {
         await using var context = CreateContext();
