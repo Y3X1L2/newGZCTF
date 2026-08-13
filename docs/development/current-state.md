@@ -1,6 +1,6 @@
 # YINYU 当前开发状态
 
-更新时间：2026-08-10
+更新时间：2026-08-13
 
 本文件是跨会话的短期状态入口。长期规则见根目录 `AGENTS.md`，完整目标见 `docs/platform-commercialization-master-plan.md`。状态变化后应更新本文件，不通过追加整段聊天记录维护记忆。
 
@@ -10,15 +10,24 @@
 | --- | --- |
 | 主仓库 | `https://github.com/Y3X1L2/newGZCTF.git` |
 | 稳定分支 | `main` |
-| 本快照代码基线 | `1f8d5cca8da9a8491b9feefb3a2ba1f7879cbc2f` |
-| 基线说明 | Phase 9 TeamLab 组网、远程操作基础和 vNext 管理前端，包含 Schema v1 草稿读取兼容 |
+| 本快照代码基线 | `8de8570` |
+| 基线说明 | Phase 9 TeamLab 基础与自主练习模块；练习模块已完成本地启动、迁移和核心业务验收，尚未部署生产 |
 | 本机正式工作区 | `D:\Work\newGZCTF` |
 | Git 结构 | 独立仓库，`.git` 位于正式工作区，不再依赖 linked worktree |
 | 本机历史归档 | `D:\Work\newGZCTF-local-archive`，不属于源码事实 |
 
 当前 HEAD 必须通过 `git rev-parse HEAD` 实时读取。开始新任务前仍须重新 `fetch`，不能假定本表中的代码基线或远端关系永久有效。
 
-## 1.1 TeamLab 现场验收状态（2026-08-09）
+## 1.1 自主练习模块验收状态（2026-08-13）
+
+- PR #5 提供 `/practice`、题库浏览、练习详情、统计、后台题库管理、Flag/附件和 Docker 实例流程；运行实例继续复用 `DeploymentQueueTicket`，没有建立第二套队列。
+- 候选修复提交 `8de8570` 解决测试构造器编译阻断、禁用草稿无法经 Open API 管理、练习列表游标分页缺失，并增加真实 HTTP 核心流程和历史迁移兼容回归。
+- 已从 `origin/main@75d7a16` 数据库基线前向应用 6 条新增迁移至总计 120 条；存量练习哨兵记录保留，新表和练习池/AWDP 字段存在。临时 PostgreSQL、Redis、后端与 Vite 均完成真实启动后清理。
+- 验证通过：Release 编译 0 错误、单元测试 `821/821`、练习与迁移定向集成 `4/4`、前端 locale/lint/TypeScript/架构/`242/242`/production build。全量集成为 `262/271`；剩余 9 项在纯 `origin/main` 上同样失败，不是练习模块回归。
+- 教师从比赛、课程导入及全量回填的现有角色范围属于当前产品策略，本轮不收紧；后续若改变治理模型，应作为独立权限需求设计和验收。
+- 当前仅完成本地候选验收，未部署到 `10.24.0.27`，生产发布状态仍以本文第 5 节为准。
+
+## 1.2 TeamLab 现场验收状态（2026-08-09）
 
 - 候选提交 `0ee455b` 已部署到测试服务器的独立 release；主站、Agent、首页、`ApiOperationWorker` 和两个 Agent inventory 已通过发布后冒烟。
 - 数据库已前向应用 `20260809041834_NormalizeImageDistributionReferenceIdentity`，修复多个 TeamLab 发布版本共享镜像引用时的覆盖风险。
