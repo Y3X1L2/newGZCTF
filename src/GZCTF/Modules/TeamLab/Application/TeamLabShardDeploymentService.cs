@@ -444,11 +444,13 @@ public sealed class TeamLabShardDeploymentService(
         try
         {
             var response = await executor.ApplyExecutionPlanAsync(workerNodeId, plan, cancellationToken);
-            return response.Success
-                ? new ExecutionPlanApplyResult(workerNodeId, plan, response, null)
-                : new ExecutionPlanApplyResult(workerNodeId, plan, null,
-                    response.Message ?? "Agent rejected the execution plan.",
-                    response.ErrorCategory, response.ErrorCode);
+            if (response.Success)
+                return new ExecutionPlanApplyResult(workerNodeId, plan, response, null);
+            var message = FailureDetail(response.Events) ?? response.Message ?? "Agent rejected the execution plan.";
+            logger.LogWarning("TeamLab execution plan apply failed for node {WorkerNodeId}, runtime {RuntimeId}: {Message}",
+                workerNodeId, plan.RuntimeId, message);
+            return new ExecutionPlanApplyResult(workerNodeId, plan, null, message,
+                response.ErrorCategory, response.ErrorCode);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -470,7 +472,8 @@ public sealed class TeamLabShardDeploymentService(
             {
                 var cleanup = await executor.CleanupExecutionPlanAsync(
                     item.WorkerNodeId, item.Plan, cancellationToken);
-                return cleanup.Success ? null : $"node {item.WorkerNodeId}: {cleanup.Message}";
+                var failure = FailureDetail(cleanup.Events) ?? cleanup.Message;
+                return cleanup.Success ? null : $"node {item.WorkerNodeId}: {failure}";
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
@@ -484,6 +487,12 @@ public sealed class TeamLabShardDeploymentService(
         var failures = results.Where(message => !string.IsNullOrWhiteSpace(message)).ToArray();
         return failures.Length == 0 ? null : string.Join("; ", failures!);
     }
+
+    static string? FailureDetail(IReadOnlyList<TeamLabExecutionEventV2> events) =>
+        events.Where(item => item.Outcome == "failed")
+            .Select(item => item.Detail is { } detail &&
+                            detail.TryGetValue("summary", out var summary) ? summary : null)
+            .FirstOrDefault(summary => !string.IsNullOrWhiteSpace(summary));
 
     private sealed record ExecutionPlanApplyResult(
         Guid WorkerNodeId,

@@ -43,7 +43,7 @@ public sealed class TeamLabOvnNetworkProviderTests
         foreach (var operation in operations)
         {
             var uuidName = operation["uuid-name"]?.GetValue<string>();
-            Assert.True(Guid.TryParse(uuidName, out _), $"uuid-name is not a valid UUID: {uuidName}");
+            Assert.True(IsOvsdbId(uuidName), $"uuid-name is not a valid OVSDB id: {uuidName}");
             AssertJsonUuids(operation);
         }
     }
@@ -55,8 +55,8 @@ public sealed class TeamLabOvnNetworkProviderTests
             if (array.Count == 2 && array[0] is JsonValue first &&
                 string.Equals(first.GetValue<string>(), "named-uuid", StringComparison.Ordinal))
             {
-                Assert.True(Guid.TryParse(array[1]?.GetValue<string>(), out _),
-                    $"named-uuid is not a valid UUID: {array[1]}");
+                Assert.True(IsOvsdbId(array[1]?.GetValue<string>()),
+                    $"named-uuid is not a valid OVSDB id: {array[1]}");
                 return;
             }
             foreach (var item in array)
@@ -90,6 +90,11 @@ public sealed class TeamLabOvnNetworkProviderTests
             Assert.Equal(plan.PlanDigest, digest![1]?.GetValue<string>());
         }
     }
+
+    static bool IsOvsdbId(string? value) =>
+        !string.IsNullOrWhiteSpace(value) &&
+        (char.IsAsciiLetter(value[0]) || value[0] == '_') &&
+        value.All(character => char.IsAsciiLetterOrDigit(character) || character == '_');
 
     static TeamLabOvnNetworkProvider Provider() => new(
         new OvsdbJsonRpcClient(),

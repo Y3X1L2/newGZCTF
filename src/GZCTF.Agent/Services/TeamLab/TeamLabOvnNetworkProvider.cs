@@ -500,7 +500,7 @@ public sealed class TeamLabOvnNetworkProvider(
     {
         var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(
             $"gzctf:teamlab:{plan.RuntimePublicId:D}:{plan.Generation}:{kind}:{key}"));
-        return new Guid(bytes[..16]).ToString("D");
+        return $"gzctf_{kind.Replace('-', '_')}_{new Guid(bytes[..16]):N}";
     }
 }
 

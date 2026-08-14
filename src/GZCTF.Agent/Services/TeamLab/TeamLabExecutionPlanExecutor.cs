@@ -134,12 +134,13 @@ public sealed class TeamLabExecutionPlanExecutor(
             using var cleanupTimeout = new CancellationTokenSource(TimeSpan.FromMinutes(2));
             var compensation = await CleanupCoreAsync(plan, cleanupTimeout.Token);
             events.Enqueue(Event(plan, null, "compute", "failed", "inventory_read_failed",
-                "Agent inventory could not be read after execution-plan apply."));
+                $"Agent inventory could not be read: {Trim(exception.Message)}"));
             foreach (var cleanupEvent in compensation.Events)
                 events.Enqueue(cleanupEvent);
+            var inventoryFailure = FailureSummary(events.ToArray());
             return new TeamLabExecutionPlanApplyResponse(
                 false, false, plan.PlanDigest, events.ToArray(), compensation.Inventory,
-                "compute", "inventory_read_failed", "Execution plan inventory verification failed.");
+                "compute", "inventory_read_failed", inventoryFailure);
         }
         foreach (var asset in plan.Assets)
         {
@@ -170,7 +171,8 @@ public sealed class TeamLabExecutionPlanExecutor(
                 logger.LogError(exception,
                     "TeamLab execution compensation failed for runtime {RuntimeId}, generation {Generation}",
                     plan.RuntimeId, plan.Generation);
-                events.Enqueue(Event(plan, null, "cleanup", "failed", "compensation_failed", "Execution plan compensation failed."));
+                events.Enqueue(Event(plan, null, "cleanup", "failed", "compensation_failed",
+                    $"Execution plan compensation failed: {Trim(exception.Message)}"));
             }
         }
         var eventArray = events.ToArray();
@@ -182,7 +184,7 @@ public sealed class TeamLabExecutionPlanExecutor(
             inventory,
             success ? null : "compute",
             success ? null : "asset_execution_failed",
-            success ? "Execution plan applied." : "One or more assets failed to start.");
+            success ? "Execution plan applied." : FailureSummary(eventArray));
         if (success) journal.Save(plan, response);
         else journal.Remove(plan);
         return response;
@@ -249,7 +251,7 @@ public sealed class TeamLabExecutionPlanExecutor(
         return new TeamLabExecutionPlanCleanupResponse(
             success, plan.PlanDigest, eventArray, inventory,
             success ? null : "cleanup", success ? null : "resource_cleanup_failed",
-            success ? "Execution plan cleaned." : "One or more execution resources remain.");
+            success ? "Execution plan cleaned." : FailureSummary(eventArray));
     }
 
     async Task CleanupAssetAsync(
@@ -486,18 +488,18 @@ public sealed class TeamLabExecutionPlanExecutor(
         return new TeamLabExecutionEventV2(
             plan.RuntimeId, plan.RuntimePublicId, plan.Generation, plan.ShardKey, assetKey, stage, outcome,
             outcome == "succeeded" ? null : stage, errorCode, DateTimeOffset.UtcNow,
-            new Dictionary<string, string> { ["summary"] = EventSummary(outcome, errorCode, detail) });
+            new Dictionary<string, string> { ["summary"] = Describe(detail) });
     }
 
     static TeamLabExecutionPlanApplyResponse Failure(TeamLabExecutionPlanV2 plan, string stage, string message) =>
         new(false, false, plan.PlanDigest, [Event(plan, null, stage, "failed", $"{stage}_failed", message)], [], stage,
-            $"{stage}_failed", FailureMessage(stage));
+            $"{stage}_failed", Describe(message));
 
     static TeamLabExecutionPlanCleanupResponse CleanupFailure(
         TeamLabExecutionPlanV2 plan, string stage, string message) =>
         new(false, plan.PlanDigest,
             [Event(plan, null, stage, "failed", $"{stage}_failed", message)], [], stage,
-            $"{stage}_failed", FailureMessage(stage));
+            $"{stage}_failed", Describe(message));
 
     static TeamLabExecutionPlanApplyResponse IdentityConflict(TeamLabExecutionPlanV2 plan) =>
         new(false, false, plan.PlanDigest,
@@ -506,22 +508,17 @@ public sealed class TeamLabExecutionPlanExecutor(
             "validation", "identity_conflict",
             "The execution identity conflicts with an existing generation. Reset the runtime to create a new generation.");
 
-    static string EventSummary(string outcome, string? errorCode, string detail)
-    {
-        if (outcome == "failed")
-            return errorCode is null ? "The requested execution operation failed." : FailureMessage(errorCode);
-        return detail.Length <= 256 ? detail : detail[..256];
-    }
+    static string Describe(string detail) =>
+        string.IsNullOrWhiteSpace(detail) ? "The requested execution operation failed." : Trim(detail);
 
-    static string FailureMessage(string stageOrCode) => stageOrCode switch
-    {
-        "validation" or "validation_failed" => "The execution plan was rejected by validation.",
-        "identity_conflict" => "The execution identity conflicts with an existing generation. Reset the runtime to create a new generation.",
-        "network" or "network_failed" or "network_cleanup_failed" => "The network operation did not complete.",
-        "observation" or "observation_failed" or "observation_cleanup_failed" => "The observation operation did not complete.",
-        "cleanup" or "cleanup_failed" => "The cleanup operation did not complete.",
-        _ => "The requested execution operation failed."
-    };
+    static string Trim(string value) => value.Length <= 512 ? value : value[..512];
+
+    static string FailureSummary(IReadOnlyList<TeamLabExecutionEventV2> events) =>
+        events.Where(item => item.Outcome == "failed")
+            .Select(item => item.Detail is { } detail &&
+                            detail.TryGetValue("summary", out var summary) ? summary : null)
+            .FirstOrDefault(summary => !string.IsNullOrWhiteSpace(summary))
+        ?? "One or more execution resources remain.";
 
     static int StableChallengeId(string key) =>
         BitConverter.ToInt32(System.Security.Cryptography.SHA256.HashData(
