@@ -364,3 +364,12 @@ vNext 正式路由和实现状态以以下文件为准：
 - 本 release 包含审查 agent 修复：`RedisTeamLabTrafficIngestor.BufferLocally` 不再把本地易失缓冲样本误报为 Redis 持久接受（`AcceptedCount=0`）。
 - 服务 `gzctf.service`、`gzctf-agent.service` active，首页 HTTP 200；发布物内嵌前端门禁（locales/lint/tsc/architecture/239 vitest/vite build）通过。
 - 仍由测试 agent 负责：V2 实机全矩阵（多资产/多网段、生命周期、并发、故障注入、观测回放与清理残留核对）。
+
+## 2026-08-14 release 11：容器网络前缀修复部署与 125 同步
+
+- 修复测试 agent 定位的第 4 处根因：编译器把 Docker 资产 attachment IP 存为纯 IP，Agent 执行 `ip address replace` 时按 `/32` 添加，导致默认路由网关不在直连网段而报 `Nexthop has invalid gateway`。`LinuxNetworkAttachmentService` 现在从 `plan.Networks` 取 CIDR 掩码，地址以 `{IP}/{prefix}` 写入；VM 资产不受影响。commit `cde909f`。
+- release `teamlab-container-route-fix-20260814-11` 已原子部署到 118：发布包 SHA-256 `e4e4ff8ee34568cb82db299ee67e31f2eeebd158fcac99418c5a1eb570d4f00a`，软链 `/opt/gzctf/publish -> /opt/gzctf/releases/teamlab-container-route-fix-20260814-11/publish`，上一版本 `teamlab-review-fix-20260814-10` 保留在 `publish.previous`。
+- 数据库 `efbundle` 已执行：`No migrations were applied`；备份位于 `/opt/gzctf-vnext/backups/teamlab-container-route-fix-20260814-11/gzctf.dump`。
+- 118、125 Agent 均通过平台 `sync-agent` 同步至同一 SHA-256 `f7e658821e9f923e7e5bacd8d4c5c49dcc03917c416a5cb3eff73fc5dac04f21`；两节点在线、可调度，V2 能力与执行上限一致，125 `observations/read` 持续 200。
+- 服务 `gzctf.service`、`gzctf-agent.service` active，首页 HTTP 200；发布物内嵌前端门禁（locales/lint/tsc/architecture/239 vitest/vite build）通过，Agent Release build 0 错误 0 警告。
+- 仍由测试 agent 负责：V2 实机全矩阵（多资产/多网段、生命周期、并发、故障注入、观测回放与清理残留核对）。
