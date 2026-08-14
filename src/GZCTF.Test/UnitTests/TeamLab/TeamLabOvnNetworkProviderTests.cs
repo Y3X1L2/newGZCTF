@@ -45,6 +45,10 @@ public sealed class TeamLabOvnNetworkProviderTests
             var uuidName = operation["uuid-name"]?.GetValue<string>();
             Assert.True(IsOvsdbId(uuidName), $"uuid-name is not a valid OVSDB id: {uuidName}");
             AssertJsonUuids(operation);
+            if (string.Equals(operation["table"]?.GetValue<string>(), "Logical_Switch_Port", StringComparison.Ordinal))
+                Assert.Null((operation["row"] as JsonObject)?["switch"]);
+            if (string.Equals(operation["table"]?.GetValue<string>(), "Logical_Router_Static_Route", StringComparison.Ordinal))
+                Assert.IsType<string>((operation["row"] as JsonObject)?["output_port"]?.GetValue<string>());
         }
     }
 

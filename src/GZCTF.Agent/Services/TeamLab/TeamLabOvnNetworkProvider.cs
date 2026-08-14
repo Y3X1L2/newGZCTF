@@ -128,7 +128,7 @@ public sealed class TeamLabOvnNetworkProvider(
             var switchUuid = StableUuid(plan, "switch", network.Key);
             operations.Add(MutateNetwork(plan, network, switchUuid, control));
             foreach (var port in network.Ports)
-                operations.Add(MutatePort(plan, network, port, switchUuid));
+                operations.Add(MutatePort(plan, network, port));
             if (RouterFor(network, control) is { } router)
             {
                 operations.Add(MutateRouterPort(plan, network, router));
@@ -251,15 +251,14 @@ public sealed class TeamLabOvnNetworkProvider(
     };
 
     static JsonObject MutatePort(TeamLabExecutionPlanV2 plan, TeamLabNetworkIntentV2 network,
-        TeamLabNetworkPortV2 port, string switchUuid) => new()
+        TeamLabNetworkPortV2 port) => new()
     {
         ["op"] = "insert",
         ["table"] = "Logical_Switch_Port",
         ["uuid-name"] = StableUuid(plan, "port", $"{network.Key}:{port.Key}"),
-            ["row"] = new JsonObject
-            {
-                ["name"] = TeamLabOvnNaming.LogicalPortName(plan, network.Key, port.Key),
-                ["switch"] = new JsonArray { "named-uuid", switchUuid },
+        ["row"] = new JsonObject
+        {
+            ["name"] = TeamLabOvnNaming.LogicalPortName(plan, network.Key, port.Key),
             ["addresses"] = Set([ $"{port.MacAddress} {port.IpAddress ?? ""}".Trim() ]),
             ["dhcpv4_options"] = network.DhcpLeases is { Count: > 0 }
                 ? NamedUuid(DhcpUuid(plan, network))
@@ -406,7 +405,7 @@ public sealed class TeamLabOvnNetworkProvider(
         {
             ["ip_prefix"] = route.DestinationCidr,
             ["nexthop"] = route.NextHop,
-            ["output_port"] = NamedUuid(RouterPortNamedUuid(plan, network, router)),
+            ["output_port"] = RouterPortName(plan, network, router),
             ["external_ids"] = Identity(plan, $"{router.Key}:{network.Key}:{route.DestinationCidr}")
         }
     };
