@@ -190,10 +190,10 @@ public sealed class TeamLabExecutionPlanV2Tests
             []);
 
         var first = TeamLabExecutionPlanCompiler.Compile(
-            7, runtimePublicId, 1, "shard-a", infrastructure, [asset],
+            7, runtimePublicId, 1, "shard-a", true, infrastructure, [asset], [asset], [],
             new Dictionary<int, string> { [3] = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" });
         var second = TeamLabExecutionPlanCompiler.Compile(
-            7, runtimePublicId, 1, "shard-a", infrastructure, [asset],
+            7, runtimePublicId, 1, "shard-a", true, infrastructure, [asset], [asset], [],
             new Dictionary<int, string> { [3] = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" });
 
         Assert.True(first.IsValid(out var error), error);
@@ -211,6 +211,92 @@ public sealed class TeamLabExecutionPlanV2Tests
         Assert.Contains("digest", changedError, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public void Compiler_ProducesLegalDeterministicInterfaceNames()
+    {
+        var runtimePublicId = Guid.Parse("019fa217-fcee-73af-bb45-1bc400000002");
+        var asset = new TeamLabNodeAssetCreateRequest(
+            7, 11, runtimePublicId, 1, "docker-1", "Docker", TeamLabAssetKind.Docker,
+            3, 1, 256, 256, null, true, new Dictionary<string, string>(),
+            [
+                new TeamLabNodeInterfaceIntent(
+                    "docker-switch-nic", "network-a", "tl-network-a", "10.0.1.10", 24,
+                    "02:00:00:00:00:01", true, [], ["10.0.1.1"]),
+                new TeamLabNodeInterfaceIntent(
+                    "uplink-extra", "network-a", "tl-network-a", "10.0.1.11", 24,
+                    "02:00:00:00:00:02", false, [], ["10.0.1.1"])
+            ],
+            null,
+            ImageReference: "registry.example/teamlab:latest");
+        var infrastructure = new TeamLabNodeInfrastructureApplyRequest(
+            7,
+            1,
+            1,
+            "tlr-7-1",
+            [new TeamLabNodeManagedSwitchIntent(
+                new TeamLabNodeNetworkIntent("network-a", "Network A", "10.0.1.0/24", "10.0.1.1", "tl-network-a"),
+                "dns-7-a",
+                [
+                    new TeamLabNodeDnsRecord("Docker", "10.0.1.10", "02:00:00:00:00:01"),
+                    new TeamLabNodeDnsRecord("Docker2", "10.0.1.11", "02:00:00:00:00:02")
+                ])],
+            [new TeamLabNodeManagedRouterFragmentIntent("router-a", ["network-a"])],
+            new TeamLabNodeFabricIntent("100.64.0.2", "100.64.0.1/30", "100.64.0.2/30", "fabric-host", "fabric-ns", [], []),
+            [new TeamLabNodeForwardPolicy("10.0.1.0/24", "10.0.2.0/24", false)],
+            []);
+
+        var plan = TeamLabExecutionPlanCompiler.Compile(
+            7, runtimePublicId, 1, "shard-a", true, infrastructure, [asset], [asset], [],
+            new Dictionary<int, string> { [3] = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" });
+
+        var attachments = plan.Assets[0].NetworkAttachments;
+        Assert.Equal(2, attachments.Count);
+        Assert.Equal("docker-switch-nic", attachments[0].PortKey);
+        Assert.Equal("eth0", attachments[0].InterfaceName);
+        Assert.Equal("uplink-extra", attachments[1].PortKey);
+        Assert.Equal("eth1", attachments[1].InterfaceName);
+        Assert.All(attachments, attachment =>
+        {
+            Assert.True(attachment.InterfaceName.Length <= 15);
+            Assert.Matches("^[a-zA-Z0-9_.-]+$", attachment.InterfaceName);
+        });
+    }
+    [Fact]
+    public void Compiler_AssignsPlayerGatewayToTheEntryNetworkLastHost()
+    {
+        var runtimePublicId = Guid.Parse("019fa217-fcee-73af-bb45-1bc400000003");
+        var asset = new TeamLabNodeAssetCreateRequest(
+            7, 11, runtimePublicId, 1, "docker-1", "Docker", TeamLabAssetKind.Docker,
+            3, 1, 256, 256, null, true, new Dictionary<string, string>(),
+            [new TeamLabNodeInterfaceIntent(
+                "eth0", "network-a", "tl-network-a", "10.0.1.10", 24,
+                "02:00:00:00:00:01", true, [], ["10.0.1.1"])],
+            null,
+            ImageReference: "registry.example/teamlab:latest");
+        var infrastructure = new TeamLabNodeInfrastructureApplyRequest(
+            7, 1, 1, "tlr-7-1",
+            [new TeamLabNodeManagedSwitchIntent(
+                new TeamLabNodeNetworkIntent(
+                    "network-a", "Network A", "10.0.1.0/24", "10.0.1.1", "tl-network-a",
+                    IsEntry: true),
+                "dns-7-a",
+                [new TeamLabNodeDnsRecord("Docker", "10.0.1.10", "02:00:00:00:00:01")])],
+            [new TeamLabNodeManagedRouterFragmentIntent("router-a", ["network-a"])],
+            new TeamLabNodeFabricIntent("100.64.0.2", "100.64.0.1/30", "100.64.0.2/30", "fabric-host", "fabric-ns", [], []),
+            [new TeamLabNodeForwardPolicy("10.0.1.0/24", "10.0.2.0/24", false)],
+            []);
+
+        var plan = TeamLabExecutionPlanCompiler.Compile(
+            7, runtimePublicId, 1, "shard-a", true, infrastructure, [asset], [asset], [],
+            new Dictionary<int, string> { [3] = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" });
+
+        var gateway = Assert.Single(plan.Networks).PlayerGateway;
+        Assert.NotNull(gateway);
+        Assert.Equal("player-gateway", gateway.PortKey);
+        Assert.Equal("10.0.1.254", gateway.IpAddress);
+        Assert.Equal("tlwg7", gateway.InterfaceName);
+    }
+
     static TeamLabExecutionPlanV2 Plan()
     {
         var plan = new TeamLabExecutionPlanV2(
@@ -219,14 +305,20 @@ public sealed class TeamLabExecutionPlanV2Tests
             1,
             "node-a",
             string.Empty,
+            string.Empty,
+            false,
             [new TeamLabNetworkIntentV2(
                 "network-a", "10.0.1.0/24", "10.0.1.1",
                 [new TeamLabNetworkPortV2("port-a", "docker-1", "02:00:00:00:00:01", "10.0.1.10")], [], [])],
             [Asset("docker-1", "network-a", "port-a")],
             []);
+        var networkDigest = $"sha256:{Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(
+            new { plan.Networks, plan.NetworkControl }))).ToLowerInvariant()}";
+        plan = plan with { NetworkDigest = networkDigest };
         return plan with
         {
-            PlanDigest = $"sha256:{Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(plan))).ToLowerInvariant()}"
+            PlanDigest = $"sha256:{Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(
+                plan with { PlanDigest = string.Empty }))).ToLowerInvariant()}"
         };
     }
 

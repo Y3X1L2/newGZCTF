@@ -45,8 +45,17 @@ public sealed class TeamLabOvnNetworkProviderTests
             var uuidName = operation["uuid-name"]?.GetValue<string>();
             Assert.True(IsOvsdbId(uuidName), $"uuid-name is not a valid OVSDB id: {uuidName}");
             AssertJsonUuids(operation);
+            var row = operation["row"] as JsonObject;
             if (string.Equals(operation["table"]?.GetValue<string>(), "Logical_Switch_Port", StringComparison.Ordinal))
-                Assert.Null((operation["row"] as JsonObject)?["switch"]);
+            {
+                Assert.Null(row?["switch"]);
+                if (string.Equals(ExternalId(row, "gzctf-asset-key"), "player-gateway", StringComparison.Ordinal))
+                {
+                    Assert.Null(row?["type"]);
+                    Assert.Equal("02:00:00:00:00:fe 10.0.1.254",
+                        (row?["addresses"] as JsonArray)?[1]?[0]?.GetValue<string>());
+                }
+            }
             if (string.Equals(operation["table"]?.GetValue<string>(), "Logical_Router_Static_Route", StringComparison.Ordinal))
                 Assert.IsType<string>((operation["row"] as JsonObject)?["output_port"]?.GetValue<string>());
         }
@@ -79,22 +88,39 @@ public sealed class TeamLabOvnNetworkProviderTests
         var plan = Plan();
         var operations = TeamLabOvnNetworkProvider.BuildRemoveOperations(plan);
 
-        Assert.Equal(9, operations.Count);
+        Assert.Equal(16, operations.Count);
         foreach (var operation in operations)
         {
-            Assert.Equal("delete", operation["op"]?.GetValue<string>());
             var condition = (operation["where"] as JsonArray)?[0] as JsonArray;
             Assert.Equal("external_ids", condition?[0]?.GetValue<string>());
             Assert.Equal("includes", condition?[1]?.GetValue<string>());
             var entries = (condition?[2] as JsonArray)?[1] as JsonArray;
             var digest = entries?.OfType<JsonArray>()
-                .FirstOrDefault(entry => string.Equals(entry[0]?.GetValue<string>(), "gzctf-plan-digest",
+                .FirstOrDefault(entry => string.Equals(entry[0]?.GetValue<string>(), "gzctf-network-digest",
                     StringComparison.Ordinal));
             Assert.NotNull(digest);
-            Assert.Equal(plan.PlanDigest, digest![1]?.GetValue<string>());
+            Assert.Equal(plan.NetworkDigest, digest![1]?.GetValue<string>());
+        }
+        foreach (var update in operations.Take(7))
+        {
+            Assert.Equal("update", update["op"]?.GetValue<string>());
+            var row = update["row"] as JsonObject;
+            Assert.NotNull(row);
+            var value = row!.First().Value as JsonArray;
+            Assert.Equal("set", value?[0]?.GetValue<string>());
+            Assert.Empty(value![1]!.AsArray());
+        }
+        foreach (var delete in operations.Skip(7))
+        {
+            Assert.Equal("delete", delete["op"]?.GetValue<string>());
+            Assert.NotNull(delete["table"]);
         }
     }
 
+    static string? ExternalId(JsonObject? row, string key) =>
+        row?["external_ids"] is JsonArray map && map[1] is JsonArray entries
+            ? (entries.FirstOrDefault(entry => (entry as JsonArray)?[0]?.GetValue<string>() == key) as JsonArray)?[1]?.GetValue<string>()
+            : null;
     static bool IsOvsdbId(string? value) =>
         !string.IsNullOrWhiteSpace(value) &&
         (char.IsAsciiLetter(value[0]) || value[0] == '_') &&
@@ -113,13 +139,16 @@ public sealed class TeamLabOvnNetworkProviderTests
             1,
             "node-a",
             string.Empty,
+            string.Empty,
+            false,
             [new TeamLabNetworkIntentV2(
                 "network-a", "10.0.1.0/24", "10.0.1.1",
                 [new TeamLabNetworkPortV2("port-a", "docker-1", "02:00:00:00:00:01", "10.0.1.10")],
                 [new TeamLabNetworkRouteV2("10.0.2.0/24", "10.0.1.2")],
                 [new TeamLabNetworkPolicyV2("10.0.1.0/24", "10.0.2.0/24", "tcp", 443, true)],
                 DhcpLeases: [new TeamLabDhcpLeaseV2("02:00:00:00:00:02", "10.0.1.20", "docker-1")],
-                DnsRecords: [new TeamLabDnsRecordV2("docker-1", "10.0.1.10")])],
+                DnsRecords: [new TeamLabDnsRecordV2("docker-1", "10.0.1.10")],
+                PlayerGateway: new TeamLabPlayerGatewayV2("player-gateway", "02:00:00:00:00:fe", "10.0.1.254", "tlwg-test"))],
             [Asset("docker-1", "network-a", "port-a")],
             [],
             new TeamLabNetworkControlIntentV2(
@@ -127,6 +156,7 @@ public sealed class TeamLabOvnNetworkProviderTests
                 [new TeamLabForwardPolicyV2("10.0.1.0/24", "10.0.2.0/24", true)]));
         return plan with
         {
+            NetworkDigest = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             PlanDigest = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
         };
     }

@@ -117,6 +117,8 @@ public sealed class TeamLabExecutionLifecycleTests
         1,
         "shard-a",
         "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        string.Empty,
+        false,
         [],
         [],
         []);

@@ -11,6 +11,7 @@ using GZCTF.Modules.Audit.Contracts;
 using GZCTF.Modules.Audit.Domain;
 using GZCTF.Services.TeamLab;
 using GZCTF.Modules.Runtime.Application;
+using GZCTF.TeamLab.Contracts;
 using Microsoft.EntityFrameworkCore;
 
 namespace GZCTF.Modules.TeamLab.Application;
@@ -210,8 +211,10 @@ public sealed class TeamLabRuntimeOrchestrator(
                     "runtime_asset_kind_unsupported", "运行时包含不受支持的 workload 资源类型", 409)
             };
             var result = pause
-                ? await nodes.PauseAssetAsync(nodeId, assetKind, asset.RuntimeResourceId, runtime.Generation, cancellationToken)
-                : await nodes.ResumeAssetAsync(nodeId, assetKind, asset.RuntimeResourceId, runtime.Generation, cancellationToken);
+                ? await nodes.PauseAssetAsync(nodeId, assetKind, asset.RuntimeResourceId, runtime.Generation,
+                    runtime.ExecutionModel, cancellationToken)
+                : await nodes.ResumeAssetAsync(nodeId, assetKind, asset.RuntimeResourceId, runtime.Generation,
+                    runtime.ExecutionModel, cancellationToken);
             if (!result.Success)
                 return await FailLifecycleAsync(
                     runtime,

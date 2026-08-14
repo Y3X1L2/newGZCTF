@@ -30,6 +30,22 @@ public sealed class TeamLabOvnNetworkProvider(
         if (!TryValidateDnsHostnames(plan.Networks, out var dnsValidationError))
             return TeamLabOvnApplyResult.Failed("validation", dnsValidationError!);
 
+        if (!plan.NetworkOwner)
+        {
+            try
+            {
+                return await AllResourcesPresentAsync(plan, cancellationToken)
+                    ? new TeamLabOvnApplyResult(true, true, "network", "Network intent is present.")
+                    : TeamLabOvnApplyResult.Failed("network",
+                        "The network owner has not applied the complete global network intent.");
+            }
+            catch (Exception exception) when (exception is SocketException or IOException or InvalidOperationException or JsonException)
+            {
+                return TeamLabOvnApplyResult.Failed("network",
+                    $"OVN network validation failed: {Trim(exception.Message)}");
+            }
+        }
+
         try
         {
             var switches = await ovsdb.SelectAsync(config.OvnNorthboundEndpoint, config.OvnNorthboundDatabase,
@@ -41,8 +57,8 @@ public sealed class TeamLabOvnNetworkProvider(
                 if (rows.Count == 0) continue;
                 existingCount++;
                 var row = rows[0] as JsonObject;
-                var digest = OvsdbJsonCodec.GetMapValue(row?["external_ids"], "gzctf-plan-digest");
-                if (!string.Equals(digest, plan.PlanDigest, StringComparison.Ordinal))
+                var digest = OvsdbJsonCodec.GetMapValue(row?["external_ids"], "gzctf-network-digest");
+                if (!string.Equals(digest, plan.NetworkDigest, StringComparison.Ordinal))
                     return TeamLabOvnApplyResult.Failed("network", "Existing OVN network identity conflicts with the requested plan.");
             }
             if (existingCount == plan.Networks.Count)
@@ -87,6 +103,9 @@ public sealed class TeamLabOvnNetworkProvider(
     {
         if (!plan.IsValid(out var validationError))
             return TeamLabOvnApplyResult.Failed("validation", validationError!);
+        if (!plan.NetworkOwner)
+            return new TeamLabOvnApplyResult(true, false, "cleanup",
+                "Network intent is owned by another shard; local resources are cleaned separately.");
         try
         {
             var operations = BuildRemoveOperations(plan);
@@ -129,6 +148,8 @@ public sealed class TeamLabOvnNetworkProvider(
             operations.Add(MutateNetwork(plan, network, switchUuid, control));
             foreach (var port in network.Ports)
                 operations.Add(MutatePort(plan, network, port));
+            if (network.PlayerGateway is { } gateway)
+                operations.Add(MutatePlayerGatewayPort(plan, network, gateway));
             if (RouterFor(network, control) is { } router)
             {
                 operations.Add(MutateRouterPort(plan, network, router));
@@ -155,22 +176,36 @@ public sealed class TeamLabOvnNetworkProvider(
         return operations;
     }
 
+
     internal static IReadOnlyList<JsonObject> BuildRemoveOperations(TeamLabExecutionPlanV2 plan)
     {
-        string[] tables =
-        [
-            "Logical_Router_Policy",
-            "Logical_Router_Static_Route",
-            "Logical_Router_Port",
-            "Logical_Router",
-            "ACL",
-            "DNS",
-            "DHCP_Options",
-            "Logical_Switch_Port",
-            "Logical_Switch"
-        ];
-        return tables.Select(table => DeleteOwned(table, plan)).ToArray();
+        var operations = new List<JsonObject>
+        {
+            ClearReferences("Logical_Router", "ports", plan),
+            ClearReferences("Logical_Router", "static_routes", plan),
+            ClearReferences("Logical_Router", "policies", plan),
+            ClearReferences("Logical_Switch", "ports", plan),
+            ClearReferences("Logical_Switch", "acls", plan),
+            ClearReferences("Logical_Switch", "dns_records", plan),
+            ClearReferences("Logical_Switch_Port", "dhcpv4_options", plan)
+        };
+        foreach (var table in RemoveTableOrder)
+            operations.Add(DeleteOwned(table, plan));
+        return operations;
     }
+
+    static readonly string[] RemoveTableOrder =
+    [
+        "Logical_Router",
+        "Logical_Switch",
+        "Logical_Router_Policy",
+        "Logical_Router_Static_Route",
+        "Logical_Router_Port",
+        "Logical_Switch_Port",
+        "ACL",
+        "DNS",
+        "DHCP_Options"
+    ];
 
     static JsonObject DeleteOwned(string table, TeamLabExecutionPlanV2 plan) => new()
     {
@@ -178,6 +213,18 @@ public sealed class TeamLabOvnNetworkProvider(
         ["table"] = table,
         ["where"] = OvsdbJsonCodec.OwnedWhere(plan)
     };
+
+    static JsonObject ClearReferences(string table, string column, TeamLabExecutionPlanV2 plan) => new()
+    {
+        ["op"] = "update",
+        ["table"] = table,
+        ["where"] = OvsdbJsonCodec.OwnedWhere(plan),
+        ["row"] = new JsonObject
+        {
+            [column] = new JsonArray { "set", new JsonArray() }
+        }
+    };
+
 
     async Task<bool> AllResourcesPresentAsync(TeamLabExecutionPlanV2 plan, CancellationToken cancellationToken)
     {
@@ -187,6 +234,7 @@ public sealed class TeamLabOvnNetworkProvider(
         {
             AddExpected(expected, "Logical_Switch", 1);
             AddExpected(expected, "Logical_Switch_Port", network.Ports.Count +
+                (network.PlayerGateway is null ? 0 : 1) +
                 (RouterFor(network, control) is null ? 0 : 1));
             if (network.DhcpLeases is { Count: > 0 }) AddExpected(expected, "DHCP_Options", 1);
             if (network.DnsRecords is { Count: > 0 }) AddExpected(expected, "DNS", 1);
@@ -211,8 +259,8 @@ public sealed class TeamLabOvnNetworkProvider(
             var tableRows = rows[index];
             if (tableRows.Count != expected[tables[index]] ||
                 tableRows.Any(row => row is not JsonObject json ||
-                    !string.Equals(OvsdbJsonCodec.GetMapValue(json["external_ids"], "gzctf-plan-digest"),
-                        plan.PlanDigest, StringComparison.Ordinal)))
+                    !string.Equals(OvsdbJsonCodec.GetMapValue(json["external_ids"], "gzctf-network-digest"),
+                        plan.NetworkDigest, StringComparison.Ordinal)))
                 return false;
         }
         return true;
@@ -234,6 +282,9 @@ public sealed class TeamLabOvnNetworkProvider(
         {
             ["name"] = TeamLabOvnNaming.LogicalNetworkName(plan, network.Key),
             ["ports"] = References(network.Ports.Select(port => StableUuid(plan, "port", $"{network.Key}:{port.Key}"))
+                .Concat(network.PlayerGateway is { } gateway
+                    ? [PlayerGatewayUuid(plan, network, gateway)]
+                    : [])
                 .Concat(RouterFor(network, control) is { } router
                     ? [RouterSwitchPortNamedUuid(plan, network, router)]
                     : [])),
@@ -246,32 +297,51 @@ public sealed class TeamLabOvnNetworkProvider(
                 ("gzctf-cidr", network.Cidr),
                 ("gzctf-runtime", plan.RuntimePublicId.ToString("D")),
                 ("gzctf-generation", plan.Generation.ToString()),
-                ("gzctf-plan-digest", plan.PlanDigest))
+                ("gzctf-network-digest", plan.NetworkDigest))
         }
     };
-
     static JsonObject MutatePort(TeamLabExecutionPlanV2 plan, TeamLabNetworkIntentV2 network,
-        TeamLabNetworkPortV2 port) => new()
+        TeamLabNetworkPortV2 port)
     {
-        ["op"] = "insert",
-        ["table"] = "Logical_Switch_Port",
-        ["uuid-name"] = StableUuid(plan, "port", $"{network.Key}:{port.Key}"),
-        ["row"] = new JsonObject
+        var row = new JsonObject
         {
             ["name"] = TeamLabOvnNaming.LogicalPortName(plan, network.Key, port.Key),
             ["addresses"] = Set([ $"{port.MacAddress} {port.IpAddress ?? ""}".Trim() ]),
-            ["dhcpv4_options"] = network.DhcpLeases is { Count: > 0 }
-                ? NamedUuid(DhcpUuid(plan, network))
-                : null,
             ["external_ids"] = OvsdbJsonCodec.Map(
                 ("gzctf-runtime", plan.RuntimePublicId.ToString("D")),
                 ("gzctf-generation", plan.Generation.ToString()),
                 ("gzctf-asset-key", port.AssetKey),
                 ("gzctf-network-key", network.Key),
-                ("gzctf-plan-digest", plan.PlanDigest))
+                ("gzctf-network-digest", plan.NetworkDigest))
+        };
+        if (network.DhcpLeases is { Count: > 0 })
+            row["dhcpv4_options"] = NamedUuid(DhcpUuid(plan, network));
+        return new JsonObject
+        {
+            ["op"] = "insert",
+            ["table"] = "Logical_Switch_Port",
+            ["uuid-name"] = StableUuid(plan, "port", $"{network.Key}:{port.Key}"),
+            ["row"] = row
+        };
+    }
+    static JsonObject MutatePlayerGatewayPort(TeamLabExecutionPlanV2 plan, TeamLabNetworkIntentV2 network,
+        TeamLabPlayerGatewayV2 gateway) => new()
+    {
+        ["op"] = "insert",
+        ["table"] = "Logical_Switch_Port",
+        ["uuid-name"] = PlayerGatewayUuid(plan, network, gateway),
+        ["row"] = new JsonObject
+        {
+            ["name"] = TeamLabOvnNaming.LogicalPortName(plan, network.Key, gateway.PortKey),
+            ["addresses"] = Set([$"{gateway.MacAddress} {gateway.IpAddress}".Trim()]),
+            ["external_ids"] = OvsdbJsonCodec.Map(
+                ("gzctf-runtime", plan.RuntimePublicId.ToString("D")),
+                ("gzctf-generation", plan.Generation.ToString()),
+                ("gzctf-asset-key", "player-gateway"),
+                ("gzctf-network-key", network.Key),
+                ("gzctf-network-digest", plan.NetworkDigest))
         }
     };
-
     JsonObject MutateDhcpOptions(TeamLabExecutionPlanV2 plan, TeamLabNetworkIntentV2 network) => new()
     {
         ["op"] = "insert",
@@ -361,23 +431,26 @@ public sealed class TeamLabOvnNetworkProvider(
     };
 
     static JsonObject MutateRouterSwitchPort(TeamLabExecutionPlanV2 plan, TeamLabNetworkIntentV2 network,
-        TeamLabRouterIntentV2 router) => new()
+        TeamLabRouterIntentV2 router)
     {
-        ["op"] = "insert",
-        ["table"] = "Logical_Switch_Port",
-        ["uuid-name"] = RouterSwitchPortNamedUuid(plan, network, router),
-        ["row"] = new JsonObject
+        var row = new JsonObject
         {
             ["name"] = RouterSwitchPortName(plan, network, router),
             ["type"] = "router",
             ["options"] = OvsdbJsonCodec.Map(("router-port", RouterPortName(plan, network, router))),
             ["addresses"] = Set([RouterMac(plan, network, router)]),
-            ["dhcpv4_options"] = network.DhcpLeases is { Count: > 0 }
-                ? NamedUuid(DhcpUuid(plan, network))
-                : null,
             ["external_ids"] = Identity(plan, $"{router.Key}:{network.Key}:router")
-        }
-    };
+        };
+        if (network.DhcpLeases is { Count: > 0 })
+            row["dhcpv4_options"] = NamedUuid(DhcpUuid(plan, network));
+        return new JsonObject
+        {
+            ["op"] = "insert",
+            ["table"] = "Logical_Switch_Port",
+            ["uuid-name"] = RouterSwitchPortNamedUuid(plan, network, router),
+            ["row"] = row
+        };
+    }
 
     static JsonObject MutateAcl(TeamLabExecutionPlanV2 plan, TeamLabNetworkIntentV2 network,
         TeamLabNetworkPolicyV2 policy) => new()
@@ -394,7 +467,6 @@ public sealed class TeamLabOvnNetworkProvider(
             ["external_ids"] = Identity(plan, $"{network.Key}:{AclName(plan, network, policy)}")
         }
     };
-
     static JsonObject MutateStaticRoute(TeamLabExecutionPlanV2 plan, TeamLabRouterIntentV2 router,
         TeamLabNetworkIntentV2 network, TeamLabNetworkRouteV2 route) => new()
     {
@@ -409,7 +481,6 @@ public sealed class TeamLabOvnNetworkProvider(
             ["external_ids"] = Identity(plan, $"{router.Key}:{network.Key}:{route.DestinationCidr}")
         }
     };
-
     static JsonObject MutateRouterPolicy(TeamLabExecutionPlanV2 plan, TeamLabRouterIntentV2 router,
         TeamLabForwardPolicyV2 policy) => new()
     {
@@ -449,7 +520,7 @@ public sealed class TeamLabOvnNetworkProvider(
             ("gzctf-runtime", plan.RuntimePublicId.ToString("D")),
             ("gzctf-generation", plan.Generation.ToString()),
             ("gzctf-key", key),
-            ("gzctf-plan-digest", plan.PlanDigest));
+            ("gzctf-network-digest", plan.NetworkDigest));
 
     static JsonArray Set(IEnumerable<string> values) => new() { "set", new JsonArray(values.Select(value => (JsonNode)JsonValue.Create(value)!).ToArray()) };
     static JsonArray References(IEnumerable<string> values) => new()
@@ -462,6 +533,8 @@ public sealed class TeamLabOvnNetworkProvider(
     static string RouterPortNamedUuid(TeamLabExecutionPlanV2 plan, TeamLabNetworkIntentV2 network, TeamLabRouterIntentV2 router) => StableUuid(plan, "router-port-row", $"{router.Key}:{network.Key}");
     static string RouterSwitchPortNamedUuid(TeamLabExecutionPlanV2 plan, TeamLabNetworkIntentV2 network, TeamLabRouterIntentV2 router) => StableUuid(plan, "router-switch-port-row", $"{router.Key}:{network.Key}");
     static string RouterSwitchPortName(TeamLabExecutionPlanV2 plan, TeamLabNetworkIntentV2 network, TeamLabRouterIntentV2 router) => StableName(plan, "router-switch-port", $"{router.Key}:{network.Key}");
+    static string PlayerGatewayUuid(TeamLabExecutionPlanV2 plan, TeamLabNetworkIntentV2 network,
+        TeamLabPlayerGatewayV2 gateway) => StableUuid(plan, "port", $"{network.Key}:{gateway.PortKey}");
     static string RouterUuid(TeamLabExecutionPlanV2 plan, TeamLabRouterIntentV2 router) => StableUuid(plan, "router", router.Key);
     static string DhcpUuid(TeamLabExecutionPlanV2 plan, TeamLabNetworkIntentV2 network) => StableUuid(plan, "dhcp", network.Key);
     static string DnsUuid(TeamLabExecutionPlanV2 plan, TeamLabNetworkIntentV2 network) => StableUuid(plan, "dns", network.Key);

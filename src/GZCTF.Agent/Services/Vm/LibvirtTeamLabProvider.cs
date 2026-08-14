@@ -103,6 +103,57 @@ public sealed class LibvirtTeamLabProvider(
         }
     }
 
+    public Task<LibvirtAssetResult> PauseAsync(
+        string domainName,
+        int expectedGeneration,
+        CancellationToken cancellationToken) =>
+        ChangeLifecycleAsync(domainName, expectedGeneration, pause: true, cancellationToken);
+
+    public Task<LibvirtAssetResult> ResumeAsync(
+        string domainName,
+        int expectedGeneration,
+        CancellationToken cancellationToken) =>
+        ChangeLifecycleAsync(domainName, expectedGeneration, pause: false, cancellationToken);
+
+    Task<LibvirtAssetResult> ChangeLifecycleAsync(
+        string domainName,
+        int expectedGeneration,
+        bool pause,
+        CancellationToken token)
+    {
+        token.ThrowIfCancellationRequested();
+        if (string.IsNullOrWhiteSpace(domainName) || expectedGeneration <= 0)
+            return Task.FromResult(LibvirtAssetResult.Failed("validation", "VM lifecycle identity is invalid."));
+        var domain = GetConnection().Lookup(domainName);
+        try
+        {
+            if (domain == 0)
+                return Task.FromResult(LibvirtAssetResult.Failed("compute", "VM domain is not present on this node."));
+            if (!MatchesLifecycleOwnership(GetConnection().GetXml(domain), expectedGeneration))
+                return Task.FromResult(LibvirtAssetResult.Failed(
+                    "compute", "VM domain does not belong to the requested runtime generation."));
+            var state = GetState(domain);
+            if (pause ? state == "paused" : state == "running")
+                return Task.FromResult(new LibvirtAssetResult(true, state, domainName));
+            var result = pause
+                ? LibvirtNativeInterop.DomainSuspend(domain)
+                : LibvirtNativeInterop.DomainResume(domain);
+            return Task.FromResult(result < 0
+                ? LibvirtAssetResult.Failed("compute",
+                    $"libvirt failed to {(pause ? "suspend" : "resume")} the VM domain.")
+                : new LibvirtAssetResult(true, pause ? "paused" : "running", domainName));
+        }
+        finally
+        {
+            if (domain != 0) LibvirtNativeInterop.DomainFree(domain);
+        }
+    }
+
+    static bool MatchesLifecycleOwnership(string? xml, int expectedGeneration) =>
+        !string.IsNullOrWhiteSpace(xml) &&
+        xml.Contains($"gzctf-generation={expectedGeneration}", StringComparison.Ordinal) &&
+        xml.Contains("gzctf-execution-plan=v2", StringComparison.Ordinal);
+
     LibvirtConnection GetConnection()
     {
         lock (connectionSync)
@@ -315,6 +366,8 @@ public sealed class LibvirtTeamLabProvider(
             new XElement("virtualport", new XAttribute("type", "openvswitch"),
                 new XElement("parameters", new XAttribute("interfaceid",
                     TeamLabOvnNaming.LogicalPortName(plan, attachment.NetworkKey, attachment.PortKey)))),
+            new XElement("target", new XAttribute("dev",
+                TeamLabExecutionIdentityV2.VmTapName(plan.RuntimePublicId, plan.Generation, asset.AssetKey, attachment.NetworkKey))),
             new XElement("model", new XAttribute("type", "virtio")),
             new XElement("alias", new XAttribute("name", attachment.InterfaceName)));
     }

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -1337,6 +1337,7 @@ public class TeamLabCommandBuilderTests
             pcap,
             bootstrap,
             new TeamLabRuntimeGenerationStore(options),
+            new TeamLabOvsAttachmentProvider(new OvsdbJsonRpcClient(), options),
             new AgentResourceLock(),
             NullLogger<TeamLabNetworkService>.Instance);
     }

@@ -3,6 +3,7 @@ using GZCTF.Agent.Services;
 using GZCTF.Agent.Services.Observation;
 using GZCTF.Agent.Services.RuntimeSignals;
 using GZCTF.Agent.Services.TeamLab;
+using GZCTF.Agent.Services.Vm;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using GZCTF.TeamLab.Contracts;
@@ -21,6 +22,7 @@ public class TeamLabController(
     AgentRuntimeSignalJournal runtimeSignals,
     DockerService docker,
     KvmService kvm,
+    LibvirtTeamLabProvider libvirt,
     AgentOperationGate gate,
     TeamLabExecutionPlanExecutor executionPlans,
     IOptions<AgentTeamLabConfig> teamLabOptions) : ControllerBase
@@ -219,7 +221,17 @@ public class TeamLabController(
                         await docker.ResumeContainerAsync(request.ResourceId, request.Generation, token);
                     break;
                 case "vm":
-                    if (pause)
+                    if (request.ExecutionModel == TeamLabExecutionModel.V2)
+                    {
+                        var result = pause
+                            ? await libvirt.PauseAsync(request.ResourceId, request.Generation, token)
+                            : await libvirt.ResumeAsync(request.ResourceId, request.Generation, token);
+                        if (!result.Success)
+                            throw new AgentOperationException(
+                                "Compute", "runtime.vm_lifecycle_failed", result.State, false,
+                                StatusCodes.Status409Conflict);
+                    }
+                    else if (pause)
                         await kvm.SuspendVmAsync(request.ResourceId, request.Generation, token);
                     else
                         await kvm.ResumeVmAsync(request.ResourceId, request.Generation, token);

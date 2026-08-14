@@ -35,7 +35,7 @@ static class OvsdbJsonCodec
             Map(
                 ("gzctf-runtime", plan.RuntimePublicId.ToString("D")),
                 ("gzctf-generation", plan.Generation.ToString()),
-                ("gzctf-plan-digest", plan.PlanDigest))
+                ("gzctf-network-digest", plan.NetworkDigest))
         }
     };
 }

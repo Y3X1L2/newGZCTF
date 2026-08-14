@@ -11,6 +11,8 @@ public sealed record TeamLabExecutionPlanV2(
     int Generation,
     string ShardKey,
     string PlanDigest,
+    string NetworkDigest,
+    bool NetworkOwner,
     IReadOnlyList<TeamLabNetworkIntentV2> Networks,
     IReadOnlyList<TeamLabAssetExecutionSpecV2> Assets,
     IReadOnlyList<TeamLabObservationIntentV2> ObservationPoints,
@@ -24,9 +26,9 @@ public sealed record TeamLabExecutionPlanV2(
             return false;
         }
 
-        if (string.IsNullOrWhiteSpace(ShardKey) || !IsDigest(PlanDigest))
+        if (string.IsNullOrWhiteSpace(ShardKey) || !IsDigest(PlanDigest) || !IsDigest(NetworkDigest))
         {
-            error = "Shard key and plan digest are required.";
+            error = "Shard key, network digest and plan digest are required.";
             return false;
         }
 
@@ -114,6 +116,18 @@ public sealed record TeamLabExecutionPlanV2(
                                     !TryParseIpv4Address(attachment.IpAddress))))
         {
             error = "The execution plan contains an invalid network, attachment, asset kind, or image identity.";
+            return false;
+        }
+
+        if (Networks.Any(network => network.PlayerGateway is { } gateway &&
+            (string.IsNullOrWhiteSpace(gateway.PortKey) ||
+             !IsMacAddress(gateway.MacAddress) ||
+             !TryParseIpv4Cidr(network.Cidr, out var gatewayNetwork, out var gatewayPrefix) ||
+             !IsAddressInCidr(gateway.IpAddress, gatewayNetwork, gatewayPrefix) ||
+             network.Ports.Any(port => IsSameIpv4Address(port.IpAddress, gateway.IpAddress)) ||
+             string.IsNullOrWhiteSpace(gateway.InterfaceName))))
+        {
+            error = "The execution plan contains an invalid player gateway.";
             return false;
         }
 
@@ -278,8 +292,14 @@ public sealed record TeamLabNetworkIntentV2(
     IReadOnlyList<TeamLabNetworkPolicyV2> Policies,
     string? DhcpDnsServiceName = null,
     IReadOnlyList<TeamLabDhcpLeaseV2>? DhcpLeases = null,
-    IReadOnlyList<TeamLabDnsRecordV2>? DnsRecords = null);
+    IReadOnlyList<TeamLabDnsRecordV2>? DnsRecords = null,
+    TeamLabPlayerGatewayV2? PlayerGateway = null);
 
+public sealed record TeamLabPlayerGatewayV2(
+    string PortKey,
+    string MacAddress,
+    string IpAddress,
+    string InterfaceName);
 public sealed record TeamLabDhcpLeaseV2(
     string MacAddress,
     string IpAddress,
@@ -329,7 +349,9 @@ public sealed record TeamLabAssetNetworkAttachmentV2(
     string NetworkKey,
     string PortKey,
     string InterfaceName,
-    string? IpAddress);
+    string? IpAddress,
+    string? GatewayIp = null,
+    bool Primary = false);
 
 public sealed record TeamLabHealthCheckV2(
     string Protocol,

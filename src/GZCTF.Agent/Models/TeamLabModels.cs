@@ -168,14 +168,22 @@ public record TeamLabWireGuardRequest(
     string PeerAllowedIps,
     string[] PlayerAllowedCidrs,
     string[] PlayerBlockedCidrs,
-    bool DryRun = true);
+    bool DryRun = true,
+    TeamLabExecutionModel ExecutionModel = TeamLabExecutionModel.V1,
+    Guid RuntimePublicId = default,
+    string? NetworkKey = null,
+    string? PortKey = null,
+    string? MacAddress = null);
 
 public record TeamLabWireGuardCleanupRequest(
     int RuntimeId,
     int Generation,
     string NamespaceName,
     string InterfaceName,
-    bool DryRun = true);
+    bool DryRun = true,
+    TeamLabExecutionModel ExecutionModel = TeamLabExecutionModel.V1,
+    Guid RuntimePublicId = default,
+    string? NetworkKey = null);
 
 public record TeamLabCleanupRequest(
     int RuntimeId,
@@ -190,7 +198,8 @@ public record TeamLabAssetLifecycleRequest(
     string Kind,
     string ResourceId,
     int Generation,
-    bool DryRun = false);
+    bool DryRun = false,
+    TeamLabExecutionModel ExecutionModel = TeamLabExecutionModel.V1);
 
 public record TeamLabAssetLifecycleResponse(
     bool Success,

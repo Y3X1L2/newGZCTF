@@ -8,6 +8,10 @@ public static class TeamLabResourceNameFactory
     public static string Bridge(int runtimeId, string networkKey) => LinuxName($"tl{runtimeId}-{networkKey}");
     public static string RouterNamespace(int runtimeId, int shardId) => LinuxName($"tlr{runtimeId}-{shardId}");
     public static string WireGuardInterface(int runtimeId) => LinuxName($"tlwg{runtimeId}");
+
+    public static string PlayerGatewayMac(Guid runtimePublicId, int generation, string networkKey) =>
+        $"02:{Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(
+            $"{runtimePublicId:D}:{generation}:player-gateway:{networkKey}")))[..10].ToLowerInvariant().Insert(2, ":").Insert(5, ":").Insert(8, ":").Insert(11, ":")}";
     public static string DhcpDnsService(int runtimeId, string networkKey) => LinuxName($"tld{runtimeId}-{networkKey}");
     public static string FabricHostInterface(int runtimeId) => LinuxName($"tlrf{runtimeId}");
     public static string FabricNamespaceInterface(int runtimeId) => LinuxName($"tlrf{runtimeId}n");

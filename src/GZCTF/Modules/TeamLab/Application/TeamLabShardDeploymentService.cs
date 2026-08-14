@@ -362,8 +362,19 @@ public sealed class TeamLabShardDeploymentService(
         }
         await context.SaveChangesAsync(cancellationToken);
 
-        var results = await Task.WhenAll(shards.Select(shard => ApplyExecutionPlanAsync(
-            shard.WorkerNodeId, plans[shard.Id], cancellationToken)));
+        // The network owner must converge the global OVN intent before other shards attach
+        // their local ports, otherwise a non-owner can race ahead of the logical topology.
+        var orderedShards = shards.OrderBy(shard => plans[shard.Id].NetworkOwner ? 0 : 1)
+            .ThenBy(shard => shard.Id)
+            .ToArray();
+        var results = new List<ExecutionPlanApplyResult>();
+        foreach (var shard in orderedShards)
+        {
+            var result = await ApplyExecutionPlanAsync(shard.WorkerNodeId, plans[shard.Id], cancellationToken);
+            results.Add(result);
+            if (!result.Success)
+                break;
+        }
         var failed = results.Where(item => !item.Success).ToArray();
         if (failed.Length > 0)
         {
@@ -542,6 +553,8 @@ public sealed class TeamLabShardDeploymentService(
     {
         var infrastructure = await routes.BuildInfrastructureRequestsAsync(
             runtime, definition, cancellationToken);
+        var globalInfrastructure = await routes.BuildGlobalInfrastructureRequestAsync(
+            runtime, definition, cancellationToken);
         var allowedRoutes = BuildAllowedRoutes(runtime, definition);
         var digests = runtimeAssets
             .Where(item => item.SourceTemplateId.HasValue)
@@ -555,10 +568,7 @@ public sealed class TeamLabShardDeploymentService(
                         $"Runtime has conflicting frozen image digests for template {group.Key}.");
                 return values[0];
             });
-        var plans = new Dictionary<int, TeamLabExecutionPlanV2>();
-        foreach (var shard in runtime.Shards.Where(item => item.Generation == runtime.Generation))
-        {
-            var shardAssets = await Task.WhenAll(runtimeAssets.Where(item => item.ShardId == shard.Id)
+        var allAssetRequests = (await Task.WhenAll(runtimeAssets
                 .OrderBy(item => item.TopologyKey, StringComparer.Ordinal)
                 .Select(asset => BuildAssetRequest(
                     runtime,
@@ -568,14 +578,30 @@ public sealed class TeamLabShardDeploymentService(
                     overlays.GetValueOrDefault(asset.TopologyKey),
                     allowedRoutes,
                     imageReady: true,
-                    cancellationToken)));
+                    cancellationToken))))
+            .ToDictionary(item => item.AssetKey, StringComparer.Ordinal);
+        var orderedShards = runtime.Shards.Where(item => item.Generation == runtime.Generation)
+            .OrderBy(item => item.Id)
+            .ToArray();
+        var ownerShardId = orderedShards[0].Id;
+        var plans = new Dictionary<int, TeamLabExecutionPlanV2>();
+        foreach (var shard in orderedShards)
+        {
+            var shardAssets = runtimeAssets.Where(item => item.ShardId == shard.Id)
+                .OrderBy(item => item.TopologyKey, StringComparer.Ordinal)
+                .Select(item => allAssetRequests[item.TopologyKey])
+                .ToArray();
             plans.Add(shard.Id, TeamLabExecutionPlanCompiler.Compile(
                 runtime.Id,
                 runtime.PublicId,
                 runtime.Generation,
                 shard.Id.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                infrastructure[shard.Id],
+                shard.Id == ownerShardId,
+                globalInfrastructure,
+                allAssetRequests.OrderBy(item => item.Key, StringComparer.Ordinal)
+                    .Select(item => item.Value).ToArray(),
                 shardAssets,
+                infrastructure[shard.Id].ObservationPoints,
                 digests));
         }
         return plans;

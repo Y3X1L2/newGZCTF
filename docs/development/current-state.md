@@ -337,3 +337,13 @@ vNext 正式路由和实现状态以以下文件为准：
 - 118/125 Agent 均同步至 SHA-256 `9d9444bf...68489`；两节点 V2 能力齐全、可调度，125 `observations/read` 稳定 200 约 2ms。
 - 新增 runtime-signal 409 收敛：确定性冲突被确认并丢弃，不再无限重试；Agent 启动后冲突日志只出现一次，ack 文件已生成。
 - 仍待测试 agent 验收：V2 全矩阵（多资产/多网段、生命周期、并发、故障注入、观测回放与清理残留核对），依据本文件上方 release 4/5 交接清单执行。
+
+## 2026-08-14 release 9：OVN 当前 schema 兼容、玩家网关与容器网络闭环
+
+- release `teamlab-ovn-attach-fix-20260814-9` 已原子部署到 118：发布包 SHA-256 `74a81c7b15c89725fb83d7f0c821f5d3af416459e395a33a65084d038741bb30`，软链 `/opt/gzctf/publish -> /opt/gzctf/releases/teamlab-ovn-attach-fix-20260814-9/publish`，上一版本 `teamlab-docker-reference-fix-20260814-8` 保留在 `publish.previous`。
+- 118 本机 Agent 已随发布切换，SHA-256 `3625447c589f2756c41fc9c6801a26474128ae8028f80c71c0ddc283151b378b`；125 尚未执行 release 9 的 `sync-agent`，运行进程仍是 release 8 Agent，测试 agent 需在节点管理完成同步并确认能力清单。
+- `efbundle` 已执行：`No migrations were applied`，无新增迁移；数据库备份位于 `/opt/gzctf-vnext/backups/teamlab-ovn-attach-fix-20260814-9/`。
+- 服务 `gzctf.service`、`gzctf-agent.service` active，首页 HTTP 200；125 观测读取持续 200。
+- 修复内容：OVN 26.03 `Logical_Switch_Port` 移除过时 `switch` 列、`Logical_Router_Port.peer` 不再作为引用集合清理、`dhcpv4_options` 只在有租约时写入；玩家网关 MAC 闭环（OVN LSP 与 WireGuard 接口一致）；Docker 容器接口名改 `eth{index}`；镜像引用统一 `sha256:` 前缀；容器健康检查改经 `nsenter` 在容器网络命名空间内执行；VM libvirt 原生 pause/resume 与 OVS interfaceid 已接入。
+- 门禁：Release 全套构建 0 错误 0 警告，publish 内嵌前端门禁（locales/lint/tsc/architecture/239 vitest/vite build）通过，定向 TeamLab 单测 75 个通过。
+- 尚未闭环：V2 VM 网络附件未实机验证（libvirt 可能自动创建 TAP，但 OVS 本地 attachment 未确认）；OVN 26.03 全链路 apply/cleanup 与 V2 完整矩阵仍由测试 agent 验收。交接见 `docs/development/handoffs/2026-08-14-teamlab-ovn-attach-fix-handoff.md`。

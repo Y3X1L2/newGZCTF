@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.ComponentModel;
+using System.IO;
 using System.Text;
 using GZCTF.TeamLab.Contracts.Execution;
 
@@ -19,20 +20,33 @@ public sealed class LinuxNetworkAttachmentService(ILogger<LinuxNetworkAttachment
             return TeamLabAttachmentResult.Failed("network", "Linux container attachments are only available on Linux Agents.");
         if (pid <= 0 || string.IsNullOrWhiteSpace(attachment.InterfaceName))
             return TeamLabAttachmentResult.Failed("validation", "Container network attachment identity is invalid.");
+        var port = plan.Networks
+            .FirstOrDefault(network => network.Key == attachment.NetworkKey)?
+            .Ports.FirstOrDefault(item => item.Key == attachment.PortKey);
+        if (port is null || string.IsNullOrWhiteSpace(port.MacAddress))
+            return TeamLabAttachmentResult.Failed("validation", "Container network attachment is missing its declared port identity.");
 
         var hostInterface = HostInterfaceName(plan, asset.AssetKey, attachment.NetworkKey);
         var peerInterface = PeerInterfaceName(plan, asset.AssetKey, attachment.NetworkKey);
         try
         {
-            if (await SucceedsAsync("ip", ["link", "show", hostInterface], cancellationToken))
+            if (await IsAttachmentConvergedAsync(pid, hostInterface, attachment.InterfaceName, cancellationToken))
+            {
+                await ApplyAttachmentStateAsync(pid, attachment, port.MacAddress, cancellationToken);
                 return new TeamLabAttachmentResult(true, hostInterface);
+            }
+
+            if (await SucceedsAsync("ip", ["link", "show", hostInterface], cancellationToken))
+                await RunAsync("ip", ["link", "delete", hostInterface], cancellationToken, allowFailure: true);
             await RunAsync("ip", ["link", "add", hostInterface, "type", "veth", "peer", "name", peerInterface], cancellationToken);
+            await RunAsync("ip", ["link", "set", peerInterface, "address", port.MacAddress], cancellationToken);
+            await RunAsync("nsenter", ["-t", pid.ToString(), "-n", "ip", "link", "del", peerInterface], cancellationToken, allowFailure: true);
             await RunAsync("ip", ["link", "set", peerInterface, "netns", pid.ToString()], cancellationToken);
             await RunAsync("ip", ["link", "set", hostInterface, "up"], cancellationToken);
+            await RunAsync("nsenter", ["-t", pid.ToString(), "-n", "ip", "link", "del", attachment.InterfaceName], cancellationToken, allowFailure: true);
             await RunAsync("nsenter", ["-t", pid.ToString(), "-n", "ip", "link", "set", peerInterface, "name", attachment.InterfaceName], cancellationToken);
             await RunAsync("nsenter", ["-t", pid.ToString(), "-n", "ip", "link", "set", attachment.InterfaceName, "up"], cancellationToken);
-            if (!string.IsNullOrWhiteSpace(attachment.IpAddress))
-                await RunAsync("nsenter", ["-t", pid.ToString(), "-n", "ip", "address", "replace", attachment.IpAddress, "dev", attachment.InterfaceName], cancellationToken);
+            await ApplyAttachmentStateAsync(pid, attachment, port.MacAddress, cancellationToken);
             return new TeamLabAttachmentResult(true, hostInterface);
         }
         catch (Exception exception) when (exception is IOException or InvalidOperationException or Win32Exception)
@@ -62,8 +76,48 @@ public sealed class LinuxNetworkAttachmentService(ILogger<LinuxNetworkAttachment
         }
     }
 
+    async Task ApplyAttachmentStateAsync(
+        long pid,
+        TeamLabAssetNetworkAttachmentV2 attachment,
+        string macAddress,
+        CancellationToken token)
+    {
+        await RunAsync("nsenter", ["-t", pid.ToString(), "-n", "ip", "link", "set", attachment.InterfaceName, "address", macAddress], token);
+        if (!string.IsNullOrWhiteSpace(attachment.IpAddress))
+            await RunAsync("nsenter", ["-t", pid.ToString(), "-n", "ip", "address", "replace", attachment.IpAddress, "dev", attachment.InterfaceName], token);
+        if (attachment.Primary && !string.IsNullOrWhiteSpace(attachment.GatewayIp))
+            await RunAsync("nsenter", ["-t", pid.ToString(), "-n", "ip", "route", "replace", "default", "via", attachment.GatewayIp, "dev", attachment.InterfaceName], token);
+    }
+
+    async Task<bool> IsAttachmentConvergedAsync(
+        long pid,
+        string hostInterface,
+        string containerInterface,
+        CancellationToken token)
+    {
+        var hostIndex = await ReadInterfaceNumberAsync($"/sys/class/net/{hostInterface}/ifindex", token);
+        var hostLink = await ReadInterfaceNumberAsync($"/sys/class/net/{hostInterface}/iflink", token);
+        var peerIndex = await ReadInterfaceNumberAsync($"/proc/{pid}/root/sys/class/net/{containerInterface}/ifindex", token);
+        var peerLink = await ReadInterfaceNumberAsync($"/proc/{pid}/root/sys/class/net/{containerInterface}/iflink", token);
+        return hostIndex > 0 && hostLink > 0 && peerIndex > 0 && peerLink > 0 &&
+               hostLink == peerIndex && peerLink == hostIndex;
+    }
+
+    static async Task<long> ReadInterfaceNumberAsync(string path, CancellationToken token)
+    {
+        try
+        {
+            var value = await File.ReadAllTextAsync(path, token);
+            return long.TryParse(value.Trim(), out var number) ? number : 0;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return 0;
+        }
+    }
+
     public static string HostInterfaceName(TeamLabExecutionPlanV2 plan, string assetKey, string networkKey) =>
-        StableName("tlh", plan, assetKey, networkKey);
+        TeamLabExecutionIdentityV2.WorkloadHostInterface(plan.RuntimePublicId, plan.Generation, assetKey, networkKey);
 
     public static string PeerInterfaceName(TeamLabExecutionPlanV2 plan, string assetKey, string networkKey) =>
         StableName("tlp", plan, assetKey, networkKey);

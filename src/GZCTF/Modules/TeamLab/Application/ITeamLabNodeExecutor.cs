@@ -1,5 +1,6 @@
 using GZCTF.Modules.TeamLab.Domain;
 using GZCTF.Modules.TeamLab.Domain.Runtime;
+using GZCTF.TeamLab.Contracts;
 using GZCTF.TeamLab.Contracts.Execution;
 
 namespace GZCTF.Modules.TeamLab.Application;
@@ -15,7 +16,8 @@ public sealed record TeamLabNodeNetworkIntent(
     string Name,
     string Cidr,
     string GatewayIp,
-    string BridgeName);
+    string BridgeName,
+    bool IsEntry = false);
 
 public sealed record TeamLabNodeInterfaceIntent(
     string Key,
@@ -64,7 +66,8 @@ public sealed record TeamLabNodeObservationPointIntent(
     Guid PublicId,
     string TopologyKey,
     TeamLabObservationPointKind Kind,
-    string InterfaceToken);
+    string InterfaceToken,
+    string? NetworkKey = null);
 
 public sealed record TeamLabNodeInfrastructureApplyRequest(
     int RuntimeId,
@@ -210,13 +213,21 @@ public sealed record TeamLabNodeAccessApplyRequest(
     string ClientAddress,
     string ClientAllowedIps,
     IReadOnlyList<string> PlayerAllowedCidrs,
-    IReadOnlyList<string> PlayerBlockedCidrs);
+    IReadOnlyList<string> PlayerBlockedCidrs,
+    TeamLabExecutionModel ExecutionModel = TeamLabExecutionModel.V1,
+    Guid RuntimePublicId = default,
+    string? NetworkKey = null,
+    string? PortKey = null,
+    string? MacAddress = null);
 
 public sealed record TeamLabNodeAccessRemoveRequest(
     int RuntimeId,
     int Generation,
     string RouterNamespace,
-    string InterfaceName);
+    string InterfaceName,
+    TeamLabExecutionModel ExecutionModel = TeamLabExecutionModel.V1,
+    Guid RuntimePublicId = default,
+    string? NetworkKey = null);
 
 public sealed record TeamLabNodeObservationRecord(
     long Sequence,
@@ -328,12 +339,14 @@ public interface ITeamLabNodeExecutor
         TeamLabAssetKind kind,
         string resourceId,
         int generation,
+        TeamLabExecutionModel executionModel,
         CancellationToken cancellationToken);
     Task<TeamLabNodeResult> ResumeAssetAsync(
         Guid workerNodeId,
         TeamLabAssetKind kind,
         string resourceId,
         int generation,
+        TeamLabExecutionModel executionModel,
         CancellationToken cancellationToken);
     Task<TeamLabNodeResult> DestroyAssetAsync(Guid workerNodeId, TeamLabAssetKind kind, string resourceId, CancellationToken cancellationToken);
     Task<TeamLabScenarioArtifactCommitResult> CommitScenarioArtifactAsync(

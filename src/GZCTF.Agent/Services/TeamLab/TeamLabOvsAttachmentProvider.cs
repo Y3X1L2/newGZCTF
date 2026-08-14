@@ -12,11 +12,44 @@ public sealed class TeamLabOvsAttachmentProvider(
 {
     readonly AgentTeamLabConfig config = options.Value;
 
-    public async Task<TeamLabAttachmentResult> AttachAsync(
+    public Task<TeamLabAttachmentResult> AttachAsync(
         TeamLabExecutionPlanV2 plan,
         string interfaceName,
         string networkKey,
         string portKey,
+        CancellationToken cancellationToken) =>
+        AttachCoreAsync(
+            plan.RuntimePublicId,
+            plan.Generation,
+            interfaceName,
+            networkKey,
+            TeamLabOvnNaming.LogicalPortName(plan, networkKey, portKey),
+            plan.PlanDigest,
+            cancellationToken);
+
+    public Task<TeamLabAttachmentResult> AttachHostInterfaceAsync(
+        Guid runtimePublicId,
+        int generation,
+        string interfaceName,
+        string networkKey,
+        string portKey,
+        CancellationToken cancellationToken) =>
+        AttachCoreAsync(
+            runtimePublicId,
+            generation,
+            interfaceName,
+            networkKey,
+            TeamLabOvnNaming.LogicalPortName(runtimePublicId, generation, networkKey, portKey),
+            null,
+            cancellationToken);
+
+    async Task<TeamLabAttachmentResult> AttachCoreAsync(
+        Guid runtimePublicId,
+        int generation,
+        string interfaceName,
+        string networkKey,
+        string logicalPortName,
+        string? planDigest,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(config.OvsLocalEndpoint))
@@ -36,14 +69,9 @@ public sealed class TeamLabOvsAttachmentProvider(
                     $"OVS integration bridge {config.OvsIntegrationBridgeName} does not exist.");
             var interfaceRows = state[1];
             var portRows = state[2];
-            var interfaceUuid = ExistingUuid(interfaceRows, plan, networkKey, "interface");
-            var portUuid = ExistingUuid(portRows, plan, networkKey, "port");
-            var externalIds = OvsdbJsonCodec.Map(
-                ("gzctf-runtime", plan.RuntimePublicId.ToString("D")),
-                ("gzctf-generation", plan.Generation.ToString()),
-                ("gzctf-network-key", networkKey),
-                ("gzctf-plan-digest", plan.PlanDigest),
-                ("iface-id", TeamLabOvnNaming.LogicalPortName(plan, networkKey, portKey)));
+            var interfaceUuid = ExistingUuid(interfaceRows, runtimePublicId, generation, networkKey, planDigest, "interface");
+            var portUuid = ExistingUuid(portRows, runtimePublicId, generation, networkKey, planDigest, "port");
+            var externalIds = BuildExternalIds(runtimePublicId, generation, networkKey, logicalPortName, planDigest);
             var interfaceRef = interfaceUuid is null
                 ? NamedUuid("interface", interfaceName)
                 : Uuid(interfaceUuid);
@@ -60,12 +88,12 @@ public sealed class TeamLabOvsAttachmentProvider(
                     ["row"] = new JsonObject
                     {
                         ["name"] = interfaceName,
-                        ["type"] = "",
+                        ["type"] = "system",
                         ["external_ids"] = externalIds
                     }
                 });
             else
-                operations.Add(Update("Interface", interfaceName, externalIds));
+                operations.Add(UpdateSystemInterface(interfaceName, externalIds));
 
             if (portUuid is null)
                 operations.Add(new JsonObject
@@ -113,10 +141,27 @@ public sealed class TeamLabOvsAttachmentProvider(
         }
     }
 
-    public async Task<TeamLabAttachmentResult> RemoveAsync(
+    public Task<TeamLabAttachmentResult> RemoveAsync(
         TeamLabExecutionPlanV2 plan,
         string interfaceName,
         string networkKey,
+        CancellationToken cancellationToken) =>
+        RemoveCoreAsync(plan.RuntimePublicId, plan.Generation, interfaceName, networkKey, plan.PlanDigest, cancellationToken);
+
+    public Task<TeamLabAttachmentResult> RemoveHostInterfaceAsync(
+        Guid runtimePublicId,
+        int generation,
+        string interfaceName,
+        string networkKey,
+        CancellationToken cancellationToken) =>
+        RemoveCoreAsync(runtimePublicId, generation, interfaceName, networkKey, null, cancellationToken);
+
+    async Task<TeamLabAttachmentResult> RemoveCoreAsync(
+        Guid runtimePublicId,
+        int generation,
+        string interfaceName,
+        string networkKey,
+        string? planDigest,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(config.OvsLocalEndpoint) || string.IsNullOrWhiteSpace(interfaceName))
@@ -133,10 +178,12 @@ public sealed class TeamLabOvsAttachmentProvider(
                     $"OVS integration bridge {config.OvsIntegrationBridgeName} does not exist.");
             var portRows = state[1];
             var interfaceRows = state[2];
-            var portUuid = portRows.Count == 0 ? null : ExistingUuid(portRows, plan, networkKey, "port");
+            var portUuid = portRows.Count == 0
+                ? null
+                : ExistingUuid(portRows, runtimePublicId, generation, networkKey, planDigest, "port");
             if (portUuid is null)
                 return new TeamLabAttachmentResult(true, "Attachment is already absent.");
-            if (ExistingUuid(interfaceRows, plan, networkKey, "interface") is null)
+            if (ExistingUuid(interfaceRows, runtimePublicId, generation, networkKey, planDigest, "interface") is null)
                 return TeamLabAttachmentResult.Failed("cleanup",
                     $"OVS port {interfaceName} has no owned interface.");
             if (!BridgeContainsPort(bridgeRows[0] as JsonObject, portUuid))
@@ -154,13 +201,13 @@ public sealed class TeamLabOvsAttachmentProvider(
             {
                 ["op"] = "delete",
                 ["table"] = "Port",
-                ["where"] = OwnedWhere("name", interfaceName, plan, networkKey)
+                ["where"] = OwnedWhere("name", interfaceName, runtimePublicId, generation, networkKey, planDigest)
             });
             operations.Add(new JsonObject
             {
                 ["op"] = "delete",
                 ["table"] = "Interface",
-                ["where"] = OwnedWhere("name", interfaceName, plan, networkKey)
+                ["where"] = OwnedWhere("name", interfaceName, runtimePublicId, generation, networkKey, planDigest)
             });
             var result = await ovsdb.TransactAsync(config.OvsLocalEndpoint, config.OvsLocalDatabase,
                 operations, cancellationToken);
@@ -174,26 +221,57 @@ public sealed class TeamLabOvsAttachmentProvider(
         }
     }
 
+    static JsonArray BuildExternalIds(
+        Guid runtimePublicId,
+        int generation,
+        string networkKey,
+        string logicalPortName,
+        string? planDigest)
+    {
+        var pairs = new List<(string Key, string Value)>
+        {
+            ("gzctf-runtime", runtimePublicId.ToString("D")),
+            ("gzctf-generation", generation.ToString()),
+            ("gzctf-network-key", networkKey),
+            ("iface-id", logicalPortName)
+        };
+        if (planDigest is not null)
+            pairs.Add(("gzctf-plan-digest", planDigest));
+        return OvsdbJsonCodec.Map(pairs.ToArray());
+    }
+
     static string Trim(string value) => value.Length <= 512 ? value : value[..512];
 
     static JsonArray Where(string column, string value) =>
         new() { new JsonArray { column, "==", value } };
 
-    static JsonArray OwnedWhere(string column, string value, TeamLabExecutionPlanV2 plan, string networkKey) =>
-        new()
+    static JsonArray OwnedWhere(
+        string column,
+        string value,
+        Guid runtimePublicId,
+        int generation,
+        string networkKey,
+        string? planDigest)
+    {
+        var pairs = new List<(string Key, string Value)>
+        {
+            ("gzctf-runtime", runtimePublicId.ToString("D")),
+            ("gzctf-generation", generation.ToString()),
+            ("gzctf-network-key", networkKey)
+        };
+        if (planDigest is not null)
+            pairs.Add(("gzctf-plan-digest", planDigest));
+        return new JsonArray
         {
             new JsonArray { column, "==", value },
             new JsonArray
             {
                 "external_ids",
                 "includes",
-                OvsdbJsonCodec.Map(
-                    ("gzctf-runtime", plan.RuntimePublicId.ToString("D")),
-                    ("gzctf-generation", plan.Generation.ToString()),
-                    ("gzctf-network-key", networkKey),
-                    ("gzctf-plan-digest", plan.PlanDigest))
+                OvsdbJsonCodec.Map(pairs.ToArray())
             }
         };
+    }
 
     static JsonArray Set(JsonArray value) => new() { "set", new JsonArray { value } };
 
@@ -206,7 +284,13 @@ public sealed class TeamLabOvsAttachmentProvider(
         new Guid(System.Security.Cryptography.SHA256.HashData(
             System.Text.Encoding.UTF8.GetBytes($"{kind}:{name}"))[..16]).ToString("D");
 
-    static string? ExistingUuid(JsonArray rows, TeamLabExecutionPlanV2 plan, string networkKey, string kind)
+    static string? ExistingUuid(
+        JsonArray rows,
+        Guid runtimePublicId,
+        int generation,
+        string networkKey,
+        string? planDigest,
+        string kind)
     {
         if (rows.Count == 0) return null;
         var row = rows[0] as JsonObject
@@ -214,34 +298,42 @@ public sealed class TeamLabOvsAttachmentProvider(
         if (row["_uuid"] is not JsonArray uuid || uuid.Count != 2 || uuid[1]?.GetValue<string>() is not { } value)
             throw new JsonException($"OVSDB {kind} row has no UUID.");
         if (!string.Equals(OvsdbJsonCodec.GetMapValue(row["external_ids"], "gzctf-runtime"),
-                plan.RuntimePublicId.ToString("D"), StringComparison.Ordinal) ||
+                runtimePublicId.ToString("D"), StringComparison.Ordinal) ||
             !string.Equals(OvsdbJsonCodec.GetMapValue(row["external_ids"], "gzctf-generation"),
-                plan.Generation.ToString(), StringComparison.Ordinal) ||
+                generation.ToString(), StringComparison.Ordinal) ||
             !string.Equals(OvsdbJsonCodec.GetMapValue(row["external_ids"], "gzctf-network-key"),
                 networkKey, StringComparison.Ordinal) ||
-            !string.Equals(OvsdbJsonCodec.GetMapValue(row["external_ids"], "gzctf-plan-digest"),
-                plan.PlanDigest, StringComparison.Ordinal))
+            planDigest is not null && !string.Equals(
+                OvsdbJsonCodec.GetMapValue(row["external_ids"], "gzctf-plan-digest"),
+                planDigest, StringComparison.Ordinal))
             throw new InvalidOperationException($"OVS {kind} identity conflicts with the requested runtime.");
         return value;
     }
 
-    static JsonObject Update(string table, string name, JsonArray externalIds) => new()
+    static JsonObject UpdateSystemInterface(string name, JsonArray externalIds) => new()
     {
         ["op"] = "update",
-        ["table"] = table,
+        ["table"] = "Interface",
         ["where"] = Where("name", name),
-        ["row"] = new JsonObject { ["external_ids"] = externalIds }
+        ["row"] = new JsonObject
+        {
+            ["type"] = "system",
+            ["external_ids"] = externalIds
+        }
     };
 
     static bool BridgeContainsPort(JsonObject? bridge, string portUuid)
     {
-        if (bridge?["ports"] is not JsonArray set || set.Count != 2 ||
-            !string.Equals(set[0]?.GetValue<string>(), "set", StringComparison.Ordinal) ||
-            set[1] is not JsonArray ports)
+        if (bridge?["ports"] is not JsonArray ports)
             return false;
-        return ports.OfType<JsonArray>().Any(port => port.Count == 2 &&
-            string.Equals(port[0]?.GetValue<string>(), "uuid", StringComparison.Ordinal) &&
-            string.Equals(port[1]?.GetValue<string>(), portUuid, StringComparison.Ordinal));
+        if (ports.Count == 2 && string.Equals(ports[0]?.GetValue<string>(), "uuid", StringComparison.Ordinal))
+            return string.Equals(ports[1]?.GetValue<string>(), portUuid, StringComparison.Ordinal);
+        if (ports.Count == 2 && string.Equals(ports[0]?.GetValue<string>(), "set", StringComparison.Ordinal) &&
+            ports[1] is JsonArray members)
+            return members.OfType<JsonArray>().Any(port => port.Count == 2 &&
+                string.Equals(port[0]?.GetValue<string>(), "uuid", StringComparison.Ordinal) &&
+                string.Equals(port[1]?.GetValue<string>(), portUuid, StringComparison.Ordinal));
+        return false;
     }
 
     static void RequireCleanupCount(JsonNode result, int index, string table, string name)

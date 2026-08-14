@@ -17,6 +17,7 @@ using GZCTF.Modules.TeamLab.Domain;
 using GZCTF.Services;
 using GZCTF.Services.Fleet;
 using GZCTF.Utils;
+using GZCTF.TeamLab.Contracts;
 using GZCTF.TeamLab.Contracts.Execution;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -223,22 +224,25 @@ public sealed class AgentTeamLabNodeExecutor(
         TeamLabAssetKind kind,
         string resourceId,
         int generation,
+        TeamLabExecutionModel executionModel,
         CancellationToken cancellationToken) =>
-        ChangeAssetLifecycleAsync(workerNodeId, kind, resourceId, generation, pause: true, cancellationToken);
+        ChangeAssetLifecycleAsync(workerNodeId, kind, resourceId, generation, executionModel, pause: true, cancellationToken);
 
     public Task<TeamLabNodeResult> ResumeAssetAsync(
         Guid workerNodeId,
         TeamLabAssetKind kind,
         string resourceId,
         int generation,
+        TeamLabExecutionModel executionModel,
         CancellationToken cancellationToken) =>
-        ChangeAssetLifecycleAsync(workerNodeId, kind, resourceId, generation, pause: false, cancellationToken);
+        ChangeAssetLifecycleAsync(workerNodeId, kind, resourceId, generation, executionModel, pause: false, cancellationToken);
 
     private Task<TeamLabNodeResult> ChangeAssetLifecycleAsync(
         Guid workerNodeId,
         TeamLabAssetKind kind,
         string resourceId,
         int generation,
+        TeamLabExecutionModel executionModel,
         bool pause,
         CancellationToken cancellationToken) =>
         DispatchAsync(
@@ -252,7 +256,8 @@ public sealed class AgentTeamLabNodeExecutor(
                         kind == TeamLabAssetKind.Docker ? "docker" : "vm",
                         resourceId,
                         generation,
-                        _config.DryRun);
+                        _config.DryRun,
+                        executionModel);
                     var response = pause
                         ? await agent.PauseTeamLabAssetAsync(workerNodeId, request, operationToken)
                         : await agent.ResumeTeamLabAssetAsync(workerNodeId, request, operationToken);
@@ -405,7 +410,12 @@ public sealed class AgentTeamLabNodeExecutor(
                     request.ClientAllowedIps,
                     request.PlayerAllowedCidrs.ToArray(),
                     request.PlayerBlockedCidrs.ToArray(),
-                    _config.DryRun),
+                    _config.DryRun,
+                    request.ExecutionModel,
+                    request.RuntimePublicId,
+                    request.NetworkKey,
+                    request.PortKey,
+                    request.MacAddress),
                 operationToken), cancellationToken);
         return RequireMutation(response, "Failed to configure TeamLab WireGuard access.");
     }
@@ -422,7 +432,10 @@ public sealed class AgentTeamLabNodeExecutor(
                     request.Generation,
                     request.RouterNamespace,
                     request.InterfaceName,
-                    _config.DryRun),
+                    _config.DryRun,
+                    request.ExecutionModel,
+                    request.RuntimePublicId,
+                    request.NetworkKey),
                 operationToken), cancellationToken);
         return RequireMutation(response, "Failed to remove TeamLab WireGuard access.");
     }

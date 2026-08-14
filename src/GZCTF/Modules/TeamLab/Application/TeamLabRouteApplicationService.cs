@@ -197,6 +197,89 @@ public sealed class TeamLabRouteApplicationService(
         return requests;
     }
 
+    public async Task<TeamLabNodeInfrastructureApplyRequest> BuildGlobalInfrastructureRequestAsync(
+        TeamLabRuntime runtime,
+        TeamLabExecutionTopology definition,
+        CancellationToken cancellationToken)
+    {
+        var allNetworks = runtime.Networks
+            .Where(item => item.Generation == runtime.Generation)
+            .OrderBy(item => item.TopologyKey, StringComparer.Ordinal)
+            .ToArray();
+        if (allNetworks.Length == 0)
+            throw new TeamLabRuntimeExecutionException("Runtime has no network intent.");
+        var templateIds = runtime.Assets
+            .Where(asset => asset.Generation == runtime.Generation && asset.SourceTemplateId.HasValue)
+            .Select(asset => asset.SourceTemplateId!.Value)
+            .Distinct()
+            .ToArray();
+        var networkModes = await context.ImageTemplates.AsNoTracking()
+            .Where(template => templateIds.Contains(template.Id))
+            .ToDictionaryAsync(item => item.Id, item => item.VmNetworkMode, cancellationToken);
+        var allowedPairs = TeamLabReachabilityCompiler.Compile(definition);
+        var dnsRecords = runtime.Assets
+            .Where(asset => asset.Generation == runtime.Generation)
+            .SelectMany(asset => ParseInterfaces(asset)
+                .Select(iface => new TeamLabNodeDnsRecord(
+                    asset.TopologyKey, iface.IpAddress, iface.MacAddress, iface.Primary)))
+            .GroupBy(item => (item.Hostname, item.IpAddress))
+            .Select(group => group.First())
+            .OrderBy(item => item.Hostname, StringComparer.Ordinal)
+            .ThenBy(item => item.IpAddress, StringComparer.Ordinal)
+            .ToArray();
+        var recordsByNetwork = allNetworks.ToDictionary(
+            network => network.TopologyKey,
+            network => (IReadOnlyList<TeamLabNodeDnsRecord>)runtime.Assets
+                .Where(asset => asset.Generation == runtime.Generation &&
+                                (asset.Kind != TeamLabResourceKind.Vm ||
+                                 !asset.SourceTemplateId.HasValue ||
+                                 networkModes.GetValueOrDefault(asset.SourceTemplateId.Value) !=
+                                 VmNetworkMode.Preconfigured))
+                .SelectMany(asset => ParseInterfaces(asset)
+                    .Where(iface => string.Equals(iface.NetworkKey, network.TopologyKey, StringComparison.Ordinal))
+                    .Select(iface => new TeamLabNodeDnsRecord(
+                        asset.TopologyKey, iface.IpAddress, iface.MacAddress, iface.Primary)))
+                .OrderBy(item => item.Hostname, StringComparer.Ordinal)
+                .ThenBy(item => item.IpAddress, StringComparer.Ordinal)
+                .ToArray(),
+            StringComparer.Ordinal);
+        var switches = allNetworks.Select(network => new TeamLabNodeManagedSwitchIntent(
+            new TeamLabNodeNetworkIntent(
+                network.TopologyKey,
+                network.Name,
+                network.Cidr,
+                network.GatewayIp,
+                network.BridgeName,
+                network.IsEntry),
+            TeamLabResourceNameFactory.DhcpDnsService(runtime.Id, network.TopologyKey),
+            recordsByNetwork[network.TopologyKey],
+            dnsRecords)).ToArray();
+        var routers = runtime.Infrastructure
+            .Where(item => item.Generation == runtime.Generation &&
+                           item.Kind == TeamLabInfrastructureKind.ManagedRouter)
+            .Select(item => new TeamLabNodeManagedRouterFragmentIntent(
+                item.TopologyKey,
+                item.Fragments
+                    .SelectMany(fragment => Deserialize<TeamLabRuntimeInfrastructureInterfaceIntent>(
+                        fragment.InterfaceSummaryJson))
+                    .Select(iface => iface.NetworkKey)
+                    .Distinct(StringComparer.Ordinal)
+                    .OrderBy(key => key, StringComparer.Ordinal)
+                    .ToArray()))
+            .OrderBy(item => item.Key, StringComparer.Ordinal)
+            .ToArray();
+        return new TeamLabNodeInfrastructureApplyRequest(
+            runtime.Id,
+            runtime.Generation,
+            runtime.Generation,
+            string.Empty,
+            switches,
+            routers,
+            new TeamLabNodeFabricIntent(string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, [], []),
+            BuildAllForwardPolicies(allNetworks, allowedPairs),
+            []);
+    }
+
     private async Task<TeamLabNodeInfrastructureResult> ApplyShardInfrastructureAsync(
         TeamLabRuntime runtime,
         TeamLabRuntimeShard shard,
@@ -265,7 +348,8 @@ public sealed class TeamLabRouteApplicationService(
                 network.Name,
                 network.Cidr,
                 network.GatewayIp,
-                network.BridgeName),
+                network.BridgeName,
+                network.IsEntry),
             TeamLabResourceNameFactory.DhcpDnsService(runtime.Id, network.TopologyKey),
             recordsByNetwork[network.TopologyKey],
             dnsRecords)).ToArray();
@@ -286,7 +370,14 @@ public sealed class TeamLabRouteApplicationService(
             .Where(item => item.Generation == runtime.Generation && item.ShardId == shard.Id && item.Enabled)
             .OrderBy(item => item.PublicId)
             .Select(item => new TeamLabNodeObservationPointIntent(
-                item.PublicId, item.TopologyKey, item.Kind, item.InterfaceToken))
+                item.PublicId,
+                item.TopologyKey,
+                item.Kind,
+                item.InterfaceToken,
+                item.Kind == TeamLabObservationPointKind.WorkloadEndpoint
+                    ? runtime.Networks.FirstOrDefault(network =>
+                        network.Id == item.NetworkId && network.Generation == runtime.Generation)?.TopologyKey
+                    : null))
             .ToArray();
         var request = new TeamLabNodeInfrastructureApplyRequest(
                 runtime.Id,
@@ -313,6 +404,17 @@ public sealed class TeamLabRouteApplicationService(
 
     private static T[] Deserialize<T>(string json) =>
         JsonSerializer.Deserialize<T[]>(json) ?? [];
+
+    internal static TeamLabNodeForwardPolicy[] BuildAllForwardPolicies(
+        IReadOnlyList<TeamLabRuntimeNetwork> allNetworks,
+        IReadOnlySet<string> allowedPairs) => allNetworks
+        .SelectMany(source => allNetworks
+            .Where(target => target.Id != source.Id)
+            .Select(target => new TeamLabNodeForwardPolicy(
+                source.Cidr,
+                target.Cidr,
+                allowedPairs.Contains(TeamLabReachabilityCompiler.Pair(source.TopologyKey, target.TopologyKey)))))
+        .ToArray();
 
     internal static TeamLabNodeForwardPolicy[] BuildForwardPolicies(
         IReadOnlyList<TeamLabRuntimeNetwork> allNetworks,

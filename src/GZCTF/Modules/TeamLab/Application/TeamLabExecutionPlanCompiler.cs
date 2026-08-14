@@ -1,3 +1,5 @@
+using System.Net;
+using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -19,15 +21,18 @@ public static class TeamLabExecutionPlanCompiler
         Guid runtimePublicId,
         int generation,
         string shardKey,
+        bool networkOwner,
         TeamLabNodeInfrastructureApplyRequest infrastructure,
+        IReadOnlyList<TeamLabNodeAssetCreateRequest> allAssets,
         IReadOnlyList<TeamLabNodeAssetCreateRequest> assets,
+        IReadOnlyList<TeamLabNodeObservationPointIntent> observations,
         IReadOnlyDictionary<int, string> imageDigests)
     {
         ArgumentNullException.ThrowIfNull(infrastructure);
         ArgumentNullException.ThrowIfNull(assets);
         ArgumentNullException.ThrowIfNull(imageDigests);
 
-        var interfaceOwners = assets
+        var interfaceOwners = allAssets
             .SelectMany(asset => asset.Interfaces.Select(item => new InterfaceOwner(
                 item.MacAddress, asset.AssetKey, item)))
             .GroupBy(item => item.MacAddress, StringComparer.OrdinalIgnoreCase)
@@ -40,11 +45,9 @@ public static class TeamLabExecutionPlanCompiler
                 StringComparer.OrdinalIgnoreCase);
 
         var networks = infrastructure.Switches
-            .Select(switchIntent => new TeamLabNetworkIntentV2(
-                switchIntent.Network.Key,
-                switchIntent.Network.Cidr,
-                switchIntent.Network.GatewayIp,
-                switchIntent.Records
+            .Select(switchIntent =>
+            {
+                var networkPorts = switchIntent.Records
                     .Where(record => interfaceOwners.ContainsKey(record.MacAddress))
                     .Select(record =>
                     {
@@ -55,7 +58,7 @@ public static class TeamLabExecutionPlanCompiler
                             record.MacAddress,
                             AddressWithoutPrefix(record.IpAddress));
                     })
-                    .Concat(assets.SelectMany(asset => asset.Interfaces
+                    .Concat(allAssets.SelectMany(asset => asset.Interfaces
                         .Where(item => item.NetworkKey == switchIntent.Network.Key)
                         .Where(item => !switchIntent.Records.Any(record =>
                             record.MacAddress.Equals(item.MacAddress, StringComparison.OrdinalIgnoreCase)))
@@ -65,20 +68,35 @@ public static class TeamLabExecutionPlanCompiler
                             item.MacAddress,
                             AddressWithoutPrefix(item.IpAddress)))))
                     .DistinctBy(item => item.Key, StringComparer.Ordinal)
-                    .ToArray(),
-                Routes(infrastructure, switchIntent.Network.Key),
-                Policies(infrastructure.ForwardPolicies, switchIntent.Network.Cidr),
-                switchIntent.DhcpDnsServiceName,
-                switchIntent.Records.Select(record => new TeamLabDhcpLeaseV2(
-                    record.MacAddress,
-                    AddressWithoutPrefix(record.IpAddress),
-                    record.Hostname)).ToArray(),
-                (switchIntent.DnsRecords ?? switchIntent.Records)
-                    .Select(record => new TeamLabDnsRecordV2(record.Hostname, AddressWithoutPrefix(record.IpAddress)))
-                    .DistinctBy(record => (record.Hostname, record.IpAddress))
-                    .ToArray()))
+                    .ToArray();
+                var playerGateway = switchIntent.Network.IsEntry
+                    ? PlayerGateway(runtimeId, runtimePublicId, generation, switchIntent.Network, networkPorts)
+                    : null;
+                return new TeamLabNetworkIntentV2(
+                    switchIntent.Network.Key,
+                    switchIntent.Network.Cidr,
+                    switchIntent.Network.GatewayIp,
+                    networkPorts,
+                    [],
+                    Policies(infrastructure.ForwardPolicies, switchIntent.Network.Cidr),
+                    switchIntent.DhcpDnsServiceName,
+                    switchIntent.Records.Select(record => new TeamLabDhcpLeaseV2(
+                        record.MacAddress,
+                        AddressWithoutPrefix(record.IpAddress),
+                        record.Hostname)).ToArray(),
+                    (switchIntent.DnsRecords ?? switchIntent.Records)
+                        .Select(record => new TeamLabDnsRecordV2(record.Hostname, AddressWithoutPrefix(record.IpAddress)))
+                        .DistinctBy(record => (record.Hostname, record.IpAddress))
+                        .ToArray(),
+                    playerGateway);
+            })
             .ToArray();
 
+        var gateways = infrastructure.Switches
+            .ToDictionary(
+                switchIntent => switchIntent.Network.Key,
+                switchIntent => switchIntent.Network.GatewayIp ?? string.Empty,
+                StringComparer.Ordinal);
         var executionAssets = assets.Select(asset =>
         {
             if (!imageDigests.TryGetValue(asset.ImageTemplateId, out var digest) ||
@@ -101,11 +119,7 @@ public static class TeamLabExecutionPlanCompiler
                 asset.ImageTemplateId,
                 asset.CpuUnits,
                 asset.MemoryMiB,
-                asset.Interfaces.Select(item => new TeamLabAssetNetworkAttachmentV2(
-                    item.NetworkKey,
-                    item.Key,
-                    item.Key,
-                    AddressWithoutPrefix(item.IpAddress))).ToArray(),
+                NetworkAttachments(asset, gateways),
                 health is not null
                     ? [new TeamLabHealthCheckV2(
                         health.Kind == TeamLabHealthCheckKind.Http ? "http" : "tcp",
@@ -116,12 +130,24 @@ public static class TeamLabExecutionPlanCompiler
                 asset.ImageReference);
         }).ToArray();
 
-        var observations = infrastructure.ObservationPoints
-            .Select(point => new TeamLabObservationIntentV2(
-                point.PublicId,
-                point.TopologyKey,
-                point.InterfaceToken,
-                CaptureMetadata: true))
+        var observationIntents = observations
+            .Where(point => point.Kind == TeamLabObservationPointKind.WorkloadEndpoint &&
+                            !string.IsNullOrWhiteSpace(point.NetworkKey))
+            .Select(point =>
+            {
+                var isVm = assets.Any(asset =>
+                    string.Equals(asset.AssetKey, point.TopologyKey, StringComparison.Ordinal) &&
+                    asset.Kind == TeamLabAssetKind.Vm);
+                return new TeamLabObservationIntentV2(
+                    point.PublicId,
+                    point.TopologyKey,
+                    isVm
+                        ? TeamLabExecutionIdentityV2.VmTapName(
+                            runtimePublicId, generation, point.TopologyKey, point.NetworkKey!)
+                        : TeamLabExecutionIdentityV2.WorkloadHostInterface(
+                            runtimePublicId, generation, point.TopologyKey, point.NetworkKey!),
+                    CaptureMetadata: true);
+            })
             .ToArray();
         var control = new TeamLabNetworkControlIntentV2(
             infrastructure.Routers.Select(router => new TeamLabRouterIntentV2(
@@ -129,15 +155,18 @@ public static class TeamLabExecutionPlanCompiler
             infrastructure.ForwardPolicies.Select(policy => new TeamLabForwardPolicyV2(
                 policy.SourceCidr, policy.DestinationCidr, policy.Allow)).ToArray());
 
+        var networkDigest = ComputeNetworkDigest(networks, control);
         var plan = new TeamLabExecutionPlanV2(
             runtimeId,
             runtimePublicId,
             generation,
             shardKey,
             string.Empty,
+            networkDigest,
+            networkOwner,
             networks,
             executionAssets,
-            observations,
+            observationIntents,
             control);
         var digest = ComputeDigest(plan);
         return plan with { PlanDigest = $"sha256:{digest}" };
@@ -147,14 +176,11 @@ public static class TeamLabExecutionPlanCompiler
         Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(
             plan with { PlanDigest = string.Empty }))).ToLowerInvariant();
 
-    static TeamLabNetworkRouteV2[] Routes(
-        TeamLabNodeInfrastructureApplyRequest infrastructure, string networkKey) =>
-        infrastructure.Fabric.LocalRoutes.Concat(infrastructure.Fabric.RemoteRoutes)
-            .Where(route => !string.IsNullOrWhiteSpace(route.TargetCidr))
-            .Select(route => new TeamLabNetworkRouteV2(
-                route.TargetCidr, route.GatewayIp))
-            .DistinctBy(route => (route.DestinationCidr, route.NextHop))
-            .ToArray();
+    static string ComputeNetworkDigest(
+        IReadOnlyList<TeamLabNetworkIntentV2> networks,
+        TeamLabNetworkControlIntentV2 control) =>
+        $"sha256:{Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(
+            new { networks, control }))).ToLowerInvariant()}";
 
     static TeamLabNetworkPolicyV2[] Policies(
         IReadOnlyList<TeamLabNodeForwardPolicy> policies, string networkCidr) =>
@@ -163,8 +189,64 @@ public static class TeamLabExecutionPlanCompiler
                 policy.SourceCidr, policy.DestinationCidr, "any", null, policy.Allow))
             .ToArray();
 
+    static TeamLabAssetNetworkAttachmentV2[] NetworkAttachments(
+        TeamLabNodeAssetCreateRequest asset,
+        IReadOnlyDictionary<string, string> gateways) =>
+        asset.Interfaces
+            .OrderBy(item => item.Key, StringComparer.Ordinal)
+            .Select((item, index) => new TeamLabAssetNetworkAttachmentV2(
+                item.NetworkKey,
+                item.Key,
+                $"eth{index}",
+                AddressWithoutPrefix(item.IpAddress),
+                gateways.GetValueOrDefault(item.NetworkKey),
+                item.Primary))
+            .ToArray();
+
     static string AddressWithoutPrefix(string address) => address.Split('/', 2)[0];
 
+    static TeamLabPlayerGatewayV2 PlayerGateway(
+        int runtimeId,
+        Guid runtimePublicId,
+        int generation,
+        TeamLabNodeNetworkIntent network,
+        IReadOnlyList<TeamLabNetworkPortV2> ports)
+    {
+        if (string.IsNullOrWhiteSpace(network.GatewayIp))
+            throw new InvalidOperationException($"Player entry network {network.Key} has no gateway.");
+        var used = ports.Select(port => port.IpAddress)
+            .Where(ip => !string.IsNullOrWhiteSpace(ip))
+            .Append(network.GatewayIp)
+            .ToHashSet(StringComparer.Ordinal);
+        var ip = LastHost(network.Cidr);
+        if (used.Contains(ip))
+            throw new InvalidOperationException(
+                $"Player entry network {network.Key} already uses the gateway host address {ip}.");
+        return new TeamLabPlayerGatewayV2(
+            "player-gateway",
+            PlayerGatewayMac(runtimePublicId, generation, network.Key),
+            ip,
+            TeamLabResourceNameFactory.WireGuardInterface(runtimeId));
+    }
+
+    static string PlayerGatewayMac(Guid runtimePublicId, int generation, string networkKey) =>
+        TeamLabResourceNameFactory.PlayerGatewayMac(runtimePublicId, generation, networkKey);
+
+    static string LastHost(string cidr)
+    {
+        var parts = cidr.Split('/', 2);
+        if (parts.Length != 2 ||
+            !IPAddress.TryParse(parts[0], out var address) ||
+            address.AddressFamily != AddressFamily.InterNetwork ||
+            !int.TryParse(parts[1], out var prefix) ||
+            prefix is < 2 or > 30)
+            throw new InvalidOperationException($"Network CIDR has no valid prefix: {cidr}");
+        var hostBits = 32 - prefix;
+        var networkValue = BitConverter.ToUInt32(address.GetAddressBytes().Reverse().ToArray());
+        var lastHost = networkValue + ((1u << hostBits) - 1) - 1;
+        var bytes = BitConverter.GetBytes(lastHost).Reverse().ToArray();
+        return string.Join('.', bytes.Select(value => value.ToString()));
+    }
     sealed record InterfaceOwner(string MacAddress, string AssetKey, TeamLabNodeInterfaceIntent Interface);
 
 }

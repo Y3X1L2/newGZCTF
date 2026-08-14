@@ -78,7 +78,8 @@ public class TeamLabInterfaceNamingTests
     {
         var plan = new TeamLabExecutionPlanV2(
             7, Guid.Parse("019fa217-fcee-73af-bb45-1bc400000001"), 2, "node-a",
-            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", [], [], []);
+            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            string.Empty, false, [], [], []);
 
         var first = LinuxNetworkAttachmentService.HostInterfaceName(plan, "web", "network-a");
         var second = LinuxNetworkAttachmentService.HostInterfaceName(plan, "web", "network-a");

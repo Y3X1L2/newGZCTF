@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
+using System.ComponentModel;
+using System.Diagnostics;
 using System.Net;
-using System.Net.Sockets;
 using GZCTF.Agent.Models;
 using GZCTF.Agent.Services.Observation;
 using GZCTF.Agent.Services.Vm;
@@ -17,7 +18,6 @@ public sealed class TeamLabExecutionPlanExecutor(
     LibvirtTeamLabProvider libvirt,
     ObservationPointRegistry observations,
     TeamLabExecutionEventJournal journal,
-    IHttpClientFactory httpClients,
     IOptions<AgentConfig> agentOptions,
     ILogger<TeamLabExecutionPlanExecutor> logger)
 {
@@ -331,7 +331,12 @@ public sealed class TeamLabExecutionPlanExecutor(
             MemoryLimit = Math.Max(64, asset.MemoryMiB),
             CPUCount = Math.Max(1, asset.Cpu),
             TeamLabPlanDigest = plan.PlanDigest,
-            TeamLabShardKey = plan.ShardKey
+            TeamLabShardKey = plan.ShardKey,
+            DnsServers = asset.NetworkAttachments
+                .Where(attachment => attachment.Primary && !string.IsNullOrWhiteSpace(attachment.GatewayIp))
+                .Select(attachment => attachment.GatewayIp!)
+                .Distinct(StringComparer.Ordinal)
+                .ToList()
         };
         AgentContainerResponse? container = null;
         var attached = new List<TeamLabAssetNetworkAttachmentV2>();
@@ -361,7 +366,8 @@ public sealed class TeamLabExecutionPlanExecutor(
                     return;
                 }
             }
-            if (!await RunHealthChecksAsync(plan, asset, events, token))
+            var containerPid = await docker.GetContainerPidAsync(container.ContainerId, token);
+            if (!await RunHealthChecksAsync(plan, asset, events, token, containerPid: containerPid))
                 return;
             events.Enqueue(Event(plan, asset.AssetKey, "compute", "succeeded", null, container.ContainerId));
             completed = true;
@@ -425,8 +431,6 @@ public sealed class TeamLabExecutionPlanExecutor(
             events.Enqueue(Event(plan, asset.AssetKey, "compute", "failed", "vm_start_failed", result.State));
             return;
         }
-        if (!await RunHealthChecksAsync(plan, asset, events, token))
-            return;
         events.Enqueue(Event(plan, asset.AssetKey, "compute", "succeeded", null, result.ResourceId));
     }
 
@@ -434,7 +438,8 @@ public sealed class TeamLabExecutionPlanExecutor(
         TeamLabExecutionPlanV2 plan,
         TeamLabAssetExecutionSpecV2 asset,
         ConcurrentQueue<TeamLabExecutionEventV2> events,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        long? containerPid = null)
     {
         foreach (var check in asset.HealthChecks)
         {
@@ -444,24 +449,9 @@ public sealed class TeamLabExecutionPlanExecutor(
             {
                 if (check.Port is < 1 or > 65535 || !IPAddress.TryParse(check.Host, out _))
                     throw new InvalidOperationException("Health check target is invalid.");
-
-                if (check.Protocol.Equals("tcp", StringComparison.OrdinalIgnoreCase))
-                {
-                    using var client = new TcpClient();
-                    await client.ConnectAsync(check.Host, check.Port, deadline.Token);
-                }
-                else if (check.Protocol.Equals("http", StringComparison.OrdinalIgnoreCase))
-                {
-                    var address = new UriBuilder(Uri.UriSchemeHttp, check.Host, check.Port,
-                        string.IsNullOrWhiteSpace(check.Path) ? "/" : check.Path).Uri;
-                    using var response = await httpClients.CreateClient().GetAsync(address, deadline.Token);
-                    if ((int)response.StatusCode is < 200 or >= 400)
-                        throw new HttpRequestException($"HTTP {(int)response.StatusCode}");
-                }
-                else
-                {
-                    throw new InvalidOperationException($"Unsupported health check protocol '{check.Protocol}'.");
-                }
+                if (containerPid is not > 0)
+                    throw new InvalidOperationException("Container health checks require a running container process.");
+                await RunContainerHealthProbeAsync(containerPid.Value, check, deadline.Token);
                 events.Enqueue(Event(plan, asset.AssetKey, "service", "succeeded", null,
                     $"{check.Protocol.ToUpperInvariant()} health check passed."));
             }
@@ -469,7 +459,7 @@ public sealed class TeamLabExecutionPlanExecutor(
             {
                 throw;
             }
-            catch (Exception exception) when (exception is SocketException or HttpRequestException or
+            catch (Exception exception) when (exception is Win32Exception or IOException or
                                                 InvalidOperationException or OperationCanceledException)
             {
                 events.Enqueue(Event(plan, asset.AssetKey, "service", "failed", "health_check_failed",
@@ -478,6 +468,51 @@ public sealed class TeamLabExecutionPlanExecutor(
             }
         }
         return true;
+    }
+
+    async Task RunContainerHealthProbeAsync(long pid, TeamLabHealthCheckV2 check, CancellationToken token)
+    {
+        if (!OperatingSystem.IsLinux())
+            throw new InvalidOperationException("Container health checks require a Linux Agent.");
+        if (!check.Protocol.Equals("tcp", StringComparison.OrdinalIgnoreCase) &&
+            !check.Protocol.Equals("http", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException($"Unsupported health check protocol '{check.Protocol}'.");
+
+        var script = check.Protocol.Equals("tcp", StringComparison.OrdinalIgnoreCase)
+            ? $"exec 3<>/dev/tcp/{check.Host}/{check.Port}"
+            : $"exec 3<>/dev/tcp/{check.Host}/{check.Port}; IFS=' ' read -r -a parts <&3; code=${{parts[1]}}; (( code >= 200 && code < 400 ))";
+        using var process = new Process
+        {
+            StartInfo = new ProcessStartInfo
+            {
+                FileName = "nsenter",
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            }
+        };
+        process.StartInfo.ArgumentList.Add("-t");
+        process.StartInfo.ArgumentList.Add(pid.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        process.StartInfo.ArgumentList.Add("-n");
+        process.StartInfo.ArgumentList.Add("bash");
+        process.StartInfo.ArgumentList.Add("-c");
+        process.StartInfo.ArgumentList.Add(script);
+        process.Start();
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(token);
+        deadline.CancelAfter(HealthProbeTimeout);
+        try
+        {
+            await process.WaitForExitAsync(deadline.Token);
+            if (process.ExitCode != 0)
+                throw new InvalidOperationException($"Health probe failed with exit code {process.ExitCode}.");
+        }
+        catch (OperationCanceledException)
+        {
+            if (!process.HasExited) process.Kill(entireProcessTree: true);
+            await process.WaitForExitAsync(CancellationToken.None);
+            throw;
+        }
     }
 
     static TeamLabExecutionEventV2 Event(TeamLabExecutionPlanV2 plan, string? assetKey, string stage,

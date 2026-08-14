@@ -9,8 +9,11 @@ internal static class TeamLabOvnNaming
     public static string LogicalNetworkName(TeamLabExecutionPlanV2 plan, string key) =>
         $"gzctf-tl-{plan.RuntimePublicId:N}-{plan.Generation}-n-{SafeKey(key)}";
 
+    public static string LogicalPortName(Guid runtimePublicId, int generation, string networkKey, string portKey) =>
+        $"gzctf-tl-{runtimePublicId:N}-{generation}-p-{SafeKey(networkKey)}-{SafeKey(portKey)}";
+
     public static string LogicalPortName(TeamLabExecutionPlanV2 plan, string networkKey, string portKey) =>
-        $"gzctf-tl-{plan.RuntimePublicId:N}-{plan.Generation}-p-{SafeKey(networkKey)}-{SafeKey(portKey)}";
+        LogicalPortName(plan.RuntimePublicId, plan.Generation, networkKey, portKey);
 
     static string SafeKey(string value)
     {
