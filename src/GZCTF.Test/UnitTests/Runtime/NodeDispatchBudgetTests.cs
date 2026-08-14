@@ -96,6 +96,42 @@ public sealed class NodeDispatchBudgetTests
     }
 
     [Fact]
+    public async Task WaitForIdle_DoesNotCompleteWhileReleasedWaiterCanStillEnter()
+    {
+        var limiter = new NodeDispatchLimiter();
+        var nodeId = Guid.NewGuid();
+        var releaseFirst = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var firstStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var secondStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseSecond = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var first = limiter.RunAsync(nodeId, NodeDispatchCategory.TeamLabExecution, 1,
+            async token =>
+            {
+                firstStarted.SetResult();
+                await releaseFirst.Task.WaitAsync(token);
+            }, CancellationToken.None);
+        await firstStarted.Task.WaitAsync(TimeSpan.FromSeconds(1));
+
+        var second = limiter.RunAsync(nodeId, NodeDispatchCategory.TeamLabExecution, 1,
+            async token =>
+            {
+                secondStarted.SetResult();
+                await releaseSecond.Task.WaitAsync(token);
+            }, CancellationToken.None);
+
+        await Task.Delay(20);
+        releaseFirst.SetResult();
+        var idle = limiter.WaitForIdleAsync(nodeId, NodeDispatchCategory.TeamLabExecution, CancellationToken.None);
+
+        await secondStarted.Task.WaitAsync(TimeSpan.FromSeconds(1));
+        Assert.False(idle.IsCompleted);
+
+        releaseSecond.SetResult();
+        await Task.WhenAll(first, second, idle).WaitAsync(TimeSpan.FromSeconds(1));
+    }
+
+    [Fact]
     public void LimitPolicy_UsesManifestValuesAndPlatformSafetyCaps()
     {
         var limits = new AgentExecutionLimits(100, 100, 100, 100, 100, 100, ArtifactCleanupOperations: 2);

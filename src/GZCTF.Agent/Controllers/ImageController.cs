@@ -20,12 +20,14 @@ public class ImageController : ControllerBase
     private readonly AgentOciArtifactUploader _ociUploader;
     private readonly VmImageBackingChainInspector _backingChain;
     private readonly AgentTeamLabConfig _teamLab;
+    private readonly KvmConfig _kvm;
     private readonly ILogger<ImageController> _logger;
 
     public ImageController(DockerService docker, AgentOperationGate gate, AgentResourceLock resourceLock,
         ImageTransferSingleFlight singleFlight, AgentOciArtifactUploader ociUploader,
         VmImageBackingChainInspector backingChain,
         IOptions<AgentTeamLabConfig> teamLabOptions,
+        IOptions<KvmConfig> kvmOptions,
         ILogger<ImageController> logger)
     {
         _docker = docker;
@@ -35,6 +37,7 @@ public class ImageController : ControllerBase
         _ociUploader = ociUploader;
         _backingChain = backingChain;
         _teamLab = teamLabOptions.Value;
+        _kvm = kvmOptions.Value;
         _logger = logger;
     }
 
@@ -93,10 +96,13 @@ public class ImageController : ControllerBase
     {
         var cacheIdentity = NormalizeSha256(request.Digest) ?? NormalizeSha256(request.Hash) ??
                             request.TemplateId?.ToString() ?? request.Hash;
+        var fileStem = request.TemplateId?.ToString() ?? request.Hash;
+        var destination = Path.Combine(_kvm.ImageStoragePath, fileStem + ".qcow2");
         var key = $"vm:{cacheIdentity}";
         var result = await _singleFlight.RunAsync(key, async sharedToken =>
         {
-            await using var cacheLock = await _resourceLock.AcquireAsync("vm-image:" + cacheIdentity, sharedToken);
+            await using var cacheLock = await _resourceLock.AcquireAsync(
+                LibvirtTeamLabProvider.BaseImageLockKey(destination), sharedToken);
             await using var permit = await _gate.EnterAsync(AgentOperationCategory.VmImageTransfer, sharedToken);
             return await DownloadVmImageCoreAsync(request, sharedToken);
         }, token);
@@ -106,7 +112,7 @@ public class ImageController : ControllerBase
     async Task<DownloadVmImageResponse> DownloadVmImageCoreAsync(DownloadVmImageRequest request,
         CancellationToken token)
     {
-        const string storagePath = "/var/lib/gzctf/images";
+        var storagePath = _kvm.ImageStoragePath;
         var fileStem = request.TemplateId.HasValue ? request.TemplateId.Value.ToString() : request.Hash;
         var destPath = Path.Combine(storagePath, fileStem + ".qcow2");
         var expectedHash = NormalizeSha256(request.Digest) ?? NormalizeSha256(request.Hash);
@@ -175,10 +181,11 @@ public class ImageController : ControllerBase
         var key = $"vm-publish:{request.TemplateId}:{hash}";
         var result = await _singleFlight.RunAsync(key, async sharedToken =>
         {
-            await using var cacheLock = await _resourceLock.AcquireAsync("vm-image:" + hash, sharedToken);
+            var path = Path.Combine(_kvm.ImageStoragePath, $"{request.TemplateId}.qcow2");
+            await using var cacheLock = await _resourceLock.AcquireAsync(
+                LibvirtTeamLabProvider.BaseImageLockKey(path), sharedToken);
             await using var permit = await _gate.EnterAsync(
                 AgentOperationCategory.VmImageTransfer, sharedToken);
-            var path = Path.Combine("/var/lib/gzctf/images", $"{request.TemplateId}.qcow2");
             if (!System.IO.File.Exists(path))
                 throw new AgentOperationException(
                     "ImageTransfer", "image.vm.cache_missing",
@@ -216,9 +223,11 @@ public class ImageController : ControllerBase
         [FromQuery] string? hash,
         CancellationToken token)
     {
-        var storagePath = "/var/lib/gzctf/images";
+        var storagePath = _kvm.ImageStoragePath;
         var cacheIdentity = NormalizeSha256(hash) ?? templateId.ToString();
-        await using var cacheLock = await _resourceLock.AcquireAsync("vm-image:" + cacheIdentity, token);
+        var templatePath = Path.Combine(storagePath, $"{templateId}.qcow2");
+        await using var cacheLock = await _resourceLock.AcquireAsync(
+            LibvirtTeamLabProvider.BaseImageLockKey(templatePath), token);
         await using var permit = await _gate.EnterAsync(AgentOperationCategory.Control, token);
         var targets = ResolveVmImageCachePaths(storagePath, templateId, hash)
             .Where(System.IO.File.Exists)

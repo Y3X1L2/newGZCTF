@@ -1,3 +1,5 @@
+using GZCTF.TeamLab.Contracts;
+
 namespace GZCTF.Agent.Models;
 
 public record AgentSyncRequest(
@@ -21,13 +23,15 @@ public sealed record AgentVmControlPlaneSyncConfig(
 
 public sealed record TeamLabDataPlaneSyncConfig(
     bool Enabled,
+    TeamLabExecutionModel ExecutionModel,
     bool ControlPlane,
     string? NorthboundEndpoint,
     string? SouthboundEndpoint,
     string? NorthboundListenEndpoint,
     string? SouthboundListenEndpoint,
     string? ChassisEncapIp,
-    string IntegrationBridgeName = "br-int");
+    string IntegrationBridgeName = "br-int",
+    int ManagedDhcpLeaseSeconds = 3600);
 
 public record AgentSyncResponse(
     bool Success,

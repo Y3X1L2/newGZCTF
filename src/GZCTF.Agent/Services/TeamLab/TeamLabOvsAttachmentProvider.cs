@@ -38,13 +38,12 @@ public sealed class TeamLabOvsAttachmentProvider(
             var portRows = state[2];
             var interfaceUuid = ExistingUuid(interfaceRows, plan, networkKey, "interface");
             var portUuid = ExistingUuid(portRows, plan, networkKey, "port");
-            var externalIds = new JsonObject
-            {
-                ["gzctf-runtime"] = plan.RuntimePublicId.ToString("D"),
-                ["gzctf-generation"] = plan.Generation.ToString(),
-                ["gzctf-network-key"] = networkKey,
-                ["iface-id"] = TeamLabOvnNaming.LogicalPortName(plan, networkKey, portKey)
-            };
+            var externalIds = OvsdbJsonCodec.Map(
+                ("gzctf-runtime", plan.RuntimePublicId.ToString("D")),
+                ("gzctf-generation", plan.Generation.ToString()),
+                ("gzctf-network-key", networkKey),
+                ("gzctf-plan-digest", plan.PlanDigest),
+                ("iface-id", TeamLabOvnNaming.LogicalPortName(plan, networkKey, portKey)));
             var interfaceRef = interfaceUuid is null
                 ? NamedUuid("interface", interfaceName)
                 : Uuid(interfaceUuid);
@@ -110,7 +109,7 @@ public sealed class TeamLabOvsAttachmentProvider(
         }
         catch (Exception exception) when (exception is IOException or InvalidOperationException or JsonException)
         {
-            return TeamLabAttachmentResult.Failed("network", exception.Message);
+            return TeamLabAttachmentResult.Failed("network", $"OVS attachment transaction failed: {Trim(exception.Message)}");
         }
     }
 
@@ -165,15 +164,17 @@ public sealed class TeamLabOvsAttachmentProvider(
             });
             var result = await ovsdb.TransactAsync(config.OvsLocalEndpoint, config.OvsLocalDatabase,
                 operations, cancellationToken);
-            RequireDeleteCount(result, 1, "Port", interfaceName);
-            RequireDeleteCount(result, 2, "Interface", interfaceName);
+            RequireCleanupCount(result, 1, "Port", interfaceName);
+            RequireCleanupCount(result, 2, "Interface", interfaceName);
             return new TeamLabAttachmentResult(true, "Attachment removed.");
         }
         catch (Exception exception) when (exception is IOException or InvalidOperationException or JsonException)
         {
-            return TeamLabAttachmentResult.Failed("cleanup", exception.Message);
+            return TeamLabAttachmentResult.Failed("cleanup", $"OVS attachment cleanup transaction failed: {Trim(exception.Message)}");
         }
     }
+
+    static string Trim(string value) => value.Length <= 512 ? value : value[..512];
 
     static JsonArray Where(string column, string value) =>
         new() { new JsonArray { column, "==", value } };
@@ -182,12 +183,16 @@ public sealed class TeamLabOvsAttachmentProvider(
         new()
         {
             new JsonArray { column, "==", value },
-            new JsonArray { "external_ids", "includes", new JsonArray { "map", new JsonArray
+            new JsonArray
             {
-                new JsonArray { "gzctf-runtime", plan.RuntimePublicId.ToString("D") },
-                new JsonArray { "gzctf-generation", plan.Generation.ToString() },
-                new JsonArray { "gzctf-network-key", networkKey }
-            } } }
+                "external_ids",
+                "includes",
+                OvsdbJsonCodec.Map(
+                    ("gzctf-runtime", plan.RuntimePublicId.ToString("D")),
+                    ("gzctf-generation", plan.Generation.ToString()),
+                    ("gzctf-network-key", networkKey),
+                    ("gzctf-plan-digest", plan.PlanDigest))
+            }
         };
 
     static JsonArray Set(JsonArray value) => new() { "set", new JsonArray { value } };
@@ -198,8 +203,8 @@ public sealed class TeamLabOvsAttachmentProvider(
         new() { "named-uuid", NamedName(kind, name) };
 
     static string NamedName(string kind, string name) =>
-        $"gzctf_{kind}_{Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
-            System.Text.Encoding.UTF8.GetBytes(name))).ToLowerInvariant()[..16]}";
+        new Guid(System.Security.Cryptography.SHA256.HashData(
+            System.Text.Encoding.UTF8.GetBytes($"{kind}:{name}"))[..16]).ToString("D");
 
     static string? ExistingUuid(JsonArray rows, TeamLabExecutionPlanV2 plan, string networkKey, string kind)
     {
@@ -208,15 +213,19 @@ public sealed class TeamLabOvsAttachmentProvider(
                   ?? throw new JsonException($"OVSDB {kind} row is invalid.");
         if (row["_uuid"] is not JsonArray uuid || uuid.Count != 2 || uuid[1]?.GetValue<string>() is not { } value)
             throw new JsonException($"OVSDB {kind} row has no UUID.");
-        if (row["external_ids"] is not JsonObject externalIds ||
-            !string.Equals(externalIds["gzctf-runtime"]?.GetValue<string>(), plan.RuntimePublicId.ToString("D"), StringComparison.Ordinal) ||
-            !string.Equals(externalIds["gzctf-generation"]?.GetValue<string>(), plan.Generation.ToString(), StringComparison.Ordinal) ||
-            !string.Equals(externalIds["gzctf-network-key"]?.GetValue<string>(), networkKey, StringComparison.Ordinal))
+        if (!string.Equals(OvsdbJsonCodec.GetMapValue(row["external_ids"], "gzctf-runtime"),
+                plan.RuntimePublicId.ToString("D"), StringComparison.Ordinal) ||
+            !string.Equals(OvsdbJsonCodec.GetMapValue(row["external_ids"], "gzctf-generation"),
+                plan.Generation.ToString(), StringComparison.Ordinal) ||
+            !string.Equals(OvsdbJsonCodec.GetMapValue(row["external_ids"], "gzctf-network-key"),
+                networkKey, StringComparison.Ordinal) ||
+            !string.Equals(OvsdbJsonCodec.GetMapValue(row["external_ids"], "gzctf-plan-digest"),
+                plan.PlanDigest, StringComparison.Ordinal))
             throw new InvalidOperationException($"OVS {kind} identity conflicts with the requested runtime.");
         return value;
     }
 
-    static JsonObject Update(string table, string name, JsonObject externalIds) => new()
+    static JsonObject Update(string table, string name, JsonArray externalIds) => new()
     {
         ["op"] = "update",
         ["table"] = table,
@@ -235,10 +244,10 @@ public sealed class TeamLabOvsAttachmentProvider(
             string.Equals(port[1]?.GetValue<string>(), portUuid, StringComparison.Ordinal));
     }
 
-    static void RequireDeleteCount(JsonNode result, int index, string table, string name)
+    static void RequireCleanupCount(JsonNode result, int index, string table, string name)
     {
-        if (result is not JsonArray operations || operations[index]?["count"]?.GetValue<int>() != 1)
-            throw new InvalidOperationException($"OVSDB did not remove owned {table} {name}.");
+        if (result is not JsonArray operations || operations[index]?["count"]?.GetValue<int>() is not (0 or 1))
+            throw new InvalidOperationException($"OVSDB cleanup did not converge for owned {table} {name}.");
     }
 }
 

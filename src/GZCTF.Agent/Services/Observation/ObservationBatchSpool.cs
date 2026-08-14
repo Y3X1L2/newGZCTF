@@ -17,16 +17,15 @@ public sealed class ObservationBatchSpool : BackgroundService
     private readonly ConcurrentDictionary<RuntimeKey, byte> _removed = [];
     private readonly ConcurrentDictionary<RuntimeKey, long> _epochs = [];
     private readonly ConcurrentDictionary<RuntimeKey, SemaphoreSlim> _mutationGates = [];
-    // AppendPacket is synchronous because it runs on the packet observer path. A bounded
-    // channel cannot apply backpressure there: TryWrite returns false and turns a temporary
-    // disk-writer backlog into dropped observations. The runtime buffer and spool byte budget
-    // remain bounded; this queue only bridges producers to the durable writer.
-    private readonly Channel<SpoolWrite> _writes = Channel.CreateUnbounded<SpoolWrite>(
-        new UnboundedChannelOptions
+    // Runtime buffers retain records until persistence succeeds. This bounded channel only
+    // schedules the single writer; a full channel delays a write instead of dropping data.
+    private readonly Channel<SpoolWork> _writes = Channel.CreateBounded<SpoolWork>(
+        new BoundedChannelOptions(4096)
         {
             SingleReader = true,
             SingleWriter = false,
-            AllowSynchronousContinuations = false
+            AllowSynchronousContinuations = false,
+            FullMode = BoundedChannelFullMode.Wait
         });
 
     public ObservationBatchSpool(
@@ -131,7 +130,8 @@ public sealed class ObservationBatchSpool : BackgroundService
         var key = new RuntimeKey(request.RuntimeId, request.Generation);
         if (!_buffers.TryGetValue(key, out var buffer))
             return new TeamLabObservationBatchResponse(
-                true, "No observations are available yet.", request.AfterSequence, 0, [], health);
+                true, "No observations are available yet.", request.AfterSequence, 0,
+                0, [], health);
         FlushAggregates(key, buffer);
         var limit = Math.Clamp(request.Limit, 1, Math.Clamp(_config.ObservationBatchSize, 1, 2_000));
         var snapshot = buffer.Read(request.AfterSequence, request.ObservationPointId, limit);
@@ -140,6 +140,7 @@ public sealed class ObservationBatchSpool : BackgroundService
             $"Loaded {snapshot.Records.Length} observation record(s).",
             snapshot.NextSequence,
             snapshot.DroppedCount,
+            buffer.PersistedThrough,
             snapshot.Records,
             health with
             {
@@ -160,7 +161,7 @@ public sealed class ObservationBatchSpool : BackgroundService
         try
         {
             if (_removed.ContainsKey(key) || !buffer.Acknowledge(sequence)) return;
-            await RewriteSpoolLockedAsync(key, buffer, cancellationToken);
+            await WriteAcknowledgementLockedAsync(key, buffer.AcknowledgedThrough, cancellationToken);
         }
         finally
         {
@@ -201,7 +202,10 @@ public sealed class ObservationBatchSpool : BackgroundService
             using var timer = new PeriodicTimer(interval);
             while (await timer.WaitForNextTickAsync(stoppingToken))
                 foreach (var (key, buffer) in _buffers)
+                {
                     FlushAggregates(key, buffer);
+                    QueuePersistence(key, _epochs.GetOrAdd(key, 0), buffer);
+                }
         }
         finally
         {
@@ -218,34 +222,10 @@ public sealed class ObservationBatchSpool : BackgroundService
 
     private async Task PersistWritesAsync(CancellationToken stoppingToken)
     {
-        List<SpoolWrite> batch = new(256);
         while (await _writes.Reader.WaitToReadAsync(stoppingToken))
         {
-            batch.Clear();
-            while (batch.Count < 256 && _writes.Reader.TryRead(out var item)) batch.Add(item);
-            foreach (var group in batch.GroupBy(item => (item.Key, item.Epoch, item.SpoolVersion)))
-            {
-                if (_removed.ContainsKey(group.Key.Key) ||
-                    _epochs.GetOrAdd(group.Key.Key, 0) != group.Key.Epoch ||
-                    !_buffers.TryGetValue(group.Key.Key, out var buffer) ||
-                    !buffer.AcceptsSpoolVersion(group.Key.SpoolVersion))
-                    continue;
-                try
-                {
-                    await AppendFileAsync(
-                        group.Key.Key,
-                        group.Key.Epoch,
-                        group.Select(item => item.Record).ToArray(),
-                        stoppingToken);
-                }
-                catch (Exception exception) when (
-                    exception is IOException or UnauthorizedAccessException or JsonException)
-                {
-                    _logger.LogWarning(exception,
-                        "Failed to persist TeamLab observation spool for runtime {RuntimeId} generation {Generation}.",
-                        group.Key.Key.RuntimeId, group.Key.Key.Generation);
-                }
-            }
+            while (_writes.Reader.TryRead(out var work))
+                await PersistWorkAsync(work, stoppingToken);
         }
     }
 
@@ -263,11 +243,51 @@ public sealed class ObservationBatchSpool : BackgroundService
             buffer.RecordDrop();
             return false;
         }
-        var spoolVersion = buffer.Append(record);
+        if (!buffer.Append(record)) return false;
         if (_removed.ContainsKey(buffer.Key) || _epochs.GetOrAdd(buffer.Key, 0) != epoch)
             return false;
-        _writes.Writer.TryWrite(new SpoolWrite(buffer.Key, epoch, spoolVersion, record));
+        QueuePersistence(buffer.Key, epoch, buffer);
         return true;
+    }
+
+    private void QueuePersistence(RuntimeKey key, long epoch, RuntimeBuffer buffer)
+    {
+        if (!buffer.TrySchedulePersistence()) return;
+        _ = QueuePersistenceAsync(key, epoch, buffer);
+    }
+
+    private async Task QueuePersistenceAsync(RuntimeKey key, long epoch, RuntimeBuffer buffer)
+    {
+        try
+        {
+            await _writes.Writer.WriteAsync(new SpoolWork(key, epoch));
+        }
+        catch (ChannelClosedException)
+        {
+            buffer.CancelPersistenceSchedule();
+        }
+    }
+
+    private async Task PersistWorkAsync(SpoolWork work, CancellationToken cancellationToken)
+    {
+        if (_removed.ContainsKey(work.Key) || _epochs.GetOrAdd(work.Key, 0) != work.Epoch ||
+            !_buffers.TryGetValue(work.Key, out var buffer))
+            return;
+        try
+        {
+            await AppendPendingAsync(work.Key, work.Epoch, buffer, cancellationToken);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException)
+        {
+            _logger.LogWarning(exception,
+                "Failed to persist TeamLab observation spool for runtime {RuntimeId} generation {Generation}.",
+                work.Key.RuntimeId, work.Key.Generation);
+        }
+        finally
+        {
+            if (buffer.CompletePersistencePass())
+                QueuePersistence(work.Key, work.Epoch, buffer);
+        }
     }
 
     private bool TryGetActiveEpoch(RuntimeKey key, out long epoch)
@@ -286,10 +306,10 @@ public sealed class ObservationBatchSpool : BackgroundService
                     1_000, 1_000_000),
                 Math.Clamp(_config.ObservationMaxActiveFlows, 128, 1_000_000)));
 
-    private async Task AppendFileAsync(
+    private async Task AppendPendingAsync(
         RuntimeKey key,
         long epoch,
-        IReadOnlyList<TeamLabObservationRecord> records,
+        RuntimeBuffer buffer,
         CancellationToken cancellationToken)
     {
         var gate = MutationGate(key);
@@ -303,8 +323,9 @@ public sealed class ObservationBatchSpool : BackgroundService
             if (_removed.ContainsKey(key) || _epochs.GetOrAdd(key, 0) != epoch)
                 return;
 
-            if (!_buffers.TryGetValue(key, out var buffer)) return;
-            var pending = records.Where(record => record.Sequence > buffer.AcknowledgedThrough).ToArray();
+            if (!_buffers.TryGetValue(key, out var activeBuffer)) return;
+            buffer = activeBuffer;
+            var pending = buffer.PendingPersistence();
             if (pending.Length == 0) return;
             var path = SpoolPath(key);
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
@@ -314,6 +335,7 @@ public sealed class ObservationBatchSpool : BackgroundService
                 foreach (var record in pending)
                     await writer.WriteLineAsync(JsonSerializer.Serialize(record).AsMemory(), cancellationToken);
             }
+            buffer.MarkPersisted(pending[^1].Sequence);
             var length = new FileInfo(path).Length;
             buffer.SpoolBytes = length;
             if (length > Math.Max(1_048_576, _config.ObservationSpoolMaxBytes))
@@ -348,29 +370,17 @@ public sealed class ObservationBatchSpool : BackgroundService
         }
     }
 
-    private async Task RewriteSpoolLockedAsync(RuntimeKey key, RuntimeBuffer buffer,
+    private async Task WriteAcknowledgementLockedAsync(RuntimeKey key, long sequence,
         CancellationToken cancellationToken)
     {
-        var path = SpoolPath(key);
-        if (!File.Exists(path))
-        {
-            buffer.SpoolBytes = 0;
-            return;
-        }
+        var path = AcknowledgementPath(key);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         var temporary = $"{path}.{Guid.NewGuid():N}.tmp";
         try
         {
-            await using (var stream = File.Create(temporary))
-            {
-                foreach (var record in buffer.All())
-                {
-                    var payload = JsonSerializer.SerializeToUtf8Bytes(record);
-                    await stream.WriteAsync(payload, cancellationToken);
-                    await stream.WriteAsync("\n"u8.ToArray(), cancellationToken);
-                }
-            }
+            await File.WriteAllTextAsync(temporary,
+                sequence.ToString(System.Globalization.CultureInfo.InvariantCulture), cancellationToken);
             File.Move(temporary, path, true);
-            buffer.SpoolBytes = new FileInfo(path).Length;
         }
         finally
         {
@@ -397,11 +407,13 @@ public sealed class ObservationBatchSpool : BackgroundService
                     path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 64 * 1024,
                     FileOptions.Asynchronous | FileOptions.SequentialScan);
                 using var reader = new StreamReader(stream);
+                buffer.RestoreAcknowledgement(await ReadAcknowledgementAsync(key, cancellationToken));
                 while (await reader.ReadLineAsync(cancellationToken) is { } line)
                 {
                     var record = JsonSerializer.Deserialize<TeamLabObservationRecord>(line);
                     if (record is not null) buffer.Restore(record);
                 }
+                buffer.MarkRestoredPersistence();
                 buffer.SpoolBytes = new FileInfo(path).Length;
                 if (buffer.SpoolBytes > Math.Max(1_048_576, _config.ObservationSpoolMaxBytes))
                     await CompactLockedAsync(key, path, cancellationToken);
@@ -419,6 +431,20 @@ public sealed class ObservationBatchSpool : BackgroundService
 
     private string SpoolPath(RuntimeKey key) =>
         Path.Combine(_root, $"runtime-{key.RuntimeId}", $"generation-{key.Generation}", "records.jsonl");
+
+    private string AcknowledgementPath(RuntimeKey key) =>
+        Path.Combine(Path.GetDirectoryName(SpoolPath(key))!, "acknowledged.seq");
+
+    private async Task<long> ReadAcknowledgementAsync(RuntimeKey key, CancellationToken cancellationToken)
+    {
+        var path = AcknowledgementPath(key);
+        if (!File.Exists(path)) return 0;
+        var value = await File.ReadAllTextAsync(path, cancellationToken);
+        return long.TryParse(value, System.Globalization.NumberStyles.None,
+            System.Globalization.CultureInfo.InvariantCulture, out var sequence) && sequence >= 0
+            ? sequence
+            : throw new JsonException("Observation acknowledgement watermark is invalid.");
+    }
 
     private SemaphoreSlim MutationGate(RuntimeKey key) =>
         _mutationGates.GetOrAdd(key, static _ => new SemaphoreSlim(1, 1));
@@ -457,11 +483,7 @@ public sealed class ObservationBatchSpool : BackgroundService
     }
 
     private readonly record struct RuntimeKey(int RuntimeId, int Generation);
-    private readonly record struct SpoolWrite(
-        RuntimeKey Key,
-        long Epoch,
-        long SpoolVersion,
-        TeamLabObservationRecord Record);
+    private readonly record struct SpoolWork(RuntimeKey Key, long Epoch);
     private sealed record SerializedObservation(TeamLabObservationRecord Record, byte[] Line);
 
     private static IReadOnlyList<SerializedObservation> RetainWithinBudget(
@@ -494,10 +516,19 @@ public sealed class ObservationBatchSpool : BackgroundService
         private long _nextSequence;
         private long _packetOrdinal;
         private long _dropped;
-        private long _spoolVersion;
+        private long _persistedThrough;
+        private bool _persistenceScheduled;
         public RuntimeKey Key { get; } = key;
         public long SpoolBytes { get; set; }
         public long AcknowledgedThrough { get; private set; }
+
+        public long PersistedThrough
+        {
+            get
+            {
+                lock (_records) return _persistedThrough;
+            }
+        }
 
         public long NextSequence()
         {
@@ -573,7 +604,7 @@ public sealed class ObservationBatchSpool : BackgroundService
             Packets: aggregate.Packets,
             Bytes: aggregate.Bytes);
 
-        public long Append(TeamLabObservationRecord record)
+        public bool Append(TeamLabObservationRecord record)
         {
             lock (_records)
             {
@@ -586,10 +617,10 @@ public sealed class ObservationBatchSpool : BackgroundService
                     // in-memory window. The durable spool is the backlog; this counter is
                     // reserved for an actual configured retention limit.
                     _dropped++;
-                    return _spoolVersion;
+                    return false;
                 }
                 _records.AddLast(record);
-                return _spoolVersion;
+                return true;
             }
         }
 
@@ -598,6 +629,7 @@ public sealed class ObservationBatchSpool : BackgroundService
             lock (_records)
             {
                 _nextSequence = Math.Max(_nextSequence, record.Sequence);
+                if (record.Sequence <= AcknowledgedThrough) return;
                 while (_records.Count >= capacity &&
                        _records.First is { Value.Sequence: var first } && first <= AcknowledgedThrough)
                     _records.RemoveFirst();
@@ -620,17 +652,15 @@ public sealed class ObservationBatchSpool : BackgroundService
             lock (_records)
             {
                 if (sequence <= AcknowledgedThrough) return false;
-                AcknowledgedThrough = Math.Min(sequence, _nextSequence);
+                // Acknowledging a record that has not reached disk would make an Agent restart
+                // permanently lose it. The caller will retry this monotonic acknowledgement
+                // after the writer advances the durable watermark.
+                if (sequence > _persistedThrough) return false;
+                AcknowledgedThrough = Math.Min(sequence, _persistedThrough);
                 while (_records.First is { Value.Sequence: var value } && value <= AcknowledgedThrough)
                     _records.RemoveFirst();
-                _spoolVersion++;
                 return true;
             }
-        }
-
-        public bool AcceptsSpoolVersion(long version)
-        {
-            lock (_records) return version == _spoolVersion;
         }
 
         public RuntimeRead Read(long after, Guid? pointId, int limit)
@@ -643,7 +673,7 @@ public sealed class ObservationBatchSpool : BackgroundService
                     .Take(limit)
                     .ToArray();
                 return new RuntimeRead(
-                    records.Length == 0 ? Math.Max(after, _nextSequence) : records[^1].Sequence,
+                    records.Length == 0 ? after : records[^1].Sequence,
                     _dropped,
                     records);
             }
@@ -661,7 +691,61 @@ public sealed class ObservationBatchSpool : BackgroundService
                 _dropped += Math.Max(0, _records.Count - records.Count);
                 _records.Clear();
                 foreach (var record in records) _records.AddLast(record);
-                _spoolVersion++;
+                _persistedThrough = Math.Max(AcknowledgedThrough,
+                    records.Count == 0 ? 0 : records.Max(item => item.Sequence));
+            }
+        }
+
+        public void RestoreAcknowledgement(long sequence)
+        {
+            lock (_records)
+            {
+                AcknowledgedThrough = sequence;
+                _nextSequence = Math.Max(_nextSequence, sequence);
+                _persistedThrough = Math.Max(_persistedThrough, sequence);
+            }
+        }
+
+        public void MarkRestoredPersistence()
+        {
+            lock (_records) _persistedThrough = Math.Max(_persistedThrough, _nextSequence);
+        }
+
+        public TeamLabObservationRecord[] PendingPersistence()
+        {
+            lock (_records) return _records.Where(item => item.Sequence > _persistedThrough).ToArray();
+        }
+
+        public void MarkPersisted(long sequence)
+        {
+            lock (_records)
+            {
+                if (sequence <= _persistedThrough) return;
+                _persistedThrough = sequence;
+            }
+        }
+
+        public bool TrySchedulePersistence()
+        {
+            lock (_records)
+            {
+                if (_persistenceScheduled || _records.All(item => item.Sequence <= _persistedThrough)) return false;
+                _persistenceScheduled = true;
+                return true;
+            }
+        }
+
+        public void CancelPersistenceSchedule()
+        {
+            lock (_records) _persistenceScheduled = false;
+        }
+
+        public bool CompletePersistencePass()
+        {
+            lock (_records)
+            {
+                _persistenceScheduled = false;
+                return _records.Any(item => item.Sequence > _persistedThrough);
             }
         }
 
@@ -669,10 +753,12 @@ public sealed class ObservationBatchSpool : BackgroundService
         {
             lock (_records)
             {
+                _persistenceScheduled = false;
                 _records.Clear();
                 _packetAggregates.Clear();
             }
         }
+
     }
 
     private readonly record struct PacketAggregateKey(

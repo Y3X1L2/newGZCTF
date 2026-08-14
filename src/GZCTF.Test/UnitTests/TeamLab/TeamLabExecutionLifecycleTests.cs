@@ -78,37 +78,28 @@ public sealed class TeamLabExecutionLifecycleTests
     }
 
     [Fact]
-    public void Journal_EvictsOldestEntryWhenCapacityIsReached()
+    public void Journal_RetainsEntriesPastLegacyCapacity()
     {
         var journal = new TeamLabExecutionEventJournal();
-        for (var runtimeId = 1; runtimeId <= 4096; runtimeId++)
+        for (var runtimeId = 1; runtimeId <= 5000; runtimeId++)
         {
             var plan = Plan(runtimeId);
             journal.Save(plan, Response(plan));
         }
 
-        var overflow = Plan(4097);
-        journal.Save(overflow, Response(overflow));
-        Assert.True(journal.TryGet(overflow, out _));
-        Assert.False(journal.TryGet(Plan(1), out _));
+        Assert.True(journal.TryGet(Plan(1), out _));
+        Assert.True(journal.TryGet(Plan(5000), out _));
     }
 
     [Fact]
-    public void Journal_EnforcesCapacityUnderConcurrentWriters()
+    public void Journal_RetainsConcurrentWritersUntilRetention()
     {
         var journal = new TeamLabExecutionEventJournal();
 
         Parallel.For(1, 8193, runtimeId =>
         {
             var plan = Plan(runtimeId);
-            try
-            {
-                journal.Save(plan, Response(plan));
-            }
-            catch (InvalidOperationException)
-            {
-                // Capacity rejection is the expected result after the journal fills.
-            }
+            journal.Save(plan, Response(plan));
         });
 
         var plans = typeof(TeamLabExecutionEventJournal).GetField(
@@ -117,7 +108,7 @@ public sealed class TeamLabExecutionLifecycleTests
         var count = (int?)plans?.GetType().GetProperty("Count")?.GetValue(plans);
 
         Assert.NotNull(count);
-        Assert.InRange(count.Value, 0, 4096);
+        Assert.Equal(8192, count.Value);
     }
 
     private static TeamLabExecutionPlanV2 Plan(int runtimeId) => new(

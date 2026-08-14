@@ -51,6 +51,10 @@ internal static class ServicesExtension
             builder.AddConfig<ContainerPolicy>();
             builder.AddConfig<ContainerProvider>();
             builder.AddConfig<TeamLabNetworkConfig>();
+            builder.Services.AddOptions<TeamLabNetworkConfig>()
+                .Validate(config => Enum.IsDefined(config.ExecutionModel),
+                    "TeamLabNetworkConfig.ExecutionModel must be a valid execution model.")
+                .ValidateOnStart();
             builder.AddConfig<PublicUdpGatewayConfig>();
             builder.AddConfig<KvmSettings>();
             builder.AddConfig<GuacamoleSettings>();

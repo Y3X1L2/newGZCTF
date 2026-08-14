@@ -55,6 +55,7 @@ public sealed class TeamLabTrafficPersistenceWorker(
                     .WriteAsync(batch.Messages.Select(item => item.Envelope).ToArray(), cancellationToken);
                 await ingestor.AcknowledgeAsync(
                     batch.Messages.Where(item => item.StreamId is not null).Select(item => item.StreamId!).ToArray(),
+                    batch.Messages.Where(item => item.LocalSequence.HasValue).Select(item => item.LocalSequence!.Value).ToArray(),
                     cancellationToken);
                 failureDelay = MaximumBatchDelay;
             }

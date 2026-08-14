@@ -1,10 +1,13 @@
 using GZCTF.Models;
 using GZCTF.Models.Data;
+using GZCTF.Models.Internal;
 using GZCTF.Modules.Audit.Application;
 using GZCTF.Modules.Audit.Contracts;
 using GZCTF.Modules.Audit.Domain;
 using GZCTF.Modules.Runtime.Contracts;
+using GZCTF.TeamLab.Contracts;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace GZCTF.Services.Fleet;
 
@@ -18,7 +21,8 @@ public sealed class AgentFleetUpdateCoordinator(
     AppDbContext context,
     AgentClient agent,
     IOperationalEventWriter events,
-    ILogger<AgentFleetUpdateCoordinator> logger)
+    ILogger<AgentFleetUpdateCoordinator> logger,
+    IOptions<TeamLabNetworkConfig> teamLabNetwork)
 {
     private static readonly TimeSpan HeartbeatDeadline = TimeSpan.FromSeconds(90);
 
@@ -129,25 +133,15 @@ public sealed class AgentFleetUpdateCoordinator(
             .ToArrayAsync(cancellationToken);
         foreach (var node in pending)
         {
-            // Only this state is entered after the node configuration request has succeeded.
-            // Earlier states may have transferred the binary but must never be scheduled before
-            // the configuration phase has run.
-            if (node.AgentUpdateState == AgentUpdateState.VerifyingFabric &&
-                !string.IsNullOrWhiteSpace(node.AgentUpdateExpectedSha256) &&
-                HasExpectedManifest(node, node.AgentUpdateExpectedSha256, node.Capabilities) &&
-                FabricReady(node))
-            {
-                node.AgentUpdateState = AgentUpdateState.Stable;
-                node.IsSchedulable = node.AgentUpdateWasSchedulable;
-                node.AgentUpdateCompletedAt = now;
-                node.AgentUpdateLastError = null;
-                continue;
-            }
+            // The expected capability set belongs to the submitted update, not to the mutable
+            // heartbeat projection. A restarted coordinator cannot reconstruct that request
+            // safely, so it keeps the node cordoned rather than letting current capabilities
+            // approve their own update.
             if (node.AgentUpdateStartedAt < now - TimeSpan.FromMinutes(10))
             {
                 node.AgentUpdateState = AgentUpdateState.Failed;
                 node.IsSchedulable = false;
-                node.AgentUpdateLastError = "Agent update recovery timed out before manifest and Fabric convergence.";
+                node.AgentUpdateLastError = "Agent update recovery requires an explicit resynchronization after coordinator interruption.";
                 node.AgentUpdateCompletedAt = now;
             }
         }
@@ -199,6 +193,7 @@ public sealed class AgentFleetUpdateCoordinator(
 
     internal static bool FabricReady(WorkerNode node) =>
         !node.TeamLabNetworkEnabled ||
+        string.IsNullOrWhiteSpace(node.TeamLabTunnelIp) ||
         node.TeamLabTunnelStatus == TeamLabTunnelStatus.Healthy &&
         node.TeamLabFabricStatus == TeamLabFabricStatus.Healthy;
 
@@ -271,7 +266,7 @@ public sealed class AgentFleetUpdateCoordinator(
         await context.Entry(node).ReloadAsync(cancellationToken);
     }
 
-    private static AgentSyncRequest CreateSyncRequest(string serverUrl, string expectedSha, WorkerNode node,
+    private AgentSyncRequest CreateSyncRequest(string serverUrl, string expectedSha, WorkerNode node,
         WorkerNode? controlPlaneNode, bool includeManagedArtifacts, bool includeNodeConfiguration) =>
         new(
             DownloadUrl: $"{serverUrl.TrimEnd('/')}/api/agent/download",
@@ -295,7 +290,9 @@ public sealed class AgentFleetUpdateCoordinator(
                     node.TeamLabNetworkEnabled && node.Capabilities.HasFlag(NodeCapability.Kvm))
                 : null,
             TeamLabDataPlane: includeNodeConfiguration
-                ? TeamLabDataPlaneSyncConfiguration.Create(node, controlPlaneNode)
+                ? TeamLabDataPlaneSyncConfiguration.Create(node, controlPlaneNode,
+                    teamLabNetwork.Value.ExecutionModel,
+                    teamLabNetwork.Value.ManagedDhcpLeaseSeconds)
                 : null);
 
     private async Task<AgentFleetUpdateResult> FailAsync(

@@ -349,4 +349,15 @@ public sealed class TeamLabRouteApplicationService(
         bool Primary);
 }
 
-public sealed class TeamLabRuntimeExecutionException(string message) : Exception(message);
+public class TeamLabRuntimeExecutionException(string message) : Exception(message);
+
+public sealed class TeamLabRuntimeIdentityConflictException(string message)
+    : TeamLabRuntimeExecutionException(message), IOperationalFailureException
+{
+    public OperationalError Error { get; } = new(
+        OperationalErrorCategory.Validation,
+        OperationalErrorCodes.RuntimeIdentityConflict,
+        "The execution identity conflicts with an existing runtime generation.",
+        false,
+        Operation: "teamlab.execution-plan");
+}

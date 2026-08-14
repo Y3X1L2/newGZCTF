@@ -35,7 +35,7 @@ public sealed class TeamLabExecutionPlanExecutor(
             (plan.RuntimeId, plan.Generation, plan.ShardKey), cancellationToken);
         if (journal.TryGetIdentity(plan, out var existingDigest) &&
             !string.Equals(existingDigest, plan.PlanDigest, StringComparison.OrdinalIgnoreCase))
-            return Failure(plan, "validation", "A different execution plan is already active for this runtime generation and shard.");
+            return IdentityConflict(plan);
         if (journal.TryGet(plan, out var existing))
         {
             var inventory = await ReadInventoryAsync(plan, cancellationToken);
@@ -499,6 +499,13 @@ public sealed class TeamLabExecutionPlanExecutor(
             [Event(plan, null, stage, "failed", $"{stage}_failed", message)], [], stage,
             $"{stage}_failed", FailureMessage(stage));
 
+    static TeamLabExecutionPlanApplyResponse IdentityConflict(TeamLabExecutionPlanV2 plan) =>
+        new(false, false, plan.PlanDigest,
+            [Event(plan, null, "validation", "failed", "identity_conflict",
+                "A different execution plan is already active for this runtime generation and shard.")], [],
+            "validation", "identity_conflict",
+            "The execution identity conflicts with an existing generation. Reset the runtime to create a new generation.");
+
     static string EventSummary(string outcome, string? errorCode, string detail)
     {
         if (outcome == "failed")
@@ -509,6 +516,7 @@ public sealed class TeamLabExecutionPlanExecutor(
     static string FailureMessage(string stageOrCode) => stageOrCode switch
     {
         "validation" or "validation_failed" => "The execution plan was rejected by validation.",
+        "identity_conflict" => "The execution identity conflicts with an existing generation. Reset the runtime to create a new generation.",
         "network" or "network_failed" or "network_cleanup_failed" => "The network operation did not complete.",
         "observation" or "observation_failed" or "observation_cleanup_failed" => "The observation operation did not complete.",
         "cleanup" or "cleanup_failed" => "The cleanup operation did not complete.",

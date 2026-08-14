@@ -1,9 +1,11 @@
+using GZCTF.TeamLab.Contracts;
+
 namespace GZCTF.Agent.Models;
 
 public class AgentTeamLabConfig
 {
     public bool Enable { get; set; } = true;
-    public bool EnableExecutionPlanV2 { get; set; }
+    public TeamLabExecutionModel ExecutionModel { get; set; } = TeamLabExecutionModel.V2;
     public bool DryRun { get; set; }
     public string RuntimeStateRoot { get; set; } = "/var/lib/gzctf/teamlab";
     public string FabricInterfaceName { get; set; } = "gzctf-fabric";
@@ -21,6 +23,7 @@ public class AgentTeamLabConfig
     public string OvsLocalEndpoint { get; set; } = "unix:/var/run/openvswitch/db.sock";
     public string OvsLocalDatabase { get; set; } = "Open_vSwitch";
     public string OvsIntegrationBridgeName { get; set; } = "br-int";
+    public int ManagedDhcpLeaseSeconds { get; set; } = 3600;
 }
 
 public record TeamLabToolCapabilityReport(
@@ -403,6 +406,7 @@ public record TeamLabObservationBatchResponse(
     string Message,
     long NextSequence,
     long DroppedCount,
+    long PersistedThroughSequence,
     TeamLabObservationRecord[] Records,
     TeamLabObservationHealth Health);
 

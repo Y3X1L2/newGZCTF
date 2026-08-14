@@ -5,7 +5,6 @@ namespace GZCTF.Agent.Services.TeamLab;
 public sealed class TeamLabExecutionEventJournal
 {
     static readonly TimeSpan Retention = TimeSpan.FromHours(24);
-    const int MaximumEntries = 4096;
     readonly object sync = new();
     readonly Dictionary<(int RuntimeId, int Generation, string ShardKey), PlanState> plans = [];
 
@@ -37,22 +36,11 @@ public sealed class TeamLabExecutionEventJournal
         }
     }
 
-    public bool ContainsIdentity(TeamLabExecutionPlanV2 plan)
-    {
-        lock (sync)
-        {
-            Prune();
-            return plans.ContainsKey(Key(plan));
-        }
-    }
-
     public void Save(TeamLabExecutionPlanV2 plan, TeamLabExecutionPlanApplyResponse response)
     {
         lock (sync)
         {
             Prune();
-            if (plans.Count >= MaximumEntries && !plans.ContainsKey(Key(plan)))
-                plans.Remove(plans.MinBy(item => item.Value.UpdatedAt).Key);
             plans[Key(plan)] = new PlanState(plan.PlanDigest, response, DateTimeOffset.UtcNow);
         }
     }

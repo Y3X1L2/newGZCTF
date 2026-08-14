@@ -815,7 +815,8 @@ public class NodesControllerTests
             context,
             services.GetRequiredService<AgentClient>(),
             services.GetRequiredService<IOperationalEventWriter>(),
-            NullLogger<AgentFleetUpdateCoordinator>.Instance);
+            NullLogger<AgentFleetUpdateCoordinator>.Instance,
+            Options.Create(new TeamLabNetworkConfig()));
 
         await coordinator.RecoverPendingAsync(CancellationToken.None);
 

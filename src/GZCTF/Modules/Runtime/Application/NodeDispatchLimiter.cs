@@ -89,66 +89,45 @@ public sealed class NodeDispatchLimiter
     {
         if (!_gates.TryGetValue((nodeId, category), out var gate))
             return;
-        var acquired = 0;
-        try
-        {
-            for (; acquired < gate.Capacity; acquired++)
-                await gate.Semaphore.WaitAsync(token);
-        }
-        finally
-        {
-            if (acquired > 0)
-                gate.Semaphore.Release(acquired);
-        }
+        await gate.WaitForIdleAsync(token);
     }
 
     sealed class DispatchGate
     {
         readonly object sync = new();
-        SemaphoreSlim semaphore = new(1, 1);
         int capacity = 1;
-        int desiredCapacity = 1;
         int active;
         int waiting;
-
-        public int Capacity
-        {
-            get { lock (sync) return capacity; }
-        }
-
-        public SemaphoreSlim Semaphore
-        {
-            get { lock (sync) return semaphore; }
-        }
+        TaskCompletionSource changed = NewChangeSignal();
 
         public async Task EnterAsync(int limit, CancellationToken token)
         {
-            SemaphoreSlim current;
-            lock (sync)
+            while (true)
             {
-                desiredCapacity = Math.Max(1, limit);
-                if (active == 0 && waiting == 0 && capacity != desiredCapacity)
-                {
-                    semaphore.Dispose();
-                    capacity = desiredCapacity;
-                    semaphore = new SemaphoreSlim(capacity, capacity);
-                }
-                current = semaphore;
-                waiting++;
-            }
-            try
-            {
-                await current.WaitAsync(token);
+                Task signal;
                 lock (sync)
                 {
-                    waiting--;
-                    active++;
+                    capacity = Math.Max(1, limit);
+                    if (active < capacity)
+                    {
+                        active++;
+                        return;
+                    }
+                    waiting++;
+                    signal = changed.Task;
                 }
-            }
-            catch
-            {
-                lock (sync) waiting--;
-                throw;
+                try
+                {
+                    await signal.WaitAsync(token);
+                }
+                finally
+                {
+                    lock (sync)
+                    {
+                        waiting--;
+                        SignalChanged();
+                    }
+                }
             }
         }
 
@@ -157,14 +136,32 @@ public sealed class NodeDispatchLimiter
             lock (sync)
             {
                 active--;
-                semaphore.Release();
-                if (active == 0 && waiting == 0 && capacity != desiredCapacity)
-                {
-                    semaphore.Dispose();
-                    capacity = desiredCapacity;
-                    semaphore = new SemaphoreSlim(capacity, capacity);
-                }
+                SignalChanged();
             }
         }
+
+        public async Task WaitForIdleAsync(CancellationToken token)
+        {
+            while (true)
+            {
+                Task signal;
+                lock (sync)
+                {
+                    if (active == 0 && waiting == 0) return;
+                    signal = changed.Task;
+                }
+                await signal.WaitAsync(token);
+            }
+        }
+
+        void SignalChanged()
+        {
+            var previous = changed;
+            changed = NewChangeSignal();
+            previous.TrySetResult();
+        }
+
+        static TaskCompletionSource NewChangeSignal() =>
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
     }
 }

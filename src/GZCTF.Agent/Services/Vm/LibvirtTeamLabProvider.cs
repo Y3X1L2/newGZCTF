@@ -13,6 +13,7 @@ namespace GZCTF.Agent.Services.Vm;
 public sealed class LibvirtTeamLabProvider(
     IOptions<KvmConfig> kvmOptions,
     IOptions<AgentTeamLabConfig> teamLabOptions,
+    AgentResourceLock resourceLock,
     ILogger<LibvirtTeamLabProvider> logger) : IDisposable
 {
     const uint UndefineManagedSave = 1;
@@ -69,8 +70,12 @@ public sealed class LibvirtTeamLabProvider(
             }
 
             var baseImage = ResolveBaseImage(plan, asset);
+            await using var imageLock = await resourceLock.AcquireAsync(
+                BaseImageLockKey(baseImage), cancellationToken);
             if (!File.Exists(baseImage))
                 return LibvirtAssetResult.Failed("artifact", $"VM base image is not available for digest {asset.ImageDigest}.");
+            if (!await HasExpectedBaseImageAsync(baseImage, asset.ImageDigest, cancellationToken))
+                return LibvirtAssetResult.Failed("artifact", "VM base image does not match the execution-plan digest.");
             var overlay = await CreateOverlayAsync(plan, asset, baseImage, cancellationToken);
             var domain = native.Define(BuildDomainXml(plan, asset, domainName, overlay));
             if (domain == 0)
@@ -174,7 +179,8 @@ public sealed class LibvirtTeamLabProvider(
         var overlay = OverlayPath(plan, asset);
         if (File.Exists(overlay))
         {
-            if (new FileInfo(overlay).Length > 0 && await HasExpectedBackingAsync(overlay, baseImage, cancellationToken))
+            if (new FileInfo(overlay).Length > 0 && await HasExpectedBackingAsync(
+                    overlay, baseImage, asset.ImageDigest, cancellationToken))
                 return overlay;
             DeleteOverlay(overlay);
         }
@@ -182,9 +188,10 @@ public sealed class LibvirtTeamLabProvider(
         return overlay;
     }
 
-    static async Task<bool> HasExpectedBackingAsync(
+    async Task<bool> HasExpectedBackingAsync(
         string overlay,
         string baseImage,
+        string? expectedDigest,
         CancellationToken cancellationToken)
     {
         using var process = new Process
@@ -209,9 +216,15 @@ public sealed class LibvirtTeamLabProvider(
             await process.WaitForExitAsync(deadline.Token);
             if (process.ExitCode != 0) return false;
             using var document = JsonDocument.Parse(output);
-            if (!document.RootElement.TryGetProperty("backing-filename", out var backing)) return false;
+            if (!document.RootElement.TryGetProperty("backing-filename", out var backing) ||
+                !document.RootElement.TryGetProperty("format", out var format) ||
+                !string.Equals(format.GetString(), "qcow2", StringComparison.OrdinalIgnoreCase) ||
+                !document.RootElement.TryGetProperty("virtual-size", out var virtualSize) ||
+                virtualSize.GetInt64() <= 0)
+                return false;
             return string.Equals(Path.GetFullPath(backing.GetString() ?? string.Empty), Path.GetFullPath(baseImage),
-                OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+                       OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal) &&
+                   await HasExpectedBaseImageAsync(baseImage, expectedDigest, cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -221,14 +234,39 @@ public sealed class LibvirtTeamLabProvider(
         }
     }
 
+    internal static async Task<bool> HasExpectedBaseImageAsync(
+        string path, string? expectedDigest, CancellationToken cancellationToken)
+    {
+        var digest = NormalizeSha256(expectedDigest);
+        if (digest is null) return false;
+        if (!File.Exists(path)) return false;
+        await using var stream = File.OpenRead(path);
+        var actual = Convert.ToHexString(await SHA256.HashDataAsync(stream, cancellationToken)).ToLowerInvariant();
+        return string.Equals(actual, digest, StringComparison.Ordinal);
+    }
+
+    internal static string BaseImageLockKey(string path) =>
+        "vm-image-path:" + Path.GetFullPath(path).Replace('\\', '/').ToUpperInvariant();
+
+    static string? NormalizeSha256(string? value)
+    {
+        var trimmed = value?.Trim();
+        if (string.IsNullOrWhiteSpace(trimmed)) return null;
+        if (trimmed.StartsWith("sha256:", StringComparison.OrdinalIgnoreCase)) trimmed = trimmed[7..];
+        return trimmed.Length == 64 && trimmed.All(Uri.IsHexDigit) ? trimmed.ToLowerInvariant() : null;
+    }
+
     static string DomainName(TeamLabExecutionPlanV2 plan, TeamLabAssetExecutionSpecV2 asset) =>
-        TeamLabExecutionIdentityV2.VmDomainName(plan.RuntimePublicId, plan.Generation, asset.AssetKey);
+        TeamLabExecutionIdentityV2.VmDomainName(plan.RuntimePublicId, plan.Generation, plan.ShardKey, asset.AssetKey);
 
     string RuntimeDirectory(TeamLabExecutionPlanV2 plan) => Path.Combine(
         teamLab.RuntimeStateRoot, plan.RuntimePublicId.ToString("N"), plan.Generation.ToString());
 
     string OverlayPath(TeamLabExecutionPlanV2 plan, TeamLabAssetExecutionSpecV2 asset) => Path.Combine(
-        RuntimeDirectory(plan), $"{asset.AssetKey}-{plan.PlanDigest["sha256:".Length..]}.qcow2");
+        RuntimeDirectory(plan), $"{asset.AssetKey}-{PlanDigestHex(plan.PlanDigest)}.qcow2");
+
+    static string PlanDigestHex(string digest) =>
+        digest.StartsWith("sha256:", StringComparison.OrdinalIgnoreCase) ? digest[7..] : digest;
 
     static bool MatchesStableUuid(nint domain, TeamLabExecutionPlanV2 plan,
         TeamLabAssetExecutionSpecV2 asset)
@@ -314,7 +352,11 @@ public sealed class LibvirtTeamLabProvider(
         deadline.CancelAfter(TimeSpan.FromMinutes(2));
         try
         {
+            var standardError = process.StandardError.ReadToEndAsync(deadline.Token);
             await process.WaitForExitAsync(deadline.Token);
+            _ = await standardError;
+            if (process.ExitCode != 0)
+                throw new InvalidOperationException("qemu-img failed to create the VM overlay.");
         }
         catch (OperationCanceledException)
         {
@@ -322,8 +364,6 @@ public sealed class LibvirtTeamLabProvider(
             await process.WaitForExitAsync(CancellationToken.None);
             throw;
         }
-        if (process.ExitCode != 0)
-            throw new InvalidOperationException("qemu-img failed to create the VM overlay.");
     }
 
     static void DeleteOverlay(string path)

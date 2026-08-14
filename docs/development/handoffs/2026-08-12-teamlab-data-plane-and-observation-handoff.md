@@ -79,11 +79,45 @@
 - `dotnet build src/GZCTF.slnx -c Release --no-restore`：通过，0 error；存在既有测试分析器 warning，未在本轮修改。
 - 未执行单元、集成、实机、压测、浏览器和故障注入测试。此前定向测试宿主无输出而被停止，不能写为通过。
 
-## 118 部署记录
+## 118 部署与节点同步记录
 
-- 发布版本：`teamlab-hpa-b87c747`。
-- 源码提交：`b87c747ca3195b3137b5d5293c88eec226423847`。
-- 发布包 SHA-256：`e35c37f38693bbcee9865f7033818bdbcef39f9704bcca1c5a9426900e3cb31d`。
-- 发布目录：`/opt/gzctf/releases/teamlab-hpa-b87c747/publish`。
-- 发布后只读核验：`gzctf.service=active`、`gzctf-agent.service=active`、主站与 Agent 运行二进制均与本地发布物 SHA-256 一致、`http://127.0.0.1:8080/` 返回 `200`、`EnableExecutionPlanV2=false`。
-- 未在部署过程中创建、修改或销毁任何 TeamLab 场景、比赛、运行时、VM、容器或测试资源。
+- 发布版本：`teamlab-hpa-ovsdb-jsonrpc-20260812`；发布目录：`/opt/gzctf/releases/teamlab-hpa-ovsdb-jsonrpc-20260812/publish`；发布包 SHA-256：`9d548ac0b3abde23d114d51f524fde40786f4bb420bdf8cfd01b8fb51099a6cf`。
+- 先前问题的根因是 118 主站仍指向另一套 release，而 `/usr/local/bin/gzctf-agent` 被单独替换，主站计算的随附 Agent SHA 与实际进程不一致。此次已改为完整 release 原子切换，主站与随附 Agent 的 SHA 一致。
+- 已通过主站节点管理接口同步 118、125，未手工替换 125。两个请求均返回成功；两个节点均上报 Agent SHA `498ff7e3fb555f0adc2e5648b94ad0b64f9b5176a85b464324f2d11734ec1689`，更新状态稳定、`IsSchedulable=true`、无不可调度原因。
+- 两节点的隧道与 Fabric 均为健康状态，能力清单均含 `teamlab.execution-plan.v2`、`teamlab.ovs-ovn.v1`、`teamlab.artifact-cache.v2`、`teamlab.libvirt.native.v1`，执行计划并发上限为 1。
+- `gzctf.service`、`gzctf-agent.service` 均为 `active`，首页本机 HTTP 检查通过。未在部署过程中创建、修改或销毁 TeamLab 场景、比赛、运行时、VM、容器或测试资源。
+- 2026-08-12 后续切换：release 已更新为 `teamlab-hpa-v2-enabled-20260812`，主站 `TeamLabNetworkConfig:EnableExecutionPlanV2=true`。该开关已纳入 `TeamLabDataPlaneSyncConfig`，平台同步会将相同配置写入 Agent，避免主站与节点半切换。
+- 118、125 均已通过平台同步并重启 Agent。两节点以节点认证请求 `POST /api/teamlab/execution-plan/apply` 时均返回 `400 request.invalid`，没有返回 V2 关闭时的 `404`；因此 V2 Provider 已实际开启，新建 TeamLab runtime 将走执行计划路径。
+- **仍待验收：** V2 正常运行、并发、故障与清理矩阵。上述未完成项是测试范围，不再阻止 V2 在独立验收环境启用。
+
+## 2026-08-13 Review-2 修复部署
+
+### 发布物
+
+- 发布版本：`teamlab-hpa-review2-fixes-20260813-2`。
+- 发布包 SHA-256：`0a95e872f0758d414034fdb2f4d2714118b862c34da7837d1fc24bad8810e54c`。
+- 发布目录：`/opt/gzctf/releases/teamlab-hpa-review2-fixes-20260813-2/publish`；`/opt/gzctf/publish` 已原子切换指向该 release。
+- 发布物由当前工作树构建，包含 review-2 修复；`release-manifest.json` 的 `gitCommit` 仍为 `b90005d`，不代表工作树未提交改动未包含在包内。
+- 切换前已备份数据库：`/opt/gzctf-vnext/backups/gzctf-before-vnext-20260812T172824Z.dump`，SHA-256 `c2e1a696cbf09818a7c2a494f786c5b702426756df868478c95c9dfde8ed3694`。
+- 迁移已应用至 `20260812113416_AlignTeamLabExecutionRuntimeSchema`；旧 release `teamlab-hpa-v2-enabled-20260812` 保留在 `/opt/gzctf/publish.previous`，可用于回滚。
+- `gzctf.service`、`gzctf-agent.service` 均为 `active`，`http://127.0.0.1:8080/` 返回 200。
+
+### 配置与节点同步
+
+- 部署后核对发现 08-12 `v2-enabled` release 的主站 `appsettings.json` 实际未包含 `TeamLabNetwork` 节；本次已在 `/opt/gzctf/publish/appsettings.json` 与 `/opt/gzctf/persistent/appsettings.json` 显式写入 `TeamLabNetwork.EnableExecutionPlanV2=true`，并重启主站确认生效。
+- 已通过平台节点管理接口同步 118、125；两节点均回报 `success=true`、状态稳定、`IsSchedulable=true`。
+- 118、125 的 Agent SHA-256 均为 `be5aae78b600f9aa34cc3ddf0cd5bffb16d5888c7483ce1d90d67d152779c961`，与主站 bundled Agent 一致。
+- 两节点能力清单均包含 `teamlab.execution-plan.v2`、`teamlab.ovs-ovn.v1`、`teamlab.artifact-cache.v2`、`teamlab.libvirt.native.v1`，执行计划并发上限 1，无不可调度原因。
+- 118 Agent 配置 `TeamLab.EnableExecutionPlanV2=true`；两节点以节点认证请求 `POST /api/teamlab/execution-plan/apply` 均返回 `400 request.invalid`，确认主站与 Agent 两侧 V2 Provider 同时开启。
+- 未创建、修改或销毁任何 TeamLab 场景、比赛、运行时、VM、容器或测试资源；现有 runtime 119 等旧路径资源未受影响。
+
+### 待验收
+
+- V2 实机矩阵仍未执行：正常 apply/cleanup、4/20/50 资产、多网段、Docker/VM、暂停恢复、并发、故障注入、清理残留与观测回放。
+- 验收人员按上文“必测矩阵”执行，并使用独立场景与独立比赛；验收失败时按快照清理并保留日志，不自动重试或延长等待。
+
+## 2026-08-13 125 V2 能力间歇缺失根因修复（本节的节点同步结论已被更新）
+
+- 实测 125 的 V2 能力不是始终缺失，而是 V2/NO_V2 交替。根因是 OVSDB 半开连接与闲置 `echo` 残留；同步阶段还存在安装文件哈希与运行进程哈希不一致造成的假阳性。
+- 修复内容、部署事实与测试入口见 `docs/development/handoffs/2026-08-13-125-v2-root-cause-fixed.md`。
+- 当前 118、125 的 Agent SHA-256 均为 `c4835cb5945590674c51027f51aee9c3daa2f05e59940fd56fb32b4b3a8e99ce`，两节点能力清单均含 `teamlab.execution-plan.v2`、`teamlab.ovs-ovn.v1`，状态 Stable、可调度。

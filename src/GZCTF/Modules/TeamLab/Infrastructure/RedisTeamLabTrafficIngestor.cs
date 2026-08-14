@@ -11,6 +11,7 @@ namespace GZCTF.Modules.TeamLab.Infrastructure;
 public sealed class RedisTeamLabTrafficIngestor(
     IRedisConnectionProvider connections,
     RedisKeyspace keyspace,
+    TeamLabTrafficLocalBuffer localBuffer,
     RedisRuntimeState runtimeState,
     RedisTelemetry telemetry,
     ILogger<RedisTeamLabTrafficIngestor> logger) : ITeamLabTrafficIngestor
@@ -18,29 +19,26 @@ public sealed class RedisTeamLabTrafficIngestor(
     public const string ConsumerGroup = "gzctf-teamlab-flow-v1";
     public const int MaxStreamLength = 250_000;
 
-    private const string AppendBatchScript = """
-        local stream = KEYS[1]
-        local group = ARGV[1]
-        local maximum = tonumber(ARGV[2])
-        local count = #ARGV - 2
-        local pending = redis.call('XPENDING', stream, group)
-        if pending[1] == 0 then
-            redis.call('XTRIM', stream, 'MAXLEN', maximum - count)
-        else
-            redis.call('XTRIM', stream, 'MINID', pending[2])
-        end
-        if redis.call('XLEN', stream) + count > maximum then
-            return -1
-        end
-        for index = 3, #ARGV do
-            redis.call('XADD', stream, '*', 'payload', ARGV[index])
-        end
-        return count
-        """;
+    private static readonly LuaScript ProtectedTrimScript = LuaScript.Prepare(
+        "local pending = redis.call('XPENDING', @stream, @group); " +
+        "local groups = redis.call('XINFO', 'GROUPS', @stream); " +
+        "for _, info in ipairs(groups) do " +
+        "  local name; local lastDelivered; " +
+        "  for index = 1, #info, 2 do " +
+        "    if info[index] == 'name' then name = info[index + 1]; " +
+        "    elseif info[index] == 'last-delivered-id' then lastDelivered = info[index + 1]; end; " +
+        "  end; " +
+        "  if name == @group then " +
+        "    if pending[1] > 0 then return redis.call('XTRIM', @stream, 'MINID', pending[2]); end; " +
+        "    if lastDelivered ~= '0-0' then return redis.call('XTRIM', @stream, 'MINID', lastDelivered); end; " +
+        "    return 0; " +
+        "  end; " +
+        "end; return 0;");
 
     private static readonly JsonSerializerOptions StreamPayloadJson = new(JsonSerializerDefaults.Web);
 
     private readonly RedisKey _streamKey = keyspace.Create(RedisKeyPurpose.Stream, "teamlab-flow");
+    private readonly RedisKey _capacityLockKey = keyspace.Create(RedisKeyPurpose.Lock, "teamlab-flow-capacity");
     private readonly SemaphoreSlim _groupGate = new(1, 1);
     private readonly ConcurrentDictionary<string, RedisValue> _reclaimCursors = new(StringComparer.Ordinal);
     private int _groupReady;
@@ -55,7 +53,7 @@ public sealed class RedisTeamLabTrafficIngestor(
         var batches = CreateBatches(envelopes);
         var connection = await TryGetConnectionAsync(cancellationToken);
         if (connection is null)
-            return Deferred();
+            return BufferLocally(batches, 0);
 
         var database = connection.GetDatabase();
         var stopwatch = Stopwatch.StartNew();
@@ -77,7 +75,7 @@ public sealed class RedisTeamLabTrafficIngestor(
             logger.LogWarning(exception,
                 "TeamLab 流量流追加失败，节点将保留 {Count} 条样本等待下次收集",
                 batches.Skip(completedBatches).Sum(batch => batch.Count));
-            return Deferred();
+            return BufferLocally(batches, completedBatches);
         }
     }
 
@@ -91,11 +89,10 @@ public sealed class RedisTeamLabTrafficIngestor(
         var take = Math.Clamp(maxCount, 1, TeamLabTrafficIngestionLimits.MaxBatchSamples);
         var connection = await TryGetConnectionAsync(cancellationToken);
         if (connection is null)
-            return TeamLabTrafficReadBatch.Empty;
+            return ReadLocal(take);
 
         var database = connection.GetDatabase();
         var messages = new List<TeamLabTrafficIngestMessage>(take);
-        var malformedIds = new List<RedisValue>();
         try
         {
             await EnsureConsumerGroupAsync(database);
@@ -109,20 +106,14 @@ public sealed class RedisTeamLabTrafficIngestor(
                 reclaimCursor,
                 reclaimCount);
             _reclaimCursors[consumerName] = reclaimed.NextStartId;
-            AddEntries(reclaimed.ClaimedEntries, messages, malformedIds);
+            AddEntries(reclaimed.ClaimedEntries, messages);
 
             var remaining = take - messages.Count;
             if (remaining > 0)
             {
                 var fresh = await database.StreamReadGroupAsync(
                     _streamKey, ConsumerGroup, consumerName, ">", remaining, noAck: false);
-                AddEntries(fresh, messages, malformedIds);
-            }
-
-            if (malformedIds.Count > 0)
-            {
-                await database.StreamAcknowledgeAsync(_streamKey, ConsumerGroup, malformedIds.ToArray());
-                logger.LogError("已丢弃 {Count} 条格式错误的 TeamLab 流量流条目", malformedIds.Count);
+                AddEntries(fresh, messages);
             }
 
             runtimeState.RecordSuccess("stream");
@@ -133,6 +124,10 @@ public sealed class RedisTeamLabTrafficIngestor(
             logger.LogWarning(exception, "TeamLab 流量流读取失败，仅消费本地回退数据");
         }
 
+        if (messages.Count < take)
+            messages.AddRange(localBuffer.Read(take - messages.Count)
+                .Select(item => new TeamLabTrafficIngestMessage(null, item.Envelope, item.Sequence)));
+
         if (messages.Count == 0)
             return TeamLabTrafficReadBatch.Empty;
 
@@ -141,21 +136,31 @@ public sealed class RedisTeamLabTrafficIngestor(
         return new TeamLabTrafficReadBatch(messages);
     }
 
+    private TeamLabTrafficReadBatch ReadLocal(int take)
+    {
+        var messages = localBuffer.Read(take)
+            .Select(item => new TeamLabTrafficIngestMessage(null, item.Envelope, item.Sequence))
+            .ToArray();
+        return messages.Length == 0 ? TeamLabTrafficReadBatch.Empty : new TeamLabTrafficReadBatch(messages);
+    }
+
     public async ValueTask AcknowledgeAsync(
         IReadOnlyCollection<string> streamIds,
+        IReadOnlyCollection<long> localSequences,
         CancellationToken cancellationToken)
     {
-        if (streamIds.Count == 0)
-            return;
+        if (streamIds.Count > 0)
+        {
+            var connection = await connections.GetAsync(cancellationToken);
+            if (connection is null)
+                throw new InvalidOperationException("Redis became unavailable before TeamLab traffic acknowledgement.");
 
-        var connection = await connections.GetAsync(cancellationToken);
-        if (connection is null)
-            throw new InvalidOperationException("Redis became unavailable before TeamLab traffic acknowledgement.");
-
-        await connection.GetDatabase().StreamAcknowledgeAsync(
-            _streamKey,
-            ConsumerGroup,
-            streamIds.Select(id => (RedisValue)id).ToArray());
+            await connection.GetDatabase().StreamAcknowledgeAsync(
+                _streamKey,
+                ConsumerGroup,
+                streamIds.Select(id => (RedisValue)id).ToArray());
+        }
+        localBuffer.Acknowledge(localSequences);
     }
 
     internal static IReadOnlyList<IReadOnlyList<TeamLabTrafficEnvelope>> CreateBatches(
@@ -195,16 +200,35 @@ public sealed class RedisTeamLabTrafficIngestor(
         IReadOnlyList<TeamLabTrafficEnvelope> batch,
         CancellationToken cancellationToken)
     {
-        cancellationToken.ThrowIfCancellationRequested();
-        var arguments = new RedisValue[batch.Count + 2];
-        arguments[0] = ConsumerGroup;
-        arguments[1] = MaxStreamLength;
-        for (var index = 0; index < batch.Count; index++)
-            arguments[index + 2] = JsonSerializer.Serialize(batch[index], StreamPayloadJson);
-        var appended = (long)await database.ScriptEvaluateAsync(
-            AppendBatchScript, [_streamKey], arguments);
-        if (appended != batch.Count)
-            throw new TeamLabTrafficStreamCapacityException();
+        var owner = Guid.NewGuid().ToString("N");
+        var deadline = DateTimeOffset.UtcNow.AddSeconds(5);
+        while (!await database.LockTakeAsync(_capacityLockKey, owner, TimeSpan.FromSeconds(30)))
+        {
+            if (DateTimeOffset.UtcNow >= deadline)
+                throw new TimeoutException("TeamLab traffic stream capacity lock timed out.");
+            await Task.Delay(25, cancellationToken);
+        }
+
+        try
+        {
+            await database.ScriptEvaluateAsync(ProtectedTrimScript, new
+            {
+                stream = _streamKey,
+                group = (RedisValue)ConsumerGroup
+            });
+            if (await database.StreamLengthAsync(_streamKey) + batch.Count > MaxStreamLength)
+                throw new TeamLabTrafficStreamCapacityException();
+
+            var redisBatch = database.CreateBatch();
+            var writes = batch.Select(envelope => redisBatch.StreamAddAsync(_streamKey,
+                [new NameValueEntry("payload", JsonSerializer.Serialize(envelope, StreamPayloadJson))])).ToArray();
+            redisBatch.Execute();
+            await Task.WhenAll(writes);
+        }
+        finally
+        {
+            await database.LockReleaseAsync(_capacityLockKey, owner);
+        }
     }
 
     private async Task EnsureConsumerGroupAsync(IDatabase database)
@@ -249,16 +273,19 @@ public sealed class RedisTeamLabTrafficIngestor(
         }
     }
 
-    private TeamLabTrafficEnqueueResult Deferred()
+    private TeamLabTrafficEnqueueResult BufferLocally(
+        IReadOnlyList<IReadOnlyList<TeamLabTrafficEnvelope>> batches,
+        int firstBatch)
     {
+        var pending = batches.Skip(firstBatch).SelectMany(batch => batch).ToArray();
+        var dropped = localBuffer.EnqueueRange(pending);
         telemetry.RecordOperation(RedisTelemetryPurpose.Stream, RedisTelemetryStatus.Bypassed);
-        return new TeamLabTrafficEnqueueResult(0, 0, 0, true);
+        return new TeamLabTrafficEnqueueResult(pending.Length, batches.Count - firstBatch, dropped, true);
     }
 
     private static void AddEntries(
         IEnumerable<StreamEntry> entries,
-        ICollection<TeamLabTrafficIngestMessage> messages,
-        ICollection<RedisValue> malformedIds)
+        ICollection<TeamLabTrafficIngestMessage> messages)
     {
         foreach (var entry in entries)
         {
@@ -268,7 +295,8 @@ public sealed class RedisTeamLabTrafficIngestor(
             }
             catch (Exception exception) when (exception is FormatException or OverflowException or ArgumentException)
             {
-                malformedIds.Add(entry.Id);
+                // Keep malformed entries pending. Confirming data that did not reach PostgreSQL
+                // would turn corruption into an invisible permanent data loss.
             }
         }
     }

@@ -1,4 +1,5 @@
 using GZCTF.Models.Data;
+using GZCTF.TeamLab.Contracts;
 using GZCTF.Modules.TeamLab.Domain;
 using GZCTF.Modules.Audit.Domain;
 using Microsoft.EntityFrameworkCore;
@@ -22,6 +23,8 @@ public sealed class TeamLabRuntimeFoundationEntityConfiguration : IEntityTypeCon
         builder.Property(item => item.ExternalReference).HasMaxLength(256);
         builder.Property(item => item.CreationIdempotencyKey).HasMaxLength(128);
         builder.Property(item => item.CreateRequestHash).HasMaxLength(128);
+        builder.Property(item => item.IsScenarioBuild).HasDefaultValue(false);
+        builder.Property(item => item.ExecutionModel).HasConversion<string>().HasMaxLength(16);
         builder.HasOne<TeamLabTopologyRelease>()
             .WithMany()
             .HasForeignKey(item => item.TopologyReleaseId)

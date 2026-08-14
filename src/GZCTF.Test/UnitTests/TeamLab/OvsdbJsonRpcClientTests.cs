@@ -15,14 +15,28 @@ namespace GZCTF.Test.UnitTests.TeamLab;
 public sealed class OvsdbJsonRpcClientTests
 {
     [Fact]
-    public async Task Client_AnswersGreetingAndRejectsMismatchedResponseId()
+    public async Task Client_SendsRequestWithoutWaitingForServerGreeting()
     {
         using var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
-        var server = ServeOnceAsync(listener, mismatchedResponse: true);
+        var server = ServeOnceAsync(listener, mismatchedResponse: false);
         using var client = new OvsdbJsonRpcClient();
 
-        await Assert.ThrowsAsync<JsonException>(() => client.TransactAsync(
+        Assert.IsType<JsonArray>(await client.TransactAsync(
+            Endpoint(listener), "Open_vSwitch", [new JsonObject { ["op"] = "select" }],
+            CancellationToken.None));
+        await server;
+    }
+
+    [Fact]
+    public async Task Client_AnswersEchoRequestBeforeReadingTransactionResponse()
+    {
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var server = ServeEchoThenResponseAsync(listener);
+        using var client = new OvsdbJsonRpcClient();
+
+        Assert.IsType<JsonArray>(await client.TransactAsync(
             Endpoint(listener), "Open_vSwitch", [new JsonObject { ["op"] = "select" }],
             CancellationToken.None));
         await server;
@@ -39,10 +53,58 @@ public sealed class OvsdbJsonRpcClientTests
 
         Assert.IsType<JsonArray>(await client.TransactAsync(
             Endpoint(listener), "Open_vSwitch", operations, CancellationToken.None));
-        await Assert.ThrowsAnyAsync<Exception>(() => client.TransactAsync(
-            Endpoint(listener), "Open_vSwitch", operations, CancellationToken.None));
         Assert.IsType<JsonArray>(await client.TransactAsync(
             Endpoint(listener), "Open_vSwitch", operations, CancellationToken.None));
+        await server;
+    }
+
+    [Fact]
+    public async Task Client_ReconnectsBeforeReusingAnIdleSession()
+    {
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var server = ServeTwiceAsync(listener);
+        using var client = new OvsdbJsonRpcClient(TimeSpan.FromSeconds(15), TimeSpan.FromMilliseconds(50));
+        var operations = new[] { new JsonObject { ["op"] = "select" } };
+
+        Assert.IsType<JsonArray>(await client.TransactAsync(
+            Endpoint(listener), "Open_vSwitch", operations, CancellationToken.None));
+        await Task.Delay(100);
+        Assert.IsType<JsonArray>(await client.TransactAsync(
+            Endpoint(listener), "Open_vSwitch", operations, CancellationToken.None));
+        await server;
+    }
+    [Fact]
+    public async Task Client_ResetsTimedOutSessionBeforeNextTransactionUsesIt()
+    {
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var server = ServeTimedOutThenSuccessfulConnectionAsync(listener);
+        using var client = new OvsdbJsonRpcClient(TimeSpan.FromMilliseconds(100));
+        var operations = new[] { new JsonObject { ["op"] = "select" } };
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => client.TransactAsync(
+            Endpoint(listener), "Open_vSwitch", operations, CancellationToken.None));
+        await Task.Delay(300);
+        Assert.IsType<JsonArray>(await client.TransactAsync(
+            Endpoint(listener), "Open_vSwitch", operations, CancellationToken.None));
+        await server.WaitAsync(TimeSpan.FromSeconds(5));
+    }
+
+    [Fact]
+    public async Task Client_DoesNotExposeOvsdbErrorPayload()
+    {
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var server = ServeErrorAsync(listener);
+        using var client = new OvsdbJsonRpcClient();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => client.TransactAsync(
+            Endpoint(listener), "Open_vSwitch", [new JsonObject { ["op"] = "select" }],
+            CancellationToken.None));
+
+        Assert.Equal("OVSDB transaction failed.", exception.Message);
+        Assert.DoesNotContain("secret-table-detail", exception.Message, StringComparison.Ordinal);
         await server;
     }
 
@@ -63,6 +125,59 @@ public sealed class OvsdbJsonRpcClientTests
             await ServeConnectionAsync(second, mismatchedResponse: false);
     }
 
+    private static async Task ServeTimedOutThenSuccessfulConnectionAsync(TcpListener listener)
+    {
+        using (var first = await listener.AcceptTcpClientAsync())
+        {
+            using var reader = new StreamReader(first.GetStream(), new UTF8Encoding(false), false, 4096,
+                leaveOpen: true);
+            _ = await reader.ReadLineAsync();
+            await Task.Delay(250);
+        }
+        using (var second = await listener.AcceptTcpClientAsync())
+            await ServeConnectionAsync(second, mismatchedResponse: false);
+    }
+
+    private static async Task ServeErrorAsync(TcpListener listener)
+    {
+        using var connection = await listener.AcceptTcpClientAsync();
+        await using var stream = connection.GetStream();
+        using var reader = new StreamReader(stream, new UTF8Encoding(false), false, 4096, leaveOpen: true);
+        await using var writer = new StreamWriter(stream, new UTF8Encoding(false), 4096, leaveOpen: true)
+        {
+            AutoFlush = true
+        };
+        var request = JsonNode.Parse(await reader.ReadLineAsync() ?? throw new EndOfStreamException())!.AsObject();
+        await writer.WriteAsync(JsonSerializer.Serialize(new
+        {
+            jsonrpc = "2.0",
+            result = (object?)null,
+            error = new { error = "constraint violation", details = "secret-table-detail" },
+            id = request["id"]!.GetValue<string>()
+        }));
+    }
+
+    private static async Task ServeEchoThenResponseAsync(TcpListener listener)
+    {
+        using var connection = await listener.AcceptTcpClientAsync();
+        await using var stream = connection.GetStream();
+        using var reader = new StreamReader(stream, new UTF8Encoding(false), false, 4096, leaveOpen: true);
+        await using var writer = new StreamWriter(stream, new UTF8Encoding(false), 4096, leaveOpen: true)
+        {
+            AutoFlush = true
+        };
+        var request = JsonNode.Parse(await reader.ReadLineAsync() ?? throw new EndOfStreamException())!.AsObject();
+        await writer.WriteAsync("{\"jsonrpc\":\"2.0\",\"method\":\"echo\",\"params\":[\"keepalive\"],\"id\":\"echo-1\"}");
+        var echo = JsonNode.Parse(await reader.ReadLineAsync() ?? throw new EndOfStreamException())!.AsObject();
+        Assert.Equal("echo-1", echo["id"]!.GetValue<string>());
+        Assert.Equal("keepalive", echo["result"]![0]!.GetValue<string>());
+        await writer.WriteAsync(JsonSerializer.Serialize(new
+        {
+            jsonrpc = "2.0", result = Array.Empty<object>(), error = (string?)null,
+            id = request["id"]!.GetValue<string>()
+        }));
+    }
+
     private static async Task ServeConnectionAsync(TcpClient connection, bool mismatchedResponse)
     {
         await using var stream = connection.GetStream();
@@ -71,10 +186,11 @@ public sealed class OvsdbJsonRpcClientTests
         {
             AutoFlush = true
         };
-        await writer.WriteLineAsync("{\"jsonrpc\":\"2.0\",\"method\":\"echo\",\"params\":[],\"id\":0}");
-        _ = await reader.ReadLineAsync();
         var request = JsonNode.Parse(await reader.ReadLineAsync() ?? throw new EndOfStreamException())!.AsObject();
         var id = mismatchedResponse ? "mismatched" : request["id"]!.GetValue<string>();
-        await writer.WriteLineAsync(JsonSerializer.Serialize(new { jsonrpc = "2.0", result = Array.Empty<object>(), id }));
+        await writer.WriteAsync(JsonSerializer.Serialize(new
+        {
+            jsonrpc = "2.0", result = Array.Empty<object>(), error = (string?)null, id
+        }));
     }
 }

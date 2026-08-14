@@ -6,6 +6,7 @@ using GZCTF.Models.Data;
 using GZCTF.Modules.Audit.Contracts;
 using GZCTF.Modules.Audit.Domain;
 using GZCTF.Modules.Runtime.Contracts;
+using GZCTF.TeamLab.Contracts;
 using GZCTF.Modules.Runtime.Domain;
 using GZCTF.Modules.TeamLab.Domain;
 using GZCTF.Services.TeamLab;
@@ -62,18 +63,18 @@ public sealed class TeamLabRuntimeCleanupService(
         {
             try
             {
+                // A persisted plan is the only evidence V2 was applied. Rows without one
+                // (legacy deployments or destroy-before-apply) use the inventory-based path;
+                // failing on a missing snapshot would strand the runtime and its capacity.
                 if (planSnapshots.TryGetValue(shard.Id, out var snapshot))
                 {
                     var plan = DeserializeSnapshot(snapshot, runtime, generation);
                     var cleanup = await executor.CleanupExecutionPlanAsync(
-                        snapshot.WorkerNodeId, plan, cancellationToken);
+                        shard.WorkerNodeId, plan, cancellationToken);
                     return cleanup.Success
                         ? TeamLabNodeResult.Ok(cleanup.Message ?? "Execution plan cleaned.")
                         : TeamLabNodeResult.Failed(cleanup.Message ?? "Execution-plan cleanup failed.");
                 }
-                if (UsesExecutionPlanV2(runtime, shard, generation))
-                    return TeamLabNodeResult.Failed(
-                        $"Execution-plan cleanup snapshot is missing for shard {shard.Id}.");
                 var inventory = await executor.GetRuntimeInventoryAsync(shard.WorkerNodeId, cancellationToken);
                 return await executor.CleanupShardAsync(
                     shard.WorkerNodeId,
@@ -166,16 +167,6 @@ public sealed class TeamLabRuntimeCleanupService(
                 $"Execution-plan cleanup snapshot is invalid for shard {snapshot.ShardId}.");
         return plan;
     }
-
-    private static bool UsesExecutionPlanV2(
-        TeamLabRuntime runtime,
-        TeamLabRuntimeShard shard,
-        int generation) => runtime.Infrastructure
-        .Where(item => item.Generation == generation)
-        .SelectMany(item => item.Fragments)
-        .Any(fragment => fragment.ShardId == shard.Id &&
-                         string.Equals(fragment.NativeResourceId, $"execution-plan-v2/{shard.Id}",
-                             StringComparison.Ordinal));
 
     private async Task MarkCleanupStartedAsync(TeamLabRuntime runtime, CancellationToken cancellationToken)
     {
@@ -329,6 +320,14 @@ public sealed class TeamLabRuntimeCleanupService(
             .ToArrayAsync(cancellationToken);
         foreach (var lease in fabricLeases)
             lease.ReleasedAt = now;
+
+        // The immutable plan is the authority only until this generation has been physically
+        // cleaned. Keeping it afterwards turns a bounded recovery record into permanent JSON
+        // retention for every reset.
+        var snapshots = await context.TeamLabExecutionPlanSnapshots
+            .Where(item => item.RuntimeId == runtime.Id && item.Generation == generation)
+            .ToArrayAsync(cancellationToken);
+        context.TeamLabExecutionPlanSnapshots.RemoveRange(snapshots);
 
         if (markRuntimeDestroyed)
             runtime.Status = TeamLabRuntimeStatus.Destroyed;

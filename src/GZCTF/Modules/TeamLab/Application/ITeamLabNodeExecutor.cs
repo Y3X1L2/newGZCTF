@@ -244,6 +244,7 @@ public sealed record TeamLabNodeObservationResult(
     bool Success,
     string Message,
     long NextSequence,
+    long PersistedThroughSequence,
     long DroppedCount,
     IReadOnlyList<TeamLabNodeObservationRecord> Records,
     TeamLabNodeObservationHealth Health);

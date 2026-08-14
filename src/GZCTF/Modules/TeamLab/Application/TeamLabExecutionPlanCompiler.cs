@@ -53,8 +53,7 @@ public static class TeamLabExecutionPlanCompiler
                             owner.Interface.Key,
                             owner.AssetKey,
                             record.MacAddress,
-                            AddressWithoutPrefix(record.IpAddress),
-                            record.IsPrimary);
+                            AddressWithoutPrefix(record.IpAddress));
                     })
                     .Concat(assets.SelectMany(asset => asset.Interfaces
                         .Where(item => item.NetworkKey == switchIntent.Network.Key)
@@ -64,8 +63,7 @@ public static class TeamLabExecutionPlanCompiler
                             item.Key,
                             asset.AssetKey,
                             item.MacAddress,
-                            AddressWithoutPrefix(item.IpAddress),
-                            item.Primary))))
+                            AddressWithoutPrefix(item.IpAddress)))))
                     .DistinctBy(item => item.Key, StringComparer.Ordinal)
                     .ToArray(),
                 Routes(infrastructure, switchIntent.Network.Key),
@@ -74,8 +72,7 @@ public static class TeamLabExecutionPlanCompiler
                 switchIntent.Records.Select(record => new TeamLabDhcpLeaseV2(
                     record.MacAddress,
                     AddressWithoutPrefix(record.IpAddress),
-                    record.Hostname,
-                    record.IsPrimary)).ToArray(),
+                    record.Hostname)).ToArray(),
                 (switchIntent.DnsRecords ?? switchIntent.Records)
                     .Select(record => new TeamLabDnsRecordV2(record.Hostname, AddressWithoutPrefix(record.IpAddress)))
                     .DistinctBy(record => (record.Hostname, record.IpAddress))
@@ -95,11 +92,11 @@ public static class TeamLabExecutionPlanCompiler
                 asset.AssetKey,
                 asset.Kind == TeamLabAssetKind.Docker ? "docker" : "vm",
                 asset.Kind == TeamLabAssetKind.Vm
-                    ? TeamLabExecutionIdentityV2.VmDomainName(runtimePublicId, generation, asset.AssetKey)
+                    ? TeamLabExecutionIdentityV2.VmDomainName(runtimePublicId, generation, shardKey, asset.AssetKey)
                     : asset.AssetKey,
                 digest,
                 asset.Kind == TeamLabAssetKind.Vm
-                    ? TeamLabExecutionIdentityV2.VmDomainName(runtimePublicId, generation, asset.AssetKey)
+                    ? TeamLabExecutionIdentityV2.VmDomainName(runtimePublicId, generation, shardKey, asset.AssetKey)
                     : null,
                 asset.ImageTemplateId,
                 asset.CpuUnits,
@@ -108,8 +105,7 @@ public static class TeamLabExecutionPlanCompiler
                     item.NetworkKey,
                     item.Key,
                     item.Key,
-                    AddressWithoutPrefix(item.IpAddress),
-                    item.Primary)).ToArray(),
+                    AddressWithoutPrefix(item.IpAddress))).ToArray(),
                 health is not null
                     ? [new TeamLabHealthCheckV2(
                         health.Kind == TeamLabHealthCheckKind.Http ? "http" : "tcp",
@@ -125,8 +121,7 @@ public static class TeamLabExecutionPlanCompiler
                 point.PublicId,
                 point.TopologyKey,
                 point.InterfaceToken,
-                CaptureMetadata: true,
-                CapturePackets: false))
+                CaptureMetadata: true))
             .ToArray();
         var control = new TeamLabNetworkControlIntentV2(
             infrastructure.Routers.Select(router => new TeamLabRouterIntentV2(

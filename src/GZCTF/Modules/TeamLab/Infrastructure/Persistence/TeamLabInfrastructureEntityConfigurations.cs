@@ -54,6 +54,7 @@ public sealed class TeamLabExecutionPlanSnapshotEntityConfiguration
     public void Configure(EntityTypeBuilder<TeamLabExecutionPlanSnapshot> builder)
     {
         builder.ToTable("TeamLabExecutionPlanSnapshots");
+        builder.Property(item => item.PlanDigest).HasMaxLength(96);
         builder.Property(item => item.PlanJson).HasColumnType("jsonb");
         builder.HasIndex(item => new { item.RuntimeId, item.Generation, item.ShardId }).IsUnique();
         builder.HasOne(item => item.Runtime)

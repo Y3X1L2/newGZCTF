@@ -49,7 +49,7 @@ public sealed class TeamLabExecutionPlanV2Tests
         {
             Networks = [new TeamLabNetworkIntentV2(
                 "network-a", "10.0.1.0/24", "10.0.1.1",
-                [new TeamLabNetworkPortV2("port-a", "missing", "02:00:00:00:00:01", "10.0.1.10", true)], [], [])]
+                [new TeamLabNetworkPortV2("port-a", "missing", "02:00:00:00:00:01", "10.0.1.10")], [], [])]
         };
 
         Assert.False(plan.IsValid(out var error));
@@ -64,8 +64,8 @@ public sealed class TeamLabExecutionPlanV2Tests
             Networks = [new TeamLabNetworkIntentV2(
                 "network-a", "10.0.1.0/24", "10.0.1.1",
                 [
-                    new TeamLabNetworkPortV2("port-a", "docker-1", "02:00:00:00:00:01", "10.0.1.10", true),
-                    new TeamLabNetworkPortV2("port-b", "docker-2", "02:00:00:00:00:02", "10.0.1.11", false)
+                    new TeamLabNetworkPortV2("port-a", "docker-1", "02:00:00:00:00:01", "10.0.1.10"),
+                    new TeamLabNetworkPortV2("port-b", "docker-2", "02:00:00:00:00:02", "10.0.1.11")
                 ], [], [])],
             Assets =
             [
@@ -73,7 +73,7 @@ public sealed class TeamLabExecutionPlanV2Tests
                 Asset("docker-2", "network-a", "port-b") with
                 {
                     NetworkAttachments = [new TeamLabAssetNetworkAttachmentV2(
-                        "network-a", "port-b", "eth0", "10.0.1.11/24", true)]
+                        "network-a", "port-b", "eth0", "10.0.1.11/24")]
                 }
             ]
         };
@@ -90,12 +90,32 @@ public sealed class TeamLabExecutionPlanV2Tests
         {
             Networks = [new TeamLabNetworkIntentV2(
                 "network-a", "10.0.1.0/24", "10.0.1.1",
-                [new TeamLabNetworkPortV2("port-a", "docker-1", "02:00:00:00:00:01", "10.0.1.10", true)],
+                [new TeamLabNetworkPortV2("port-a", "docker-1", "02:00:00:00:00:01", "10.0.1.10")],
                 [route, route], [])]
         };
 
         Assert.False(plan.IsValid(out var error));
         Assert.Contains("invalid network", error, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Plan_RejectsDuplicateDnsHostnameIgnoringCase()
+    {
+        var plan = Plan();
+        plan = plan with
+        {
+            Networks = [plan.Networks[0] with
+            {
+                DnsRecords =
+                [
+                    new TeamLabDnsRecordV2("portal", "10.0.1.10"),
+                    new TeamLabDnsRecordV2("PORTAL", "10.0.1.11")
+                ]
+            }]
+        };
+
+        Assert.False(plan.IsValid(out var error));
+        Assert.Contains("DNS hostname", error, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -201,7 +221,7 @@ public sealed class TeamLabExecutionPlanV2Tests
             string.Empty,
             [new TeamLabNetworkIntentV2(
                 "network-a", "10.0.1.0/24", "10.0.1.1",
-                [new TeamLabNetworkPortV2("port-a", "docker-1", "02:00:00:00:00:01", "10.0.1.10", true)], [], [])],
+                [new TeamLabNetworkPortV2("port-a", "docker-1", "02:00:00:00:00:01", "10.0.1.10")], [], [])],
             [Asset("docker-1", "network-a", "port-a")],
             []);
         return plan with
@@ -212,5 +232,5 @@ public sealed class TeamLabExecutionPlanV2Tests
 
     static TeamLabAssetExecutionSpecV2 Asset(string key, string network, string port) => new(
         key, "docker", key, "registry.example/teamlab@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", null, 3, 1, 256,
-        [new TeamLabAssetNetworkAttachmentV2(network, port, "eth0", "10.0.1.10/24", true)], []);
+        [new TeamLabAssetNetworkAttachmentV2(network, port, "eth0", "10.0.1.10/24")], []);
 }

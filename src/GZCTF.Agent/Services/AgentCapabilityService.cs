@@ -172,13 +172,6 @@ public sealed class AgentCapabilityService(
         }
     }
 
-    static async Task<string?> ComputeBinarySha256Async()
-    {
-        var path = File.Exists("/usr/local/bin/gzctf-agent")
-            ? "/usr/local/bin/gzctf-agent"
-            : Environment.ProcessPath;
-        return !string.IsNullOrWhiteSpace(path) && File.Exists(path)
-            ? await AgentMaintenanceService.ComputeFileSha256Async(path, CancellationToken.None)
-            : null;
-    }
+    static Task<string?> ComputeBinarySha256Async() =>
+        AgentMaintenanceService.ComputeRunningBinarySha256Async(CancellationToken.None);
 }

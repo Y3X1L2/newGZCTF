@@ -45,14 +45,8 @@ public sealed class TeamLabDataPlanePreparationService(
         if (!string.IsNullOrWhiteSpace(desired.SouthboundEndpoint))
         {
             await EnsureServiceAsync(["ovn-controller"], cancellationToken);
-            await RunRequiredAsync("ovs-vsctl",
-                [
-                    "set", "Open_vSwitch", ".",
-                    $"external-ids:ovn-remote={desired.SouthboundEndpoint}",
-                    "external-ids:ovn-encap-type=geneve",
-                    $"external-ids:ovn-encap-ip={desired.ChassisEncapIp}"
-                ], cancellationToken);
-            await RunRequiredAsync("systemctl", ["restart", "ovn-controller"], cancellationToken);
+            if (await ConfigureControllerAsync(desired, cancellationToken))
+                await RunRequiredAsync("systemctl", ["restart", "ovn-controller"], cancellationToken);
         }
 
         _cachedReadiness = null;
@@ -64,6 +58,7 @@ public sealed class TeamLabDataPlanePreparationService(
     {
         var desired = new TeamLabDataPlaneSyncConfig(
             config.Enable,
+            config.ExecutionModel,
             false,
             config.OvnNorthboundEndpoint,
             config.OvnSouthboundEndpoint,
@@ -101,7 +96,8 @@ public sealed class TeamLabDataPlanePreparationService(
                         new JsonArray(), cancellationToken);
                     northbound = true;
                 }
-                catch (Exception exception) when (exception is IOException or InvalidOperationException or System.Net.Sockets.SocketException)
+                catch (Exception exception) when (exception is IOException or InvalidOperationException or
+                                                  System.Net.Sockets.SocketException or System.Text.Json.JsonException)
                 {
                     logger.LogDebug(exception, "OVN Northbound probe is not ready.");
                 }
@@ -190,7 +186,10 @@ public sealed class TeamLabDataPlanePreparationService(
     {
         foreach (var name in names)
         {
-            if (await SucceedsAsync("systemctl", ["enable", "--now", name], cancellationToken))
+            // Some required OVN units are static: they must be started but cannot be enabled.
+            // Readiness is determined by the active service, not by install-time enablement metadata.
+            if (await SucceedsAsync("systemctl", ["start", name], cancellationToken) &&
+                await SucceedsAsync("systemctl", ["is-active", "--quiet", name], cancellationToken))
                 return;
         }
         throw new InvalidOperationException($"Unable to start required service '{string.Join("' or '", names)}'.");
@@ -211,7 +210,7 @@ public sealed class TeamLabDataPlanePreparationService(
     {
         var result = await RunAsync(fileName, arguments, cancellationToken);
         if (result.ExitCode != 0)
-            throw new InvalidOperationException($"{fileName} failed with exit code {result.ExitCode}.");
+            throw new InvalidOperationException($"{fileName} failed with exit code {result.ExitCode}: {result.StandardError}");
     }
 
     private async Task<bool> SucceedsAsync(string fileName, IReadOnlyList<string> arguments,
@@ -228,20 +227,49 @@ public sealed class TeamLabDataPlanePreparationService(
             var startInfo = new ProcessStartInfo(fileName)
             {
                 UseShellExecute = false,
-                CreateNoWindow = true
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
             };
             foreach (var argument in arguments) startInfo.ArgumentList.Add(argument);
             using var process = Process.Start(startInfo)
                                 ?? throw new InvalidOperationException($"Unable to start {fileName}.");
+            var output = process.StandardOutput.ReadToEndAsync(timeout.Token);
+            var error = process.StandardError.ReadToEndAsync(timeout.Token);
             await process.WaitForExitAsync(timeout.Token);
-            return new CommandResult(process.ExitCode);
+            return new CommandResult(process.ExitCode, await output, await error);
         }
         catch (Win32Exception)
         {
             // Capability probes treat a missing optional host tool as not ready.
-            return new CommandResult(-1);
+            return new CommandResult(-1, string.Empty, "command unavailable");
         }
     }
 
-    private sealed record CommandResult(int ExitCode);
+    private async Task<bool> ConfigureControllerAsync(TeamLabDataPlaneSyncConfig desired,
+        CancellationToken cancellationToken)
+    {
+        var values = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["ovn-remote"] = desired.SouthboundEndpoint!,
+            ["ovn-encap-type"] = "geneve",
+            ["ovn-encap-ip"] = desired.ChassisEncapIp!
+        };
+        var changed = false;
+        foreach (var (key, value) in values)
+        {
+            var current = await RunAsync("ovs-vsctl", ["get", "Open_vSwitch", ".", $"external-ids:{key}"],
+                cancellationToken);
+            if (current.ExitCode == 0 && string.Equals(Unquote(current.StandardOutput), value, StringComparison.Ordinal))
+                continue;
+            await RunRequiredAsync("ovs-vsctl", ["set", "Open_vSwitch", ".", $"external-ids:{key}={value}"],
+                cancellationToken);
+            changed = true;
+        }
+        return changed;
+    }
+
+    private static string Unquote(string value) => value.Trim().Trim('"');
+
+    private sealed record CommandResult(int ExitCode, string StandardOutput, string StandardError);
 }

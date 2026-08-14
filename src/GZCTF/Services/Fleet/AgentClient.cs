@@ -9,6 +9,7 @@ using GZCTF.Models.Internal;
 using GZCTF.Modules.Audit.Contracts;
 using GZCTF.Modules.Audit.Domain;
 using GZCTF.Modules.Runtime.Contracts;
+using GZCTF.TeamLab.Contracts;
 using GZCTF.TeamLab.Contracts.Execution;
 using GZCTF.Repositories.Interface;
 using GZCTF.Services.Container.Manager;
@@ -1886,13 +1887,15 @@ public sealed record AgentVmControlPlaneSyncConfig(
 
 public sealed record TeamLabDataPlaneSyncConfig(
     bool Enabled,
+    TeamLabExecutionModel ExecutionModel,
     bool ControlPlane,
     string? NorthboundEndpoint,
     string? SouthboundEndpoint,
     string? NorthboundListenEndpoint,
     string? SouthboundListenEndpoint,
     string? ChassisEncapIp,
-    string IntegrationBridgeName = "br-int");
+    string IntegrationBridgeName = "br-int",
+    int ManagedDhcpLeaseSeconds = 3600);
 
 public record AgentSyncResponse(
     bool Success,
@@ -2298,6 +2301,7 @@ public record TeamLabObservationBatchResponse(
     string Message,
     long NextSequence,
     long DroppedCount,
+    long PersistedThroughSequence,
     TeamLabObservationRecord[] Records,
     TeamLabObservationHealth Health);
 

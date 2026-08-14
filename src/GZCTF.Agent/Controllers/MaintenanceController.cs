@@ -14,8 +14,6 @@ public class MaintenanceController(AgentMaintenanceService service) : Controller
         var result = await service.SyncAgentAsync(request, token);
         return result.Success
             ? Ok(result)
-            : throw new AgentOperationException(
-                "AgentProtocol", "agent.sync_failed", "Agent synchronization failed.", true,
-                StatusCodes.Status400BadRequest);
+            : BadRequest(result);
     }
 }

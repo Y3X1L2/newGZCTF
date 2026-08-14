@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.Json.Serialization;
 using GZCTF.Extensions;
 using GZCTF.Infrastructure.Cache;
+using GZCTF.TeamLab.Contracts;
 using MemoryPack;
 using Microsoft.Extensions.Options;
 using OpenTelemetry.Exporter;
@@ -604,11 +605,10 @@ public class TeamLabNetworkConfig
     public bool Enable { get; set; }
 
     /// <summary>
-    /// Enables the versioned Agent execution-plan provider after every assigned node has
-    /// advertised the required native capabilities. It is intentionally off until a node fleet
-    /// has passed the real OVN/OVS and libvirt acceptance run.
+    /// Execution model for TeamLab runtime deployments. V2 is the platform default; V1 is an
+    /// explicit migration mode and is never selected automatically.
     /// </summary>
-    public bool EnableExecutionPlanV2 { get; set; }
+    public TeamLabExecutionModel ExecutionModel { get; set; } = TeamLabExecutionModel.V2;
 
     /// <summary>
     /// Returns command plans without mutating WorkerNode state when true.
@@ -637,6 +637,7 @@ public class TeamLabNetworkConfig
     public int PublicUdpPortEnd { get; set; } = 32999;
     public int WorkerWireGuardPortStart { get; set; } = 42000;
     public int WorkerWireGuardPortEnd { get; set; } = 42999;
+    public int ManagedDhcpLeaseSeconds { get; set; } = 3600;
     public string BridgePrefix { get; set; } = "tl";
     public string RouterNamespacePrefix { get; set; } = "tlr";
     public string WireGuardInterfacePrefix { get; set; } = "tlwg";

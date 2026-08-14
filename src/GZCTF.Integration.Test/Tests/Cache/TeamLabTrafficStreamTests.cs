@@ -43,6 +43,7 @@ public sealed class TeamLabTrafficStreamTests : IAsyncLifetime
         var ingestor = new RedisTeamLabTrafficIngestor(
             _connections,
             new RedisKeyspace(options),
+            new TeamLabTrafficLocalBuffer(telemetry),
             runtimeState,
             telemetry,
             NullLogger<RedisTeamLabTrafficIngestor>.Instance);
@@ -62,7 +63,7 @@ public sealed class TeamLabTrafficStreamTests : IAsyncLifetime
         var message = Assert.Single(reclaimed.Messages);
         Assert.Equal(envelope.EvidenceFingerprint, message.Envelope.EvidenceFingerprint);
         Assert.NotNull(message.StreamId);
-        await ingestor.AcknowledgeAsync([message.StreamId!], CancellationToken.None);
+        await ingestor.AcknowledgeAsync([message.StreamId!], [], CancellationToken.None);
     }
 
     [Fact]
@@ -91,7 +92,7 @@ public sealed class TeamLabTrafficStreamTests : IAsyncLifetime
         }
 
         Assert.Equal(envelopes.Length, reclaimedIds.Distinct().Count());
-        await ingestor.AcknowledgeAsync(reclaimedIds, CancellationToken.None);
+        await ingestor.AcknowledgeAsync(reclaimedIds, [], CancellationToken.None);
     }
 
     private RedisTeamLabTrafficIngestor CreateIngestor()
@@ -110,6 +111,7 @@ public sealed class TeamLabTrafficStreamTests : IAsyncLifetime
         return new RedisTeamLabTrafficIngestor(
             _connections,
             new RedisKeyspace(options),
+            new TeamLabTrafficLocalBuffer(telemetry),
             runtimeState,
             telemetry,
             NullLogger<RedisTeamLabTrafficIngestor>.Instance);

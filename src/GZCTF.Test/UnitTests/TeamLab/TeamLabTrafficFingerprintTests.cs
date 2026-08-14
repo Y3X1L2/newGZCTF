@@ -60,6 +60,7 @@ public sealed class TeamLabTrafficFingerprintTests
         var ingestor = new RedisTeamLabTrafficIngestor(
             connections,
             new RedisKeyspace(options),
+            new TeamLabTrafficLocalBuffer(telemetry),
             state,
             telemetry,
             NullLogger<RedisTeamLabTrafficIngestor>.Instance);

@@ -656,10 +656,13 @@ public sealed class TeamLabTrafficApplicationService(
             return;
         }
 
+        var durableRecords = result.Records
+            .Where(item => item.Sequence <= result.PersistedThroughSequence)
+            .ToArray();
         var prepared = PrepareObservationBatch(
-            result.Records,
+            durableRecords,
             cursor.LastSequence,
-            result.NextSequence,
+            Math.Min(result.NextSequence, result.PersistedThroughSequence),
             item => !string.IsNullOrWhiteSpace(item.SourceIp) &&
                     !string.IsNullOrWhiteSpace(item.DestinationIp) &&
                     ResolveObservationPoint(item, pointsByPublicId, endpointPoints, networkCidrs) is { } point
@@ -759,7 +762,7 @@ public sealed class TeamLabTrafficApplicationService(
             PlatformTelemetry.RecordTeamLabObservation("recovered", "mixed");
         }
         await context.SaveChangesAsync(cancellationToken);
-        collected += result.Records.Count;
+        collected += prepared.Envelopes.Length;
         if (!accepted || prepared.BlockedByUnresolvedRecord ||
             result.Records.Count < ObservationReadPageSize || cursor.LastSequence <= previousSequence)
             return;

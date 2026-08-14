@@ -45,6 +45,14 @@ public sealed record TeamLabExecutionPlanV2(
             return false;
         }
 
+        if (Networks.Any(network => network.DnsRecords is { } records && records
+                .GroupBy(record => record.Hostname, StringComparer.OrdinalIgnoreCase)
+                .Any(group => group.Count() != 1)))
+        {
+            error = "DNS hostnames must be unique within each network.";
+            return false;
+        }
+
         var networkKeys = Networks.Select(item => item.Key).ToHashSet(StringComparer.Ordinal);
         var networkPortRecords = Networks.SelectMany(network => network.Ports
             .Select(port => (NetworkKey: network.Key, PortKey: port.Key, port.AssetKey, port.IpAddress)))
@@ -275,8 +283,7 @@ public sealed record TeamLabNetworkIntentV2(
 public sealed record TeamLabDhcpLeaseV2(
     string MacAddress,
     string IpAddress,
-    string Hostname,
-    bool IsPrimary = true);
+    string Hostname);
 
 public sealed record TeamLabDnsRecordV2(string Hostname, string IpAddress);
 
@@ -292,8 +299,7 @@ public sealed record TeamLabNetworkPortV2(
     string Key,
     string AssetKey,
     string MacAddress,
-    string? IpAddress,
-    bool IsPrimary);
+    string? IpAddress);
 
 public sealed record TeamLabNetworkRouteV2(
     string DestinationCidr,
@@ -323,8 +329,7 @@ public sealed record TeamLabAssetNetworkAttachmentV2(
     string NetworkKey,
     string PortKey,
     string InterfaceName,
-    string? IpAddress,
-    bool IsPrimary);
+    string? IpAddress);
 
 public sealed record TeamLabHealthCheckV2(
     string Protocol,
@@ -336,5 +341,4 @@ public sealed record TeamLabObservationIntentV2(
     Guid ObservationPointId,
     string AssetKey,
     string InterfaceToken,
-    bool CaptureMetadata,
-    bool CapturePackets);
+    bool CaptureMetadata);

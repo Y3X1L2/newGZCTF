@@ -5,6 +5,7 @@ using GZCTF.Agent.Services.RuntimeSignals;
 using GZCTF.Agent.Services.TeamLab;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
+using GZCTF.TeamLab.Contracts;
 using GZCTF.TeamLab.Contracts.Execution;
 
 namespace GZCTF.Agent.Controllers;
@@ -32,7 +33,7 @@ public class TeamLabController(
         [FromBody] TeamLabExecutionPlanApplyRequest? request,
         CancellationToken token)
     {
-        if (!teamLabOptions.Value.EnableExecutionPlanV2)
+        if (teamLabOptions.Value.ExecutionModel != TeamLabExecutionModel.V2)
             return NotFound();
         if (request?.Plan is null) return BadRequest("Execution plan request is required.");
         await using var permit = await gate.EnterAsync(AgentOperationCategory.TeamLabExecution, token);
@@ -44,7 +45,7 @@ public class TeamLabController(
         [FromBody] TeamLabExecutionPlanCleanupRequest? request,
         CancellationToken token)
     {
-        if (!teamLabOptions.Value.EnableExecutionPlanV2)
+        if (teamLabOptions.Value.ExecutionModel != TeamLabExecutionModel.V2)
             return NotFound();
         if (request?.Plan is null) return BadRequest("Execution plan request is required.");
         // Cleanup is a bounded, identity-fenced operation. It must not wait behind an unrelated

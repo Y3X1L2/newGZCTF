@@ -20,6 +20,7 @@ using GZCTF.Modules.TeamLab.Contracts;
 using GZCTF.Modules.TeamLab.Domain;
 using GZCTF.Modules.TeamLab.Domain.Runtime;
 using GZCTF.Modules.TeamLab.Infrastructure;
+using GZCTF.TeamLab.Contracts;
 using GZCTF.Services.Fleet;
 using GZCTF.Services.TeamLab;
 using Microsoft.AspNetCore.DataProtection;
@@ -73,7 +74,10 @@ public sealed class TeamLabDeploymentOrchestrationTests
             executor.Object,
             routes,
             eventRecorder,
-            Mock.Of<ITeamLabDeploymentProgress>());
+            Mock.Of<ITeamLabDeploymentProgress>(),
+            NullLogger<TeamLabShardDeploymentService>.Instance);
+
+        runtime.ExecutionModel = TeamLabExecutionModel.V1;
 
         var exception = await Assert.ThrowsAsync<TeamLabRuntimeExecutionException>(() =>
             deployment.DeployAsync(runtime, Topology([
@@ -109,6 +113,7 @@ public sealed class TeamLabDeploymentOrchestrationTests
         var vm = RuntimeAsset("database-node", TeamLabAssetExecutionStage.Pending, null);
         vm.Kind = TeamLabResourceKind.Vm;
         var (runtime, _) = await SeedRuntimeAsync(context, vm);
+        runtime.ExecutionModel = TeamLabExecutionModel.V1;
         TeamLabNodeCleanupRequest? cleanupRequest = null;
         var executor = new Mock<ITeamLabNodeExecutor>();
         executor.Setup(item => item.GetRuntimeInventoryAsync(
@@ -151,6 +156,7 @@ public sealed class TeamLabDeploymentOrchestrationTests
         await using var context = CreateContext();
         var container = RuntimeAsset("worker", TeamLabAssetExecutionStage.Pending, null);
         var (runtime, _) = await SeedRuntimeAsync(context, container);
+        runtime.ExecutionModel = TeamLabExecutionModel.V1;
         TeamLabNodeCleanupRequest? cleanupRequest = null;
         var executor = new Mock<ITeamLabNodeExecutor>();
         executor.Setup(item => item.CleanupShardAsync(
@@ -202,6 +208,51 @@ public sealed class TeamLabDeploymentOrchestrationTests
         Assert.DoesNotContain("container-other-runtime", cleanupRequest.ContainerIds);
     }
 
+
+    [Fact]
+    public async Task CleanupAsync_V2WithoutSnapshotFallsBackToLegacyPath()
+    {
+        await using var context = CreateContext();
+        var (runtime, _) = await SeedRuntimeAsync(
+            context,
+            RuntimeAsset("entry", TeamLabAssetExecutionStage.GuestReady, "teamlab-entry"));
+        runtime.ExecutionModel = TeamLabExecutionModel.V2;
+        TeamLabNodeCleanupRequest? cleanupRequest = null;
+        var executor = new Mock<ITeamLabNodeExecutor>();
+        executor.Setup(item => item.GetRuntimeInventoryAsync(
+                It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(EmptyInventory());
+        executor.Setup(item => item.CleanupShardAsync(
+                It.IsAny<Guid>(), It.IsAny<TeamLabNodeCleanupRequest>(), It.IsAny<CancellationToken>()))
+            .Callback<Guid, TeamLabNodeCleanupRequest, CancellationToken>((_, request, _) => cleanupRequest = request)
+            .ReturnsAsync(TeamLabNodeResult.Ok());
+        var writer = new Mock<IOperationalEventWriter>();
+        var eventRecorder = new TeamLabEventRecorder(context, writer.Object, new OperationalCorrelation());
+        var traffic = new TeamLabTrafficApplicationService(
+            context,
+            executor.Object,
+            Mock.Of<IDistributedLeaseProvider>(),
+            Mock.Of<ITeamLabTrafficIngestor>(),
+            eventRecorder,
+            NullLogger<TeamLabTrafficApplicationService>.Instance);
+        var cleanup = new TeamLabRuntimeCleanupService(
+            context,
+            executor.Object,
+            traffic,
+            CaptureCleanup(),
+            Mock.Of<IPublicUdpGatewayProvider>(),
+            eventRecorder,
+            RemoteAccess());
+
+        var result = await cleanup.CleanupAsync(runtime, CancellationToken.None);
+
+        Assert.True(result.Success, result.Message);
+        Assert.NotNull(cleanupRequest);
+        executor.Verify(item => item.CleanupExecutionPlanAsync(
+            It.IsAny<Guid>(), It.IsAny<GZCTF.TeamLab.Contracts.Execution.TeamLabExecutionPlanV2>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
     [Fact]
     public async Task CleanupAsync_PersistsCleanupPendingBeforePhysicalRollback()
     {
@@ -209,6 +260,7 @@ public sealed class TeamLabDeploymentOrchestrationTests
         var (runtime, _) = await SeedRuntimeAsync(
             context,
             RuntimeAsset("entry", TeamLabAssetExecutionStage.GuestReady, "teamlab-entry"));
+        runtime.ExecutionModel = TeamLabExecutionModel.V1;
         var observedPersistedTransition = false;
         var executor = new Mock<ITeamLabNodeExecutor>();
         executor.Setup(item => item.GetRuntimeInventoryAsync(
@@ -251,6 +303,7 @@ public sealed class TeamLabDeploymentOrchestrationTests
         var (runtime, _) = await SeedRuntimeAsync(
             context,
             RuntimeAsset("entry", TeamLabAssetExecutionStage.GuestReady, "teamlab-entry"));
+        runtime.ExecutionModel = TeamLabExecutionModel.V1;
         var executor = new Mock<ITeamLabNodeExecutor>();
         executor.Setup(item => item.GetRuntimeInventoryAsync(
                 It.IsAny<Guid>(), It.IsAny<CancellationToken>()))

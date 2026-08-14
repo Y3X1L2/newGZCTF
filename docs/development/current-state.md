@@ -1,6 +1,6 @@
 # YINYU 当前开发状态
 
-更新时间：2026-08-12
+更新时间：2026-08-14
 
 本文件是跨会话的短期状态入口。长期规则见根目录 `AGENTS.md`，完整目标见 `docs/platform-commercialization-master-plan.md`。状态变化后应更新本文件，不通过追加整段聊天记录维护记忆。
 
@@ -28,11 +28,20 @@
 ### 2026-08-12 高性能执行面候选部署
 
 - 当前 `10.0.7.118` 活跃 release 为 `teamlab-hp-a-20260812-1950`；主站、118 本机 Agent 和首页健康检查正常，`EnableExecutionPlanV2` 保持关闭。
-- 125 的旧 Agent 在下载新二进制前执行旧防火墙脚本，因旧版 nft 语法不兼容而无法完成平台同步。不得将其写为“已同步成功”。
+- 2026-08-12 已通过节点管理的 `sync-agent` 操作完成 118、125 的 Agent 二进制同步。两个节点回报的二进制 SHA-256 均为 `6a0808fd9eee4f47c77ede6fef9ec208691c09e15fb3df69aede49741f0e0295`；125 未被手工复制或直接修改。
+- 同步初次失败的根因是旧 Agent 以 Windows 换行生成 nft heredoc，`nft` 拒绝该脚本；118 已先替换为包含统一换行处理的新 Agent，再通过平台完成两阶段同步。
+- 同步后主站仍将两节点投影为 `node_agent_update_in_progress`，并且心跳能力清单尚未出现 `teamlab.ovs-ovn.v1` 与 `teamlab.execution-plan.v2`。这表示 V2 数据面就绪和状态收敛尚未验收，`EnableExecutionPlanV2` 必须继续关闭，节点不得用于 V2 调度。
 - 待部署候选已把同步改为二阶段：旧 Agent 仅接收二进制与传感器，收到新心跳后才接收 VM/OVS/OVN 配置；恢复任务不会把配置未完成节点恢复为可调度。
 - 待部署候选还移除了主站易失流量内存回退。只有 Redis 流原子接收成功后才会确认 Agent 观测游标；Redis 不可用时由 Agent 磁盘 spool 保留记录等待恢复。
 - OVS/OVN、libvirt、Docker 和故障注入实机矩阵仍未执行，不得将 V2 写为已验收或删除旧 bridge/router namespace/dnsmasq 路径。
 
+### 2026-08-14 执行模型决策逻辑修复（未合并）
+
+- `codex/teamlab-high-performance-a` 已把 TeamLab 执行模型改为显式枚举契约：`TeamLabExecutionModel`（V1/V2），`TeamLabNetworkConfig.ExecutionModel` 默认 V2 并有 `ValidateOnStart`。
+- runtime 新增持久化 `ExecutionModel`（默认 V2），迁移链 `20260814000000_AddTeamLabRuntimeExecutionModel` + `20260814010000_RemoveTeamLabRuntimeExecutionModelDefault`；模型快照已同步（含 PlanDigest varchar(96)），列默认值已移除以避免 EF sentinel 告警并保证显式 V1 落库。
+- 部署不再静默降级：V2 能力不足、节点缺失、secrets 不支持均明确报错；V1 仅在显式配置时使用。
+- 审计 detail 包含 executionModel；清理按持久化模型选择 V2 快照清理或显式 V1 legacy 清理。
+- 本机 Release build、EF 模型一致性检查和 75 个定向 TeamLab 单元测试通过；release 2（`teamlab-execution-model-fix-20260814-2`，SHA `e1fc98af06e04fa3977920a8755ac836aa6231b7275e7be4dc514eb7df6f081b`）已部署到 118，迁移头 `20260814010000`，服务 active、HTTP 200，118 Agent 已随发布包替换；125 Agent 同步与 V2 双节点实机验收由测试 agent 继续。
 ## 1.1 TeamLab 现场验收状态（2026-08-09）
 
 ### 高性能执行面工作分支（2026-08-11）
@@ -189,7 +198,10 @@ vNext 正式路由和实现状态以以下文件为准：
 - Agent 能力清单仅在 OVS、OVN、Northbound 连通和本机执行条件同时满足时报告 `teamlab.ovs-ovn.v1` 与 `teamlab.execution-plan.v2`。`EnableExecutionPlanV2` 仍必须保持关闭，直到独立实机验收完成。
 - OVSDB 客户端已改为受限的持久连接，具备请求超时、响应 ID 校验、断线重建和释放逻辑；VM、Docker、执行计划快照和流量写入的审查修复详见 2026-08-12 交接文档。
 - 本次仅完成代码与发布门禁。执行计划 V2 的双节点、故障、并发、清理和观测实机验收尚未签收，必须由下一位验收人员按交接矩阵执行，不能将本候选写为已通过业务验收。
-- 2026-08-12 已部署到 118：release `teamlab-hpa-b87c747`，提交 `b87c747ca3195b3137b5d5293c88eec226423847`。主站与本机 Agent 均为 active，运行二进制摘要与发布物一致，首页 HTTP 200；`EnableExecutionPlanV2=false`。未执行 TeamLab 业务、压力或故障注入验收。
+- 2026-08-12 已部署到 118：release `teamlab-hpa-ovsdb-jsonrpc-20260812`。完整发布物同时包含主站与 Agent，发布包 SHA-256 为 `9d548ac0b3abde23d114d51f524fde40786f4bb420bdf8cfd01b8fb51099a6cf`。主站、首页和本机 Agent 已通过部署后检查。
+- 已通过主站节点管理接口同步 118、125。两个节点均上报 bundled Agent SHA `498ff7e3fb555f0adc2e5648b94ad0b64f9b5176a85b464324f2d11734ec1689`，更新状态稳定、可调度，隧道与 Fabric 健康，能力清单包含 `teamlab.execution-plan.v2`、`teamlab.ovs-ovn.v1`、`teamlab.artifact-cache.v2` 与 `teamlab.libvirt.native.v1`。
+- 2026-08-12 已在验收环境启用 `EnableExecutionPlanV2=true`。主站通过正式 Agent 同步契约把该开关下发至 118、125；两节点执行计划端点均返回请求体校验 `400`，证明 V2 Provider 已开启（关闭时应为 `404`）。后续新建 TeamLab runtime 将走 V2 执行计划路径。
+- V2 正常业务、并发、故障注入与清理实机验收尚未完成；它们现在是后续测试任务，而不是切换前置条件。
 
 ---
 
@@ -242,3 +254,55 @@ vNext 正式路由和实现状态以以下文件为准：
 - 模板库继续拥有镜像内容、系统类型、摘要、认证状态和静态运维账号；发布版本在内部锁定模板摘要，场景 API 不暴露或接受该内部事实。
 - 历史 `Scenario` 模板会在升级迁移中降级为兼容 VM，历史服务注入表和场景制品表会被删除。运行期覆盖仅保留实例隔离 Flag 和平台观测机密，不作为作者配置入口。
 - 本轮完成主站、前端、测试项目构建，TeamLab 定向单元验收和 OpenAPI 快照再生成；EF 已确认模型无待生成迁移。迁移 Testcontainers 验收仍受本机 Docker 引擎不可用阻塞；未部署到任何服务器。
+
+---
+
+## 2026-08-12 二次审查结论（修复候选 + 线上 v2-enabled 部署）
+
+完整报告：`docs/development/handoffs/2026-08-12-teamlab-high-performance-a-review-2.md`。
+
+- 静态：上轮 5 项 P0 全部真修复、24 项 P1 中 21 项真修复；新增潜伏 P0 两项——快照 `PlanDigest` 列 `varchar(64)` 装不下 `sha256:` 前缀的 71 字符 digest（首次 V2 apply 在 PostgreSQL 必失败）；Redis 流在持久化 worker 停摆 >76 分钟时 XTRIM 静默裁剪未读条目（游标照常推进，静默丢数）。
+- 实机（08-12 19:xx，release `teamlab-hpa-v2-enabled-20260812`，两节点 V2 能力齐全、端点 400 非 404，OVS/OVN/br-int/geneve 就绪，观测管线 60 秒采样 0 丢弃）：**新建 TeamLab 试运行返回 500**——线上库应用了另一分支的迁移 `20260811200000_RestoreTeamLabRuntimeScenarioBuild`（恢复 `IsScenarioBuild` NOT NULL 列），部署主站二进制（本分支）EF 模型不含该属性 → `23502 not-null violation`。**当前任何新建 TeamLab 运行时（V1/V2）均失败**；快照表列宽缺陷叠加，V2 亦无法 apply。
+- 需先修复：线上迁移与部署分支对齐（含部署前 schema diff 门禁）、快照列宽（PostgreSQL 真库验证）、XTRIM 语义、工作树 data-plane 闸门合入；之后才能执行 V2 实机矩阵。边界问题（200 HTML/参数零校验/无限流）不在修复范围，原样保留。
+
+## 2026-08-13 Review-2 修复部署到 118
+
+- release `teamlab-hpa-review2-fixes-20260813-2` 已原子切换到 118，包 SHA-256 `0a95e872f0758d414034fdb2f4d2714118b862c34da7837d1fc24bad8810e54c`；主站与 bundled Agent 运行正常，首页 HTTP 200。
+- 迁移已应用至 `20260812113416_AlignTeamLabExecutionRuntimeSchema`；切换前数据库备份位于 `/opt/gzctf-vnext/backups/gzctf-before-vnext-20260812T172824Z.dump`，旧 release 保留在 `/opt/gzctf/publish.previous`。
+- 118、125 已通过平台节点管理接口同步，Agent SHA-256 均为 `be5aae78b600f9aa34cc3ddf0cd5bffb16d5888c7483ce1d90d67d152779c961`，状态稳定、可调度，V2 相关能力齐全。
+- 主站与两个 Agent 的 `EnableExecutionPlanV2` 均为 `true`，两节点执行计划端点返回 `400 request.invalid`（关闭时为 404）。
+- V2 正常业务、并发、故障注入与清理实机矩阵仍未验收；验收范围与证据要求见 `docs/development/handoffs/2026-08-12-teamlab-data-plane-and-observation-handoff.md`。
+## 2026-08-13 125 V2 能力间歇缺失根因修复（release 5）
+
+- 测试反馈“125 未上报 V2”需要修正：125 的 V2 不是始终缺失，而是间歇性缺失。根因是 OVSDB 半开连接：118 `ovsdb-server` 在连接空闲约 5-10 秒后会先发送 `echo` 再关闭连接；旧客户端只在事务期间读 socket，闲置期残留的 `echo` 未消费，下次 `Poll(SelectRead)` 误判连接健康，写入事务后收到 RST，探测失败并进入 20 秒失败缓存，表现为 V2/NO_V2 交替。
+- 同步阶段另有误导：`AgentCapabilityService` 原先计算 `/usr/local/bin/gzctf-agent` 安装文件哈希，不是运行进程哈希；文件已替换但进程未重启时，主站会误以为节点已运行新二进制。
+- 修复内容：
+  - Agent 能力哈希改为读取 `/proc/self/exe`，即运行中进程的哈希；
+  - Agent 同步检测“安装文件已更新但运行进程仍是旧版”，发现不一致时调度重启并明确返回；
+  - `OvsdbJsonRpcClient` 增加闲置重建：会话空闲超过 5 秒，下次事务前主动断开重连；事务期间正常应答 OVSDB echo；对已关闭连接即时重连。单元测试覆盖已关闭连接、闲置重连、超时后恢复，定向 6/6 通过。
+- 部署事实：
+  - release `teamlab-hpa-fix-20260813-5`，发布包 SHA-256 `a3df348a72841889de3b5f049519ab4b5bc5e2ac92f92a8ff122011b01f9ee6e`；
+  - Agent SHA-256 `c4835cb5945590674c51027f51aee9c3daa2f05e59940fd56fb32b4b3a8e99ce`，迁移头 `20260812113416_AlignTeamLabExecutionRuntimeSchema`，无新增迁移；
+  - 118、125 均通过平台 `/sync-agent` 正式同步，`AgentUpdateState=Stable`、可调度；两节点 `/api/status` 均报告 `teamlab.execution-plan.v2`、`teamlab.ovs-ovn.v1`，执行计划并发上限 1；
+  - 125 上线后连续采样 10/10 与 5/5 均保持 V2，覆盖两个 20 秒探测缓存周期；
+  - 数据库备份：`/opt/gzctf-vnext/backups/teamlab-hpa-fix-20260813-4/gzctf-before-teamlab-hpa-fix-20260813-4.dump`。
+- 仍未验收：V2 完整实机矩阵（正常链路、并发、故障注入、观测回放、暂停恢复、销毁清理）。测试入口见 `docs/development/handoffs/2026-08-13-125-v2-root-cause-fixed.md`。
+
+## 2026-08-14 release 4：OVN 清理修复部署与 125 V2 恢复
+
+- release `teamlab-execution-model-fix-20260814-4` 已原子部署到 118：发布包 SHA-256 `55c0495b7828ff21f953d6bf6726d30aa6bda18366fbd71aaaa597883b0d3ddf`，Agent SHA-256 `8e1edf33b4a462bbda94013f902ffb2c0c7d1f08d7bcf7caf68cae33511eb88d`，软链 `/opt/gzctf/publish -> /opt/gzctf/releases/teamlab-execution-model-fix-20260814-4/publish`；`gzctf.service`、`gzctf-agent.service` active，首页 HTTP 200，无新增迁移。
+- 125 已通过平台 `sync-agent` 同步至 release 4，心跳能力恢复 `teamlab.execution-plan.v2`、`teamlab.ovs-ovn.v1`，Agent SHA 与发布包一致。
+- runtime 131（`019ffe05-780c-7a29-8945-6aa7ac700aa7`）已成功销毁：Status=10 Destroyed、LastError 清空、快照 0 行、OVN `gzctf` 资源 0 行。
+- 存量 runtime 迁移回填问题已闭环：迁移 `20260814020000_BackfillLegacyTeamLabExecutionModel` 只把真实存量执行路径标记为 V1，不把无 V2 快照的存量行回填为 V2；当前存量 V1=122、V2=2。
+- OVN 清理根因修复：`TeamLabOvnNetworkProvider` 清理不再按不存在的 `name` 列删除 `Logical_Router_Static_Route`、`Logical_Router_Policy`、`DHCP_Options`、`DNS`，改为按 runtime + generation + plan digest ownership 删除；map 字段统一使用 OVSDB `["map", ...]` 编码。新增 `OvsdbJsonCodec`，`TeamLabOvsAttachmentProvider` 与 `OvsdbJsonRpcClient` 同步加固。
+- 验证：`TeamLabOvnNetworkProviderTests` 2/2、`OvsdbJsonRpcClientTests` 6/6、Agent Release build 通过；完整 V2 实机矩阵仍由测试 agent 继续验收。
+
+## 2026-08-14 release 5 + Agent 增量：OVN apply 与观测读取修复
+
+- 测试反馈 125 的两个阻塞项已定位并修复：OVSDB named-uuid 必须是合法 UUID，旧实现用业务字符串导致 apply 事务语法错误；`observations/read` 旧实现无限等待磁盘持久化导致 60s 超时/400。
+- OVN 侧新增稳定 UUID 派生，所有 `uuid-name`/`named-uuid` 统一为 UUID；清理与所有权统计按 ownership 行数实现；OVSDB 错误原因透传。
+- 观测侧改为持久化水位模型：主站只推进到已落盘游标，未落盘记录返回但下轮重试；Agent 删除无限等待持久化死代码。
+- release `teamlab-ovn-observation-fix-20260814-5` 已部署：发布包 SHA-256 `d2c0ad03...9d4b298`，软链指向 `/opt/gzctf/releases/teamlab-ovn-observation-fix-20260814-5/publish`，服务 active、首页 200。
+- 118/125 Agent 均同步至 SHA-256 `9d9444bf...68489`；两节点 V2 能力齐全、可调度，125 `observations/read` 稳定 200 约 2ms。
+- 新增 runtime-signal 409 收敛：确定性冲突被确认并丢弃，不再无限重试；Agent 启动后冲突日志只出现一次，ack 文件已生成。
+- 仍待测试 agent 验收：V2 全矩阵（多资产/多网段、生命周期、并发、故障注入、观测回放与清理残留核对），依据本文件上方 release 4/5 交接清单执行。

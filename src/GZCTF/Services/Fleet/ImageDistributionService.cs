@@ -328,7 +328,7 @@ public class ImageDistributionService(
                         .SetProperty(record => record.Status, ImageDistributionStatus.CleanupPending)
                         .SetProperty(record => record.Stage, ImageDistributionStage.Queued)
                         .SetProperty(record => record.ClaimOwner, cleanupOwner)
-                        .SetProperty(record => record.ClaimExpiresAt, DateTimeOffset.MaxValue)
+                        .SetProperty(record => record.ClaimExpiresAt, now.AddMinutes(5))
                         .SetProperty(record => record.NextAttemptAt, now)
                         .SetProperty(record => record.ErrorMessage, (string?)null)
                         .SetProperty(record => record.LastErrorCode, (string?)null)
@@ -1037,7 +1037,7 @@ public class ImageDistributionService(
         record.Status = ImageDistributionStatus.CleanupPending;
         record.Stage = ImageDistributionStage.Queued;
         record.ClaimOwner = claimOwner;
-        record.ClaimExpiresAt = DateTimeOffset.MaxValue;
+        record.ClaimExpiresAt = now.AddMinutes(5);
         record.NextAttemptAt = now;
         record.ErrorMessage = null;
         record.LastErrorCode = null;

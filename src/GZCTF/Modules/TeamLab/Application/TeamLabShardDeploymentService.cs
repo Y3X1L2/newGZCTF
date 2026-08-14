@@ -13,9 +13,10 @@ using GZCTF.Services;
 using GZCTF.Modules.Runtime.Domain;
 using GZCTF.Modules.Runtime.Contracts;
 using GZCTF.Services.Fleet;
+using GZCTF.TeamLab.Contracts;
 using GZCTF.TeamLab.Contracts.Execution;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Logging;
 
 namespace GZCTF.Modules.TeamLab.Application;
 
@@ -26,9 +27,8 @@ public sealed class TeamLabShardDeploymentService(
     TeamLabRouteApplicationService routes,
     TeamLabEventRecorder eventRecorder,
     ITeamLabDeploymentProgress stageMachine,
-    IOptions<TeamLabNetworkConfig>? networkOptions = null)
+    ILogger<TeamLabShardDeploymentService> logger)
 {
-    private readonly TeamLabNetworkConfig networkConfig = networkOptions?.Value ?? new();
 
     public async Task DeployAsync(
         TeamLabRuntime runtime,
@@ -68,35 +68,31 @@ public sealed class TeamLabShardDeploymentService(
         foreach (var asset in runtimeAssets.Where(item => item.AgentOperationId is null))
             asset.AgentOperationId = Guid.CreateVersion7();
         await context.SaveChangesAsync(cancellationToken);
-        var executionPlanApplied = false;
+
         try
         {
-            if (networkConfig.EnableExecutionPlanV2)
-                await stageMachine.SetAsync(
-                    TeamLabDeploymentStage.NetworkApplying,
-                    "Applying the versioned TeamLab execution plan.",
-                    cancellationToken);
-            if (networkConfig.EnableExecutionPlanV2 &&
-                await TryApplyExecutionPlansAsync(runtime, definition, runtimeAssets, templates,
-                    overlays, StartImagePreparation, cancellationToken))
+            switch (runtime.ExecutionModel)
             {
-                executionPlanApplied = true;
-                await stageMachine.SetAsync(
-                    TeamLabDeploymentStage.RoutesApplying,
-                    "Versioned execution-plan networks are ready.",
-                    cancellationToken);
-                await context.SaveChangesAsync(cancellationToken);
-            }
-            else
-            {
-                var legacyImagePreparation = StartImagePreparation();
-                if (!networkConfig.EnableExecutionPlanV2)
+                case TeamLabExecutionModel.V2:
+                    await stageMachine.SetAsync(
+                        TeamLabDeploymentStage.NetworkApplying,
+                        "Applying the versioned TeamLab execution plan.",
+                        cancellationToken);
+                    await ApplyExecutionPlansAsync(runtime, definition, runtimeAssets, templates,
+                        overlays, StartImagePreparation, cancellationToken);
+                    await context.SaveChangesAsync(cancellationToken);
+                    break;
+                case TeamLabExecutionModel.V1:
+                    imagePreparation = StartImagePreparation();
                     await stageMachine.SetAsync(
                         TeamLabDeploymentStage.NetworkApplying,
                         "Applying managed TeamLab network desired state.",
                         cancellationToken);
-                await routes.ApplyAsync(runtime, definition, cancellationToken);
-                imagePreparation = legacyImagePreparation;
+                    await routes.ApplyAsync(runtime, definition, cancellationToken);
+                    break;
+                default:
+                    throw new TeamLabRuntimeExecutionException(
+                        $"不支持的 TeamLab 执行模型 {runtime.ExecutionModel}。");
             }
         }
         catch
@@ -120,6 +116,7 @@ public sealed class TeamLabShardDeploymentService(
             {
                 ["generation"] = runtime.Generation,
                 ["stage"] = "network",
+                ["executionModel"] = runtime.ExecutionModel.ToString(),
                 ["shardCount"] = currentShards.Length,
                 ["assetCount"] = runtimeAssets.Length
             });
@@ -136,6 +133,7 @@ public sealed class TeamLabShardDeploymentService(
             {
                 ["generation"] = runtime.Generation,
                 ["stage"] = "route",
+                ["executionModel"] = runtime.ExecutionModel.ToString(),
                 ["routeCount"] = definition.Connections.Count,
                 ["shardCount"] = currentShards.Length
             });
@@ -143,28 +141,9 @@ public sealed class TeamLabShardDeploymentService(
         MarkDependenciesSatisfied(runtime, null, TeamLabDependencyCondition.NetworkReady);
         await context.SaveChangesAsync(cancellationToken);
 
-        if (executionPlanApplied)
+        if (runtime.ExecutionModel == TeamLabExecutionModel.V2)
         {
-            await VerifyRuntimeInventoryAsync(runtimeAssets, cancellationToken);
-            foreach (var asset in runtimeAssets)
-            {
-                asset.ExecutionStage = TeamLabAssetExecutionStage.ServiceReady;
-                asset.Status = TeamLabRuntimeStatus.Running;
-                asset.LastError = null;
-                asset.ExecutionUpdatedAt = DateTimeOffset.UtcNow;
-                MarkDependenciesSatisfied(runtime, asset.TopologyKey, TeamLabDependencyCondition.GuestReady);
-                MarkDependenciesSatisfied(runtime, asset.TopologyKey, TeamLabDependencyCondition.ServiceReady);
-            }
-            runtime.Status = TeamLabRuntimeStatus.Probing;
-            runtime.UpdatedAt = DateTimeOffset.UtcNow;
-            eventRecorder.Record(
-                runtime,
-                "probe",
-                TeamLabEventLevel.Success,
-                OperationalEventCodes.TeamLab.ProbeSucceeded,
-                OperationalEventOutcome.Succeeded,
-                "Versioned execution-plan asset readiness checks completed successfully.");
-            await context.SaveChangesAsync(cancellationToken);
+            await CompleteV2ReadinessAsync(runtime, runtimeAssets, cancellationToken);
             return;
         }
 
@@ -251,7 +230,34 @@ public sealed class TeamLabShardDeploymentService(
         await context.SaveChangesAsync(cancellationToken);
     }
 
-    private async Task<bool> TryApplyExecutionPlansAsync(
+    private async Task CompleteV2ReadinessAsync(
+        TeamLabRuntime runtime,
+        IReadOnlyCollection<TeamLabRuntimeAsset> runtimeAssets,
+        CancellationToken cancellationToken)
+    {
+        await VerifyRuntimeInventoryAsync(runtimeAssets, cancellationToken);
+        foreach (var asset in runtimeAssets)
+        {
+            asset.ExecutionStage = TeamLabAssetExecutionStage.ServiceReady;
+            asset.Status = TeamLabRuntimeStatus.Running;
+            asset.LastError = null;
+            asset.ExecutionUpdatedAt = DateTimeOffset.UtcNow;
+            MarkDependenciesSatisfied(runtime, asset.TopologyKey, TeamLabDependencyCondition.GuestReady);
+            MarkDependenciesSatisfied(runtime, asset.TopologyKey, TeamLabDependencyCondition.ServiceReady);
+        }
+        runtime.Status = TeamLabRuntimeStatus.Probing;
+        runtime.UpdatedAt = DateTimeOffset.UtcNow;
+        eventRecorder.Record(
+            runtime,
+            "probe",
+            TeamLabEventLevel.Success,
+            OperationalEventCodes.TeamLab.ProbeSucceeded,
+            OperationalEventOutcome.Succeeded,
+            "Versioned execution-plan asset readiness checks completed successfully.");
+        await context.SaveChangesAsync(cancellationToken);
+    }
+
+    private async Task ApplyExecutionPlansAsync(
         TeamLabRuntime runtime,
         TeamLabExecutionTopology definition,
         IReadOnlyCollection<TeamLabRuntimeAsset> runtimeAssets,
@@ -275,15 +281,30 @@ public sealed class TeamLabShardDeploymentService(
         if (hasVm) required.Add(AgentFeatureIds.TeamLabNativeLibvirt);
         if (runtimeAssets.Any(item => item.Kind == TeamLabResourceKind.Docker))
             required.Add(AgentFeatureIds.Docker);
-        if (shards.Any(shard => !nodes.TryGetValue(shard.WorkerNodeId, out var node) ||
-                                !AgentCapabilityEvaluator.Supports(node, required.Distinct().ToArray())))
-            return false;
+        var requiredFeatures = required.Distinct().ToArray();
+        foreach (var shard in shards)
+        {
+            if (!nodes.TryGetValue(shard.WorkerNodeId, out var node))
+                throw new TeamLabRuntimeExecutionException(
+                    $"执行计划节点 {shard.WorkerNodeId} 不存在，无法部署 V2 执行模型。");
+            var missing = AgentCapabilityEvaluator.MissingFeatures(node, requiredFeatures);
+            if (missing.Length > 0)
+            {
+                logger.LogWarning(
+                    "TeamLab V2 deployment rejected on node {NodeId} ({NodeName}): missing {Features}",
+                    node.Id, node.Name, missing);
+                throw new TeamLabRuntimeExecutionException(
+                    $"节点 {node.Name} 缺少 V2 执行能力：{string.Join("、", missing)}");
+            }
+        }
 
-        // V2 deliberately contains only immutable execution facts. Runtime overlays carry
-        // instance-scoped secrets and must remain on the established injection path until a
-        // dedicated encrypted delivery contract is introduced.
-        if (overlays.Values.Any(overlay => overlay.Secrets is { Count: > 0 }))
-            return false;
+        // Runtime overlays currently travel on the legacy injection path. V2 plans carry immutable
+        // execution facts only, so a user secret can never be delivered by the V2 Agent. Fail
+        // loudly instead of silently falling back to V1.
+        var unsupportedSecret = TeamLabExecutionModelPolicy.FindUnsupportedSecretKey(overlays.Values);
+        if (unsupportedSecret is not null)
+            throw new TeamLabRuntimeExecutionException(
+                $"V2 执行模型不支持运行时密钥覆盖，资产密钥 '{unsupportedSecret}' 无法投递。");
 
         foreach (var asset in runtimeAssets)
             if (asset.SourceTemplateId is not { } templateId ||
@@ -310,8 +331,9 @@ public sealed class TeamLabShardDeploymentService(
             if (existingSnapshots.TryGetValue(shard.Id, out var snapshot))
             {
                 if (!string.Equals(snapshot.PlanDigest, plan.PlanDigest, StringComparison.Ordinal))
-                    throw new TeamLabRuntimeExecutionException(
-                        $"Execution-plan snapshot conflicts for shard {shard.Id}.");
+                    throw new TeamLabRuntimeIdentityConflictException(
+                        $"Execution-plan identity conflict for shard {shard.Id}. " +
+                        "The accepted generation is immutable; reset the runtime to create a new generation.");
             }
             else
             {
@@ -344,6 +366,12 @@ public sealed class TeamLabShardDeploymentService(
         var failed = results.Where(item => !item.Success).ToArray();
         if (failed.Length > 0)
         {
+            var identityConflict = failed.FirstOrDefault(item =>
+                string.Equals(item.ErrorCategory, "validation", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(item.ErrorCode, "identity_conflict", StringComparison.OrdinalIgnoreCase));
+            if (identityConflict is not null)
+                throw new TeamLabRuntimeIdentityConflictException(
+                    "Execution-plan identity conflict. Reset the runtime to create a new generation.");
             using var cleanupTimeout = new CancellationTokenSource(TimeSpan.FromMinutes(2));
             var compensationError = await CompensateExecutionPlansAsync(
                 results, cleanupTimeout.Token);
@@ -407,9 +435,7 @@ public sealed class TeamLabShardDeploymentService(
                 fragment.UpdatedAt = DateTimeOffset.UtcNow;
             }
         }
-        return true;
     }
-
     private async Task<ExecutionPlanApplyResult> ApplyExecutionPlanAsync(
         Guid workerNodeId,
         TeamLabExecutionPlanV2 plan,
@@ -421,7 +447,8 @@ public sealed class TeamLabShardDeploymentService(
             return response.Success
                 ? new ExecutionPlanApplyResult(workerNodeId, plan, response, null)
                 : new ExecutionPlanApplyResult(workerNodeId, plan, null,
-                    response.Message ?? "Agent rejected the execution plan.");
+                    response.Message ?? "Agent rejected the execution plan.",
+                    response.ErrorCategory, response.ErrorCode);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -462,7 +489,9 @@ public sealed class TeamLabShardDeploymentService(
         Guid WorkerNodeId,
         TeamLabExecutionPlanV2 Plan,
         TeamLabExecutionPlanApplyResponse? Response,
-        string? Message)
+        string? Message,
+        string? ErrorCategory = null,
+        string? ErrorCode = null)
     {
         public bool Success => Response is not null;
     }
@@ -506,12 +535,16 @@ public sealed class TeamLabShardDeploymentService(
         var allowedRoutes = BuildAllowedRoutes(runtime, definition);
         var digests = runtimeAssets
             .Where(item => item.SourceTemplateId.HasValue)
-            .Select(item => item.SourceTemplateId!.Value)
-            .Distinct()
-            .ToDictionary(
-                templateId => templateId,
-                templateId => NormalizeImageDigest(templates[templateId].ImageHash ?? string.Empty),
-                EqualityComparer<int>.Default);
+            .GroupBy(item => item.SourceTemplateId!.Value)
+            .ToDictionary(group => group.Key, group =>
+            {
+                var values = group.Select(item => NormalizeImageDigest(item.ImageDigest ?? string.Empty))
+                    .Distinct(StringComparer.Ordinal).ToArray();
+                if (values.Length != 1)
+                    throw new TeamLabRuntimeExecutionException(
+                        $"Runtime has conflicting frozen image digests for template {group.Key}.");
+                return values[0];
+            });
         var plans = new Dictionary<int, TeamLabExecutionPlanV2>();
         foreach (var shard in runtime.Shards.Where(item => item.Generation == runtime.Generation))
         {
@@ -638,7 +671,7 @@ public sealed class TeamLabShardDeploymentService(
                 topologyAsset.Kind == TeamLabAssetKind.Vm ? template.VmRuntimeMode : null,
                 topologyAsset.Kind == TeamLabAssetKind.Vm ? template.VmNetworkMode : null,
                 topologyAsset.Kind == TeamLabAssetKind.Docker
-                    ? DockerImageReference.ResolvePullTarget(template.Name, template.RegistryUrl).FullImage
+                    ? asset.Image ?? DockerImageReference.ResolvePullTarget(template.Name, template.RegistryUrl).FullImage
                     : null);
     }
 

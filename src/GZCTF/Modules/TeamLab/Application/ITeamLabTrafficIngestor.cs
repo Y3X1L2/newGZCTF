@@ -142,7 +142,8 @@ public sealed record TeamLabTrafficEnqueueResult(
 
 public sealed record TeamLabTrafficIngestMessage(
     string? StreamId,
-    TeamLabTrafficEnvelope Envelope);
+    TeamLabTrafficEnvelope Envelope,
+    long? LocalSequence = null);
 
 public sealed record TeamLabTrafficReadBatch(
     IReadOnlyList<TeamLabTrafficIngestMessage> Messages)
@@ -164,5 +165,6 @@ public interface ITeamLabTrafficIngestor
 
     ValueTask AcknowledgeAsync(
         IReadOnlyCollection<string> streamIds,
+        IReadOnlyCollection<long> localSequences,
         CancellationToken cancellationToken);
 }

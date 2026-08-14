@@ -602,11 +602,15 @@ public sealed class TeamLabRuntimeOrchestrator(
 
             using var rollbackDeadline = new CancellationTokenSource(TimeSpan.FromMinutes(2));
             var cleaned = await cleanup.CleanupAsync(runtime, rollbackDeadline.Token);
+            var identityConflict = exception is TeamLabRuntimeIdentityConflictException;
             return await FailAsync(runtime,
                 cleaned.Success ? exception.Message : $"{exception.Message}; cleanup: {cleaned.Message}",
                 rollbackDeadline.Token,
                 cleanupPending: !cleaned.Success,
-                error: error);
+                error: error,
+                failureStatus: identityConflict && cleaned.Success
+                    ? TeamLabRuntimeStatus.Destroyed
+                    : TeamLabRuntimeStatus.Failed);
         }
     }
 
@@ -747,9 +751,10 @@ public sealed class TeamLabRuntimeOrchestrator(
         bool cleanupPending = false,
         string eventCode = OperationalEventCodes.TeamLab.DeployFailed,
         string stage = "deploy",
-        OperationalError? error = null)
+        OperationalError? error = null,
+        TeamLabRuntimeStatus failureStatus = TeamLabRuntimeStatus.Failed)
     {
-        runtime.Status = cleanupPending ? TeamLabRuntimeStatus.CleanupPending : TeamLabRuntimeStatus.Failed;
+        runtime.Status = cleanupPending ? TeamLabRuntimeStatus.CleanupPending : failureStatus;
         runtime.IsOpenToPlayers = false;
         runtime.LastError = Trim(message);
         runtime.UpdatedAt = DateTimeOffset.UtcNow;

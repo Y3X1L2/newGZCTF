@@ -449,12 +449,14 @@ public sealed class AgentTeamLabNodeExecutor(
                 response?.Message ?? "Traffic observation read failed.",
                 afterSequence,
                 0,
+                0,
                 [],
                 TeamLabNodeObservationHealth.Unavailable);
         return new TeamLabNodeObservationResult(
             true,
             response.Message,
             response.NextSequence,
+            response.PersistedThroughSequence,
             response.DroppedCount,
             response.Records.Select(item => new TeamLabNodeObservationRecord(
                 item.Sequence,

@@ -53,6 +53,19 @@ public class AgentMaintenanceService(
                                 await SyncVmControlPlaneConfigAsync(request.VmControlPlane, token);
             configChanged |= request.TeamLabDataPlane is not null &&
                              await SyncTeamLabDataPlaneConfigAsync(request.TeamLabDataPlane, token);
+            if (agentUpToDate && request.Restart && !string.IsNullOrWhiteSpace(expectedSha))
+            {
+                var runningSha = await ComputeRunningBinarySha256Async(token);
+                var stale = !string.IsNullOrWhiteSpace(runningSha) &&
+                            !string.Equals(runningSha, expectedSha, StringComparison.OrdinalIgnoreCase);
+                if (stale)
+                {
+                    _ = Task.Run(RestartAgentAfterResponseAsync, CancellationToken.None);
+                    return new AgentSyncResponse(true,
+                        "Installed agent binary is current, but the running process is stale; restart scheduled.",
+                        CurrentVersion());
+                }
+            }
             var dataPlaneReadiness = request.TeamLabDataPlane is null
                 ? null
                 : await dataPlane.ApplyAsync(request.TeamLabDataPlane, token);
@@ -245,9 +258,12 @@ public class AgentMaintenanceService(
             teamLab = new JsonObject();
             root["TeamLab"] = teamLab;
         }
-        var changed = Set(teamLab, "OvnNorthboundEndpoint", desired.NorthboundEndpoint) |
+        var changed = Set(teamLab, "ExecutionModel", desired.ExecutionModel.ToString()) |
+                      Set(teamLab, "OvnNorthboundEndpoint", desired.NorthboundEndpoint) |
                       Set(teamLab, "OvnSouthboundEndpoint", desired.SouthboundEndpoint) |
-                      Set(teamLab, "OvsIntegrationBridgeName", desired.IntegrationBridgeName);
+                      Set(teamLab, "OvsIntegrationBridgeName", desired.IntegrationBridgeName) |
+                      Set(teamLab, "ManagedDhcpLeaseSeconds",
+                          Math.Clamp(desired.ManagedDhcpLeaseSeconds, 60, 86_400));
         if (!changed) return false;
 
         var temporary = CreateSiblingTemporaryPath(AgentConfigPath);
@@ -271,6 +287,22 @@ public class AgentMaintenanceService(
     private static bool Set(JsonObject target, string name, string? value)
     {
         var next = value is null ? null : JsonValue.Create(value);
+        if (JsonNode.DeepEquals(target[name], next)) return false;
+        target[name] = next;
+        return true;
+    }
+
+    private static bool Set(JsonObject target, string name, bool value)
+    {
+        var next = JsonValue.Create(value);
+        if (JsonNode.DeepEquals(target[name], next)) return false;
+        target[name] = next;
+        return true;
+    }
+
+    private static bool Set(JsonObject target, string name, int value)
+    {
+        var next = JsonValue.Create(value);
         if (JsonNode.DeepEquals(target[name], next)) return false;
         target[name] = next;
         return true;
@@ -306,6 +338,16 @@ public class AgentMaintenanceService(
         await using var stream = File.OpenRead(path);
         var hash = await SHA256.HashDataAsync(stream, token);
         return Convert.ToHexString(hash).ToLowerInvariant();
+    }
+
+    internal static async Task<string?> ComputeRunningBinarySha256Async(CancellationToken token)
+    {
+        var path = OperatingSystem.IsLinux() && File.Exists("/proc/self/exe")
+            ? "/proc/self/exe"
+            : Environment.ProcessPath;
+        return !string.IsNullOrWhiteSpace(path) && File.Exists(path)
+            ? await ComputeFileSha256Async(path, token)
+            : null;
     }
 
     private static string? NormalizeSha256(string? value)
