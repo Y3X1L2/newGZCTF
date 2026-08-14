@@ -117,6 +117,16 @@ public sealed class TeamLabOvnNetworkProviderTests
         }
     }
 
+    [Theory]
+    [InlineData("interface", "docker-switch-nic")]
+    [InlineData("port", "docker-switch-nic")]
+    [InlineData("port", "eth0")]
+    public void OvsdbId_AlwaysProducesValidUuidName(string kind, string value)
+    {
+        Assert.True(IsOvsdbId(TeamLabOvnNaming.OvsdbId(kind, value)),
+            $"generated id is not a valid OVSDB id: {TeamLabOvnNaming.OvsdbId(kind, value)}");
+    }
+
     static string? ExternalId(JsonObject? row, string key) =>
         row?["external_ids"] is JsonArray map && map[1] is JsonArray entries
             ? (entries.FirstOrDefault(entry => (entry as JsonArray)?[0]?.GetValue<string>() == key) as JsonArray)?[1]?.GetValue<string>()

@@ -561,19 +561,10 @@ public sealed class TeamLabOvnNetworkProvider(
     }
 
     static string StableName(TeamLabExecutionPlanV2 plan, string kind, string key)
-    {
-        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(
-            $"gzctf:teamlab:{plan.RuntimePublicId:D}:{plan.Generation}:{kind}:{key}"));
-        var guid = new Guid(bytes[..16]);
-        return $"gzctf_{kind}_{guid:N}";
-    }
+        => TeamLabOvnNaming.OvsdbId(kind, $"{plan.RuntimePublicId:D}:{plan.Generation}:{key}");
 
     static string StableUuid(TeamLabExecutionPlanV2 plan, string kind, string key)
-    {
-        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(
-            $"gzctf:teamlab:{plan.RuntimePublicId:D}:{plan.Generation}:{kind}:{key}"));
-        return $"gzctf_{kind.Replace('-', '_')}_{new Guid(bytes[..16]):N}";
-    }
+        => TeamLabOvnNaming.OvsdbId(kind, $"{plan.RuntimePublicId:D}:{plan.Generation}:{key}");
 }
 
 public sealed record TeamLabOvnApplyResult(

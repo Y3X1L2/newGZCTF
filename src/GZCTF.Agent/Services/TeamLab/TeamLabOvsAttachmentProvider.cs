@@ -280,9 +280,7 @@ public sealed class TeamLabOvsAttachmentProvider(
     static JsonArray NamedUuid(string kind, string name) =>
         new() { "named-uuid", NamedName(kind, name) };
 
-    static string NamedName(string kind, string name) =>
-        new Guid(System.Security.Cryptography.SHA256.HashData(
-            System.Text.Encoding.UTF8.GetBytes($"{kind}:{name}"))[..16]).ToString("D");
+    static string NamedName(string kind, string name) => TeamLabOvnNaming.OvsdbId(kind, name);
 
     static string? ExistingUuid(
         JsonArray rows,

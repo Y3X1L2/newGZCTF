@@ -6,6 +6,12 @@ namespace GZCTF.Agent.Services.TeamLab;
 
 internal static class TeamLabOvnNaming
 {
+    public static string OvsdbId(string kind, string value)
+    {
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes($"{kind}:{value}"));
+        return $"gzctf_{kind.Replace('-', '_')}_{new Guid(bytes[..16]):N}";
+    }
+
     public static string LogicalNetworkName(TeamLabExecutionPlanV2 plan, string key) =>
         $"gzctf-tl-{plan.RuntimePublicId:N}-{plan.Generation}-n-{SafeKey(key)}";
 
