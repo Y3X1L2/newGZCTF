@@ -355,3 +355,12 @@ vNext 正式路由和实现状态以以下文件为准：
 - 6 个已知设计张力（V1/V2 双路径、`TeamLabExecutionModelPolicy`、`IsValid` 超长校验、幂等提前返回、VM TAP 闭环、network owner 串行化）均评估为无需改代码，证据见报告第 5 节。
 - 残留风险：`OvsdbJsonRpcClientTests.Client_ResetsTimedOutSessionBeforeNextTransactionUsesIt` 是计时型测试（100ms 超时 + 固定延迟），并行全量运行偶发失败、单类隔离通过；属测试设计问题而非产品缺陷，待改确定性协调后处理。
 - 验证：Release build 0 错误；TeamLab 定向单测 301 用例，修复后仅剩上述 1 个偶发用例。实机 OVN/OVS/KVM 与迁移 Testcontainers 验证仍未执行，不得据此启用 V2 或删除旧 bridge/router namespace/dnsmasq 路径。
+
+## 2026-08-14 release 10：代码审查修复部署与 125 同步
+
+- release `teamlab-review-fix-20260814-10` 已原子部署到 118：发布包 SHA-256 `f70c2ad2b4855a6d5705f9e73106e1c9310324c697132b565ebc4e4500968bd2`，软链 `/opt/gzctf/publish -> /opt/gzctf/releases/teamlab-review-fix-20260814-10/publish`，上一版本 `teamlab-ovn-attach-fix-20260814-9` 保留在 `publish.previous`。
+- 数据库 `efbundle` 已执行：`No migrations were applied`；备份位于 `/opt/gzctf-vnext/backups/teamlab-review-fix-20260814-10/`。
+- 118、125 Agent 均通过平台 `sync-agent` 同步至同一 SHA-256 `fd08427aa50e0bf5ab9de60c85ac7e79c33687174e0a3e544c1a376b4ca6a62b`；两节点 `agentUpdateState=None`、可调度，V2 能力（execution-plan.v2 / ovs-ovn.v1 / artifact-cache.v2 / libvirt.native.v1 等）一致，125 观测读取持续 200。
+- 本 release 包含审查 agent 修复：`RedisTeamLabTrafficIngestor.BufferLocally` 不再把本地易失缓冲样本误报为 Redis 持久接受（`AcceptedCount=0`）。
+- 服务 `gzctf.service`、`gzctf-agent.service` active，首页 HTTP 200；发布物内嵌前端门禁（locales/lint/tsc/architecture/239 vitest/vite build）通过。
+- 仍由测试 agent 负责：V2 实机全矩阵（多资产/多网段、生命周期、并发、故障注入、观测回放与清理残留核对）。
