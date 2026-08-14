@@ -74,3 +74,10 @@
 - 报错链路已闭环：Agent 事件 `Detail.summary` 与 apply/cleanup 顶层 `Message` 保留真实错误；主站 apply/补偿清理失败时优先取事件 detail，写入失败消息并记录日志。删除泛化 `FailureMessage` 映射，不新增错误分类机制。
 - 本地 Release build 通过；`TeamLabOvnNetworkProviderTests` 3/3 通过。
 - 待办：第二处 OVN schema 兼容问题已修复并部署 release `teamlab-ovn-schema-fix-20260814-7`（提交 `39e7169`，包 SHA-256 `2456aac501f25ead346d9b99a3944a562cb44e27d600c9f02e5e7a66318aa585`）。修复内容：`Logical_Switch_Port` 不再写入已移除的 `switch` 列（归属仅由 `Logical_Switch.ports` 维护）；`Logical_Router_Static_Route.output_port` 改填路由器端口名字符串（schema 为 string，非 UUID）。Agent 已同步 118/125（SHA-256 `ab1e8c707e40abafdd4de6f624da2b0292a65561c33c6367c1aa33c18105d7ce`）。下一步由测试 agent 复验 `execution-plan/apply` 真实通过后继续 V2 全链路验收。（提交 `c9ec69d`，包 SHA-256 `e7f8482b7e93b156f7a67ebeaad91e25235c63a63ef96c7ce9e4fc590fd97c2f`）到 118，Agent 已同步 118/125（SHA-256 `6bf58f73eecc931f7c05c4f11af2186731f9b60e18d4328d9714cef5b67dd637`）。部署后 125 `observations/read` 持续 200，无 `400 invalid cursor`。下一步由测试 agent 复验 `execution-plan/apply` 真实通过后继续 V2 全链路验收。
+
+### release 8 处置结果（2026-08-14，Docker 引用修复）
+
+- 测试反馈的 `invalid reference format` 已在主站闭环修复，未改 Agent 的 `ImmutableDockerReference`：`TeamLabShardDeploymentService.BuildAssetRequest` 对 Docker 资产先调用 `ResolveImageReferenceAsync`，把 `gzctf-internal://ctf/web/test-web:v1` 解析为内部 registry 实际地址（如 `10.24.0.28:5000/ctf/web/test-web:v1`），V2 计划中的 `ImageDigest` 已由 `NormalizeImageDigest` 规范为 `sha256:...`。Agent 收到的引用形式为 `registry/repo:tag + sha256:digest`，Docker 可正常拉取。
+- 提交 `071627c`；release `teamlab-docker-reference-fix-20260814-8`（包 SHA-256 `0602c5574947a0075cea5636b7ac55945982db7f03746e754a06eed87213fec8`）已部署 118，`gzctf.service`/`gzctf-agent.service` active，首页 HTTP 200；125 Agent 已同步（SHA-256 `03bb124912a2c9e803e931b5ac90ace0601d99e3280651ed5d7c96c1268f2fa8`）。
+- 验证：`GZCTF.slnx` Release build 0 错误，`TeamLabDeploymentOrchestrationTests` 13/13 通过，前端门禁全绿。
+- 待测试 agent 复验：V2 全链路（OVN 收敛、Docker/Linux VM/Windows VM 创建、pause/resume/reset/destroy、清理残留核对、观测矩阵）。

@@ -42,6 +42,14 @@
 - 部署不再静默降级：V2 能力不足、节点缺失、secrets 不支持均明确报错；V1 仅在显式配置时使用。
 - 审计 detail 包含 executionModel；清理按持久化模型选择 V2 快照清理或显式 V1 legacy 清理。
 - 本机 Release build、EF 模型一致性检查和 75 个定向 TeamLab 单元测试通过；release 2（`teamlab-execution-model-fix-20260814-2`，SHA `e1fc98af06e04fa3977920a8755ac836aa6231b7275e7be4dc514eb7df6f081b`）已部署到 118，迁移头 `20260814010000`，服务 active、HTTP 200，118 Agent 已随发布包替换；125 Agent 同步与 V2 双节点实机验收由测试 agent 继续。
+### 2026-08-14 V2 Docker 镜像引用修复（release 8 已部署）
+
+- 根因：V2 主站把模板 `gzctf-internal://` 内部引用和裸 64-hex `ImageHash` 原样发给 Agent，Agent 的不可变 Docker 引用拼出 `repo@<64hex>`，Docker API 报 `invalid reference format`。
+- 修复：主站 `TeamLabShardDeploymentService.BuildAssetRequest` 对 Docker 资产调用 `DockerImageRegistryService.ResolveImageReferenceAsync`，把 `gzctf-internal://` 归一化为内部 registry 实际地址；V2 计划编译继续经 `NormalizeImageDigest` 补 `sha256:` 前缀。Agent 只接收不可变标准引用，V2 执行契约保持纯净。
+- 提交 `071627c`；release `teamlab-docker-reference-fix-20260814-8` 已原子部署到 118：包 SHA-256 `0602c5574947a0075cea5636b7ac55945982db7f03746e754a06eed87213fec8`，软链 `/opt/gzctf/publish` 指向新 release，`gzctf.service`、`gzctf-agent.service` active，首页 HTTP 200，数据库迁移无新增。
+- 125 Agent 已通过 `sync_release_agent.py` 同步并重启，Agent SHA-256 `03bb124912a2c9e803e931b5ac90ace0601d99e3280651ed5d7c96c1268f2fa8`。
+- 本机 `GZCTF.slnx` Release build 0 错误；`TeamLabDeploymentOrchestrationTests` 13/13 通过；前端 lint/type/architecture/test/build 全绿（80 测试文件、239 测试）。
+- 下一步由测试 agent 复验 V2 Docker 资产创建与全链路。
 ### 2026-08-14 V2 apply 阻塞根因修复（release 7 已部署）
 
 - 根因：`TeamLabOvnNetworkProvider.StableUuid` 返回 `Guid.ToString("D")`，而 OVSDB `uuid-name`/`named-uuid` 的 `<id>` 必须以字母或 `_` 开头；UUID 以数字开头时事务报 `Type mismatch for member 'uuid-name'`。已改为 `gzctf_{kind}_{32位hex}` 并同步修正单元测试断言（不再用 `Guid.TryParse`）。
