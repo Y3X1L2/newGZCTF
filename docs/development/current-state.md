@@ -42,7 +42,15 @@
 - 部署不再静默降级：V2 能力不足、节点缺失、secrets 不支持均明确报错；V1 仅在显式配置时使用。
 - 审计 detail 包含 executionModel；清理按持久化模型选择 V2 快照清理或显式 V1 legacy 清理。
 - 本机 Release build、EF 模型一致性检查和 75 个定向 TeamLab 单元测试通过；release 2（`teamlab-execution-model-fix-20260814-2`，SHA `e1fc98af06e04fa3977920a8755ac836aa6231b7275e7be4dc514eb7df6f081b`）已部署到 118，迁移头 `20260814010000`，服务 active、HTTP 200，118 Agent 已随发布包替换；125 Agent 同步与 V2 双节点实机验收由测试 agent 继续。
-### 2026-08-14 V2 apply 阻塞根因修复（待部署）
+### 2026-08-14 V2 apply 阻塞根因修复（release 6 已部署）
+
+- 根因：`TeamLabOvnNetworkProvider.StableUuid` 返回 `Guid.ToString("D")`，而 OVSDB `uuid-name`/`named-uuid` 的 `<id>` 必须以字母或 `_` 开头；UUID 以数字开头时事务报 `Type mismatch for member 'uuid-name'`。已改为 `gzctf_{kind}_{32位hex}` 并同步修正单元测试断言（不再用 `Guid.TryParse`）。
+- 报错闭环：Agent 失败事件的 `Detail.summary` 和 apply/cleanup 顶层 `Message` 现在保留真实 OVSDB 错误；主站 `TeamLabShardDeploymentService` 在 apply 失败时取事件 detail 写入失败消息并记日志，补偿清理同样保留真实原因。移除了泛化的 `FailureMessage` 映射，不再新增错误分类系统。
+- release `teamlab-ovsdb-id-fix-20260814-6` 已原子部署到 118：包 SHA-256 `e7f8482b7e93b156f7a67ebeaad91e25235c63a63ef96c7ce9e4fc590fd97c2f`，提交 `c9ec69d`，软链 `/opt/gzctf/publish -> /opt/gzctf/releases/teamlab-ovsdb-id-fix-20260814-6/publish`；`gzctf.service`、`gzctf-agent.service` active，首页 HTTP 200，数据库迁移已是最新（无新增迁移）。
+- 118 随发布包更新 Agent；125 已通过 `sync_release_agent.py` 同步同一二进制并重启。两节点 Agent SHA-256 均为 `6bf58f73eecc931f7c05c4f11af2186731f9b60e18d4328d9714cef5b67dd637`。
+- 部署后 125 的 `observations/read` 持续返回 200，不再出现此前的 `400 invalid cursor`；主站侧无新增 Agent call failed。V2 apply 复验与全链路验收由测试 agent 继续。
+
+## 2026-08-14 V2 apply 阻塞根因修复（待部署）
 
 - 根因：`TeamLabOvnNetworkProvider.StableUuid` 返回 `Guid.ToString("D")`，而 OVSDB `uuid-name`/`named-uuid` 的 `<id>` 必须以字母或 `_` 开头；UUID 以数字开头时事务报 `Type mismatch for member 'uuid-name'`。已改为 `gzctf_{kind}_{32位hex}` 并同步修正单元测试断言（不再用 `Guid.TryParse`）。
 - 报错闭环：Agent 失败事件的 `Detail.summary` 和 apply/cleanup 顶层 `Message` 现在保留真实 OVSDB 错误；主站 `TeamLabShardDeploymentService` 在 apply 失败时取事件 detail 写入失败消息并记日志，补偿清理同样保留真实原因。移除了泛化的 `FailureMessage` 映射，不再新增错误分类系统。

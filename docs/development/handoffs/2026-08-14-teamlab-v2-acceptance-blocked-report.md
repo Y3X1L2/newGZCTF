@@ -73,4 +73,4 @@
 - 根因已定位：`TeamLabOvnNetworkProvider.StableUuid` 生成的 `uuid-name` 以数字开头，不符合 OVSDB `<id>` 语法，OVN Northbound 事务报 `Type mismatch for member 'uuid-name'`。修复为 `gzctf_{kind}_{32位hex}`（kind 中的 `-` 替换为 `_`），并修正单测从 `Guid.TryParse` 改为 OVSDB `<id>` 语法校验。
 - 报错链路已闭环：Agent 事件 `Detail.summary` 与 apply/cleanup 顶层 `Message` 保留真实错误；主站 apply/补偿清理失败时优先取事件 detail，写入失败消息并记录日志。删除泛化 `FailureMessage` 映射，不新增错误分类机制。
 - 本地 Release build 通过；`TeamLabOvnNetworkProviderTests` 3/3 通过。
-- 待办：部署 118/125 新 Agent，复验 `execution-plan/apply` 真实通过后继续 V2 全链路验收。
+- 待办：已部署 release `teamlab-ovsdb-id-fix-20260814-6`（提交 `c9ec69d`，包 SHA-256 `e7f8482b7e93b156f7a67ebeaad91e25235c63a63ef96c7ce9e4fc590fd97c2f`）到 118，Agent 已同步 118/125（SHA-256 `6bf58f73eecc931f7c05c4f11af2186731f9b60e18d4328d9714cef5b67dd637`）。部署后 125 `observations/read` 持续 200，无 `400 invalid cursor`。下一步由测试 agent 复验 `execution-plan/apply` 真实通过后继续 V2 全链路验收。
