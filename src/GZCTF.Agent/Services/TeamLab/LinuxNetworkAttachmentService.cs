@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.ComponentModel;
 using System.IO;
 using System.Text;
+using GZCTF.Agent.Services;
 using GZCTF.TeamLab.Contracts.Execution;
 
 namespace GZCTF.Agent.Services.TeamLab;
@@ -20,10 +21,9 @@ public sealed class LinuxNetworkAttachmentService(ILogger<LinuxNetworkAttachment
             return TeamLabAttachmentResult.Failed("network", "Linux container attachments are only available on Linux Agents.");
         if (pid <= 0 || string.IsNullOrWhiteSpace(attachment.InterfaceName))
             return TeamLabAttachmentResult.Failed("validation", "Container network attachment identity is invalid.");
-        var port = plan.Networks
-            .FirstOrDefault(network => network.Key == attachment.NetworkKey)?
-            .Ports.FirstOrDefault(item => item.Key == attachment.PortKey);
-        if (port is null || string.IsNullOrWhiteSpace(port.MacAddress))
+        var network = plan.Networks.FirstOrDefault(item => item.Key == attachment.NetworkKey);
+        var port = network?.Ports.FirstOrDefault(item => item.Key == attachment.PortKey);
+        if (network is null || port is null || string.IsNullOrWhiteSpace(port.MacAddress))
             return TeamLabAttachmentResult.Failed("validation", "Container network attachment is missing its declared port identity.");
 
         var hostInterface = HostInterfaceName(plan, asset.AssetKey, attachment.NetworkKey);
@@ -32,7 +32,7 @@ public sealed class LinuxNetworkAttachmentService(ILogger<LinuxNetworkAttachment
         {
             if (await IsAttachmentConvergedAsync(pid, hostInterface, attachment.InterfaceName, cancellationToken))
             {
-                await ApplyAttachmentStateAsync(pid, attachment, port.MacAddress, cancellationToken);
+                await ApplyAttachmentStateAsync(pid, attachment, port.MacAddress, TeamLabNetworkService.PrefixLength(network.Cidr), cancellationToken);
                 return new TeamLabAttachmentResult(true, hostInterface);
             }
 
@@ -46,7 +46,7 @@ public sealed class LinuxNetworkAttachmentService(ILogger<LinuxNetworkAttachment
             await RunAsync("nsenter", ["-t", pid.ToString(), "-n", "ip", "link", "del", attachment.InterfaceName], cancellationToken, allowFailure: true);
             await RunAsync("nsenter", ["-t", pid.ToString(), "-n", "ip", "link", "set", peerInterface, "name", attachment.InterfaceName], cancellationToken);
             await RunAsync("nsenter", ["-t", pid.ToString(), "-n", "ip", "link", "set", attachment.InterfaceName, "up"], cancellationToken);
-            await ApplyAttachmentStateAsync(pid, attachment, port.MacAddress, cancellationToken);
+            await ApplyAttachmentStateAsync(pid, attachment, port.MacAddress, TeamLabNetworkService.PrefixLength(network.Cidr), cancellationToken);
             return new TeamLabAttachmentResult(true, hostInterface);
         }
         catch (Exception exception) when (exception is IOException or InvalidOperationException or Win32Exception)
@@ -80,11 +80,12 @@ public sealed class LinuxNetworkAttachmentService(ILogger<LinuxNetworkAttachment
         long pid,
         TeamLabAssetNetworkAttachmentV2 attachment,
         string macAddress,
+        int prefixLength,
         CancellationToken token)
     {
         await RunAsync("nsenter", ["-t", pid.ToString(), "-n", "ip", "link", "set", attachment.InterfaceName, "address", macAddress], token);
         if (!string.IsNullOrWhiteSpace(attachment.IpAddress))
-            await RunAsync("nsenter", ["-t", pid.ToString(), "-n", "ip", "address", "replace", attachment.IpAddress, "dev", attachment.InterfaceName], token);
+            await RunAsync("nsenter", ["-t", pid.ToString(), "-n", "ip", "address", "replace", $"{attachment.IpAddress}/{prefixLength}", "dev", attachment.InterfaceName], token);
         if (attachment.Primary && !string.IsNullOrWhiteSpace(attachment.GatewayIp))
             await RunAsync("nsenter", ["-t", pid.ToString(), "-n", "ip", "route", "replace", "default", "via", attachment.GatewayIp, "dev", attachment.InterfaceName], token);
     }

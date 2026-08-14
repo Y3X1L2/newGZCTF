@@ -625,7 +625,7 @@ public partial class TeamLabNetworkService(
         }
     }
 
-    private static int PrefixLength(string cidr) => int.Parse(cidr[(cidr.IndexOf('/') + 1)..]);
+    internal static int PrefixLength(string cidr) => int.Parse(cidr[(cidr.IndexOf('/') + 1)..]);
 
     private static bool IsStrictIpv4(string value)
     {
