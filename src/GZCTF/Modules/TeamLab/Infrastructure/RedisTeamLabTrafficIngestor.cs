@@ -280,7 +280,9 @@ public sealed class RedisTeamLabTrafficIngestor(
         var pending = batches.Skip(firstBatch).SelectMany(batch => batch).ToArray();
         var dropped = localBuffer.EnqueueRange(pending);
         telemetry.RecordOperation(RedisTelemetryPurpose.Stream, RedisTelemetryStatus.Bypassed);
-        return new TeamLabTrafficEnqueueResult(pending.Length, batches.Count - firstBatch, dropped, true);
+        // Deferred samples are buffered locally, not durably accepted by the Redis stream.
+        // AcceptedCount must stay 0 so callers never treat a volatile fallback as durable data.
+        return new TeamLabTrafficEnqueueResult(0, batches.Count - firstBatch, dropped, true);
     }
 
     private static void AddEntries(

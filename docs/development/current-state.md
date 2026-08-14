@@ -347,3 +347,11 @@ vNext 正式路由和实现状态以以下文件为准：
 - 修复内容：OVN 26.03 `Logical_Switch_Port` 移除过时 `switch` 列、`Logical_Router_Port.peer` 不再作为引用集合清理、`dhcpv4_options` 只在有租约时写入；玩家网关 MAC 闭环（OVN LSP 与 WireGuard 接口一致）；Docker 容器接口名改 `eth{index}`；镜像引用统一 `sha256:` 前缀；容器健康检查改经 `nsenter` 在容器网络命名空间内执行；VM libvirt 原生 pause/resume 与 OVS interfaceid 已接入。
 - 门禁：Release 全套构建 0 错误 0 警告，publish 内嵌前端门禁（locales/lint/tsc/architecture/239 vitest/vite build）通过，定向 TeamLab 单测 75 个通过。
 - 尚未闭环：V2 VM 网络附件未实机验证（libvirt 可能自动创建 TAP，但 OVS 本地 attachment 未确认）；OVN 26.03 全链路 apply/cleanup 与 V2 完整矩阵仍由测试 agent 验收。交接见 `docs/development/handoffs/2026-08-14-teamlab-ovn-attach-fix-handoff.md`。
+
+## 2026-08-14 组网底座代码审查（HEAD 0bb43f6，未提交）
+
+- 审查按 `docs/development/handoffs/2026-08-14-teamlab-code-review-handoff.md` 执行，结论落 `docs/development/handoffs/2026-08-14-teamlab-code-review-report.md`。
+- 修复 1 个阻断项：`RedisTeamLabTrafficIngestor.BufferLocally` 在 Redis 不可用/追加失败时把本地缓冲样本误报为 `AcceptedCount`（commit `8f45599` 用 `BufferLocally` 替换旧 `Deferred()` 引入的回归），已改回 `AcceptedCount=0`（Deferred 样本不是持久接受）。
+- 6 个已知设计张力（V1/V2 双路径、`TeamLabExecutionModelPolicy`、`IsValid` 超长校验、幂等提前返回、VM TAP 闭环、network owner 串行化）均评估为无需改代码，证据见报告第 5 节。
+- 残留风险：`OvsdbJsonRpcClientTests.Client_ResetsTimedOutSessionBeforeNextTransactionUsesIt` 是计时型测试（100ms 超时 + 固定延迟），并行全量运行偶发失败、单类隔离通过；属测试设计问题而非产品缺陷，待改确定性协调后处理。
+- 验证：Release build 0 错误；TeamLab 定向单测 301 用例，修复后仅剩上述 1 个偶发用例。实机 OVN/OVS/KVM 与迁移 Testcontainers 验证仍未执行，不得据此启用 V2 或删除旧 bridge/router namespace/dnsmasq 路径。
