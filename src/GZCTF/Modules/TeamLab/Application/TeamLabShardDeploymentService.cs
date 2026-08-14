@@ -24,6 +24,7 @@ public sealed class TeamLabShardDeploymentService(
     AppDbContext context,
     IServiceScopeFactory scopeFactory,
     ITeamLabNodeExecutor executor,
+    DockerImageRegistryService dockerRegistry,
     TeamLabRouteApplicationService routes,
     TeamLabEventRecorder eventRecorder,
     ITeamLabDeploymentProgress stageMachine,
@@ -150,19 +151,19 @@ public sealed class TeamLabShardDeploymentService(
         var topologyAssets = definition.Assets.ToDictionary(item => item.Key, StringComparer.Ordinal);
         var legacyPreparedImages = imagePreparation ?? StartImagePreparation();
         var allowedRoutes = BuildAllowedRoutes(runtime, definition);
-        var work = runtimeAssets.ToDictionary(
-            item => item.TopologyKey,
-            item => new AssetWork(
-                item,
-                BuildAssetRequest(
-                    runtime,
-                    item,
-                    topologyAssets[item.TopologyKey],
-                    templates[item.SourceTemplateId!.Value],
-                    overlays.GetValueOrDefault(item.TopologyKey),
-                    allowedRoutes,
-                    imageReady: true)),
-            StringComparer.Ordinal);
+        var builtRequests = await Task.WhenAll(runtimeAssets.Select(item => BuildAssetRequest(
+            runtime,
+            item,
+            topologyAssets[item.TopologyKey],
+            templates[item.SourceTemplateId!.Value],
+            overlays.GetValueOrDefault(item.TopologyKey),
+            allowedRoutes,
+            imageReady: true,
+            cancellationToken)));
+        var work = runtimeAssets.Zip(builtRequests)
+            .ToDictionary(pair => pair.First.TopologyKey,
+                pair => new AssetWork(pair.First, pair.Second),
+                StringComparer.Ordinal);
         var graph = TeamLabDependencyGraph.Compile(definition);
         var completed = TeamLabDependencyGraph.RestoreCompletedNodes(runtimeAssets);
         var scheduled = new HashSet<string>(StringComparer.Ordinal);
@@ -557,7 +558,7 @@ public sealed class TeamLabShardDeploymentService(
         var plans = new Dictionary<int, TeamLabExecutionPlanV2>();
         foreach (var shard in runtime.Shards.Where(item => item.Generation == runtime.Generation))
         {
-            var shardAssets = runtimeAssets.Where(item => item.ShardId == shard.Id)
+            var shardAssets = await Task.WhenAll(runtimeAssets.Where(item => item.ShardId == shard.Id)
                 .OrderBy(item => item.TopologyKey, StringComparer.Ordinal)
                 .Select(asset => BuildAssetRequest(
                     runtime,
@@ -566,8 +567,8 @@ public sealed class TeamLabShardDeploymentService(
                     templates[asset.SourceTemplateId!.Value],
                     overlays.GetValueOrDefault(asset.TopologyKey),
                     allowedRoutes,
-                    imageReady: true))
-                .ToArray();
+                    imageReady: true,
+                    cancellationToken)));
             plans.Add(shard.Id, TeamLabExecutionPlanCompiler.Compile(
                 runtime.Id,
                 runtime.PublicId,
@@ -641,14 +642,15 @@ public sealed class TeamLabShardDeploymentService(
         await scopedArtifacts.EnsureImageAsync(runtimeId, workerNodeId, template, cancellationToken);
     }
 
-    private static TeamLabNodeAssetCreateRequest BuildAssetRequest(
+    private async Task<TeamLabNodeAssetCreateRequest> BuildAssetRequest(
         TeamLabRuntime runtime,
         TeamLabRuntimeAsset asset,
         TeamLabExecutionAsset topologyAsset,
         ImageTemplate template,
         TeamLabRuntimeOverlayModel? overlay,
         IReadOnlyDictionary<string, IReadOnlyList<string>> allowedRoutes,
-        bool imageReady)
+        bool imageReady,
+        CancellationToken cancellationToken)
     {
         var shard = runtime.Shards.Single(item => item.Id == asset.ShardId);
         var parsedInterfaces = ParseInterfaces(asset).ToArray();
@@ -666,6 +668,11 @@ public sealed class TeamLabShardDeploymentService(
                 dnsServers);
         }).ToArray();
         var secrets = overlay?.Secrets ?? new Dictionary<string, string>();
+        var imageReference = topologyAsset.Kind == TeamLabAssetKind.Docker
+            ? await dockerRegistry.ResolveImageReferenceAsync(
+                asset.Image ?? DockerImageReference.ResolvePullTarget(template.Name, template.RegistryUrl).FullImage,
+                cancellationToken)
+            : null;
         return new TeamLabNodeAssetCreateRequest(
                 runtime.Id, asset.Id, runtime.PublicId, runtime.Generation, asset.TopologyKey, asset.Name, topologyAsset.Kind,
                 asset.SourceTemplateId ?? topologyAsset.ImageTemplateId, topologyAsset.CpuUnits, topologyAsset.MemoryMiB,
@@ -680,7 +687,7 @@ public sealed class TeamLabShardDeploymentService(
                 topologyAsset.Kind == TeamLabAssetKind.Vm ? template.VmRuntimeMode : null,
                 topologyAsset.Kind == TeamLabAssetKind.Vm ? template.VmNetworkMode : null,
                 topologyAsset.Kind == TeamLabAssetKind.Docker
-                    ? asset.Image ?? DockerImageReference.ResolvePullTarget(template.Name, template.RegistryUrl).FullImage
+                    ? imageReference
                     : null);
     }
 

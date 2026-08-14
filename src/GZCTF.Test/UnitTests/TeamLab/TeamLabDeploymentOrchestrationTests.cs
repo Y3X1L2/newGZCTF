@@ -22,6 +22,7 @@ using GZCTF.Modules.TeamLab.Domain.Runtime;
 using GZCTF.Modules.TeamLab.Infrastructure;
 using GZCTF.TeamLab.Contracts;
 using GZCTF.Services.Fleet;
+using GZCTF.Services;
 using GZCTF.Services.TeamLab;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
@@ -72,6 +73,7 @@ public sealed class TeamLabDeploymentOrchestrationTests
             context,
             provider.GetRequiredService<IServiceScopeFactory>(),
             executor.Object,
+            CreateImageRegistry(),
             routes,
             eventRecorder,
             Mock.Of<ITeamLabDeploymentProgress>(),
@@ -649,4 +651,18 @@ public sealed class TeamLabDeploymentOrchestrationTests
         new DbContextOptionsBuilder<AppDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
             .Options);
+
+    private static DockerImageRegistryService CreateImageRegistry()
+    {
+        var agent = new AgentClient(
+            Mock.Of<IHttpClientFactory>(),
+            Mock.Of<IServiceScopeFactory>(),
+            new ConfigurationBuilder().Build(),
+            NullLogger<AgentClient>.Instance);
+        return new DockerImageRegistryService(
+            Options.Create(new DockerRegistrySettings()),
+            Mock.Of<IServiceScopeFactory>(),
+            agent,
+            NullLogger<DockerImageRegistryService>.Instance);
+    }
 }
