@@ -50,6 +50,7 @@
 - OVN/OVS 逻辑端口标识统一为确定性 UUID：libvirt 要求 `interfaceid` 是 UUID，OVN 又按 `iface-id == Logical_Switch_Port.name` 绑定，因此 `LogicalPortName` 改为 `LogicalPortId`（同一 UUID 同时进入 OVN LSP name、OVS external_ids:iface-id 和 VM XML interfaceid），可读键仍保留在 external_ids。
 - 修正 libvirt 原生互操作释放：`virFree` 不存在，`virConnectListAllDomains` 返回数组与 `virDomainGetXMLDesc` 返回字符串改用 libc `free` 释放；域名句柄继续由调用方 `virDomainFree`。
 - 2026-08-15 部署 release 16，118/125 Agent 同步 SHA `8af6c50f...`；125 真机冒烟：Docker+双 VM V2 apply 全成功、OVN/OVS/libvirt UUID 绑定一致、cleanup 无残留。
+- 审查报告残留的 `OvsdbJsonRpcClientTests` 计时型偶发用例已改为确定性协调（commit `1c9d153`）：用请求到达信号与显式取消替代 100ms 超时 + 固定延迟，定向 `OvsdbJsonRpcClientTests` 7/7 通过，残留风险关闭。
 
 ## 本轮门禁证据
 

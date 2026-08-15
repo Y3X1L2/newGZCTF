@@ -366,8 +366,8 @@ vNext 正式路由和实现状态以以下文件为准：
 - 审查按 `docs/development/handoffs/2026-08-14-teamlab-code-review-handoff.md` 执行，结论落 `docs/development/handoffs/2026-08-14-teamlab-code-review-report.md`。
 - 修复 1 个阻断项：`RedisTeamLabTrafficIngestor.BufferLocally` 在 Redis 不可用/追加失败时把本地缓冲样本误报为 `AcceptedCount`（commit `8f45599` 用 `BufferLocally` 替换旧 `Deferred()` 引入的回归），已改回 `AcceptedCount=0`（Deferred 样本不是持久接受）。
 - 6 个已知设计张力（V1/V2 双路径、`TeamLabExecutionModelPolicy`、`IsValid` 超长校验、幂等提前返回、VM TAP 闭环、network owner 串行化）均评估为无需改代码，证据见报告第 5 节。
-- 残留风险：`OvsdbJsonRpcClientTests.Client_ResetsTimedOutSessionBeforeNextTransactionUsesIt` 是计时型测试（100ms 超时 + 固定延迟），并行全量运行偶发失败、单类隔离通过；属测试设计问题而非产品缺陷，待改确定性协调后处理。
-- 验证：Release build 0 错误；TeamLab 定向单测 301 用例，修复后仅剩上述 1 个偶发用例。实机 OVN/OVS/KVM 与迁移 Testcontainers 验证仍未执行，不得据此启用 V2 或删除旧 bridge/router namespace/dnsmasq 路径。
+- 残留风险已闭环（2026-08-15，commit `1c9d153`）：`OvsdbJsonRpcClientTests.Client_ResetsTimedOutSessionBeforeNextTransactionUsesIt` 改为确定性协调（请求到达信号 + 显式取消），不再依赖 100ms 超时与固定延迟，定向 `OvsdbJsonRpcClientTests` 7/7 通过。
+- 验证：Release build 0 错误；TeamLab 定向单测 301 用例，偶发用例已消除。实机 OVN/OVS/KVM 与迁移 Testcontainers 验证仍未执行，不得据此启用 V2 或删除旧 bridge/router namespace/dnsmasq 路径。
 
 ## 2026-08-14 release 10：代码审查修复部署与 125 同步
 
