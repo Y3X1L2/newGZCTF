@@ -79,13 +79,19 @@ public sealed class OvsdbJsonRpcClientTests
     {
         using var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
-        var server = ServeTimedOutThenSuccessfulConnectionAsync(listener);
-        using var client = new OvsdbJsonRpcClient(TimeSpan.FromMilliseconds(100));
+        var firstRequestReceived = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseFirst = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var server = ServeTimedOutThenSuccessfulConnectionAsync(listener, firstRequestReceived, releaseFirst);
+        using var client = new OvsdbJsonRpcClient();
+        using var timeout = new CancellationTokenSource();
         var operations = new[] { new JsonObject { ["op"] = "select" } };
 
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => client.TransactAsync(
-            Endpoint(listener), "Open_vSwitch", operations, CancellationToken.None));
-        await Task.Delay(300);
+        var first = client.TransactAsync(Endpoint(listener), "Open_vSwitch", operations, timeout.Token);
+        await firstRequestReceived.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        timeout.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => first);
+
+        releaseFirst.SetResult();
         Assert.IsType<JsonArray>(await client.TransactAsync(
             Endpoint(listener), "Open_vSwitch", operations, CancellationToken.None));
         await server.WaitAsync(TimeSpan.FromSeconds(5));
@@ -141,14 +147,18 @@ public sealed class OvsdbJsonRpcClientTests
             await ServeConnectionAsync(second, mismatchedResponse: false);
     }
 
-    private static async Task ServeTimedOutThenSuccessfulConnectionAsync(TcpListener listener)
+    private static async Task ServeTimedOutThenSuccessfulConnectionAsync(
+        TcpListener listener,
+        TaskCompletionSource firstRequestReceived,
+        TaskCompletionSource releaseFirst)
     {
         using (var first = await listener.AcceptTcpClientAsync())
         {
             using var reader = new StreamReader(first.GetStream(), new UTF8Encoding(false), false, 4096,
                 leaveOpen: true);
             _ = await reader.ReadLineAsync();
-            await Task.Delay(250);
+            firstRequestReceived.SetResult();
+            await releaseFirst.Task;
         }
         using (var second = await listener.AcceptTcpClientAsync())
             await ServeConnectionAsync(second, mismatchedResponse: false);
