@@ -124,8 +124,10 @@ public class ExerciseController(
     [RequireTeacher]
     public async Task<IActionResult> CreateExercise([FromBody] ExerciseCreateModel model, CancellationToken token)
     {
+        var user = await CurrentUser();
         var exercise = new ExerciseChallenge
         {
+            CreatedById = user.Id,
             Title = model.Title,
             Content = model.Content,
             Category = model.Category,

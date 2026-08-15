@@ -1,5 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations;
 using System.Net.Mime;
+using System.Security.Claims;
 using GZCTF.Middlewares;
 using GZCTF.Repositories.Interface;
 using GZCTF.Storage.Interface;
@@ -93,7 +94,10 @@ public class AssetsController(
             List<LocalFile> results = [];
             foreach (var file in files.Where(file => file.Length > 0))
             {
-                var res = await blobService.CreateOrUpdateBlob(file, filename, token);
+                var actorId = Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId)
+                    ? userId
+                    : (Guid?)null;
+                var res = await blobService.CreateOrUpdateBlob(file, filename, token, actorId);
                 logger.SystemLog(
                     StaticLocalizer[nameof(Resources.Program.Assets_UpdateFile), res.Hash[..8],
                         filename ?? file.FileName, file.Length],

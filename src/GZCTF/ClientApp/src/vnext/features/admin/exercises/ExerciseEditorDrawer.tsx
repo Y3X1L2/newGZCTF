@@ -188,6 +188,7 @@ export function ExerciseEditorDrawer({
           </section>
 
           <section>
+            {exerciseId ? <p className={styles.creator}>出题人：{draft.creatorUserName || '未记录（历史题目）'}</p> : null}
             <h3>题目内容</h3>
             <TextAreaField label="Markdown" onValueChange={(value) => update('content', value)} rows={14} value={draft.content} />
           </section>

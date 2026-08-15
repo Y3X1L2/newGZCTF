@@ -55,8 +55,13 @@ public sealed class ExerciseOpenApiFlagInfoModel
 
 public sealed class ExerciseOpenApiAttachmentModel
 {
-    [Required, MaxLength(2048)]
-    public string RemoteUrl { get; set; } = string.Empty;
+    /// <summary>Hash returned by POST /api/open/v1/assets for a local attachment.</summary>
+    [RegularExpression("^[0-9a-f]{64}$")]
+    public string? FileHash { get; set; }
+
+    /// <summary>External attachment URL. Retained for backwards compatibility.</summary>
+    [MaxLength(2048)]
+    public string? RemoteUrl { get; set; }
 }
 
 public sealed class ExerciseExternalModel

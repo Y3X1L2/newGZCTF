@@ -35,10 +35,12 @@ public class ExerciseFlagCreateModel : FlagCreateModel
 public class ExerciseManagementModel : ExerciseCreateModel
 {
     public int Id { get; set; }
+    public string? CreatorUserName { get; set; }
 
     internal static ExerciseManagementModel FromExercise(ExerciseChallenge exercise) => new()
     {
         Id = exercise.Id,
+        CreatorUserName = exercise.CreatedBy?.UserName,
         Title = exercise.Title,
         Content = exercise.Content,
         Category = exercise.Category,

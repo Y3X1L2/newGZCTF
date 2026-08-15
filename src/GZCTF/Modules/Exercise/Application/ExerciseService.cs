@@ -23,8 +23,8 @@ public sealed class ExerciseService(
     public async Task<ExerciseChallenge?> GetExerciseByIdAsync(int exerciseId, CancellationToken token = default) =>
         await context.ExerciseChallenges
             .AsNoTracking()
-            .Include(e => e.Flags)
-            .Include(e => e.Attachment)
+            .Include(e => e.Flags).ThenInclude(flag => flag.Attachment).ThenInclude(attachment => attachment!.LocalFile)
+            .Include(e => e.Attachment).ThenInclude(attachment => attachment!.LocalFile)
             .FirstOrDefaultAsync(e => e.Id == exerciseId && e.IsEnabled && e.TrainingCourseId == null, token);
 
     public async Task<ExerciseInfoModel[]> GetExerciseListAsync(
@@ -38,7 +38,7 @@ public sealed class ExerciseService(
             .Where(e => e.IsEnabled && e.TrainingCourseId == null && e.MinimumVisibleRole <= role);
 
         if (filter is null)
-            return await BuildInfoModels(query, userId).ToArrayAsync(token);
+            return await BuildInfoModels(query, userId, role >= Role.Teacher).ToArrayAsync(token);
 
         if (!string.IsNullOrWhiteSpace(filter.Search))
         {
@@ -63,7 +63,7 @@ public sealed class ExerciseService(
         if (filter.Sources is { Length: > 0 })
             query = query.Where(e => filter.Sources.Contains(e.PoolSource));
 
-        return await BuildInfoModels(query, userId).ToArrayAsync(token);
+        return await BuildInfoModels(query, userId, role >= Role.Teacher).ToArrayAsync(token);
     }
 
     public async Task<ExerciseDetailModel?> GetExerciseDetailAsync(UserInfo user, int exerciseId, CancellationToken token = default)
@@ -218,7 +218,10 @@ public sealed class ExerciseService(
             : new TaskResult<DeploymentQueueStatusModel>(TaskStatus.Success, status);
     }
 
-    IQueryable<ExerciseInfoModel> BuildInfoModels(IQueryable<ExerciseChallenge> query, Guid? userId) =>
+    IQueryable<ExerciseInfoModel> BuildInfoModels(
+        IQueryable<ExerciseChallenge> query,
+        Guid? userId,
+        bool includeCreator) =>
         query.Select(e => new ExerciseInfoModel
         {
             Id = e.Id,
@@ -230,6 +233,7 @@ public sealed class ExerciseService(
             Tags = e.Tags ?? new(),
             Credit = e.Credit,
             PoolSource = e.PoolSource,
+            CreatorUserName = includeCreator ? e.CreatedBy!.UserName : null,
             AcceptedCount = context.ExerciseInstances.Count(i =>
                 i.ExerciseId == e.Id && i.SolveTimeUtc > DateTimeOffset.FromUnixTimeSeconds(0)),
             SubmissionCount = context.ExerciseSubmissions.Count(submission =>

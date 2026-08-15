@@ -229,10 +229,18 @@ public sealed class ExerciseOpenApiController(
         Attachment = toAttachmentModel(flag.Attachment),
     };
 
-    private static ExerciseOpenApiAttachmentModel? toAttachmentModel(Attachment? attachment) =>
-        attachment?.Type == FileType.Remote && !string.IsNullOrEmpty(attachment.RemoteUrl)
-            ? new ExerciseOpenApiAttachmentModel { RemoteUrl = attachment.RemoteUrl }
-            : null;
+    private static ExerciseOpenApiAttachmentModel? toAttachmentModel(Attachment? attachment) => attachment switch
+    {
+        { Type: FileType.Local, LocalFile: not null } => new ExerciseOpenApiAttachmentModel
+        {
+            FileHash = attachment.LocalFile.Hash
+        },
+        { Type: FileType.Remote, RemoteUrl: not null } => new ExerciseOpenApiAttachmentModel
+        {
+            RemoteUrl = attachment.RemoteUrl
+        },
+        _ => null
+    };
 
     private static ChallengeCategory[]? ParseCategories(string? value)
     {

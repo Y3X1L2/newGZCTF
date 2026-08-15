@@ -27,6 +27,7 @@ export interface ImageTemplateSummary {
   imageHash: string | null
   uploadedAt: number
   registryUrl: string | null
+  creatorUserName?: string | null
   containsMalware?: boolean
   supportsInstanceCredentials?: boolean
   remoteAccessProtocol?: 'containerTerminal' | 'ssh' | 'rdp' | null

@@ -8,9 +8,10 @@ public interface IBlobRepository : IRepository
     /// <param name="file">The form file</param>
     /// <param name="fileName">The name to save the file as</param>
     /// <param name="token"></param>
+    /// <param name="createdById">Account that first owns a newly created blob.</param>
     /// <returns>The file object</returns>
     public Task<LocalFile> CreateOrUpdateBlob(IFormFile file, string? fileName = null,
-        CancellationToken token = default);
+        CancellationToken token = default, Guid? createdById = null);
 
     /// <summary>
     /// Create or update a blob file from a stream
@@ -18,9 +19,10 @@ public interface IBlobRepository : IRepository
     /// <param name="fileName">The name to save the file as</param>
     /// <param name="stream">The file content stream</param>
     /// <param name="token"></param>
+    /// <param name="createdById">Account that first owns a newly created blob.</param>
     /// <returns>The file object</returns>
     public Task<LocalFile> CreateOrUpdateBlobFromStream(string fileName, Stream stream,
-        CancellationToken token = default);
+        CancellationToken token = default, Guid? createdById = null);
 
     /// <summary>
     /// Increment reference count for an existing blob file
