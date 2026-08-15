@@ -92,6 +92,22 @@ public sealed class OvsdbJsonRpcClientTests
     }
 
     [Fact]
+    public async Task Client_ReportsOperationErrorWithNonStringDetails()
+    {
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var server = ServeOperationErrorAsync(listener);
+        using var client = new OvsdbJsonRpcClient();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => client.TransactAsync(
+            Endpoint(listener), "Open_vSwitch", [new JsonObject { ["op"] = "select" }],
+            CancellationToken.None));
+
+        Assert.Equal("OVSDB transaction operation 1 failed: constraint violation", exception.Message);
+        await server;
+    }
+
+    [Fact]
     public async Task Client_DoesNotExposeOvsdbErrorPayload()
     {
         using var listener = new TcpListener(IPAddress.Loopback, 0);
@@ -136,6 +152,28 @@ public sealed class OvsdbJsonRpcClientTests
         }
         using (var second = await listener.AcceptTcpClientAsync())
             await ServeConnectionAsync(second, mismatchedResponse: false);
+    }
+
+    private static async Task ServeOperationErrorAsync(TcpListener listener)
+    {
+        using var connection = await listener.AcceptTcpClientAsync();
+        await using var stream = connection.GetStream();
+        using var reader = new StreamReader(stream, new UTF8Encoding(false), false, 4096, leaveOpen: true);
+        await using var writer = new StreamWriter(stream, new UTF8Encoding(false), 4096, leaveOpen: true)
+        {
+            AutoFlush = true
+        };
+        var request = JsonNode.Parse(await reader.ReadLineAsync() ?? throw new EndOfStreamException())!.AsObject();
+        await writer.WriteAsync(JsonSerializer.Serialize(new
+        {
+            jsonrpc = "2.0",
+            result = new object[]
+            {
+                new { error = "constraint violation", details = new object[] { "unexpected", "shape" } }
+            },
+            error = (object?)null,
+            id = request["id"]!.GetValue<string>()
+        }));
     }
 
     private static async Task ServeErrorAsync(TcpListener listener)

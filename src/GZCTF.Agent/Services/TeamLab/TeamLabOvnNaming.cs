@@ -15,11 +15,15 @@ internal static class TeamLabOvnNaming
     public static string LogicalNetworkName(TeamLabExecutionPlanV2 plan, string key) =>
         $"gzctf-tl-{plan.RuntimePublicId:N}-{plan.Generation}-n-{SafeKey(key)}";
 
-    public static string LogicalPortName(Guid runtimePublicId, int generation, string networkKey, string portKey) =>
-        $"gzctf-tl-{runtimePublicId:N}-{generation}-p-{SafeKey(networkKey)}-{SafeKey(portKey)}";
+    // libvirt requires OVS interface ids to be UUIDs, and OVN binds a port by
+    // matching iface-id against Logical_Switch_Port.name, so the same
+    // deterministic UUID is the identity shared by OVN, OVS and libvirt.
+    public static string LogicalPortId(Guid runtimePublicId, int generation, string networkKey, string portKey) =>
+        new Guid(SHA256.HashData(Encoding.UTF8.GetBytes(
+            $"gzctf-tl-port:{runtimePublicId:D}:{generation}:{networkKey}:{portKey}"))[..16]).ToString("D");
 
-    public static string LogicalPortName(TeamLabExecutionPlanV2 plan, string networkKey, string portKey) =>
-        LogicalPortName(plan.RuntimePublicId, plan.Generation, networkKey, portKey);
+    public static string LogicalPortId(TeamLabExecutionPlanV2 plan, string networkKey, string portKey) =>
+        LogicalPortId(plan.RuntimePublicId, plan.Generation, networkKey, portKey);
 
     static string SafeKey(string value)
     {

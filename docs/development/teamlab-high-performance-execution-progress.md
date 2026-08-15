@@ -39,6 +39,18 @@
 - 缓存清理的 Agent 响应现在携带目标 Docker/VM 缓存 inventory；主站遇到残留会保留分发记录并写入真实失败，不会把“删除请求已返回”当成物理清理完成。
 - 多节点 V2 apply 不会先写成功标记：任一分片失败、取消或 inventory 缺失时，已成功分片按相同不可变计划补偿清理，避免外层销毁错误回落到旧路径。
 
+## 2026-08-15 全链路追踪修复
+
+- 主站 `TeamLabShardDeploymentService -> TeamLabExecutionPlanCompiler -> Agent TeamLabExecutionPlanExecutor -> OVN/OVS/Docker/libvirt` 的调用链已逐段核对；镜像引用、容器接口名、IP 前缀和 OVSDB `uuid-name` 已确认闭环。
+- 修复 VM inventory 把 `residual:` 域带回 cleanup 结果的问题，`ReadInventoryAsync` 只返回声明资产；残留域由 `DestroyResidualsAsync` 专门清理。
+- 统一空路由语义：`IsValid` 只在 `NextHop` 非空时校验，Provider 跳过空路由创建和静态路由统计。
+- OVN 删除顺序调整为“子表先删、父表后删”，ACL/DNS/Switch Port 在 Logical_Switch 之前删除，避免强引用约束失败。
+- OVSDB 错误透传对 `table/error/details` 使用类型安全读取，非字符串详情不再触发二次 `JsonException`。
+- 定向测试 27/27 通过（空路由、OVN 删除顺序、OVSDB 错误透传及既有 TeamLab 用例）；覆盖率收集器在本机存在已知 coverlet 竞态，验证时以 `-p:CollectCoverage=false` 执行。
+- OVN/OVS 逻辑端口标识统一为确定性 UUID：libvirt 要求 `interfaceid` 是 UUID，OVN 又按 `iface-id == Logical_Switch_Port.name` 绑定，因此 `LogicalPortName` 改为 `LogicalPortId`（同一 UUID 同时进入 OVN LSP name、OVS external_ids:iface-id 和 VM XML interfaceid），可读键仍保留在 external_ids。
+- 修正 libvirt 原生互操作释放：`virFree` 不存在，`virConnectListAllDomains` 返回数组与 `virDomainGetXMLDesc` 返回字符串改用 libc `free` 释放；域名句柄继续由调用方 `virDomainFree`。
+- 2026-08-15 部署 release 16，118/125 Agent 同步 SHA `8af6c50f...`；125 真机冒烟：Docker+双 VM V2 apply 全成功、OVN/OVS/libvirt UUID 绑定一致、cleanup 无残留。
+
 ## 本轮门禁证据
 
 - `dotnet build src/GZCTF.slnx -c Release --no-restore`：最终复核通过，0 警告、0 错误。

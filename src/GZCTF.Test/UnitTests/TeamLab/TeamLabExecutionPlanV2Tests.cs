@@ -99,6 +99,20 @@ public sealed class TeamLabExecutionPlanV2Tests
     }
 
     [Fact]
+    public void Plan_AcceptsRouteWithEmptyNextHop()
+    {
+        var plan = WithDigests(Plan() with
+        {
+            Networks = [new TeamLabNetworkIntentV2(
+                "network-a", "10.0.1.0/24", "10.0.1.1",
+                [new TeamLabNetworkPortV2("port-a", "docker-1", "02:00:00:00:00:01", "10.0.1.10")],
+                [new TeamLabNetworkRouteV2("10.0.2.0/24", null)], [])]
+        });
+
+        Assert.True(plan.IsValid(out var error), error);
+    }
+
+    [Fact]
     public void Plan_RejectsDuplicateDnsHostnameIgnoringCase()
     {
         var plan = Plan();
@@ -295,6 +309,18 @@ public sealed class TeamLabExecutionPlanV2Tests
         Assert.Equal("player-gateway", gateway.PortKey);
         Assert.Equal("10.0.1.254", gateway.IpAddress);
         Assert.Equal("tlwg7", gateway.InterfaceName);
+    }
+
+    static TeamLabExecutionPlanV2 WithDigests(TeamLabExecutionPlanV2 plan)
+    {
+        var networkDigest = $"sha256:{Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(
+            new { plan.Networks, plan.NetworkControl }))).ToLowerInvariant()}";
+        plan = plan with { NetworkDigest = networkDigest };
+        return plan with
+        {
+            PlanDigest = $"sha256:{Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(
+                plan with { PlanDigest = string.Empty }))).ToLowerInvariant()}"
+        };
     }
 
     static TeamLabExecutionPlanV2 Plan()

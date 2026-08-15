@@ -61,6 +61,33 @@ public sealed class TeamLabOvnNetworkProviderTests
         }
     }
 
+    [Fact]
+    public void ApplyOperations_LogicalPortNamesAreUuidInterfaceIds()
+    {
+        var operations = Provider().BuildApplyOperations(Plan());
+        var names = operations
+            .Where(operation => string.Equals(operation["table"]?.GetValue<string>(),
+                "Logical_Switch_Port", StringComparison.Ordinal))
+            .Select(operation => operation["row"] as JsonObject)
+            .Where(row => row is not null && row["type"] is null)
+            .Select(row => row!["name"]?.GetValue<string>())
+            .Where(name => !string.IsNullOrWhiteSpace(name));
+        Assert.Equal(2, names.Count());
+        Assert.All(names, name => Assert.True(Guid.TryParse(name, out _), $"LSP name is not a UUID: {name}"));
+    }
+
+    [Fact]
+    public void LogicalPortId_IsDeterministicAndUuidFormatted()
+    {
+        var plan = Plan();
+        var first = TeamLabOvnNaming.LogicalPortId(plan, "network-a", "port-a");
+        var second = TeamLabOvnNaming.LogicalPortId(plan, "network-a", "port-a");
+
+        Assert.True(Guid.TryParse(first, out _));
+        Assert.Equal(first, second);
+        Assert.NotEqual(first, TeamLabOvnNaming.LogicalPortId(plan, "network-a", "port-b"));
+    }
+
     static void AssertJsonUuids(JsonNode? node)
     {
         if (node is JsonArray array)
@@ -80,6 +107,25 @@ public sealed class TeamLabOvnNetworkProviderTests
             foreach (var property in obj)
                 AssertJsonUuids(property.Value);
         }
+    }
+
+    [Fact]
+    public void RemoveOperations_DeleteChildrenBeforeTheirParents()
+    {
+        var operations = TeamLabOvnNetworkProvider.BuildRemoveOperations(Plan());
+
+        int IndexOf(string table) => operations
+            .Select((operation, index) => (operation, index))
+            .First(item => string.Equals(item.operation["op"]?.GetValue<string>(), "delete", StringComparison.Ordinal) &&
+                            string.Equals(item.operation["table"]?.GetValue<string>(), table, StringComparison.Ordinal))
+            .index;
+        Assert.True(IndexOf("Logical_Router_Policy") < IndexOf("Logical_Router"));
+        Assert.True(IndexOf("Logical_Router_Static_Route") < IndexOf("Logical_Router"));
+        Assert.True(IndexOf("Logical_Router_Port") < IndexOf("Logical_Router"));
+        Assert.True(IndexOf("ACL") < IndexOf("Logical_Switch"));
+        Assert.True(IndexOf("DNS") < IndexOf("Logical_Switch"));
+        Assert.True(IndexOf("Logical_Switch_Port") < IndexOf("Logical_Switch"));
+        Assert.True(IndexOf("Logical_Switch_Port") < IndexOf("DHCP_Options"));
     }
 
     [Fact]

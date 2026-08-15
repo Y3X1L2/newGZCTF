@@ -105,6 +105,19 @@
 - 通过受审计容器终端发送 ICMP：Docker 到 Linux VM 成功；Docker 到 Windows VM 未响应，当前符合 Windows 默认 ICMP 防火墙策略，不能据此判定网络失败。流量页面已经出现本运行时的 ICMP、UDP、ARP 元数据；端到端路径暂无数据，待继续核对采集关联条件与投影结果。
 - 后续优先验收：流量筛选与详情、日志/事件关联、暂停/恢复/重置/销毁、终端会话回收和权限边界。服务注入保持低优先级，不阻塞上述验收。
 
+### 2026-08-15 V2 执行链代码级追踪修复（未部署）
+
+- 按主站编译 -> Agent apply/cleanup 的完整调用链逐段追踪，定位并修复以下问题。
+- VM inventory 的 `residual:` 事实不再进入 `ReadInventoryAsync` 结果；残留域只在 `DestroyResidualsAsync` 中作为清理目标，避免清理成功后仍被回读为 `resource_remains` 导致销毁永久卡住。
+- `TeamLabExecutionPlanV2.IsValid` 对路由 `NextHop` 仅在非空时校验；空路由跳过创建与校验，与 Provider 的空路由过滤语义一致。
+- OVN 清理按引用方向删除：先删 `Logical_Router_Policy`/`Static_Route`/`Port` 再删 `Logical_Router`；先删 `ACL`/`DNS`/`Logical_Switch_Port` 再删 `Logical_Switch`，最后删 `DHCP_Options`，避免强引用约束顺序问题。
+- OVSDB 操作错误解析不再假定 `table/error/details` 是字符串，非字符串详情不会导致二次 `JsonException` 掩盖真实错误。
+- 新增定向测试：空路由合法、OVN 删除顺序、OVSDB 非字符串详情错误透传；27 个相关定向用例通过。
+- OVN/OVS 逻辑端口标识统一为确定性 UUID：同一 UUID 进入 OVN `Logical_Switch_Port.name`、OVS `external_ids:iface-id` 和 libvirt `interfaceid`，满足 libvirt UUID 校验同时保持 OVN 绑定闭环；语义键仍写入 external_ids。
+- libvirt 互操作释放修正：`virFree` 在 libvirt 12.0.0 不存在，域列表与 XML 字符串改用 libc `free`，域句柄仍由 `virDomainFree` 释放。
+- 2026-08-15 已部署 `teamlab-execution-chain-fix-20260815-16` 到 118，118/125 Agent 同步为 `8af6c50f...`；真机冒烟（125）确认 OVN/OVS/libvirt UUID 端口身份闭环、Docker+双 VM apply/cleanup 通过，清理后无 VM/OVS/OVN/容器残留。
+- 环境遗留：125 模板 79 本地镜像与库摘要不一致（库 `7a574e70...` / 本地 `4f529f1c...`），重新分发模板 79 前 Linux VM 计划会报 base image digest mismatch；runtime 141/142 物理资源已清理，DB 仍为 cleanup-pending，平台再次 destroy 应可收敛。
+
 ## 2. 产品与代码状态
 
 当前平台已形成以下主要能力：

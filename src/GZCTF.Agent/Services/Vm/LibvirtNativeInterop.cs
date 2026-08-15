@@ -16,6 +16,12 @@ internal static partial class LibvirtNativeInterop
         nint connection,
         [MarshalAs(UnmanagedType.LPStr)] string name);
 
+    [DllImport("libvirt.so.0", EntryPoint = "virConnectListAllDomains", CallingConvention = CallingConvention.Cdecl)]
+    internal static extern int ConnectListAllDomains(nint connection, out nint domains, uint flags);
+
+    [DllImport("libvirt.so.0", EntryPoint = "virDomainGetName", CallingConvention = CallingConvention.Cdecl)]
+    internal static extern nint DomainGetName(nint domain);
+
     [DllImport("libvirt.so.0", EntryPoint = "virDomainDefineXML", CallingConvention = CallingConvention.Cdecl)]
     internal static extern nint DomainDefineXml(
         nint connection,
@@ -48,7 +54,9 @@ internal static partial class LibvirtNativeInterop
     [DllImport("libvirt.so.0", EntryPoint = "virDomainGetXMLDesc", CallingConvention = CallingConvention.Cdecl)]
     internal static extern nint DomainGetXmlDesc(nint domain, uint flags);
 
-    [DllImport("libvirt.so.0", EntryPoint = "virFree", CallingConvention = CallingConvention.Cdecl)]
+    // libvirt returns malloc-allocated buffers for the domain list and XML; virFree
+    // does not exist, so libc free is the correct release for both.
+    [DllImport("libc", EntryPoint = "free", CallingConvention = CallingConvention.Cdecl)]
     internal static extern void Free(nint pointer);
 }
 
@@ -77,6 +85,27 @@ public sealed class LibvirtConnection : IDisposable
     }
 
     public nint Lookup(string name) => LibvirtNativeInterop.DomainLookupByName(handle, name);
+
+    public nint[] ListDomains()
+    {
+        var count = LibvirtNativeInterop.ConnectListAllDomains(handle, out var domains, 0);
+        if (count < 0)
+            throw new InvalidOperationException("libvirt failed to list domains.");
+        try
+        {
+            var result = new nint[count];
+            for (var index = 0; index < count; index++)
+                result[index] = Marshal.ReadIntPtr(domains, index * IntPtr.Size);
+            return result;
+        }
+        finally { LibvirtNativeInterop.Free(domains); }
+    }
+
+    public string? GetName(nint domain)
+    {
+        var name = LibvirtNativeInterop.DomainGetName(domain);
+        return name == 0 ? null : Marshal.PtrToStringAnsi(name);
+    }
 
     public nint Define(string xml) => LibvirtNativeInterop.DomainDefineXml(handle, xml);
 

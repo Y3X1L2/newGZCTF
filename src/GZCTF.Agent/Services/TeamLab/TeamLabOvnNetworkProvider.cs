@@ -165,7 +165,8 @@ public sealed class TeamLabOvnNetworkProvider(
             foreach (var networkKey in router.NetworkKeys)
             {
                 var network = plan.Networks.First(item => item.Key == networkKey);
-                foreach (var route in network.Routes)
+                foreach (var route in network.Routes.Where(route =>
+                             !string.IsNullOrWhiteSpace(route.NextHop)))
                     operations.Add(MutateStaticRoute(plan, router, network, route));
             }
             foreach (var policy in control.ForwardPolicies)
@@ -196,14 +197,14 @@ public sealed class TeamLabOvnNetworkProvider(
 
     static readonly string[] RemoveTableOrder =
     [
-        "Logical_Router",
-        "Logical_Switch",
         "Logical_Router_Policy",
         "Logical_Router_Static_Route",
         "Logical_Router_Port",
-        "Logical_Switch_Port",
+        "Logical_Router",
         "ACL",
         "DNS",
+        "Logical_Switch_Port",
+        "Logical_Switch",
         "DHCP_Options"
     ];
 
@@ -305,7 +306,7 @@ public sealed class TeamLabOvnNetworkProvider(
     {
         var row = new JsonObject
         {
-            ["name"] = TeamLabOvnNaming.LogicalPortName(plan, network.Key, port.Key),
+            ["name"] = TeamLabOvnNaming.LogicalPortId(plan, network.Key, port.Key),
             ["addresses"] = Set([ $"{port.MacAddress} {port.IpAddress ?? ""}".Trim() ]),
             ["external_ids"] = OvsdbJsonCodec.Map(
                 ("gzctf-runtime", plan.RuntimePublicId.ToString("D")),
@@ -332,7 +333,7 @@ public sealed class TeamLabOvnNetworkProvider(
         ["uuid-name"] = PlayerGatewayUuid(plan, network, gateway),
         ["row"] = new JsonObject
         {
-            ["name"] = TeamLabOvnNaming.LogicalPortName(plan, network.Key, gateway.PortKey),
+            ["name"] = TeamLabOvnNaming.LogicalPortId(plan, network.Key, gateway.PortKey),
             ["addresses"] = Set([$"{gateway.MacAddress} {gateway.IpAddress}".Trim()]),
             ["external_ids"] = OvsdbJsonCodec.Map(
                 ("gzctf-runtime", plan.RuntimePublicId.ToString("D")),

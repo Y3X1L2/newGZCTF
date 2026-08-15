@@ -166,16 +166,18 @@ public sealed class LibvirtTeamLabProvider(
     {
         var result = new List<TeamLabExecutionInventoryFactV2>();
         var native = GetConnection();
-        foreach (var asset in plan.Assets.Where(item =>
-                     string.Equals(item.Kind, "vm", StringComparison.OrdinalIgnoreCase)))
+        foreach (var domain in native.ListDomains())
         {
-            var name = DomainName(plan, asset);
-            var domain = native.Lookup(name);
-            if (domain == 0) continue;
             try
             {
+                var name = native.GetName(domain);
+                if (string.IsNullOrWhiteSpace(name) || !MatchesExecutionPlan(native.GetXml(domain), plan))
+                    continue;
+                var asset = plan.Assets.FirstOrDefault(item =>
+                    item.Kind.Equals("vm", StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(DomainName(plan, item), name, StringComparison.Ordinal));
                 result.Add(new TeamLabExecutionInventoryFactV2(
-                    "vm", asset.AssetKey, name, GetState(domain), plan.Generation));
+                    "vm", asset?.AssetKey ?? $"residual:{name}", name, GetState(domain), plan.Generation));
             }
             finally { LibvirtNativeInterop.DomainFree(domain); }
         }
@@ -213,6 +215,38 @@ public sealed class LibvirtTeamLabProvider(
         {
             if (domain != 0) LibvirtNativeInterop.DomainFree(domain);
         }
+    }
+
+    public Task<LibvirtAssetResult> DestroyResidualsAsync(
+        TeamLabExecutionPlanV2 plan,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var native = GetConnection();
+        var declared = plan.Assets
+            .Where(item => item.Kind.Equals("vm", StringComparison.OrdinalIgnoreCase))
+            .Select(item => DomainName(plan, item))
+            .ToHashSet(StringComparer.Ordinal);
+        foreach (var domain in native.ListDomains())
+        {
+            try
+            {
+                var name = native.GetName(domain);
+                var xml = native.GetXml(domain);
+                if (string.IsNullOrWhiteSpace(name) || declared.Contains(name) || !MatchesExecutionPlan(xml, plan))
+                    continue;
+                if (GetState(domain) is "running" or "paused" &&
+                    LibvirtNativeInterop.DomainDestroy(domain) < 0)
+                    return Task.FromResult(LibvirtAssetResult.Failed("cleanup",
+                        $"libvirt failed to destroy residual VM {name}."));
+                if (LibvirtNativeInterop.DomainUndefineFlags(domain, UndefineManagedSave | UndefineNvram) < 0)
+                    return Task.FromResult(LibvirtAssetResult.Failed("cleanup",
+                        $"libvirt failed to undefine residual VM {name}."));
+                DeleteResidualOverlay(xml, plan);
+            }
+            finally { LibvirtNativeInterop.DomainFree(domain); }
+        }
+        return Task.FromResult(new LibvirtAssetResult(true, "destroyed", string.Empty));
     }
 
     string ResolveBaseImage(TeamLabExecutionPlanV2 plan, TeamLabAssetExecutionSpecV2 asset)
@@ -365,7 +399,7 @@ public sealed class LibvirtTeamLabProvider(
             new XElement("source", new XAttribute("bridge", teamLab.OvsIntegrationBridgeName)),
             new XElement("virtualport", new XAttribute("type", "openvswitch"),
                 new XElement("parameters", new XAttribute("interfaceid",
-                    TeamLabOvnNaming.LogicalPortName(plan, attachment.NetworkKey, attachment.PortKey)))),
+                    TeamLabOvnNaming.LogicalPortId(plan, attachment.NetworkKey, attachment.PortKey)))),
             new XElement("target", new XAttribute("dev",
                 TeamLabExecutionIdentityV2.VmTapName(plan.RuntimePublicId, plan.Generation, asset.AssetKey, attachment.NetworkKey))),
             new XElement("model", new XAttribute("type", "virtio")),
@@ -422,6 +456,28 @@ public sealed class LibvirtTeamLabProvider(
     static void DeleteOverlay(string path)
     {
         if (File.Exists(path)) File.Delete(path);
+    }
+
+    void DeleteResidualOverlay(string? xml, TeamLabExecutionPlanV2 plan)
+    {
+        if (string.IsNullOrWhiteSpace(xml)) return;
+        try
+        {
+            var root = Path.GetFullPath(teamLab.RuntimeStateRoot).TrimEnd(Path.DirectorySeparatorChar)
+                + Path.DirectorySeparatorChar;
+            var overlay = XDocument.Parse(xml).Root?
+                .Descendants("source")
+                .FirstOrDefault(source => source.Parent?.Name.LocalName == "disk")
+                ?.Attribute("file")?.Value;
+            if (string.IsNullOrWhiteSpace(overlay)) return;
+            var path = Path.GetFullPath(overlay);
+            if (path.StartsWith(root, StringComparison.Ordinal) && File.Exists(path))
+                File.Delete(path);
+        }
+        catch (Exception exception) when (exception is System.Xml.XmlException or IOException or UnauthorizedAccessException)
+        {
+            logger.LogWarning(exception, "Failed to inspect the residual VM overlay for runtime {RuntimeId}.", plan.RuntimeId);
+        }
     }
 
     public void Dispose()

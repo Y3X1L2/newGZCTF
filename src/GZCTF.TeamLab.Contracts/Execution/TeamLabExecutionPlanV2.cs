@@ -79,6 +79,7 @@ public sealed record TeamLabExecutionPlanV2(
                                     network.Ports.Any(port => !IsMacAddress(port.MacAddress) ||
                                                                  !IsAddressInCidr(port.IpAddress, networkAddress, prefixLength)) ||
                                     network.Routes.Any(route => !TryParseIpv4Cidr(route.DestinationCidr, out _, out _) ||
+                                                                !string.IsNullOrWhiteSpace(route.NextHop) &&
                                                                 !TryParseIpv4Address(route.NextHop)) ||
                                     network.Policies.Any(policy => !IsValidPolicy(policy)) ||
                                     network.DhcpLeases is { } leases && leases.Any(lease =>

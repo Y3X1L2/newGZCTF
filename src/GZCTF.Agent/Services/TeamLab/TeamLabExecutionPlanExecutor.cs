@@ -231,6 +231,13 @@ public sealed class TeamLabExecutionPlanExecutor(
                     events.Enqueue(Event(plan, asset.AssetKey, "cleanup", "failed", "ovs_cleanup_failed", ovsResult.Message));
             }
 
+        if (plan.Assets.Any(asset => asset.Kind.Equals("vm", StringComparison.OrdinalIgnoreCase)))
+        {
+            var residual = await libvirt.DestroyResidualsAsync(plan, cancellationToken);
+            if (!residual.Success)
+                events.Enqueue(Event(plan, null, "cleanup", "failed", "vm_residual_cleanup_failed", residual.State));
+        }
+
         var network = await ovn.RemoveAsync(plan, cancellationToken);
         events.Enqueue(Event(plan, null, "cleanup", network.Success ? "succeeded" : "failed",
             network.Success ? null : "network_cleanup_failed", network.Message));
@@ -306,7 +313,8 @@ public sealed class TeamLabExecutionPlanExecutor(
             .Where(item => !string.IsNullOrWhiteSpace(item.AssetKey))
             .ToList();
         if (plan.Assets.Any(item => item.Kind.Equals("vm", StringComparison.OrdinalIgnoreCase)))
-            inventory.AddRange(libvirt.GetInventory(plan));
+            inventory.AddRange(libvirt.GetInventory(plan)
+                .Where(item => !item.AssetKey.StartsWith("residual:", StringComparison.Ordinal)));
         return inventory;
     }
 

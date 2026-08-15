@@ -23,7 +23,7 @@ public sealed class TeamLabOvsAttachmentProvider(
             plan.Generation,
             interfaceName,
             networkKey,
-            TeamLabOvnNaming.LogicalPortName(plan, networkKey, portKey),
+            TeamLabOvnNaming.LogicalPortId(plan, networkKey, portKey),
             plan.PlanDigest,
             cancellationToken);
 
@@ -39,7 +39,7 @@ public sealed class TeamLabOvsAttachmentProvider(
             generation,
             interfaceName,
             networkKey,
-            TeamLabOvnNaming.LogicalPortName(runtimePublicId, generation, networkKey, portKey),
+            TeamLabOvnNaming.LogicalPortId(runtimePublicId, generation, networkKey, portKey),
             null,
             cancellationToken);
 

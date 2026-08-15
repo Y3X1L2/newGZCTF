@@ -49,10 +49,10 @@ public sealed class OvsdbJsonRpcClient : IDisposable
             {
                 if (transactionResults[index] is not JsonObject item || !HasError(item["error"]))
                     continue;
-                var table = item["table"]?.GetValue<string>();
+                var table = ReadString(item["table"]);
                 var location = table is null ? $"operation {index + 1}" : $"operation {index + 1} ({table})";
-                var error = item["error"]?.GetValue<string>() ?? "operation failed";
-                var details = item["details"]?.GetValue<string>();
+                var error = ReadString(item["error"]) ?? "operation failed";
+                var details = ReadString(item["details"]);
                 throw new InvalidOperationException(
                     $"OVSDB transaction {location} failed: {error}" +
                     (string.IsNullOrEmpty(details) ? string.Empty : $" ({details})"));
@@ -328,6 +328,9 @@ public sealed class OvsdbJsonRpcClient : IDisposable
 
     static bool HasError(JsonNode? error) =>
         error is not null && !(error is JsonValue value && value.TryGetValue<object?>(out var raw) && raw is null);
+
+    static string? ReadString(JsonNode? node) =>
+        node is JsonValue value && value.TryGetValue<string>(out var text) ? text : null;
 
     static async Task<JsonObject> ReadJsonAsync(Stream stream, CancellationToken token)
     {
