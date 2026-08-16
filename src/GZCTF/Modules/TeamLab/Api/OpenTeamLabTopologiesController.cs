@@ -128,12 +128,11 @@ public sealed class OpenTeamLabTopologiesController(
     public async Task<IActionResult> Clone(Guid topologyId, CancellationToken cancellationToken)
     {
         var actor = Actor();
-        var scopeId = await scopeAuthorization.RequireTopologyScopeAsync(
-            topologyId, actor.TokenId, IsAdministrator(), false, cancellationToken);
+        // Cloning creates a new draft inside the source topology's scope, so
+        // the authorization level matches any other topology write.
+        await scopeAuthorization.RequireTopologyScopeAsync(
+            topologyId, actor.TokenId, IsAdministrator(), true, cancellationToken);
         var clone = await topologies.CloneAsync(topologyId, actor.UserId, true, cancellationToken);
-        RequireScopeGrant(scopeId);
-        if (clone.ControlScopeId != scopeId)
-            throw new TeamLabApiContractException("scope_not_found", "未找到 TeamLab 控制范围。", 404);
         return Created($"/api/open/v1/teamlab/topologies/{clone.Id:D}", clone.ToOpen());
     }
 
