@@ -94,6 +94,22 @@ public sealed class TeamLabScopeAuthorizationService(AppDbContext context)
         return await RequireResourceScopeAsync(scopeId, apiTokenId, administrator, writable, cancellationToken);
     }
 
+    public async Task RequireLinkPolicyScopeAsync(
+        Guid policyId,
+        Guid? apiTokenId,
+        bool administrator,
+        bool writable,
+        CancellationToken cancellationToken)
+    {
+        var runtimeId = await context.TeamLabLinkPolicies.AsNoTracking()
+            .Where(item => item.PublicId == policyId)
+            .Select(item => item.Runtime.PublicId)
+            .SingleOrDefaultAsync(cancellationToken);
+        if (runtimeId == Guid.Empty)
+            throw new TeamLabApiContractException("link_policy_not_found", "未找到链路策略", 404);
+        await RequireRuntimeScopeAsync(runtimeId, apiTokenId, administrator, writable, cancellationToken);
+    }
+
     public async Task<IReadOnlySet<Guid>> ListReadableScopesAsync(
         Guid? apiTokenId,
         bool administrator,

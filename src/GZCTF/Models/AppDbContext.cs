@@ -182,6 +182,10 @@ public partial class AppDbContext(DbContextOptions<AppDbContext> options) :
     public DbSet<TeamLabRemoteAuditFileEntity> TeamLabRemoteAuditFiles => Set<TeamLabRemoteAuditFileEntity>();
     public DbSet<TeamLabWebhookSubscription> TeamLabWebhookSubscriptions => Set<TeamLabWebhookSubscription>();
     public DbSet<TeamLabWebhookDeliveryFailure> TeamLabWebhookDeliveryFailures => Set<TeamLabWebhookDeliveryFailure>();
+    public DbSet<TeamLabDevicePackage> TeamLabDevicePackages => Set<TeamLabDevicePackage>();
+    public DbSet<TeamLabConnector> TeamLabConnectors => Set<TeamLabConnector>();
+    public DbSet<TeamLabConnectorLease> TeamLabConnectorLeases => Set<TeamLabConnectorLease>();
+    public DbSet<TeamLabLinkPolicy> TeamLabLinkPolicies => Set<TeamLabLinkPolicy>();
     public DbSet<DataGovernanceRunEntity> DataGovernanceRuns => Set<DataGovernanceRunEntity>();
     public DbSet<OperationalLogAggregateEntity> OperationalLogAggregates => Set<OperationalLogAggregateEntity>();
     public DbSet<DeploymentLifecycleAggregateEntity> DeploymentLifecycleAggregates => Set<DeploymentLifecycleAggregateEntity>();
