@@ -117,7 +117,6 @@ public sealed class TeamLabShardDeploymentService(
             {
                 ["generation"] = runtime.Generation,
                 ["stage"] = "network",
-                ["executionModel"] = runtime.ExecutionModel.ToString(),
                 ["shardCount"] = currentShards.Length,
                 ["assetCount"] = runtimeAssets.Length
             });
@@ -134,7 +133,6 @@ public sealed class TeamLabShardDeploymentService(
             {
                 ["generation"] = runtime.Generation,
                 ["stage"] = "route",
-                ["executionModel"] = runtime.ExecutionModel.ToString(),
                 ["routeCount"] = definition.Connections.Count,
                 ["shardCount"] = currentShards.Length
             });
