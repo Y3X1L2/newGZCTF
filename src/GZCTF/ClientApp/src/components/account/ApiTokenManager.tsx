@@ -32,6 +32,9 @@ type TokenForm = ApiTokenCreateModel & {
 }
 
 const scopeOptions = [
+  { value: 'assets:read', label: '读取附件' },
+  { value: 'assets:write', label: '写入附件' },
+  { value: 'assets:delete', label: '删除附件' },
   { value: 'images:read', label: '读取镜像' },
   { value: 'images:write', label: '写入镜像' },
   { value: 'images:delete', label: '删除镜像' },

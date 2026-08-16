@@ -17,6 +17,7 @@ public sealed record ImageTemplateDescriptor(int Id, Guid? CreatedById, string N
 public sealed record ImageTemplateDetails(
     int Id,
     Guid? CreatedById,
+    string? CreatorUserName,
     string Name,
     OSType OSType,
     ImageType ImageType,
@@ -33,6 +34,7 @@ public sealed record ImageTemplateDetails(
 
 public sealed record OpenImageTemplateModel(
     int Id,
+    string? CreatorUserName,
     string Name,
     OSType OSType,
     ImageType ImageType,
@@ -49,6 +51,7 @@ public sealed record OpenImageTemplateModel(
 {
     public static OpenImageTemplateModel FromDetails(ImageTemplateDetails details) => new(
         details.Id,
+        details.CreatorUserName,
         details.Name,
         details.OSType,
         details.ImageType,

@@ -24,6 +24,7 @@ public sealed class EfImageTemplateCatalog(
             .Select(template => new ImageTemplateDetails(
                 template.Id,
                 template.CreatedById,
+                template.CreatedBy != null ? template.CreatedBy.UserName : null,
                 template.Name,
                 template.OSType,
                 template.ImageType,

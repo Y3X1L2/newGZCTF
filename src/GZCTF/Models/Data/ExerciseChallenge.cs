@@ -1,16 +1,9 @@
-using System.ComponentModel.DataAnnotations.Schema;
 using System.Text.Json.Serialization;
 
 namespace GZCTF.Models.Data;
 
 public class ExerciseChallenge : Challenge
 {
-    /// <summary>Account that originally created this public exercise.</summary>
-    public Guid? CreatedById { get; set; }
-
-    [ForeignKey(nameof(CreatedById))]
-    public UserInfo? CreatedBy { get; set; }
-
     /// <summary>
     /// Credits for the exercise challenge
     /// </summary>
