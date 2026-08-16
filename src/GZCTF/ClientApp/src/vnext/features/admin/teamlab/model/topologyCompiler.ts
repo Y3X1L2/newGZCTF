@@ -36,6 +36,17 @@ function switchNetworkKey(document: TopologyDocument, switchKey: string) {
   return node.networkKey
 }
 
+/** Author-edited JSON text becomes the contract object; blank text unsets the parameters. */
+function parseDeviceParameters(text: string | null | undefined, assetKey: string): unknown {
+  const trimmed = (text ?? '').trim()
+  if (!trimmed) return null
+  try {
+    return JSON.parse(trimmed)
+  } catch {
+    throw new TopologyCompileError(`资产 '${assetKey}' 的设备包参数不是合法 JSON。`)
+  }
+}
+
 function interfacesFor(document: TopologyDocument, nodeKey: string): TeamLabTopologyInterface[] {
   return Object.values(document.connections)
     .filter(
@@ -128,6 +139,9 @@ export function compileTopologyDocument(document: TopologyDocument): CreateTeamL
       healthCheck: node.healthCheck ? { ...node.healthCheck } : null,
       orderIndex: node.orderIndex,
       endpointObservation: node.endpointObservation,
+      devicePackageId: node.devicePackageId ?? null,
+      deviceParameters: parseDeviceParameters(node.deviceParameters, node.key),
+      connectorId: node.connectorId ?? null,
     })),
     connections: connections
       .filter((connection) => connection.type === 'route')

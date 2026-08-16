@@ -1,3 +1,4 @@
+using System.Text.Json;
 using GZCTF.Modules.TeamLab.Domain;
 
 namespace GZCTF.Modules.TeamLab.Contracts;
@@ -32,7 +33,10 @@ public sealed record TeamLabTopologyAssetModel(
     int? ExposePort = null,
     TeamLabHealthCheckModel? HealthCheck = null,
     int OrderIndex = 0,
-    TeamLabEndpointObservationMode EndpointObservation = TeamLabEndpointObservationMode.Disabled);
+    TeamLabEndpointObservationMode EndpointObservation = TeamLabEndpointObservationMode.Disabled,
+    int? DevicePackageId = null,
+    JsonElement? DeviceParameters = null,
+    Guid? ConnectorId = null);
 
 public sealed record TeamLabTopologyConnectionModel(
     string Key,
@@ -121,7 +125,8 @@ public sealed record TeamLabReleaseModel(
     string ContentHash,
     Guid? PublishedBy,
     DateTimeOffset PublishedAt,
-    TeamLabTopologyEditorModel? Editor = null);
+    TeamLabTopologyEditorModel? Editor = null,
+    bool Archived = false);
 
 public sealed record TeamLabCapabilitiesModel(
     string ApiVersion,

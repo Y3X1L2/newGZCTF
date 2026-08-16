@@ -61,6 +61,9 @@ export interface TeamLabTopologyAsset {
   healthCheck: TeamLabHealthCheck | null
   orderIndex: number
   endpointObservation: TeamLabEndpointObservationMode
+  devicePackageId?: number | null
+  deviceParameters?: unknown
+  connectorId?: string | null
 }
 
 export interface TeamLabTopologyInfrastructure {

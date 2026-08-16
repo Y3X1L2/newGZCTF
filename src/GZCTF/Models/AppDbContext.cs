@@ -1243,6 +1243,7 @@ public partial class AppDbContext(DbContextOptions<AppDbContext> options) :
                 .HasConversion<byte>();
 
             entity.HasIndex(e => new { e.RuntimeId, e.Generation, e.Kind, e.TopologyKey });
+            entity.HasIndex(e => e.DevicePackageId);
             entity.HasIndex(e => e.AgentOperationId)
                 .IsUnique()
                 .HasFilter("\"AgentOperationId\" IS NOT NULL");

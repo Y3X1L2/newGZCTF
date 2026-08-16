@@ -14,6 +14,9 @@ public sealed class TeamLabTopologyRelease
     public Guid? PublishedById { get; set; }
     public Guid? ApiOperationId { get; set; }
     public DateTimeOffset PublishedAt { get; set; } = DateTimeOffset.UtcNow;
+    /// <summary>Archived releases stay readable and drainable but no longer accept new runtimes.</summary>
+    public bool IsArchived { get; set; }
+    public DateTimeOffset? ArchivedAt { get; set; }
     public TeamLabTopology Topology { get; set; } = null!;
     public TeamLabControlScope? ControlScope { get; set; }
 }

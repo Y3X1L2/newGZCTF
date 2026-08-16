@@ -36,6 +36,7 @@ public sealed class TeamLabTrafficApplicationService(
         string? queryText,
         string? protocol,
         string? networkKey,
+        int? port,
         CancellationToken cancellationToken)
     {
         var runtime = await LoadRuntimeAsync(runtimePublicId, cancellationToken);
@@ -48,6 +49,8 @@ public sealed class TeamLabTrafficApplicationService(
             var term = queryText.Trim();
             query = query.Where(item => item.SourceIp.Contains(term) || item.DestinationIp.Contains(term));
         }
+        if (port is { } portValue)
+            query = query.Where(item => item.SourcePort == portValue || item.DestinationPort == portValue);
         if (!string.IsNullOrWhiteSpace(protocol))
         {
             var normalizedProtocol = protocol.Trim().ToUpperInvariant();
@@ -376,6 +379,33 @@ public sealed class TeamLabTrafficApplicationService(
             changed = true;
         }
         return changed;
+    }
+
+    public async Task<TeamLabCapturePageModel> ListCapturesAsync(
+        Guid runtimePublicId,
+        string? after,
+        int limit,
+        CancellationToken cancellationToken)
+    {
+        var runtime = await LoadRuntimeAsync(runtimePublicId, cancellationToken);
+        var take = Math.Clamp(limit, 1, 100);
+        var cursor = DecodeIntCursor(after);
+        var query = context.TeamLabTrafficCaptureJobs
+            .Include(item => item.Segments)
+            .ThenInclude(item => item.ObservationPoint.Network)
+            .Include(item => item.Segments)
+            .ThenInclude(item => item.ObservationPoint.InfrastructureFragment).ThenInclude(item => item.Infrastructure)
+            .Include(item => item.Segments)
+            .ThenInclude(item => item.ObservationPoint.Asset)
+            .Where(item => item.RuntimeId == runtime.Id);
+        if (cursor is not null)
+            query = query.Where(item => item.Id < cursor);
+        var rows = await query.OrderByDescending(item => item.Id)
+            .Take(take + 1)
+            .ToArrayAsync(cancellationToken);
+        return new TeamLabCapturePageModel(
+            rows.Take(take).Select(ToModel).ToArray(),
+            rows.Length > take ? EncodeIntCursor(rows[take - 1].Id) : null);
     }
 
     public async Task<TeamLabCaptureModel> GetCaptureAsync(
@@ -1102,6 +1132,23 @@ public sealed class TeamLabTrafficApplicationService(
             true,
             WorkerNodeId: workerNodeId,
             Operation: "teamlab.capture");
+
+    private static int? DecodeIntCursor(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        try
+        {
+            var decoded = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(value));
+            return int.TryParse(decoded, out var id) && id > 0 ? id : throw new FormatException();
+        }
+        catch (FormatException)
+        {
+            throw new TeamLabApiContractException("capture_cursor_invalid", "抓包 cursor 无效", 400);
+        }
+    }
+
+    private static string EncodeIntCursor(int id) =>
+        Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(id.ToString()));
 
     private static TimeCursor? DecodeCursor(string? cursor)
     {

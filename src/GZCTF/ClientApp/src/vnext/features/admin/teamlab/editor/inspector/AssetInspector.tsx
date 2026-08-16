@@ -2,6 +2,7 @@ import { Container, Monitor, MonitorCog } from 'lucide-react'
 import { updateTopologyNode } from '../../model/topologyCommands'
 import type { TopologyAssetNode } from '../../model/topologyDocument'
 import type { TeamLabImageOption } from '../../api'
+import { CapabilityBindingEditor } from './CapabilityBindingEditor'
 import { HealthCheckEditor } from './HealthCheckEditor'
 import { InspectorSection, SelectInput, TextInput } from './InspectorFields'
 import type { InspectorDocumentProps } from './inspectorTypes'
@@ -46,6 +47,7 @@ export function AssetInspector({
       </InspectorSection>
 
       <ResourceRequirementsEditor onChange={(resources) => update({ resources })} readOnly={readOnly} resources={node.resources} />
+      <CapabilityBindingEditor node={node} onAssetChange={update} readOnly={readOnly} />
       <NetworkInterfacesEditor document={document} nodeKey={node.key} onDocumentChange={onDocumentChange} readOnly={readOnly} />
       <HealthCheckEditor healthCheck={node.healthCheck} onChange={(healthCheck) => update({ healthCheck })} readOnly={readOnly} />
 

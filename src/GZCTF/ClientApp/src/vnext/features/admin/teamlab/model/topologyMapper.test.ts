@@ -56,6 +56,9 @@ function detail(): TeamLabTopologyDetail {
           healthCheck: { kind: 'http', port: 8080 },
           orderIndex: 0,
           endpointObservation: 'required',
+          devicePackageId: null,
+          deviceParameters: null,
+          connectorId: null,
         },
         {
           key: 'dc',
@@ -68,6 +71,9 @@ function detail(): TeamLabTopologyDetail {
           healthCheck: { kind: 'tcp', port: 389 },
           orderIndex: 1,
           endpointObservation: 'optional',
+          devicePackageId: null,
+          deviceParameters: null,
+          connectorId: null,
         },
       ],
       connections: [

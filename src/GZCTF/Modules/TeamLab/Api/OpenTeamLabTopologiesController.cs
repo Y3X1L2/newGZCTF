@@ -24,6 +24,7 @@ namespace GZCTF.Modules.TeamLab.Api;
 [ProducesResponseType(typeof(ExternalApiProblemDetailsModel), StatusCodes.Status422UnprocessableEntity, "application/problem+json")]
 public sealed class OpenTeamLabTopologiesController(
     ITeamLabTopologyApplicationService topologies,
+    TeamLabReleaseService releases,
     TeamLabScopeAuthorizationService scopeAuthorization,
     TeamLabRuntimeOperationApplicationService operations) : ControllerBase
 {
@@ -120,6 +121,22 @@ public sealed class OpenTeamLabTopologiesController(
         return await topologies.ValidateAsync(topologyId, actor.UserId, true, cancellationToken);
     }
 
+    [HttpPost("topologies/{topologyId:guid}/clone")]
+    [OpenApiOperation("克隆拓扑", "把已有拓扑复制为调用者名下的新草稿，并重新校验镜像、设备包与连接器引用。")]
+    [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabTopologiesWrite)]
+    [ProducesResponseType(typeof(OpenTeamLabTopologyDetailModel), StatusCodes.Status201Created)]
+    public async Task<IActionResult> Clone(Guid topologyId, CancellationToken cancellationToken)
+    {
+        var actor = Actor();
+        var scopeId = await scopeAuthorization.RequireTopologyScopeAsync(
+            topologyId, actor.TokenId, IsAdministrator(), false, cancellationToken);
+        var clone = await topologies.CloneAsync(topologyId, actor.UserId, true, cancellationToken);
+        RequireScopeGrant(scopeId);
+        if (clone.ControlScopeId != scopeId)
+            throw new TeamLabApiContractException("scope_not_found", "未找到 TeamLab 控制范围。", 404);
+        return Created($"/api/open/v1/teamlab/topologies/{clone.Id:D}", clone.ToOpen());
+    }
+
     [HttpPost("topologies/{topologyId:guid}/releases")]
     [OpenApiOperation("发布拓扑版本", "校验并提交创建用于运行时部署的不可变拓扑版本。")]
     [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabTopologiesWrite)]
@@ -178,6 +195,19 @@ public sealed class OpenTeamLabTopologiesController(
         await scopeAuthorization.RequireTopologyScopeAsync(topologyId, actor.TokenId, IsAdministrator(), false, cancellationToken);
         await scopeAuthorization.RequireReleaseScopeAsync(releaseId, actor.TokenId, IsAdministrator(), false, cancellationToken);
         return await topologies.PlanAsync(topologyId, releaseId, actor.UserId, true, cancellationToken);
+    }
+
+    [HttpPost("topologies/{topologyId:guid}/releases/{releaseId:guid}/archive")]
+    [OpenApiOperation("归档拓扑版本", "归档后版本保持可读、既有运行时继续运行，但不能再创建新运行时；重复归档幂等。")]
+    [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabTopologiesWrite)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> ArchiveRelease(Guid topologyId, Guid releaseId, CancellationToken cancellationToken)
+    {
+        var actor = Actor();
+        await scopeAuthorization.RequireTopologyScopeAsync(topologyId, actor.TokenId, IsAdministrator(), true, cancellationToken);
+        await scopeAuthorization.RequireReleaseScopeAsync(releaseId, actor.TokenId, IsAdministrator(), true, cancellationToken);
+        await releases.ArchiveAsync(releaseId, cancellationToken);
+        return NoContent();
     }
 
     private (Guid TokenId, Guid UserId) Actor()

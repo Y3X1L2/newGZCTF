@@ -61,7 +61,18 @@ function mapAsset(
     healthCheck: asset.healthCheck ? { ...asset.healthCheck } : null,
     orderIndex: asset.orderIndex,
     endpointObservation: asset.endpointObservation,
+    devicePackageId: asset.devicePackageId ?? null,
+    deviceParameters: deviceParametersText(asset.deviceParameters),
+    connectorId: asset.connectorId ?? null,
   }
+}
+
+/** The editor keeps parameters as editable JSON text; the contract carries a parsed object. */
+function deviceParametersText(parameters: unknown): string | null {
+  if (parameters === null || parameters === undefined) return null
+  if (typeof parameters !== 'object' || Array.isArray(parameters)) return null
+  const entries = Object.keys(parameters as Record<string, unknown>)
+  return entries.length === 0 ? null : JSON.stringify(parameters, null, 2)
 }
 
 function switchForNetwork(networkKey: string, infrastructure: readonly TeamLabTopologyInfrastructure[]) {

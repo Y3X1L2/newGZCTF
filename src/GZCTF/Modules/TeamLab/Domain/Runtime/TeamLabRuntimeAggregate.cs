@@ -107,6 +107,9 @@ public class TeamLabRuntimeAsset
     public long AgentSignalSequence { get; set; }
     public TeamLabEndpointObservationMode EndpointObservation { get; set; }
     [MaxLength(128)] public string? ImageDigest { get; set; }
+    public int? DevicePackageId { get; set; }
+    [MaxLength(2048)] public string? DevicePackageParametersJson { get; set; }
+    public Guid? ConnectorId { get; set; }
     public DateTimeOffset? ExecutionUpdatedAt { get; set; }
     [MaxLength(1024)] public string? LastError { get; set; }
     public TeamLabRuntime Runtime { get; set; } = null!;

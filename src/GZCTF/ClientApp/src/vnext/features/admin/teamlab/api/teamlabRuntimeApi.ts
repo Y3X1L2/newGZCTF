@@ -15,6 +15,8 @@ import {
   parseTeamLabTrafficPath,
   parseTeamLabTrafficPathPage,
 } from './teamlabRuntimeParsers'
+import { parseTeamLabLinkPolicy, parseTeamLabLinkPolicyPage } from './teamlabResourcesParsers'
+import type { ApplyTeamLabLinkPolicyRequest } from './teamlabResourcesContracts'
 
 const root = '/api/admin/teamlab/runtimes'
 
@@ -43,6 +45,7 @@ export const teamLabRuntimeKeys = {
   path: (runtimeId: string, pathId: string) =>
     ['vnext:admin:teamlab:runtime-path', runtimeId, pathId] as const,
   logs: (runtimeId: string) => ['vnext:admin:teamlab:runtime-logs', runtimeId] as const,
+  linkPolicies: (runtimeId: string) => ['vnext:admin:teamlab:runtime-link-policies', runtimeId] as const,
   capture: (runtimeId: string, captureId: string) =>
     ['vnext:admin:teamlab:runtime-capture', runtimeId, captureId] as const,
 }
@@ -131,6 +134,31 @@ export function createTeamLabRuntimeApi(client: RuntimeJsonClient = runtimeJsonC
 
     async getPath(runtimeId: string, pathId: string) {
       return parseTeamLabTrafficPath(await client.get(`${root}/${runtimeId}/traffic/paths/${pathId}`))
+    },
+
+    async listLinkPolicies(
+      runtimeId: string,
+      filters?: { status?: string },
+      after?: string,
+      limit = 50
+    ) {
+      return parseTeamLabLinkPolicyPage(
+        await client.get(`${root}/${runtimeId}/link-policies`, {
+          status: filters?.status || undefined,
+          after: after || undefined,
+          limit,
+        })
+      )
+    },
+
+    async applyLinkPolicy(runtimeId: string, request: ApplyTeamLabLinkPolicyRequest) {
+      return parseTeamLabLinkPolicy(await client.postJson(`${root}/${runtimeId}/link-policies`, request))
+    },
+
+    async recoverLinkPolicy(runtimeId: string, policyId: string) {
+      return parseTeamLabLinkPolicy(
+        await client.postJson(`${root}/${runtimeId}/link-policies/${policyId}/recover`, {})
+      )
     },
 
     async startCapture(runtimeId: string, request: CreateTeamLabCaptureRequest) {

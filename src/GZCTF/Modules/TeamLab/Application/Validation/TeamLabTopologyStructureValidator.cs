@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Sockets;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using GZCTF.Modules.TeamLab.Contracts;
 using GZCTF.Modules.TeamLab.Domain;
@@ -105,6 +106,12 @@ internal sealed partial class TeamLabTopologyStructureValidator(TeamLabAddressPo
             Add(issues, "image_template_invalid", $"{path}.imageTemplateId", "请为该资产选择可用镜像模板。");
         if (asset.Resources.CpuUnits <= 0 || asset.Resources.MemoryMiB <= 0 || asset.Resources.StorageMiB <= 0)
             Add(issues, "asset_resources_invalid", $"{path}.resources", "CPU, memory and storage must be positive.");
+        if (asset.DevicePackageId is null or <= 0 && asset.DeviceParameters is not null)
+            Add(issues, "device_parameters_without_package", $"{path}.deviceParameters",
+                "设备包参数只有在资产绑定设备包时才能配置。");
+        else if (asset.DeviceParameters is { ValueKind: not JsonValueKind.Object })
+            Add(issues, "device_parameters_invalid", $"{path}.deviceParameters",
+                "设备包参数必须是 JSON 对象。");
         ValidateInterfaces(asset.Interfaces, path, networkByKey, false, issues);
     }
 

@@ -16,8 +16,42 @@ namespace GZCTF.Modules.TeamLab.Api;
 [Route("api/admin/teamlab")]
 public sealed class TeamLabAdminCapabilityResourcesController(
     TeamLabDevicePackageService packages,
-    TeamLabConnectorService connectors) : ControllerBase
+    TeamLabConnectorService connectors,
+    TeamLabResourcePoolService pools) : ControllerBase
 {
+    [HttpGet("device-packages")]
+    [ProducesResponseType(typeof(TeamLabDevicePackagePageModel), StatusCodes.Status200OK)]
+    public Task<TeamLabDevicePackagePageModel> ListDevicePackages(
+        [FromQuery] string? name = null,
+        [FromQuery] int limit = 50,
+        [FromQuery] string? after = null) =>
+        packages.ListAsync(name, after, limit, HttpContext.RequestAborted);
+
+    [HttpGet("device-packages/{packageId:guid}")]
+    [ProducesResponseType(typeof(TeamLabDevicePackageModel), StatusCodes.Status200OK)]
+    public Task<TeamLabDevicePackageModel> GetDevicePackage(Guid packageId) =>
+        packages.GetAsync(packageId, HttpContext.RequestAborted);
+
+    [HttpGet("connectors")]
+    [ProducesResponseType(typeof(TeamLabConnectorPageModel), StatusCodes.Status200OK)]
+    public Task<TeamLabConnectorPageModel> ListConnectors(
+        [FromQuery] Guid? scopeId = null,
+        [FromQuery] int limit = 50,
+        [FromQuery] string? after = null) =>
+        connectors.ListAsync(scopeId, after, limit, HttpContext.RequestAborted);
+
+    [HttpGet("resource-pools")]
+    [ProducesResponseType(typeof(TeamLabResourcePoolSnapshotModel), StatusCodes.Status200OK)]
+    public Task<TeamLabResourcePoolSnapshotModel> ResourcePoolSnapshot() =>
+        pools.GetSnapshotAsync(HttpContext.RequestAborted);
+
+    [HttpGet("resource-pools/node-cache")]
+    [ProducesResponseType(typeof(TeamLabNodeCachePageModel), StatusCodes.Status200OK)]
+    public Task<TeamLabNodeCachePageModel> ListNodeCache(
+        [FromQuery] int limit = 50,
+        [FromQuery] string? after = null) =>
+        pools.ListNodeCacheAsync(after, limit, HttpContext.RequestAborted);
+
     [HttpPost("device-packages")]
     [ProducesResponseType(typeof(TeamLabDevicePackageModel), StatusCodes.Status201Created)]
     public async Task<IActionResult> RegisterDevicePackage(

@@ -22,6 +22,8 @@ public static class ApiTokenScopes
     public const string TeamLabConnectorsWrite = "teamlab.connectors:write";
     public const string TeamLabLinkPoliciesRead = "teamlab.link-policies:read";
     public const string TeamLabLinkPoliciesWrite = "teamlab.link-policies:write";
+    public const string TeamLabRemoteSessionsRead = "teamlab.remote-sessions:read";
+    public const string TeamLabRemoteSessionsWrite = "teamlab.remote-sessions:write";
     public const string BootstrapProfilesRead = "bootstrap-profiles:read";
     public const string BootstrapProfilesWrite = "bootstrap-profiles:write";
 
@@ -47,6 +49,8 @@ public static class ApiTokenScopes
         TeamLabConnectorsWrite,
         TeamLabLinkPoliciesRead,
         TeamLabLinkPoliciesWrite,
+        TeamLabRemoteSessionsRead,
+        TeamLabRemoteSessionsWrite,
         BootstrapProfilesRead,
         BootstrapProfilesWrite
     };

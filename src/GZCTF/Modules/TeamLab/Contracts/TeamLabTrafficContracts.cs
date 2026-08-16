@@ -112,6 +112,10 @@ public sealed record TeamLabCaptureSegmentModel(
     string? Sha256,
     string? Error);
 
+public sealed record TeamLabCapturePageModel(
+    IReadOnlyList<TeamLabCaptureModel> Items,
+    string? Next);
+
 public sealed record TeamLabCaptureModel(
     Guid Id,
     TeamLabTrafficCaptureStatus Status,

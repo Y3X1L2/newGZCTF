@@ -19,7 +19,8 @@ namespace GZCTF.Modules.TeamLab.Application;
 public sealed class TeamLabRuntimePlanner(
     AppDbContext context,
     TeamLabRuntimeOverlayService overlayService,
-    TeamLabEventRecorder eventRecorder)
+    TeamLabEventRecorder eventRecorder,
+    TeamLabConnectorService connectors)
 {
     public async Task<TeamLabRuntimeCreateResult> CreateAsync(
         CreateTeamLabRuntimeModel command,
@@ -38,6 +39,9 @@ public sealed class TeamLabRuntimePlanner(
                 "insufficient_permission",
                 "拓扑版本不属于运行时所有者",
                 403);
+        if (release.IsArchived)
+            throw new TeamLabApiContractException(
+                "release_archived", "该拓扑版本已归档，无法创建新的运行时", 409);
 
         var normalizedIdempotencyKey = string.IsNullOrWhiteSpace(creationIdempotencyKey)
             ? null
@@ -331,6 +335,8 @@ public sealed class TeamLabRuntimePlanner(
                     $"资源 '{asset.Key}' 解析到的镜像模板 {resolvedTemplateId} 与已发布 digest 不匹配",
                     409);
         }
+        await ValidateDevicePackagesAsync(definition, cancellationToken);
+        await AcquireConnectorLeasesAsync(runtime, definition, cancellationToken);
         foreach (var network in definition.Networks.OrderBy(item => item.Key, StringComparer.Ordinal))
         {
             var cidr = Allocate(network.AddressPoolCidr, network.RuntimePrefixLength, usedCidrs.Concat(allocated));
@@ -386,7 +392,10 @@ public sealed class TeamLabRuntimePlanner(
                 Status = TeamLabRuntimeStatus.Pending,
                 ExecutionStage = TeamLabAssetExecutionStage.Pending,
                 EndpointObservation = asset.EndpointObservation,
-                ImageDigest = asset.ImageDigest ?? templateDigests.GetValueOrDefault(resolvedTemplateIds[asset.Key])
+                ImageDigest = asset.ImageDigest ?? templateDigests.GetValueOrDefault(resolvedTemplateIds[asset.Key]),
+                DevicePackageId = asset.DevicePackageId,
+                DevicePackageParametersJson = asset.DeviceParametersJson,
+                ConnectorId = asset.ConnectorId
             });
         }
         var connectionsByNode = definition.Connections
@@ -442,6 +451,59 @@ public sealed class TeamLabRuntimePlanner(
             $"Runtime generation {runtime.Generation} logical network groups compiled; physical nodes will be assigned by the scheduler.");
         await context.SaveChangesAsync(cancellationToken);
         activity?.SetStatus(ActivityStatusCode.Ok);
+    }
+
+    /// <summary>
+    /// Re-checks device packages at planning time against the frozen release
+    /// digest so registry drift never enters a running generation silently.
+    /// </summary>
+    private async Task ValidateDevicePackagesAsync(
+        TeamLabExecutionTopology definition,
+        CancellationToken cancellationToken)
+    {
+        var packageIds = definition.Assets
+            .Where(item => item.DevicePackageId is { } id && id > 0)
+            .Select(item => item.DevicePackageId!.Value)
+            .Distinct()
+            .ToArray();
+        if (packageIds.Length == 0) return;
+        var packages = await context.TeamLabDevicePackages.AsNoTracking()
+            .Where(item => packageIds.Contains(item.Id))
+            .ToDictionaryAsync(item => item.Id, cancellationToken);
+        foreach (var asset in definition.Assets)
+        {
+            if (asset.DevicePackageId is not { } packageId || packageId <= 0) continue;
+            if (!packages.TryGetValue(packageId, out var package) || !package.IsEnabled || package.IsArchived)
+                throw new TeamLabApiContractException(
+                    "device_package_unavailable",
+                    $"资源 '{asset.Key}' 引用的设备包 {packageId} 不可用",
+                    409);
+            if (!string.IsNullOrWhiteSpace(asset.DevicePackageDigest) &&
+                !string.Equals(asset.DevicePackageDigest, package.Digest, StringComparison.Ordinal))
+                throw new TeamLabApiContractException(
+                    "device_package_digest_changed",
+                    $"资源 '{asset.Key}' 引用的设备包 {packageId} 与已发布 digest 不匹配",
+                    409);
+        }
+    }
+
+    /// <summary>
+    /// Connector leases are acquired inside the planning transaction: losing
+    /// the exclusivity race fails creation with a stable conflict, and a later
+    /// planning failure rolls the acquisition back with everything else.
+    /// </summary>
+    private async Task AcquireConnectorLeasesAsync(
+        TeamLabRuntime runtime,
+        TeamLabExecutionTopology definition,
+        CancellationToken cancellationToken)
+    {
+        var connectorIds = definition.Assets
+            .Where(item => item.ConnectorId is { } connectorId && connectorId != Guid.Empty)
+            .Select(item => item.ConnectorId!.Value)
+            .Distinct()
+            .ToArray();
+        foreach (var connectorId in connectorIds)
+            await connectors.AcquireAsync(connectorId, runtime.PublicId, runtime.ControlScopeId, cancellationToken);
     }
 
     private static IPNetwork? Allocate(string poolCidr, int runtimePrefix, IEnumerable<IPNetwork> unavailable)

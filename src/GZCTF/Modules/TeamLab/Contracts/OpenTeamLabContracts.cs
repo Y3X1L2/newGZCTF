@@ -49,7 +49,8 @@ public sealed record OpenTeamLabReleaseModel(
     int SchemaVersion,
     string ContentHash,
     DateTimeOffset PublishedAt,
-    TeamLabTopologyEditorModel? Editor = null);
+    TeamLabTopologyEditorModel? Editor = null,
+    bool Archived = false);
 
 public sealed record OpenTeamLabReleasePageModel(
     IReadOnlyList<OpenTeamLabReleaseModel> Items,
@@ -124,6 +125,10 @@ public sealed record OpenTeamLabCaptureModel(
     IReadOnlyList<TeamLabCaptureSegmentModel> Segments,
     OpenTeamLabFailureModel? Failure);
 
+public sealed record OpenTeamLabCapturePageModel(
+    IReadOnlyList<OpenTeamLabCaptureModel> Items,
+    string? Next);
+
 public static class OpenTeamLabContractMapper
 {
     public static CreateTeamLabTopologyModel ToInternal(this OpenCreateTeamLabTopologyModel model) =>
@@ -146,7 +151,7 @@ public static class OpenTeamLabContractMapper
 
     public static OpenTeamLabReleaseModel ToOpen(this TeamLabReleaseModel model) =>
         new(model.Id, model.TopologyId, model.Version, model.SourceRevision, model.SchemaVersion,
-            model.ContentHash, model.PublishedAt, model.Editor);
+            model.ContentHash, model.PublishedAt, model.Editor, model.Archived);
 
     public static OpenTeamLabRuntimeModel ToOpen(this TeamLabRuntimeProjectionModel model) =>
         new(

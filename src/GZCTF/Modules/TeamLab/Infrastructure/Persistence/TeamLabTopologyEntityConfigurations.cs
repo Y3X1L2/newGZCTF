@@ -69,8 +69,10 @@ public sealed class TeamLabTopologyAssetEntityConfiguration : IEntityTypeConfigu
         builder.Property(item => item.EndpointObservation).HasConversion<byte>()
             .HasDefaultValue(TeamLabEndpointObservationMode.Disabled);
         builder.Property(item => item.HealthCheckKind).HasConversion<byte?>();
+        builder.Property(item => item.DevicePackageParametersJson).HasMaxLength(2048);
         builder.HasIndex(item => new { item.TopologyId, item.Key }).IsUnique();
         builder.HasIndex(item => item.ImageTemplateId);
+        builder.HasIndex(item => item.DevicePackageId);
         builder.HasOne(item => item.Topology)
             .WithMany(item => item.Assets)
             .HasForeignKey(item => item.TopologyId)
@@ -79,6 +81,14 @@ public sealed class TeamLabTopologyAssetEntityConfiguration : IEntityTypeConfigu
             .WithMany()
             .HasForeignKey(item => item.ImageTemplateId)
             .OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<TeamLabDevicePackage>()
+            .WithMany()
+            .HasForeignKey(item => item.DevicePackageId)
+            .OnDelete(DeleteBehavior.Restrict);
+        // Connector references are public-id only: archived connectors keep
+        // historical releases readable without a database dependency on the
+        // registry row, and validity is enforced at save/publish time.
+        builder.HasIndex(item => item.ConnectorId);
     }
 }
 

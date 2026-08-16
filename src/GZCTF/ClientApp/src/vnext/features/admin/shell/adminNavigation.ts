@@ -44,6 +44,7 @@ export const adminNavigation: AdminNavigationGroup[] = [
     items: [
       { id: 'images', label: '环境模板', route: '/admin/images', icon: Boxes, implemented: true },
       { id: 'teamlab', label: '组网场景', route: '/admin/teamlab', icon: Network, implemented: true },
+      { id: 'teamlab-resources', label: '组网资源', route: '/admin/teamlab/resources', icon: Network, implemented: true },
       { id: 'instances', label: '运行实例', route: '/admin/instances', icon: Activity, implemented: true },
     ],
   },

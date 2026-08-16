@@ -286,6 +286,34 @@ public sealed class TeamLabRuntimeCleanupService(
         foreach (var lease in fabricLeases)
             lease.ReleasedAt = now;
 
+        // Field connectors and link policies follow the same finalize
+        // semantics as network/fabric leases on a full destroy: released here
+        // synchronously, with the capability-resource worker as the
+        // crash-recovery backstop. A generation reset keeps them so the
+        // rebuilt runtime does not lose its real-world attachments.
+        if (markRuntimeDestroyed)
+        {
+            var connectorLeases = await context.TeamLabConnectorLeases
+                .Where(item => item.RuntimeId == runtime.Id && item.ReleasedAt == null)
+                .ToArrayAsync(cancellationToken);
+            foreach (var lease in connectorLeases)
+            {
+                lease.ReleasedAt = now;
+                lease.ReleaseReason = TeamLabConnectorLeaseReleaseReason.RuntimeDestroyed;
+            }
+            var activePolicies = await context.TeamLabLinkPolicies
+                .Where(policy => policy.RuntimeId == runtime.Id && policy.Status == TeamLabLinkPolicyStatus.Active)
+                .ToArrayAsync(cancellationToken);
+            foreach (var policy in activePolicies)
+            {
+                policy.Status = TeamLabLinkPolicyStatus.Recovered;
+                policy.RecoveredAt = now;
+                policy.RecoverOrigin = TeamLabLinkPolicyRecoverOrigin.RuntimeDestroyed;
+                policy.RecoverAt = null;
+                policy.UpdatedAt = now;
+            }
+        }
+
         if (markRuntimeDestroyed)
             runtime.Status = TeamLabRuntimeStatus.Destroyed;
         runtime.IsOpenToPlayers = false;
