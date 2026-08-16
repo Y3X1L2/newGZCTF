@@ -274,6 +274,7 @@ public class GameExportImportTests(GZCTFApplicationFactory factory, ITestOutputH
 
         // Count how many times each blob is used in the game (for verification after import)
         var blobUsageCount = await CountBlobUsageInGame(gameWithBlobs.Id);
+        var initialAttachmentCounts = await CountLocalAttachmentReferences();
         foreach (var (hash, usageCount) in blobUsageCount)
         {
             output.WriteLine($"  Blob {hash[..8]} used {usageCount} time(s) in game");
@@ -318,19 +319,27 @@ public class GameExportImportTests(GZCTFApplicationFactory factory, ITestOutputH
 
             // Assert: Verify reference counts increased for shared files
             var afterImportBlobCounts = await GetBlobReferenceCounts();
+            var afterImportAttachmentCounts = await CountLocalAttachmentReferences();
 
             // Same number of unique files (no duplicates created)
             Assert.Equal(initialBlobCounts.Count, afterImportBlobCounts.Count);
 
-            // Each file should have reference count increased by its usage count in the game
+            // Import also synchronizes eligible challenges into the public exercise pool.
+            // Every new local attachment, whether owned by the imported game or its pool copy,
+            // must contribute exactly one blob reference.
             foreach (var (hash, initialCount) in initialBlobCounts)
             {
                 Assert.True(afterImportBlobCounts.ContainsKey(hash), $"Blob {hash[..8]} should exist after import");
                 var newCount = afterImportBlobCounts[hash];
-                var expectedIncrement = blobUsageCount.TryGetValue(hash, out var count) ? count : 0u;
+                var initialAttachmentCount = initialAttachmentCounts.GetValueOrDefault(hash);
+                var currentAttachmentCount = afterImportAttachmentCounts.GetValueOrDefault(hash);
+                Assert.True(currentAttachmentCount >= initialAttachmentCount,
+                    $"Blob {hash[..8]} attachment references must not decrease during import");
+                var expectedIncrement = currentAttachmentCount - initialAttachmentCount;
                 var expectedCount = initialCount + expectedIncrement;
                 Assert.Equal(expectedCount, newCount);
-                output.WriteLine($"  Blob {hash[..8]}: RefCount {initialCount} → {newCount} (used {expectedIncrement}x) ✓");
+                output.WriteLine($"  Blob {hash[..8]}: RefCount {initialCount} → {newCount} " +
+                                 $"(new attachment references {expectedIncrement}) ✓");
             }
 
             output.WriteLine("All blob reference counts correctly incremented ✓");
@@ -950,6 +959,18 @@ public class GameExportImportTests(GZCTFApplicationFactory factory, ITestOutputH
             .ToDictionaryAsync(x => x.Hash, x => x.Count);
 
         return usageCounts;
+    }
+
+    private async Task<Dictionary<string, uint>> CountLocalAttachmentReferences()
+    {
+        using var scope = factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        return await context.Attachments
+            .Where(attachment => attachment.LocalFile != null)
+            .GroupBy(attachment => attachment.LocalFile!.Hash)
+            .Select(group => new { Hash = group.Key, Count = (uint)group.Count() })
+            .ToDictionaryAsync(item => item.Hash, item => item.Count);
     }
 
     /// <summary>
