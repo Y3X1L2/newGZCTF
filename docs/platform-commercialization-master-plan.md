@@ -8,7 +8,7 @@
 
 ## 1. 审计基线
 
-- 当前仓库路径：`D:\newgz\newGZCTF-main`。
+- 当前仓库路径：`D:\Work\newGZCTF`。
 - 当前分支：`main`。
 - CodeGraph 索引：1011 个文件、27262 个代码节点、79249 条关系边。
 - 后端主站：ASP.NET Core、EF Core、Identity、SignalR、PostgreSQL、Redis。

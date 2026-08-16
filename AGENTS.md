@@ -6,9 +6,10 @@
 
 1. `AGENTS.md`
 2. `docs/development/current-state.md`
-3. `README.md`
-4. `docs/platform-commercialization-master-plan.md`
-5. 与任务直接相关的模块文档
+3. `docs/README.md`
+4. `README.md`
+5. `docs/platform-commercialization-master-plan.md`
+6. 与任务直接相关的模块文档
 
 涉及架构、前端或部署时还必须阅读：
 
