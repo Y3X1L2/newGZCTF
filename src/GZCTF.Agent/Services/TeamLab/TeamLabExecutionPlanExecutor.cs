@@ -76,34 +76,47 @@ public sealed class TeamLabExecutionPlanExecutor(
 
         var events = new ConcurrentQueue<TeamLabExecutionEventV2>();
         events.Enqueue(Event(plan, null, "network", "succeeded", null, network.Message));
-        var limit = Math.Max(1, agent.ExecutionLimits.TeamLabExecutionOperations ?? 1);
+        var dockerAssets = plan.Assets.Where(asset => asset.Kind.Equals("docker", StringComparison.OrdinalIgnoreCase)).ToArray();
+        var vmAssets = plan.Assets.Where(asset => asset.Kind.Equals("vm", StringComparison.OrdinalIgnoreCase)).ToArray();
+        var dockerLimit = Math.Max(1, agent.ExecutionLimits.DockerCreates ?? 1);
+        var vmLimit = Math.Max(1, agent.ExecutionLimits.VmCreates ?? 1);
         try
         {
-            await Parallel.ForEachAsync(plan.Assets,
-                new ParallelOptions { MaxDegreeOfParallelism = limit, CancellationToken = cancellationToken },
-                async (asset, token) =>
+            async ValueTask ApplyAssetAsync(TeamLabAssetExecutionSpecV2 asset, CancellationToken token)
+            {
+                var sw = System.Diagnostics.Stopwatch.StartNew();
+                try
                 {
-                    try
-                    {
-                        if (string.Equals(asset.Kind, "docker", StringComparison.OrdinalIgnoreCase))
-                            await ApplyDockerAsync(plan, asset, events, token);
-                        else if (string.Equals(asset.Kind, "vm", StringComparison.OrdinalIgnoreCase))
-                            await ApplyVmAsync(plan, asset, events, token);
-                        else
-                            events.Enqueue(Event(plan, asset.AssetKey, "validation", "failed", "asset_kind_unsupported", asset.Kind));
-                    }
-                    catch (OperationCanceledException) when (token.IsCancellationRequested)
-                    {
-                        throw;
-                    }
-                    catch (Exception exception) when (exception is not OperationCanceledException)
-                    {
-                        logger.LogWarning(exception,
-                            "TeamLab execution asset failed for runtime {RuntimeId}, generation {Generation}, asset {AssetKey}",
-                            plan.RuntimeId, plan.Generation, asset.AssetKey);
-                        events.Enqueue(Event(plan, asset.AssetKey, "compute", "failed", "asset_execution_failed", exception.Message));
-                    }
-                });
+                    if (asset.Kind.Equals("docker", StringComparison.OrdinalIgnoreCase))
+                        await ApplyDockerAsync(plan, asset, events, token);
+                    else if (asset.Kind.Equals("vm", StringComparison.OrdinalIgnoreCase))
+                        await ApplyVmAsync(plan, asset, events, token);
+                    else
+                        events.Enqueue(Event(plan, asset.AssetKey, "validation", "failed", "asset_kind_unsupported", asset.Kind));
+                    logger.LogInformation(
+                        "TeamLab asset applied runtime={RuntimeId} generation={Generation} asset={AssetKey} kind={Kind} elapsedMs={ElapsedMs}",
+                        plan.RuntimeId, plan.Generation, asset.AssetKey, asset.Kind, sw.ElapsedMilliseconds);
+                }
+                catch (OperationCanceledException) when (token.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception exception) when (exception is not OperationCanceledException)
+                {
+                    logger.LogWarning(exception,
+                        "TeamLab execution asset failed for runtime {RuntimeId}, generation {Generation}, asset {AssetKey} elapsedMs={ElapsedMs}",
+                        plan.RuntimeId, plan.Generation, asset.AssetKey, sw.ElapsedMilliseconds);
+                    events.Enqueue(Event(plan, asset.AssetKey, "compute", "failed", "asset_execution_failed", exception.Message));
+                }
+            }
+
+            var dockerWork = Parallel.ForEachAsync(dockerAssets,
+                new ParallelOptions { MaxDegreeOfParallelism = dockerLimit, CancellationToken = cancellationToken },
+                (asset, token) => ApplyAssetAsync(asset, token));
+            var vmWork = Parallel.ForEachAsync(vmAssets,
+                new ParallelOptions { MaxDegreeOfParallelism = vmLimit, CancellationToken = cancellationToken },
+                (asset, token) => ApplyAssetAsync(asset, token));
+            await Task.WhenAll(dockerWork, vmWork);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -209,13 +222,26 @@ public sealed class TeamLabExecutionPlanExecutor(
     {
         var events = new ConcurrentQueue<TeamLabExecutionEventV2>();
         var beforeCleanup = await ReadInventoryAsync(plan, cancellationToken);
-        await Parallel.ForEachAsync(plan.Assets,
-            new ParallelOptions
-            {
-                MaxDegreeOfParallelism = Math.Max(1, agent.ExecutionLimits.TeamLabExecutionOperations ?? 1),
-                CancellationToken = cancellationToken
-            },
-            async (asset, token) => await CleanupAssetAsync(plan, asset, beforeCleanup, events, token));
+        var dockerAssets = plan.Assets.Where(asset => asset.Kind.Equals("docker", StringComparison.OrdinalIgnoreCase)).ToArray();
+        var vmAssets = plan.Assets.Where(asset => asset.Kind.Equals("vm", StringComparison.OrdinalIgnoreCase)).ToArray();
+        var dockerLimit = Math.Max(1, agent.ExecutionLimits.DockerCreates ?? 1);
+        var vmLimit = Math.Max(1, agent.ExecutionLimits.VmCreates ?? 1);
+        async ValueTask CleanupAssetAsyncTimed(TeamLabAssetExecutionSpecV2 asset, CancellationToken token)
+        {
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            await CleanupAssetAsync(plan, asset, beforeCleanup, events, token);
+            logger.LogInformation(
+                "TeamLab asset cleaned runtime={RuntimeId} generation={Generation} asset={AssetKey} kind={Kind} elapsedMs={ElapsedMs}",
+                plan.RuntimeId, plan.Generation, asset.AssetKey, asset.Kind, sw.ElapsedMilliseconds);
+        }
+
+        var dockerCleanup = Parallel.ForEachAsync(dockerAssets,
+            new ParallelOptions { MaxDegreeOfParallelism = dockerLimit, CancellationToken = cancellationToken },
+            (asset, token) => CleanupAssetAsyncTimed(asset, token));
+        var vmCleanup = Parallel.ForEachAsync(vmAssets,
+            new ParallelOptions { MaxDegreeOfParallelism = vmLimit, CancellationToken = cancellationToken },
+            (asset, token) => CleanupAssetAsyncTimed(asset, token));
+        await Task.WhenAll(dockerCleanup, vmCleanup);
 
         foreach (var asset in plan.Assets.Where(asset =>
                      asset.Kind.Equals("docker", StringComparison.OrdinalIgnoreCase)))
