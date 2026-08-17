@@ -7,11 +7,14 @@ using System.Diagnostics;
 using GZCTF.Infrastructure.Telemetry;
 using GZCTF.Models;
 using GZCTF.Models.Data;
+using GZCTF.Models.Internal;
 using GZCTF.Modules.Audit.Application;
 using GZCTF.Modules.Audit.Domain;
 using GZCTF.Modules.TeamLab.Contracts;
 using GZCTF.Modules.TeamLab.Domain;
+using GZCTF.TeamLab.Contracts;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Npgsql;
 
 namespace GZCTF.Modules.TeamLab.Application;
@@ -20,8 +23,10 @@ public sealed class TeamLabRuntimePlanner(
     AppDbContext context,
     TeamLabRuntimeOverlayService overlayService,
     TeamLabEventRecorder eventRecorder,
-    TeamLabConnectorService connectors)
+    TeamLabConnectorService connectors,
+    IOptions<TeamLabNetworkConfig> networkOptions)
 {
+    private readonly TeamLabNetworkConfig _network = networkOptions.Value;
     public async Task<TeamLabRuntimeCreateResult> CreateAsync(
         CreateTeamLabRuntimeModel command,
         Guid runtimeOwnerUserId,
@@ -114,6 +119,8 @@ public sealed class TeamLabRuntimePlanner(
             var runtime = new TeamLabRuntime
             {
                 TopologyReleaseId = release.Id,
+                IsScenarioBuild = false,
+                ExecutionModel = _network.ExecutionModel,
                 ControlScopeId = release.ControlScopeId,
                 CreatedById = runtimeOwnerUserId,
                 ExternalReference = externalReference,
@@ -261,6 +268,7 @@ public sealed class TeamLabRuntimePlanner(
         runtime.ControlScopeId = release.ControlScopeId;
         if (createRequestHash is not null) runtime.CreateRequestHash = createRequestHash;
         runtime.EntryShardId = null;
+        runtime.ExecutionModel = _network.ExecutionModel;
         runtime.Status = TeamLabRuntimeStatus.Planning;
         runtime.LastError = null;
         runtime.UpdatedAt = DateTimeOffset.UtcNow;
@@ -317,19 +325,19 @@ public sealed class TeamLabRuntimePlanner(
         var templateIds = resolvedTemplateIds.Values.Distinct().ToArray();
         var templateDigests = await context.ImageTemplates.AsNoTracking()
             .Where(item => templateIds.Contains(item.Id))
-            .ToDictionaryAsync(item => item.Id, item => item.ImageHash, cancellationToken);
+            .ToDictionaryAsync(item => item.Id, cancellationToken);
         foreach (var asset in definition.Assets)
         {
             var resolvedTemplateId = resolvedTemplateIds[asset.Key];
             var expectedDigest = asset.ImageDigest;
-            if (!templateDigests.TryGetValue(resolvedTemplateId, out var currentDigest) ||
-                string.IsNullOrWhiteSpace(currentDigest))
+            if (!templateDigests.TryGetValue(resolvedTemplateId, out var template) ||
+                string.IsNullOrWhiteSpace(template.ImageHash))
                 throw new TeamLabApiContractException(
                     "image_template_unavailable",
                     $"资源 '{asset.Key}' 解析到的镜像模板 {resolvedTemplateId} 不可用",
                     409);
             if (!string.IsNullOrWhiteSpace(expectedDigest) &&
-                !string.Equals(expectedDigest, currentDigest, StringComparison.Ordinal))
+                !string.Equals(expectedDigest, template.ImageHash, StringComparison.Ordinal))
                 throw new TeamLabApiContractException(
                     "image_template_digest_changed",
                     $"资源 '{asset.Key}' 解析到的镜像模板 {resolvedTemplateId} 与已发布 digest 不匹配",
@@ -392,7 +400,12 @@ public sealed class TeamLabRuntimePlanner(
                 Status = TeamLabRuntimeStatus.Pending,
                 ExecutionStage = TeamLabAssetExecutionStage.Pending,
                 EndpointObservation = asset.EndpointObservation,
-                ImageDigest = asset.ImageDigest ?? templateDigests.GetValueOrDefault(resolvedTemplateIds[asset.Key]),
+                ImageDigest = asset.ImageDigest ?? templateDigests.GetValueOrDefault(resolvedTemplateIds[asset.Key])?.ImageHash,
+                Image = asset.Kind == TeamLabAssetKind.Docker && templateDigests.TryGetValue(resolvedTemplateIds[asset.Key], out var dockerTemplate)
+                    ? DockerImageReference.ResolvePullTarget(
+                        dockerTemplate.Name,
+                        dockerTemplate.RegistryUrl).FullImage
+                    : null,
                 DevicePackageId = asset.DevicePackageId,
                 DevicePackageParametersJson = asset.DeviceParametersJson,
                 ConnectorId = asset.ConnectorId
@@ -434,6 +447,16 @@ public sealed class TeamLabRuntimePlanner(
                 Condition = dependency.Condition
             });
         }
+        if (runtime.ExecutionModel == TeamLabExecutionModel.V2)
+        {
+            var unsupportedSecret = TeamLabExecutionModelPolicy.FindUnsupportedSecretKey(runtimeOverlays ?? []);
+            if (unsupportedSecret is not null)
+                throw new TeamLabApiContractException(
+                    "execution_model_secrets_unsupported",
+                    $"V2 执行模型暂不支持运行时密钥覆盖，请移除资产密钥 '{unsupportedSecret}' 后重试",
+                    422);
+        }
+
         var envelope = overlayService.Protect(runtime.Id, runtime.Generation, runtimeOverlays,
             definition.Assets.Select(item => item.Key).ToHashSet(StringComparer.Ordinal),
             definition.Assets

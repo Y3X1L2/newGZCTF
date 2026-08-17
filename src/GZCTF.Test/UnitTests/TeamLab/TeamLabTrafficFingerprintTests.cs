@@ -1,10 +1,14 @@
 using System;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using GZCTF.Infrastructure.Cache;
 using GZCTF.Modules.TeamLab.Application;
 using GZCTF.Modules.TeamLab.Domain;
 using GZCTF.Modules.TeamLab.Infrastructure;
 using GZCTF.Modules.TeamLab.Domain.Runtime;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace GZCTF.Test.UnitTests.TeamLab;
@@ -46,16 +50,26 @@ public sealed class TeamLabTrafficFingerprintTests
     }
 
     [Fact]
-    public void LocalBuffer_DropsOldestWithoutBlockingProducer()
+    public async Task RedisUnavailable_DefersInsteadOfAcknowledgingVolatileMemory()
     {
-        var buffer = new TeamLabTrafficLocalBuffer(2, new RedisTelemetry());
+        var options = Options.Create(new RedisRuntimeOptions { Mode = RedisRuntimeMode.Disabled });
+        var telemetry = new RedisTelemetry();
+        var state = new RedisRuntimeState(options, telemetry);
+        await using var connections = new RedisConnectionProvider(
+            options, state, telemetry, NullLogger<RedisConnectionProvider>.Instance);
+        var ingestor = new RedisTeamLabTrafficIngestor(
+            connections,
+            new RedisKeyspace(options),
+            new TeamLabTrafficLocalBuffer(telemetry),
+            state,
+            telemetry,
+            NullLogger<RedisTeamLabTrafficIngestor>.Instance);
 
-        var dropped = buffer.EnqueueRange([CreateEnvelope(1), CreateEnvelope(2), CreateEnvelope(3)]);
-        var drained = buffer.Drain(10);
+        var result = await ingestor.EnqueueAsync([CreateEnvelope(1)], CancellationToken.None);
 
-        Assert.Equal(1, dropped);
-        Assert.Equal(1, buffer.DroppedCount);
-        Assert.Equal([2, 3], drained.Select(item => item.SourcePort).ToArray());
+        Assert.Equal(0, result.AcceptedCount);
+        Assert.Equal(0, result.DroppedCount);
+        Assert.True(result.Deferred);
     }
 
     [Fact]

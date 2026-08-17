@@ -317,7 +317,7 @@ public class DockerImageRegistryService
         return $"{address}/{internalPath.TrimStart('/')}";
     }
 
-    public async Task<string> ResolveImageReferenceAsync(string image, CancellationToken token = default)
+    public virtual async Task<string> ResolveImageReferenceAsync(string image, CancellationToken token = default)
     {
         var normalized = NormalizeRegistryAddress(image);
         if (string.IsNullOrWhiteSpace(normalized))

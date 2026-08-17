@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Security.Cryptography;
+using Microsoft.Extensions.Options;
 
 namespace GZCTF.Agent.Controllers;
 
@@ -18,11 +19,15 @@ public class ImageController : ControllerBase
     private readonly ImageTransferSingleFlight _singleFlight;
     private readonly AgentOciArtifactUploader _ociUploader;
     private readonly VmImageBackingChainInspector _backingChain;
+    private readonly AgentTeamLabConfig _teamLab;
+    private readonly KvmConfig _kvm;
     private readonly ILogger<ImageController> _logger;
 
     public ImageController(DockerService docker, AgentOperationGate gate, AgentResourceLock resourceLock,
         ImageTransferSingleFlight singleFlight, AgentOciArtifactUploader ociUploader,
         VmImageBackingChainInspector backingChain,
+        IOptions<AgentTeamLabConfig> teamLabOptions,
+        IOptions<KvmConfig> kvmOptions,
         ILogger<ImageController> logger)
     {
         _docker = docker;
@@ -31,6 +36,8 @@ public class ImageController : ControllerBase
         _singleFlight = singleFlight;
         _ociUploader = ociUploader;
         _backingChain = backingChain;
+        _teamLab = teamLabOptions.Value;
+        _kvm = kvmOptions.Value;
         _logger = logger;
     }
 
@@ -57,7 +64,8 @@ public class ImageController : ControllerBase
             "docker-image:" + image.Trim().ToLowerInvariant(), token);
         await using var permit = await _gate.EnterAsync(AgentOperationCategory.Control, token);
         await _docker.DeleteImageAsync(image, token);
-        return Ok(new { message = "Docker image cache deleted" });
+        return Ok(new ImageCacheCleanupResponse(
+            [new ImageCacheInventoryEntry("docker", image, await _docker.ImageExistsAsync(image, token))]));
     }
 
     [HttpPost("ensure-docker-registry")]
@@ -88,10 +96,13 @@ public class ImageController : ControllerBase
     {
         var cacheIdentity = NormalizeSha256(request.Digest) ?? NormalizeSha256(request.Hash) ??
                             request.TemplateId?.ToString() ?? request.Hash;
+        var fileStem = request.TemplateId?.ToString() ?? request.Hash;
+        var destination = Path.Combine(_kvm.ImageStoragePath, fileStem + ".qcow2");
         var key = $"vm:{cacheIdentity}";
         var result = await _singleFlight.RunAsync(key, async sharedToken =>
         {
-            await using var cacheLock = await _resourceLock.AcquireAsync("vm-image:" + cacheIdentity, sharedToken);
+            await using var cacheLock = await _resourceLock.AcquireAsync(
+                LibvirtTeamLabProvider.BaseImageLockKey(destination), sharedToken);
             await using var permit = await _gate.EnterAsync(AgentOperationCategory.VmImageTransfer, sharedToken);
             return await DownloadVmImageCoreAsync(request, sharedToken);
         }, token);
@@ -101,7 +112,7 @@ public class ImageController : ControllerBase
     async Task<DownloadVmImageResponse> DownloadVmImageCoreAsync(DownloadVmImageRequest request,
         CancellationToken token)
     {
-        const string storagePath = "/var/lib/gzctf/images";
+        var storagePath = _kvm.ImageStoragePath;
         var fileStem = request.TemplateId.HasValue ? request.TemplateId.Value.ToString() : request.Hash;
         var destPath = Path.Combine(storagePath, fileStem + ".qcow2");
         var expectedHash = NormalizeSha256(request.Digest) ?? NormalizeSha256(request.Hash);
@@ -117,7 +128,8 @@ public class ImageController : ControllerBase
             IReadOnlyList<VmImageBackingReference> references;
             try
             {
-                references = await _backingChain.FindReferencesAsync(storagePath, [destPath], token);
+                references = await _backingChain.FindReferencesAsync(
+                    [storagePath, _teamLab.RuntimeStateRoot], [destPath], token);
             }
             catch (InvalidOperationException exception)
             {
@@ -169,10 +181,11 @@ public class ImageController : ControllerBase
         var key = $"vm-publish:{request.TemplateId}:{hash}";
         var result = await _singleFlight.RunAsync(key, async sharedToken =>
         {
-            await using var cacheLock = await _resourceLock.AcquireAsync("vm-image:" + hash, sharedToken);
+            var path = Path.Combine(_kvm.ImageStoragePath, $"{request.TemplateId}.qcow2");
+            await using var cacheLock = await _resourceLock.AcquireAsync(
+                LibvirtTeamLabProvider.BaseImageLockKey(path), sharedToken);
             await using var permit = await _gate.EnterAsync(
                 AgentOperationCategory.VmImageTransfer, sharedToken);
-            var path = Path.Combine("/var/lib/gzctf/images", $"{request.TemplateId}.qcow2");
             if (!System.IO.File.Exists(path))
                 throw new AgentOperationException(
                     "ImageTransfer", "image.vm.cache_missing",
@@ -210,15 +223,18 @@ public class ImageController : ControllerBase
         [FromQuery] string? hash,
         CancellationToken token)
     {
-        var storagePath = "/var/lib/gzctf/images";
+        var storagePath = _kvm.ImageStoragePath;
         var cacheIdentity = NormalizeSha256(hash) ?? templateId.ToString();
-        await using var cacheLock = await _resourceLock.AcquireAsync("vm-image:" + cacheIdentity, token);
+        var templatePath = Path.Combine(storagePath, $"{templateId}.qcow2");
+        await using var cacheLock = await _resourceLock.AcquireAsync(
+            LibvirtTeamLabProvider.BaseImageLockKey(templatePath), token);
         await using var permit = await _gate.EnterAsync(AgentOperationCategory.Control, token);
         var targets = ResolveVmImageCachePaths(storagePath, templateId, hash)
             .Where(System.IO.File.Exists)
             .ToArray();
         if (targets.Length == 0)
-            return Ok(new { message = "VM image cache cleanup completed", removed = 0 });
+            return Ok(new ImageCacheCleanupResponse(
+                [new ImageCacheInventoryEntry("vm", cacheIdentity, false)]));
 
         // A cached template is the backing file of every VM overlay created from it, and that link
         // exists only in qcow2 metadata. Deleting it while an overlay still points at it leaves that
@@ -226,7 +242,8 @@ public class ImageController : ControllerBase
         IReadOnlyList<VmImageBackingReference> references;
         try
         {
-            references = await _backingChain.FindReferencesAsync(storagePath, targets, token);
+            references = await _backingChain.FindReferencesAsync(
+                [storagePath, _teamLab.RuntimeStateRoot], targets, token);
         }
         catch (InvalidOperationException exception)
         {
@@ -253,7 +270,10 @@ public class ImageController : ControllerBase
             removed++;
         }
 
-        return Ok(new { message = "VM image cache cleanup completed", removed });
+        var present = ResolveVmImageCachePaths(storagePath, templateId, hash)
+            .Any(System.IO.File.Exists);
+        return Ok(new ImageCacheCleanupResponse(
+            [new ImageCacheInventoryEntry("vm", cacheIdentity, present)], removed));
     }
 
     [HttpPost("download-bootstrap-artifact")]

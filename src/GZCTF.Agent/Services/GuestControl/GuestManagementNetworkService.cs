@@ -60,8 +60,10 @@ public sealed class GuestManagementNetworkService(
     {
         var bridge = _config.BridgeName.Replace("\\", "\\\\").Replace("\"", "\\\"");
         return $$"""
+            if nft list table inet gzctf_guest_mgmt >/dev/null 2>&1; then
+              nft delete table inet gzctf_guest_mgmt
+            fi
             nft -f - <<'GZCTF_NFT'
-            destroy table inet gzctf_guest_mgmt
             table inet gzctf_guest_mgmt {
               chain input {
                 type filter hook input priority -10; policy accept;

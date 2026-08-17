@@ -35,7 +35,7 @@ public class DockerService
         await using var identityLock = await _resourceLock.AcquireAsync($"container:{containerName}", token);
         var fabricManagementNetwork = request.UsePenetrationFabric && request.PublishPort;
         var isolatedHostNetwork = request.UseHostNetworkNone || request.UsePenetrationFabric;
-        var gateForTeamLabNetwork = isolatedHostNetwork;
+        var gateForTeamLabNetwork = request.EnableTeamLabNetworkGate && isolatedHostNetwork;
         var attachments = isolatedHostNetwork
             ?
             (fabricManagementNetwork
@@ -83,7 +83,10 @@ public class DockerService
                 ["UserId"] = request.UserId.ToString(),
                 ["ManagedBy"] = "GZCTF",
                 ["GZCTF.RuntimeId"] = request.RuntimeId.ToString(),
-                ["GZCTF.Generation"] = Math.Max(1, request.Generation).ToString()
+                ["GZCTF.Generation"] = Math.Max(1, request.Generation).ToString(),
+                ["GZCTF.AssetKey"] = request.AssetKey ?? string.Empty,
+                ["GZCTF.TeamLabPlanDigest"] = request.TeamLabPlanDigest ?? string.Empty,
+                ["GZCTF.TeamLabShardKey"] = request.TeamLabShardKey ?? string.Empty
             },
             HostConfig = new HostConfig
             {
@@ -161,13 +164,23 @@ public class DockerService
                             existing.Config.Labels.TryGetValue("GZCTF.RuntimeId", out var runtimeLabel)
                 ? runtimeLabel
                 : null;
+            var planDigest = existing.Config.Labels is not null &&
+                             existing.Config.Labels.TryGetValue("GZCTF.TeamLabPlanDigest", out var digestLabel)
+                ? digestLabel
+                : null;
+            var shardKey = existing.Config.Labels is not null &&
+                           existing.Config.Labels.TryGetValue("GZCTF.TeamLabShardKey", out var shardLabel)
+                ? shardLabel
+                : null;
             if (!string.Equals(existing.Config.Image, request.Image, StringComparison.Ordinal) ||
                 !string.Equals(generation, Math.Max(1, request.Generation).ToString(), StringComparison.Ordinal) ||
                 gateForTeamLabNetwork &&
-                !string.Equals(runtimeId, request.RuntimeId.ToString(), StringComparison.Ordinal))
+                !string.Equals(runtimeId, request.RuntimeId.ToString(), StringComparison.Ordinal) ||
+                !string.Equals(planDigest, request.TeamLabPlanDigest ?? string.Empty, StringComparison.Ordinal) ||
+                !string.Equals(shardKey, request.TeamLabShardKey ?? string.Empty, StringComparison.Ordinal))
                 throw new InvalidOperationException(
                     $"runtime_identity_conflict: container {containerName} exists with a different image or generation.");
-            if (existing.State?.Running != true)
+            if (request.StartImmediately && existing.State?.Running != true)
                 await _client.Containers.StartContainerAsync(existing.ID, new ContainerStartParameters(), token);
             return BuildContainerResponse(existing, primaryNetwork, portSpec, request.ExposedPort);
         }
@@ -188,7 +201,8 @@ public class DockerService
             throw new InvalidOperationException($"image_not_ready: Docker image {request.Image} is not present.", ex);
         }
 
-        await _client.Containers.StartContainerAsync(createResult.ID, new ContainerStartParameters(), token);
+        if (request.StartImmediately)
+            await _client.Containers.StartContainerAsync(createResult.ID, new ContainerStartParameters(), token);
 
         foreach (var attachment in attachments
                      .Where(n => !n.NetworkName.Equals(primaryNetwork, StringComparison.Ordinal))
@@ -243,12 +257,28 @@ public class DockerService
         return BuildContainerResponse(inspect, primaryNetwork, portSpec, request.ExposedPort);
     }
 
+    public async Task StartContainerAsync(
+        string containerId,
+        int expectedGeneration,
+        CancellationToken token)
+    {
+        var inspect = await _client.Containers.InspectContainerAsync(containerId, token);
+        if (!MatchesExpectedGeneration(inspect.Config.Labels, expectedGeneration, out _))
+            throw new AgentOperationException(
+                "Conflict", "runtime.identity_conflict",
+                "Container generation does not match the requested runtime identity.", false,
+                StatusCodes.Status409Conflict);
+        if (inspect.State?.Running == true) return;
+        await _client.Containers.StartContainerAsync(containerId, new ContainerStartParameters(), token);
+    }
+
     public async Task DestroyContainerAsync(
         string containerId,
         CancellationToken token,
-        int? expectedGeneration = null)
+        int? expectedGeneration = null,
+        string? expectedTeamLabPlanDigest = null)
     {
-        if (expectedGeneration is { } requiredGeneration)
+        if (expectedGeneration is not null || !string.IsNullOrWhiteSpace(expectedTeamLabPlanDigest))
         {
             ContainerInspectResponse existing;
             try
@@ -264,15 +294,26 @@ public class DockerService
                 return;
             }
 
-            if (!MatchesExpectedGeneration(existing.Config.Labels, requiredGeneration, out var legacyGeneration))
-                throw new AgentOperationException(
-                    "Conflict", "runtime.identity_conflict",
-                    "Container generation does not match the requested runtime identity.", false,
-                    StatusCodes.Status409Conflict);
-            if (legacyGeneration)
+            var legacyGeneration = false;
+            if (expectedGeneration is { } requiredGeneration)
+            {
+                if (!MatchesExpectedGeneration(existing.Config.Labels, requiredGeneration, out legacyGeneration))
+                    throw new AgentOperationException(
+                        "Conflict", "runtime.identity_conflict",
+                        "Container generation does not match the requested runtime identity.", false,
+                        StatusCodes.Status409Conflict);
+            }
+            if (expectedGeneration is not null && legacyGeneration)
                 _logger.LogWarning(
                     "Destroying legacy GZCTF container {ContainerId} without a generation label as generation 1",
                     containerId);
+            if (!string.IsNullOrWhiteSpace(expectedTeamLabPlanDigest) &&
+                (!existing.Config.Labels!.TryGetValue("GZCTF.TeamLabPlanDigest", out var existingPlanDigest) ||
+                 !string.Equals(existingPlanDigest, expectedTeamLabPlanDigest, StringComparison.OrdinalIgnoreCase)))
+                throw new AgentOperationException(
+                    "Conflict", "runtime.execution_plan_conflict",
+                    "Container does not belong to the requested execution plan.", false,
+                    StatusCodes.Status409Conflict);
         }
 
         try
@@ -754,7 +795,13 @@ public class DockerService
                     generation,
                     container.State ?? "unknown",
                     container.Image,
-                    RuntimeId: runtimeId);
+                    RuntimeId: runtimeId,
+                    AssetKey: container.Labels.TryGetValue("GZCTF.AssetKey", out var assetKey)
+                        ? assetKey
+                        : null,
+                    ShardKey: container.Labels.TryGetValue("GZCTF.TeamLabShardKey", out var shardKey)
+                        ? shardKey
+                        : null);
             })
             .OfType<RuntimeInventoryResource>()
             .OrderBy(item => item.StableName, StringComparer.Ordinal)
@@ -794,6 +841,23 @@ public class DockerService
         }
         catch (DockerApiException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
         {
+        }
+    }
+
+    public async Task<bool> ImageExistsAsync(string image, CancellationToken token)
+    {
+        try
+        {
+            await _client.Images.InspectImageAsync(image, token);
+            return true;
+        }
+        catch (DockerImageNotFoundException)
+        {
+            return false;
+        }
+        catch (DockerApiException exception) when (exception.StatusCode == HttpStatusCode.NotFound)
+        {
+            return false;
         }
     }
 

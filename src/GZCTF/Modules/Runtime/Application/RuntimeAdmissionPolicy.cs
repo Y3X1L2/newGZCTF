@@ -1,4 +1,5 @@
 using GZCTF.Models.Data;
+using GZCTF.Modules.Audit.Application;
 using GZCTF.Services.Fleet;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -28,3 +29,6 @@ public sealed class RuntimeQueueLimitException(string code, string message) : In
 {
     public string Code { get; } = code;
 }
+
+public sealed class RuntimeApiContractException(string code, string message, int statusCode)
+    : ApiContractException(code, message, statusCode);

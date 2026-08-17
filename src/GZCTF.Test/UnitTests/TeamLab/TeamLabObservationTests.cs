@@ -199,6 +199,87 @@ public sealed class TeamLabObservationTests
     }
 
     [Fact]
+    public async Task ObservationSpool_AcknowledgementReleasesOnlyPersistedRecords()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"gzctf-observation-{Guid.NewGuid():N}");
+        var spool = new ObservationBatchSpool(
+            Options.Create(new AgentTeamLabConfig
+            {
+                ObservationPacketFingerprintEnabled = true,
+                ObservationAggregationIntervalMilliseconds = 100
+            }),
+            NullLogger<ObservationBatchSpool>.Instance,
+            root,
+            null);
+        var registration = new ObservationPointRegistration(74, 1, Guid.NewGuid(), "entry", 0, "tl-entry");
+        var packet = new ParsedObservationPacket(
+            "10.0.0.2", 1000, "10.0.0.3", 80, "TCP", 0x18, 64,
+            "sha256:" + new string('a', 64), "sha256:" + new string('b', 64));
+
+        try
+        {
+            await spool.StartAsync(CancellationToken.None);
+            var first = spool.AppendPacket(registration, DateTimeOffset.UtcNow, packet);
+            var second = spool.AppendPacket(registration, DateTimeOffset.UtcNow, packet);
+            await WaitForPersistenceAsync(spool, 74, 1, second);
+            await spool.AcknowledgeAsync(74, 1, first, CancellationToken.None);
+
+            var remaining = spool.Read(new TeamLabObservationBatchRequest(74, 1), Health()).Records;
+            var record = Assert.Single(remaining);
+            Assert.Equal(second, record.Sequence);
+        }
+        finally
+        {
+            await spool.StopAsync(CancellationToken.None);
+            if (Directory.Exists(root)) Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
+    public void ObservationSpool_DoesNotCountWriterBacklogAsDroppedTraffic()
+    {
+        const int recordCount = 33_000;
+        var spool = new ObservationBatchSpool(
+            Options.Create(new AgentTeamLabConfig
+            {
+                ObservationPacketFingerprintEnabled = true,
+                ObservationMemoryRecordLimit = 1_000,
+                ObservationBatchSize = 2_000,
+                ObservationSpoolMaxBytes = 64L * 1024 * 1024
+            }),
+            NullLogger<ObservationBatchSpool>.Instance);
+        var registration = new ObservationPointRegistration(75, 1, Guid.NewGuid(), "entry", 0, "tl-entry");
+        var packet = new ParsedObservationPacket(
+            "10.0.0.2", 1000, "10.0.0.3", 80, "TCP", 0x18, 64,
+            "sha256:" + new string('a', 64), "sha256:" + new string('b', 64));
+
+        for (var index = 0; index < recordCount; index++)
+            Assert.True(spool.AppendPacket(registration, DateTimeOffset.UtcNow, packet) > 0);
+
+        var first = spool.Read(new TeamLabObservationBatchRequest(75, 1, 0, registration.PublicId, 2_000), Health());
+        Assert.Equal(0, first.DroppedCount);
+        Assert.Equal(2_000, first.Records.Length);
+        Assert.Equal(2_000, first.NextSequence);
+    }
+
+    static async Task WaitForPersistenceAsync(
+        ObservationBatchSpool spool,
+        int runtimeId,
+        int generation,
+        long sequence)
+    {
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+        while (DateTime.UtcNow < deadline)
+        {
+            if (spool.Read(new TeamLabObservationBatchRequest(runtimeId, generation), Health())
+                .PersistedThroughSequence >= sequence)
+                return;
+            await Task.Delay(20);
+        }
+        throw new TimeoutException("Observation spool did not persist records in time.");
+    }
+
+    [Fact]
     public void EndpointSensorSignature_IsAcceptedOnceAndRejectsReplay()
     {
         var key = RandomNumberGenerator.GetBytes(32);

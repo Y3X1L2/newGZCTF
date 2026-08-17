@@ -154,7 +154,7 @@ public sealed class ImageDistributionWorker(
                 .SingleOrDefaultAsync(token);
             var limits = AgentCapabilityEvaluator.Parse(manifestJson)?.ExecutionLimits;
             var category = work.Operation == ImageDistributionOperation.Cleanup
-                ? NodeDispatchCategory.Cleanup
+                ? NodeDispatchCategory.ArtifactCleanup
                 : work.ImageType == ImageType.Docker
                     ? NodeDispatchCategory.DockerImageTransfer
                     : NodeDispatchCategory.VmImageTransfer;

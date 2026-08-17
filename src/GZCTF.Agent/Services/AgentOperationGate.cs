@@ -9,6 +9,7 @@ public enum AgentOperationCategory
     DockerImageTransfer,
     VmImageTransfer,
     TeamLabNetwork,
+    TeamLabExecution,
     Control
 }
 
@@ -27,6 +28,7 @@ public sealed class AgentOperationGate
             [AgentOperationCategory.DockerImageTransfer] = Gate(configured.DockerImageTransfers ?? 2),
             [AgentOperationCategory.VmImageTransfer] = Gate(configured.VmImageTransfers ?? 1),
             [AgentOperationCategory.TeamLabNetwork] = Gate(configured.TeamLabNetworkOperations ?? 4),
+            [AgentOperationCategory.TeamLabExecution] = Gate(configured.TeamLabExecutionOperations ?? 1),
             [AgentOperationCategory.Control] = Gate(configured.ControlOperations ?? 2)
         };
     }

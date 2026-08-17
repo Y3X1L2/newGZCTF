@@ -7,11 +7,12 @@ public sealed class TeamLabTrafficLocalBuffer
 {
     public const int DefaultCapacity = 10_000;
 
-    private readonly Queue<TeamLabTrafficEnvelope> _queue;
+    private readonly LinkedList<LocalEnvelope> _queue = [];
     private readonly object _gate = new();
     private readonly int _capacity;
     private readonly RedisTelemetry _telemetry;
     private long _droppedCount;
+    private long _nextSequence;
 
     public TeamLabTrafficLocalBuffer(RedisTelemetry telemetry) : this(DefaultCapacity, telemetry)
     {
@@ -23,7 +24,6 @@ public sealed class TeamLabTrafficLocalBuffer
             throw new ArgumentOutOfRangeException(nameof(capacity));
 
         _capacity = capacity;
-        _queue = new Queue<TeamLabTrafficEnvelope>(Math.Min(capacity, 1024));
         _telemetry = telemetry;
     }
 
@@ -38,11 +38,10 @@ public sealed class TeamLabTrafficLocalBuffer
             {
                 if (_queue.Count == _capacity)
                 {
-                    _queue.Dequeue();
+                    _queue.RemoveFirst();
                     dropped++;
                 }
-
-                _queue.Enqueue(envelope);
+                _queue.AddLast(new LocalEnvelope(++_nextSequence, envelope));
             }
         }
 
@@ -55,7 +54,7 @@ public sealed class TeamLabTrafficLocalBuffer
         return dropped;
     }
 
-    public IReadOnlyList<TeamLabTrafficEnvelope> Drain(int maxCount)
+    public IReadOnlyList<LocalEnvelope> Read(int maxCount)
     {
         if (maxCount < 1)
             return [];
@@ -66,10 +65,18 @@ public sealed class TeamLabTrafficLocalBuffer
             if (count == 0)
                 return [];
 
-            var result = new TeamLabTrafficEnvelope[count];
-            for (var index = 0; index < count; index++)
-                result[index] = _queue.Dequeue();
-            return result;
+            return _queue.Take(count).ToArray();
         }
     }
+
+    public void Acknowledge(IReadOnlyCollection<long> sequences)
+    {
+        if (sequences.Count == 0) return;
+        var acknowledged = sequences.ToHashSet();
+        lock (_gate)
+            while (_queue.First is { Value.Sequence: var sequence } && acknowledged.Contains(sequence))
+                _queue.RemoveFirst();
+    }
+
+    public sealed record LocalEnvelope(long Sequence, TeamLabTrafficEnvelope Envelope);
 }

@@ -51,6 +51,10 @@ internal static class ServicesExtension
             builder.AddConfig<ContainerPolicy>();
             builder.AddConfig<ContainerProvider>();
             builder.AddConfig<TeamLabNetworkConfig>();
+            builder.Services.AddOptions<TeamLabNetworkConfig>()
+                .Validate(config => Enum.IsDefined(config.ExecutionModel),
+                    "TeamLabNetworkConfig.ExecutionModel must be a valid execution model.")
+                .ValidateOnStart();
             builder.AddConfig<PublicUdpGatewayConfig>();
             builder.AddConfig<KvmSettings>();
             builder.AddConfig<GuacamoleSettings>();
@@ -140,6 +144,7 @@ internal static class ServicesExtension
             // Fleet control-plane services
             builder.Services.AddScoped<INodeRepository, NodeRepository>();
             builder.Services.AddScoped<NodeDeployService>();
+            builder.Services.AddScoped<AgentFleetUpdateCoordinator>();
             builder.Services.AddScoped<NodeCapacitySnapshotService>();
             builder.Services.AddScoped<NodeEligibilityEvaluator>();
             builder.Services.AddScoped<RuntimeQueueSelector>();
@@ -160,6 +165,7 @@ internal static class ServicesExtension
             builder.Services.AddHostedService<ImageDistributionWorker>();
             builder.Services.AddHostedService<ImageDistributionReconcileService>();
             builder.Services.AddHostedService<FleetHealthCheckService>();
+            builder.Services.AddHostedService<AgentFleetUpdateRecoveryWorker>();
             builder.Services.AddHostedService<RuntimeSchedulingWorker>();
             builder.Services.AddHostedService<RuntimeRecoveryWorker>();
             builder.Services.AddHostedService<RuntimeExecutionWorker>();

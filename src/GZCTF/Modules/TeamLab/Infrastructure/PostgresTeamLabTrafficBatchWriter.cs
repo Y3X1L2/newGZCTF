@@ -82,7 +82,7 @@ public sealed class PostgresTeamLabTrafficBatchWriter(
                destination_port, protocol, bytes, packets, first_seen_at, last_seen_at,
                captured_at, flow_fingerprint
         FROM teamlab_traffic_ingest_stage
-        WHERE observation_point_kind = 0 AND evidence_kind = 0
+        WHERE observation_point_kind IN (0, 3) AND evidence_kind = 0
           AND network_id IS NOT NULL
         ON CONFLICT ("CapturedAt", "RuntimeId", "Generation", "Fingerprint") DO NOTHING;
         """;

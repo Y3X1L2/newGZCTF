@@ -1,5 +1,6 @@
 using GZCTF.Models.Data;
 using GZCTF.Modules.TeamLab.Domain;
+using GZCTF.TeamLab.Contracts;
 
 namespace GZCTF.Modules.TeamLab.Contracts;
 
@@ -89,6 +90,7 @@ public sealed record OpenTeamLabRuntimeModel(
     Guid Id,
     Guid ReleaseId,
     int Generation,
+    TeamLabExecutionModel ExecutionModel,
     TeamLabRuntimeStatus Status,
     string Stage,
     bool OpenForAccess,
@@ -158,6 +160,7 @@ public static class OpenTeamLabContractMapper
             model.Id,
             model.ReleaseId,
             model.Generation,
+            model.ExecutionModel,
             model.Status,
             model.Stage,
             model.OpenForAccess,

@@ -182,7 +182,7 @@ public sealed class PenetrationTeamLabLifecycleTests
         var runtime = new Mock<ITeamLabRuntimeApplicationService>(MockBehavior.Strict);
         runtime.Setup(item => item.GetByStorageIdAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((int _, CancellationToken _) => new TeamLabRuntimeProjectionModel(
-                Guid.NewGuid(), Guid.NewGuid(), 2, TeamLabRuntimeStatus.Running, "running", false,
+                Guid.NewGuid(), Guid.NewGuid(), 2, GZCTF.TeamLab.Contracts.TeamLabExecutionModel.V2, TeamLabRuntimeStatus.Running, "running", false,
                 [], [], [], DateTimeOffset.UtcNow, null, null));
         return runtime;
     }

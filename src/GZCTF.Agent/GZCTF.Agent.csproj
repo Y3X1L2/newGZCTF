@@ -17,6 +17,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\GZCTF.GuestControl.Contracts\GZCTF.GuestControl.Contracts.csproj" />
+    <ProjectReference Include="..\GZCTF.TeamLab.Contracts\GZCTF.TeamLab.Contracts.csproj" />
   </ItemGroup>
 
   <ItemGroup>

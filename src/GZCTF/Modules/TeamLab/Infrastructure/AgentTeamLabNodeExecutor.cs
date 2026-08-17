@@ -17,6 +17,8 @@ using GZCTF.Modules.TeamLab.Domain;
 using GZCTF.Services;
 using GZCTF.Services.Fleet;
 using GZCTF.Utils;
+using GZCTF.TeamLab.Contracts;
+using GZCTF.TeamLab.Contracts.Execution;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
@@ -33,7 +35,39 @@ public sealed class AgentTeamLabNodeExecutor(
     ILogger<AgentTeamLabNodeExecutor> logger) : ITeamLabNodeExecutor
 {
     private readonly TeamLabNetworkConfig _config = options.Value;
-    private readonly ConcurrentDictionary<Guid, Task<AgentExecutionLimits?>> _dispatchLimits = new();
+    private readonly ConcurrentDictionary<Guid, DispatchLimitsSnapshot> _dispatchLimits = new();
+
+    public async Task<TeamLabExecutionPlanApplyResponse> ApplyExecutionPlanAsync(
+        Guid workerNodeId,
+        TeamLabExecutionPlanV2 plan,
+        CancellationToken cancellationToken)
+    {
+        var limits = await ResolveDispatchLimitsAsync(workerNodeId, cancellationToken);
+        var response = await dispatchLimiter.RunAsync(
+            workerNodeId,
+            NodeDispatchCategory.TeamLabExecution,
+            NodeDispatchLimitPolicy.Resolve(limits, NodeDispatchCategory.TeamLabExecution),
+            operationToken => agent.ApplyTeamLabExecutionPlanAsync(
+                workerNodeId, plan, operationToken, ExecutionPlanDeadline(plan, limits)),
+            cancellationToken);
+        return response ?? ApplyPlanFailure(plan, "Agent returned no execution-plan response.");
+    }
+
+    public async Task<TeamLabExecutionPlanCleanupResponse> CleanupExecutionPlanAsync(
+        Guid workerNodeId,
+        TeamLabExecutionPlanV2 plan,
+        CancellationToken cancellationToken)
+    {
+        var limits = await ResolveDispatchLimitsAsync(workerNodeId, cancellationToken);
+        var response = await dispatchLimiter.RunAsync(
+            workerNodeId,
+            NodeDispatchCategory.Cleanup,
+            NodeDispatchLimitPolicy.Resolve(limits, NodeDispatchCategory.Cleanup),
+            operationToken => agent.CleanupTeamLabExecutionPlanAsync(
+                workerNodeId, plan, operationToken, ExecutionPlanDeadline(plan, limits)),
+            cancellationToken);
+        return response ?? CleanupPlanFailure(plan, "Agent returned no execution-plan cleanup response.");
+    }
 
     public async Task<TeamLabNodeRuntimeInventory> GetRuntimeInventoryAsync(
         Guid workerNodeId,
@@ -190,22 +224,25 @@ public sealed class AgentTeamLabNodeExecutor(
         TeamLabAssetKind kind,
         string resourceId,
         int generation,
+        TeamLabExecutionModel executionModel,
         CancellationToken cancellationToken) =>
-        ChangeAssetLifecycleAsync(workerNodeId, kind, resourceId, generation, pause: true, cancellationToken);
+        ChangeAssetLifecycleAsync(workerNodeId, kind, resourceId, generation, executionModel, pause: true, cancellationToken);
 
     public Task<TeamLabNodeResult> ResumeAssetAsync(
         Guid workerNodeId,
         TeamLabAssetKind kind,
         string resourceId,
         int generation,
+        TeamLabExecutionModel executionModel,
         CancellationToken cancellationToken) =>
-        ChangeAssetLifecycleAsync(workerNodeId, kind, resourceId, generation, pause: false, cancellationToken);
+        ChangeAssetLifecycleAsync(workerNodeId, kind, resourceId, generation, executionModel, pause: false, cancellationToken);
 
     private Task<TeamLabNodeResult> ChangeAssetLifecycleAsync(
         Guid workerNodeId,
         TeamLabAssetKind kind,
         string resourceId,
         int generation,
+        TeamLabExecutionModel executionModel,
         bool pause,
         CancellationToken cancellationToken) =>
         DispatchAsync(
@@ -219,7 +256,8 @@ public sealed class AgentTeamLabNodeExecutor(
                         kind == TeamLabAssetKind.Docker ? "docker" : "vm",
                         resourceId,
                         generation,
-                        _config.DryRun);
+                        _config.DryRun,
+                        executionModel);
                     var response = pause
                         ? await agent.PauseTeamLabAssetAsync(workerNodeId, request, operationToken)
                         : await agent.ResumeTeamLabAssetAsync(workerNodeId, request, operationToken);
@@ -372,7 +410,12 @@ public sealed class AgentTeamLabNodeExecutor(
                     request.ClientAllowedIps,
                     request.PlayerAllowedCidrs.ToArray(),
                     request.PlayerBlockedCidrs.ToArray(),
-                    _config.DryRun),
+                    _config.DryRun,
+                    request.ExecutionModel,
+                    request.RuntimePublicId,
+                    request.NetworkKey,
+                    request.PortKey,
+                    request.MacAddress),
                 operationToken), cancellationToken);
         return RequireMutation(response, "Failed to configure TeamLab WireGuard access.");
     }
@@ -389,7 +432,10 @@ public sealed class AgentTeamLabNodeExecutor(
                     request.Generation,
                     request.RouterNamespace,
                     request.InterfaceName,
-                    _config.DryRun),
+                    _config.DryRun,
+                    request.ExecutionModel,
+                    request.RuntimePublicId,
+                    request.NetworkKey),
                 operationToken), cancellationToken);
         return RequireMutation(response, "Failed to remove TeamLab WireGuard access.");
     }
@@ -399,6 +445,7 @@ public sealed class AgentTeamLabNodeExecutor(
         int runtimeId,
         int generation,
         long afterSequence,
+        long acknowledgeThroughSequence,
         Guid? observationPointId,
         int limit,
         CancellationToken cancellationToken)
@@ -406,7 +453,8 @@ public sealed class AgentTeamLabNodeExecutor(
         var response = await DispatchAsync(workerNodeId, NodeDispatchCategory.Probe,
             operationToken => agent.ReadTeamLabObservationsAsync(workerNodeId,
                 new TeamLabObservationBatchRequest(
-                    runtimeId, generation, afterSequence, observationPointId, limit), operationToken),
+                    runtimeId, generation, afterSequence, observationPointId, limit,
+                    acknowledgeThroughSequence), operationToken),
             cancellationToken);
         if (response is not { Success: true })
             return new TeamLabNodeObservationResult(
@@ -414,12 +462,14 @@ public sealed class AgentTeamLabNodeExecutor(
                 response?.Message ?? "Traffic observation read failed.",
                 afterSequence,
                 0,
+                0,
                 [],
                 TeamLabNodeObservationHealth.Unavailable);
         return new TeamLabNodeObservationResult(
             true,
             response.Message,
             response.NextSequence,
+            response.PersistedThroughSequence,
             response.DroppedCount,
             response.Records.Select(item => new TeamLabNodeObservationRecord(
                 item.Sequence,
@@ -1111,9 +1161,7 @@ public sealed class AgentTeamLabNodeExecutor(
         Func<CancellationToken, Task<T>> operation,
         CancellationToken cancellationToken)
     {
-        var limits = await _dispatchLimits
-            .GetOrAdd(workerNodeId, LoadDispatchLimitsAsync)
-            .WaitAsync(cancellationToken);
+        var limits = await ResolveDispatchLimitsAsync(workerNodeId, cancellationToken);
         return await dispatchLimiter.RunAsync(
             workerNodeId,
             category,
@@ -1122,22 +1170,55 @@ public sealed class AgentTeamLabNodeExecutor(
             cancellationToken);
     }
 
-    private async Task<AgentExecutionLimits?> LoadDispatchLimitsAsync(Guid workerNodeId)
+    private static TeamLabExecutionPlanApplyResponse ApplyPlanFailure(
+        TeamLabExecutionPlanV2 plan, string message) =>
+        new(false, false, plan.PlanDigest, [], [], "compute", "agent_empty_response", message);
+
+    private static TeamLabExecutionPlanCleanupResponse CleanupPlanFailure(
+        TeamLabExecutionPlanV2 plan, string message) =>
+        new(false, plan.PlanDigest, [], [], "cleanup", "agent_empty_response", message);
+
+    private async Task<AgentExecutionLimits?> ResolveDispatchLimitsAsync(Guid workerNodeId, CancellationToken cancellationToken)
+    {
+        if (_dispatchLimits.TryGetValue(workerNodeId, out var cached) && cached.ExpiresAt > DateTimeOffset.UtcNow)
+            return cached.Limits;
+
+        var limits = await LoadDispatchLimitsAsync(workerNodeId, cancellationToken);
+        _dispatchLimits[workerNodeId] = new DispatchLimitsSnapshot(limits, DateTimeOffset.UtcNow.AddMinutes(1));
+        return limits;
+    }
+
+    private async Task<AgentExecutionLimits?> LoadDispatchLimitsAsync(Guid workerNodeId, CancellationToken cancellationToken)
     {
         await using var scope = scopeFactory.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var manifestJson = await db.WorkerNodes.AsNoTracking()
             .Where(item => item.Id == workerNodeId)
             .Select(item => item.CapabilityManifestJson)
-            .SingleOrDefaultAsync(CancellationToken.None);
+            .SingleOrDefaultAsync(cancellationToken);
         return AgentCapabilityEvaluator.Parse(manifestJson)?.ExecutionLimits;
+    }
+
+    private sealed record DispatchLimitsSnapshot(AgentExecutionLimits? Limits, DateTimeOffset ExpiresAt);
+
+    private static TimeSpan ExecutionPlanDeadline(TeamLabExecutionPlanV2 plan, AgentExecutionLimits? limits)
+    {
+        var concurrency = Math.Max(1, limits?.TeamLabExecutionOperations ?? 1);
+        var batches = (int)Math.Ceiling(plan.Assets.Count / (double)concurrency);
+        var healthSeconds = plan.Assets.Sum(asset => asset.HealthChecks.Count) * 10;
+        // qemu-img has the plan's longest per-asset bound (120 seconds); the deadline derives
+        // from that bound and the node's declared concurrency rather than a generic timeout.
+        return TimeSpan.FromSeconds(30 + batches * 120 + healthSeconds);
     }
 
     private static string Hostname(string value) => new(value.ToLowerInvariant().Where(ch => char.IsLetterOrDigit(ch) || ch == '-').ToArray());
     private static int StableId(string value) => BitConverter.ToInt32(SHA256.HashData(Encoding.UTF8.GetBytes(value)), 0) & int.MaxValue;
     private static string Gateway(string ipAddress, int prefix)
     {
-        var bytes = System.Net.IPAddress.Parse(ipAddress).GetAddressBytes();
+        if (prefix is < 1 or > 30 || !System.Net.IPAddress.TryParse(ipAddress, out var address) ||
+            address.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork)
+            throw new ArgumentOutOfRangeException(nameof(prefix), "A routable IPv4 network prefix is required.");
+        var bytes = address.GetAddressBytes();
         var raw = ((uint)bytes[0] << 24) | ((uint)bytes[1] << 16) | ((uint)bytes[2] << 8) | bytes[3];
         var mask = uint.MaxValue << (32 - prefix);
         var gateway = (raw & mask) + 1;

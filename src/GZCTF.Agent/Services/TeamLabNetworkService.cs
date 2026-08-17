@@ -9,6 +9,7 @@ using GZCTF.Agent.Models;
 using GZCTF.Agent.Services.Observation;
 using GZCTF.Agent.Services.TeamLab;
 using GZCTF.Agent.Services.Vm;
+using GZCTF.TeamLab.Contracts;
 using Microsoft.Extensions.Options;
 
 namespace GZCTF.Agent.Services;
@@ -26,6 +27,7 @@ public partial class TeamLabNetworkService(
     TeamLabPcapService pcapService,
     VmBootstrapService bootstrapService,
     TeamLabRuntimeGenerationStore generationStore,
+    TeamLabOvsAttachmentProvider ovs,
     AgentResourceLock resourceLock,
     ILogger<TeamLabNetworkService> logger)
 {
@@ -44,6 +46,11 @@ public partial class TeamLabNetworkService(
         var hasTcpdump = HasCommand("tcpdump");
         var hasDumpcap = HasCommand("dumpcap");
         var hasDnsProbe = HasCommand("dig");
+        var hasOvsVsctl = HasCommand("ovs-vsctl");
+        var hasOvsdbClient = HasCommand("ovsdb-client");
+        var hasOvnController = HasCommand("ovn-controller");
+        var hasOvnNbctl = HasCommand("ovn-nbctl");
+        var hasOvnSbctl = HasCommand("ovn-sbctl");
         var fabric = ResolveFabricInterface();
         var available = hasIp && hasWg && (hasIptables || hasNft);
         var missing = new List<string>();
@@ -61,7 +68,12 @@ public partial class TeamLabNetworkService(
             hasNft,
             hasTcpdump,
             hasDumpcap,
-            hasDnsProbe);
+            hasDnsProbe,
+            hasOvsVsctl,
+            hasOvsdbClient,
+            hasOvnController,
+            hasOvnNbctl,
+            hasOvnSbctl);
 
         return Task.FromResult(new TeamLabStatusResponse(
             available,
@@ -613,7 +625,7 @@ public partial class TeamLabNetworkService(
         }
     }
 
-    private static int PrefixLength(string cidr) => int.Parse(cidr[(cidr.IndexOf('/') + 1)..]);
+    internal static int PrefixLength(string cidr) => int.Parse(cidr[(cidr.IndexOf('/') + 1)..]);
 
     private static bool IsStrictIpv4(string value)
     {
@@ -669,6 +681,8 @@ public partial class TeamLabNetworkService(
     {
         if (request.RuntimeId <= 0) return Failure("Invalid RuntimeId.", request.DryRun);
         if (request.Generation <= 0) return Failure("Invalid Generation.", request.DryRun);
+        if (request.ExecutionModel == TeamLabExecutionModel.V2)
+            return await ConfigureHostWireGuardAsync(request, token);
         var validation = ValidateLinuxName(request.NamespaceName, nameof(request.NamespaceName));
         if (validation is not null) return Failure(validation, request.DryRun);
 
@@ -755,6 +769,8 @@ public partial class TeamLabNetworkService(
     {
         if (request.RuntimeId <= 0) return Failure("Invalid RuntimeId.", request.DryRun);
         if (request.Generation <= 0) return Failure("Invalid Generation.", request.DryRun);
+        if (request.ExecutionModel == TeamLabExecutionModel.V2)
+            return await CleanupHostWireGuardAsync(request, token);
         var validation = ValidateLinuxName(request.NamespaceName, nameof(request.NamespaceName));
         if (validation is not null) return Failure(validation, request.DryRun);
         validation = ValidateLinuxName(request.InterfaceName, nameof(request.InterfaceName));
@@ -785,6 +801,140 @@ public partial class TeamLabNetworkService(
         return await ExecuteOrPlanAsync(commands, request.DryRun, token);
     }
 
+    private async Task<TeamLabDryRunResponse> ConfigureHostWireGuardAsync(
+        TeamLabWireGuardRequest request,
+        CancellationToken token)
+    {
+        var validation = ValidateLinuxName(request.InterfaceName, nameof(request.InterfaceName));
+        validation ??= ValidatePort(request.ListenPort, nameof(request.ListenPort));
+        validation ??= ValidateCidr(request.AddressCidr, nameof(request.AddressCidr));
+        validation ??= ValidateCidr(request.PeerClientAddress, nameof(request.PeerClientAddress));
+        validation ??= ValidateAllowedIps(request.PeerAllowedIps, nameof(request.PeerAllowedIps));
+        foreach (var cidr in request.PlayerAllowedCidrs)
+            validation ??= ValidateCidr(cidr, nameof(request.PlayerAllowedCidrs));
+        foreach (var cidr in request.PlayerBlockedCidrs)
+            validation ??= ValidateCidr(cidr, nameof(request.PlayerBlockedCidrs));
+        validation ??= ValidateWireGuardKey(request.InterfacePrivateKey, nameof(request.InterfacePrivateKey));
+        validation ??= ValidateWireGuardKey(request.PeerPublicKey, nameof(request.PeerPublicKey));
+        if (request.RuntimePublicId == Guid.Empty || string.IsNullOrWhiteSpace(request.NetworkKey) ||
+            string.IsNullOrWhiteSpace(request.PortKey) || string.IsNullOrWhiteSpace(request.MacAddress))
+            validation ??= "V2 WireGuard access requires the runtime public id, network key, port key and gateway MAC address.";
+        if (validation is not null)
+            return Failure(validation, request.DryRun);
+
+        await using var runtimeLock = await resourceLock.AcquireAsync(RuntimeLockKey(request.RuntimeId), token);
+        var commands = BuildHostWireGuardCommands(request);
+        var executed = await ExecuteOrPlanAsync(commands, request.DryRun, token, request.InterfacePrivateKey);
+        if (!executed.Success || executed.DryRun)
+            return executed;
+        var attachment = await ovs.AttachHostInterfaceAsync(
+            request.RuntimePublicId,
+            request.Generation,
+            request.InterfaceName,
+            request.NetworkKey!,
+            request.PortKey!,
+            token);
+        return attachment.Success
+            ? new TeamLabDryRunResponse(true, false, "V2 WireGuard access configured.", commands)
+            : Failure(attachment.Message, request.DryRun);
+    }
+
+    private async Task<TeamLabDryRunResponse> CleanupHostWireGuardAsync(
+        TeamLabWireGuardCleanupRequest request,
+        CancellationToken token)
+    {
+        var validation = ValidateLinuxName(request.InterfaceName, nameof(request.InterfaceName));
+        if (request.RuntimePublicId == Guid.Empty || string.IsNullOrWhiteSpace(request.NetworkKey))
+            validation ??= "V2 WireGuard cleanup requires the runtime public id and network key.";
+        if (validation is not null)
+            return Failure(validation, request.DryRun);
+
+        await using var runtimeLock = await resourceLock.AcquireAsync(RuntimeLockKey(request.RuntimeId), token);
+        var commands = BuildHostWireGuardCleanupCommands(request);
+        if (!request.DryRun && !_config.DryRun)
+        {
+            var attachment = await ovs.RemoveHostInterfaceAsync(
+                request.RuntimePublicId,
+                request.Generation,
+                request.InterfaceName,
+                request.NetworkKey!,
+                token);
+            if (!attachment.Success)
+                return Failure(attachment.Message, request.DryRun);
+        }
+        return await ExecuteOrPlanAsync(commands, request.DryRun, token);
+    }
+
+    private static string[] BuildHostWireGuardCommands(TeamLabWireGuardRequest request)
+    {
+        var iface = request.InterfaceName;
+        var commands = new List<string>
+        {
+            "sysctl -w net.ipv4.ip_forward=1",
+            "printf '<redacted>' | wg set <interface> private-key /dev/stdin",
+            $"if ip link show dev {iface} >/dev/null 2>&1; then wg set {iface} private-key /dev/stdin listen-port {request.ListenPort} peer {request.PeerPublicKey} allowed-ips {request.PeerClientAddress}; else ip link delete {iface} 2>/dev/null || true; ip link add {iface} type wireguard; wg set {iface} private-key /dev/stdin listen-port {request.ListenPort} peer {request.PeerPublicKey} allowed-ips {request.PeerClientAddress}; fi",
+            $"for existing_peer in $(wg show {iface} peers); do test \"$existing_peer\" = {ShellQuote(request.PeerPublicKey)} || wg set {iface} peer \"$existing_peer\" remove; done"
+        };
+        commands.AddRange(request.PeerAllowedIps
+            .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            .Select(cidr => $"ip route replace {cidr} dev {iface}"));
+        commands.AddRange(BuildHostNatCommands(iface, request.PeerClientAddress, request.PlayerAllowedCidrs));
+        commands.Add($"ip link set {iface} address {request.MacAddress!}");
+        commands.Add($"ip address replace {request.AddressCidr} dev {iface}");
+        commands.Add($"ip link set {iface} up");
+        return commands.ToArray();
+    }
+
+    private static string[] BuildHostWireGuardCleanupCommands(TeamLabWireGuardCleanupRequest request)
+    {
+        var iface = request.InterfaceName;
+        var natChain = $"TLN{iface}";
+        var commands = new List<string>();
+        if (HasCommand("nft"))
+        {
+            commands.Add($"nft delete table ip gzctf_teamlab_nat_{iface} 2>/dev/null || true");
+        }
+        else
+        {
+            commands.Add($"iptables -t nat -D POSTROUTING -j {natChain} 2>/dev/null || true");
+            commands.Add($"iptables -t nat -F {natChain} 2>/dev/null || true");
+            commands.Add($"iptables -t nat -X {natChain} 2>/dev/null || true");
+        }
+        commands.Add($"ip link delete {iface} 2>/dev/null || true");
+        return commands.ToArray();
+    }
+
+    private static string[] BuildHostNatCommands(string interfaceName, string peerClientAddress,
+        IEnumerable<string> allowedCidrs)
+    {
+        var natChain = $"TLN{interfaceName}";
+        var cidrs = allowedCidrs
+            .Where(cidr => !string.IsNullOrWhiteSpace(cidr))
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        if (HasCommand("nft"))
+        {
+            return new[]
+            {
+                $"nft add table ip gzctf_teamlab_nat_{interfaceName} 2>/dev/null || true",
+                $"nft {ShellQuote($"add chain ip gzctf_teamlab_nat_{interfaceName} postrouting {{ type nat hook postrouting priority srcnat; policy accept; }}")} 2>/dev/null || true",
+                $"nft flush chain ip gzctf_teamlab_nat_{interfaceName} postrouting"
+            }
+            .Concat(cidrs.Select(cidr =>
+                $"nft add rule ip gzctf_teamlab_nat_{interfaceName} postrouting ip saddr {peerClientAddress} ip daddr {cidr} masquerade"))
+            .ToArray();
+        }
+        return new[]
+        {
+            $"iptables -t nat -N {natChain} 2>/dev/null || true",
+            $"iptables -t nat -F {natChain}",
+            $"iptables -t nat -C POSTROUTING -j {natChain} 2>/dev/null || iptables -t nat -A POSTROUTING -j {natChain}"
+        }
+        .Concat(cidrs.Select(cidr =>
+            $"iptables -t nat -A {natChain} -s {peerClientAddress} -d {cidr} -j MASQUERADE"))
+        .ToArray();
+    }
     public async Task<TeamLabDryRunResponse> CleanupAsync(TeamLabCleanupRequest request, CancellationToken token)
     {
         if (request.RuntimeId <= 0)

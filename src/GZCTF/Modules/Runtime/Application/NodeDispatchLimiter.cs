@@ -12,7 +12,9 @@ public enum NodeDispatchCategory : byte
     TeamLabNetwork = 5,
     Control = 6,
     Probe = 7,
-    Cleanup = 8
+    Cleanup = 8,
+    TeamLabExecution = 9,
+    ArtifactCleanup = 10
 }
 
 public static class NodeDispatchLimitPolicy
@@ -26,6 +28,8 @@ public static class NodeDispatchLimitPolicy
             NodeDispatchCategory.DockerImageTransfer => limits?.DockerImageTransfers,
             NodeDispatchCategory.VmImageTransfer => limits?.VmImageTransfers,
             NodeDispatchCategory.TeamLabNetwork => limits?.TeamLabNetworkOperations,
+            NodeDispatchCategory.TeamLabExecution => limits?.TeamLabExecutionOperations,
+            NodeDispatchCategory.ArtifactCleanup => limits?.ArtifactCleanupOperations,
             NodeDispatchCategory.Control or NodeDispatchCategory.Probe or NodeDispatchCategory.Cleanup =>
                 limits?.ControlOperations,
             _ => null
@@ -36,6 +40,8 @@ public static class NodeDispatchLimitPolicy
             NodeDispatchCategory.VmCreate => 4,
             NodeDispatchCategory.DockerImageTransfer or NodeDispatchCategory.VmImageTransfer => 4,
             NodeDispatchCategory.TeamLabNetwork => 4,
+            NodeDispatchCategory.TeamLabExecution => 1,
+            NodeDispatchCategory.ArtifactCleanup => 2,
             NodeDispatchCategory.Probe => 16,
             NodeDispatchCategory.Control => 8,
             NodeDispatchCategory.Cleanup => 4,
@@ -52,32 +58,30 @@ public sealed class NodeDispatchLimiter
     public async Task RunAsync(Guid nodeId, NodeDispatchCategory category, int limit,
         Func<CancellationToken, Task> operation, CancellationToken token)
     {
-        var normalizedLimit = Math.Max(1, limit);
-        var gate = _gates.GetOrAdd((nodeId, category), _ => new DispatchGate(normalizedLimit));
-        await gate.Semaphore.WaitAsync(token);
+        var gate = _gates.GetOrAdd((nodeId, category), _ => new DispatchGate());
+        await gate.EnterAsync(limit, token);
         try
         {
             await operation(token);
         }
         finally
         {
-            gate.Semaphore.Release();
+            gate.Exit();
         }
     }
 
     public async Task<T> RunAsync<T>(Guid nodeId, NodeDispatchCategory category, int limit,
         Func<CancellationToken, Task<T>> operation, CancellationToken token)
     {
-        var normalizedLimit = Math.Max(1, limit);
-        var gate = _gates.GetOrAdd((nodeId, category), _ => new DispatchGate(normalizedLimit));
-        await gate.Semaphore.WaitAsync(token);
+        var gate = _gates.GetOrAdd((nodeId, category), _ => new DispatchGate());
+        await gate.EnterAsync(limit, token);
         try
         {
             return await operation(token);
         }
         finally
         {
-            gate.Semaphore.Release();
+            gate.Exit();
         }
     }
 
@@ -85,22 +89,79 @@ public sealed class NodeDispatchLimiter
     {
         if (!_gates.TryGetValue((nodeId, category), out var gate))
             return;
-        var acquired = 0;
-        try
-        {
-            for (; acquired < gate.Capacity; acquired++)
-                await gate.Semaphore.WaitAsync(token);
-        }
-        finally
-        {
-            if (acquired > 0)
-                gate.Semaphore.Release(acquired);
-        }
+        await gate.WaitForIdleAsync(token);
     }
 
-    sealed class DispatchGate(int capacity)
+    sealed class DispatchGate
     {
-        public int Capacity { get; } = capacity;
-        public SemaphoreSlim Semaphore { get; } = new(capacity, capacity);
+        readonly object sync = new();
+        int capacity = 1;
+        int active;
+        int waiting;
+        TaskCompletionSource changed = NewChangeSignal();
+
+        public async Task EnterAsync(int limit, CancellationToken token)
+        {
+            while (true)
+            {
+                Task signal;
+                lock (sync)
+                {
+                    capacity = Math.Max(1, limit);
+                    if (active < capacity)
+                    {
+                        active++;
+                        return;
+                    }
+                    waiting++;
+                    signal = changed.Task;
+                }
+                try
+                {
+                    await signal.WaitAsync(token);
+                }
+                finally
+                {
+                    lock (sync)
+                    {
+                        waiting--;
+                        SignalChanged();
+                    }
+                }
+            }
+        }
+
+        public void Exit()
+        {
+            lock (sync)
+            {
+                active--;
+                SignalChanged();
+            }
+        }
+
+        public async Task WaitForIdleAsync(CancellationToken token)
+        {
+            while (true)
+            {
+                Task signal;
+                lock (sync)
+                {
+                    if (active == 0 && waiting == 0) return;
+                    signal = changed.Task;
+                }
+                await signal.WaitAsync(token);
+            }
+        }
+
+        void SignalChanged()
+        {
+            var previous = changed;
+            changed = NewChangeSignal();
+            previous.TrySetResult();
+        }
+
+        static TaskCompletionSource NewChangeSignal() =>
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
     }
 }

@@ -14,6 +14,7 @@
     <BuildType Solution="GenAPI|*" Project="Debug" />
   </Project>
   <Project Path="GZCTF.GuestControl.Contracts/GZCTF.GuestControl.Contracts.csproj" />
+  <Project Path="GZCTF.TeamLab.Contracts/GZCTF.TeamLab.Contracts.csproj" />
   <Project Path="GZCTF.GuestTelemetry/GZCTF.GuestTelemetry.csproj" />
   <Project Path="GZCTF.GuestSupervisor/GZCTF.GuestSupervisor.csproj" />
   <Project Path="GZCTF.EndpointSensor/GZCTF.EndpointSensor.csproj">

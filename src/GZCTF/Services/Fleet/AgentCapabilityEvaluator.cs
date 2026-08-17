@@ -10,15 +10,18 @@ public static class AgentCapabilityEvaluator
 {
     public const int SupportedManifestSchema = 1;
 
-    public static bool Supports(WorkerNode node, params string[] features)
+
+    public static bool Supports(WorkerNode node, params string[] features) =>
+        MissingFeatures(node, features).Length == 0;
+
+    public static string[] MissingFeatures(WorkerNode node, params string[] features)
     {
         var manifest = Parse(node.CapabilityManifestJson);
         if (manifest is null || manifest.ManifestSchemaVersion != SupportedManifestSchema)
-            return false;
+            return features;
         var available = manifest.Features.ToHashSet(StringComparer.Ordinal);
-        return features.All(available.Contains);
+        return features.Where(feature => !available.Contains(feature)).ToArray();
     }
-
     public static AgentCapabilityManifest? Parse(string? json)
     {
         if (string.IsNullOrWhiteSpace(json)) return null;

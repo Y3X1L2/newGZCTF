@@ -1,4 +1,5 @@
 using GZCTF.Agent.Models;
+using GZCTF.Agent.Services.TeamLab;
 using Microsoft.Extensions.Options;
 using System.Runtime.InteropServices;
 
@@ -6,10 +7,13 @@ namespace GZCTF.Agent.Services;
 
 public sealed class AgentCapabilityService(
     TeamLabNetworkService teamLab,
-    IOptions<AgentConfig> options)
+    TeamLabDataPlanePreparationService dataPlane,
+    IOptions<AgentConfig> options,
+    IOptions<AgentTeamLabConfig> teamLabOptions)
 {
     const int ManifestSchemaVersion = 1;
     readonly AgentConfig _config = options.Value;
+    readonly AgentTeamLabConfig _teamLabConfig = teamLabOptions.Value;
     readonly Lazy<Task<string?>> _binarySha256 = new(ComputeBinarySha256Async);
 
     public Task<string?> GetBinarySha256Async() => _binarySha256.Value;
@@ -17,6 +21,7 @@ public sealed class AgentCapabilityService(
     public async Task<AgentCapabilityManifest> GetManifestAsync(string? binarySha256, CancellationToken token)
     {
         var teamLabStatus = await teamLab.GetStatusAsync(token);
+        var dataPlaneReadiness = await dataPlane.GetReadinessAsync(_teamLabConfig, token);
         var capabilities = teamLabStatus.Capabilities;
         var features = new List<string>();
         if (capabilities.Docker)
@@ -44,6 +49,19 @@ public sealed class AgentCapabilityService(
                 features.Add(AgentFeatureIds.TeamLabEndpointSensor);
             if (HasLibPcap())
                 features.Add(AgentFeatureIds.TeamLabObservation);
+            if (HasNativeLibvirt())
+                features.Add(AgentFeatureIds.TeamLabNativeLibvirt);
+            if (dataPlaneReadiness.Ready &&
+                capabilities.OvsVsctl && capabilities.OvsdbClient && capabilities.OvnController &&
+                capabilities.OvnNorthboundClient && capabilities.OvnSouthboundClient)
+                features.Add(AgentFeatureIds.TeamLabOvnOvs);
+            if (dataPlaneReadiness.Ready &&
+                capabilities.OvsVsctl && capabilities.OvsdbClient && capabilities.OvnController &&
+                capabilities.OvnNorthboundClient && capabilities.OvnSouthboundClient &&
+                (capabilities.Docker || kvm))
+                features.Add(AgentFeatureIds.TeamLabExecutionPlan);
+            if (HasArtifactCacheRoot())
+                features.Add(AgentFeatureIds.TeamLabArtifactCache);
         }
         if (capabilities.WireGuard)
             features.Add(AgentFeatureIds.WireGuard);
@@ -74,7 +92,11 @@ public sealed class AgentCapabilityService(
             Resolve(_config.ExecutionLimits.DockerImageTransfers, 2, capabilities.Docker),
             Resolve(_config.ExecutionLimits.VmImageTransfers, 1, kvm),
             Resolve(_config.ExecutionLimits.TeamLabNetworkOperations, 4, teamLabStatus.Available),
-            Math.Max(1, _config.ExecutionLimits.ControlOperations ?? 2));
+            Math.Max(1, _config.ExecutionLimits.ControlOperations ?? 2),
+            Resolve(_config.ExecutionLimits.TeamLabExecutionOperations, 1,
+                features.Contains(AgentFeatureIds.TeamLabExecutionPlan)),
+            Resolve(_config.ExecutionLimits.ArtifactCleanupOperations, 1,
+                features.Contains(AgentFeatureIds.TeamLabArtifactCache)));
         return new AgentCapabilityManifest(
             typeof(AgentCapabilityService).Assembly.GetName().Version?.ToString() ?? "unknown",
             binarySha256,
@@ -103,6 +125,21 @@ public sealed class AgentCapabilityService(
         }
         return false;
     }
+
+    static bool HasNativeLibvirt() =>
+        OperatingSystem.IsLinux() &&
+        (NativeLibrary.TryLoad("libvirt.so.0", out var handle) ||
+         NativeLibrary.TryLoad("libvirt.so", out handle)) &&
+        Release(handle);
+
+    static bool Release(nint handle)
+    {
+        if (handle != 0) NativeLibrary.Free(handle);
+        return handle != 0;
+    }
+
+    static bool HasArtifactCacheRoot() =>
+        Directory.Exists("/var/lib/gzctf/images") || Directory.Exists("/var/lib/gzctf/teamlab");
 
     static bool HasEndpointSensorArtifacts() =>
         File.Exists("/opt/gzctf/endpoint-sensor/linux-x64/gzctf-endpoint-sensor") &&
@@ -135,13 +172,6 @@ public sealed class AgentCapabilityService(
         }
     }
 
-    static async Task<string?> ComputeBinarySha256Async()
-    {
-        var path = File.Exists("/usr/local/bin/gzctf-agent")
-            ? "/usr/local/bin/gzctf-agent"
-            : Environment.ProcessPath;
-        return !string.IsNullOrWhiteSpace(path) && File.Exists(path)
-            ? await AgentMaintenanceService.ComputeFileSha256Async(path, CancellationToken.None)
-            : null;
-    }
+    static Task<string?> ComputeBinarySha256Async() =>
+        AgentMaintenanceService.ComputeRunningBinarySha256Async(CancellationToken.None);
 }

@@ -11,6 +11,7 @@ using GZCTF.Modules.Audit.Contracts;
 using GZCTF.Modules.Audit.Domain;
 using GZCTF.Services.TeamLab;
 using GZCTF.Modules.Runtime.Application;
+using GZCTF.TeamLab.Contracts;
 using Microsoft.EntityFrameworkCore;
 
 namespace GZCTF.Modules.TeamLab.Application;
@@ -210,8 +211,10 @@ public sealed class TeamLabRuntimeOrchestrator(
                     "runtime_asset_kind_unsupported", "运行时包含不受支持的 workload 资源类型", 409)
             };
             var result = pause
-                ? await nodes.PauseAssetAsync(nodeId, assetKind, asset.RuntimeResourceId, runtime.Generation, cancellationToken)
-                : await nodes.ResumeAssetAsync(nodeId, assetKind, asset.RuntimeResourceId, runtime.Generation, cancellationToken);
+                ? await nodes.PauseAssetAsync(nodeId, assetKind, asset.RuntimeResourceId, runtime.Generation,
+                    runtime.ExecutionModel, cancellationToken)
+                : await nodes.ResumeAssetAsync(nodeId, assetKind, asset.RuntimeResourceId, runtime.Generation,
+                    runtime.ExecutionModel, cancellationToken);
             if (!result.Success)
                 return await FailLifecycleAsync(
                     runtime,
@@ -602,11 +605,15 @@ public sealed class TeamLabRuntimeOrchestrator(
 
             using var rollbackDeadline = new CancellationTokenSource(TimeSpan.FromMinutes(2));
             var cleaned = await cleanup.CleanupAsync(runtime, rollbackDeadline.Token);
+            var identityConflict = exception is TeamLabRuntimeIdentityConflictException;
             return await FailAsync(runtime,
                 cleaned.Success ? exception.Message : $"{exception.Message}; cleanup: {cleaned.Message}",
                 rollbackDeadline.Token,
                 cleanupPending: !cleaned.Success,
-                error: error);
+                error: error,
+                failureStatus: identityConflict && cleaned.Success
+                    ? TeamLabRuntimeStatus.Destroyed
+                    : TeamLabRuntimeStatus.Failed);
         }
     }
 
@@ -747,9 +754,10 @@ public sealed class TeamLabRuntimeOrchestrator(
         bool cleanupPending = false,
         string eventCode = OperationalEventCodes.TeamLab.DeployFailed,
         string stage = "deploy",
-        OperationalError? error = null)
+        OperationalError? error = null,
+        TeamLabRuntimeStatus failureStatus = TeamLabRuntimeStatus.Failed)
     {
-        runtime.Status = cleanupPending ? TeamLabRuntimeStatus.CleanupPending : TeamLabRuntimeStatus.Failed;
+        runtime.Status = cleanupPending ? TeamLabRuntimeStatus.CleanupPending : failureStatus;
         runtime.IsOpenToPlayers = false;
         runtime.LastError = Trim(message);
         runtime.UpdatedAt = DateTimeOffset.UtcNow;

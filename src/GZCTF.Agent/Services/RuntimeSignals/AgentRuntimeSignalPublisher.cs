@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Threading.Channels;
@@ -42,6 +43,15 @@ public sealed class AgentRuntimeSignalPublisher(
                 cancellationToken);
             if (!response.IsSuccessStatusCode)
             {
+                if (response.StatusCode == HttpStatusCode.Conflict)
+                {
+                    var reason = await TryReadRejectionAsync(response, cancellationToken);
+                    logger.LogWarning(
+                        "Runtime signal conflict is terminal and was discarded: operation={OperationId}, sequence={Sequence}, reason={Reason}",
+                        signal.OperationId, signal.Sequence, reason);
+                    await journal.AcknowledgeAsync(operationId, signal.Sequence, cancellationToken);
+                    continue;
+                }
                 logger.LogWarning(
                     "Runtime signal delivery failed: operation={OperationId}, sequence={Sequence}, status={Status}",
                     signal.OperationId, signal.Sequence, (int)response.StatusCode);
@@ -52,6 +62,20 @@ public sealed class AgentRuntimeSignalPublisher(
             if (result is null || !result.Accepted && !result.Duplicate && !result.Stale)
                 return;
             await journal.AcknowledgeAsync(operationId, signal.Sequence, cancellationToken);
+        }
+    }
+
+    private static async Task<string> TryReadRejectionAsync(
+        HttpResponseMessage response,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return (await response.Content.ReadAsStringAsync(cancellationToken)).Trim();
+        }
+        catch
+        {
+            return string.Empty;
         }
     }
 

@@ -1,8 +1,11 @@
+using GZCTF.TeamLab.Contracts;
+
 namespace GZCTF.Agent.Models;
 
 public class AgentTeamLabConfig
 {
     public bool Enable { get; set; } = true;
+    public TeamLabExecutionModel ExecutionModel { get; set; } = TeamLabExecutionModel.V2;
     public bool DryRun { get; set; }
     public string RuntimeStateRoot { get; set; } = "/var/lib/gzctf/teamlab";
     public string FabricInterfaceName { get; set; } = "gzctf-fabric";
@@ -14,6 +17,13 @@ public class AgentTeamLabConfig
     public long ObservationSpoolMaxBytes { get; set; } = 64L * 1024 * 1024;
     public int ObservationAggregationIntervalMilliseconds { get; set; } = 1_000;
     public bool ObservationPacketFingerprintEnabled { get; set; }
+    public string OvnNorthboundEndpoint { get; set; } = "unix:/var/run/ovn/ovnnb_db.sock";
+    public string OvnSouthboundEndpoint { get; set; } = "unix:/var/run/ovn/ovnsb_db.sock";
+    public string OvnNorthboundDatabase { get; set; } = "OVN_Northbound";
+    public string OvsLocalEndpoint { get; set; } = "unix:/var/run/openvswitch/db.sock";
+    public string OvsLocalDatabase { get; set; } = "Open_vSwitch";
+    public string OvsIntegrationBridgeName { get; set; } = "br-int";
+    public int ManagedDhcpLeaseSeconds { get; set; } = 3600;
 }
 
 public record TeamLabToolCapabilityReport(
@@ -26,7 +36,12 @@ public record TeamLabToolCapabilityReport(
     bool Nftables,
     bool Tcpdump,
     bool Dumpcap,
-    bool DnsProbe);
+    bool DnsProbe,
+    bool OvsVsctl = false,
+    bool OvsdbClient = false,
+    bool OvnController = false,
+    bool OvnNorthboundClient = false,
+    bool OvnSouthboundClient = false);
 
 public record TeamLabStatusResponse(
     bool Available,
@@ -153,14 +168,22 @@ public record TeamLabWireGuardRequest(
     string PeerAllowedIps,
     string[] PlayerAllowedCidrs,
     string[] PlayerBlockedCidrs,
-    bool DryRun = true);
+    bool DryRun = true,
+    TeamLabExecutionModel ExecutionModel = TeamLabExecutionModel.V1,
+    Guid RuntimePublicId = default,
+    string? NetworkKey = null,
+    string? PortKey = null,
+    string? MacAddress = null);
 
 public record TeamLabWireGuardCleanupRequest(
     int RuntimeId,
     int Generation,
     string NamespaceName,
     string InterfaceName,
-    bool DryRun = true);
+    bool DryRun = true,
+    TeamLabExecutionModel ExecutionModel = TeamLabExecutionModel.V1,
+    Guid RuntimePublicId = default,
+    string? NetworkKey = null);
 
 public record TeamLabCleanupRequest(
     int RuntimeId,
@@ -175,7 +198,8 @@ public record TeamLabAssetLifecycleRequest(
     string Kind,
     string ResourceId,
     int Generation,
-    bool DryRun = false);
+    bool DryRun = false,
+    TeamLabExecutionModel ExecutionModel = TeamLabExecutionModel.V1);
 
 public record TeamLabAssetLifecycleResponse(
     bool Success,
@@ -349,7 +373,8 @@ public record TeamLabObservationBatchRequest(
     int Generation,
     long AfterSequence = 0,
     Guid? ObservationPointId = null,
-    int Limit = 500);
+    int Limit = 500,
+    long AcknowledgeThroughSequence = 0);
 
 public record TeamLabObservationRecord(
     long Sequence,
@@ -390,6 +415,7 @@ public record TeamLabObservationBatchResponse(
     string Message,
     long NextSequence,
     long DroppedCount,
+    long PersistedThroughSequence,
     TeamLabObservationRecord[] Records,
     TeamLabObservationHealth Health);
 
