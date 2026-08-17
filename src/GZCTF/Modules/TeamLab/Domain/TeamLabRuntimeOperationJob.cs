@@ -27,7 +27,8 @@ public enum TeamLabRuntimeOperationKind : byte
     ReleasePreparation = 22,
     WebhookCreate = 23,
     WebhookRevoke = 24,
-    WebhookReplay = 25
+    WebhookReplay = 25,
+    ReleasePreparationRelease = 26
 }
 
 public sealed class TeamLabRuntimeOperationJob

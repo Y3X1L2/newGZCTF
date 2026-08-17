@@ -493,6 +493,17 @@ public sealed class TeamLabRuntimeOperationHandler(
                 await CompleteJobAsync(job, new { releaseId, queued = true }, cancellationToken);
                 return;
             }
+            case TeamLabRuntimeOperationKind.ReleasePreparationRelease:
+            {
+                var releaseId = payload.ReleaseId ?? throw MissingPayload("发布版本 ID");
+                await operations.UpdateProgressAsync(operation.Id, leaseOwner, "release-releasing", 0, 1,
+                    "teamlab-release", releaseId.ToString("D"), null, cancellationToken);
+                await preparation.ReleaseAsync(releaseId, cancellationToken);
+                await operations.UpdateProgressAsync(operation.Id, leaseOwner, "release-released", 1, 1,
+                    "teamlab-release", releaseId.ToString("D"), null, cancellationToken);
+                await CompleteJobAsync(job, new { releaseId, released = true }, cancellationToken);
+                return;
+            }
             case TeamLabRuntimeOperationKind.WebhookCreate:
             {
                 var create = payload.CreateWebhook ?? throw MissingPayload("webhook 创建请求");
@@ -535,7 +546,7 @@ public sealed class TeamLabRuntimeOperationHandler(
     private static bool IsExternalCommand(TeamLabRuntimeOperationKind kind) =>
         kind is >= TeamLabRuntimeOperationKind.TopologyCreate and <= TeamLabRuntimeOperationKind.RolloutArchive or
             TeamLabRuntimeOperationKind.RolloutPause or TeamLabRuntimeOperationKind.RolloutResume or
-            TeamLabRuntimeOperationKind.ReleasePreparation or
+            TeamLabRuntimeOperationKind.ReleasePreparation or TeamLabRuntimeOperationKind.ReleasePreparationRelease or
             TeamLabRuntimeOperationKind.WebhookCreate or
             TeamLabRuntimeOperationKind.WebhookRevoke or
             TeamLabRuntimeOperationKind.WebhookReplay;

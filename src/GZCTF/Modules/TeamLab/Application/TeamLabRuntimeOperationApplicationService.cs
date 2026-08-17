@@ -459,6 +459,22 @@ public sealed class TeamLabRuntimeOperationApplicationService(
                 ReleaseId = releaseId
             }, cancellationToken);
 
+    public Task<IdempotencyBeginResult> SubmitReleasePreparationReleaseAsync(
+        Guid apiTokenId,
+        Guid actorUserId,
+        string idempotencyKey,
+        Guid releaseId,
+        Guid controlScopeId,
+        CancellationToken cancellationToken) =>
+        SubmitAsync(apiTokenId, actorUserId, idempotencyKey,
+            $"DELETE:/api/open/v1/teamlab/preparations/releases/{releaseId:D}",
+            TeamLabRuntimeOperationKind.ReleasePreparationRelease,
+            new TeamLabRuntimeOperationPayload(null, null, null)
+            {
+                ControlScopeId = controlScopeId,
+                ReleaseId = releaseId
+            }, cancellationToken);
+
     public Task<IdempotencyBeginResult> SubmitWebhookCreateAsync(
         Guid apiTokenId,
         Guid actorUserId,

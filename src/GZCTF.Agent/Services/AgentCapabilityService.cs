@@ -87,8 +87,8 @@ public sealed class AgentCapabilityService(
 
         var logicalCpu = Math.Max(1, Environment.ProcessorCount);
         var limits = new AgentExecutionLimits(
-            Resolve(_config.ExecutionLimits.DockerCreates, Math.Clamp(logicalCpu / 2, 2, 8), capabilities.Docker),
-            Resolve(_config.ExecutionLimits.VmCreates, logicalCpu >= 16 ? 2 : 1, kvm),
+            Resolve(_config.ExecutionLimits.DockerCreates, Math.Clamp(logicalCpu, 2, 8), capabilities.Docker),
+            Resolve(_config.ExecutionLimits.VmCreates, Math.Clamp((logicalCpu + 1) / 2, 1, 4), kvm),
             Resolve(_config.ExecutionLimits.DockerImageTransfers, 2, capabilities.Docker),
             Resolve(_config.ExecutionLimits.VmImageTransfers, 1, kvm),
             Resolve(_config.ExecutionLimits.TeamLabNetworkOperations, 4, teamLabStatus.Available),
