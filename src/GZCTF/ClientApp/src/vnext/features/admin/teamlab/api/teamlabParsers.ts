@@ -201,6 +201,9 @@ function parseAsset(value: unknown, label: string): TeamLabTopologyAsset {
       : null,
     orderIndex: number(item.orderIndex ?? 0, `${label}.orderIndex`),
     endpointObservation: enumValue(item.endpointObservation ?? 0, observationModes, `${label}.endpointObservation`),
+    devicePackageId: nullableNumber(item.devicePackageId, `${label}.devicePackageId`),
+    deviceParameters: item.deviceParameters ?? null,
+    connectorId: nullableString(item.connectorId, `${label}.connectorId`),
   }
 }
 

@@ -108,6 +108,37 @@ public sealed class TeamLabTopologyApplicationService(
         return ToDetail(topology);
     }
 
+    /// <summary>
+    /// Clones a topology into a fresh draft owned by the actor. References are
+    /// re-validated, so cloning fails with a stable code when an image,
+    /// device package or connector no longer resolves.
+    /// </summary>
+    public async Task<TeamLabTopologyDetailModel> CloneAsync(
+        Guid topologyId,
+        Guid actorUserId,
+        bool includeAll,
+        CancellationToken cancellationToken)
+    {
+        var source = await RequireTopologyAsync(topologyId, actorUserId, includeAll, cancellationToken);
+        var definition = ToDefinition(source) with { Name = $"{source.Name.Trim()} (副本)" };
+        return await CreateCoreAsync(
+            new CreateTeamLabTopologyModel(
+                definition.Name,
+                definition.Networks,
+                definition.Assets,
+                definition.Connections,
+                DeserializeEditor(source.EditorMetadataJson),
+                definition.Infrastructure,
+                definition.Dependencies,
+                definition.Observation,
+                source.SchemaVersion,
+                source.ControlScopeId),
+            actorUserId,
+            null,
+            true,
+            cancellationToken);
+    }
+
     public async Task<IReadOnlyList<TeamLabTopologySummaryModel>> ListAsync(
         Guid actorUserId,
         bool includeAll,
@@ -567,7 +598,10 @@ public sealed class TeamLabTopologyApplicationService(
                         ? new TeamLabHealthCheckModel(kind, port)
                         : null,
                     item.OrderIndex,
-                    item.EndpointObservation)).ToArray(),
+                    item.EndpointObservation,
+                    item.DevicePackageId,
+                    ParseDeviceParameters(item.DevicePackageParametersJson),
+                    item.ConnectorId)).ToArray(),
             topology.Connections.OrderBy(item => item.Key, StringComparer.Ordinal)
                 .Select(item => new TeamLabTopologyConnectionModel(
                     item.Key, item.FromNetworkKey, item.ToNetworkKey, item.ViaAssetKey,
@@ -584,7 +618,66 @@ public sealed class TeamLabTopologyApplicationService(
         var validation = validator.Validate(definition, schemaVersion);
         if (!validation.Valid) throw InvalidTopology(validation);
         await ValidateImageTemplatesAsync(context, definition, cancellationToken);
+        await ValidateCapabilityResourcesAsync(context, definition, cancellationToken);
     }
+
+    /// <summary>
+    /// Device packages and field connectors are referenced by id only. A
+    /// reference that no longer resolves to an enabled, non-archived registry
+    /// row is rejected with a stable code so drafts never drift silently.
+    /// </summary>
+    internal static async Task ValidateCapabilityResourcesAsync(
+        AppDbContext context,
+        TeamLabTopologyDefinitionModel definition,
+        CancellationToken cancellationToken)
+    {
+        var packageIds = definition.Assets
+            .Where(item => item.DevicePackageId is { } id && id > 0)
+            .Select(item => item.DevicePackageId!.Value)
+            .Distinct()
+            .ToArray();
+        var packages = await context.TeamLabDevicePackages.AsNoTracking()
+            .Where(item => packageIds.Contains(item.Id))
+            .ToDictionaryAsync(item => item.Id, cancellationToken);
+        foreach (var asset in definition.Assets)
+        {
+            if (asset.DevicePackageId is not { } packageId || packageId <= 0) continue;
+            if (!packages.TryGetValue(packageId, out var package) || !package.IsEnabled || package.IsArchived)
+                throw new TeamLabApiContractException(
+                    "device_package_unavailable",
+                    $"资产 '{asset.Key}' 引用的设备包 {packageId} 不可用",
+                    422);
+            var supportedKinds = JsonSerializer.Deserialize<List<string>>(package.SupportedAssetKindsJson) ?? [];
+            var expectedKind = asset.Kind == TeamLabAssetKind.Docker ? "docker" : "vm";
+            if (!supportedKinds.Contains(expectedKind, StringComparer.Ordinal))
+                throw new TeamLabApiContractException(
+                    "device_package_unavailable",
+                    $"资产 '{asset.Key}' 的资产类型 {expectedKind} 不在设备包 {packageId} 的支持范围内",
+                    422);
+        }
+        var connectorIds = definition.Assets
+            .Where(item => item.ConnectorId is { } connectorId && connectorId != Guid.Empty)
+            .Select(item => item.ConnectorId!.Value)
+            .Distinct()
+            .ToArray();
+        var connectors = await context.TeamLabConnectors.AsNoTracking()
+            .Where(item => connectorIds.Contains(item.PublicId))
+            .ToDictionaryAsync(item => item.PublicId, cancellationToken);
+        foreach (var asset in definition.Assets)
+        {
+            if (asset.ConnectorId is not { } connectorId || connectorId == Guid.Empty) continue;
+            if (!connectors.TryGetValue(connectorId, out var connector) || connector.IsArchived)
+                throw new TeamLabApiContractException(
+                    "connector_unavailable",
+                    $"资产 '{asset.Key}' 引用的现场连接器不可用",
+                    422);
+        }
+    }
+
+    private static JsonElement? ParseDeviceParameters(string? canonicalJson) =>
+        string.IsNullOrWhiteSpace(canonicalJson)
+            ? null
+            : JsonDocument.Parse(canonicalJson).RootElement.Clone();
 
     private async Task<TeamLabTopology> RequireTopologyAsync(
         Guid topologyId,
@@ -681,6 +774,11 @@ public sealed class TeamLabTopologyApplicationService(
                 // Draft assets may be created before an image is selected. The publish validator
                 // rejects that state; persisting it as null keeps the draft outside the image FK.
                 ImageTemplateId = model.ImageTemplateId > 0 ? model.ImageTemplateId : null,
+                DevicePackageId = model.DevicePackageId,
+                DevicePackageParametersJson = model.DeviceParameters is { } parameters
+                    ? JsonSerializer.Serialize(parameters)
+                    : null,
+                ConnectorId = model.ConnectorId,
                 CpuUnits = model.Resources.CpuUnits,
                 MemoryMiB = model.Resources.MemoryMiB,
                 StorageMiB = model.Resources.StorageMiB,

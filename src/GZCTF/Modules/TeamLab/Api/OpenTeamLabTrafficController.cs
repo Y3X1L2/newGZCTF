@@ -41,10 +41,11 @@ public sealed class OpenTeamLabTrafficController(
         [FromQuery] string? query = null,
         [FromQuery] string? protocol = null,
         [FromQuery] string? networkKey = null,
+        [FromQuery, Range(1, 65535)] int? port = null,
         CancellationToken cancellationToken = default)
     {
         await AuthorizeRuntimeAsync(runtimeId, cancellationToken);
-        return await traffic.GetFlowsAsync(runtimeId, after, limit, query, protocol, networkKey, cancellationToken);
+        return await traffic.GetFlowsAsync(runtimeId, after, limit, query, protocol, networkKey, port, cancellationToken);
     }
 
     [HttpGet("traffic/paths")]
@@ -96,6 +97,23 @@ public sealed class OpenTeamLabTrafficController(
         var result = await operations.SubmitCaptureStartAsync(
             actor.TokenId, actor.UserId, idempotencyKey, runtimeId, scopeId, model, cancellationToken);
         return AcceptedOperation(result);
+    }
+
+    [HttpGet("captures")]
+    [OpenApiOperation("列出抓包任务", "按创建时间倒序返回该运行时的抓包任务，使用稳定 cursor 分页。")]
+    [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabCaptureRead)]
+    [ProducesResponseType(typeof(OpenTeamLabCapturePageModel), StatusCodes.Status200OK)]
+    public async Task<OpenTeamLabCapturePageModel> ListCaptures(
+        Guid runtimeId,
+        [FromQuery] string? after = null,
+        [FromQuery, Range(1, 100)] int limit = 50,
+        CancellationToken cancellationToken = default)
+    {
+        await AuthorizeRuntimeAsync(runtimeId, cancellationToken);
+        var page = await traffic.ListCapturesAsync(runtimeId, after, limit, cancellationToken);
+        return new OpenTeamLabCapturePageModel(
+            page.Items.Select(item => item.ToOpen()).ToArray(),
+            page.Next);
     }
 
     [HttpGet("captures/{captureId:guid}")]

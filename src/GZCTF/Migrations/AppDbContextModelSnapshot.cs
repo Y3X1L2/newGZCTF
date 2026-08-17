@@ -5832,6 +5832,16 @@ namespace GZCTF.Migrations
                     b.Property<long>("AgentSignalSequence")
                         .HasColumnType("bigint");
 
+                    b.Property<Guid?>("ConnectorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("DevicePackageId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("DevicePackageParametersJson")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
                     b.Property<byte>("EndpointObservation")
                         .HasColumnType("smallint");
 
@@ -5919,6 +5929,8 @@ namespace GZCTF.Migrations
                     b.HasIndex("AgentOperationId")
                         .IsUnique()
                         .HasFilter("\"AgentOperationId\" IS NOT NULL");
+
+                    b.HasIndex("DevicePackageId");
 
                     b.HasIndex("ShardId");
 
@@ -6432,6 +6444,122 @@ namespace GZCTF.Migrations
                     b.ToTable("TeamLabVpnPeerRuntimes");
                 });
 
+            modelBuilder.Entity("GZCTF.Modules.TeamLab.Domain.TeamLabConnector", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AttachmentReference")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<int>("Capacity")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("ControlScopeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<byte>("Health")
+                        .HasColumnType("smallint");
+
+                    b.Property<DateTimeOffset?>("HealthObservedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsArchived")
+                        .HasColumnType("boolean");
+
+                    b.Property<byte>("Kind")
+                        .HasColumnType("smallint");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(96)
+                        .HasColumnType("character varying(96)");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("SupportsSharedUse")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ControlScopeId");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.HasIndex("PublicId")
+                        .IsUnique();
+
+                    b.ToTable("TeamLabConnectors", (string)null);
+                });
+
+            modelBuilder.Entity("GZCTF.Modules.TeamLab.Domain.TeamLabConnectorLease", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTimeOffset>("AcquiredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("ConnectorId")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<byte>("ReleaseReason")
+                        .HasColumnType("smallint");
+
+                    b.Property<DateTimeOffset?>("ReleasedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("RuntimeId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Slot")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique();
+
+                    b.HasIndex("RuntimeId");
+
+                    b.HasIndex("ConnectorId", "RuntimeId")
+                        .IsUnique()
+                        .HasFilter("\"ReleasedAt\" IS NULL");
+
+                    b.HasIndex("ConnectorId", "Slot")
+                        .IsUnique()
+                        .HasFilter("\"ReleasedAt\" IS NULL");
+
+                    b.ToTable("TeamLabConnectorLeases", (string)null);
+                });
+
             modelBuilder.Entity("GZCTF.Modules.TeamLab.Domain.TeamLabControlScope", b =>
                 {
                     b.Property<Guid>("Id")
@@ -6465,6 +6593,184 @@ namespace GZCTF.Migrations
                     b.HasIndex("IsArchived", "UpdatedAt");
 
                     b.ToTable("TeamLabControlScopes", (string)null);
+                });
+
+            modelBuilder.Entity("GZCTF.Modules.TeamLab.Domain.TeamLabDevicePackage", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<byte>("ArtifactKind")
+                        .HasColumnType("smallint");
+
+                    b.Property<string>("ArtifactReference")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<int>("CpuMillis")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<string>("Digest")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("HealthDeclarationJson")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<bool>("IsArchived")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("MemoryMib")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(96)
+                        .HasColumnType("character varying(96)");
+
+                    b.Property<string>("ParameterSchemaJson")
+                        .IsRequired()
+                        .HasMaxLength(8192)
+                        .HasColumnType("character varying(8192)");
+
+                    b.Property<string>("PortsJson")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<string>("ProtocolEventTypesJson")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("StorageGib")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("SupportedAssetKindsJson")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Version")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique();
+
+                    b.HasIndex("IsEnabled", "Name");
+
+                    b.HasIndex("Name", "Version")
+                        .IsUnique();
+
+                    b.ToTable("TeamLabDevicePackages", (string)null);
+                });
+
+            modelBuilder.Entity("GZCTF.Modules.TeamLab.Domain.TeamLabLinkPolicy", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTimeOffset>("AppliedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("AssetKey")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid?>("ControlScopeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<byte>("Kind")
+                        .HasColumnType("smallint");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<string>("NetworkKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("ParametersJson")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("RecoverAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<byte>("RecoverOrigin")
+                        .HasColumnType("smallint");
+
+                    b.Property<DateTimeOffset?>("RecoveredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer");
+
+                    b.Property<int>("RuntimeId")
+                        .HasColumnType("integer");
+
+                    b.Property<byte>("Status")
+                        .HasColumnType("smallint");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique();
+
+                    b.HasIndex("Status", "RecoverAt");
+
+                    b.HasIndex("RuntimeId", "NetworkKey", "AssetKey", "Kind")
+                        .IsUnique()
+                        .HasFilter("\"Status\" = 1");
+
+                    b.ToTable("TeamLabLinkPolicies", (string)null);
                 });
 
             modelBuilder.Entity("GZCTF.Modules.TeamLab.Domain.TeamLabNetworkLease", b =>
@@ -6851,8 +7157,18 @@ namespace GZCTF.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<Guid?>("ConnectorId")
+                        .HasColumnType("uuid");
+
                     b.Property<int>("CpuUnits")
                         .HasColumnType("integer");
+
+                    b.Property<int?>("DevicePackageId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("DevicePackageParametersJson")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
 
                     b.Property<byte>("EndpointObservation")
                         .ValueGeneratedOnAdd()
@@ -6897,6 +7213,10 @@ namespace GZCTF.Migrations
                         .HasColumnType("integer");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ConnectorId");
+
+                    b.HasIndex("DevicePackageId");
 
                     b.HasIndex("ImageTemplateId");
 
@@ -7041,6 +7361,9 @@ namespace GZCTF.Migrations
                     b.Property<Guid?>("ApiOperationId")
                         .HasColumnType("uuid");
 
+                    b.Property<DateTimeOffset?>("ArchivedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("CanonicalJson")
                         .IsRequired()
                         .HasColumnType("jsonb");
@@ -7058,6 +7381,9 @@ namespace GZCTF.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("jsonb")
                         .HasDefaultValueSql("'{}'::jsonb");
+
+                    b.Property<bool>("IsArchived")
+                        .HasColumnType("boolean");
 
                     b.Property<DateTimeOffset>("PublishedAt")
                         .HasColumnType("timestamp with time zone");
@@ -9986,6 +10312,46 @@ namespace GZCTF.Migrations
                     b.Navigation("Runtime");
                 });
 
+            modelBuilder.Entity("GZCTF.Modules.TeamLab.Domain.TeamLabConnector", b =>
+                {
+                    b.HasOne("GZCTF.Modules.TeamLab.Domain.TeamLabControlScope", "ControlScope")
+                        .WithMany()
+                        .HasForeignKey("ControlScopeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("ControlScope");
+                });
+
+            modelBuilder.Entity("GZCTF.Modules.TeamLab.Domain.TeamLabConnectorLease", b =>
+                {
+                    b.HasOne("GZCTF.Modules.TeamLab.Domain.TeamLabConnector", "Connector")
+                        .WithMany("Leases")
+                        .HasForeignKey("ConnectorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("GZCTF.Modules.TeamLab.Domain.Runtime.TeamLabRuntime", "Runtime")
+                        .WithMany()
+                        .HasForeignKey("RuntimeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Connector");
+
+                    b.Navigation("Runtime");
+                });
+
+            modelBuilder.Entity("GZCTF.Modules.TeamLab.Domain.TeamLabLinkPolicy", b =>
+                {
+                    b.HasOne("GZCTF.Modules.TeamLab.Domain.Runtime.TeamLabRuntime", "Runtime")
+                        .WithMany()
+                        .HasForeignKey("RuntimeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Runtime");
+                });
+
             modelBuilder.Entity("GZCTF.Modules.TeamLab.Domain.TeamLabNetworkLease", b =>
                 {
                     b.HasOne("GZCTF.Modules.TeamLab.Domain.Runtime.TeamLabRuntime", null)
@@ -10099,6 +10465,11 @@ namespace GZCTF.Migrations
 
             modelBuilder.Entity("GZCTF.Modules.TeamLab.Domain.TeamLabTopologyAsset", b =>
                 {
+                    b.HasOne("GZCTF.Modules.TeamLab.Domain.TeamLabDevicePackage", null)
+                        .WithMany()
+                        .HasForeignKey("DevicePackageId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("GZCTF.Models.Data.ImageTemplate", null)
                         .WithMany()
                         .HasForeignKey("ImageTemplateId")
@@ -10660,6 +11031,11 @@ namespace GZCTF.Migrations
                     b.Navigation("Assets");
 
                     b.Navigation("Networks");
+                });
+
+            modelBuilder.Entity("GZCTF.Modules.TeamLab.Domain.TeamLabConnector", b =>
+                {
+                    b.Navigation("Leases");
                 });
 
             modelBuilder.Entity("GZCTF.Modules.TeamLab.Domain.TeamLabRollout", b =>

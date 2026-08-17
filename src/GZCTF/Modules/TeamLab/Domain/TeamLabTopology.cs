@@ -46,6 +46,12 @@ public sealed class TeamLabTopologyAsset
     public string Name { get; set; } = string.Empty;
     public TeamLabAssetKind Kind { get; set; }
     public int? ImageTemplateId { get; set; }
+    /// <summary>Optional device package backing this asset (industrial emulation, honeypot, ...).</summary>
+    public int? DevicePackageId { get; set; }
+    /// <summary>Canonical JSON of the author-facing package parameters; frozen into the release at publish.</summary>
+    public string? DevicePackageParametersJson { get; set; }
+    /// <summary>Public id of an authorized field connector this asset attaches to; by reference only.</summary>
+    public Guid? ConnectorId { get; set; }
     public int CpuUnits { get; set; } = 10;
     public int MemoryMiB { get; set; } = 512;
     public int StorageMiB { get; set; } = 512;

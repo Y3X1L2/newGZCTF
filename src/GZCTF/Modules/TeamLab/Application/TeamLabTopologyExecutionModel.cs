@@ -49,7 +49,11 @@ public sealed record TeamLabExecutionAsset(
     int? HealthCheckPort,
     int DisplayOrder,
     TeamLabEndpointObservationMode EndpointObservation,
-    string? ImageDigest = null)
+    string? ImageDigest = null,
+    int? DevicePackageId = null,
+    string? DeviceParametersJson = null,
+    Guid? ConnectorId = null,
+    string? DevicePackageDigest = null)
 {
     public bool IsImageBacked => true;
 }

@@ -84,6 +84,11 @@ public static class TeamLabModuleRegistration
         services.AddScoped<TeamLabWebhookService>();
         services.AddScoped<ITeamLabWebhookDeliverer, HttpTeamLabWebhookDeliverer>();
         services.AddHostedService<TeamLabWebhookDeliveryWorker>();
+        services.AddScoped<TeamLabDevicePackageService>();
+        services.AddScoped<TeamLabConnectorService>();
+        services.AddScoped<TeamLabLinkPolicyService>();
+        services.AddScoped<TeamLabResourcePoolService>();
+        services.AddHostedService<TeamLabCapabilityResourceWorker>();
         return services;
     }
 }

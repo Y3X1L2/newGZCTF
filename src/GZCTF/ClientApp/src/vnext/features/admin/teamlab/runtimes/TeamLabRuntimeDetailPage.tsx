@@ -1,4 +1,4 @@
-import { Activity, ArrowLeft, Boxes, FileClock, RotateCcw, Trash2, Wrench } from 'lucide-react'
+import { Activity, ArrowLeft, Boxes, FileClock, Network, RotateCcw, Trash2, Wrench } from 'lucide-react'
 import { useCallback, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router'
 import { ActionButton, InlineFeedback, VNextConfirmDialog } from '../../../../shared/Interaction'
@@ -12,6 +12,7 @@ import { TeamLabRuntimeStatusBadge } from '../shared/TeamLabStatusBadge'
 import { CapturePanel } from './CapturePanel'
 import { RuntimeAccessPanel } from './RuntimeAccessPanel'
 import { RuntimeEventPanel } from './RuntimeEventPanel'
+import { RuntimeLinkPolicyPanel } from './RuntimeLinkPolicyPanel'
 import { RuntimeLogPanel } from './RuntimeLogPanel'
 import { RuntimeRemoteAccessPanel } from './RuntimeRemoteAccessPanel'
 import { RuntimeShardTable } from './RuntimeShardTable'
@@ -24,7 +25,7 @@ import { emptyTeamLabEventFilters, useRuntimeEvents, type TeamLabEventFilters } 
 import { useTeamLabRuntime } from './useTeamLabRuntime'
 import { useTrafficObservability, type TrafficFlowFilters, type TrafficPathFilters } from './useTrafficObservability'
 
-type RuntimeTab = 'overview' | 'operations' | 'events' | 'traffic' | 'capture'
+type RuntimeTab = 'overview' | 'operations' | 'link-policies' | 'events' | 'traffic' | 'capture'
 
 const initialFlowFilters: TrafficFlowFilters = { query: '', protocol: '', networkKey: '' }
 const initialPathFilters: TrafficPathFilters = { query: '', protocol: '', confidence: '' }
@@ -176,6 +177,10 @@ export function TeamLabRuntimeDetailPage() {
           <Wrench size={16} />
           资产运维
         </button>
+        <button data-active={tab === 'link-policies' || undefined} onClick={() => setTab('link-policies')} type="button">
+          <Network size={16} />
+          链路策略
+        </button>
         <button data-active={tab === 'events' || undefined} onClick={() => setTab('events')} type="button">
           <FileClock size={16} />
           事件与日志
@@ -206,6 +211,13 @@ export function TeamLabRuntimeDetailPage() {
           </>
         ) : null}
         {tab === 'operations' ? <RuntimeRemoteAccessPanel runtime={runtime} /> : null}
+        {tab === 'link-policies' ? (
+          <RuntimeLinkPolicyPanel
+            assets={runtime.assets.map((asset) => ({ key: asset.key, name: asset.name }))}
+            networks={runtime.networks.map((network) => ({ key: network.key, name: network.name }))}
+            runtimeId={runtime.id}
+          />
+        ) : null}
         {tab === 'events' ? (
           <div className={styles.stack}>
             <RuntimeEventPanel

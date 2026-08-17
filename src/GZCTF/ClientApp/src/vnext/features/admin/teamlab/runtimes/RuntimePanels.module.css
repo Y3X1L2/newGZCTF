@@ -654,3 +654,99 @@
   color: var(--yn-color-warning);
   font-size: var(--yn-font-sm);
 }
+
+.panelHint {
+  margin: 0 0 var(--yn-space-3);
+  color: var(--yn-color-muted);
+  font-size: var(--yn-font-xs);
+}
+
+.policyList {
+  display: grid;
+  gap: var(--yn-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.policyItem {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--yn-space-3);
+  padding: var(--yn-space-3);
+  border: 1px solid var(--yn-color-border);
+  border-radius: var(--yn-radius-md);
+  background: var(--yn-color-surface);
+}
+
+.policyIdentity {
+  display: grid;
+  min-width: 220px;
+  flex: 1;
+  gap: 2px;
+}
+
+.policyIdentity strong {
+  color: var(--yn-color-text);
+}
+
+.policyIdentity > span {
+  color: var(--yn-color-muted);
+  font-size: var(--yn-font-xs);
+  overflow-wrap: anywhere;
+}
+
+.policyParameters {
+  font-family: var(--yn-font-mono);
+}
+
+.policyMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--yn-space-2);
+  color: var(--yn-color-muted);
+  font-size: var(--yn-font-xs);
+}
+
+.policyError {
+  color: var(--yn-color-danger, var(--yn-color-warning));
+}
+
+.policyForm {
+  display: grid;
+  gap: var(--yn-space-2);
+}
+
+.policyForm label {
+  color: var(--yn-color-text-secondary);
+  font-size: var(--yn-font-sm);
+  font-weight: 650;
+}
+
+.policyForm input,
+.policyForm select,
+.policyForm textarea {
+  min-height: 44px;
+  padding: var(--yn-space-2) var(--yn-space-3);
+  border: 1px solid var(--yn-color-border);
+  border-radius: var(--yn-radius-md);
+  background: var(--yn-color-surface);
+  color: var(--yn-color-text);
+}
+
+.policyForm textarea {
+  min-height: 88px;
+  resize: vertical;
+  font-family: var(--yn-font-mono);
+  font-size: var(--yn-font-xs);
+}
+
+.policyForm input:focus,
+.policyForm select:focus,
+.policyForm textarea:focus {
+  border-color: var(--yn-color-border-strong);
+  outline: 0;
+}

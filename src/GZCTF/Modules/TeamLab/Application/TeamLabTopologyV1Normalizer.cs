@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using GZCTF.Modules.TeamLab.Contracts;
 using GZCTF.Modules.TeamLab.Domain;
 
@@ -53,7 +54,10 @@ public static class TeamLabTopologyV1Normalizer
             asset.HealthCheck?.Port,
             asset.OrderIndex,
             asset.EndpointObservation,
-            null);
+            null,
+            asset.DevicePackageId,
+            asset.DeviceParameters is { } parameters ? JsonSerializer.Serialize(parameters) : null,
+            asset.ConnectorId);
 
     internal static TeamLabExecutionInterface ToExecution(TeamLabTopologyInterfaceModel iface) =>
         new(iface.Key, iface.NetworkKey, iface.HostOffset, iface.Primary, iface.OrderIndex);

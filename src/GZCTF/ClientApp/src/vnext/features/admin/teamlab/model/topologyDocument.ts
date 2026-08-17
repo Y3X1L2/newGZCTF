@@ -46,6 +46,12 @@ interface TopologyAssetNodeBase {
   healthCheck: TeamLabHealthCheck | null
   orderIndex: number
   endpointObservation: TeamLabEndpointObservationMode
+  /** Device package binding for industrial emulation / protocol simulation assets. */
+  devicePackageId?: number | null
+  /** Raw author parameter JSON for the bound device package. */
+  deviceParameters?: string | null
+  /** Public id of an authorized field connector this asset attaches to. */
+  connectorId?: string | null
 }
 
 export interface TopologyDockerNode extends TopologyAssetNodeBase {

@@ -65,8 +65,10 @@ public sealed class TeamLabReleaseService(
         if (!validation.Valid)
             throw TeamLabTopologyApplicationService.InvalidTopology(validation);
         await TeamLabTopologyApplicationService.ValidateImageTemplatesAsync(context, definition, cancellationToken);
+        await TeamLabTopologyApplicationService.ValidateCapabilityResourcesAsync(context, definition, cancellationToken);
         var imageDigests = await LoadImageDigestsAsync(definition, cancellationToken);
-        var canonicalJson = TeamLabReleaseCodec.Encode(topology.SchemaVersion, definition, imageDigests);
+        var devicePackageDigests = await LoadDevicePackageDigestsAsync(definition, cancellationToken);
+        var canonicalJson = TeamLabReleaseCodec.Encode(topology.SchemaVersion, definition, imageDigests, devicePackageDigests);
 
         var contentHash = TeamLabReleaseCodec.ComputeContentHash(topology.SchemaVersion, canonicalJson);
         var existing = await context.TeamLabTopologyReleases
@@ -106,6 +108,32 @@ public sealed class TeamLabReleaseService(
         return ToModel(release, topology.PublicId);
     }
 
+    /// <summary>
+    /// Freezes the device package digest per asset key at publish time, mirroring the
+    /// image digest freeze so later registry drift is detectable at planning time.
+    /// </summary>
+    private async Task<IReadOnlyDictionary<string, string?>> LoadDevicePackageDigestsAsync(
+        TeamLabTopologyDefinitionModel definition,
+        CancellationToken cancellationToken)
+    {
+        var packageIds = definition.Assets
+            .Where(item => item.DevicePackageId is { } id && id > 0)
+            .Select(item => item.DevicePackageId!.Value)
+            .Distinct()
+            .ToArray();
+        var digests = await context.TeamLabDevicePackages.AsNoTracking()
+            .Where(item => packageIds.Contains(item.Id))
+            .ToDictionaryAsync(item => item.Id, item => item.Digest, cancellationToken);
+        return definition.Assets.ToDictionary(
+            asset => asset.Key,
+            asset => asset.DevicePackageId is { } id && id > 0
+                ? digests.GetValueOrDefault(id)
+                  ?? throw new TeamLabApiContractException(
+                      "device_package_unavailable", $"资产 '{asset.Key}' 引用的设备包不可用", 422)
+                : null,
+            StringComparer.Ordinal);
+    }
+
     private async Task<IReadOnlyDictionary<string, string>> LoadImageDigestsAsync(
         TeamLabTopologyDefinitionModel definition,
         CancellationToken cancellationToken)
@@ -122,9 +150,25 @@ public sealed class TeamLabReleaseService(
             StringComparer.Ordinal);
     }
 
+    /// <summary>
+    /// Archives a release: history stays readable, active runtimes keep running,
+    /// but no new runtimes may be planned from it. Idempotent.
+    /// </summary>
+    public async Task ArchiveAsync(Guid releaseId, CancellationToken cancellationToken)
+    {
+        var release = await context.TeamLabTopologyReleases
+            .SingleOrDefaultAsync(item => item.Id == releaseId, cancellationToken)
+            ?? throw new TeamLabApiContractException("release_not_found", "未找到拓扑版本", 404);
+        if (release.IsArchived) return;
+        release.IsArchived = true;
+        release.ArchivedAt = DateTimeOffset.UtcNow;
+        await context.SaveChangesAsync(cancellationToken);
+    }
+
     public static TeamLabReleaseModel ToModel(TeamLabTopologyRelease release, Guid topologyPublicId) =>
         new(release.Id, topologyPublicId, release.Version, release.SourceRevision, release.SchemaVersion,
-            release.ContentHash, release.PublishedById, release.PublishedAt, DeserializeEditor(release.EditorMetadataJson));
+            release.ContentHash, release.PublishedById, release.PublishedAt, DeserializeEditor(release.EditorMetadataJson),
+            release.IsArchived);
 
     private static TeamLabTopologyEditorModel DeserializeEditor(string json)
     {

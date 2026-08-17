@@ -21,13 +21,14 @@ public static class TeamLabReleaseCodec
     public static string Encode(
         int schemaVersion,
         TeamLabTopologyDefinitionModel definition,
-        IReadOnlyDictionary<string, string>? imageDigests = null)
+        IReadOnlyDictionary<string, string>? imageDigests = null,
+        IReadOnlyDictionary<string, string?>? devicePackageDigests = null)
     {
         var normalized = Normalize(definition);
         return schemaVersion switch
         {
             1 => JsonSerializer.Serialize(ToV1(normalized, imageDigests), JsonOptions),
-            2 => JsonSerializer.Serialize(ToV2(normalized, imageDigests), JsonOptions),
+            2 => JsonSerializer.Serialize(ToV2(normalized, imageDigests, devicePackageDigests), JsonOptions),
             _ => throw UnsupportedSchema(schemaVersion)
         };
     }
@@ -44,22 +45,31 @@ public static class TeamLabReleaseCodec
             _ => throw UnsupportedSchema(schemaVersion)
         };
 
-    public static TeamLabExecutionTopology DecodeExecution(int schemaVersion, string canonicalJson)
-    {
-        return schemaVersion switch
+    public static TeamLabExecutionTopology DecodeExecution(int schemaVersion, string canonicalJson) =>
+        schemaVersion switch
         {
-            1 => CompileWithDigests(
-                TeamLabTopologyV1Normalizer.Normalize(DecodeDefinition(1, canonicalJson)),
-                JsonSerializer.Deserialize<TeamLabTopologyDefinitionV1Model>(canonicalJson, JsonOptions)
-                    ?.Assets.ToDictionary(item => item.Key, item => item.ImageDigest, StringComparer.Ordinal)
-                ?? throw InvalidRelease()),
-            2 => CompileWithDigests(
-                TeamLabTopologyV2Compiler.Compile(DecodeDefinition(2, canonicalJson)),
-                JsonSerializer.Deserialize<TeamLabTopologyDefinitionV2Model>(canonicalJson, JsonOptions)
-                    ?.Assets.ToDictionary(item => item.Key, item => item.ImageDigest, StringComparer.Ordinal)
-                ?? throw InvalidRelease()),
+            1 => DecodeV1Execution(canonicalJson),
+            2 => DecodeV2Execution(canonicalJson),
             _ => throw UnsupportedSchema(schemaVersion)
         };
+
+    private static TeamLabExecutionTopology DecodeV1Execution(string canonicalJson)
+    {
+        var payload = JsonSerializer.Deserialize<TeamLabTopologyDefinitionV1Model>(canonicalJson, JsonOptions)
+            ?? throw InvalidRelease();
+        return CompileWithDigests(
+            TeamLabTopologyV1Normalizer.Normalize(DecodeDefinition(1, canonicalJson)),
+            payload.Assets.ToDictionary(item => item.Key, item => item.ImageDigest, StringComparer.Ordinal));
+    }
+
+    private static TeamLabExecutionTopology DecodeV2Execution(string canonicalJson)
+    {
+        var payload = JsonSerializer.Deserialize<TeamLabTopologyDefinitionV2Model>(canonicalJson, JsonOptions)
+            ?? throw InvalidRelease();
+        return CompileWithDigests(
+            TeamLabTopologyV2Compiler.Compile(DecodeDefinition(2, canonicalJson)),
+            payload.Assets.ToDictionary(item => item.Key, item => item.ImageDigest, StringComparer.Ordinal),
+            payload.Assets.ToDictionary(item => item.Key, item => item.DevicePackageDigest, StringComparer.Ordinal));
     }
 
     public static string ComputeContentHash(int schemaVersion, string canonicalJson)
@@ -83,6 +93,7 @@ public static class TeamLabReleaseCodec
             {
                 Key = item.Key.Trim(),
                 Name = item.Name.Trim(),
+                DeviceParameters = Canonicalize(item.DeviceParameters),
                 Interfaces = item.Interfaces.OrderBy(iface => iface.Key, StringComparer.Ordinal).Select(iface => iface with
                 {
                     Key = iface.Key.Trim(),
@@ -112,9 +123,14 @@ public static class TeamLabReleaseCodec
 
     private static TeamLabExecutionTopology CompileWithDigests(
         TeamLabExecutionTopology topology,
-        IReadOnlyDictionary<string, string?> digests) => topology with
+        IReadOnlyDictionary<string, string?> digests,
+        IReadOnlyDictionary<string, string?>? devicePackageDigests = null) => topology with
     {
-        Assets = topology.Assets.Select(asset => asset with { ImageDigest = digests.GetValueOrDefault(asset.Key) }).ToArray()
+        Assets = topology.Assets.Select(asset => asset with
+        {
+            ImageDigest = digests.GetValueOrDefault(asset.Key),
+            DevicePackageDigest = devicePackageDigests?.GetValueOrDefault(asset.Key)
+        }).ToArray()
     };
 
     private static TeamLabTopologyDefinitionV1Model ToV1(
@@ -130,7 +146,8 @@ public static class TeamLabReleaseCodec
 
     private static TeamLabTopologyDefinitionV2Model ToV2(
         TeamLabTopologyDefinitionModel definition,
-        IReadOnlyDictionary<string, string>? imageDigests)
+        IReadOnlyDictionary<string, string>? imageDigests,
+        IReadOnlyDictionary<string, string?>? devicePackageDigests)
     {
         var execution = TeamLabTopologyV2Compiler.Compile(definition);
         return new TeamLabTopologyDefinitionV2Model(
@@ -147,7 +164,9 @@ public static class TeamLabReleaseCodec
                 asset.HealthCheckKind is { } kind && asset.HealthCheckPort is { } port
                     ? new TeamLabHealthCheckModel(kind, port)
                     : null,
-                asset.DisplayOrder, imageDigests?.GetValueOrDefault(asset.Key))).ToArray(),
+                asset.DisplayOrder, imageDigests?.GetValueOrDefault(asset.Key),
+                asset.DevicePackageId, ParseParameters(asset.DeviceParametersJson), asset.ConnectorId,
+                devicePackageDigests?.GetValueOrDefault(asset.Key))).ToArray(),
             execution.Connections.Select(connection => new TeamLabTopologyConnectionV2Model(
                 connection.Key, connection.FromNetworkKey, connection.ToNetworkKey, connection.ViaNodeKey,
                 connection.ViaAssetKey, connection.Direction)).ToArray(),
@@ -171,7 +190,8 @@ public static class TeamLabReleaseCodec
         definition.Networks,
         definition.Assets.Select(asset => new TeamLabTopologyAssetModel(
             asset.Key, asset.Name, asset.Kind, asset.ImageTemplateId, asset.Resources, asset.Interfaces,
-            asset.ExposePort, asset.HealthCheck, asset.OrderIndex, asset.EndpointObservation)).ToArray(),
+            asset.ExposePort, asset.HealthCheck, asset.OrderIndex, asset.EndpointObservation,
+            asset.DevicePackageId, asset.DeviceParameters, asset.ConnectorId)).ToArray(),
         definition.Connections.Select(connection => new TeamLabTopologyConnectionModel(
             connection.Key, connection.FromNetworkKey, connection.ToNetworkKey, connection.ViaAssetKey,
             connection.ViaNodeKey, connection.Direction)).ToArray(),
@@ -181,6 +201,15 @@ public static class TeamLabReleaseCodec
         new(iface.Key, iface.NetworkKey, iface.HostOffset, iface.Primary, iface.DisplayOrder);
 
     private static string? TrimToNull(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    /// <summary>Re-serializes parameters so semantically equal author input canonicalizes identically.</summary>
+    private static JsonElement? Canonicalize(JsonElement? parameters) => parameters is not { } element
+        ? null
+        : JsonDocument.Parse(JsonSerializer.Serialize(element, JsonOptions)).RootElement.Clone();
+
+    private static JsonElement? ParseParameters(string? canonicalJson) => string.IsNullOrWhiteSpace(canonicalJson)
+        ? null
+        : JsonDocument.Parse(canonicalJson).RootElement.Clone();
 
     private static TeamLabApiContractException InvalidRelease() =>
         new("release_invalid", "The topology release payload is invalid.", 500);
