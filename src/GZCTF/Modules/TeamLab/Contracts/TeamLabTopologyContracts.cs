@@ -124,6 +124,7 @@ public sealed record TeamLabReleaseModel(
     int SchemaVersion,
     string ContentHash,
     Guid? PublishedBy,
+    string? PublisherName,
     DateTimeOffset PublishedAt,
     TeamLabTopologyEditorModel? Editor = null,
     bool Archived = false);

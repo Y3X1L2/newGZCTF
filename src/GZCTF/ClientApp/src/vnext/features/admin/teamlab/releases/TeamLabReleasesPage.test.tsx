@@ -27,7 +27,7 @@ vi.mock('../shared/TeamLabSceneShell', () => ({
 const release: TeamLabRelease = {
   id: '019f0000-0000-7000-8000-000000000010', topologyId: '019f0000-0000-7000-8000-000000000001',
   version: 2, sourceRevision: 4, schemaVersion: 2, contentHash: 'sha256:0123456789abcdef',
-  publishedBy: 'Teacher A', publishedAt: 1_784_918_400_000,
+  publishedBy: 'Teacher A', publisherName: null, publishedAt: 1_784_918_400_000,
 }
 
 describe('TeamLabReleasesPage', () => {

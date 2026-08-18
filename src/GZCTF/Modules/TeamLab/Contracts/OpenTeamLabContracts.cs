@@ -51,7 +51,8 @@ public sealed record OpenTeamLabReleaseModel(
     string ContentHash,
     DateTimeOffset PublishedAt,
     TeamLabTopologyEditorModel? Editor = null,
-    bool Archived = false);
+    bool Archived = false,
+    string? PublisherName = null);
 
 public sealed record OpenTeamLabReleasePageModel(
     IReadOnlyList<OpenTeamLabReleaseModel> Items,
@@ -153,7 +154,7 @@ public static class OpenTeamLabContractMapper
 
     public static OpenTeamLabReleaseModel ToOpen(this TeamLabReleaseModel model) =>
         new(model.Id, model.TopologyId, model.Version, model.SourceRevision, model.SchemaVersion,
-            model.ContentHash, model.PublishedAt, model.Editor, model.Archived);
+            model.ContentHash, model.PublishedAt, model.Editor, model.Archived, model.PublisherName);
 
     public static OpenTeamLabRuntimeModel ToOpen(this TeamLabRuntimeProjectionModel model) =>
         new(

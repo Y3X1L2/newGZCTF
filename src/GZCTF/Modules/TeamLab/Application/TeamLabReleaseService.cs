@@ -165,10 +165,13 @@ public sealed class TeamLabReleaseService(
         await context.SaveChangesAsync(cancellationToken);
     }
 
-    public static TeamLabReleaseModel ToModel(TeamLabTopologyRelease release, Guid topologyPublicId) =>
+    public static TeamLabReleaseModel ToModel(
+        TeamLabTopologyRelease release,
+        Guid topologyPublicId,
+        string? publisherName = null) =>
         new(release.Id, topologyPublicId, release.Version, release.SourceRevision, release.SchemaVersion,
-            release.ContentHash, release.PublishedById, release.PublishedAt, DeserializeEditor(release.EditorMetadataJson),
-            release.IsArchived);
+            release.ContentHash, release.PublishedById, publisherName, release.PublishedAt,
+            DeserializeEditor(release.EditorMetadataJson), release.IsArchived);
 
     private static TeamLabTopologyEditorModel DeserializeEditor(string json)
     {

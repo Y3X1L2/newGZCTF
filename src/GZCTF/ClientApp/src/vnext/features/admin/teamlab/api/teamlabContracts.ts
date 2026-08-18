@@ -211,6 +211,7 @@ export interface TeamLabRelease {
   schemaVersion: number
   contentHash: string
   publishedBy: string | null
+  publisherName: string | null
   publishedAt: number
 }
 

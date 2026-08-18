@@ -424,6 +424,7 @@ function parseRelease(value: unknown, label: string): TeamLabRelease {
     schemaVersion: number(item.schemaVersion, `${label}.schemaVersion`),
     contentHash: string(item.contentHash, `${label}.contentHash`),
     publishedBy: nullableString(item.publishedBy, `${label}.publishedBy`),
+    publisherName: nullableString(item.publisherName, `${label}.publisherName`),
     publishedAt: number(item.publishedAt, `${label}.publishedAt`),
   }
 }

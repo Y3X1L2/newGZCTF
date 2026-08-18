@@ -25,6 +25,7 @@ export function ReleaseTimeline({
               <span className={styles.timelineIdentity}>
                 <strong>v{release.version}</strong>
                 <small>设计修订 {release.sourceRevision}</small>
+                <small>由 {release.publisherName ?? '未知用户'} 发布</small>
               </span>
               <time dateTime={new Date(release.publishedAt).toISOString()}>
                 {formatAdminDate(release.publishedAt)}
