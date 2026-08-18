@@ -430,6 +430,22 @@ public class AgentClient
         await PostTeamLabAsync<TeamLabCaptureDeleteRequest, TeamLabCaptureResponse>(nodeId,
             "/api/teamlab/capture/delete", request, token);
 
+    public virtual async Task<TeamLabLinkPolicyResponse?> ApplyTeamLabLinkPolicyAsync(
+        Guid nodeId,
+        TeamLabLinkPolicyApplyRequest request,
+        CancellationToken token,
+        TimeSpan? requestTimeout = null) =>
+        await PostTeamLabAsync<TeamLabLinkPolicyApplyRequest, TeamLabLinkPolicyResponse>(
+            nodeId, "/api/teamlab/link-policy/apply", request, token, requestTimeout);
+
+    public virtual async Task<TeamLabLinkPolicyResponse?> RecoverTeamLabLinkPolicyAsync(
+        Guid nodeId,
+        TeamLabLinkPolicyRecoverRequest request,
+        CancellationToken token,
+        TimeSpan? requestTimeout = null) =>
+        await PostTeamLabAsync<TeamLabLinkPolicyRecoverRequest, TeamLabLinkPolicyResponse>(
+            nodeId, "/api/teamlab/link-policy/recover", request, token, requestTimeout);
+
     public virtual async Task<TeamLabObservationBatchResponse?> ReadTeamLabObservationsAsync(
         Guid nodeId,
         TeamLabObservationBatchRequest request,
@@ -518,19 +534,26 @@ public class AgentClient
         CancellationToken token,
         TimeSpan? requestTimeout = null)
     {
-        var node = await GetNodeAsync(nodeId, token);
-        if (node is null) return default;
+        var operation = AgentOperationName.Resolve(HttpMethod.Post, path);
+        var node = await GetNodeAsync(nodeId, token)
+            ?? throw NodeNotFound(nodeId, operation);
 
         var client = BuildClient(node);
         var body = JsonSerializer.Serialize(request);
         using var deadline = CreateDeadline(token, requestTimeout ?? TeamLabRequestTimeout);
         var response = await client.PostAsync(path, new StringContent(body, Encoding.UTF8, "application/json"),
             deadline.Token);
-        return await ReadTeamLabResponseAsync<TResponse>(
-            response,
-            AgentOperationName.Resolve(HttpMethod.Post, path),
-            node.Id,
-            deadline.Token);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw await CreateAgentExceptionAsync(
+                response,
+                operation,
+                node.Id,
+                "Agent TeamLab request failed.",
+                deadline.Token);
+        }
+
+        return await response.Content.ReadFromJsonAsync<TResponse>(deadline.Token);
     }
 
     private async Task<T?> ReadTeamLabResponseAsync<T>(
@@ -2256,6 +2279,32 @@ public record TeamLabCaptureResponse(
     string? Sha256,
     bool Uploaded,
     string[] Commands);
+
+/// <summary>Applies a link/netem policy on a runtime link's host-side veth.</summary>
+public record TeamLabLinkPolicyApplyRequest(
+    Guid RuntimePublicId,
+    int Generation,
+    string NetworkKey,
+    string AssetKey,
+    string Kind,
+    string ParametersJson,
+    bool DryRun = false);
+
+/// <summary>Recovers (removes) a link policy on a runtime link's host-side veth.</summary>
+public record TeamLabLinkPolicyRecoverRequest(
+    Guid RuntimePublicId,
+    int Generation,
+    string NetworkKey,
+    string AssetKey,
+    string Kind,
+    bool DryRun = false);
+
+public record TeamLabLinkPolicyResponse(
+    bool Success,
+    bool DryRun,
+    string Interface,
+    string State,
+    string Message);
 
 public enum TeamLabObservationEvidenceKind : byte
 {

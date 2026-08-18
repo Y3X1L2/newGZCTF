@@ -1,4 +1,5 @@
 using System;
+using System.Net.Http;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -8,6 +9,7 @@ using GZCTF.Modules.TeamLab.Contracts;
 using GZCTF.Modules.TeamLab.Domain;
 using GZCTF.Modules.TeamLab.Domain.Runtime;
 using Microsoft.EntityFrameworkCore;
+using Moq;
 using Xunit;
 
 namespace GZCTF.Test.UnitTests.TeamLab;
@@ -21,11 +23,34 @@ public sealed class TeamLabLinkPolicyTests
 
     private static JsonElement Json(string value) => JsonDocument.Parse(value).RootElement.Clone();
 
+    private static TeamLabLinkPolicyService CreateService(AppDbContext context, bool applySucceeds = true)
+    {
+        var dispatcher = new Mock<ITeamLabLinkPolicyDispatcher>();
+        dispatcher.Setup(item => item.ApplyAsync(
+                It.IsAny<TeamLabRuntime>(), It.IsAny<string>(), It.IsAny<string>(),
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new TeamLabLinkPolicyDispatchResult(
+                applySucceeds, applySucceeds ? "applied" : "agent failed"));
+        dispatcher.Setup(item => item.RecoverAsync(
+                It.IsAny<TeamLabRuntime>(), It.IsAny<string>(), It.IsAny<string>(),
+                It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new TeamLabLinkPolicyDispatchResult(
+                applySucceeds, applySucceeds ? "recovered" : "agent failed"));
+        return new TeamLabLinkPolicyService(context, dispatcher.Object);
+    }
+
     private static async Task<TeamLabRuntime> AddRuntimeAsync(AppDbContext context)
     {
+        var nodeId = Guid.NewGuid();
         var runtime = new TeamLabRuntime { Status = TeamLabRuntimeStatus.Running };
         runtime.Networks.Add(new TeamLabRuntimeNetwork { TopologyKey = "office-net", Name = "office" });
-        runtime.Assets.Add(new TeamLabRuntimeAsset { TopologyKey = "plc-1", Name = "plc-1" });
+        runtime.Assets.Add(new TeamLabRuntimeAsset { TopologyKey = "plc-1", Name = "plc-1", WorkerNodeId = nodeId });
+        runtime.Shards.Add(new TeamLabRuntimeShard
+        {
+            WorkerNodeId = nodeId,
+            Generation = 1,
+            Status = TeamLabRuntimeStatus.Running
+        });
         context.TeamLabRuntimes.Add(runtime);
         await context.SaveChangesAsync();
         return runtime;
@@ -43,7 +68,7 @@ public sealed class TeamLabLinkPolicyTests
     public async Task Apply_StoresCanonicalParameters_AndReapplyIsIdempotent()
     {
         using var context = CreateContext();
-        var service = new TeamLabLinkPolicyService(context);
+        var service = CreateService(context);
         var runtime = await AddRuntimeAsync(context);
 
         var policy = await service.ApplyAsync(
@@ -60,7 +85,7 @@ public sealed class TeamLabLinkPolicyTests
     public async Task Apply_ConflictingParametersRequireRecoverFirst()
     {
         using var context = CreateContext();
-        var service = new TeamLabLinkPolicyService(context);
+        var service = CreateService(context);
         var runtime = await AddRuntimeAsync(context);
         await service.ApplyAsync(
             Command(runtime.PublicId, "latency", """{"delayMillis":120}"""), CancellationToken.None);
@@ -89,7 +114,7 @@ public sealed class TeamLabLinkPolicyTests
     public async Task Apply_RejectsInvalidKindParameters(string kind, string parameters)
     {
         using var context = CreateContext();
-        var service = new TeamLabLinkPolicyService(context);
+        var service = CreateService(context);
         var runtime = await AddRuntimeAsync(context);
 
         var exception = await Assert.ThrowsAsync<TeamLabApiContractException>(
@@ -102,7 +127,7 @@ public sealed class TeamLabLinkPolicyTests
     public async Task Apply_ValidAccessRuleAndNat_AcceptOptionalFields()
     {
         using var context = CreateContext();
-        var service = new TeamLabLinkPolicyService(context);
+        var service = CreateService(context);
         var runtime = await AddRuntimeAsync(context);
 
         var access = await service.ApplyAsync(Command(runtime.PublicId, "access-rule",
@@ -120,7 +145,7 @@ public sealed class TeamLabLinkPolicyTests
     public async Task Apply_RejectsUnknownNetworkAndAsset()
     {
         using var context = CreateContext();
-        var service = new TeamLabLinkPolicyService(context);
+        var service = CreateService(context);
         var runtime = await AddRuntimeAsync(context);
 
         var network = await Assert.ThrowsAsync<TeamLabApiContractException>(() => service.ApplyAsync(
@@ -137,7 +162,7 @@ public sealed class TeamLabLinkPolicyTests
     public async Task Apply_RejectsPastRecoverAt_AndTerminatedRuntime()
     {
         using var context = CreateContext();
-        var service = new TeamLabLinkPolicyService(context);
+        var service = CreateService(context);
         var runtime = await AddRuntimeAsync(context);
 
         var past = await Assert.ThrowsAsync<TeamLabApiContractException>(() => service.ApplyAsync(
@@ -156,7 +181,7 @@ public sealed class TeamLabLinkPolicyTests
     public async Task List_FiltersByStatus_AndValidatesTheFilter()
     {
         using var context = CreateContext();
-        var service = new TeamLabLinkPolicyService(context);
+        var service = CreateService(context);
         var runtime = await AddRuntimeAsync(context);
         await service.ApplyAsync(Command(runtime.PublicId, "latency", """{"delayMillis":10}"""), CancellationToken.None);
         await service.ApplyAsync(Command(runtime.PublicId, "jitter", """{"jitterMillis":5}"""), CancellationToken.None);

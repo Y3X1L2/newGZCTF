@@ -13,6 +13,33 @@ public enum TeamLabDeploymentStage : byte
     ObservationStarting = 5
 }
 
+/// <summary>
+/// Physical realization of a TeamLab link policy. The control plane persists
+/// desired state and this port turns it into a real network effect on the
+/// runtime's worker node (tc netem / ip-link). The port is deliberately node
+/// and infrastructure agnostic so the Application layer stays behind the
+/// execution boundary.
+/// </summary>
+public interface ITeamLabLinkPolicyDispatcher
+{
+    Task<TeamLabLinkPolicyDispatchResult> ApplyAsync(
+        Domain.Runtime.TeamLabRuntime runtime,
+        string networkKey,
+        string assetKey,
+        string kind,
+        string parameters,
+        CancellationToken cancellationToken);
+
+    Task<TeamLabLinkPolicyDispatchResult> RecoverAsync(
+        Domain.Runtime.TeamLabRuntime runtime,
+        string networkKey,
+        string assetKey,
+        string kind,
+        CancellationToken cancellationToken);
+}
+
+public sealed record TeamLabLinkPolicyDispatchResult(bool Success, string Message);
+
 public interface ITeamLabDeploymentProgress
 {
     Task SetAsync(TeamLabDeploymentStage stage, string message, CancellationToken cancellationToken);

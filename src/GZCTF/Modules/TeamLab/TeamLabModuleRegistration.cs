@@ -87,6 +87,7 @@ public static class TeamLabModuleRegistration
         services.AddScoped<TeamLabDevicePackageService>();
         services.AddScoped<TeamLabConnectorService>();
         services.AddScoped<TeamLabLinkPolicyService>();
+        services.AddScoped<ITeamLabLinkPolicyDispatcher, TeamLabLinkPolicyDispatcher>();
         services.AddScoped<TeamLabResourcePoolService>();
         services.AddHostedService<TeamLabCapabilityResourceWorker>();
         return services;

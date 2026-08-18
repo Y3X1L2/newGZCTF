@@ -25,6 +25,7 @@ public class TeamLabController(
     LibvirtTeamLabProvider libvirt,
     AgentOperationGate gate,
     TeamLabExecutionPlanExecutor executionPlans,
+    TeamLabLinkPolicyService linkPolicies,
     IOptions<AgentTeamLabConfig> teamLabOptions) : ControllerBase
 {
     [HttpGet("status")]
@@ -199,6 +200,24 @@ public class TeamLabController(
         [FromBody] TeamLabEndpointSensorStartRequest request,
         CancellationToken token) =>
         Ok(await sensors.StartAsync(request, token));
+
+    [HttpPost("link-policy/apply")]
+    public async Task<IActionResult> ApplyLinkPolicy(
+        [FromBody] TeamLabLinkPolicyApplyRequest request,
+        CancellationToken token)
+    {
+        await using var permit = await gate.EnterAsync(AgentOperationCategory.TeamLabNetwork, token);
+        return Ok(await linkPolicies.ApplyAsync(request, token));
+    }
+
+    [HttpPost("link-policy/recover")]
+    public async Task<IActionResult> RecoverLinkPolicy(
+        [FromBody] TeamLabLinkPolicyRecoverRequest request,
+        CancellationToken token)
+    {
+        await using var permit = await gate.EnterAsync(AgentOperationCategory.TeamLabNetwork, token);
+        return Ok(await linkPolicies.RecoverAsync(request, token));
+    }
 
     private async Task<TeamLabAssetLifecycleResponse> ChangeAssetLifecycleAsync(
         TeamLabAssetLifecycleRequest request,

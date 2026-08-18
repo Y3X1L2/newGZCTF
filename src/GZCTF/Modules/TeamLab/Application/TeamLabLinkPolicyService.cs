@@ -14,7 +14,7 @@ namespace GZCTF.Modules.TeamLab.Application;
 /// (network, asset, kind), recovery is manual, scheduled or implied by
 /// runtime destruction, and the entity itself carries the audit trail.
 /// </summary>
-public sealed class TeamLabLinkPolicyService(AppDbContext context)
+public sealed class TeamLabLinkPolicyService(AppDbContext context, ITeamLabLinkPolicyDispatcher dispatcher)
 {
     private static readonly TeamLabRuntimeStatus[] NonApplicableStatuses =
     [
@@ -28,6 +28,7 @@ public sealed class TeamLabLinkPolicyService(AppDbContext context)
         var runtime = await context.TeamLabRuntimes
             .Include(item => item.Networks)
             .Include(item => item.Assets)
+            .Include(item => item.Shards)
             .SingleOrDefaultAsync(item => item.PublicId == command.RuntimeId, cancellationToken)
             ?? throw new TeamLabApiContractException("runtime_not_found", "未找到 TeamLab 运行时", 404);
         if (NonApplicableStatuses.Contains(runtime.Status))
@@ -60,6 +61,7 @@ public sealed class TeamLabLinkPolicyService(AppDbContext context)
                     "link_policy_conflict", "同一条链路已有不同参数的活动策略，请先恢复后再应用", 409);
             existing.RecoverAt = command.RecoverAt;
             existing.UpdatedAt = DateTimeOffset.UtcNow;
+            await ApplyOnNodeAsync(existing, runtime, networkKey, assetKey, kind, parameters, cancellationToken);
             await context.SaveChangesAsync(cancellationToken);
             return ToModel(existing, runtime.PublicId);
         }
@@ -93,6 +95,8 @@ public sealed class TeamLabLinkPolicyService(AppDbContext context)
                     "link_policy_conflict", "同一条链路已有不同参数的活动策略，请先恢复后再应用", 409);
             return ToModel(winner, runtime.PublicId);
         }
+        await ApplyOnNodeAsync(policy, runtime, networkKey, assetKey, kind, parameters, cancellationToken);
+        await context.SaveChangesAsync(cancellationToken);
         return ToModel(policy, runtime.PublicId);
     }
 
@@ -101,18 +105,100 @@ public sealed class TeamLabLinkPolicyService(AppDbContext context)
         var policy = await context.TeamLabLinkPolicies
             .SingleOrDefaultAsync(item => item.PublicId == policyId, cancellationToken)
             ?? throw new TeamLabApiContractException("link_policy_not_found", "未找到链路策略", 404);
-        var runtimePublicId = await context.TeamLabRuntimes.AsNoTracking()
-            .Where(runtime => runtime.Id == policy.RuntimeId)
-            .Select(runtime => runtime.PublicId)
-            .SingleAsync(cancellationToken);
-        if (policy.Status == TeamLabLinkPolicyStatus.Recovered) return ToModel(policy, runtimePublicId);
+        var runtime = await context.TeamLabRuntimes
+            .Include(item => item.Shards)
+            .Include(item => item.Assets)
+            .SingleOrDefaultAsync(item => item.Id == policy.RuntimeId, cancellationToken)
+            ?? throw new TeamLabApiContractException("runtime_not_found", "未找到 TeamLab 运行时", 404);
+        if (policy.Status == TeamLabLinkPolicyStatus.Recovered) return ToModel(policy, runtime.PublicId);
+        await RecoverOnNodeAsync(policy, runtime, policy.NetworkKey, policy.AssetKey, cancellationToken);
+        await context.SaveChangesAsync(cancellationToken);
+        return ToModel(policy, runtime.PublicId);
+    }
+
+    /// <summary>
+    /// Dispatches the declarative apply so the damage is physically realized on
+    /// the runtime's worker node (the link-policy dispatcher resolves the node
+    /// and asset link). Failure of the data plane marks the policy Failed
+    /// instead of pretending an active policy exists.
+    /// </summary>
+    private async Task ApplyOnNodeAsync(
+        TeamLabLinkPolicy policy,
+        Domain.Runtime.TeamLabRuntime runtime,
+        string networkKey,
+        string? assetKey,
+        TeamLabLinkPolicyKind kind,
+        string parameters,
+        CancellationToken cancellationToken)
+    {
+        var resolvedAsset = string.IsNullOrWhiteSpace(assetKey)
+            ? runtime.Assets
+                .Where(item => item.Generation == runtime.Generation)
+                .OrderBy(item => item.Id)
+                .Select(item => item.TopologyKey)
+                .FirstOrDefault()
+            : assetKey;
+        if (string.IsNullOrWhiteSpace(resolvedAsset))
+        {
+            policy.Status = TeamLabLinkPolicyStatus.Failed;
+            policy.LastError = "运行时没有可用的执行资产";
+            return;
+        }
+
+        var response = await dispatcher.ApplyAsync(
+            runtime,
+            networkKey,
+            resolvedAsset,
+            TeamLabCapabilityResourceContractMapper.LinkPolicyKindName(kind),
+            parameters,
+            cancellationToken);
+        if (response.Success)
+        {
+            policy.Status = TeamLabLinkPolicyStatus.Active;
+            policy.AppliedAt = DateTimeOffset.UtcNow;
+            policy.LastError = null;
+        }
+        else
+        {
+            policy.Status = TeamLabLinkPolicyStatus.Failed;
+            policy.LastError = Truncate(response.Message, 512);
+        }
+    }
+
+    private async Task RecoverOnNodeAsync(
+        TeamLabLinkPolicy policy,
+        Domain.Runtime.TeamLabRuntime runtime,
+        string networkKey,
+        string? assetKey,
+        CancellationToken cancellationToken)
+    {
+        var resolvedAsset = string.IsNullOrWhiteSpace(assetKey)
+            ? runtime.Assets
+                .Where(item => item.Generation == runtime.Generation)
+                .OrderBy(item => item.Id)
+                .Select(item => item.TopologyKey)
+                .FirstOrDefault()
+            : assetKey;
+        if (string.IsNullOrWhiteSpace(resolvedAsset))
+        {
+            policy.LastError = "运行时没有可用的执行资产，仅收敛控制面状态";
+        }
+        else
+        {
+            var response = await dispatcher.RecoverAsync(
+                runtime,
+                networkKey,
+                resolvedAsset,
+                TeamLabCapabilityResourceContractMapper.LinkPolicyKindName(policy.Kind),
+                cancellationToken);
+            if (!response.Success)
+                policy.LastError = Truncate(response.Message, 512);
+        }
         policy.Status = TeamLabLinkPolicyStatus.Recovered;
         policy.RecoveredAt = DateTimeOffset.UtcNow;
         policy.RecoverOrigin = TeamLabLinkPolicyRecoverOrigin.Manual;
         policy.RecoverAt = null;
         policy.UpdatedAt = DateTimeOffset.UtcNow;
-        await context.SaveChangesAsync(cancellationToken);
-        return ToModel(policy, runtimePublicId);
     }
 
     public async Task<TeamLabLinkPolicyPageModel> ListByRuntimeAsync(
@@ -199,6 +285,13 @@ public sealed class TeamLabLinkPolicyService(AppDbContext context)
         policy.RecoveredAt,
         TeamLabCapabilityResourceContractMapper.LinkPolicyRecoverOriginName(policy.RecoverOrigin),
         policy.LastError);
+
+    /// <summary>Bounds an error message to the persisted column width.</summary>
+    private static string Truncate(string? value, int maxLength)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return string.Empty;
+        return value.Length <= maxLength ? value : value[..maxLength];
+    }
 }
 
 /// <summary>

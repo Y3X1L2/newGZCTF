@@ -37,6 +37,11 @@ namespace GZCTF.Test.UnitTests.TeamLab;
 
 public sealed class TeamLabDeploymentOrchestrationTests
 {
+    private static TeamLabReleaseImagePreparationService Preparation(AppDbContext context) =>
+        new(context,
+            new Mock<ImageDistributionService>(
+                null, null, null, null, null, null, null, null, null).Object);
+
     [Fact]
     public async Task DeployAsync_PersistsAllSuccessfulCreateIdentitiesBeforeReportingBatchFailure()
     {
@@ -141,7 +146,8 @@ public sealed class TeamLabDeploymentOrchestrationTests
             CaptureCleanup(),
             Mock.Of<IPublicUdpGatewayProvider>(),
             eventRecorder,
-            RemoteAccess());
+            RemoteAccess(),
+            Preparation(context));
 
         var result = await cleanup.CleanupAsync(runtime, CancellationToken.None);
 
@@ -199,7 +205,8 @@ public sealed class TeamLabDeploymentOrchestrationTests
             CaptureCleanup(),
             Mock.Of<IPublicUdpGatewayProvider>(),
             eventRecorder,
-            RemoteAccess());
+            RemoteAccess(),
+            Preparation(context));
 
         var result = await cleanup.CleanupAsync(runtime, CancellationToken.None);
 
@@ -244,7 +251,8 @@ public sealed class TeamLabDeploymentOrchestrationTests
             CaptureCleanup(),
             Mock.Of<IPublicUdpGatewayProvider>(),
             eventRecorder,
-            RemoteAccess());
+            RemoteAccess(),
+            Preparation(context));
 
         var result = await cleanup.CleanupAsync(runtime, CancellationToken.None);
 
@@ -290,7 +298,8 @@ public sealed class TeamLabDeploymentOrchestrationTests
             CaptureCleanup(),
             Mock.Of<IPublicUdpGatewayProvider>(),
             eventRecorder,
-            RemoteAccess());
+            RemoteAccess(),
+            Preparation(context));
 
         var result = await cleanup.CleanupAsync(runtime, CancellationToken.None);
 
@@ -333,7 +342,8 @@ public sealed class TeamLabDeploymentOrchestrationTests
             captureCleanup.Object,
             Mock.Of<IPublicUdpGatewayProvider>(),
             eventRecorder,
-            RemoteAccess());
+            RemoteAccess(),
+            Preparation(context));
 
         var result = await cleanup.CleanupAsync(runtime, markDestroyedOnSuccess: true, CancellationToken.None);
 

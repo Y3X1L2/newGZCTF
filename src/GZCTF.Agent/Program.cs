@@ -62,6 +62,7 @@ builder.Services.AddSingleton<TeamLabFirewallService>();
 builder.Services.AddSingleton<TeamLabFabricRouteStore>();
 builder.Services.AddSingleton<TeamLabFabricService>();
 builder.Services.AddHostedService(serviceProvider => serviceProvider.GetRequiredService<TeamLabFabricService>());
+builder.Services.AddSingleton<TeamLabLinkPolicyService>();
 builder.Services.AddSingleton<ObservationPointRegistry>();
 builder.Services.AddSingleton<ObservationBatchSpool>();
 builder.Services.AddHostedService(serviceProvider => serviceProvider.GetRequiredService<ObservationBatchSpool>());

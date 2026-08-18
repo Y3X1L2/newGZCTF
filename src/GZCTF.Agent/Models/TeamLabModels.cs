@@ -362,6 +362,30 @@ public record TeamLabCaptureResponse(
     bool Uploaded,
     string[] Commands);
 
+public record TeamLabLinkPolicyApplyRequest(
+    Guid RuntimePublicId,
+    int Generation,
+    string NetworkKey,
+    string AssetKey,
+    string Kind,
+    string ParametersJson,
+    bool DryRun = false);
+
+public record TeamLabLinkPolicyRecoverRequest(
+    Guid RuntimePublicId,
+    int Generation,
+    string NetworkKey,
+    string AssetKey,
+    string Kind,
+    bool DryRun = false);
+
+public record TeamLabLinkPolicyResponse(
+    bool Success,
+    bool DryRun,
+    string Interface,
+    string State,
+    string Message);
+
 public enum TeamLabObservationEvidenceKind : byte
 {
     Packet = 0,
