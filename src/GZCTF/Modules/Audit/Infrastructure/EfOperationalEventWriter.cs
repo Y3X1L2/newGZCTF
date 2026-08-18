@@ -29,7 +29,9 @@ public sealed class EfOperationalEventWriter(
         "rebootCount", "assetKind", "assetKey", "infrastructureKind", "evidenceKind",
         "placementElapsedMs", "placementGroupCount", "placementEdgeCount", "placementImprovementPasses",
         "stateless", "result", "count", "reason", "errorCode", "remoteSessionId",
-        "assetId", "protocol", "actorUserId"
+        "assetId", "protocol", "actorUserId",
+        "protocolEventType", "protocolEventSource", "protocolEventOccurredAt",
+        "protocolEventParameterCount", "protocolEventParameters"
     };
     private static readonly string[] SensitiveFragments =
     [

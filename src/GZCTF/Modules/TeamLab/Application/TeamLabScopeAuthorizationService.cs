@@ -118,10 +118,14 @@ public sealed class TeamLabScopeAuthorizationService(AppDbContext context)
         if (administrator)
             return (await context.TeamLabControlScopes.AsNoTracking()
                 .Select(scope => scope.Id).ToArrayAsync(cancellationToken)).ToHashSet();
-        return (await context.ApiTokenResourceGrants.AsNoTracking()
+        var grants = await context.ApiTokenResourceGrants.AsNoTracking()
                 .Where(grant => grant.TokenId == apiTokenId && grant.ResourceType == "teamlab-scope")
                 .Select(grant => grant.ResourceId)
-                .ToArrayAsync(cancellationToken))
+                .ToArrayAsync(cancellationToken);
+        if (grants.Contains("*", StringComparer.Ordinal))
+            return (await context.TeamLabControlScopes.AsNoTracking()
+                .Select(scope => scope.Id).ToArrayAsync(cancellationToken)).ToHashSet();
+        return grants
             .Select(value => Guid.TryParse(value, out var id) ? id : Guid.Empty)
             .Where(id => id != Guid.Empty)
             .ToHashSet();
