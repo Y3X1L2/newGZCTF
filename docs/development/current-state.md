@@ -6,13 +6,13 @@
 
 ## 2026-08-18 TeamLab A/B/C 真实验收闭环（已完成，含证据）
 
-- 分支 `codex/phase-09-teamlab-networking`；提交 `f34a3a5` 实现真实链路策略数据面执行器。报告见 `docs/development/test-reports/2026-08-18-yinyu-teamlab-a-b-c-acceptance.md`，证据在 118 `/opt/gzctf/acceptance-evidence/`。
-- A（协议模拟）：容器模拟 MODBUS/TCP 从站（ImageTemplate 116 `modbus-slave:v1`）+ SCADA 客户端容器（117 `scada-client:v1`），同一 TeamLab 运行时（`01a014e9-...`，10.80.1.0/24）真实读写；节点 tcpdump 捕获 1200 帧端口 502，平台 `traffic/flows` 记录 MODBUS TCP 会话。✅
-- B（连接器挂载 + 链路策略）：Agent `TeamLabLinkPolicyService` 用 `tc netem/tbf` 在宿主侧 veth 施伤，主站经 `ITeamLabLinkPolicyDispatcher` 下发；packet-loss 40% → 实测 12% 丢包，latency 200ms → 实测 200.2ms，恢复后复原；连接器租约挂载/释放闭环。✅
-- C（协议事件）：设备模拟器本地 outbox → 边缘网关投递 `protocol-events` → `events?stage=protocol` 回读 6 条。✅
-- 环境治理：残留运行时 11 个全部正确销毁（先前 409 `capability_unavailable` 根因 = 节点 Docker 槽位占满 6/6、10/10），槽位已释放。
-- 已知限制（如实记录，不掩盖）：①平台 `captures` 归档 pcapng 为空帧（观察点接口 token 解析到容器内接口而非宿主 veth），待修复；②架构测试 1 例失败为 collab 未提交 WIP 传递依赖 `AgentClient`，与本次无关；③access-rule/nat 在 Agent 执行器显式 unsupported；④测试环境本次采用就地二进制补丁部署。
-- 线上 118/125 Agent sha256 `6e00fb9a337f08aa58a0892658b737ce67e10c2fa294488b1f6a65fb6454f600`（一致）；主站 `GZCTF.dll` `152d0db4ad3ce1fcd7cd78528a2a267d8787f20edd329c3fdaf044698c1c9eb3`。
+- 分支 `codex/phase-09-teamlab-networking`；提交 `f34a3a5`（真实链路策略数据面）。报告见 `docs/development/test-reports/2026-08-18-yinyu-teamlab-a-b-c-acceptance.md`，证据在 118 `/opt/gzctf/acceptance-evidence/`。
+- A（协议模拟）：容器模拟 MODBUS/TCP 从站（ImageTemplate 116 `modbus-slave:v1`）+ SCADA 客户端容器（117 `scada-client:v1`），同一 TeamLab 运行时（`01a014e9-...`，10.80.1.0/24）真实读写；节点 tcpdump 捕获 1200 帧端口 502，平台 `traffic/flows` 记录 MODBUS TCP 会话；平台 `captures` 归档修复后含 **330 帧/300 条 TCP:502**。✅
+- B（连接器挂载 + 链路策略）：Agent `TeamLabLinkPolicyService` 用 `tc netem/tbf` 在宿主侧 veth 施伤，主站经 `ITeamLabLinkPolicyDispatcher` 下发；packet-loss 40% → 实测丢包，latency 200ms → 实测 200.2ms，恢复后复原；连接器租约挂载/释放闭环。✅
+- C（协议事件）：设备模拟器本地 outbox → 边缘网关投递 `protocol-events` → `events?stage=protocol` 回读。✅
+- 环境治理：残留运行时 11 个全部正确销毁（先前 409 `capability_unavailable` 根因 = 节点 Docker 槽位占满），槽位已释放。
+- **第二轮修复**：①平台上抓包空帧 = OVS Kernel Datapath 快速路径绕过 per-veth AF_PACKET + dumpcap 权限降级。已按官方最佳实践改为 **OVS Mirror → internal 捕获口 + tcpdump -Z root -U**，并将抓包启动改为**部分失败容忍**（V1 遗留 network/fabric 观测点在 V2 节点未注册时不再让整次抓包失败）；②架构测试 `ModuleApiControllers_DoNotDependOnPersistenceOrAgent` 原失败（控制器直接依赖 `AppDbContext`）已修复（协议事件下沉为 `TeamLabProtocolEventService`）；当前单元测试 **898/898 全绿**。
+- 线上 118/125 Agent sha256 `2bc3f4502257cc494eca9a97d9f307e920b442377af057505eae9b4301f6c607`（一致）；主站 `GZCTF.dll` `e58bc26b753e335469a1dcd5c88e1f1c59373ce919ee361ceb2f99bff6c0ec16`。
 
 
 ## 1. 当前基线

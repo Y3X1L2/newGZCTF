@@ -1,8 +1,11 @@
 using System.Collections.Concurrent;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using GZCTF.Agent.Models;
+using GZCTF.Agent.Services.TeamLab;
 using Microsoft.Extensions.Options;
 
 namespace GZCTF.Agent.Services.Observation;
@@ -10,6 +13,7 @@ namespace GZCTF.Agent.Services.Observation;
 public sealed class TeamLabPcapService(
     ObservationPointRegistry registry,
     PcapSegmentUploader uploader,
+    TeamLabCommandExecutor executor,
     IOptions<AgentTeamLabConfig> options,
     ILogger<TeamLabPcapService> logger)
 {
@@ -39,9 +43,16 @@ public sealed class TeamLabPcapService(
         if (registrations.Length == 0)
             return Failed(request.SegmentId, "Observation point is not registered on this WorkerNode.", request.DryRun);
         if (_config.DryRun || request.DryRun || !_config.Enable)
+        {
+            var (planPort, planMirror) = TeamLabCaptureMirror.Names(request.SegmentId);
+            var plan = TeamLabCaptureMirror.BuildSetupCommands(
+                    _config.OvsIntegrationBridgeName, registrations[0], planPort, planMirror, request.RuntimeId)
+                .Concat(BuildCommandPlan(request, registrations))
+                .ToArray();
             return new TeamLabCaptureResponse(
                 true, true, "Capture command plan returned without execution.", request.SegmentId, null, 0, false,
-                null, false, BuildCommandPlan(request, registrations));
+                null, false, plan);
+        }
 
         var gate = _gates.GetOrAdd(request.SegmentId, _ => new SemaphoreSlim(1, 1));
         await gate.WaitAsync(cancellationToken);
@@ -95,7 +106,20 @@ public sealed class TeamLabPcapService(
                 return ToResponse(state, "Unindexed capture evidence was recovered before the start retry.");
             }
             if (File.Exists(filePath)) File.Delete(filePath);
-            var startInfo = BuildStartInfo(request, registrations, filePath);
+            // OVS Kernel Datapath Megaflow fast path bypasses per-veth AF_PACKET capture,
+            // so capturing directly on the workload veth yields empty files once flows are
+            // cached. Instead set up an OVS mirror from the workload port (source veth) to a
+            // dedicated internal capture port in the host netns, then capture on that port.
+            var (capturePort, mirrorName) = TeamLabCaptureMirror.Names(request.SegmentId);
+            var mirrorResult = await executor.ExecuteAsync(
+                TeamLabCaptureMirror.BuildSetupCommands(
+                    _config.OvsIntegrationBridgeName, registrations[0], capturePort, mirrorName, request.RuntimeId),
+                requestDryRun: false,
+                cancellationToken);
+            if (!mirrorResult.Success)
+                return Failed(request.SegmentId,
+                    "OVS capture mirror setup failed: " + mirrorResult.Message, request.DryRun);
+            var startInfo = BuildStartInfo(request, [capturePort], filePath);
             var process = Process.Start(startInfo)
                           ?? throw new InvalidOperationException("Unable to start packet capture process.");
             var started = DateTimeOffset.UtcNow;
@@ -145,15 +169,25 @@ public sealed class TeamLabPcapService(
             return new TeamLabCaptureResponse(
                 true, true, "Capture stop plan returned without execution.", request.SegmentId, null, 0, false,
                 null, false, []);
-        var state = await LoadAsync(request.RuntimeId, request.Generation, request.CaptureId, request.SegmentId,
-            cancellationToken);
-        if (state is null)
-            return Failed(request.SegmentId, "Capture segment was not found.", false);
-        if (state.Status != PcapSegmentStateStatus.Running)
-            return ToResponse(state, "Capture segment is not running.");
-        StopOwnedProcess(state);
-        state = await FinalizeAsync(state, cancellationToken);
-        return ToResponse(state, "Capture segment stopped.");
+        var gate = _gates.GetOrAdd(request.SegmentId, _ => new SemaphoreSlim(1, 1));
+        await gate.WaitAsync(cancellationToken);
+        try
+        {
+            var state = await LoadAsync(request.RuntimeId, request.Generation, request.CaptureId, request.SegmentId,
+                cancellationToken);
+            if (state is null)
+                return Failed(request.SegmentId, "Capture segment was not found.", false);
+            if (state.Status != PcapSegmentStateStatus.Running)
+                return ToResponse(state, "Capture segment is not running.");
+            StopOwnedProcess(state);
+            state = await FinalizeAsync(state, cancellationToken);
+            await TeardownMirrorAsync(request.SegmentId, cancellationToken);
+            return ToResponse(state, "Capture segment stopped.");
+        }
+        finally
+        {
+            gate.Release();
+        }
     }
 
     public async Task<TeamLabCaptureResponse> StatusAsync(
@@ -163,15 +197,24 @@ public sealed class TeamLabPcapService(
         var validation = Validate(request.RuntimeId, request.Generation, request.CaptureId, request.SegmentId);
         if (validation is not null)
             return Failed(request.SegmentId, validation, request.DryRun);
-        var state = await LoadAsync(request.RuntimeId, request.Generation, request.CaptureId, request.SegmentId,
-            cancellationToken);
-        if (state is null)
-            return Failed(request.SegmentId, "Capture segment was not found.", request.DryRun);
-        if (state.Status == PcapSegmentStateStatus.Running && !IsRunning(state))
-            state = await FinalizeAsync(state, cancellationToken);
-        return ToResponse(state, state.Status == PcapSegmentStateStatus.Running
-            ? "Capture segment is running."
-            : "Capture segment is complete.");
+        var gate = _gates.GetOrAdd(request.SegmentId, _ => new SemaphoreSlim(1, 1));
+        await gate.WaitAsync(cancellationToken);
+        try
+        {
+            var state = await LoadAsync(request.RuntimeId, request.Generation, request.CaptureId, request.SegmentId,
+                cancellationToken);
+            if (state is null)
+                return Failed(request.SegmentId, "Capture segment was not found.", request.DryRun);
+            if (state.Status == PcapSegmentStateStatus.Running && !IsRunning(state))
+                state = await FinalizeAsync(state, cancellationToken);
+            return ToResponse(state, state.Status == PcapSegmentStateStatus.Running
+                ? "Capture segment is running."
+                : "Capture segment is complete.");
+        }
+        finally
+        {
+            gate.Release();
+        }
     }
 
     public async Task<TeamLabCaptureResponse> UploadAsync(
@@ -185,35 +228,44 @@ public sealed class TeamLabPcapService(
             return new TeamLabCaptureResponse(
                 true, true, "Capture upload plan returned without execution.", request.SegmentId, null, 0, false,
                 null, false, []);
-        var state = await LoadAsync(request.RuntimeId, request.Generation, request.CaptureId, request.SegmentId,
-            cancellationToken);
-        if (state is null || state.Status == PcapSegmentStateStatus.Running)
-            return Failed(request.SegmentId, "Capture segment is not ready for upload.", false);
-        if (state.Uploaded)
-            return ToResponse(state, "Capture segment is already uploaded.");
-        if (string.IsNullOrWhiteSpace(state.Sha256) || !File.Exists(state.FilePath))
-            return Failed(request.SegmentId, "Capture segment file is unavailable.", false);
-        state = state with { Status = PcapSegmentStateStatus.Uploading, LastError = null };
-        await SaveAsync(state, cancellationToken);
-        var result = await uploader.UploadAsync(
-            request.UploadPath, request.UploadToken, state.FilePath, state.Sha256, request.MaxBytes,
-            cancellationToken);
-        if (!result.Success)
+        var gate = _gates.GetOrAdd(request.SegmentId, _ => new SemaphoreSlim(1, 1));
+        await gate.WaitAsync(cancellationToken);
+        try
         {
-            state = state with { Status = PcapSegmentStateStatus.Captured, LastError = result.Message };
+            var state = await LoadAsync(request.RuntimeId, request.Generation, request.CaptureId, request.SegmentId,
+                cancellationToken);
+            if (state is null || state.Status == PcapSegmentStateStatus.Running)
+                return Failed(request.SegmentId, "Capture segment is not ready for upload.", false);
+            if (state.Uploaded)
+                return ToResponse(state, "Capture segment is already uploaded.");
+            if (string.IsNullOrWhiteSpace(state.Sha256) || !File.Exists(state.FilePath))
+                return Failed(request.SegmentId, "Capture segment file is unavailable.", false);
+            state = state with { Status = PcapSegmentStateStatus.Uploading, LastError = null };
             await SaveAsync(state, cancellationToken);
-            return ToResponse(state, result.Message, success: false);
+            var result = await uploader.UploadAsync(
+                request.UploadPath, request.UploadToken, state.FilePath, state.Sha256, request.MaxBytes,
+                cancellationToken);
+            if (!result.Success)
+            {
+                state = state with { Status = PcapSegmentStateStatus.Captured, LastError = result.Message };
+                await SaveAsync(state, cancellationToken);
+                return ToResponse(state, result.Message, success: false);
+            }
+            state = state with
+            {
+                Status = PcapSegmentStateStatus.Uploaded,
+                Uploaded = true,
+                UploadedAt = DateTimeOffset.UtcNow,
+                LastError = null
+            };
+            await SaveAsync(state, cancellationToken);
+            File.Delete(state.FilePath);
+            return ToResponse(state, result.Message);
         }
-        state = state with
+        finally
         {
-            Status = PcapSegmentStateStatus.Uploaded,
-            Uploaded = true,
-            UploadedAt = DateTimeOffset.UtcNow,
-            LastError = null
-        };
-        await SaveAsync(state, cancellationToken);
-        File.Delete(state.FilePath);
-        return ToResponse(state, result.Message);
+            gate.Release();
+        }
     }
 
     public async Task<TeamLabCaptureResponse> DeleteAsync(
@@ -240,6 +292,7 @@ public sealed class TeamLabPcapService(
             _monitors.TryRemove(request.SegmentId, out _);
             _processes.TryRemove(request.SegmentId, out var process);
             process?.Dispose();
+            await TeardownMirrorAsync(request.SegmentId, cancellationToken);
             var directory = SegmentDirectory(
                 request.RuntimeId, request.Generation, request.CaptureId, request.SegmentId);
             if (Directory.Exists(directory)) Directory.Delete(directory, true);
@@ -361,6 +414,33 @@ public sealed class TeamLabPcapService(
         IReadOnlyList<string> interfaces,
         string filePath)
     {
+        // Prefer tcpdump (-Z root keeps it capturing/writing as the service account), which
+        // is the capture tool verified to see traffic on OVS-managed veths. dumpcap on the
+        // deployed nodes drops to an unprivileged user after opening the device (no working
+        // -Z override on this build) so it cannot open the output file and yields empty
+        // pcapng files; keep it only as a fallback when tcpdump is absent.
+        if (CommandExists("tcpdump"))
+        {
+            if (interfaces.Count != 1)
+                throw new InvalidOperationException(
+                    "Multiple capture interfaces require per-segment capture; a single interface is expected here.");
+            var fallback = BaseStartInfo("timeout");
+            fallback.ArgumentList.Add("--signal=INT");
+            fallback.ArgumentList.Add(request.MaxSeconds.ToString());
+            fallback.ArgumentList.Add("tcpdump");
+            fallback.ArgumentList.Add("-Z");
+            fallback.ArgumentList.Add("root");
+            fallback.ArgumentList.Add("-i");
+            fallback.ArgumentList.Add(interfaces[0]);
+            fallback.ArgumentList.Add("-s");
+            fallback.ArgumentList.Add("0");
+            fallback.ArgumentList.Add("-U");
+            fallback.ArgumentList.Add("-B");
+            fallback.ArgumentList.Add("8192");
+            fallback.ArgumentList.Add("-w");
+            fallback.ArgumentList.Add(filePath);
+            return fallback;
+        }
         if (CommandExists("dumpcap"))
         {
             var info = BaseStartInfo("dumpcap");
@@ -378,27 +458,8 @@ public sealed class TeamLabPcapService(
             info.ArgumentList.Add(filePath);
             return info;
         }
-        if (!CommandExists("tcpdump") || interfaces.Count != 1)
-            throw new InvalidOperationException(
-                "dumpcap is required for multi-interface capture and tcpdump is unavailable as a fallback.");
-        var fallback = BaseStartInfo("timeout");
-        fallback.ArgumentList.Add("--signal=INT");
-        fallback.ArgumentList.Add(request.MaxSeconds.ToString());
-        fallback.ArgumentList.Add("tcpdump");
-        fallback.ArgumentList.Add("-Z");
-        fallback.ArgumentList.Add("root");
-        fallback.ArgumentList.Add("-i");
-        fallback.ArgumentList.Add(interfaces[0]);
-        fallback.ArgumentList.Add("-s");
-        fallback.ArgumentList.Add("0");
-        fallback.ArgumentList.Add("-U");
-        fallback.ArgumentList.Add("-w");
-        fallback.ArgumentList.Add(filePath);
-        fallback.ArgumentList.Add("-C");
-        fallback.ArgumentList.Add(Math.Max(1, (request.MaxBytes + 1024 * 1024 - 1) / (1024 * 1024)).ToString());
-        fallback.ArgumentList.Add("-W");
-        fallback.ArgumentList.Add("1");
-        return fallback;
+        throw new InvalidOperationException(
+            "Neither tcpdump nor dumpcap is available for packet capture on this WorkerNode.");
     }
 
     private static ProcessStartInfo BaseStartInfo(string fileName) => new()
@@ -441,11 +502,60 @@ public sealed class TeamLabPcapService(
         try
         {
             var process = _processes.GetValueOrDefault(state.SegmentId) ?? Process.GetProcessById(pid);
+            // dumpcap/tcpdump buffer pcapng blocks in memory and only flush them when the
+            // capture is closed cleanly. SIGKILL on stop previously left header-only
+            // (232-byte) segment files even though frames were captured. Send SIGINT first
+            // so the tool finalizes and flushes the archive, then hard-kill only as a
+            // fallback if it does not exit promptly.
+            if (OperatingSystem.IsLinux())
+            {
+                try
+                {
+                    Process.Start(new ProcessStartInfo("kill")
+                    {
+                        UseShellExecute = false,
+                        CreateNoWindow = true,
+                        ArgumentList = { "-INT", pid.ToString() }
+                    })?.Dispose();
+                }
+                catch (Exception exception) when (exception is InvalidOperationException or System.ComponentModel.Win32Exception)
+                {
+                    logger.LogDebug(exception, "Failed to send SIGINT to capture process {ProcessId}.", pid);
+                }
+                if (process.WaitForExit(2000))
+                {
+                    // pcapng finalized and flushed; nothing more to do.
+                    return;
+                }
+            }
             process.Kill(entireProcessTree: true);
         }
         catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
         {
             logger.LogDebug(exception, "Capture process {ProcessId} was already absent.", pid);
+        }
+    }
+
+    /// <summary>
+    /// Removes the OVS capture mirror + internal capture port for a segment. The
+    /// desired-state naming is derived only from the segment id so teardown is
+    /// idempotent even if the capture never started (mirror/port may not exist).
+    /// </summary>
+    private async Task TeardownMirrorAsync(
+        Guid segmentId,
+        CancellationToken cancellationToken)
+    {
+        var (capturePort, mirrorName) = TeamLabCaptureMirror.Names(segmentId);
+        try
+        {
+            await executor.ExecuteAsync(
+                TeamLabCaptureMirror.BuildTeardownCommands(_config.OvsIntegrationBridgeName, capturePort, mirrorName),
+                requestDryRun: false,
+                token: cancellationToken);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            logger.LogWarning(exception, "Failed to tear down capture mirror for segment {SegmentId}.", segmentId);
         }
     }
 
@@ -523,6 +633,48 @@ public sealed class TeamLabPcapService(
         bool success = true) =>
         new(success, false, message, state.SegmentId, state.FilePath, state.CapturedBytes,
             state.Status == PcapSegmentStateStatus.Running, state.Sha256, state.Uploaded, []);
+
+    /// <summary>
+    /// Desired-state for the per-segment OVS capture mirror. The OVS kernel
+    /// datapath fast path (Megaflow) bypasses AF_PACKET capture on the runtime
+    /// workload veths once a flow is cached, so a per-veth tcpdump silently
+    /// yields empty pcapngs. The reliable mechanism is an OVS Mirror that copies
+    /// packets at datapath-action time from the workload port (src+dst) to a
+    /// dedicated internal port in the host netns; tcpdump then captures on that
+    /// internal port. The mirror and capture-port names derive only from the
+    /// segment id so setup/teardown are idempotent.
+    /// </summary>
+    internal static class TeamLabCaptureMirror
+    {
+        public static (string CapturePort, string MirrorName) Names(Guid segmentId)
+        {
+            var token = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(segmentId.ToString("N"))));
+            return ($"gzcp{token[..10]}", $"gzctf-m{token[..10]}");
+        }
+
+        public static string[] BuildSetupCommands(
+            string bridge,
+            string sourceInterface,
+            string capturePort,
+            string mirrorName,
+            int runtimeId)
+        {
+            return
+            [
+                $"ovs-vsctl --if-exists destroy Mirror {mirrorName}",
+                $"ovs-vsctl --if-exists del-port {bridge} {capturePort}",
+                $"ovs-vsctl --may-exist add-port {bridge} {capturePort} -- set Interface {capturePort} type=internal -- set Interface {capturePort} external-ids:gzctf-capture={runtimeId}",
+                $"ip link set {capturePort} up",
+                $"ovs-vsctl --id=@src get Port {sourceInterface} _uuid -- --id=@out get Port {capturePort} _uuid -- --id=@m create Mirror name={mirrorName} select-src-port=@src select-dst-port=@src output-port=@out -- set Bridge {bridge} mirrors=@m"
+            ];
+        }
+
+        public static string[] BuildTeardownCommands(string bridge, string capturePort, string mirrorName) =>
+        [
+            $"ovs-vsctl --if-exists destroy Mirror {mirrorName}",
+            $"ovs-vsctl --if-exists del-port {bridge} {capturePort}"
+        ];
+    }
 
     private enum PcapSegmentStateStatus : byte
     {

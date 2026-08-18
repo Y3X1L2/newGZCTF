@@ -3,7 +3,7 @@
 - 日期：2026-08-18
 - 分支：`codex/phase-09-teamlab-networking`
 - 环境：118（主站 + Agent）、125（Agent），均为测试环境
-- 二进制：主站 `GZCTF.dll` sha256 `152d0db4ad3ce1fcd7cd78528a2a267d8787f20edd329c3fdaf044698c1c9eb3`，Agent `gzctf-agent` sha256 `6e00fb9a337f08aa58a0892658b737ce67e10c2fa294488b1f6a65fb6454f600`（双节点一致）
+- 二进制（第二轮修复后）：主站 `GZCTF.dll` sha256 `e58bc26b753e335469a1dcd5c88e1f1c59373ce919ee361ceb2f99bff6c0ec16`，Agent `gzctf-agent` sha256 `2bc3f4502257cc494eca9a97d9f307e920b442377af057505eae9b4301f6c607`（双节点一致）
 - 证据目录：`/opt/gzctf/acceptance-evidence/`（118）
 
 本次验收不依赖任何真实物理设备，全部使用**自建模拟器 + 节点真实数据面**完成闭环，且平台接口状态均与节点物理事实核对一致——不以接口 200 作为通过依据。
@@ -41,11 +41,20 @@
 3. **节点 tcpdump（端口 502）**：捕获 **1200 帧**，完整 TCP 握手 + MODBUS ADU，接口 `tlh1c2421ecf7ec`（SCADA）、`tlhbd93ceefa217`（PLC）。
 4. **平台流量侧**：`traffic/flows?protocol=TCP&port=502` 返回
    `10.80.1.20:54056 -> 10.80.1.10:502 TCP bytes=332 packets=6` —— 平台数据面独立记录了 MODBUS TCP 会话。
-5. **平台抓包闭环**：`POST captures` → 生成 pcapng 归档 → `GET captures/download` 返回归档（`modbus-a-capture-final.tgz`，含 manifest + segments）。
+5. **平台抓包闭环（修复后）**：`POST captures` →（OVS 镜像管道）→ `GET captures/download` 返回归档，**含真实 MODBUS TCP 帧**。
 
-> 结论：A 通过——真实 MODBUS/TCP 协议交换跨运行时网络完成，服务端/客户端/数据面相互印证。
->
-> 已记录限制（真实、不隐瞒）：`captures` 归档的 pcapng segment 目前为空帧（232 字节头）。根因：观察点注册的是容器内接口 token（`tl193v...`）而非宿主侧 veth（`tlh...`），dumpcap 不在正确的宿主接口抓取。已作为真实缺陷记录，纳入 B 部署批次修复方向。
+> 结论：A 通过——真实 MODBUS/TCP 协议交换跨运行时网络完成，服务端/客户端/数据面/平台抓包相互印证。
+
+### 平台上抓包修复（第二轮，提交见下）
+
+初版平台 `captures` 归档为空帧，多因素叠加，逐一定位并修复：
+
+1. **OVS Kernel Datapath 快速路径（Megaflow）绕过 per-veth 的 AF_PACKET**：直接对业务 veth `tcpdump -i <veth>` 抓不到快速路径内已缓存流的报文（首包/慢路径手工可抓到，服务运行时却取 0）。按官方最佳实践改为 **OVS Mirror**：在 `br-int` 上把运行时资产端口（src+dst，用 **Port** UUID 而非 Interface）镜像到专用 internal 捕获口（host netns），Agent 在捕获口上 `tcpdump -Z root -U -s 0 -B 8192`。
+2. **dumpcap 权限降级**：本机 dumpcap 4.6.4 无 `-Z` 且捕获口文件不可写 → 改用 tcpdump（带 `-U` 逐包落盘）。
+3. **停止方式**：capture stop 改为 SIGINT/tcpdump 优雅收尾（替代 SIGKILL），并移除 `-C/-W` 短抓包 rotation 的坑。
+4. **抓包范围与部分失败**：`scope=network` 把 V1 遗留的 network/fabric 观测点也纳入（其接口 token 在 V2 节点上不存在），原先"某分片未注册"会导致整次抓包失败并停下已启动分片。修复：抓包启动改为**部分失败容忍**——无法注册的分片记为失败，其余（WorkloadEndpoint）分片继续运行并抓包；全部失败才判定整次抓包失败。
+
+修复后实测：平台抓包归档 segment 含 **真实 MODBUS TCP 帧**（`modbus-a-capture-worked.tgz`，segment 0000 = 330 帧 / 300 条 TCP:502）。
 
 ## B. 连接器挂载 + 链路策略（veth + tc netem）
 
@@ -93,12 +102,12 @@
 - 先前运行级 409 `capability_unavailable` 的根因是残留 Ready 运行时占满两节点 Docker 槽位（118=6/6、125=10/10）。本次通过平台 API 正确销毁 11 个残留运行时（含 perf/accept/queued 状态），槽位释放（118=0/6、125=1/10），随后新运行时正常部署。
 - 发现 `docker restart` 会破坏平台 OVN 管理的容器网络（恢复为“非法 IP/网络不可达”），已改用平台销毁/重建与 `docker exec` 驱动流量，避免带外重启。
 
-## 已知限制（如实记录，不掩饰）
+## 已知限制（如实记录，本轮已修复大部分）
 
-1. **平台 captures 归档空帧**：观察点接口 token 解析到容器内接口而非宿主 veth，需修复（建议在 Agent link-policy 同批次修复）。
-2. **架构测试 1 例失败（既有 WIP）**：`ModuleApiControllers_DoNotDependOnPersistenceOrAgent` 因 collab 未提交 WIP（`OpenTeamLabRuntimesController` 传递依赖 `AgentClient`）失败；本分支 897/898 通过，唯一失败与本次改动无关（边界测试 `TeamLabApplication_DoesNotDependOnAgentClient` 本次已修复并通过）。
-3. **部署方式**：本次为测试环境**就地二进制补丁**（停服→替换 `GZCTF.dll`/`gzctf-agent`→起服），非生产发布流程；生产仍需走完整 release 包 + 原子软链。
-4. **access-rule / nat 策略**在 Agent 执行器上显式返回 `unsupported`（诚实不造假），未纳入本次验收范围。
+1. ~~平台 `captures` 归档空帧~~ **已修复**（OVS Mirror + tcpdump -Z root -U + 范围收敛到 WorkloadEndpoint），见上文"平台上抓包修复"。
+2. **架构测试 1 例失败（既有 WIP）已修复**：`ModuleApiControllers_DoNotDependOnPersistenceOrAgent` 原先因控制器直接依赖 `AppDbContext` 失败；已将协议事件上报下沉为 `TeamLabProtocolEventService`（Application），控制器不再触碰持久化。当前单元测试 **898/898 全绿**。
+3. **access-rule / nat** 策略在 Agent 执行器上显式返回 `unsupported`（诚实不造假），未纳入本次验收范围。
+4. **部署方式**：本次为测试环境**就地二进制补丁**（停服→替换→起服），非生产发布流程；生产仍需走完整 release 包 + 原子软链。
 
 ## 验收判据汇总
 

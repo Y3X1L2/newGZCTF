@@ -34,8 +34,7 @@ public sealed class OpenTeamLabRuntimesController(
     TeamLabScopeAuthorizationService scopeAuthorization,
     TeamLabRuntimeLifecycleGuard lifecycleGuard,
     TeamLabAccessGrantService access,
-    AppDbContext context,
-    TeamLabEventRecorder eventRecorder) : ControllerBase
+    TeamLabProtocolEventService protocolEvents) : ControllerBase
 {
     [HttpPost]
     [OpenApiOperation("创建运行时", "为单个队伍或自动化属主提交已发布拓扑版本的部署任务。")]
@@ -154,29 +153,8 @@ public sealed class OpenTeamLabRuntimesController(
         var actor = Actor();
         await scopeAuthorization.RequireRuntimeScopeAsync(
             runtimeId, actor.TokenId, IsAdministrator(), writable: true, cancellationToken);
-        var runtime = await context.TeamLabRuntimes.AsNoTracking()
-            .SingleOrDefaultAsync(item => item.PublicId == runtimeId, cancellationToken)
-            ?? throw new TeamLabApiContractException("runtime_not_found", "未找到 TeamLab 运行时", 404);
-        if (runtime.Status != TeamLabRuntimeStatus.Running)
-            throw new TeamLabApiContractException("runtime_not_running", "仅运行中运行时接受协议事件上报", 409);
-
-        var detail = new Dictionary<string, object?>
-        {
-            ["type"] = model.Type,
-            ["source"] = model.Source,
-            ["occurredAt"] = model.OccurredAt?.ToString("O"),
-            ["parameters"] = model.Parameters,
-        };
-        eventRecorder.Record(
-            runtime,
-            "protocol",
-            TeamLabEventLevel.Info,
-            OperationalEventCodes.TeamLab.ProtocolEvent,
-            OperationalEventOutcome.Succeeded,
-            "收到设备协议事件",
-            detail: detail);
-        await context.SaveChangesAsync(cancellationToken);
-        return Ok(new { runtimeId, stage = "protocol", type = model.Type, source = model.Source });
+        var result = await protocolEvents.RecordAsync(runtimeId, model, cancellationToken);
+        return Ok(new { runtimeId = result.RuntimeId, stage = result.Stage, type = result.Type, source = result.Source });
     }
 
     [HttpGet("{runtimeId:guid}/events")]

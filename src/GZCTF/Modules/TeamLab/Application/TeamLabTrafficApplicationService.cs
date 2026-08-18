@@ -319,12 +319,23 @@ public sealed class TeamLabTrafficApplicationService(
         foreach (var (segment, result) in results)
             ApplyNodeResult(segment, result, now);
         var failed = results.Where(item => !item.Result.Success).ToArray();
-        if (failed.Length > 0)
+        var started = results.Where(item => item.Result.Success).ToArray();
+        if (started.Length == 0)
         {
-            await StopStartedSegmentsAsync(runtime, job, results, cancellationToken);
+            // Nothing could start: the whole capture is failed and there is nothing to keep alive.
             job.Status = TeamLabTrafficCaptureStatus.Failed;
             job.CompletedAt = now;
             job.LastError = $"{failed.Length} 个抓包分片启动失败";
+        }
+        else if (failed.Length > 0)
+        {
+            // Partial start: a subset of observation points is not registered on the target
+            // node (e.g. V1-only taps on a V2 runtime). Keep the successfully-started
+            // segments capturing instead of stopping them as well, so the topology that is
+            // actually present is still captured.
+            job.Status = TeamLabTrafficCaptureStatus.Running;
+            job.StartedAt ??= now;
+            job.LastError = null;
         }
         else
         {
@@ -336,14 +347,14 @@ public sealed class TeamLabTrafficApplicationService(
         eventRecorder.Record(
             runtime,
             "capture",
-            failed.Length == 0 ? TeamLabEventLevel.Success : TeamLabEventLevel.Error,
-            failed.Length == 0
-                ? OperationalEventCodes.TeamLab.CaptureStarted
-                : OperationalEventCodes.TeamLab.CaptureFailed,
-            failed.Length == 0 ? OperationalEventOutcome.Started : OperationalEventOutcome.Failed,
-            failed.Length == 0 ? "Traffic capture started." : "Traffic capture failed to start.",
-            failed.Length == 0 ? null : CaptureError(failed[0].Segment.WorkerNodeId),
-            failed.Length == 0 ? null : failed[0].Segment.WorkerNodeId,
+            started.Length == 0 ? TeamLabEventLevel.Error : TeamLabEventLevel.Success,
+            started.Length == 0
+                ? OperationalEventCodes.TeamLab.CaptureFailed
+                : OperationalEventCodes.TeamLab.CaptureStarted,
+            started.Length == 0 ? OperationalEventOutcome.Failed : OperationalEventOutcome.Started,
+            started.Length == 0 ? "Traffic capture failed to start." : "Traffic capture started.",
+            started.Length == 0 ? CaptureError(failed[0].Segment.WorkerNodeId) : null,
+            started.Length == 0 ? failed[0].Segment.WorkerNodeId : null,
             new Dictionary<string, object?>
             {
                 ["captureScope"] = job.Scope,
@@ -351,9 +362,9 @@ public sealed class TeamLabTrafficApplicationService(
                 ["captureWorkerCount"] = job.Segments.Select(item => item.WorkerNodeId).Distinct().Count()
             });
         PlatformTelemetry.RecordTeamLabCapture(
-            "start", job.Scope, failed.Length == 0 ? "success" : "failure");
+            "start", job.Scope, started.Length == 0 ? "failure" : "success");
         await context.SaveChangesAsync(cancellationToken);
-        if (failed.Length > 0)
+        if (started.Length == 0)
             throw new TeamLabApiContractException(
                 "operation_failed", "流量抓包无法启动", 500);
         return ToModel(job);
@@ -928,6 +939,15 @@ public sealed class TeamLabTrafficApplicationService(
                 .ToArray();
         }
 
+        // The V2 execution data plane only registers workload-endpoint observation taps
+        // (the deterministic host-side veth of each asset) on the agents. Legacy
+        // network/router/fabric observation rows carry V1-only interface tokens that do not
+        // exist on a V2 runtime, so those segments report "Observation point is not
+        // registered" from the node. Starting the capture is tolerant to that: segments that
+        // cannot start are recorded as failed while the remaining (endpoint) segments keep
+        // running and capturing, instead of the whole capture failing and stopping the ones
+        // that did start. This keeps NetworkBridge captures valid where they exist while
+        // making V2 runtimes (endpoint-only taps) fully capturable.
         selected = selected.DistinctBy(item => item.Id)
             .OrderBy(item => item.WorkerNodeId)
             .ThenBy(item => item.Kind)

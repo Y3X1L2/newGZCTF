@@ -1318,6 +1318,7 @@ public class TeamLabCommandBuilderTests
         var pcap = new TeamLabPcapService(
             registry,
             uploader,
+            commandExecutor,
             options,
             NullLogger<TeamLabPcapService>.Instance);
         var guest = new VmGuestAgentService(NullLogger<VmGuestAgentService>.Instance);
