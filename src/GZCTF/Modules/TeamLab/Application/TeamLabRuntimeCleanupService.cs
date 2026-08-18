@@ -22,8 +22,10 @@ public sealed class TeamLabRuntimeCleanupService(
     ITeamLabCaptureCleanup captureCleanup,
     IPublicUdpGatewayProvider publicGateway,
     TeamLabEventRecorder eventRecorder,
-    ITeamLabRemoteAccessService remoteAccess)
+    ITeamLabRemoteAccessService remoteAccess,
+    TeamLabReleaseImagePreparationService preparation)
 {
+    private readonly TeamLabReleaseImagePreparationService _preparation = preparation;
     public Task<TeamLabNodeResult> CleanupAsync(
         TeamLabRuntime runtime,
         CancellationToken cancellationToken) =>
@@ -121,7 +123,8 @@ public sealed class TeamLabRuntimeCleanupService(
             .Where(item => item.RuntimeId == runtime.Id && item.Generation == generation && item.ReleasedAt == null)
             .CountAsync(cancellationToken);
         await FinalizeGenerationAsync(
-            context, runtime, generation, markDestroyedOnSuccess, cancellationToken);
+            context, runtime, generation, markDestroyedOnSuccess, cancellationToken,
+            onLastConsumerDestroyed: (releaseId, ct) => _preparation.ReleaseAsync(releaseId, ct));
         if (fabricLeaseCount > 0)
         {
             eventRecorder.Record(
@@ -261,7 +264,8 @@ public sealed class TeamLabRuntimeCleanupService(
         TeamLabRuntime runtime,
         int generation,
         bool markRuntimeDestroyed,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Func<Guid, CancellationToken, Task>? onLastConsumerDestroyed = null)
     {
         var now = DateTimeOffset.UtcNow;
         foreach (var shard in runtime.Shards.Where(item => item.Generation == generation))
@@ -363,6 +367,19 @@ public sealed class TeamLabRuntimeCleanupService(
         runtime.LastError = null;
         runtime.UpdatedAt = now;
         await context.SaveChangesAsync(cancellationToken);
+
+        // Default closed-loop for prepared images: when the destroyed runtime was
+        // the last consumer of its release, release the release-scoped artifact
+        // references immediately. A later create simply re-queues preparation, so
+        // there is no reason to keep the cache warm at the platform level.
+        if (markRuntimeDestroyed && onLastConsumerDestroyed is not null)
+        {
+            var remainingConsumers = await context.TeamLabRuntimes.AsNoTracking()
+                .CountAsync(item => item.TopologyReleaseId == runtime.TopologyReleaseId &&
+                                    item.Status != TeamLabRuntimeStatus.Destroyed, cancellationToken);
+            if (remainingConsumers == 0)
+                await onLastConsumerDestroyed(runtime.TopologyReleaseId, cancellationToken);
+        }
     }
 
     private static bool IsActiveCaptureSegment(TeamLabTrafficCaptureSegment item) =>

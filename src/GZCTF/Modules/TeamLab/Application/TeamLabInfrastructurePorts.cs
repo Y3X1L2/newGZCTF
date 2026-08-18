@@ -27,6 +27,13 @@ public interface ITeamLabArtifactDistribution
         CancellationToken cancellationToken);
 
     Task ReleaseRuntimeAsync(int runtimeId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Releases release-scoped image distribution references (the preparation
+    /// claim that keeps a release's images warm). Implementations must be
+    /// idempotent so the "last consumer destroyed" path can call it freely.
+    /// </summary>
+    Task ReleaseTeamLabReleaseReferencesAsync(Guid releaseId, CancellationToken token);
 }
 
 public interface ITeamLabCaptureCleanup

@@ -61,6 +61,9 @@ public sealed class TeamLabArtifactDistribution(ImageDistributionService distrib
             throw new TeamLabRuntimeExecutionException(result.Message);
     }
 
+    public Task ReleaseTeamLabReleaseReferencesAsync(Guid releaseId, CancellationToken token) =>
+        distribution.ReleaseTeamLabReleaseReferencesAsync(releaseId, token);
+
     public Task ReleaseRuntimeAsync(int runtimeId, CancellationToken cancellationToken) =>
         distribution.ReleaseTeamLabRuntimeReferencesAsync(runtimeId, cancellationToken);
 }
