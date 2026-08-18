@@ -58,6 +58,12 @@ public sealed record OpenTeamLabReleasePageModel(
     IReadOnlyList<OpenTeamLabReleaseModel> Items,
     string? NextCursor);
 
+public sealed record TeamLabProtocolEventReportModel(
+    string Type,
+    string Source,
+    DateTimeOffset? OccurredAt = null,
+    IReadOnlyDictionary<string, string>? Parameters = null);
+
 public sealed record OpenTeamLabFailureModel(
     string Code,
     string Stage,

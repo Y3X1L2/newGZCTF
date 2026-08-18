@@ -1,12 +1,17 @@
 using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
 using GZCTF.Infrastructure.Api;
+using GZCTF.Infrastructure.Telemetry;
+using GZCTF.Models.Data;
 using GZCTF.Modules.Audit.Contracts;
+using GZCTF.Modules.Audit.Domain;
 using GZCTF.Modules.Identity.Application;
+using GZCTF.Modules.TeamLab.Domain;
 using GZCTF.Modules.TeamLab.Application;
 using GZCTF.Modules.TeamLab.Contracts;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using NSwag.Annotations;
 
 namespace GZCTF.Modules.TeamLab.Api;
@@ -28,7 +33,9 @@ public sealed class OpenTeamLabRuntimesController(
     TeamLabRuntimeOperationApplicationService operations,
     TeamLabScopeAuthorizationService scopeAuthorization,
     TeamLabRuntimeLifecycleGuard lifecycleGuard,
-    TeamLabAccessGrantService access) : ControllerBase
+    TeamLabAccessGrantService access,
+    AppDbContext context,
+    TeamLabEventRecorder eventRecorder) : ControllerBase
 {
     [HttpPost]
     [OpenApiOperation("创建运行时", "为单个队伍或自动化属主提交已发布拓扑版本的部署任务。")]
@@ -133,6 +140,43 @@ public sealed class OpenTeamLabRuntimesController(
             await RequireRuntimeScopeAsync(runtimeId, true, cancellationToken), cancellationToken);
         var operation = ApiOperationModel.FromEntity(result.Operation);
         return Accepted($"/api/open/v1/operations/{operation.Id}", operation);
+    }
+
+    [HttpPost("{runtimeId:guid}/protocol-events")]
+    [OpenApiOperation("上报协议事件", "设备/传感器把去敏的协议事件（如点位读写、握手、告警）写入运行时事件流，可用 events?stage=protocol 查询。")]
+    [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabRuntimesWrite)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<IActionResult> ReportProtocolEvent(
+        Guid runtimeId,
+        TeamLabProtocolEventReportModel model,
+        CancellationToken cancellationToken)
+    {
+        var actor = Actor();
+        await scopeAuthorization.RequireRuntimeScopeAsync(
+            runtimeId, actor.TokenId, IsAdministrator(), writable: true, cancellationToken);
+        var runtime = await context.TeamLabRuntimes.AsNoTracking()
+            .SingleOrDefaultAsync(item => item.PublicId == runtimeId, cancellationToken)
+            ?? throw new TeamLabApiContractException("runtime_not_found", "未找到 TeamLab 运行时", 404);
+        if (runtime.Status != TeamLabRuntimeStatus.Running)
+            throw new TeamLabApiContractException("runtime_not_running", "仅运行中运行时接受协议事件上报", 409);
+
+        var detail = new Dictionary<string, object?>
+        {
+            ["type"] = model.Type,
+            ["source"] = model.Source,
+            ["occurredAt"] = model.OccurredAt?.ToString("O"),
+            ["parameters"] = model.Parameters,
+        };
+        eventRecorder.Record(
+            runtime,
+            "protocol",
+            TeamLabEventLevel.Info,
+            OperationalEventCodes.TeamLab.ProtocolEvent,
+            OperationalEventOutcome.Succeeded,
+            "收到设备协议事件",
+            detail: detail);
+        await context.SaveChangesAsync(cancellationToken);
+        return Ok(new { runtimeId, stage = "protocol", type = model.Type, source = model.Source });
     }
 
     [HttpGet("{runtimeId:guid}/events")]
