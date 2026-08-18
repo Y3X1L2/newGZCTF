@@ -1,8 +1,19 @@
 # YINYU 当前开发状态
 
-更新时间：2026-08-14
+更新時間：2026-08-18
 
 本文件是跨会话的短期状态入口。长期规则见根目录 `AGENTS.md`，完整目标见 `docs/platform-commercialization-master-plan.md`。状态变化后应更新本文件，不通过追加整段聊天记录维护记忆。
+
+## 2026-08-18 TeamLab A/B/C 真实验收闭环（已完成，含证据）
+
+- 分支 `codex/phase-09-teamlab-networking`；提交 `f34a3a5` 实现真实链路策略数据面执行器。报告见 `docs/development/test-reports/2026-08-18-yinyu-teamlab-a-b-c-acceptance.md`，证据在 118 `/opt/gzctf/acceptance-evidence/`。
+- A（协议模拟）：容器模拟 MODBUS/TCP 从站（ImageTemplate 116 `modbus-slave:v1`）+ SCADA 客户端容器（117 `scada-client:v1`），同一 TeamLab 运行时（`01a014e9-...`，10.80.1.0/24）真实读写；节点 tcpdump 捕获 1200 帧端口 502，平台 `traffic/flows` 记录 MODBUS TCP 会话。✅
+- B（连接器挂载 + 链路策略）：Agent `TeamLabLinkPolicyService` 用 `tc netem/tbf` 在宿主侧 veth 施伤，主站经 `ITeamLabLinkPolicyDispatcher` 下发；packet-loss 40% → 实测 12% 丢包，latency 200ms → 实测 200.2ms，恢复后复原；连接器租约挂载/释放闭环。✅
+- C（协议事件）：设备模拟器本地 outbox → 边缘网关投递 `protocol-events` → `events?stage=protocol` 回读 6 条。✅
+- 环境治理：残留运行时 11 个全部正确销毁（先前 409 `capability_unavailable` 根因 = 节点 Docker 槽位占满 6/6、10/10），槽位已释放。
+- 已知限制（如实记录，不掩盖）：①平台 `captures` 归档 pcapng 为空帧（观察点接口 token 解析到容器内接口而非宿主 veth），待修复；②架构测试 1 例失败为 collab 未提交 WIP 传递依赖 `AgentClient`，与本次无关；③access-rule/nat 在 Agent 执行器显式 unsupported；④测试环境本次采用就地二进制补丁部署。
+- 线上 118/125 Agent sha256 `6e00fb9a337f08aa58a0892658b737ce67e10c2fa294488b1f6a65fb6454f600`（一致）；主站 `GZCTF.dll` `152d0db4ad3ce1fcd7cd78528a2a267d8787f20edd329c3fdaf044698c1c9eb3`。
+
 
 ## 1. 当前基线
 
@@ -117,6 +128,13 @@
 - libvirt 互操作释放修正：`virFree` 在 libvirt 12.0.0 不存在，域列表与 XML 字符串改用 libc `free`，域句柄仍由 `virDomainFree` 释放。
 - 2026-08-15 已部署 `teamlab-execution-chain-fix-20260815-16` 到 118，118/125 Agent 同步为 `8af6c50f...`；真机冒烟（125）确认 OVN/OVS/libvirt UUID 端口身份闭环、Docker+双 VM apply/cleanup 通过，清理后无 VM/OVS/OVN/容器残留。
 - 环境遗留：125 模板 79 本地镜像与库摘要不一致（库 `7a574e70...` / 本地 `4f529f1c...`），重新分发模板 79 前 Linux VM 计划会报 base image digest mismatch；runtime 141/142 物理资源已清理，DB 仍为 cleanup-pending，平台再次 destroy 应可收敛。
+
+### 2026-08-10 TeamLab 场景作者设置收敛部署
+
+- 候选提交 `453614b00affe17e26a63fc42da66692b896b0bb` 已以独立 release `teamlab-simplify-453614b-20260810` 部署至 118；旧 release 仍保留，数据库备份已在切换前完成。
+- 主站与 Agent 服务、首页返回和两项前向迁移 `20260810085310_RemoveTeamLabServiceInjection`、`20260810102442_RemoveTeamLabAuthoringOverrides` 均已核验。公开 OpenAPI 已不再暴露 `teamlab/service-profiles`。
+- 场景作者侧服务注入、手工镜像摘要、无状态自动恢复、发布时预制及运行命令等实现细节已移除；模板库和平台运行面仍分别负责镜像认证/静态运维账号，以及制品锁定、分发和调度。
+- 2026-08-11 验收服务器已原子切换至 `teamlab-focus-palette-20260811-1151`。本轮验证主站、Agent、首页均正常；专注模式保留可读的节点库，网段创建入口可见，框选与区域折叠入口已移除。
 
 ## 2. 产品与代码状态
 
