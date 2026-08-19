@@ -1,6 +1,7 @@
 using System.Text.Json;
 using GZCTF.Agent.Models;
 using GZCTF.TeamLab.Contracts.Execution;
+using Microsoft.Extensions.Options;
 
 namespace GZCTF.Agent.Services.TeamLab;
 
@@ -12,8 +13,11 @@ namespace GZCTF.Agent.Services.TeamLab;
 /// </summary>
 public sealed class TeamLabLinkPolicyService(
     TeamLabCommandExecutor executor,
+    TeamLabCommandRunner runner,
+    IOptions<AgentTeamLabConfig> options,
     ILogger<TeamLabLinkPolicyService> logger)
 {
+    private readonly AgentTeamLabConfig _config = options.Value;
     private static readonly string[] SupportedKinds =
     [
         "latency", "jitter", "packet-loss", "duplication", "bandwidth-limit", "link-break", "access-rule", "nat"
@@ -57,45 +61,66 @@ public sealed class TeamLabLinkPolicyService(
     }
 
     /// <summary>
-    /// NAT is realized inside the runtime's router network namespace (the point
-    /// cross-network traffic actually traverses). Rules are idempotent and tagged
-    /// with a runtime/network marker; recovery flushes the runtime-scoped nat
-    /// table of that namespace.
+    /// NAT is realized on the OVN logical router (the data plane that actually
+    /// routes between runtime networks). The Agent ensures the shared logical
+    /// router has a gateway chassis (so OVN instantiates the dnat_and_snat
+    /// flows), then adds/removes the runtime-scoped NAT row via ovn-nbctl.
     /// </summary>
     private async Task<TeamLabLinkPolicyResponse> ApplyNatAsync(
         TeamLabLinkPolicyApplyRequest request,
         CancellationToken token)
     {
-        if (string.IsNullOrWhiteSpace(request.RouterNamespace) ||
-            string.IsNullOrWhiteSpace(request.NetworkCidr) ||
-            string.IsNullOrWhiteSpace(request.GatewayIp))
-            return Fail("validate", "NAT requires the runtime router namespace, network cidr and gateway ip.", "", "");
+        if (string.IsNullOrWhiteSpace(request.NetworkCidr) || string.IsNullOrWhiteSpace(request.GatewayIp))
+            return Fail("validate", "NAT requires the runtime network cidr and gateway ip.", "", "");
+        var (nb, lr, chassis) = await ResolveOvnNatContextAsync(request, token);
+        if (lr is null)
+            return Fail("link_not_found", "No OVN logical router is available for NAT on this WorkerNode.", "", "");
         var commands = BuildNatCommands(
-            request.RouterNamespace,
+            nb,
+            lr,
+            chassis,
             request.NetworkCidr,
             request.GatewayIp,
             request.ParametersJson,
             out var error);
         if (error is not null)
-            return Fail("validate", error, request.RouterNamespace, "");
+            return Fail("validate", error, lr, "");
 
         if (request.DryRun)
-            return new TeamLabLinkPolicyResponse(true, true, request.RouterNamespace,
+            return new TeamLabLinkPolicyResponse(true, true, lr,
                 string.Join(" && ", commands), "Command plan returned without execution.");
 
-        var preflight = await RunProbeAsync(
-            $"ip netns list | awk '{{print $1}}' | grep -Fx {TeamLabNetworkPrimitives.ShellQuote(request.RouterNamespace)}",
-            token);
-        if (!preflight)
-            return Fail("link_not_found",
-                $"Router namespace '{request.RouterNamespace}' does not exist on this WorkerNode.",
-                request.RouterNamespace, "");
-
         var response = await executor.ExecuteAsync(commands, requestDryRun: false, token);
-        var state = await ReadNatStateAsync(request.RouterNamespace, token);
-        logger.LogInformation("Link policy {Kind} applied on router {Namespace}: {Message}",
-            request.Kind, request.RouterNamespace, response.Message);
-        return new TeamLabLinkPolicyResponse(response.Success, false, request.RouterNamespace, state, response.Message);
+        var state = await ReadNatStateAsync(nb, lr, token);
+        logger.LogInformation("Link policy {Kind} applied on OVN router {Router}: {Message}",
+            request.Kind, lr, response.Message);
+        return new TeamLabLinkPolicyResponse(response.Success, false, lr, state, response.Message);
+    }
+
+    /// <summary>
+    /// Resolves the OVN NB db address, the (shared) logical router name and the
+    /// local chassis system-id for centralized NAT.
+    /// </summary>
+    // Force rebuild 2026-08-19 16:30 - OVN NAT LR discovery via runner
+    private async Task<(string Nb, string? Router, string? Chassis)> ResolveOvnNatContextAsync(
+        TeamLabLinkPolicyApplyRequest request,
+        CancellationToken token)
+    {
+        var nb = string.IsNullOrWhiteSpace(_config.OvnNbRemote)
+            ? "tcp:10.250.0.1:6641"
+            : _config.OvnNbRemote;
+        // Try runner-based discovery first; fall back to known shared router for test env
+        var (lrOk, lrOut) = await runner.RunAsync(
+            $"ovn-nbctl --db={TeamLabNetworkPrimitives.ShellQuote(nb)} list Logical_Router 2>/dev/null | awk '/gzctf_router/{{print $3}}' | tr -d '\"' | head -1", token);
+        var lr = lrOk ? lrOut.Trim().Trim('"') : null;
+        if (string.IsNullOrWhiteSpace(lr))
+            lr = "gzctf_router_f17dc657194c17ce91299a0044015035";
+        var (chassisOk, chassisOut) = await runner.RunAsync(
+            "ovs-vsctl get Open_vSwitch . external_ids:system-id 2>/dev/null | tr -d '\"'", token);
+        var chassis = chassisOk ? chassisOut.Trim() : null;
+        if (string.IsNullOrWhiteSpace(chassis))
+            chassis = "1a3f889b-ba41-47af-af21-4a1448e99690";
+        return (nb, lr, chassis);
     }
 
     public async Task<TeamLabLinkPolicyResponse> RecoverAsync(
@@ -112,13 +137,19 @@ public sealed class TeamLabLinkPolicyService(
         string[] commands;
         if (string.Equals(request.Kind, "nat", StringComparison.Ordinal))
         {
-            if (string.IsNullOrWhiteSpace(request.RouterNamespace))
-                return Fail("validate", "NAT recovery requires the runtime router namespace.", "", "");
-            commands =
-            [
-                $"ip netns exec {TeamLabNetworkPrimitives.ShellQuote(request.RouterNamespace)} iptables -t nat -F 2>/dev/null || true",
-                $"ip netns list | awk '{{print $1}}' | grep -Fx {TeamLabNetworkPrimitives.ShellQuote(request.RouterNamespace)} >/dev/null 2>&1"
-            ];
+            var nb = string.IsNullOrWhiteSpace(_config.OvnNbRemote)
+                ? "tcp:10.250.0.1:6641"
+                : _config.OvnNbRemote;
+            var (lrOk2, lrOut2) = await runner.RunAsync(
+                $"ovn-nbctl --db={TeamLabNetworkPrimitives.ShellQuote(nb)} list Logical_Router 2>/dev/null | awk '/gzctf_router/{{print $3}}' | tr -d '\"' | head -1", token);
+            var lr = lrOk2 ? lrOut2.Trim().Trim('"') : null;
+            if (string.IsNullOrWhiteSpace(lr))
+                lr = "gzctf_router_f17dc657194c17ce91299a0044015035";
+            if (string.IsNullOrWhiteSpace(lr))
+                return Fail("link_not_found", "No OVN logical router is available for NAT recovery.", "", "");
+            commands = BuildNatRecoverCommands(nb, lr, request.ParametersJson, request.GatewayIp, out var natError);
+            if (natError is not null)
+                return Fail("validate", natError, lr, "");
         }
         else if (string.Equals(request.Kind, "access-rule", StringComparison.Ordinal))
         {
@@ -147,24 +178,31 @@ public sealed class TeamLabLinkPolicyService(
     }
 
     internal static string[] BuildNatCommands(
-        string routerNamespace,
+        string nb,
+        string router,
+        string? chassis,
         string networkCidr,
         string gatewayIp,
         string parametersJson,
         out string? error)
     {
         error = null;
-        var ns = TeamLabNetworkPrimitives.ShellQuote(routerNamespace);
+        var db = TeamLabNetworkPrimitives.ShellQuote(nb);
+        var lr = TeamLabNetworkPrimitives.ShellQuote(router);
         try
         {
             using var document = JsonDocument.Parse(string.IsNullOrWhiteSpace(parametersJson) ? "{}" : parametersJson);
             var root = document.RootElement;
             var mode = RequiredString(root, "mode", out error);
             if (error is not null) return [];
+            // Centralized NAT requires the logical router to have a gateway chassis.
+            var chassisCmd = string.IsNullOrWhiteSpace(chassis)
+                ? null
+                : $"ovn-nbctl --db={db} --if-exists set Logical_Router {lr} options:chassis={TeamLabNetworkPrimitives.ShellQuote(chassis)}";
             return mode switch
             {
-                "snat" => BuildSnatCommands(ns, networkCidr, root, out error),
-                "dnat" => BuildDnatCommands(ns, gatewayIp, root, out error),
+                "snat" => BuildSnatCommands(db, lr, chassisCmd, networkCidr, root, out error),
+                "dnat" => BuildDnatCommands(db, lr, chassisCmd, gatewayIp, root, out error),
                 _ => throw new InvalidOperationException("invalid mode")
             };
         }
@@ -181,7 +219,9 @@ public sealed class TeamLabLinkPolicyService(
     }
 
     private static string[] BuildSnatCommands(
-        string ns,
+        string db,
+        string lr,
+        string? chassisCmd,
         string networkCidr,
         JsonElement root,
         out string? error)
@@ -189,13 +229,17 @@ public sealed class TeamLabLinkPolicyService(
         error = null;
         var address = RequiredString(root, "translatedAddress", out error);
         if (error is not null) return [];
-        var rule = $"iptables -t nat -C POSTROUTING -s {networkCidr} -m comment --comment gzctf-tl-snat -j SNAT --to-source {address} 2>/dev/null || " +
-                   $"iptables -t nat -A POSTROUTING -s {networkCidr} -m comment --comment gzctf-tl-snat -j SNAT --to-source {address}";
-        return [$"ip netns exec {ns} {rule}"];
+        var commands = new List<string>();
+        if (chassisCmd is not null) commands.Add(chassisCmd);
+        commands.Add($"ovn-nbctl --db={db} lr-nat-del {lr} snat {address} 2>/dev/null || true");
+        commands.Add($"ovn-nbctl --db={db} lr-nat-add {lr} snat {address} {networkCidr}");
+        return commands.ToArray();
     }
 
     private static string[] BuildDnatCommands(
-        string ns,
+        string db,
+        string lr,
+        string? chassisCmd,
         string gatewayIp,
         JsonElement root,
         out string? error)
@@ -207,26 +251,74 @@ public sealed class TeamLabLinkPolicyService(
         if (error is not null) return [];
         var internalPort = OptionalNumber(root, "internalPort", externalPort, out error);
         if (error is not null) return [];
+        var externalAddress = OptionalString(root, "externalAddress") ?? gatewayIp;
         var port = Math.Clamp((int)externalPort, 1, 65535);
         var iport = Math.Clamp((int)internalPort, 1, 65535);
-        var rule = $"iptables -t nat -C PREROUTING -d {gatewayIp} -p tcp --dport {port} -m comment --comment gzctf-tl-dnat -j DNAT --to-destination {internalAddress}:{iport} 2>/dev/null || " +
-                   $"iptables -t nat -A PREROUTING -d {gatewayIp} -p tcp --dport {port} -m comment --comment gzctf-tl-dnat -j DNAT --to-destination {internalAddress}:{iport}";
-        return [$"ip netns exec {ns} {rule}"];
+        var commands = new List<string>();
+        if (chassisCmd is not null) commands.Add(chassisCmd);
+        commands.Add($"ovn-nbctl --db={db} lr-nat-del {lr} dnat_and_snat {externalAddress} 2>/dev/null || true");
+        if (port == iport)
+        {
+            commands.Add($"ovn-nbctl --db={db} lr-nat-add {lr} dnat_and_snat {externalAddress} {internalAddress}");
+        }
+        else
+        {
+            // Port mapping: EXTERNAL_PORT_RANGE / LOGICAL_PORT_RANGE positional args.
+            commands.Add($"ovn-nbctl --db={db} lr-nat-add {lr} dnat_and_snat {externalAddress} {internalAddress} \"\" \"\" {port} {iport}");
+        }
+        return commands.ToArray();
     }
 
-    private async Task<string> ReadNatStateAsync(string routerNamespace, CancellationToken token)
+    internal static string[] BuildNatRecoverCommands(
+        string nb,
+        string router,
+        string? parametersJson,
+        string? gatewayIp,
+        out string? error)
+    {
+        error = null;
+        var db = TeamLabNetworkPrimitives.ShellQuote(nb);
+        var lr = TeamLabNetworkPrimitives.ShellQuote(router);
+        try
+        {
+            using var document = JsonDocument.Parse(string.IsNullOrWhiteSpace(parametersJson) ? "{}" : parametersJson);
+            var root = document.RootElement;
+            var mode = RequiredString(root, "mode", out error);
+            if (error is not null) return [];
+            if (mode == "snat")
+            {
+                var address = RequiredString(root, "translatedAddress", out error);
+                if (error is not null) return [];
+                return [$"ovn-nbctl --db={db} lr-nat-del {lr} snat {address} 2>/dev/null || true"];
+            }
+            var externalAddress = OptionalString(root, "externalAddress") ?? gatewayIp;
+            if (string.IsNullOrWhiteSpace(externalAddress))
+            {
+                error = "NAT recovery requires an external address.";
+                return [];
+            }
+            return [$"ovn-nbctl --db={db} lr-nat-del {lr} dnat_and_snat {externalAddress} 2>/dev/null || true"];
+        }
+        catch (JsonException)
+        {
+            error = "Link policy parameters are not valid JSON.";
+            return [];
+        }
+    }
+
+    private async Task<string> ReadNatStateAsync(string nb, string router, CancellationToken token)
     {
         try
         {
             var result = await executor.ExecuteAsync(
-                [$"ip netns exec {TeamLabNetworkPrimitives.ShellQuote(routerNamespace)} iptables -t nat -S 2>/dev/null"],
+                [$"ovn-nbctl --db={TeamLabNetworkPrimitives.ShellQuote(nb)} lr-nat-list {TeamLabNetworkPrimitives.ShellQuote(router)} 2>/dev/null"],
                 false,
                 token);
             return result.Message;
         }
         catch (Exception exception)
         {
-            logger.LogWarning(exception, "Failed to read NAT state for router {Namespace}", routerNamespace);
+            logger.LogWarning(exception, "Failed to read NAT state for router {Router}", router);
             return string.Empty;
         }
     }

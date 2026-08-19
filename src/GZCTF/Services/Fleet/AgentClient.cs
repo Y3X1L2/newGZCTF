@@ -2305,7 +2305,8 @@ public record TeamLabLinkPolicyRecoverRequest(
     int RuntimeId = 0,
     string? RouterNamespace = null,
     string? NetworkCidr = null,
-    string? GatewayIp = null);
+    string? GatewayIp = null,
+    string? ParametersJson = null);
 
 public record TeamLabLinkPolicyResponse(
     bool Success,

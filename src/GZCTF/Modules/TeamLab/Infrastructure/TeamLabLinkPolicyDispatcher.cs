@@ -51,6 +51,7 @@ public sealed class TeamLabLinkPolicyDispatcher(AgentClient agent) : ITeamLabLin
         string networkKey,
         string assetKey,
         string kind,
+        string? parameters,
         CancellationToken cancellationToken)
     {
         var dispatch = Resolve(runtime, assetKey);
@@ -68,7 +69,8 @@ public sealed class TeamLabLinkPolicyDispatcher(AgentClient agent) : ITeamLabLin
                 RuntimeId: runtime.Id,
                 RouterNamespace: TeamLabResourceNameFactory.RouterNamespace(runtime.Id, dispatch.Value.ShardId),
                 NetworkCidr: network?.Cidr,
-                GatewayIp: network?.GatewayIp),
+                GatewayIp: network?.GatewayIp,
+                ParametersJson: parameters),
             cancellationToken);
         if (response is null)
             return new TeamLabLinkPolicyDispatchResult(false, "Agent 未返回链路策略恢复结果");

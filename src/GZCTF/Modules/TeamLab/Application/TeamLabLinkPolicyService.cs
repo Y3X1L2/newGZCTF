@@ -190,6 +190,7 @@ public sealed class TeamLabLinkPolicyService(AppDbContext context, ITeamLabLinkP
                 networkKey,
                 resolvedAsset,
                 TeamLabCapabilityResourceContractMapper.LinkPolicyKindName(policy.Kind),
+                policy.ParametersJson,
                 cancellationToken);
             if (!response.Success)
                 policy.LastError = Truncate(response.Message, 512);
@@ -401,6 +402,8 @@ internal static class TeamLabLinkPolicyParameters
         if (OptionalAddress(values, "internalAddress", "link_policy_parameters_invalid") is not { } internalAddress)
             throw ParametersInvalid("dnat 必须声明 internalAddress");
         canonical["internalAddress"] = JsonSerializer.SerializeToElement(internalAddress);
+        if (OptionalAddress(values, "externalAddress", "link_policy_parameters_invalid") is { } externalAddress)
+            canonical["externalAddress"] = JsonSerializer.SerializeToElement(externalAddress);
         if (values.TryGetValue("internalPort", out var internalPort) && internalPort.ValueKind == JsonValueKind.Number)
         {
             _ = RequiredPort(values, "internalPort", "link_policy_parameters_invalid");

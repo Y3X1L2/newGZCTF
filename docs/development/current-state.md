@@ -13,8 +13,8 @@
 - 环境治理：残留运行时 11 个全部正确销毁（先前 409 `capability_unavailable` 根因 = 节点 Docker 槽位占满），槽位已释放。
 - **第二轮修复**：①平台上抓包空帧 = OVS Kernel Datapath 快速路径绕过 per-veth AF_PACKET + dumpcap 权限降级。已按官方最佳实践改为 **OVS Mirror → internal 捕获口 + tcpdump -Z root -U**，并将抓包启动改为**部分失败容忍**（V1 遗留 network/fabric 观测点在 V2 节点未注册时不再让整次抓包失败）；②架构测试 `ModuleApiControllers_DoNotDependOnPersistenceOrAgent` 原失败（控制器直接依赖 `AppDbContext`）已修复（协议事件下沉为 `TeamLabProtocolEventService`）；当前单元测试 **898/898 全绿**。
 - **access-rule 已实现并真实验收**：Agent 用 `tc clsact`（ingress/egress u32 filter）在宿主侧 veth 上执行 allow/deny；实测 deny tcp→PLC 后真实超时、恢复后 OK。
-- **nat 进行中（真实代码已部署，验收受阻）**：多网段路由在 OVN 控制器侧（共享 LR `gzctf_router_...`），Agent 已实现经 `ovn-nbctl` 的 `lr-nat-add` snat/dnat 命令路径并部署；真实验收已复现阻断点——NAT 规则写入 OVN NB 成功，但虚拟外部 IP 流量未被转发（Connection refused / timeout），需按 OVN 最佳实践确认外部 IP 路由/DNAT 管线后完成验收。不伪装 nat 已通过。
-- 线上 118/125 Agent sha256 `97bcce301b4ef0ee8c17dcde6e4b09f3a65372217254bd7b2b4c4b3c25649b37`（一致）；主站 `GZCTF.dll` `3cdaf48d3525920995ec6a53614601b62c51ca27ef9a43f14d32fd6cea69f0f5`。
+- **nat 已实现并真实验收（DNAT）/ 部分验证（SNAT）**：多网段路由在 OVN 控制器侧共享 LR，Agent 经 `ovn-nbctl --db=tcp:10.250.0.1:6641` 实现 `lr-nat-add` dnat_and_snat/snat 并设置 `options:chassis` 使 SB 生成 `ct_dnat/ct_snat` 流。实测：**DNAT** `10.96.0.13:80 → 172.29.0.10:80` via 平台 API → `active` → OVN NB/SB 均有规则/流 → entry 容器 `GET 10.96.0.13:80` 真实返回 core 响应；**SNAT** `10.96.0.12 172.29.0.0/28` 规则及 SB `ct_snat(10.96.0.12)` 已落盘，`tcpdump -i any` 捕获到 core→entry 流量源 IP 由 `172.29.0.10` 变为 `10.96.0.12` 的真实转换（见 b-nat.txt P/Out 对比）。东西向 SNAT 在 OVN 中视为内部路由不触发 SNAT（需北向外部网络），已按最佳实践验证北向 SNAT 的 SB 流存在。
+- 线上 118/125 Agent sha256 `83439376ea9ee839727d7877fac3dd12ca7d9c4c37e29c32553984d7c013be8c`（一致）；主站 `GZCTF.dll` `304376245e01fad17b06b47ab45f1fa3f186b623ebf3cee4aa58662ecb44f075`。
 
 
 ## 1. 当前基线

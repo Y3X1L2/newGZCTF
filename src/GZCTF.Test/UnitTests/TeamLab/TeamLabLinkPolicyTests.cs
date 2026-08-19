@@ -33,7 +33,7 @@ public sealed class TeamLabLinkPolicyTests
                 applySucceeds, applySucceeds ? "applied" : "agent failed"));
         dispatcher.Setup(item => item.RecoverAsync(
                 It.IsAny<TeamLabRuntime>(), It.IsAny<string>(), It.IsAny<string>(),
-                It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new TeamLabLinkPolicyDispatchResult(
                 applySucceeds, applySucceeds ? "recovered" : "agent failed"));
         return new TeamLabLinkPolicyService(context, dispatcher.Object);

@@ -23,6 +23,7 @@ public class AgentTeamLabConfig
     public string OvsLocalEndpoint { get; set; } = "unix:/var/run/openvswitch/db.sock";
     public string OvsLocalDatabase { get; set; } = "Open_vSwitch";
     public string OvsIntegrationBridgeName { get; set; } = "br-int";
+    public string OvnNbRemote { get; set; } = "tcp:10.250.0.1:6641";
     public int ManagedDhcpLeaseSeconds { get; set; } = 3600;
 }
 
@@ -385,7 +386,8 @@ public record TeamLabLinkPolicyRecoverRequest(
     int RuntimeId = 0,
     string? RouterNamespace = null,
     string? NetworkCidr = null,
-    string? GatewayIp = null);
+    string? GatewayIp = null,
+    string? ParametersJson = null);
 
 public record TeamLabLinkPolicyResponse(
     bool Success,

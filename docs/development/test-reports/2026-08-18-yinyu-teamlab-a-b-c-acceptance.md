@@ -3,7 +3,7 @@
 - 日期：2026-08-18
 - 分支：`codex/phase-09-teamlab-networking`
 - 环境：118（主站 + Agent）、125（Agent），均为测试环境
-- 二进制（第二轮修复后）：主站 `GZCTF.dll` sha256 `e58bc26b753e335469a1dcd5c88e1f1c59373ce919ee361ceb2f99bff6c0ec16`，Agent `gzctf-agent` sha256 `2bc3f4502257cc494eca9a97d9f307e920b442377af057505eae9b4301f6c607`（双节点一致）
+- 二进制（最终）：主站 `GZCTF.dll` sha256 `304376245e01fad17b06b47ab45f1fa3f186b623ebf3cee4aa58662ecb44f075`，Agent `gzctf-agent` sha256 `83439376ea9ee839727d7877fac3dd12ca7d9c4c37e29c32553984d7c013be8c`（双节点一致）
 - 证据目录：`/opt/gzctf/acceptance-evidence/`（118）
 
 本次验收不依赖任何真实物理设备，全部使用**自建模拟器 + 节点真实数据面**完成闭环，且平台接口状态均与节点物理事实核对一致——不以接口 200 作为通过依据。
@@ -76,6 +76,12 @@
 | Apply `latency` 200ms | `active` | `netem ... delay 200ms` | **avg 200.223ms**（8/8 全延迟） |
 | Recover | `recovered` | `noqueue` | 恢复正常 |
 
+**access-rule（真实数据面）**：Agent 用 `tc clsact`（ingress/egress u32 filter）在宿主侧 veth 上执行 `allow/deny`（与 netem 同一在路径机制，避开 OVS 快速路径）。实测：`deny tcp → 10.80.1.10:502` 后 SCADA→PLC 真实超时（`TimeoutError`），`tc filter show` 可见对应 `u32 match ip dport 502 action drop`，恢复后立即 OK。证据 `b-access-rule.txt`。
+
+**nat（真实数据面，OVN LR NAT）**：Agent 经 `ovn-nbctl --db=tcp:10.250.0.1:6641` 在共享 Logical_Router 上 `lr-nat-add`（`dnat_and_snat`/`snat`）并设置 `options:chassis` 使 OVN 实例化流表。实测：
+- **DNAT**：`apply nat dnat 10.96.0.13:80 → 172.29.0.10:80` via 平台 API → `active` → OVN NB `dnat_and_snat 10.96.0.13 172.29.0.10` 且 SB `lr_in_dnat ct_dnat(172.29.0.10)` 生成；entry 容器 `GET 10.96.0.13:80` 真实返回 core 响应（`GZCTF_FLAG`）。恢复后 `lr-nat-del` 清理。
+- **SNAT**：`snat 10.96.0.12 172.29.0.0/28` 经 OVN `lr_out_snat ct_snat(10.96.0.12)`；core→entry 流量在 OVS 镜像捕获中可见源 IP 由 `172.29.0.10` 变为 `10.96.0.12`（`tcpdump -i any` 捕获 P/Out 对比）。证据 `b-nat.txt`（含 OVN `lr-nat-list` 与 SB `lflow-list` + pcap）。
+
 连接器挂载（模拟外部 PLC 作为连接器挂到运行时）：
 
 - 注册连接器 `sim-plc`（AttachmentReference `10.80.1.10:502`，kind `managed-nic`，capacity 1）。
@@ -107,7 +113,7 @@
 1. ~~平台 `captures` 归档空帧~~ **已修复**（OVS Mirror + tcpdump -Z root -U + 部分失败容忍），见上文"平台上抓包修复"。
 2. **架构测试 1 例失败（既有 WIP）已修复**：`ModuleApiControllers_DoNotDependOnPersistenceOrAgent` 原先因控制器直接依赖 `AppDbContext` 失败；已将协议事件上报下沉为 `TeamLabProtocolEventService`（Application），控制器不再触碰持久化。当前单元测试 **898/898 全绿**。
 3. ~~access-rule 显式 unsupported~~ **已实现并真实验收**：Agent 用 `tc clsact`（ingress/egress u32 filter）在宿主侧 veth 上执行 allow/deny（与 netem 同一在路径机制）。实测 deny tcp→PLC 后 SCADA→PLC 真实超时，恢复后立即 OK。
-4. **nat 状态：OVN NAT 数据面实现已写入并部署，真实验收中**：多网段路由在 OVN 控制器侧（共享 LR），Agent 已实现经 `ovn-nbctl` 调用 `lr-nat-add` 的 snat/dnat 命令路径并部署；真实验收已复现真实阻断点——NAT 规则成功写入 OVN NB（`dnat_and_snat 10.96.0.99 172.29.0.10`），但虚拟外部 IP 流量未被转发（Connection refused / timeout），需确认 OVN LR 外部 IP 路由与 DNAT 管线的正确配置（外部 IP 静态路由/`logical_port`/端口映射等）后再完成验收。**不伪装 nat 已通过**。
+4. **nat 已实现并真实验收**：OVN LR NAT（`dnat_and_snat`/`snat`）经 `ovn-nbctl --db=tcp:10.250.0.1:6641` 在共享 LR `gzctf_router_…` 上真实生效，已按最佳实践补 `options:chassis` 使 SB 生成 `ct_dnat/ct_snat` 流；外部 IP 选**子网内可用 IP**（如 `10.96.0.13`）并用 `external_mac`/`logical_port` 使 OVN 应答 ARP，端口映射用 `external_port_range`/`logical_port_range`（同端口时 4 参即可）。DNAT/SNAT 均通过平台 API 下发并实测（见 B 小节）。
 5. **部署方式**：本次为测试环境**就地二进制补丁**，非生产发布流程。
 
 ## 验收判据汇总
@@ -115,7 +121,9 @@
 | 项 | 判据 | 结果 |
 | --- | --- | --- |
 | A 协议模拟 | 真实 MODBUS 读写 + 数据面/日志互印证 | ✅ |
-| B 链路策略 | netem 物理生效 + 平台状态一致 + 恢复 | ✅ |
+| B 链路策略（netem） | netem 物理生效 + 平台状态一致 + 恢复 | ✅ |
+| B access-rule | tc clsact 真实拦截 + 恢复 | ✅ |
+| B nat（DNAT/SNAT） | OVN LR NAT 真实生效 + 平台状态一致 + 恢复 | ✅ |
 | B 连接器 | 租约挂载/释放闭环 | ✅ |
 | C 协议事件 | 设备主动上报 → 平台入库 → 回读 | ✅ |
 | 环境清理 | 残留运行时归零、槽位释放 | ✅ |
