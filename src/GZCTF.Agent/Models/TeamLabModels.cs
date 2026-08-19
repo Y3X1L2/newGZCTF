@@ -369,7 +369,11 @@ public record TeamLabLinkPolicyApplyRequest(
     string AssetKey,
     string Kind,
     string ParametersJson,
-    bool DryRun = false);
+    bool DryRun = false,
+    int RuntimeId = 0,
+    string? RouterNamespace = null,
+    string? NetworkCidr = null,
+    string? GatewayIp = null);
 
 public record TeamLabLinkPolicyRecoverRequest(
     Guid RuntimePublicId,
@@ -377,7 +381,11 @@ public record TeamLabLinkPolicyRecoverRequest(
     string NetworkKey,
     string AssetKey,
     string Kind,
-    bool DryRun = false);
+    bool DryRun = false,
+    int RuntimeId = 0,
+    string? RouterNamespace = null,
+    string? NetworkCidr = null,
+    string? GatewayIp = null);
 
 public record TeamLabLinkPolicyResponse(
     bool Success,

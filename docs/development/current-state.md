@@ -12,7 +12,9 @@
 - C（协议事件）：设备模拟器本地 outbox → 边缘网关投递 `protocol-events` → `events?stage=protocol` 回读。✅
 - 环境治理：残留运行时 11 个全部正确销毁（先前 409 `capability_unavailable` 根因 = 节点 Docker 槽位占满），槽位已释放。
 - **第二轮修复**：①平台上抓包空帧 = OVS Kernel Datapath 快速路径绕过 per-veth AF_PACKET + dumpcap 权限降级。已按官方最佳实践改为 **OVS Mirror → internal 捕获口 + tcpdump -Z root -U**，并将抓包启动改为**部分失败容忍**（V1 遗留 network/fabric 观测点在 V2 节点未注册时不再让整次抓包失败）；②架构测试 `ModuleApiControllers_DoNotDependOnPersistenceOrAgent` 原失败（控制器直接依赖 `AppDbContext`）已修复（协议事件下沉为 `TeamLabProtocolEventService`）；当前单元测试 **898/898 全绿**。
-- 线上 118/125 Agent sha256 `2bc3f4502257cc494eca9a97d9f307e920b442377af057505eae9b4301f6c607`（一致）；主站 `GZCTF.dll` `e58bc26b753e335469a1dcd5c88e1f1c59373ce919ee361ceb2f99bff6c0ec16`。
+- **access-rule 已实现并真实验收**：Agent 用 `tc clsact`（ingress/egress u32 filter）在宿主侧 veth 上执行 allow/deny；实测 deny tcp→PLC 后真实超时、恢复后 OK。
+- **nat 进行中（真实代码已部署，验收受阻）**：多网段路由在 OVN 控制器侧（共享 LR `gzctf_router_...`），Agent 已实现经 `ovn-nbctl` 的 `lr-nat-add` snat/dnat 命令路径并部署；真实验收已复现阻断点——NAT 规则写入 OVN NB 成功，但虚拟外部 IP 流量未被转发（Connection refused / timeout），需按 OVN 最佳实践确认外部 IP 路由/DNAT 管线后完成验收。不伪装 nat 已通过。
+- 线上 118/125 Agent sha256 `97bcce301b4ef0ee8c17dcde6e4b09f3a65372217254bd7b2b4c4b3c25649b37`（一致）；主站 `GZCTF.dll` `3cdaf48d3525920995ec6a53614601b62c51ca27ef9a43f14d32fd6cea69f0f5`。
 
 
 ## 1. 当前基线

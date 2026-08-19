@@ -26,6 +26,7 @@ public sealed class TeamLabLinkPolicyDispatcher(AgentClient agent) : ITeamLabLin
         var dispatch = Resolve(runtime, assetKey);
         if (dispatch is null)
             return new TeamLabLinkPolicyDispatchResult(false, "运行时没有可用的执行节点");
+        var network = runtime.Networks.FirstOrDefault(item => item.TopologyKey == networkKey);
         var response = await agent.ApplyTeamLabLinkPolicyAsync(
             dispatch.Value.NodeId,
             new TeamLabLinkPolicyApplyRequest(
@@ -34,7 +35,11 @@ public sealed class TeamLabLinkPolicyDispatcher(AgentClient agent) : ITeamLabLin
                 networkKey,
                 dispatch.Value.AssetKey,
                 kind,
-                parameters),
+                parameters,
+                RuntimeId: runtime.Id,
+                RouterNamespace: TeamLabResourceNameFactory.RouterNamespace(runtime.Id, dispatch.Value.ShardId),
+                NetworkCidr: network?.Cidr,
+                GatewayIp: network?.GatewayIp),
             cancellationToken);
         if (response is null)
             return new TeamLabLinkPolicyDispatchResult(false, "Agent 未返回链路策略结果");
@@ -51,6 +56,7 @@ public sealed class TeamLabLinkPolicyDispatcher(AgentClient agent) : ITeamLabLin
         var dispatch = Resolve(runtime, assetKey);
         if (dispatch is null)
             return new TeamLabLinkPolicyDispatchResult(false, "运行时没有可用的执行节点");
+        var network = runtime.Networks.FirstOrDefault(item => item.TopologyKey == networkKey);
         var response = await agent.RecoverTeamLabLinkPolicyAsync(
             dispatch.Value.NodeId,
             new TeamLabLinkPolicyRecoverRequest(
@@ -58,29 +64,31 @@ public sealed class TeamLabLinkPolicyDispatcher(AgentClient agent) : ITeamLabLin
                 dispatch.Value.Generation,
                 networkKey,
                 dispatch.Value.AssetKey,
-                kind),
+                kind,
+                RuntimeId: runtime.Id,
+                RouterNamespace: TeamLabResourceNameFactory.RouterNamespace(runtime.Id, dispatch.Value.ShardId),
+                NetworkCidr: network?.Cidr,
+                GatewayIp: network?.GatewayIp),
             cancellationToken);
         if (response is null)
             return new TeamLabLinkPolicyDispatchResult(false, "Agent 未返回链路策略恢复结果");
         return new TeamLabLinkPolicyDispatchResult(response.Success, response.Message);
     }
 
-    private static (Guid NodeId, string AssetKey, Guid RuntimePublicId, int Generation)? Resolve(
+    private static (Guid NodeId, string AssetKey, Guid RuntimePublicId, int Generation, int ShardId)? Resolve(
         TeamLabRuntime runtime,
         string assetKey)
     {
-        var nodeId = runtime.Shards
+        var shard = runtime.Shards
             .FirstOrDefault(shard => shard.Status is not (TeamLabRuntimeStatus.Destroyed
-                or TeamLabRuntimeStatus.Destroying or TeamLabRuntimeStatus.CleanupPending))?.WorkerNodeId;
+                or TeamLabRuntimeStatus.Destroying or TeamLabRuntimeStatus.CleanupPending));
+        var nodeId = shard?.WorkerNodeId;
         nodeId ??= runtime.Assets.Select(asset => (Guid?)asset.WorkerNodeId).FirstOrDefault();
         if (nodeId is null || string.IsNullOrWhiteSpace(assetKey)) return null;
 
-        var generation = runtime.Shards
-            .Where(shard => shard.WorkerNodeId == nodeId)
-            .OrderByDescending(shard => shard.Id)
-            .Select(shard => shard.Generation)
-            .FirstOrDefault();
+        var generation = shard?.Generation ?? runtime.Generation;
+        var shardId = shard?.Id ?? 0;
         if (generation <= 0) generation = runtime.Generation;
-        return (nodeId.Value, assetKey, runtime.PublicId, generation);
+        return (nodeId.Value, assetKey, runtime.PublicId, generation, shardId);
     }
 }

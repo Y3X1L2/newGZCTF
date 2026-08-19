@@ -104,10 +104,11 @@
 
 ## 已知限制（如实记录，本轮已修复大部分）
 
-1. ~~平台 `captures` 归档空帧~~ **已修复**（OVS Mirror + tcpdump -Z root -U + 范围收敛到 WorkloadEndpoint），见上文"平台上抓包修复"。
+1. ~~平台 `captures` 归档空帧~~ **已修复**（OVS Mirror + tcpdump -Z root -U + 部分失败容忍），见上文"平台上抓包修复"。
 2. **架构测试 1 例失败（既有 WIP）已修复**：`ModuleApiControllers_DoNotDependOnPersistenceOrAgent` 原先因控制器直接依赖 `AppDbContext` 失败；已将协议事件上报下沉为 `TeamLabProtocolEventService`（Application），控制器不再触碰持久化。当前单元测试 **898/898 全绿**。
-3. **access-rule / nat** 策略在 Agent 执行器上显式返回 `unsupported`（诚实不造假），未纳入本次验收范围。
-4. **部署方式**：本次为测试环境**就地二进制补丁**（停服→替换→起服），非生产发布流程；生产仍需走完整 release 包 + 原子软链。
+3. ~~access-rule 显式 unsupported~~ **已实现并真实验收**：Agent 用 `tc clsact`（ingress/egress u32 filter）在宿主侧 veth 上执行 allow/deny（与 netem 同一在路径机制）。实测 deny tcp→PLC 后 SCADA→PLC 真实超时，恢复后立即 OK。
+4. **nat 状态：OVN NAT 数据面实现已写入并部署，真实验收中**：多网段路由在 OVN 控制器侧（共享 LR），Agent 已实现经 `ovn-nbctl` 调用 `lr-nat-add` 的 snat/dnat 命令路径并部署；真实验收已复现真实阻断点——NAT 规则成功写入 OVN NB（`dnat_and_snat 10.96.0.99 172.29.0.10`），但虚拟外部 IP 流量未被转发（Connection refused / timeout），需确认 OVN LR 外部 IP 路由与 DNAT 管线的正确配置（外部 IP 静态路由/`logical_port`/端口映射等）后再完成验收。**不伪装 nat 已通过**。
+5. **部署方式**：本次为测试环境**就地二进制补丁**，非生产发布流程。
 
 ## 验收判据汇总
 
