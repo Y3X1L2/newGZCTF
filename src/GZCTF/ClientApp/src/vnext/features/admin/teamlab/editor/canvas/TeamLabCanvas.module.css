@@ -29,8 +29,16 @@
   opacity: 0.4;
 }
 
-.canvas :global(.react-flow__edge.selected) {
-  z-index: 3;
+/*
+ * Stacking is NOT expressed here. React Flow puts the effective z-index on each
+ * object's container (the edge group's parent `svg`), so a rule on
+ * `.react-flow__edge` had no effect — which is why links used to sit under region
+ * rectangles. The order now comes from `topologyLayers` via `zIndexMode="manual"`.
+ */
+
+/* Keep the connect drag line above everything it may cross. */
+.canvas :global(.react-flow__connectionline) {
+  z-index: 50;
 }
 
 .toolbar {
@@ -90,21 +98,31 @@
   fill: var(--yn-color-warning);
 }
 
+/* One hue per device type, matching the card accents in TopologyNodeShell. */
 .miniMap_docker {
   fill: var(--yn-color-info);
 }
 
 .miniMap_linux-vm {
-  fill: var(--yn-color-muted);
+  fill: #8a5cd6;
 }
 
 .miniMap_windows-vm {
-  fill: var(--yn-color-info);
+  fill: #0f9bb5;
 }
 
 .miniMap_region {
-  fill: var(--yn-color-brand);
-  opacity: 0.35;
+  fill: var(--yn-color-border-strong);
+  opacity: 0.28;
+}
+
+/*
+ * Level of detail. Below the compact threshold a device's mono detail row and the
+ * link labels are sub-pixel noise; the node and edge modules hide them via these
+ * global classes so one zoom subscription drives the whole scene.
+ */
+.canvas:global(.teamlab-lod-minimal) :global(.react-flow__handle) {
+  display: none;
 }
 
 .emptyState {

@@ -1,5 +1,13 @@
 import type { TeamLabConnectionDirection, TeamLabDependencyCondition } from '../api/teamlabContracts'
 import { isTopologyAsset, type TopologyConnection, type TopologyDocument, type TopologyNode, type TopologyPosition } from './topologyDocument'
+import {
+  REGION_HEADER_HEIGHT,
+  REGION_PADDING_BOTTOM,
+  REGION_PADDING_X,
+  clampRegionSize,
+  nodeSize,
+  regionSizeForMembers,
+} from './topologyGeometry'
 import { buildKeyRemap, dependencyConnectionKey, nextTopologyKey, topologyKeys } from './topologyKeys'
 import type { TopologySelection } from './topologySelection'
 
@@ -129,12 +137,13 @@ export function networkMembersOf(document: TopologyDocument, networkKey: string)
   return [...members].sort()
 }
 
-const REGION_PADDING = 48
-
 /**
- * Derives a region origin from its member bounding box. Used as a fallback when no
+ * Derives a region box from its member bounding box. Used as a fallback when no
  * layout has been recorded yet so collapse/resize never teleports a fresh region
  * (created this session, pasted, or legacy data) to the canvas origin.
+ *
+ * Member extents come from {@link nodeSize} — the node's intrinsic type size —
+ * never from `position.width`, which only regions may carry.
  */
 function derivedRegionLayout(document: TopologyDocument, networkKey: string): TopologyPosition {
   const members = networkMembersOf(document, networkKey)
@@ -145,19 +154,25 @@ function derivedRegionLayout(document: TopologyDocument, networkKey: string): To
   for (const key of members) {
     const current = document.nodes[key]
     if (!current) continue
-    const width = current.position.width ?? 208
-    const height = current.position.height ?? 102
+    const size = nodeSize(current)
     minX = Math.min(minX, current.position.x)
     minY = Math.min(minY, current.position.y)
-    maxX = Math.max(maxX, current.position.x + width)
-    maxY = Math.max(maxY, current.position.y + height)
+    maxX = Math.max(maxX, current.position.x + size.width)
+    maxY = Math.max(maxY, current.position.y + size.height)
   }
-  if (members.length === 0) return { x: 0, y: 0, width: 320, height: 220, collapsed: false }
+  if (members.length === 0) {
+    const empty = regionSizeForMembers([])
+    return { x: 0, y: 0, width: empty.width, height: empty.height, collapsed: false }
+  }
+  const size = clampRegionSize({
+    width: maxX - minX + REGION_PADDING_X * 2,
+    height: maxY - minY + REGION_HEADER_HEIGHT + REGION_PADDING_BOTTOM,
+  })
   return {
-    x: minX - REGION_PADDING,
-    y: minY - REGION_PADDING,
-    width: maxX - minX + REGION_PADDING * 2,
-    height: maxY - minY + REGION_PADDING * 2,
+    x: minX - REGION_PADDING_X,
+    y: minY - REGION_HEADER_HEIGHT,
+    width: size.width,
+    height: size.height,
     collapsed: false,
   }
 }
@@ -193,13 +208,22 @@ export function resizeNetworkRegion(
   height: number
 ): TopologyCommandResult<string> {
   const current = document.networkLayouts[networkKey] ?? derivedRegionLayout(document, networkKey)
-  return updateNetworkLayout(document, networkKey, { ...current, width, height })
+  // Clamping here (not only in the renderer) keeps an out-of-range drag from
+  // ever reaching persistence, where it would later be read back as a size.
+  return updateNetworkLayout(document, networkKey, { ...current, ...clampRegionSize({ width, height }) })
 }
 
-/** Returns a region to its content-derived dimensions without moving its members. */
+/**
+ * Returns a region to the size its members imply, without moving the members.
+ * A concrete size is written rather than `null` so the canvas, the persisted
+ * record and the auto-layout output all describe the same box.
+ */
 export function fitNetworkRegionToMembers(document: TopologyDocument, networkKey: string): TopologyCommandResult<string> {
   const current = document.networkLayouts[networkKey] ?? derivedRegionLayout(document, networkKey)
-  return updateNetworkLayout(document, networkKey, { ...current, width: null, height: null })
+  const memberHeights = networkMembersOf(document, networkKey)
+    .filter((key) => document.nodes[key]?.type !== 'switch')
+    .map((key) => nodeSize(document.nodes[key]).height)
+  return updateNetworkLayout(document, networkKey, { ...current, ...regionSizeForMembers(memberHeights) })
 }
 
 /** Moves the region origin and every member by the same delta, keeping the region visual container consistent. */

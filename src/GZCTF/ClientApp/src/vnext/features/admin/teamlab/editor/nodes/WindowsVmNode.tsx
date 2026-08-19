@@ -9,6 +9,7 @@ export const WindowsVmNode = memo(function WindowsVmNode({ data, selected }: Nod
   if (node.type !== 'windows-vm') return null
   return (
     <TopologyNodeShell
+      badge={data.isBorder ? '跨网段' : undefined}
       details={[`${node.resources.cpuUnits} vCPU`, `${node.resources.memoryMiB} MiB`, `${data.connectionCount} 张网卡`]}
       eyebrow="Windows 虚拟机"
       icon={<Monitor size={18} />}

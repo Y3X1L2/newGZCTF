@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { createEmptyTopologyDocument } from '../../model/topologyDocument'
 import { createTopologyNode } from '../nodeFactory'
 import { TeamLabCanvas } from './TeamLabCanvas'
+import { topologyLayers } from './topologyLayers'
 
 const capturedFlowProps = vi.hoisted(() => ({ current: null as Record<string, unknown> | null }))
 
@@ -32,6 +33,7 @@ describe('TeamLabCanvas', () => {
         onAddNode={vi.fn()}
         onAutoLayout={vi.fn()}
         onConnectNodes={vi.fn()}
+        onFitRegion={vi.fn()}
         onMoveNodes={vi.fn()}
         onMoveRegion={vi.fn()}
         onNetworkRegionSelect={vi.fn()}
@@ -91,6 +93,7 @@ describe('TeamLabCanvas', () => {
       onAddNode: vi.fn(),
       onAutoLayout: vi.fn(),
       onConnectNodes: vi.fn(),
+      onFitRegion: vi.fn(),
       onMoveNodes: vi.fn(),
       onMoveRegion: vi.fn(),
       onNetworkRegionSelect: vi.fn(),
@@ -110,7 +113,17 @@ describe('TeamLabCanvas', () => {
     const initialNodes = capturedFlowProps.current?.nodes as Array<{ id: string }>
     const initialEdges = capturedFlowProps.current?.edges as Array<{ id: string }>
     const unchangedNode = initialNodes.find((node) => node.id === assetNode.key)
-    expect(initialNodes.find((node) => node.id.startsWith('region:'))).toMatchObject({ zIndex: 0 })
+
+    // Layering contract: regions are the backdrop, links draw over them, devices
+    // draw over links. With everything left at the default zIndex 0 (the previous
+    // behaviour) React Flow's DOM order buried links under region rectangles.
+    const layered = initialNodes as Array<{ id: string; zIndex?: number }>
+    const regionZ = layered.find((node) => node.id.startsWith('region:'))!.zIndex!
+    const deviceZ = layered.find((node) => node.id === assetNode.key)!.zIndex!
+    const edgeZ = (initialEdges as Array<{ zIndex?: number }>)[0].zIndex!
+    expect(regionZ).toBe(topologyLayers.region)
+    expect(regionZ).toBeLessThan(edgeZ)
+    expect(edgeZ).toBeLessThan(deviceZ)
 
     view.rerender(
       <TeamLabCanvas {...props} selection={{ nodeKeys: new Set([switchNode.key]), connectionKeys: new Set() }} />
@@ -159,6 +172,7 @@ describe('TeamLabCanvas', () => {
         onAddNode={vi.fn()}
         onAutoLayout={vi.fn()}
         onConnectNodes={vi.fn()}
+        onFitRegion={vi.fn()}
         onMoveNodes={vi.fn()}
         onMoveRegion={vi.fn()}
         onNetworkRegionSelect={vi.fn()}

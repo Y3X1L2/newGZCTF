@@ -3,6 +3,7 @@ import {
   connectTopology,
   copyTopologyFragment,
   deleteTopologyItems,
+  fitNetworkRegionToMembers,
   moveNetworkRegion,
   networkMembersOf,
   pasteTopologyFragment,
@@ -11,6 +12,12 @@ import {
   updateTopologyConnection,
 } from './topologyCommands'
 import type { TopologyDocument } from './topologyDocument'
+import {
+  MIN_REGION_HEIGHT,
+  MIN_REGION_WIDTH,
+  REGION_HEADER_HEIGHT,
+  REGION_PADDING_X,
+} from './topologyGeometry'
 
 const position = { x: 0, y: 0, width: null, height: null, collapsed: false }
 const asset = (key: string) => ({
@@ -161,9 +168,10 @@ describe('topology commands', () => {
     const layout = changed.document.networkLayouts.net1
     expect(layout).toBeDefined()
     expect(layout.collapsed).toBe(true)
-    // Members sit at (0,0); the derived origin is the bounding box minus padding
-    // (REGION_PADDING = 48), never the canvas origin.
-    expect(layout).toMatchObject({ x: -48, y: -48 })
+    // Members sit at (0,0). The derived origin insets by the region's own
+    // geometry — a horizontal padding and a header band, not one symmetric pad —
+    // so a fresh region never lands on the canvas origin.
+    expect(layout).toMatchObject({ x: -REGION_PADDING_X, y: -REGION_HEADER_HEIGHT })
     expect(changed.before).toBe(source)
   })
 
@@ -171,7 +179,32 @@ describe('topology commands', () => {
     const source = document()
     const changed = resizeNetworkRegion(source, 'net1', 640, 480)
     const layout = changed.document.networkLayouts.net1
-    expect(layout).toMatchObject({ x: -48, y: -48, width: 640, height: 480 })
+    expect(layout).toMatchObject({
+      x: -REGION_PADDING_X,
+      y: -REGION_HEADER_HEIGHT,
+      width: 640,
+      height: 480,
+    })
+  })
+
+  it('clamps a region resize into the persistable range', () => {
+    const source = document()
+    // An out-of-range drag must never reach persistence, where it would later be
+    // read back as a real size and inflate the region again.
+    const tiny = resizeNetworkRegion(source, 'net1', 10, 10).document.networkLayouts.net1
+    expect(tiny).toMatchObject({ width: MIN_REGION_WIDTH, height: MIN_REGION_HEIGHT })
+    const huge = resizeNetworkRegion(source, 'net1', 99_999, 99_999).document.networkLayouts.net1
+    expect(huge.width).toBeLessThanOrEqual(4000)
+    expect(huge.height).toBeLessThanOrEqual(3000)
+  })
+
+  it('fits a region to its members with a concrete size instead of nulls', () => {
+    const source = document()
+    const layout = fitNetworkRegionToMembers(source, 'net1').document.networkLayouts.net1
+    // A concrete size keeps the canvas, the persisted record and the auto-layout
+    // output all describing the same box.
+    expect(layout.width).toBeGreaterThanOrEqual(MIN_REGION_WIDTH)
+    expect(layout.height).toBeGreaterThanOrEqual(MIN_REGION_HEIGHT)
   })
 
   it('moves region layout and members in one immutable commit', () => {
@@ -184,7 +217,7 @@ describe('topology commands', () => {
     const changed = moveNetworkRegion(source, 'net1', { x: 120, y: 40 })
 
     const layout = changed.document.networkLayouts.net1
-    expect(layout).toMatchObject({ x: -48 + 120, y: -48 + 40 })
+    expect(layout).toMatchObject({ x: -REGION_PADDING_X + 120, y: -REGION_HEADER_HEIGHT + 40 })
     for (const key of membersBefore) {
       expect(changed.document.nodes[key].position.x).toBe(beforePositions.get(key)!.x + 120)
       expect(changed.document.nodes[key].position.y).toBe(beforePositions.get(key)!.y + 40)

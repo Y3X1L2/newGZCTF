@@ -3,6 +3,7 @@ import type {
   TeamLabTopologyEditor,
   TeamLabTopologyInterface,
 } from '../api/teamlabContracts'
+import { networkMembersOf } from './topologyCommands'
 import {
   isTopologyAsset,
   type TopologyConnection,
@@ -10,6 +11,13 @@ import {
   type TopologyNode,
   type TopologyPosition,
 } from './topologyDocument'
+import {
+  MIN_REGION_HEIGHT,
+  MIN_REGION_WIDTH,
+  clampRegionSize,
+  nodeSize,
+  regionSizeForMembers,
+} from './topologyGeometry'
 
 export class TopologyCompileError extends Error {
   constructor(message: string) {
@@ -20,8 +28,24 @@ export class TopologyCompileError extends Error {
 
 const byKey = <T extends { key: string }>(left: T, right: T) => left.key.localeCompare(right.key)
 
-function editorItem(position: TopologyPosition) {
-  return { ...position }
+/**
+ * Region entry: the only editor record allowed to persist a size, because a
+ * region is the only user-resizable object on the canvas.
+ */
+function regionEditorItem(layout: TopologyPosition) {
+  const size = clampRegionSize({
+    width: layout.width ?? MIN_REGION_WIDTH,
+    height: layout.height ?? MIN_REGION_HEIGHT,
+  })
+  return { x: layout.x, y: layout.y, ...size, collapsed: layout.collapsed }
+}
+
+/**
+ * Node entry: position only. Writing a node width/height would let it be read
+ * back as a real node size and inflate the region that contains it.
+ */
+function nodeEditorItem(position: TopologyPosition) {
+  return { x: position.x, y: position.y, width: null, height: null, collapsed: false }
 }
 
 function requireNode(document: TopologyDocument, key: string): TopologyNode {
@@ -64,19 +88,25 @@ function interfacesFor(document: TopologyDocument, nodeKey: string): TeamLabTopo
 }
 
 function compileEditor(document: TopologyDocument): TeamLabTopologyEditor {
-  const networks: Record<string, ReturnType<typeof editorItem>> = {}
-  const assets: Record<string, ReturnType<typeof editorItem>> = {}
-  const infrastructure: Record<string, ReturnType<typeof editorItem>> = {}
+  const networks: Record<string, ReturnType<typeof regionEditorItem>> = {}
+  const assets: Record<string, ReturnType<typeof nodeEditorItem>> = {}
+  const infrastructure: Record<string, ReturnType<typeof nodeEditorItem>> = {}
 
   for (const node of Object.values(document.nodes).sort(byKey)) {
     if (node.type === 'switch') {
       const layout = document.networkLayouts[node.networkKey]
-      networks[node.networkKey] = layout ? editorItem(layout) : editorItem(node.position)
-      if (!node.implicit || node.name !== node.networkName) infrastructure[node.key] = editorItem(node.position)
+      const memberHeights = networkMembersOf(document, node.networkKey)
+        .filter((key) => document.nodes[key]?.type !== 'switch')
+        .map((key) => nodeSize(document.nodes[key]).height)
+      const derived = regionSizeForMembers(memberHeights)
+      networks[node.networkKey] = regionEditorItem(
+        layout ?? { ...node.position, ...derived, collapsed: false }
+      )
+      if (!node.implicit || node.name !== node.networkName) infrastructure[node.key] = nodeEditorItem(node.position)
     } else if (node.type === 'router') {
-      infrastructure[node.key] = editorItem(node.position)
+      infrastructure[node.key] = nodeEditorItem(node.position)
     } else {
-      assets[node.key] = editorItem(node.position)
+      assets[node.key] = nodeEditorItem(node.position)
     }
   }
 

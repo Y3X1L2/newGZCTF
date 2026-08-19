@@ -7,13 +7,16 @@ import {
   copyTopologyFragment,
   deleteTopologyItems,
   duplicateTopologyNodes,
+  fitNetworkRegionToMembers,
   moveNetworkRegion,
   moveTopologyNode,
   pasteTopologyFragment,
   resizeNetworkRegion,
+  setNetworkCollapsed,
   type TopologyFragment,
 } from '../model/topologyCommands'
 import type { TopologyDocument, TopologyNodeType } from '../model/topologyDocument'
+import { ASSET_NODE_HEIGHT, MEMBER_GAP_X, MEMBER_GAP_Y, NODE_WIDTH } from '../model/topologyGeometry'
 import styles from './TeamLabDesignPage.module.css'
 import { TeamLabCanvas } from './canvas/TeamLabCanvas'
 import { TeamLabInspector } from './inspector'
@@ -135,7 +138,12 @@ export function TeamLabDesignPage({
       if (effectiveReadOnly) return
       const currentDocument = documentRef.current
       const index = Object.keys(currentDocument.nodes).length
-      const fallback = { x: 80 + (index % 4) * 240, y: 100 + Math.floor(index / 4) * 160 }
+      // Toolbar-added nodes land on a grid derived from the real card size, so a
+      // fresh node never overlaps the one added before it.
+      const fallback = {
+        x: (index % 4) * (NODE_WIDTH + MEMBER_GAP_X),
+        y: Math.floor(index / 4) * (ASSET_NODE_HEIGHT + MEMBER_GAP_Y),
+      }
       const result = addTopologyNode(currentDocument, createTopologyNode(currentDocument, type, position ?? fallback))
       commitDocument(result.document)
       select([result.value], [])
@@ -180,10 +188,37 @@ export function TeamLabDesignPage({
   const resizeRegion = useCallback(
     (networkKey: string, width: number, height: number) => {
       if (effectiveReadOnly) return
+      // Resizing a region container changes only the editor's presentation, so it
+      // must not bump the topology revision and appear as a new release version.
+      skipServerNotifyRef.current = true
       commitDocument(resizeNetworkRegion(documentRef.current, networkKey, width, height).document)
     },
     [commitDocument, effectiveReadOnly]
   )
+  const toggleRegion = useCallback(
+    (networkKey: string, collapsed: boolean) => {
+      if (effectiveReadOnly) return
+      commitDocument(setNetworkCollapsed(documentRef.current, networkKey, collapsed).document)
+    },
+    [commitDocument, effectiveReadOnly]
+  )
+  const fitRegion = useCallback(
+    (networkKey: string) => {
+      if (effectiveReadOnly) return
+      // Region sizing is presentation-only, so it must not bump the topology
+      // revision and surface as a new release version.
+      skipServerNotifyRef.current = true
+      commitDocument(fitNetworkRegionToMembers(documentRef.current, networkKey).document)
+    },
+    [commitDocument, effectiveReadOnly]
+  )
+  const selectAll = useCallback(() => {
+    if (effectiveReadOnly) return
+    select(
+      Object.keys(documentRef.current.nodes),
+      Object.keys(documentRef.current.connections)
+    )
+  }, [effectiveReadOnly, select])
   const deleteSelection = useCallback(() => {
     if (effectiveReadOnly || (selection.nodeKeys.size === 0 && selection.connectionKeys.size === 0)) return
     commitDocument(deleteTopologyItems(documentRef.current, selection).document)
@@ -249,6 +284,7 @@ export function TeamLabDesignPage({
       paste: pasteSelection,
       duplicate: duplicateSelection,
       delete: deleteSelection,
+      selectAll,
       save,
       nudge,
     }),
@@ -260,6 +296,7 @@ export function TeamLabDesignPage({
       pasteSelection,
       redoDocument,
       save,
+      selectAll,
       undoDocument,
     ]
   )
@@ -277,13 +314,23 @@ export function TeamLabDesignPage({
           <strong>{document.name}</strong>
         </div>
         <div aria-label="连接类型" className={styles.connectionModes} role="group">
-          <button aria-pressed={connectionMode === 'network'} onClick={useNetworkConnections} type="button">
+          <button
+            aria-pressed={connectionMode === 'network'}
+            onClick={useNetworkConnections}
+            title="拖动连线时创建网络连接"
+            type="button"
+          >
             <Network size={15} />
-            网络连接
+            <span>网络连接</span>
           </button>
-          <button aria-pressed={connectionMode === 'dependency'} onClick={useDependencyConnections} type="button">
+          <button
+            aria-pressed={connectionMode === 'dependency'}
+            onClick={useDependencyConnections}
+            title="拖动连线时创建启动依赖"
+            type="button"
+          >
             <Workflow size={15} />
-            启动依赖
+            <span>启动依赖</span>
           </button>
         </div>
         <div className={styles.metrics}>
@@ -358,12 +405,14 @@ export function TeamLabDesignPage({
           document={document}
           focusMode={focusMode}
           focusNodeKey={focusTarget?.nodeKey}
+          onToggleRegion={toggleRegion}
           leftPanelOpen={leftPanelOpen}
           layoutRequest={layoutRequest}
           onAddNode={addNode}
           onAutoLayout={autoLayout}
           onConnectNodes={connectNodes}
           onMoveNodes={moveNodes}
+          onFitRegion={fitRegion}
           onMoveRegion={moveRegion}
           onRedo={redoDocument}
           onResizeRegion={resizeRegion}

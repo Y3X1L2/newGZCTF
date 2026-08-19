@@ -35,6 +35,7 @@ public interface ITeamLabLinkPolicyDispatcher
         string networkKey,
         string assetKey,
         string kind,
+        string? parameters,
         CancellationToken cancellationToken);
 }
 

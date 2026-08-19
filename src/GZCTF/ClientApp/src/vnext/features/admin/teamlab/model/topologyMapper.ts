@@ -8,6 +8,16 @@ import type {
 } from '../api/teamlabContracts'
 import { compileTopologyDocument } from './topologyCompiler'
 import {
+  ASSET_NODE_HEIGHT,
+  INFRA_NODE_HEIGHT,
+  MEMBER_GAP_X,
+  MEMBER_GAP_Y,
+  MIN_REGION_WIDTH,
+  NODE_WIDTH,
+  REGION_HEADER_HEIGHT,
+  REGION_PADDING_X,
+} from './topologyGeometry'
+import {
   type TopologyAssetNode,
   type TopologyConnection,
   type TopologyDocument,
@@ -25,23 +35,66 @@ export interface TopologyMapperOptions {
 
 const sorted = <T extends { key: string }>(items: readonly T[]) => [...items].sort((a, b) => a.key.localeCompare(b.key))
 
-function position(
+/**
+ * Reads a persisted region box. Regions are the only user-resizable objects, so
+ * this is the only place a width/height may survive the mapping.
+ */
+function regionPosition(editor: TeamLabTopologyEditor, networkKey: string, fallbackIndex: number): TopologyPosition {
+  const source = editor.networks[networkKey]
+  if (!source) return fallbackPosition(fallbackIndex)
+  return { ...source }
+}
+
+/**
+ * Reads a persisted node position and **drops any width/height**.
+ *
+ * `TeamLabEditorItem` is one wire shape shared by networks, assets and
+ * infrastructure, but only a network region can be resized. A resized region's
+ * size used to leak onto its implicit switch (which has no infrastructure entry
+ * of its own and therefore fell back to the network entry), and auto layout then
+ * padded that fake node size into an even larger region on every round.
+ */
+function nodePosition(
   editor: TeamLabTopologyEditor,
-  kind: 'network' | 'asset' | 'infrastructure',
+  kind: 'asset' | 'infrastructure',
   key: string,
   fallbackIndex: number
 ): TopologyPosition {
-  const source =
-    kind === 'network' ? editor.networks[key] : kind === 'asset' ? editor.assets[key] : editor.infrastructure[key]
-  return source
-    ? { ...source }
-    : {
-        x: (fallbackIndex % 4) * 260,
-        y: Math.floor(fallbackIndex / 4) * 180,
-        width: null,
-        height: null,
-        collapsed: false,
-      }
+  const source = kind === 'asset' ? editor.assets[key] : editor.infrastructure[key]
+  if (!source) return fallbackPosition(fallbackIndex)
+  return { x: source.x, y: source.y, width: null, height: null, collapsed: false }
+}
+
+/**
+ * Origin for an implicit switch that has no infrastructure entry: the top-centre
+ * of its region's header band, matching where auto layout puts it. Only the
+ * region's x/y are read; its width/height stay region-only data.
+ */
+function switchPositionFromNetwork(
+  editor: TeamLabTopologyEditor,
+  networkKey: string,
+  fallbackIndex: number
+): TopologyPosition {
+  const region = editor.networks[networkKey]
+  if (!region) return fallbackPosition(fallbackIndex)
+  const width = region.width ?? MIN_REGION_WIDTH
+  return {
+    x: region.x + Math.max(REGION_PADDING_X, (width - NODE_WIDTH) / 2),
+    y: region.y + REGION_HEADER_HEIGHT - INFRA_NODE_HEIGHT / 2,
+    width: null,
+    height: null,
+    collapsed: false,
+  }
+}
+
+function fallbackPosition(fallbackIndex: number): TopologyPosition {
+  return {
+    x: (fallbackIndex % 4) * (NODE_WIDTH + MEMBER_GAP_X),
+    y: Math.floor(fallbackIndex / 4) * (ASSET_NODE_HEIGHT + MEMBER_GAP_Y),
+    width: null,
+    height: null,
+    collapsed: false,
+  }
 }
 
 function mapAsset(
@@ -54,7 +107,7 @@ function mapAsset(
     type: asset.kind === 'docker' ? 'docker' : options.resolveVmDeviceType(asset),
     key: asset.key,
     name: asset.name,
-    position: position(editor, 'asset', asset.key, index),
+    position: nodePosition(editor, 'asset', asset.key, index),
     imageTemplateId: asset.imageTemplateId,
     resources: { ...asset.resources },
     exposePort: asset.exposePort,
@@ -132,9 +185,11 @@ export function mapTopologyDetailToDocument(
       key: switchKey,
       name: infrastructure?.name ?? network.name,
       networkName: network.name,
+      // An implicit switch has no infrastructure entry of its own, so it starts
+      // at its network's origin — but never inherits the network's *size*.
       position: detail.editor.infrastructure[switchKey]
-        ? position(detail.editor, 'infrastructure', switchKey, index)
-        : position(detail.editor, 'network', network.key, index),
+        ? nodePosition(detail.editor, 'infrastructure', switchKey, index)
+        : switchPositionFromNetwork(detail.editor, network.key, index),
       networkKey: network.key,
       poolCidr: network.addressPool.poolCidr,
       runtimePrefixLength: network.addressPool.runtimePrefixLength,
@@ -151,7 +206,7 @@ export function mapTopologyDetailToDocument(
         type: 'router',
         key: router.key,
         name: router.name,
-        position: position(detail.editor, 'infrastructure', router.key, detail.definition.networks.length + index),
+        position: nodePosition(detail.editor, 'infrastructure', router.key, detail.definition.networks.length + index),
       }
       for (const connection of memberships(router.key, router.interfaces, switchKeysByNetwork, occupied)) {
         connections[connection.key] = connection
@@ -197,9 +252,9 @@ export function mapTopologyDetailToDocument(
     connections,
     observation: { ...detail.definition.observation },
     networkLayouts: Object.fromEntries(
-      sorted(detail.definition.networks).map((network) => [
+      sorted(detail.definition.networks).map((network, index) => [
         network.key,
-        position(detail.editor, 'network', network.key, 0),
+        regionPosition(detail.editor, network.key, index),
       ])
     ),
   }

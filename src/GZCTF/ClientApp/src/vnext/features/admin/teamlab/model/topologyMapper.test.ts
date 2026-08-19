@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { TeamLabTopologyDetail } from '../api/teamlabContracts'
 import { compileTopologyDocument } from './topologyCompiler'
+import { MIN_REGION_HEIGHT, MIN_REGION_WIDTH } from './topologyGeometry'
 import { mapTopologyDetailToDocument } from './topologyMapper'
 
 const position = (x: number) => ({ x, y: 40, width: null, height: null, collapsed: false })
@@ -114,7 +115,63 @@ describe('topology API round trip', () => {
     }
     expect(schemaVersion).toBe(2)
     expect(definition).toEqual(canonicalSource)
-    expect(editor).toEqual(source.editor)
+
+    // Node entries round-trip position only. A node must never carry a size:
+    // that is what let a resized region's size leak onto its switch and then
+    // inflate the region again on the next auto-layout.
+    expect(editor.assets).toEqual(source.editor.assets)
+    expect(editor.infrastructure).toEqual(source.editor.infrastructure)
+    for (const item of [...Object.values(editor.assets), ...Object.values(editor.infrastructure)]) {
+      expect(item.width).toBeNull()
+      expect(item.height).toBeNull()
+    }
+
+    // A region entry is the only record allowed to persist a size. The fixture
+    // has no explicit size, so the compiler writes the members' derived box.
+    expect(Object.keys(editor.networks)).toEqual(Object.keys(source.editor.networks))
+    for (const [key, item] of Object.entries(editor.networks)) {
+      expect(item).toMatchObject({ x: source.editor.networks[key].x, y: source.editor.networks[key].y })
+      expect(item.width).toBeGreaterThanOrEqual(MIN_REGION_WIDTH)
+      expect(item.height).toBeGreaterThanOrEqual(MIN_REGION_HEIGHT)
+    }
+  })
+
+  it('never lets a persisted region size reach a node position', () => {
+    const source = detail()
+    // A region the author dragged much larger, with no explicit switch entry.
+    source.editor = {
+      networks: { client: { x: 40, y: 40, width: 1600, height: 2400, collapsed: false }, domain: position(200) },
+      infrastructure: {},
+      assets: {},
+    }
+    const document = mapTopologyDetailToDocument(source, { resolveVmDeviceType: () => 'linux-vm' })
+
+    for (const node of Object.values(document.nodes)) {
+      expect(node.position.width, `${node.key} inherited a size`).toBeNull()
+      expect(node.position.height, `${node.key} inherited a size`).toBeNull()
+    }
+    // The region itself keeps the author's size.
+    expect(document.networkLayouts.client).toMatchObject({ width: 1600, height: 2400 })
+  })
+
+  it('does not inflate a region across repeated save and reload rounds', () => {
+    let source = detail()
+    source.editor = {
+      networks: { client: { x: 40, y: 40, width: 900, height: 1200, collapsed: false }, domain: position(200) },
+      infrastructure: {},
+      assets: {},
+    }
+    const sizes: string[] = []
+    for (let round = 0; round < 5; round += 1) {
+      const document = mapTopologyDetailToDocument(source, { resolveVmDeviceType: () => 'linux-vm' })
+      const compiled = compileTopologyDocument(document)
+      const region = compiled.editor.networks.client
+      sizes.push(`${region.width}x${region.height}`)
+      source = { ...source, editor: compiled.editor }
+    }
+    // Every round must report the same box. Before the node/region split this
+    // sequence grew without bound (856x1432 -> 952x1664 -> 1048x1896 -> ...).
+    expect(new Set(sizes).size).toBe(1)
   })
 
   it('requires image metadata to distinguish Linux and Windows VM nodes', () => {
@@ -133,7 +190,12 @@ describe('topology API round trip', () => {
     const document = mapTopologyDetailToDocument(source, { resolveVmDeviceType: () => 'linux-vm' })
 
     expect(document.nodes.dc).toMatchObject({ type: 'linux-vm' })
-    expect(document.nodes['switch-client']?.position).toEqual(source.editor.networks.client)
+    // With no infrastructure entry the implicit switch starts inside its region's
+    // header band — it takes the region's origin, never the region's size.
+    const client = source.editor.networks.client
+    expect(document.nodes['switch-client']?.position).toMatchObject({ width: null, height: null })
+    expect(document.nodes['switch-client']?.position.x).toBeGreaterThanOrEqual(client.x)
+    expect(document.nodes['switch-client']?.position.y).toBeGreaterThanOrEqual(client.y)
   })
 
   it('opens schema v1 topologies and upgrades them to schema v2 when compiled', () => {
