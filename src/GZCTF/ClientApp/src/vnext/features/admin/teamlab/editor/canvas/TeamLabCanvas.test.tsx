@@ -2,6 +2,7 @@ import { act, render, waitFor } from '@testing-library/react'
 import type { PropsWithChildren } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { createEmptyTopologyDocument } from '../../model/topologyDocument'
+import { ASSET_NODE_HEIGHT, INFRA_NODE_HEIGHT, NODE_WIDTH } from '../../model/topologyGeometry'
 import { createTopologyNode } from '../nodeFactory'
 import { TeamLabCanvas } from './TeamLabCanvas'
 import { topologyLayers } from './topologyLayers'
@@ -60,6 +61,61 @@ describe('TeamLabCanvas', () => {
 
     expect(capturedFlowProps.current).not.toHaveProperty('onlyRenderVisibleElements')
   })
+
+  it('projects explicit node width/height, so edge endpoints never wait for a resize measurement', () => {
+    // Regression: without explicit dimensions React Flow computes edge endpoints
+    // from the *measured* node size. Auto layout rebuilds every node in one
+    // commit, delaying the ResizeObserver pass; during that window edges are
+    // drawn to unmeasured (0/undefined)-size coordinates — a vertical strip of
+    // lines at a far-off negative x that never recovers. Headless real-scene
+    // A/B test locked this: memberships/route edges all became x=-1433 lines
+    // after one layout click until dimensions were supplied.
+    const empty = createEmptyTopologyDocument('Canvas')
+    const switchNode = createTopologyNode(empty, 'switch', { x: 40, y: 40 })
+    const withSwitch = { ...empty, nodes: { [switchNode.key]: switchNode } }
+    const assetNode = createTopologyNode(withSwitch, 'docker', { x: 280, y: 40 })
+    const props = {
+      canRedo: false,
+      canUndo: false,
+      connectionMode: 'network' as const,
+      document: {
+        ...withSwitch,
+        nodes: { ...withSwitch.nodes, [assetNode.key]: assetNode },
+      },
+      focusMode: false,
+      layoutRequest: 0,
+      leftPanelOpen: true,
+      onAddNode: vi.fn(),
+      onAutoLayout: vi.fn(),
+      onConnectNodes: vi.fn(),
+      onFitRegion: vi.fn(),
+      onMoveNodes: vi.fn(),
+      onMoveRegion: vi.fn(),
+      onNetworkRegionSelect: vi.fn(),
+      onRedo: vi.fn(),
+      onResizeRegion: vi.fn(),
+      onSelectionChange: vi.fn(),
+      onToggleFocus: vi.fn(),
+      onToggleLeftPanel: vi.fn(),
+      onToggleRegion: vi.fn(),
+      onToggleRightPanel: vi.fn(),
+      onUndo: vi.fn(),
+      readOnly: false,
+      rightPanelOpen: true,
+      selectedNetworkKey: null,
+      selection: { nodeKeys: new Set<string>(), connectionKeys: new Set<string>() },
+    }
+    render(<TeamLabCanvas {...props} />)
+
+    const nodes = capturedFlowProps.current?.nodes as Array<{ id: string; width?: number; height?: number }>
+    const switchFlow = nodes.find((n) => n.id === switchNode.key)
+    const assetFlow = nodes.find((n) => n.id === assetNode.key)
+    expect(switchFlow?.width).toBe(NODE_WIDTH)
+    expect(switchFlow?.height).toBe(INFRA_NODE_HEIGHT)
+    expect(assetFlow?.width).toBe(NODE_WIDTH)
+    expect(assetFlow?.height).toBe(ASSET_NODE_HEIGHT)
+  })
+
 
   it('defaults to canvas panning and exposes an explicit box-selection tool', () => {
     render(
