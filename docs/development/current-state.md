@@ -33,6 +33,13 @@
 - 线上 118/125 Agent sha256 `83439376ea9ee839727d7877fac3dd12ca7d9c4c37e29c32553984d7c013be8c`（一致）；主站 `GZCTF.dll` `304376245e01fad17b06b47ab45f1fa3f186b623ebf3cee4aa58662ecb44f075`。
 
 
+## 2026-08-19 前端联动线 Bug 已修复（headless 浏览器实证定位）
+
+- 现象：自动排版点击后连线立刻不出现、需再点一次；动画中连线可能闪现错位。
+- **根因（headless Chrome + CDP 实测，非猜测）**：`TeamLabCanvas` 开启了 `onlyRenderVisibleElements`。自动排版把全部节点一次移到新位置并触发 fitView 动画；动画窗口内边的可见性判定仍用动画前节点包围盒，导致边被裁剪（点击瞬间 `.react-flow__edge path` 数量实测为 0）或以旧坐标闪现。稳定态核对：边端点与节点 flow 坐标全部精确匹配，无持久性连错。
+- **修复**：移除 `onlyRenderVisibleElements`（提交 `8261896`）。A/B 实测：关闭后点击自动排版瞬间 5 条边全部立即渲染（`edgePathsWithD 0→10`）。单场景节点量级不足以承受该渲染优化带来的正确性代价。
+- **回归**：新增 canvas 测试锁定『不启用 onlyRenderVisibleElements』不变量；前端门禁 validate/lint/check/architecture/**test(271)** 全绿；已推送 `origin/codex/phase-09-teamlab-networking`。
+
 ## 1. 当前基线
 
 | 项目 | 当前事实 |
