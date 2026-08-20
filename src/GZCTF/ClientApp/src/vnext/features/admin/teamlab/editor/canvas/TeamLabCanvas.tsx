@@ -592,7 +592,11 @@ function TeamLabCanvasInner(props: TeamLabCanvasProps) {
         onNodeDragStop={onNodeDragStop}
         onNodesChange={onNodesChange}
         onPaneClick={onPaneClick}
-        onlyRenderVisibleElements
+        // 不要开启 onlyRenderVisibleElements：自动排版 + fitView 动画期间，
+        // 可见性判定用动画前的节点包围盒，导致边在动画窗口内被裁剪（线不立即
+        // 出现）或以旧坐标闪现（线抽到别处）。本画布单场景节点量级不足以承受该
+        // 优化的正确性代价。headless 浏览器 A/B 实测：关闭后点击自动排版瞬间
+        // 边即完整渲染。
         panActivationKeyCode="Space"
         panOnDrag={selectionToolActive ? [1] : [0, 1]}
         selectionKeyCode={['Meta', 'Control']}

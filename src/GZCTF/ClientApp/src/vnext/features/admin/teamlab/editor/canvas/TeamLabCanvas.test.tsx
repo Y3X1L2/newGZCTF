@@ -20,6 +20,47 @@ vi.mock('@xyflow/react', async (importOriginal) => {
 })
 
 describe('TeamLabCanvas', () => {
+  it('never enables render-on-demand culling, so auto-layout edges stay visible during fitView animation', () => {
+    // Regression: onlyRenderVisibleElements culls edges whose endpoints sit
+    // outside the viewport rectangle while the fitView animation is running.
+    // The layout moves every node in one commit; the visibility check still uses
+    // the pre-animation node bounds, so edges disappear (or flash at stale
+    // coordinates) until the animation settles. Browser A/B test confirmed it:
+    // without the flag every edge renders in the same frame as the click.
+    render(
+      <TeamLabCanvas
+        canRedo={false}
+        canUndo={false}
+        connectionMode="network"
+        document={createEmptyTopologyDocument('Canvas')}
+        focusMode={false}
+        layoutRequest={0}
+        leftPanelOpen
+        onAddNode={vi.fn()}
+        onAutoLayout={vi.fn()}
+        onConnectNodes={vi.fn()}
+        onFitRegion={vi.fn()}
+        onMoveNodes={vi.fn()}
+        onMoveRegion={vi.fn()}
+        onNetworkRegionSelect={vi.fn()}
+        onRedo={vi.fn()}
+        onResizeRegion={vi.fn()}
+        onSelectionChange={vi.fn()}
+        onToggleFocus={vi.fn()}
+        onToggleLeftPanel={vi.fn()}
+        onToggleRegion={vi.fn()}
+        onToggleRightPanel={vi.fn()}
+        onUndo={vi.fn()}
+        readOnly={false}
+        rightPanelOpen
+        selectedNetworkKey={null}
+        selection={{ nodeKeys: new Set(), connectionKeys: new Set() }}
+      />
+    )
+
+    expect(capturedFlowProps.current).not.toHaveProperty('onlyRenderVisibleElements')
+  })
+
   it('defaults to canvas panning and exposes an explicit box-selection tool', () => {
     render(
       <TeamLabCanvas
