@@ -8,6 +8,7 @@
 
 - 后端数据面 A/B/C 已真实验收（详见 `docs/development/test-reports/2026-08-18-yinyu-teamlab-a-b-c-acceptance.md`）；前端可对接能力已就绪（链路策略 netem / access-rule / nat / 连接器 / 协议事件 / 平台抓包）。
 - 已产出**前端重构交接文档**：`docs/development/handoffs/2026-08-19-teamlab-networking-frontend-refactor-handoff.md`，供另一位 agent 直接接手干活。
+- 产出**面向测试人员的组网工作台使用说明**：`docs/development/test-reports/2026-08-19-teamlab-network-workbench-testing-guide.md`（按「说人话」skill 撰写：正常使用界面讲解 + API 底座全接口清单 + 测试重点）。接口路径按当前源码 controller 路由逐条核对（link-policies/connectors/device-packages/remote-sessions/resource-pools/protocol-events 等新增接口已含入）。
 - 当前分支 `codex/phase-09-teamlab-networking`，HEAD `460c293`（push 到 origin，同步完成）；原工作树 3 处未提交改动（region 折叠接线 + NodePalette `expanded` + `RecoverAsync` 加 `string? parameters`）已随 `460c293` 一并提交/落地。
 - 前端重构要点（交接文档 §6）：视觉问题清单（自动排版不产新版本不变量、布局空白/标题重叠、边分层与标签、focus 模式侧栏、区域背景色、标题省略展开、发布者名 UUID）；小步增量、避免全量大改（历史上已回退，见 §7 教训）。
 - 设计 Token：组网工作台实际使用 `src/GZCTF/ClientApp/src/vnext/design/tokens.css` 的 **`--yn-*`** 语义 Token（日/夜两套）；`docs/commercialization/frontend-style-token-contract.md` 声明的 `--yy-*` 与 vNext 实现不一致，重构时以 `--yn-*` 为准。
