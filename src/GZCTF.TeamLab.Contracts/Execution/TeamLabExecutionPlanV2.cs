@@ -143,16 +143,19 @@ public sealed record TeamLabExecutionPlanV2(
             return false;
         }
 
-        var assetKeys = Assets.Select(item => item.AssetKey).ToHashSet(StringComparer.Ordinal);
+        // Multi-shard plans intentionally carry the complete logical network (including ports
+        // owned by peer shards) so the network owner can build the global OVN topology and
+        // non-owner shards can wait for it. Local asset attachments are still validated above;
+        // ports whose asset is not in this shard's Assets are remote/peer ports and are allowed.
         if (Networks.SelectMany(item => item.Ports).Any(port =>
-                string.IsNullOrWhiteSpace(port.Key) || !assetKeys.Contains(port.AssetKey) ||
+                string.IsNullOrWhiteSpace(port.Key) ||
                 string.IsNullOrWhiteSpace(port.MacAddress)) ||
             Networks.Any(network => network.Ports.Any(port =>
                 network.DhcpLeases is { } leases && !leases.Any(lease =>
                     string.Equals(lease.MacAddress, port.MacAddress, StringComparison.OrdinalIgnoreCase) &&
                     string.Equals(lease.IpAddress, port.IpAddress, StringComparison.OrdinalIgnoreCase)))))
         {
-            error = "Every network port must reference an asset in the same execution plan.";
+            error = "Every network port must have a valid key, MAC address, and DHCP binding.";
             return false;
         }
 

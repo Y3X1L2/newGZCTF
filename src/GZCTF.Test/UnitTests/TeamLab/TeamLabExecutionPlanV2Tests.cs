@@ -43,17 +43,19 @@ public sealed class TeamLabExecutionPlanV2Tests
     }
 
     [Fact]
-    public void Plan_RejectsPortReferencingUnknownAsset()
+    public void Plan_AllowsPortOwnedByPeerShard()
     {
-        var plan = Plan() with
+        var plan = WithDigests(Plan() with
         {
             Networks = [new TeamLabNetworkIntentV2(
                 "network-a", "10.0.1.0/24", "10.0.1.1",
-                [new TeamLabNetworkPortV2("port-a", "missing", "02:00:00:00:00:01", "10.0.1.10")], [], [])]
-        };
+                [
+                    new TeamLabNetworkPortV2("port-a", "docker-1", "02:00:00:00:00:01", "10.0.1.10"),
+                    new TeamLabNetworkPortV2("port-b", "remote-asset", "02:00:00:00:00:02", "10.0.1.11")
+                ], [], [])]
+        });
 
-        Assert.False(plan.IsValid(out var error));
-        Assert.Contains("invalid network", error, StringComparison.OrdinalIgnoreCase);
+        Assert.True(plan.IsValid(out var error), error);
     }
 
     [Fact]

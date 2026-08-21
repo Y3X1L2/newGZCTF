@@ -269,14 +269,16 @@ public sealed class TeamLabAdminQueryService(
         var vm = execution.Assets.Count(item => item.Kind == TeamLabAssetKind.Vm);
         var cpu = execution.Assets.Sum(item => item.CpuUnits);
         var memory = execution.Assets.Sum(item => item.MemoryMiB);
+        var storage = execution.Assets.Sum(item => item.StorageMiB);
         var availableDocker = nodes.Where(item => item.SupportsDocker).Sum(item => item.AvailableDockerSlots);
         var availableVm = nodes.Where(item => item.SupportsVm).Sum(item => item.AvailableVmSlots);
         var availableCpu = nodes.Sum(item => item.AvailableResources.CpuUnits);
         var availableMemory = nodes.Sum(item => item.AvailableResources.MemoryMiB);
+        var availableStorage = nodes.Sum(item => item.AvailableResources.StorageMiB);
         var nodeSummary = nodes.Count == 0
             ? "当前没有已接入组网的在线可调度节点"
-            : $"当前可用：Docker {availableDocker} 个、VM {availableVm} 个、CPU {availableCpu}、内存 {availableMemory} MiB";
-        return $"资源不足，无法放置该版本。需求：Docker {docker} 个、VM {vm} 个、CPU {cpu}、内存 {memory} MiB；{nodeSummary}。";
+            : $"当前可用：Docker {availableDocker} 个、VM {availableVm} 个、CPU {availableCpu}、内存 {availableMemory} MiB、存储 {availableStorage} MiB";
+        return $"资源不足，无法放置该版本。需求：Docker {docker} 个、VM {vm} 个、CPU {cpu}、内存 {memory} MiB、存储 {storage} MiB；{nodeSummary}。";
     }
 
     public async Task<TeamLabAdminRuntimePageModel> ListTrialRuntimesAsync(
