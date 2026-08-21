@@ -916,6 +916,8 @@ public class TeamLabCommandBuilderTests
         var routeIndex = Array.FindIndex(result.Commands, command => command.Contains("ip route replace 10.1.1.0/24 dev tlwg196", StringComparison.Ordinal));
         Assert.True(upIndex >= 0, "Expected a WireGuard interface up command.");
         Assert.True(routeIndex > upIndex, "WireGuard routes must be added after the interface is up.");
+        Assert.DoesNotContain(result.Commands,
+            command => command.Contains("ip link set tlwg198 address", StringComparison.Ordinal));
     }
 
     [Fact]
