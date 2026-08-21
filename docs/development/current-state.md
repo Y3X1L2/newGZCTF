@@ -1,6 +1,6 @@
 # YINYU 当前开发状态
 
-更新時間：2026-08-19
+更新時間：2026-08-21
 
 本文件是跨会话的短期状态入口。长期规则见根目录 `AGENTS.md`，完整目标见 `docs/platform-commercialization-master-plan.md`。状态变化后应更新本文件，不通过追加整段聊天记录维护记忆。
 
@@ -39,6 +39,24 @@
 - **根因（headless Chrome + CDP 实测，非猜测）**：`TeamLabCanvas` 开启了 `onlyRenderVisibleElements`。自动排版把全部节点一次移到新位置并触发 fitView 动画；动画窗口内边的可见性判定仍用动画前节点包围盒，导致边被裁剪（点击瞬间 `.react-flow__edge path` 数量实测为 0）或以旧坐标闪现。稳定态核对：边端点与节点 flow 坐标全部精确匹配，无持久性连错。
 - **修复**：移除 `onlyRenderVisibleElements`（提交 `8261896`）。A/B 实测：关闭后点击自动排版瞬间 5 条边全部立即渲染（`edgePathsWithD 0→10`）。单场景节点量级不足以承受该渲染优化带来的正确性代价。
 - **回归**：新增 canvas 测试锁定『不启用 onlyRenderVisibleElements』不变量；前端门禁 validate/lint/check/architecture/**test(271)** 全绿；已推送 `origin/codex/phase-09-teamlab-networking`。
+
+## 2026-08-20 自动排版连线 Bug 第二层根因已修复并部署 118
+
+- 现象（真实场景实测复现）：点自动排版后所有边瞬间画成 x=-1433 的竖直线（线路跑到左上角/延伸远处/围成矩形）；反复点击可能消失；快速点击不生效。
+- **根因（headless 真实 4 网段 mixed 场景 A/B 实证）**：节点未传显式 width/height，React Flow 依赖 ResizeObserver 测量；自动排版全量重建 nodes 引用把测量延迟，fitView 动画窗口内边端点按「未测量为 0」算成 -1000+ 坐标竖直线，动画结束不恢复。
+- **修复（提交 `d4139dd`）**：`flowNodes` 给每个节点显式 width/height（来自 `topologyGeometry`，与 CSS 同源）。与上一提交（移除 `onlyRenderVisibleElements`，`8261896`）共同覆盖全部现象。
+- **验证**：headless 真实场景初始/点击后/快速双击边坐标均正常（无竖直线回归）；回归测试新增「节点显式尺寸」+「不启用 culling」两项；门禁 validate/lint/check/architecture/**test(272)** 全绿。
+- **部署**：release `teamlab-frontend-fix-20260820-02` 已切换为 118 活跃（HTTP 200，服务 active）；线上 `TeamLabDesignRoute...13122` chunk sha = 本地构建 sha `202ea125...`，确认部署的就是修复版。推送 `origin/codex/phase-09-teamlab-networking`。
+
+## 2026-08-21 qqqtest 试运行阻断根因、存储清理与多分片部署修复
+
+- **现象**：`qqqtest` 试运行报“资源不足，无法放置该版本。需求：Docker 1、VM 2、CPU 4、内存 1536 MiB；当前可用：Docker 12、VM 12、CPU 63、内存 15983 MiB”，看似前后矛盾。
+- **根因（真实证据）**：阻断文案只显示 Docker/VM/CPU/内存，**漏了存储**。放置算法 `TeamLabAssetPlanner.CanPlace` 检查单节点 `StorageMiB`；`qqqtest` 两个 VM 各声明 20 GiB 运行盘，清理前 118/125 可用 VM 镜像存储分别仅约 16.0 GiB / 12.0 GiB，单节点放不下，总量 28.0 GiB 也小于 41.0 GiB。
+- **镜像就绪 ≠ 存储足够**：`ImageDistributionRecords.Ready` 只表示镜像模板已分发到节点；资产 `Resources.StorageMiB` 是运行时要分配的虚拟磁盘容量，不是模板文件大小。
+- **存储清理**：118/125 清除历史发布目录、旧增量包、DB 备份、Agent 备份、孤立 VM 错误磁盘、旧 Agent release、journal/apt/Docker 可回收；118 可用 16G→21G（83%），125 可用 12G→27G（56%），Agent manifest 已刷新（118≈21313 MiB，125≈26834 MiB）。
+- **第二层修复（部署）**：清理后 plan 通过，但 V2 多分片部署被 `TeamLabExecutionPlanV2.IsValid` 拒绝“Every network port must reference an asset in the same execution plan”。该约束对单分片合理，但多分片 plan 按设计携带全局网络端口（网络属主建全局 OVN，非属主等待全局资源）。已放宽为允许远端分片端口，并补回归测试；`DescribePlanningBlocker` 同时补上存储需求/可用显示。
+- **提交/部署**：提交 `bb46482`（已推送）；release `teamlab-multishard-fix-20260821-01` 已原子部署 118（HTTP 200），118/125 Agent SHA 均为 `64d7c1578cb7774a09a8fbd3d210970ab232345361cc6a273d55f98677dbde1b`，主站 `GZCTF.dll` `00e0d7047bc7af422eb93b55d0897f862c17d334f6cb60ceba90b5cf99456a18`。
+- **验收**：`qqqtest` 新试运行 runtime `01a023ea-b9db-7dbd-811c-0cfa36d1ea24` 状态 `Running/ready`，两个分片与 Docker/Linux VM/Windows VM 三个资产全部 Running；此前失败的残留 runtime `01a023c5-85f9-72f0-93e0-3253f1ed4dbe` 已销毁完成。
 
 ## 1. 当前基线
 
