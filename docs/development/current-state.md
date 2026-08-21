@@ -58,6 +58,20 @@
 - **提交/部署**：提交 `bb46482`（已推送）；release `teamlab-multishard-fix-20260821-01` 已原子部署 118（HTTP 200），118/125 Agent SHA 均为 `64d7c1578cb7774a09a8fbd3d210970ab232345361cc6a273d55f98677dbde1b`，主站 `GZCTF.dll` `00e0d7047bc7af422eb93b55d0897f862c17d334f6cb60ceba90b5cf99456a18`。
 - **验收**：`qqqtest` 新试运行 runtime `01a023ea-b9db-7dbd-811c-0cfa36d1ea24` 状态 `Running/ready`，两个分片与 Docker/Linux VM/Windows VM 三个资产全部 Running；此前失败的残留 runtime `01a023c5-85f9-72f0-93e0-3253f1ed4dbe` 已销毁完成。
 
+### 2026-08-21 创建授权第一次点击 500 修复（WireGuard 主机接口配置）
+
+- **现象**：销毁/创建授权等按钮第一次点击报 `The request could not be processed.` / `无法将访问授权应用到运行时`，第二次看似成功。
+- **根因（Agent 日志实证）**：
+  1. V2 主机 WireGuard 命令先加 `ip route replace ... dev tlwgXXX` 再 `ip link set ... up`，首次接口未 up 时路由失败，报 `Device for nexthop is not up`；
+  2. 调整顺序后进一步暴露第二个错误：WireGuard 接口不支持 `ip link set ... address`，报 `Operation not supported`；
+  3. 主站 `TeamLabAccessGrantService` 在首次应用失败后 grant 已落库但 `AppliedAt` 为空，第二次直接复用未应用授权，造成“第二次成功”的假象。
+- **修复**：
+  - Agent `BuildHostWireGuardCommands`：先 up 再添加路由；移除对 WireGuard 接口设置 MAC 的命令；
+  - 主站 `TeamLabAccessGrantService`：遇到已存在但未应用成功的活跃授权时继续重试应用，不再直接返回假成功；
+  - 新增回归测试锁定 V2 WireGuard 命令顺序和不设置 MAC。
+- **部署（最小 delta）**：提交 `ffaf097`、`0400cd3` 已推送；release `teamlab-wireguard-order-fix-20260821-03` active；主站 `GZCTF.dll` `61fbd167...`，118/125 Agent `f38f7649...`。
+- **验证**：重建 qqqtest 运行时后，第一次创建授权即返回 201，第二次返回同一活跃授权 201；验证运行时已销毁。
+
 ## 1. 当前基线
 
 | 项目 | 当前事实 |
