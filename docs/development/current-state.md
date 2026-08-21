@@ -72,6 +72,18 @@
 - **部署（最小 delta）**：提交 `ffaf097`、`0400cd3` 已推送；release `teamlab-wireguard-order-fix-20260821-03` active；主站 `GZCTF.dll` `61fbd167...`，118/125 Agent `f38f7649...`。
 - **验证**：重建 qqqtest 运行时后，第一次创建授权即返回 201，第二次返回同一活跃授权 201；验证运行时已销毁。
 
+### 2026-08-21 创建授权仍 500 的最终根因：残留 tlwg 接口导致网关 IP 冲突
+
+- **现象**：上一轮修复后仍报 `The request could not be processed.`，且重试同样失败。
+- **根因（Agent 日志实证）**：新运行时 `tlwg199` 执行 `ip link set up` 失败，`RTNETLINK answers: Address already in use`。原因是已销毁 runtime 196/198 的 V2 主机 WireGuard 接口 `tlwg196`/`tlwg198` 未被销毁清理残留下来，`tlwg198` 仍保留相同网关 IP `10.1.0.254/32` 并挂在 OVS 上，导致新运行时同 IP 冲突。
+- **系统缺口**：V2 主机 WireGuard 接口是在 execution-plan 快照之外由 `ConfigureAccessAsync` 创建的；运行时销毁时现有 V2 cleanup 只按执行计划快照清理分片，没有显式删除主机 WireGuard 接口。未应用成功的授权也会留下接口，成为长期残留。
+- **最终修复**：
+  - 手工清理 125 上已销毁运行的残留 `tlwg196`/`tlwg198`；
+  - `TeamLabRuntimeCleanupService.CleanupHostWireGuardAccessAsync`：V2 运行时销毁时对 entry shard 显式调用 `RemoveAccessAsync`，无论授权是否应用成功都会幂等删除主机 WireGuard 接口及 OVS 挂载；
+  - 保留上两轮 Agent 修复（先 up 再路由、不设置 WireGuard MAC、未应用授权重试）。
+- **部署**：提交 `46fbb1d`；release `teamlab-wireguard-cleanup-fix-20260821-04` active；主站 `GZCTF.dll` `c3ba686e...`，118/125 Agent `f38f7649...`。
+- **验证**：对当前活跃 runtime 199 连续两次“创建授权”均 `201` 成功，返回同一活跃授权；残留接口已清，服务/HTTP 正常。
+
 ## 1. 当前基线
 
 | 项目 | 当前事实 |
