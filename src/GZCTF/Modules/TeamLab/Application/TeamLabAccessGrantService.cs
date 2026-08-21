@@ -88,6 +88,7 @@ public sealed class TeamLabAccessGrantService(
             : null;
         var activeGrant = runtime.AccessGrants.SingleOrDefault(item =>
             item.Generation == runtime.Generation && !item.Revoked && item.ExpiresAt > DateTimeOffset.UtcNow);
+        string token;
         if (grant is null && activeGrant is not null)
         {
             if (activeGrant.ConfigurationConsumedAt is not null ||
@@ -96,10 +97,11 @@ public sealed class TeamLabAccessGrantService(
                     "access_grant_already_active",
                     "已存在活跃的访问授权，轮换团队 VPN 密钥前请先显式撤销",
                     409);
-            var existingToken = _protector.Unprotect(activeGrant.ProtectedDownloadToken);
-            return ToModel(runtime, activeGrant, DownloadUrl(runtime, activeGrant, existingToken));
+            token = _protector.Unprotect(activeGrant.ProtectedDownloadToken);
+            if (activeGrant.AppliedAt is not null)
+                return ToModel(runtime, activeGrant, DownloadUrl(runtime, activeGrant, token));
+            grant = activeGrant;
         }
-        string token;
         if (grant is null)
         {
             var client = GenerateKeyPair();

@@ -875,13 +875,13 @@ public partial class TeamLabNetworkService(
             $"if ip link show dev {iface} >/dev/null 2>&1; then wg set {iface} private-key /dev/stdin listen-port {request.ListenPort} peer {request.PeerPublicKey} allowed-ips {request.PeerClientAddress}; else ip link delete {iface} 2>/dev/null || true; ip link add {iface} type wireguard; wg set {iface} private-key /dev/stdin listen-port {request.ListenPort} peer {request.PeerPublicKey} allowed-ips {request.PeerClientAddress}; fi",
             $"for existing_peer in $(wg show {iface} peers); do test \"$existing_peer\" = {ShellQuote(request.PeerPublicKey)} || wg set {iface} peer \"$existing_peer\" remove; done"
         };
+        commands.Add($"ip link set {iface} address {request.MacAddress!}");
+        commands.Add($"ip address replace {request.AddressCidr} dev {iface}");
+        commands.Add($"ip link set {iface} up");
         commands.AddRange(request.PeerAllowedIps
             .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
             .Select(cidr => $"ip route replace {cidr} dev {iface}"));
         commands.AddRange(BuildHostNatCommands(iface, request.PeerClientAddress, request.PlayerAllowedCidrs));
-        commands.Add($"ip link set {iface} address {request.MacAddress!}");
-        commands.Add($"ip address replace {request.AddressCidr} dev {iface}");
-        commands.Add($"ip link set {iface} up");
         return commands.ToArray();
     }
 
