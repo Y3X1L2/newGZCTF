@@ -91,6 +91,9 @@ public sealed class TeamLabRuntimeCleanupService(
             }
         }));
         errors.AddRange(results.Where(item => !item.Success).Select(item => item.Message));
+        var accessCleanup = await CleanupHostWireGuardAccessAsync(runtime, cancellationToken);
+        if (accessCleanup is { Success: false })
+            errors.Add(accessCleanup.Message);
         if (runtime.PublicUdpMapping is not null)
         {
             var gateway = await publicGateway.RemoveMappingAsync(runtime.PublicUdpMapping, cancellationToken);
@@ -151,6 +154,40 @@ public sealed class TeamLabRuntimeCleanupService(
             "Runtime resources were cleaned successfully.");
         await context.SaveChangesAsync(cancellationToken);
         return TeamLabNodeResult.Ok("Runtime resources cleaned.");
+    }
+
+    private async Task<TeamLabNodeResult?> CleanupHostWireGuardAccessAsync(
+        TeamLabRuntime runtime,
+        CancellationToken cancellationToken)
+    {
+        // V1 host WireGuard lives in the per-runtime namespace and is already covered by the
+        // shard cleanup inventory path. V2 host WireGuard is created outside the execution-plan
+        // snapshot, so a failed/unapplied grant can otherwise leave a stale tlwgXXX interface
+        // behind after destroy and cause duplicate gateway-IP conflicts for the next runtime.
+        if (runtime.ExecutionModel != TeamLabExecutionModel.V2)
+            return null;
+        var entryShard = runtime.Shards.SingleOrDefault(item =>
+            item.Id == runtime.EntryShardId && item.Generation == runtime.Generation);
+        if (entryShard is null)
+            return null;
+        var entryNetwork = runtime.Networks.SingleOrDefault(item =>
+            item.Generation == runtime.Generation && item.IsEntry && item.ShardId == entryShard.Id);
+        if (entryNetwork is null)
+            return null;
+
+        var cleanup = await executor.RemoveAccessAsync(entryShard.WorkerNodeId,
+            new TeamLabNodeAccessRemoveRequest(
+                runtime.Id,
+                runtime.Generation,
+                string.Empty,
+                TeamLabResourceNameFactory.WireGuardInterface(runtime.Id),
+                runtime.ExecutionModel,
+                runtime.PublicId,
+                entryNetwork.TopologyKey),
+            cancellationToken);
+        return cleanup.Success
+            ? TeamLabNodeResult.Ok(cleanup.Message ?? "Host WireGuard access cleaned.")
+            : TeamLabNodeResult.Failed(cleanup.Message ?? "Host WireGuard access cleanup failed.");
     }
 
     private static GZCTF.TeamLab.Contracts.Execution.TeamLabExecutionPlanV2 DeserializeSnapshot(
