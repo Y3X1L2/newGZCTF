@@ -84,6 +84,16 @@
 - **部署**：提交 `46fbb1d`；release `teamlab-wireguard-cleanup-fix-20260821-04` active；主站 `GZCTF.dll` `c3ba686e...`，118/125 Agent `f38f7649...`。
 - **验证**：对当前活跃 runtime 199 连续两次“创建授权”均 `201` 成功，返回同一活跃授权；残留接口已清，服务/HTTP 正常。
 
+### 2026-08-24 抓包切页后 UI 丢失任务：改为后台任务可恢复
+
+- **现象**：抓包启动后切换到其他界面，返回抓包页显示“尚未启动抓包”，看起来抓包中止。
+- **确认**：后端抓包本身是后台任务（API 启动后 8 秒仍 `running`，最终正常完成并产生 PCAP）；问题在前端 `CapturePanel` 把 `captureId` 放在组件本地 state，切 tab/路由导致组件卸载后丢失。
+- **修复**：
+  - 管理端新增 `GET /api/admin/teamlab/runtimes/{runtimeId}/captures`；
+  - 前端 `CapturePanel` 挂载时调用列表接口恢复最近抓包（进行中或已完成），切走再回来仍显示任务状态/停止/下载；
+  - 新增回归测试覆盖“面板重挂载后恢复最近抓包”。
+- **验证/部署**：提交 `faec658`；release `teamlab-capture-restore-fix-20260824-01` active，`GZCTF.dll` `f2b97c85...`，HTTP 200；管理端列表接口返回刚完成的抓包（含分段 SHA 与可下载状态），前端 273 测试全绿。
+
 ## 1. 当前基线
 
 | 项目 | 当前事实 |
