@@ -277,6 +277,17 @@ public sealed class TeamLabAdminRuntimeController(
         return Created($"/api/admin/teamlab/runtimes/{runtimeId:D}/captures/{capture.Id:D}", capture);
     }
 
+    [HttpGet("{runtimeId:guid}/captures")]
+    public async Task<TeamLabCapturePageModel> ListCaptures(
+        Guid runtimeId,
+        [FromQuery] string? after = null,
+        [FromQuery, Range(1, 100)] int limit = 50,
+        CancellationToken cancellationToken = default)
+    {
+        await RequireAsync(runtimeId, TeamLabRuntimePermission.MetadataRead, cancellationToken);
+        return await traffic.ListCapturesAsync(runtimeId, after, limit, cancellationToken);
+    }
+
     [HttpGet("{runtimeId:guid}/captures/{captureId:guid}")]
     public async Task<TeamLabCaptureModel> GetCapture(
         Guid runtimeId,

@@ -9,6 +9,7 @@ import {
   parseTeamLabAccessGrant,
   parseTeamLabAccessGrants,
   parseTeamLabCapture,
+  parseTeamLabCapturePage,
   parseTeamLabRuntime,
   parseTeamLabRuntimeEvents,
   parseTeamLabTrafficFlowPage,
@@ -159,6 +160,10 @@ export function createTeamLabRuntimeApi(client: RuntimeJsonClient = runtimeJsonC
       return parseTeamLabLinkPolicy(
         await client.postJson(`${root}/${runtimeId}/link-policies/${policyId}/recover`, {})
       )
+    },
+
+    async listCaptures(runtimeId: string, limit = 20) {
+      return parseTeamLabCapturePage(await client.get(`${root}/${runtimeId}/captures`, { limit }))
     },
 
     async startCapture(runtimeId: string, request: CreateTeamLabCaptureRequest) {

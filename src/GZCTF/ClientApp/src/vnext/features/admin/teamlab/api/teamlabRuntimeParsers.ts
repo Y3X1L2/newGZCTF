@@ -311,6 +311,11 @@ export function parseTeamLabTrafficPath(value: unknown): TeamLabTrafficPath {
   }
 }
 
+export function parseTeamLabCapturePage(value: unknown): TeamLabCapture[] {
+  const page = parse.record(value, 'TeamLab capture page')
+  return parse.array(page.items, 'TeamLab capture page.items', (entry) => parseTeamLabCapture(entry))
+}
+
 export function parseTeamLabCapture(value: unknown): TeamLabCapture {
   const item = parse.record(value, 'TeamLab capture')
   return {
