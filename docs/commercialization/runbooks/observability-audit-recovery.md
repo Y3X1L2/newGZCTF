@@ -1,6 +1,6 @@
-# Observability, Audit, and Recovery Runbook
+# 可观测性、审计与恢复手册
 
-## 1. Scope and Source of Truth
+## 1. 适用范围与事实源
 
 本 runbook 适用于结构化 `OperationalEvent`、原始 `LogModel`、部署队列、镜像分发、节点/Agent、Docker、KVM、TeamLab 和运行事实恢复。
 
@@ -10,7 +10,7 @@
 - OpenTelemetry metrics/traces 用于实时趋势和跨服务耗时，不作为业务事实。
 - Redis 只负责缓存、协调和 wake-up；恢复不得从 Redis、日志文本或 event history 反推当前状态。
 
-## 2. Production Telemetry Configuration
+## 2. 生产遥测配置
 
 主站只在 `Telemetry` 至少启用一个 exporter 时注册业务 metrics/traces。Prometheus `/metrics` 与 `/healthz` 只监听配置的 `MetricPort`，不得暴露到公网。
 
@@ -53,7 +53,7 @@
 - 多主站实例使用相同 service name/version 和时钟源；trace 采样策略在 collector 统一配置。
 - Console exporter 只用于本地诊断，生产关闭。
 
-## 3. Operator Troubleshooting Flow
+## 3. 运维排查流程
 
 1. 打开 `/admin/logs` 的“事件时间线”，按时间、事件域、结果和错误分类缩小范围。
 2. 从部署队列、节点或镜像页面进入“关联时间线”，保留 correlation、worker node 或 image template 范围。
@@ -76,7 +76,7 @@ GET /api/v1/deployment-queue?pageSize=20
 
 所有列表使用 cursor；禁止用深 OFFSET 扫描生产历史。
 
-## 4. Correlation Contract
+## 4. 关联契约
 
 - 部署任务使用 ticket ID 作为稳定 correlation ID。
 - 镜像分发使用 distribution record correlation。
@@ -87,7 +87,7 @@ GET /api/v1/deployment-queue?pageSize=20
 
 若同一 ticket 的事件出现多个 correlation，视为协议回归；先停止相关发布，再核对 enqueue、worker activity 和 AgentClient header 传播。
 
-## 5. Metrics and Initial Alerts
+## 5. 指标与初始告警
 
 业务 metrics：
 
@@ -116,11 +116,11 @@ GET /api/v1/deployment-queue?pageSize=20
 - `recovery.identity.conflict`、`recovery.resource.missing` 任意出现：Warning，并创建人工核对任务。
 - 主站健康但 3 分钟没有 `recovery.run.succeeded`：Warning；多主部署只要求一个 lease owner 产生成功事件。
 - `failed_closed` decision 任意增长：Warning；同一 workload 连续增长升级为 Critical。
-- Pending/Blocked queue depth 连续增长 10 分钟且可调度节点数不变：Warning，进入 Phase 6 容量 runbook。
+- Pending/Blocked queue depth 连续增长 10 分钟且可调度节点数不变：Warning，进入运行容量手册。
 
 延迟分位阈值必须使用目标节点和 Registry 的预发布基准冻结；不得用开发机数据替代生产阈值。
 
-## 6. System Log Sink Failure
+## 6. 系统日志写入端故障
 
 数据库日志 sink 每 2 秒或达到 50 条触发 flush，单批最多 500 条，缓冲上限 10000 条，退出等待 5 秒 drain。
 
@@ -130,7 +130,7 @@ GET /api/v1/deployment-queue?pageSize=20
 4. dropped 增长表示最旧日志已被丢弃；不得伪造缺失日志。使用 `OperationalEvent`、ticket 和 runtime current facts 补充事故时间线。
 5. 不通过提高缓冲上限掩盖持续数据库故障；先修复数据库吞吐或 collector 策略。
 
-## 7. Runtime Recovery Contract
+## 7. 运行恢复契约
 
 `RuntimeRecoveryWorker`：
 
@@ -153,7 +153,7 @@ GET /api/v1/deployment-queue?pageSize=20
 
 已成功后丢失的环境不自动重建。只有尚未完成、稳定 identity/generation 可证明幂等的 ticket 才进入 safe replay。
 
-## 8. Recovery Diagnosis SQL
+## 8. 恢复诊断 SQL
 
 最近恢复运行：
 
@@ -192,9 +192,9 @@ ORDER BY "CreatedAt", "Id";
 
 SQL 只用于核对。禁止直接删除 orphan、修改 generation 或把失败环境改回 Running。
 
-## 9. Retention and Evidence
+## 9. 保留与证据
 
-默认保留：system logs 30 天、operational events 180 天、deployment tickets 180 天、TeamLab events 180 天。删除由 Phase 4 governance worker 限批执行。
+默认保留：system logs 30 天、operational events 180 天、deployment tickets 180 天、TeamLab events 180 天。删除由治理 worker 限批执行。
 
 事故证据至少包含：
 
@@ -207,10 +207,10 @@ SQL 只用于核对。禁止直接删除 orphan、修改 generation 或把失败
 
 导出前再次检查敏感字段。不得把 flag、token、密码、私钥、Registry auth、完整 userdata、ProtectedPayload 或未脱敏 Agent body 写入事故附件。
 
-## 10. Rollout and Rollback
+## 10. 发布与回滚
 
 1. 备份数据库并确认 PITR 可用。
-2. 应用 Phase 7 Expand/Backfill/Contract migrations；Backfill 只导入活动 ticket、image distribution 和 TeamLab runtime snapshot。
+2. 应用 Expand/Backfill/Contract migrations；Backfill 只导入活动 ticket、image distribution 和 TeamLab runtime snapshot。
 3. 滚动升级主站；确认 metrics、OTLP、`/admin/logs` 和 recovery lease owner。
 4. 滚动同步 Agent；旧 Agent 可继续承载不需要 inventory 的普通调用，但恢复会标记 unsupported，不得误判 missing。
 5. 观察至少两个 recovery interval，确认无 unexpected conflict、missing 或 orphan。

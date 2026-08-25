@@ -140,6 +140,6 @@ GET /api/open/v1/operations/{operationId}
 
 ## 13. 已验证示例
 
-场景 `Phase 9 Mixed Docker Linux Windows AD Acceptance 20260716` 已完成真实流程验证：四个网段、两个 Docker 资产、一个 Linux 虚拟机、一个 Windows 虚拟机和五个基础设施节点，在低负载配置下完成校验、发布、镜像准备、试运行、运行就绪和销毁回收。
+混合 Docker/Linux/Windows/AD 场景曾完成真实流程验证：四个网段、两个 Docker 资产、一个 Linux 虚拟机、一个 Windows 虚拟机和五个基础设施节点，在低负载配置下完成校验、发布、镜像准备、试运行、运行就绪和销毁回收。该记录不替代当前节点和候选镜像的现场验收。
 
-对应操作视频：`artifacts/demo-video/teamlab-scenario-design-to-trial-demo.webm`。
+本仓库不携带对应视频制品；演示应按本节流程在可销毁环境重新录制，不能把历史视频路径当作验收证据。

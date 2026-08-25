@@ -2,7 +2,7 @@
 
 版本：v1
 
-生效阶段：Phase 3 退出时
+生效时间：2026-08-16
 
 基础路径：`/api/open/v1/teamlab`
 
@@ -29,19 +29,17 @@ TeamLab 不负责：
 
 平台内部模块通过 C# application contracts 调用 TeamLab；外部平台通过本文件定义的 HTTP API 调用。两种入口共享同一 application service、operation、部署队列和数据库事实，不能形成两套实现。
 
-## 2. Phase 3 与后续阶段
+## 2. 契约演进背景
 
-| 阶段 | 对 TeamLab 的交付 | 不得改变 |
+| 历史演进主题 | 对 TeamLab 的交付 | 不得改变 |
 | --- | --- | --- |
-| Phase 3 | 独立 topology/release/runtime 模型、外部 API、Penetration adapter、现有 Docker/Linux 部署纵向验收 | 本文件的资源身份、状态语义和错误模型 |
-| Phase 4 | 索引、保留、归档、迁移和查询 SLA | API 资源结构 |
-| Phase 5 | 流量聚合批写、Redis 缓冲、缓存失效 | Traffic query 语义 |
-| Phase 6 | 多队伍队列、原子容量预留、能力协商、多节点调度 | Runtime create/operation 契约 |
-| Phase 7 | 日志、metrics、trace、事实恢复、故障定位 | Event/operation 资源身份 |
-| Phase 8 | VM 类型、Linux SSH、Windows RDP、访问端点 | Asset kind 与 access endpoint 扩展规则 |
-| Phase 9 | Windows、多节点故障、全路径流量、PCAP、管理体验、容量验收 | 不重新引入 Game/Team 到 TeamLab 聚合根 |
+| 已完成的架构演进 | 独立 topology/release/runtime 模型、外部 API、Penetration adapter、Docker/Linux 基础链路 | 本文件的资源身份、状态语义和错误模型 |
+| 已完成的数据治理 | 索引、保留、归档、迁移和查询约束 | API 资源结构 |
+| 已完成的运行增强 | 流量聚合批写、Redis 缓冲、缓存失效、统一队列和多节点能力协商 | Runtime create/operation 契约 |
+| 当前可用的 VM/观测能力 | VM 类型、Linux/Windows 访问端点、日志、metrics、trace、流量和 PCAP | Asset kind 与 access endpoint 扩展规则 |
+| 仍需现场签收的范围 | Windows、多节点故障、全路径流量、PCAP、管理体验和容量验收 | 不重新引入 Game/Team 到 TeamLab 聚合根 |
 
-Phase 3 退出时 API 已可供外部调用。Phase 9 提升能力覆盖和商业 SLI，不负责补做 Phase 3 的解耦。
+上表是契约演进背景，不代表当前待办或部署阶段。当前 API 已可供外部调用；能力覆盖、故障和商业 SLI 仍以 `current-state.md` 与真实验收记录为准。
 
 ## 3. 身份模型
 
@@ -125,7 +123,7 @@ Phase 3 退出时 API 已可供外部调用。Phase 9 提升能力覆盖和商�
 - 保存成功 revision 原子加一。
 - validate 不修改草稿。
 
-### 4.4 Phase 9 topology schema v2
+### 4.4 拓扑 schema v2
 
 公开 API v1 同时接受不可变 release schema v1 和 v2。新发布默认使用 schema v2；历史 v1 release 只通过单一 normalizer 解码，不保留第二套运行时部署实现。
 
@@ -191,7 +189,7 @@ release 字段：
 - environment key 必须满足 `[A-Z_][A-Z0-9_]{0,63}`。
 - secret value 使用持久化 Data Protection key ring 和独立 purpose 加密后短期保存；全部 shard 确认注入后清除密文，只保留 payload hash 和消费时间，不进入 release、operation payload、queue ticket、event detail、日志或查询响应。
 - Penetration adapter 通过 overlay 注入动态 Flag；TeamLab 不理解 Flag 语义。
-- create 返回 `202 Accepted` 和 Phase 1 `ApiOperation`。
+- create 返回 `202 Accepted` 和 `ApiOperation`。
 - operation 关联唯一 `DeploymentQueueTicket`；队列 active identity 以内部 runtime ID 为核心，不依赖 Game/Team。
 
 ## 7. Runtime 状态
@@ -317,7 +315,7 @@ POST   /runtimes/{runtimeId}/captures/{captureId}/stop
 GET    /runtimes/{runtimeId}/captures/{captureId}/download
 ```
 
-所有写接口使用 Idempotency-Key；异步接口返回 Phase 1 operation。
+所有写接口使用 Idempotency-Key；异步接口返回 operation。
 
 ## 12. Capabilities
 
@@ -347,7 +345,7 @@ GET    /runtimes/{runtimeId}/captures/{captureId}/download
 }
 ```
 
-Phase 9 可以把 `windowsVm` 改为 true，不需要发布 v2。删除 asset kind、改变 network model 或收紧已发布 topology schema 需要新 API 主版本。
+在现有 v1 中启用已支持的 `windowsVm` 不需要发布 v2。删除 asset kind、改变 network model 或收紧已发布 topology schema 需要新 API 主版本。
 
 ## 13. 稳定错误码
 
@@ -367,7 +365,7 @@ Phase 9 可以把 `windowsVm` 改为 true，不需要发布 v2。删除 asset ki
 
 ## 14. 外部基座验收
 
-Phase 3 必须在没有 Penetration Game/Team 实体参与的测试中完成：
+外部基座必须先在没有 Penetration Game/Team 实体参与的独立测试中完成：
 
 1. 使用 scoped token 创建 topology；
 2. 保存混合 RFC1918 网段；

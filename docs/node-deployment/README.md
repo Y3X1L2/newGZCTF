@@ -1,7 +1,7 @@
 # GZCTF 节点部署简要指南
 
 本目录用于沉淀远程计算节点的初始化流程。这里的“节点”指在管理后台 `/admin/nodes`
-添加的远程服务器，例如 `10.0.7.125`。平台会通过 SSH 连接节点，部署
+添加的远程服务器，例如 `<WORKER_HOST>`。平台会通过 SSH 连接节点，部署
 `gzctf-agent`，之后由 agent 在该节点上启动 Docker 容器或 KVM 虚拟机。
 
 ## 一、节点需要提前准备什么
@@ -12,7 +12,7 @@
 - Docker：用于普通 CTF、AWDP 的容器靶机。
 - .NET / ASP.NET Core Runtime 10：用于运行 `gzctf-agent`。
 - KVM/libvirt：用于 Windows 靶机、渗透测试靶机等虚拟机场景。
-- 可从节点访问主平台：例如 `http://10.0.7.118:8080`。
+- 可从节点访问主平台：`http://<PLATFORM_HOST>:<PORT>`。
 - 可从主平台访问节点 agent 端口：默认 `5001/tcp`。
 
 推荐初始化脚本：
@@ -25,9 +25,9 @@ sudo bash docs/node-deployment/setup-gzctf-worker-node.sh
 
 ```bash
 sudo bash docs/node-deployment/setup-gzctf-worker-node.sh \
-  --insecure-registry 10.0.7.120:5000 \
+  --insecure-registry <REGISTRY_HOST>:5000 \
   --registry-mirror https://registry-1.docker.io \
-  --nfs-source 10.24.110.110:/data/nfs-pve/gzctf-images \
+  --nfs-source <NFS_HOST>:/data/nfs-pve/gzctf-images \
   --repo-dir /mnt/gzctf-image-repo
 ```
 
@@ -89,7 +89,7 @@ registry.ctf.lan/web/basic-sqli:20260610
 - `local`：目录存储，空间较小，适合 ISO、临时文件。
 - `local-lvm`：本机 LVM thin，适合 PVE VM 本身磁盘。
 - `nfs-pve-shared`：NFS 共享存储，约 35T 可用，挂载源为
-  `10.24.110.110:/data/nfs-pve`。
+  `<NFS_HOST>:/data/nfs-pve`。
 
 推荐把 `nfs-pve-shared` 作为“镜像母仓库”，不要把所有大镜像散落在每台节点上手工维护。
 
@@ -119,7 +119,7 @@ registry.ctf.lan/web/basic-sqli:20260610
 - VM/qcow2：PVE NFS 做母仓库，worker 本地 `/var/lib/gzctf/images` 做运行缓存。
 
 不建议把 PVE 管理节点本身直接作为 GZCTF worker；更建议在 PVE 里开专门的 worker VM，
-例如 `10.0.7.125` 这种节点。这样平台、worker、PVE 管理面之间职责清晰。
+例如 `<WORKER_HOST>` 这种节点。这样平台、worker、PVE 管理面之间职责清晰。
 
 ## 四、注意事项
 

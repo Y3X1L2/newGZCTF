@@ -1,10 +1,10 @@
-# Platform Operational Event Taxonomy
+# 平台运行事件分类
 
-## 1. Purpose
+## 1. 目的
 
-本文冻结 Phase 7 使用的结构化事件、结果、错误和关联规范。事件用于审计、生命周期解释和管理端排障，不替代当前状态表，不作为恢复决策源，也不保存业务 secret。
+本文冻结当前使用的结构化事件、结果、错误和关联规范。事件用于审计、生命周期解释和管理端排障，不替代当前状态表，不作为恢复决策源，也不保存业务 secret。
 
-## 2. Event Shape
+## 2. 事件结构
 
 每条事件必须包含：
 
@@ -27,7 +27,7 @@
 - subject/resource id 和 display snapshot；
 - 已脱敏的 detail 白名单。
 
-## 3. Naming Rules
+## 3. 命名规则
 
 event code 格式为 `domain.subject.action` 或 `domain.subject.stage.result`。
 
@@ -40,7 +40,7 @@ event code 格式为 `domain.subject.action` 或 `domain.subject.stage.result`�
 - 同一状态变化只产生一个 canonical event，system log 由 event writer 派生；
 - event code 常量集中维护，禁止在业务代码中散落字符串。
 
-## 4. Outcomes
+## 4. 结果状态
 
 | Outcome | Meaning |
 | --- | --- |
@@ -53,9 +53,9 @@ event code 格式为 `domain.subject.action` 或 `domain.subject.stage.result`�
 | Recovered | 恢复流程确认、重放或修正了状态 |
 | Observed | 只读观测到事实变化，不代表平台执行动作 |
 
-## 5. Severity
+## 5. 严重级别
 
-| Severity | Use |
+| Severity | 用途 |
 | --- | --- |
 | Debug | 不落默认管理时间线的开发诊断 |
 | Information | 正常生命周期和管理动作 |
@@ -63,7 +63,7 @@ event code 格式为 `domain.subject.action` 或 `domain.subject.stage.result`�
 | Error | 操作失败、状态漂移、资源缺失、协议错误 |
 | Critical | 数据一致性破坏、恢复无法继续、广域基础设施故障 |
 
-## 6. Error Categories
+## 6. 错误分类
 
 | Category | Stable code examples | Retry default |
 | --- | --- | --- |
@@ -88,7 +88,7 @@ event code 格式为 `domain.subject.action` 或 `domain.subject.stage.result`�
 
 具体异常是否 retryable 由 classifier 根据操作幂等性、HTTP status 和调用阶段决定，不能只由 category 决定。
 
-## 7. Runtime Queue Events
+## 7. 运行队列事件
 
 | Event code | Outcome |
 | --- | --- |
@@ -114,7 +114,7 @@ event code 格式为 `domain.subject.action` 或 `domain.subject.stage.result`�
 | `runtime.rollback.succeeded` | Succeeded |
 | `runtime.rollback.failed` | Failed |
 
-## 8. Capacity Events
+## 8. 容量事件
 
 | Event code | Outcome |
 | --- | --- |
@@ -126,7 +126,7 @@ event code 格式为 `domain.subject.action` 或 `domain.subject.stage.result`�
 | `runtime.capacity.reconciled` | Recovered |
 | `runtime.capacity.conflict` | Failed |
 
-## 9. Image Distribution Events
+## 9. 镜像分发事件
 
 | Event code | Outcome |
 | --- | --- |
@@ -147,7 +147,7 @@ event code 格式为 `domain.subject.action` 或 `domain.subject.stage.result`�
 | `image.reference.released` | Succeeded |
 | `image.reconcile.corrected` | Recovered |
 
-## 10. Node and Agent Events
+## 10. 节点与 Agent 事件
 
 | Event code | Outcome |
 | --- | --- |
@@ -170,7 +170,7 @@ event code 格式为 `domain.subject.action` 或 `domain.subject.stage.result`�
 
 normal heartbeat、status poll 和成功的普通 Agent call 只进入 span/metric，不逐条写 durable event。
 
-## 11. Container and VM Events
+## 11. 容器与 VM 事件
 
 | Event code | Outcome |
 | --- | --- |
@@ -192,7 +192,7 @@ normal heartbeat、status poll 和成功的普通 Agent call 只进入 span/metr
 | `vm.access.opened` | Succeeded |
 | `vm.access.failed` | Failed |
 
-## 12. TeamLab Events
+## 12. TeamLab 事件
 
 | Event code | Outcome |
 | --- | --- |
@@ -246,7 +246,7 @@ normal heartbeat、status poll 和成功的普通 Agent call 只进入 span/metr
 | `teamlab.access.opened` | Succeeded |
 | `teamlab.access.revoked` | Succeeded |
 
-## 13. Recovery Events
+## 13. 恢复事件
 
 | Event code | Outcome |
 | --- | --- |
@@ -262,7 +262,7 @@ normal heartbeat、status poll 和成功的普通 Agent call 只进入 span/metr
 | `recovery.inventory.unsupported` | Blocked |
 | `recovery.orphan.observed` | Observed |
 
-## 14. Administrative and Security Events
+## 14. 管理与安全事件
 
 Generic mutation code:
 
@@ -275,7 +275,7 @@ Generic mutation code:
 
 具体业务模块可增加 `audit.identity.*`、`audit.content.*`、`audit.training.*`、`audit.game.*`，但必须先加入本文件和常量表，不能在 controller 内临时创建 code。
 
-## 15. Detail Allowlist
+## 15. detail 允许字段
 
 允许的 detail 键：
 
@@ -303,7 +303,7 @@ Generic mutation code:
 - 完整 JWT、Bearer header、WireGuard key、完整 sha256 认证材料；
 - 原始异常对象、stack trace、任意上传文件内容。
 
-## 16. Query and Retention
+## 16. 查询与保留
 
 - 默认事件页面按 `OccurredAt desc, Id desc` cursor 分页。
 - correlation timeline 按 `OccurredAt asc, Id asc`。

@@ -2,9 +2,9 @@
 
 版本：1.0
 
-主责阶段：Phase 4
+文档状态：现行数据库治理基线
 
-事实来源：当前源码、Phase 0/1/3 目标模型、PostgreSQL migration 与真实查询计划
+事实来源：当前源码、PostgreSQL migration 与真实查询计划
 
 ## 1. 审计规则
 
@@ -58,7 +58,7 @@
 - 应用始终提前创建当前和后续两个分区；缺失分区是 health degradation。
 - partition DDL 使用 PostgreSQL advisory transaction lock。
 - 分区 drop 前必须对候选分区完整重聚合；日志的 source count 与聚合 count 必须一致，流量的 flow/packet/byte 总量必须一致。随后在分区写锁内复核 source count、runtime window 和分区级 `DataGovernanceRun`，任何迟到写入都会阻止删除。
-- default partition 只作为迁移保护，Phase 4 退出前必须为空；生产 steady state 不允许数据长期落入 default partition。
+- default partition 只作为迁移保护，生产稳定运行时不允许数据长期落入 default partition。
 
 ## 5. 查询计划验收
 
@@ -76,10 +76,10 @@
 
 ## 7. 可执行证据
 
-- `DatabaseGovernanceMigrationTests` 从 Phase 3 schema 播种旧镜像 JSON、跨月 Logs、跨日 TeamLab flow 和 Theory bank，再迁移到 latest；验证 count/checksum、关系回填、分区路由、聚合幂等、advisory lease、清理门槛和唯一约束。
+- `DatabaseGovernanceMigrationTests` 从迁移前 schema 播种旧镜像 JSON、跨月 Logs、跨日 TeamLab flow 和 Theory bank，再迁移到 latest；验证 count/checksum、关系回填、分区路由、聚合幂等、advisory lease、清理门槛和唯一约束。
 - `seed-commercial-baseline.sql` 提供 CI 与 Commercial 两档确定性合成数据，不读取生产信息。
 - `capture-query-plans.ps1` 只允许目标数据库名包含 benchmark/test/phase4/ci，使用 `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)` 生成制品。
 - `assert-query-plans.ps1` 验证七类主查询使用目标索引、无大范围 Seq Scan，Logs/TeamLab flow 只访问一个命中分区。
 - `.github/workflows/quality.yml` 在独立 PostgreSQL 16 服务上迁移、播种并执行 query-plan contract，并上传 JSON plan artifact；PostgreSQL 17 Commercial 数据量结果单独记录，不将共享 runner 延迟作为容量结论。
-- `RedisGovernanceMigrationTests` 验证 Phase 5 projection revision、节点分钟指标和公网端口 owner lease 的迁移与历史事实回填；`TeamLabTrafficStreamTests` 验证写库前崩溃留下的 pending 可由其他 consumer reclaim。
+- `RedisGovernanceMigrationTests` 验证 projection revision、节点分钟指标和公网端口 owner lease 的迁移与历史事实回填；`TeamLabTrafficStreamTests` 验证写库前崩溃留下的 pending 可由其他 consumer reclaim。
 - `rehearse-pitr.ps1` 使用隔离 PostgreSQL 16、WAL archive 和 base backup 恢复至 Contract 前时间点，并校验 migration head 与升级前后标记事实。

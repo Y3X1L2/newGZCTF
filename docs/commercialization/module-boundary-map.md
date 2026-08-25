@@ -2,7 +2,7 @@
 
 版本：1.0
 
-生效阶段：Phase 1 退出时
+生效时间：2026-08-16
 
 架构形态：模块化单体主站 + 独立 Agent 执行面
 
@@ -56,7 +56,7 @@ src/GZCTF/
     ServiceRegistration.cs
 ```
 
-Phase 1 迁入 Identity API token、外部 API 基础、ImageTemplate 参考链路和 CTF 比赛题目外部导入切片。其他模块在各自主责 Phase 迁移；架构测试从 Phase 1 起禁止增加新的跨界依赖，并为每项现存依赖绑定唯一清理 Phase。
+当前代码已具备 Identity API token、外部 API 基础、ImageTemplate 参考链路和 CTF 比赛题目外部导入能力。架构测试禁止新增跨界依赖；历史迁移中的阶段名称不代表当前待办。
 
 ## 3. 模块所有权
 
@@ -107,7 +107,7 @@ Phase 1 迁入 Identity API token、外部 API 基础、ImageTemplate 参考链�
 
 - `ImageTemplate` 是 Content 全局资产，存储服务器保存唯一主副本。
 - 创建者和管理员可以管理模板元数据；业务模块只拥有显式 binding。
-- `TrainingCourseId` 不能继续作为模板所有权字段。Phase 1 将其迁移成课程 binding。
+- `TrainingCourseId` 不能作为模板所有权字段，只能表达课程 binding。
 - 删除模板前由 Content 查询 CTF、Exercise、Training 和 TeamLab 的公开引用检查接口。
 - 任一有效引用或运行实例存在时返回 `asset_in_use`，不能依赖数据库 cascade 删除。
 
@@ -115,7 +115,7 @@ Phase 1 迁入 Identity API token、外部 API 基础、ImageTemplate 参考链�
 
 - `GameChallenge` 是比赛快照，`ExerciseChallenge` 是练习定义，二者不能通过修改同一行切换类型。
 - 课程通过 `TrainingCourseChallenge` 绑定 ExerciseChallenge。`ExerciseChallenge.TrainingCourseId` 非空表示课程拥有的隔离快照，删除课程时显式删除该快照、实例、Flag、附件和提交。
-- 全局 ExerciseChallenge 和 Phase 10 QuestionPool 是来源资产；导入课程必须创建课程拥有的 snapshot，后续修改互不影响。
+- 全局 ExerciseChallenge 是当前来源资产；未来若引入 QuestionPool，导入课程仍必须创建课程拥有的 snapshot，后续修改互不影响。
 - 无论删除课程 snapshot 还是全局题目，都不能级联删除仍被其他对象引用的 ImageTemplate 主副本。
 
 ### 5.3 TeamLab
@@ -139,7 +139,7 @@ Phase 1 迁入 Identity API token、外部 API 基础、ImageTemplate 参考链�
 
 ## 7. 架构门禁
 
-Phase 1 新增 `ArchitectureDependencyTests`，至少约束：
+`ArchitectureDependencyTests` 至少约束：
 
 ```csharp
 [Fact]
@@ -169,11 +169,11 @@ public void Controllers_DoNotDependOn_AgentClient()
 
 门禁策略：
 
-1. Phase 1 创建当前依赖快照，任何新增违规立即失败。
-2. 每项现存违规必须在总纲中已有主责 Phase；不能写入无截止时间的 allow-list。
-3. 对 Phase 1 已迁移的 Identity/Content reference slice 不允许基线豁免。
-4. Phase 3 退出时 TeamLab -> Penetration 违规数量必须为零。
-5. Phase 14 退出时所有目标模块必须满足完整矩阵，临时快照文件删除。
+1. 以当前依赖快照为基线，任何新增违规立即失败。
+2. 现存违规必须有明确的清理任务和负责人，不能写入无期限 allow-list。
+3. Identity/Content 的已稳定公开契约不允许新增基线豁免。
+4. TeamLab -> Penetration 的禁止依赖必须保持为零。
+5. 临时依赖快照只作为门禁输入，不作为运行时兼容层。
 
 ## 8. 组合根
 

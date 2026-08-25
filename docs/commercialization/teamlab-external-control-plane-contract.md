@@ -78,7 +78,7 @@ Idempotency-Key: customer-order-20260808-001
 
 状态为 `planAvailable`、`preparing`、`readyToStart` 或 `blocked`。返回每个模板的适配节点数、就绪数、准备中数量和失败数量，不暴露节点地址。
 
-### Rollout
+### 发布与切换
 
 - `GET|POST /api/open/v1/teamlab/rollouts`
 - `GET /api/open/v1/teamlab/rollouts/{rolloutId}`

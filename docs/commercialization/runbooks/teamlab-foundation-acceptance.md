@@ -1,68 +1,55 @@
-# TeamLab Foundation Acceptance Runbook
+# TeamLab 基础能力验收手册
 
-## Scope
+## 1. 验收范围
 
-This runbook validates the Phase 3 boundary: TeamLab is an independent topology, release, runtime, access, and traffic control plane; Penetration is a gameplay adapter that owns objectives, submissions, scoring, and team bindings.
+本手册验证 TeamLab 作为独立拓扑、发布、运行、访问和流量控制面工作。Penetration 只负责目标、提交、计分和战队绑定的业务适配，不拥有 TeamLab 拓扑或 runtime。
 
-## Automated Evidence
+本手册面向真实可销毁环境，不以 mock、页面显示或历史测试数字替代节点、Agent、容器、虚拟机和网络验收。
 
-Validated on 2026-07-12 from branch `codex/phase-3-teamlab-foundation`:
+## 2. 发布前门禁
 
-| Gate | Result |
-|---|---|
-| Production and test compilation | 0 warnings, 0 errors |
-| EF pending model changes | None |
-| Unit tests | 476 passed |
-| PostgreSQL contract migration | 2 passed |
-| OpenAPI TestServer snapshot | Passed |
-| OpenAPI compatibility comparator | 26 breaking and 11 additive self-tests passed; contract compatible |
-| Frontend locale, strict TypeScript, production build | Passed |
-| Git whitespace check | Passed |
+1. 进入维护窗口，暂停拓扑写入、发布、runtime 创建/重置/销毁和抓包创建。
+2. 等待 TeamLab 部署任务进入终态。
+3. 备份 PostgreSQL，记录活动 runtime、generation、shard、网络租约、资产、访问授权、UDP 映射和节点资源事实。
+4. 执行迁移。迁移前置条件失败时修复绑定或 runtime 事实后重新执行完整事务，不绕过检查。
+5. 确认所有 Agent 的 manifest 可解析，并具备当前场景所需 Docker/KVM/Fabric/WireGuard 能力。
 
-The migration test verifies both successful schema contraction and atomic rejection of an active legacy environment without a runtime binding. It runs against PostgreSQL 16.
+## 3. 独立 Docker 流程
 
-The final quality review findings are closed: runtime generation reuse and stable ownership, active-release reset, access grant reissue, object-level runtime authorization, per-shard capacity accounting, connection-aware route isolation, incremental flow cursors, and idempotent capture completion are implemented. The complete integration suite reached 220 passing tests before two Phase 1 resource-grant fixture failures; those fixtures were corrected and both affected tests then passed.
+1. 创建只有 TeamLab topology、runtime、traffic 和 capture scope 的 API token，不绑定 Game 或 Team。
+2. 创建两个 RFC1918 网段的拓扑，包含入口 Docker、内部 Docker、健康检查和一条允许连接。
+3. 完成校验、发布、计划并创建 runtime，记录稳定外部引用。
+4. 轮询 operation 和 runtime 事件，直到服务端报告 Ready。
+5. 创建并消费一次性 WireGuard 访问授权。
+6. 验证入口网络可达、路由后的内部 HTTP 服务可达、未连接网络不可达。
+7. 查询流量元数据，启动有时长/大小限制的抓包，产生流量、停止抓包并下载 PCAP。
+8. 销毁 runtime，逐节点核对容器、网络命名空间、路由、WireGuard、抓包进程和临时文件均已清理。
 
-## Pre-Deployment Gate
+## 4. 独立 Linux VM 流程
 
-1. Enter maintenance mode for TeamLab topology writes, release publication, runtime create/reset/destroy, and capture creation.
-2. Wait until all active TeamLab deployment tickets reach a terminal state.
-3. Back up PostgreSQL and record active runtime, generation, shard, network lease, asset, access grant, UDP mapping, and node resource facts.
-4. Apply migrations. Do not bypass a migration precondition failure; repair the reported binding or runtime fact and retry the complete transaction.
-5. Confirm all registered Agents satisfy the deployed TeamLab protocol and required Docker/KVM/network capabilities.
+1. 使用 Ready 的 Linux cloud-image 模板发布至少两个 RFC1918 网段的拓扑。
+2. 创建 runtime，核对 cloud-init 主机名、按 MAC 固定地址、DNS、路由、qemu guest-agent 和服务健康。
+3. 通过路由路径验证 SSH 和目标 HTTP 服务。
+4. 重置 runtime，确认 PublicId 和外部引用稳定、generation 增加、旧访问授权失效、旧 generation 事实仍可查询。
+5. 销毁 runtime，确认 overlay、seed ISO、bridge、namespace、route、capture 和 staging 文件不存在。
 
-## Independent Docker Flow
+## 5. Penetration 适配流程
 
-1. Issue an API token with TeamLab topology, runtime, traffic, and capture scopes and no Game or Team resource binding.
-2. Create a two-network RFC1918 topology with an entry Docker asset, a routed internal Docker asset, health checks, and one allowed connection.
-3. Validate, publish, plan, and create the runtime with a stable external reference.
-4. Poll the durable operation and runtime events until ready.
-5. Create and consume a one-time WireGuard access grant.
-6. Verify direct access is limited to the entry network, routed access reaches the internal HTTP service, and an unconnected network is unreachable.
-7. Query flow metadata, start a bounded capture, generate traffic, stop the capture, and download the PCAP.
-8. Destroy the runtime and verify cleanup on every participating node.
+1. 创建 Penetration 比赛，绑定已有 TeamLab topology 和活动 release。
+2. 使用 topology asset key 配置目标，至少包含一个动态 Flag 和一个前置条件。
+3. 为两支队伍启动环境，确认各自绑定不同 TeamLab runtime。
+4. 提交动态 Flag，核对得分和提交审计，然后只重置其中一支队伍。
+5. 确认另一支队伍的 runtime、得分、授权和流量事实未改变。
+6. 停止两套环境，核对 runtime 清理、队列事件和系统事件。
 
-## Independent Linux VM Flow
+## 6. 资源残留检查
 
-1. Publish a topology using a Ready Linux cloud-image template and at least two RFC1918 networks.
-2. Create the runtime and verify cloud-init hostname, MAC-bound static addresses, DNS, routes, qemu guest-agent response, and service health.
-3. Verify SSH and the intended HTTP service through the routed path.
-4. Reset the runtime. Confirm PublicId and external reference remain stable, generation increments, old grants are revoked, and old generation facts remain queryable.
-5. Destroy the runtime and verify overlay, seed ISO, bridge, namespace, route, capture, and staging files are absent.
+对每个已销毁 runtime 的 PublicId，在所有参与节点核对：容器、libvirt domain、qcow2 overlay、seed ISO、bridge、路由 namespace、WireGuard interface、路由、capture 进程、PCAP 和 staging 文件。任何残留都阻断生产验收，必须记录资源归属和清理结果后重验。
 
-## Penetration Adapter Flow
+## 7. 验收证据
 
-1. Create a Penetration game and bind an existing TeamLab topology and active release.
-2. Configure objectives against topology asset keys, including one dynamic Flag and one prerequisite.
-3. Start environments for two teams and verify each binding points to a distinct TeamLab runtime.
-4. Submit the dynamic Flag, verify score and submission audit, then reset one team.
-5. Confirm the other team's runtime, score, grant, and traffic facts are unchanged.
-6. Stop both environments and verify runtime cleanup and queue/system event visibility.
+至少保存 topology/release/runtime ID、operation/ticket ID、节点和 Agent manifest、关键事件 correlation、入口访问结果、流量/PCAP 元数据和清理核对结果。证据中不得保存 token、Flag、密码、私钥、完整 user-data 或 Registry 凭据。
 
-## Residual Resource Check
+## 8. 回滚边界
 
-For every destroyed runtime PublicId, inspect all participating nodes for containers, libvirt domains, qcow2 overlays, seed ISOs, bridges, router namespaces, WireGuard interfaces, routes, capture processes, PCAPs, and staging files. Any residue blocks Phase 3 production acceptance.
-
-## Rollback Boundary
-
-The contract migration removes legacy Penetration topology and runtime tables. Application rollback across this migration requires restoring the pre-migration database backup and the matching application release together. Rolling back application binaries alone is unsupported.
+涉及删除旧 Penetration topology/runtime 表的契约迁移时，应用回滚必须同时恢复迁移前数据库备份和匹配的应用版本。只回滚二进制而不恢复数据库不受支持。

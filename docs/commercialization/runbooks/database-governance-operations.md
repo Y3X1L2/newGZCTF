@@ -64,6 +64,6 @@ pwsh scripts/database/assert-query-plans.ps1 `
 ./scripts/database/rehearse-pitr.ps1
 ```
 
-脚本创建临时 PostgreSQL 16 数据卷、WAL archive 卷和 base backup 卷，将数据库迁移到 Phase 3 后记录基线事实，再执行 Phase 4 Contract，最后恢复到 Contract 前时间点并验证 migration head、升级前标记存在且升级后标记不存在。默认结束后删除全部临时容器和 volume；失败时输出 PostgreSQL recovery 日志。
+脚本创建临时 PostgreSQL 16 数据卷、WAL archive 卷和 base backup 卷，将数据库迁移到当前基线前记录事实，再执行当前迁移契约，最后恢复到契约前时间点并验证 migration head、升级前标记存在且升级后标记不存在。默认结束后删除全部临时容器和 volume；失败时输出 PostgreSQL recovery 日志。
 
 2026-07-12 本地演练结果：`passed`；恢复目标 `2026-07-12 10:28:44.597477+00`；migration head `20260712054103_CompleteTeamLabRuntimeReliability`；升级前/后标记计数 `1/0`。

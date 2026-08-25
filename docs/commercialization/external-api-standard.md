@@ -2,7 +2,7 @@
 
 版本：v1
 
-生效阶段：Phase 1 退出时
+生效时间：2026-08-16
 
 基础路径：`/api/open/v1`
 
@@ -81,12 +81,12 @@ scope 使用 `resource:action`：
 | `training:write` | 导入培训课程、章节、实验和课程试卷。 |
 | `theory:write` | 导入理论题库或替换 Theory/Mixed 比赛试卷。 |
 | `teams:write` | 由管理员批量创建战队并绑定现有用户。 |
-| `teamlab.topologies:read` | Phase 3 查询可访问拓扑和 release。 |
-| `teamlab.topologies:write` | Phase 3 编辑、验证和发布拓扑。 |
-| `teamlab.runtimes:read` | Phase 3 查询 runtime、事件和访问状态。 |
-| `teamlab.runtimes:write` | Phase 3 创建、重置和销毁 runtime。 |
-| `teamlab.capture:read` | Phase 3 查询和下载授权范围内的 PCAP。 |
-| `teamlab.capture:write` | Phase 3 创建和停止抓包任务。 |
+| `teamlab.topologies:read` | 查询授权范围内的拓扑和 release。 |
+| `teamlab.topologies:write` | 编辑、验证和发布授权范围内的拓扑。 |
+| `teamlab.runtimes:read` | 查询授权范围内的 runtime、事件和访问状态。 |
+| `teamlab.runtimes:write` | 创建、重置和销毁授权范围内的 runtime。 |
+| `teamlab.capture:read` | 查询和下载授权范围内的 PCAP。 |
+| `teamlab.capture:write` | 创建和停止授权范围内的抓包任务。 |
 
 resource grant 使用显式 `(resourceType, resourceId)` 行。比赛题目接口必须具有 `game:{gameId}` 或 `game:*`；教师只能签发自己拥有的具体比赛授权，`game:*` 和 `*:*` 只能由管理员签发。空 grant 不授予任何比赛。镜像接口仍按模板创建者和 `image:{name}` 授权；其他已注册资源类型由对应 grant policy 校验，未知类型在签发时被拒绝。
 
@@ -185,7 +185,7 @@ Pending -> Running -> Succeeded
 
 ## 8. 上传接口
 
-Phase 1 参考接口：
+当前 v1 参考接口：
 
 ```text
 POST   /api/open/v1/images/docker-archives
@@ -280,7 +280,7 @@ AWDP 使用 `challenges:read/write/delete` 和 `game:{gameId}`。导入体包含
 - Redis 不可用时，外部写接口 fail closed 并返回 `503 quota_backend_unavailable`，不能退化为无限调用。
 - 大文件导入同时受全局、token 和存储节点并发 gate 限制。
 - 429 返回 `Retry-After`、`RateLimit-Limit`、`RateLimit-Remaining` 和 `RateLimit-Reset`。
-- Phase 5 可以优化 Redis key 和批写策略，但不能改变本标准的 HTTP 契约。
+- Redis key 和批写策略可以优化，但不能改变本标准的 HTTP 契约。
 
 ## 10. 审计与观测
 

@@ -1,8 +1,8 @@
-# Agent Capability Protocol
+# Agent 能力协商协议
 
-## 1. Purpose
+## 1. 目的
 
-本文冻结 GZCTF 主站与 `GZCTF.Agent` 之间的节点能力协商协议，供 Phase 6 调度、节点注册、Agent 同步、镜像分发和 TeamLab 多节点运行共同使用。
+本文冻结 GZCTF 主站与 `GZCTF.Agent` 之间的节点能力协商协议，供调度、节点注册、Agent 同步、镜像分发和 TeamLab 多节点运行共同使用。
 
 协议目标：
 
@@ -12,7 +12,7 @@
 - 旧 Agent、依赖缺失、能力回报过期和同步未完成均产生稳定、可读、可审计的不可调度原因。
 - feature ID 和 JSON schema 可以独立演进，不要求主站与所有 WorkerNode 同时替换。
 
-## 2. Current Code Evidence
+## 2. 当前代码依据
 
 - `src/GZCTF.Agent/Services/AgentCapabilityService.cs` 生成 schema `1` manifest、稳定 feature set、host facts 和分类 execution limits。
 - `src/GZCTF.Agent/Controllers/StatusController.cs` 与 heartbeat 共用同一 manifest 生成器，并缓存计算 Agent binary SHA-256。
@@ -24,7 +24,7 @@
 
 活动业务代码不保留 `protocolVersion >= N` 判断；历史 migration 中的旧字段只用于升级数据回填。
 
-## 3. Protocol Layers
+## 3. 协议分层
 
 Agent 协议分为四层：
 
@@ -37,9 +37,9 @@ Agent 协议分为四层：
 
 禁止把四层再次压缩为一个 `Available` 布尔值或全局 protocol number。
 
-## 4. Status Endpoint
+## 4. 状态接口
 
-### 4.1 Endpoint
+### 4.1 接口
 
 ```http
 GET /api/status
@@ -49,7 +49,7 @@ Accept: application/json
 
 Agent status endpoint 继续使用节点 auth token。未认证请求返回 `401`；不得公开主机能力、路径、二进制摘要或依赖诊断。
 
-### 4.2 Response contract
+### 4.2 响应契约
 
 ```csharp
 public sealed record AgentStatusResponse(
@@ -121,17 +121,17 @@ JSON 使用 `camelCase`，feature 集合按 ordinal 升序返回，所有容量�
 }
 ```
 
-## 5. Manifest Schema Version
+## 5. Manifest Schema 版本
 
-- Phase 6 当前 schema 为 `1`。
+- 当前生产协议使用 schema `1`。
 - schema 只描述 JSON transport 结构，不描述 Docker、KVM 或 TeamLab 功能等级。
 - 主站支持的 schema 集合首版为 `{1}`。未知 schema 返回 `agent_manifest_schema_unsupported`，节点保留注册事实但不参与运行调度。
 - 新增 optional JSON 字段不提升 schema；删除字段、改变字段类型或改变必填语义时发布新 schema。
 - 同一 Agent 可以只返回一个 schema。主站升级顺序必须先支持新 schema，再发布使用新 schema 的 Agent。
 
-## 6. Feature Catalog
+## 6. Feature 目录
 
-### 6.1 Feature naming
+### 6.1 Feature 命名
 
 格式固定为：
 
@@ -144,7 +144,7 @@ JSON 使用 `camelCase`，feature 集合按 ordinal 升序返回，所有容量�
 - 兼容增强保留原 ID；破坏请求/响应、执行语义或安全边界时发布新 revision。
 - Agent 可以同时声明旧/新 feature，主站按 workload 的 required set 判断。
 
-### 6.2 Phase 6 feature set
+### 6.2 当前 feature 集合
 
 | Feature ID | Agent 必须满足 | 主站使用场景 |
 | --- | --- | --- |
@@ -159,7 +159,7 @@ JSON 使用 `camelCase`，feature 集合按 ordinal 升序返回，所有容量�
 | `teamlab.pcap.v1` | `tcpdump` 或 `dumpcap`，时长/大小限制和状态合约可用 | 按需 PCAP |
 | `maintenance.self-update.v1` | hash 校验、临时文件、原子替换、systemd restart 合约可用 | 节点“同步最新版本” |
 
-### 6.3 Derived coarse capabilities
+### 6.3 派生能力投影
 
 `WorkerNode.Capabilities` 保留为数据库查询投影：
 
@@ -170,7 +170,7 @@ NodeCapability.Kvm    <=> features contains "runtime.kvm.v1"
 
 投影只能由 `AgentCapabilityEvaluator` 生成。Controller、heartbeat 和 TeamLab service 不得各自维护转换函数。
 
-## 7. Workload Requirement Matrix
+## 7. 工作负载需求矩阵
 
 | Workload | Required feature set | Required runtime health |
 | --- | --- | --- |
@@ -186,7 +186,7 @@ NodeCapability.Kvm    <=> features contains "runtime.kvm.v1"
 
 Docker-only TeamLab 不要求 `runtime.kvm.v1`。非入口 TeamLab shard 不要求 WireGuard player-entry feature。
 
-## 8. Runtime Health
+## 8. 运行健康
 
 静态 feature 不能替代动态健康：
 
@@ -199,7 +199,7 @@ Docker-only TeamLab 不要求 `runtime.kvm.v1`。非入口 TeamLab shard 不要�
 
 节点详情 API 返回静态 feature 和动态 health 的独立结果。UI 不显示笼统“VPN 可调度”来掩盖具体缺失项。
 
-## 9. Heartbeat Contract
+## 9. 心跳契约
 
 heartbeat 保存两类数据：
 
@@ -213,13 +213,13 @@ public sealed record AgentHeartbeatRequest(
     TeamLabRuntimeHealthReport TeamLabHealth);
 ```
 
-- `Metrics` 进入 Phase 5 Redis live state/分钟 checkpoint。
+- `Metrics` 进入 Redis live state 和分钟级 checkpoint。
 - `Manifest` 是低频持久事实；只有 `CapabilityHash` 变化时更新 PostgreSQL manifest 和 coarse projection。
 - `TeamLabHealth` 是动态运行健康，不能修改静态 feature set。
-- metric sequence 过期时拒绝旧 metric，但仍允许更新更高可信度的 manifest/hash 和 Agent version；沿用 Phase 5 已修复语义。
+- metric sequence 过期时拒绝旧 metric，但仍允许更新更高可信度的 manifest/hash 和 Agent version。
 - `ObservedAt` 与主站 receive time 同时保存；调度 freshness 使用主站 receive time，避免节点时钟漂移使节点永久在线。
 
-## 10. Execution Limits
+## 10. 执行限制
 
 Agent 本机 operation gate 是最终保护：
 
@@ -238,7 +238,7 @@ Agent 本机 operation gate 是最终保护：
 - VM create permit 在 `virt-install` 返回并确认 domain 存在后释放；boot/service probe 由主站有界并行，不用慢启动长期串行后续 VM create。
 - 主站读取 limit 用于 dispatch 批次估算；即使多个主站实例同时调用，Agent gate 仍保证本机上限。
 
-### 10.1 Single-flight and identity locks
+### 10.1 单航班任务与身份锁
 
 - Docker image key 为解析后的 normalized registry reference；可获得 digest 时使用 digest。同 key 只有一个真实 pull，等待者共享结果。
 - VM image key 为 `templateId + expectedSha256`。同 key 只有一个 `.part` owner；完成后写 digest sidecar 并原子替换目标 qcow2。
@@ -247,7 +247,7 @@ Agent 本机 operation gate 是最终保护：
 - 相同 generation 已存在且规格一致时 create 返回 `alreadyExists = true`；规格不一致返回 `runtime_identity_conflict`。create 不得先无条件删除已有 container/domain。
 - Docker/VM create 遇到本地镜像缺失返回 `image_not_ready`，不得在 create 内隐式执行 pull/download。
 
-### 10.2 Request deadlines and retry boundary
+### 10.2 请求截止时间与重试边界
 
 | Operation | Default deadline |
 | --- | --- |
@@ -259,7 +259,7 @@ Agent 本机 operation gate 是最终保护：
 
 主站不再设置统一 10 分钟 HttpClient timeout。只有 create/cleanup 已具备 identity inspect 幂等语义后，连接建立失败、连接重置或响应读取中断才能自动重试一次；明确业务错误、4xx、hash mismatch 和 capacity error 不重试。
 
-## 11. Persistence Model
+## 11. 持久化模型
 
 `WorkerNode` 保存：
 
@@ -272,7 +272,7 @@ string CapabilityHash
 DateTimeOffset? CapabilityObservedAt
 ```
 
-同时保存由 manifest 导出的 `NodeCapability` bit flag。以下旧字段在 Phase 6 Contract 删除：
+同时保存由 manifest 导出的 `NodeCapability` bit flag。以下旧字段已从当前运行契约删除：
 
 ```text
 TeamLabAgentVersion
@@ -282,7 +282,7 @@ TeamLabCapabilitiesJson
 
 manifest JSON 不用于任意 ad-hoc 查询；调度通过 evaluator 的 typed snapshot 和 coarse projection。raw JSON 用于审计、节点详情和未知 optional feature 前向兼容。
 
-## 12. Agent Sync Contract
+## 12. Agent 同步契约
 
 同步状态机：
 
@@ -305,7 +305,7 @@ Requested
 - 同步不自动安装 Docker/KVM/TeamLab OS 依赖；节点注册 bootstrap 负责“缺什么装什么”，sync 只更新 Agent 制品和配置。
 - 同一节点只允许一个 active sync，重复请求返回同一 operation。
 
-## 13. Error Contract
+## 13. 错误契约
 
 | Code | 含义 |
 | --- | --- |
@@ -323,9 +323,9 @@ Requested
 
 错误响应包含 `code`、`message`、`nodeId`、`missingFeatures` 和 correlation ID；不返回 auth token、远端 sudo 密码、完整 shell、Registry 凭据或配置正文。
 
-## 14. Rollout and Compatibility
+## 14. 发布与兼容
 
-Phase 6 部署顺序：
+协议升级部署顺序：
 
 1. 主站先支持 schema 1、feature evaluator 和新旧字段 Expand schema，但保持新调度未启用。
 2. 通过节点同步或重新注册发布新 Agent，等待 manifest 回报。
@@ -335,7 +335,7 @@ Phase 6 部署顺序：
 
 旧 Agent 不进行猜测兼容：未上报 manifest 的节点保留在线和管理能力，但标记 `agent_manifest_missing`，不参与新运行调度。普通容器不能因为“历史上可能支持 Docker”绕过 feature 门禁。
 
-## 15. Security Requirements
+## 15. 安全要求
 
 - status、heartbeat、sync 和维护接口必须使用节点身份认证。
 - capability 只陈述能力，不接受主站下发任意命令或任意 feature 名执行。
@@ -344,7 +344,7 @@ Phase 6 部署顺序：
 - capability manifest 最大 16 KiB，feature 数最大 128，单个 feature 最大 96 ASCII 字符，防止异常节点放大数据库和日志。
 - 主站只接受已注册 NodeId 的 heartbeat，NodeId 与 auth token 必须匹配。
 
-## 16. Verification
+## 16. 验证要求
 
 自动测试必须覆盖：
 

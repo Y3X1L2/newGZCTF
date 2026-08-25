@@ -1,8 +1,8 @@
 # 平台商业化领域术语表
 
-版本：1.0
+版本：1.1
 
-生效阶段：Phase 0 退出时
+生效时间：2026-08-16
 
 适用范围：主站、前端、Agent、数据库、OpenAPI、日志、测试和运维文档
 
@@ -11,8 +11,8 @@
 1. 一个术语只能有一个领域所有者；其他模块只能通过公开契约引用该对象。
 2. 数据库实体名、C# 类型名、TypeScript 类型名、API 资源名和界面文案必须表达同一业务概念。
 3. 历史命名不能通过 alias、兼容 DTO 或重复路由长期保留。
-4. 迁移期名称转换只允许存在于对应 Phase 的数据迁移代码中，阶段退出前删除运行时适配代码。
-5. 本表标记为“目标”的术语在对应 Phase 实现前不能伪装成现有能力。
+4. 迁移期名称转换只允许存在于对应数据迁移代码中，迁移完成后删除运行时适配代码。
+5. 本表标记为“目标”的术语在实现前不能伪装成现有能力。
 6. 已删除术语只允许用于历史 migration、迁移验证、负向删除门禁、禁用术语登记和审计记录，不得形成可执行兼容面。
 
 ## 2. 身份与参与关系
@@ -32,7 +32,7 @@
 | GameChallenge | 某场比赛拥有的题目快照。 | CTF | 删除比赛可以删除该快照；不能删除其引用的全局镜像主副本。 |
 | ExerciseChallenge | 常态练习拥有的题目定义。 | Exercise | 不通过 `Participation` 表达练习进度。 |
 | TrainingCourseChallenge | 课程对 `ExerciseChallenge` 的显式绑定。 | Training | 当前实体已存在；删除课程删除课程拥有的 ExerciseChallenge 快照、绑定和提交，不删除全局来源题目或 ImageTemplate。 |
-| QuestionPool | 平台级可复用题目资产集合。 | Content | 目标术语，当前代码没有对应实体；由 Phase 10 实现。 |
+| QuestionPool | 平台级可复用题目资产集合。 | Content | 目标术语，当前代码没有对应实体，尚未纳入现行事实模型。 |
 | TheoryQuestion | 理论题资产，包含题型、题干、选项、答案和 tag。 | Theory | tag 是正式关系和索引条件，不能用题库名代替 tag。 |
 | Attachment | 题目或课程引用的文件资产。 | Content | 通过显式引用管理生命周期。 |
 | FlagContext | 运行期或题目校验使用的 Flag 事实。 | Content/Runtime | 不在日志、API 错误和队列详情中输出明文。 |
@@ -63,16 +63,16 @@
 
 | 术语 | 定义 | 所有者 | 使用约束 |
 | --- | --- | --- | --- |
-| TeamLabTopology | 与调用方业务无关的组网草稿，拥有网段、资产、网卡和连通关系。 | TeamLab | Phase 3 建立；不能引用 Penetration 计分实体。 |
+| TeamLabTopology | 与调用方业务无关的组网草稿，拥有网段、资产、网卡和连通关系。 | TeamLab | 当前实体；不能引用 Penetration 计分实体。 |
 | TeamLabRelease | 从拓扑发布的不可变版本，包含 schema version、规范化快照和内容摘要。 | TeamLab | runtime 只能消费 release，不能消费可变草稿。 |
 | TeamLabPlan | 对某个 release 和部署请求生成的确定性资源、分片、地址和路由计划。 | TeamLab | 相同 release、能力快照和约束必须产生相同计划。 |
-| TeamLabRuntime | 某个 release 的运行实例，是组网生命周期聚合根。 | TeamLab | Phase 3 后不再以 `GameId + TeamId` 作为领域主身份。 |
+| TeamLabRuntime | 某个 release 的运行实例，是组网生命周期聚合根。 | TeamLab | 不以 `GameId + TeamId` 作为领域主身份。 |
 | TeamLabRuntimeBinding | 平台业务对象与 TeamLab runtime 的显式绑定。 | 调用方模块 | Penetration 通过独立绑定表关联 Game、Team 和 Runtime。 |
 | TeamLabShard | 一个 runtime 在某个 WorkerNode 上的执行分片。 | TeamLab | 一个网段首版只归属一个 shard。 |
 | TeamLabRuntimeNetwork | runtime 内实际分配的网段、网关、bridge 和节点归属事实。 | TeamLab | 不从编辑器坐标或 UI 状态推导。 |
 | TeamLabRuntimeAsset | runtime 内实际创建的 Docker、VM 或基础设施资产事实。 | TeamLab | 与 `ImageTemplate` 通过来源 ID 关联，不拥有镜像主副本。 |
 | TeamLabAccessGrant | runtime 对玩家或外部调用方签发的受控访问配置。 | TeamLab | WireGuard 私钥必须受保护存储并支持撤销。 |
-| TeamLabTrafficFlow | 解密后内网侧采集的聚合流量元数据。 | TeamLab | Phase 5 定义批写和保留，Phase 9 完成商业闭环。 |
+| TeamLabTrafficFlow | 解密后内网侧采集的聚合流量元数据。 | TeamLab | 当前支持聚合采集；长期留存和规模仍需真实验收。 |
 | TeamLabCaptureJob | 有时间、大小、范围和保留期限的按需 PCAP 任务。 | TeamLab | 下载必须单独授权并记录审计。 |
 
 ## 7. Penetration 赛制
@@ -91,13 +91,13 @@
 | 独立 IRChallenge/IRInstance | 删除。IR 只作为普通 CTF 题目方向或内容标签。 |
 | ScenarioInstance/Stage | 删除。不得用 Scenario 旧实体表达 TeamLab 拓扑、训练章节或题目阶段。 |
 | 攻击图、迷雾、公网目标 | 不进入当前 TeamLab 商业主线，不保留兼容字段。 |
-| WindowsVM 作为全部 VM 类型 | Phase 8 拆成 VM 类型、OS 类型和访问协议。 |
-| 有效 token 等同管理员 | Phase 1 删除该授权语义。 |
-| PenetrationConfig 作为 TeamLab 拓扑 | Phase 3 完成数据迁移后删除该依赖。 |
+| WindowsVM 作为全部 VM 类型 | 后续统一抽象时拆成 VM 类型、OS 类型和访问协议。 |
+| 有效 token 等同管理员 | 已删除该授权语义。 |
+| PenetrationConfig 作为 TeamLab 拓扑 | 已由独立 TeamLab 拓扑和显式 binding 替代。 |
 
 ## 9. 命名检查
 
-Phase 0 退出前运行：
+当前代码变更或治理任务涉及旧术语时运行：
 
 ```powershell
 $legacySurface = 'IRChallenge|IRCheckpoint|IRInstance|ScenarioInstance|ScenarioTimelineEntry|TrainingDirection|TrainingModule|TrainingCtfSubmission|TheoryTrainingPlan|TheoryTrainingSession|Training(Admin)?Controller|api/training/(catalog|overview|modules|ctf/modules|theory/modules)'
@@ -107,4 +107,4 @@ rg -ni -g '!src/GZCTF/Migrations/**' -g '!src/GZCTF/wwwroot/**' -g '!artifacts/*
 dotnet test src/GZCTF.Test/GZCTF.Test.csproj --filter FullyQualifiedName~LegacySurfaceRemovalTests
 ```
 
-预期结果：文本扫描无产品运行代码或活动 e2e 命中，负向删除门禁通过。大小写不敏感扫描覆盖 PascalCase 类型、camelCase DTO/UI 字段、旧控制器名和旧 API 子路由；反射门禁精确覆盖 `Stage` 等通用词命名的已删除类型和控制器根路由。历史 EF migration、Phase 0 迁移验证、负向删除门禁、禁用术语登记和明确标记的审计记录可以引用旧名称，但不得形成可执行兼容面。
+预期结果：文本扫描无产品运行代码或活动 e2e 命中，负向删除门禁通过。大小写不敏感扫描覆盖 PascalCase 类型、camelCase DTO/UI 字段、旧控制器名和旧 API 子路由；反射门禁精确覆盖 `Stage` 等通用词命名的已删除类型和控制器根路由。历史 EF migration、迁移验证、负向删除门禁、禁用术语登记和明确标记的审计记录可以引用旧名称，但不得形成可执行兼容面。
