@@ -37,8 +37,8 @@ case "$old_release" in
 esac
 test -f "$old_release/GZCTF" || { echo "current release is incomplete" >&2; exit 4; }
 test -f "$old_release/appsettings.json" || { echo "current configuration is missing" >&2; exit 4; }
-files_target="$(readlink -f "$old_release/files")"
-test -d "$files_target" || { echo "current file storage is missing" >&2; exit 4; }
+files_target="$root/shared/files"
+test -d "$files_target" || { echo "shared file storage is missing: $files_target" >&2; exit 4; }
 test ! -e "$release_root" || { echo "release directory already exists" >&2; exit 4; }
 
 install -d -m 0750 "$release_root"

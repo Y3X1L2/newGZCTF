@@ -45,6 +45,8 @@ public sealed class RegistrySetupScriptTests
 
         Assert.Contains("test -L \"$current\"", script, StringComparison.Ordinal);
         Assert.Contains("release_root=\"$root/releases/$release_id\"", script, StringComparison.Ordinal);
+        Assert.Contains("files_target=\"$root/shared/files\"", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("readlink -f \"$old_release/files\"", script, StringComparison.Ordinal);
         Assert.Contains("mv -Tf \"$next_link\" \"$current\"", script, StringComparison.Ordinal);
         Assert.DoesNotContain("mv \"$current\" \"$previous\"", script, StringComparison.Ordinal);
         Assert.DoesNotContain("mv \"$current/files\"", script, StringComparison.Ordinal);
