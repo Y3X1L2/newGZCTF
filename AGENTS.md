@@ -17,6 +17,7 @@
 - 前端边界：`docs/commercialization/frontend-component-boundary.md`
 - 前端视觉契约：`docs/commercialization/frontend-style-token-contract.md`
 - vNext 设计与开发边界：`docs/yinyu-vnext-development-guardrails.md`
+- 组网/TeamLab 执行面：`docs/development/teamlab-networking-best-practices.md`
 - 生产发布：`docs/operations/vnext-maintenance-window-rollout.md`
 
 `docs/archive/` 只保存历史材料，不是当前设计或实现依据。历史计划中的路径、分支、测试数量和部署状态不得直接当作当前事实。
