@@ -72,6 +72,7 @@
 ## 6. 交接与状态维护
 
 - 当前事实只写入 [`development/current-state.md`](development/current-state.md)。
+- 新 AI 或新成员接手项目先阅读 [`development/current-handoff.md`](development/current-handoff.md)。
 - 跨人员或跨会话任务使用 [`development/task-handoff-template.md`](development/task-handoff-template.md)。
 - 大任务计划完成后移入 `archive/implementation-records/`，不继续在原计划中维护当前状态。
 - 生产地址、发布 SHA、备份和冒烟结果只有在现场重新验证后才能写入当前状态。
