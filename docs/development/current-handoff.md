@@ -55,11 +55,13 @@ Release ID：stable-20260831
 /opt/gzctf/releases/stable-20260831/publish
 ```
 
-manifest 的 `gitCommit` 为 `81a6e02b7dbe3d1f12094b606e5b3a93fd86de0c`，主站 DLL 和 Agent 二进制摘要已与 manifest 核对一致。数据库迁移头为：
+manifest 的 `gitCommit` 为 `81a6e02b7dbe3d1f12094b606e5b3a93fd86de0c`，主站 DLL 和 Agent 二进制摘要已与 manifest 核对一致。服务器曾回读到的数据库迁移头为：
 
 ```text
 20260815012026_AddExerciseCreatorTracking
 ```
+
+注意：该迁移文件不在当前源码或 Git 历史中；当前源码可见的最新迁移为 `20260812003330_AddAwdpPoolCollection`。这属于服务器数据库与源码的未闭环漂移，不能把该数据库当作可直接迁移开发的基线。任何新增迁移前，必须在数据库副本上导出 `__EFMigrationsHistory`、执行 schema-only 对比，并找回缺失迁移的真实来源；禁止直接删除迁移历史或修改生产库绕过检查。
 
 发布前备份目录：
 
@@ -132,6 +134,8 @@ Route -> feature controller/hook -> feature panel -> foundation component
 | `10.24.0.28` | 由环境配置提供 | 内网 Docker Registry `5000` | 作为 Docker 镜像来源，凭据不得写入文档 |
 | `10.0.7.118` | 由环境配置提供 | 备用测试平台 `8080` | 使用前必须重新探测，不视为当前生产事实 |
 | `106.52.207.52:42755` | 无 | 历史公网平台入口 | 只在实际路由可达时使用，不替代 10.24 当前主站核对 |
+
+10.24 还曾观察到 `8081`、`3001` 监听，当前用途未确认；除非先完成进程和配置归属核对，否则不要占用、停止或修改这两个端口。
 
 本机访问 GitHub 必要时使用代理：`http://127.0.0.1:10808`。
 
@@ -207,6 +211,10 @@ python scripts/deployment/deploy-gzctf-release.py `
 ### 公网同步恢复
 
 203 网关曾因旧同步服务未启用而无法恢复动态转发。当前使用 Nginx stream 同步器和 timer，timer 同时配置 `OnBootSec`、`OnActiveSec` 和 `OnUnitActiveSec`，避免手动重启 timer 后不再触发。旧同步服务保持 disabled。
+
+### 数据库迁移漂移
+
+10.24 数据库的 `__EFMigrationsHistory` 曾包含当前源码不存在的 `20260815012026_AddExerciseCreatorTracking`。这不是可以用“数据库已是最新”掩盖的问题；在缺失迁移来源和 schema 对比完成前，禁止新增数据库迁移、删除历史记录或对生产库执行手工修补。
 
 ## 9. 下一位接手者第一步
 
