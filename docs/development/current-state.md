@@ -10,7 +10,7 @@
 | --- | --- |
 | 仓库 | `https://github.com/Y3X1L2/newGZCTF.git` |
 | 稳定分支 | `main` |
-| 当前统一基线 | 发布标识 `stable-20260831`；本地 `main`、GitHub `origin/main` 和 10.24 release manifest 必须指向同一提交 |
+| 运行代码基线 | 发布标识 `stable-20260831`，提交 `81a6e02b7dbe3d1f12094b606e5b3a93fd86de0c`；纯文档提交可以在该标签之后进入 `main` |
 | 当前任务分支 | `codex/document-governance-cleanup`；完成发布后从 `main` 创建新的功能分支 |
 | 正式工作区 | `D:\Work\newGZCTF` |
 | 工作树结构 | 单一主仓库、单一 worktree；不依赖其他本地目录 |

@@ -35,7 +35,7 @@ git log -5 --oneline --decorate
 提交：81a6e02b7dbe3d1f12094b606e5b3a93fd86de0c
 ```
 
-本地 `main`、GitHub `origin/main` 和 10.24 运行 release 在统一发布完成时均指向该提交。当前交接文档属于后续文档说明，不改变该运行代码基线。
+10.24 运行 release 由该标签精确标识。随后 GitHub `main` 追加了文档-only 交接提交，当前 `main` 可以比运行 release 更新，但没有改变运行时代码；需要复现服务器二进制时使用该稳定标签，需要继续开发时从最新 `origin/main` 创建分支。
 
 发布物：
 
