@@ -11,6 +11,8 @@
 ## 基线
 
 - 起始分支：
+- 当前任务分支：
+- Worktree 路径：
 - 起始提交：
 - 远端 `origin/main`：
 - 涉及环境：
@@ -18,6 +20,7 @@
 ## 当前状态
 
 - `pending / in progress / blocked / complete`
+- 证据状态：`VERIFIED / IMPLEMENTED / NOT_RUN / BLOCKED / OPERATOR_ONLY`
 - 已完成：
 - 正在进行：
 - 尚未完成：
@@ -53,6 +56,8 @@
 
 - 最终提交：
 - 推送分支：
+- 是否已合并 `main`：
+- 是否已删除任务分支和 worktree：
 - 部署环境：
 - 发布物/备份：
 - 冒烟结果：

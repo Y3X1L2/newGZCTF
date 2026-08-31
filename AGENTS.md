@@ -104,6 +104,39 @@ git log -5 --oneline --decorate
 - 合并前检查远端是否前进，使用快进、正常 merge 或经过审查的 rebase，不覆盖远端。
 - 禁止把本地归档、发布制品、数据库副本、镜像、凭据和测试 Cookie 提交到仓库。
 
+### 6.1 多任务与 Worktree
+
+- 每个功能、缺陷或文档任务使用一个 `codex/<task-name>` 分支；任务分支从最新 `origin/main` 创建。
+- 并行任务必须使用不同的 worktree 和不同的分支。两个 AI 不得共用同一工作目录，也不得同时检出同一分支。
+- 主工作区可以继续用于一个任务；额外任务使用 `git worktree add` 创建到仓库外的目录。
+- 任务完成后先提交并推送分支，经过审查后合并到 `main`；确认合并成功且不再需要时，删除远端和本地任务分支，并执行 `git worktree remove` 清理对应 worktree。
+- 删除分支前必须确认：工作树干净、提交已推送、合并提交已在 `main`、没有未交接的修改。未合并任务不得删除分支。
+
+标准并行流程：
+
+```powershell
+git fetch origin --prune
+git switch main
+git pull --ff-only
+git worktree add ..\newGZCTF-feature -b codex/feature-a origin/main
+git worktree add ..\newGZCTF-bugfix -b codex/bugfix-b origin/main
+```
+
+合并和清理流程：
+
+```powershell
+git switch main
+git pull --ff-only
+git merge --no-ff codex/feature-a
+git push origin main
+git worktree remove ..\newGZCTF-feature
+git branch -d codex/feature-a
+git push origin --delete codex/feature-a
+git worktree prune
+```
+
+如果 `main` 在任务分支创建后前进，先在任务 worktree 中同步并解决冲突，再提交后合并；禁止 force push 和覆盖他人的提交。
+
 ## 7. 验证门禁
 
 根据影响范围选择最小充分测试；共享契约、调度、计分、迁移和认证变更需要扩大验证。

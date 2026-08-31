@@ -80,6 +80,7 @@
 
 - 总体架构和目标：[平台架构与产品总纲](../platform-commercialization-master-plan.md)
 - 文档入口：[文档导航](../README.md)
+- AI 交接：[AI 开发与交接规范](../development/ai-development-playbook.md)
 - 模块边界：[模块边界图](../commercialization/module-boundary-map.md)
 - 外部接口：[Open API v1 指南](../commercialization/open-api-v1-guide.md)
 - 生产发布：[生产发布与回滚手册](../operations/vnext-maintenance-window-rollout.md)
