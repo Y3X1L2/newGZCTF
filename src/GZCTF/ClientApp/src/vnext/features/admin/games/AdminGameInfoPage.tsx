@@ -69,6 +69,7 @@ function triggerDownload(blob: Blob, fileName: string) {
 export function AdminGameInfoPage() {
   const navigate = useNavigate()
   const { game, mutateGame } = useOutletContext<GameAdminOutletContext>()
+  const teamLabOnly = game.gameType === GameType.Penetration
   const [draft, setDraft] = useState<GameInfoModel>(() => ({ ...game }))
   const [timeInputs, setTimeInputs] = useState<GameTimeInputs>(() => gameTimeInputs(game))
   const [posterFile, setPosterFile] = useState<File | null>(null)
@@ -233,13 +234,13 @@ export function AdminGameInfoPage() {
           </div>
         </AdminEditorSection>
 
-        <AdminEditorSection description="0 表示不限制；邀请码为空时不要求比赛邀请码。" title="报名与运行限制">
+        <AdminEditorSection description={teamLabOnly ? '队伍上限和邀请码仍适用于组网比赛；每支队伍的运行环境由 TeamLab 场景统一管理。' : '0 表示不限制；邀请码为空时不要求比赛邀请码。'} title="报名与运行限制">
           <div className={styles.stack}>
             <div className={styles.fieldGrid}>
               <TextField label="队伍人数上限" min={0} onValueChange={(value) => update('teamMemberCountLimit', Number(value))} type="number" value={draft.teamMemberCountLimit ?? 0} />
-              <TextField label="实例数量上限" min={0} onValueChange={(value) => update('containerCountLimit', Number(value))} type="number" value={draft.containerCountLimit ?? 0} />
+              {!teamLabOnly ? <TextField label="实例数量上限" min={0} onValueChange={(value) => update('containerCountLimit', Number(value))} type="number" value={draft.containerCountLimit ?? 0} /> : null}
               <TextField label="比赛邀请码" maxLength={32} onValueChange={(value) => update('inviteCode', value)} value={draft.inviteCode ?? ''} />
-              <TextField label="一二三血奖励" min={0} onValueChange={(value) => update('bloodBonus', Number(value))} type="number" value={draft.bloodBonus ?? 0} />
+              {!teamLabOnly ? <TextField label="一二三血奖励" min={0} onValueChange={(value) => update('bloodBonus', Number(value))} type="number" value={draft.bloodBonus ?? 0} /> : null}
             </div>
             <ToggleField checked={draft.acceptWithoutReview ?? false} description="关闭时由管理员在报名审核页处理申请。" label="报名自动通过" onChange={(checked) => update('acceptWithoutReview', checked)} />
           </div>

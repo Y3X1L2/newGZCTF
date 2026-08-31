@@ -21,7 +21,7 @@ public sealed class TeamLabFoundationTopologyTests
     }
 
     [Fact]
-    public void Validate_RejectsOverlappingPoolsAndInvalidRouter()
+    public void Validate_RejectsOverlappingPools()
     {
         var source = CreateDefinition();
         var invalid = source with
@@ -31,14 +31,13 @@ public sealed class TeamLabFoundationTopologyTests
                 source.Networks[0],
                 source.Networks[1] with { AddressPool = new TeamLabAddressPoolModel("10.40.0.0/17", 24) }
             ],
-            Assets = source.Assets.Select(item => item with { RoutingEnabled = false }).ToArray()
+            Assets = source.Assets
         };
 
         var result = new TeamLabTopologyValidator().Validate(invalid);
 
         Assert.False(result.Valid);
         Assert.Contains(result.Issues, item => item.Code == "address_pool_overlap");
-        Assert.Contains(result.Issues, item => item.Code == "connection_router_invalid");
     }
 
     [Fact]
@@ -153,19 +152,25 @@ public sealed class TeamLabFoundationTopologyTests
     [Theory]
     [InlineData(1)]
     [InlineData(2)]
-    public void ReleaseCodec_PreservesFrozenImageDigest(int schemaVersion)
+    public void ReleaseCodec_PreservesPlatformLockedImageDigest(int schemaVersion)
     {
         var expectedDigest = $"sha256:{new string('a', 64)}";
         var source = CreateDefinition();
-        source = source with
-        {
-            Assets = source.Assets.Select(asset => asset with { ImageDigest = expectedDigest }).ToArray()
-        };
+        var digests = source.Assets.ToDictionary(
+            asset => asset.Key,
+            _ => expectedDigest,
+            StringComparer.Ordinal);
 
-        var canonical = TeamLabReleaseCodec.Encode(schemaVersion, source);
+        var canonical = TeamLabReleaseCodec.Encode(schemaVersion, source, digests);
         var decoded = TeamLabReleaseCodec.DecodeExecution(schemaVersion, canonical);
 
         Assert.All(decoded.Assets, asset => Assert.Equal(expectedDigest, asset.ImageDigest));
+    }
+
+    [Fact]
+    public void PublicTopologyDefinition_DoesNotAcceptImageDigest()
+    {
+        Assert.Null(typeof(TeamLabTopologyAssetModel).GetProperty("ImageDigest"));
     }
 
     [Fact]
@@ -208,16 +213,20 @@ public sealed class TeamLabFoundationTopologyTests
             new TeamLabTopologyAssetModel(
                 "jump-host", "Jump Host", TeamLabAssetKind.Docker, 1,
                 new TeamLabAssetResourceModel(10, 512, 2048),
-                [
-                    new TeamLabTopologyInterfaceModel("eth0", "entry", 10, true),
-                    new TeamLabTopologyInterfaceModel("eth1", "core", 10, false)
-                ],
-                true,
-                22,
-                new Dictionary<string, string> { ["LAB_MODE"] = "competition" },
+                [new TeamLabTopologyInterfaceModel("eth0", "entry", 10, true)],
+                ExposePort: 22,
                 HealthCheck: new TeamLabHealthCheckModel(TeamLabHealthCheckKind.Tcp, 22))
         ],
-        [new TeamLabTopologyConnectionModel("entry-to-core", "entry", "core", "jump-host")]);
+        [new TeamLabTopologyConnectionModel("entry-to-core", "entry", "core", ViaNodeKey: "edge-router")],
+        Infrastructure:
+        [
+            new TeamLabTopologyInfrastructureModel(
+                "edge-router", "Edge Router", TeamLabInfrastructureKind.ManagedRouter,
+                [
+                    new TeamLabTopologyInterfaceModel("entry", "entry", 1, true),
+                    new TeamLabTopologyInterfaceModel("core", "core", 1, false)
+                ])
+        ]);
 
     private static TeamLabTopologyAssetModel DockerAsset(string key, string networkKey, int templateId) => new(
         key,
@@ -226,5 +235,5 @@ public sealed class TeamLabFoundationTopologyTests
         templateId,
         new TeamLabAssetResourceModel(10, 256, 512),
         [new TeamLabTopologyInterfaceModel("eth0", networkKey, 10 + templateId, true)],
-        false);
+        ExposePort: null);
 }

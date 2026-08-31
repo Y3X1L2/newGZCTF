@@ -9,6 +9,8 @@ using GZCTF.Models.Internal;
 using GZCTF.Modules.Audit.Contracts;
 using GZCTF.Modules.Audit.Domain;
 using GZCTF.Modules.Runtime.Contracts;
+using GZCTF.TeamLab.Contracts;
+using GZCTF.TeamLab.Contracts.Execution;
 using GZCTF.Repositories.Interface;
 using GZCTF.Services.Container.Manager;
 using Microsoft.EntityFrameworkCore;
@@ -303,6 +305,30 @@ public class AgentClient
             response, "teamlab.status", node.Id, deadline.Token);
     }
 
+    public virtual Task<TeamLabExecutionPlanApplyResponse?> ApplyTeamLabExecutionPlanAsync(
+        Guid nodeId,
+        TeamLabExecutionPlanV2 plan,
+        CancellationToken token,
+        TimeSpan? requestTimeout = null) =>
+        PostTeamLabAsync<TeamLabExecutionPlanApplyRequest, TeamLabExecutionPlanApplyResponse>(
+            nodeId,
+            "/api/teamlab/execution-plan/apply",
+            new TeamLabExecutionPlanApplyRequest(plan),
+            token,
+            requestTimeout);
+
+    public virtual Task<TeamLabExecutionPlanCleanupResponse?> CleanupTeamLabExecutionPlanAsync(
+        Guid nodeId,
+        TeamLabExecutionPlanV2 plan,
+        CancellationToken token,
+        TimeSpan? requestTimeout = null) =>
+        PostTeamLabAsync<TeamLabExecutionPlanCleanupRequest, TeamLabExecutionPlanCleanupResponse>(
+            nodeId,
+            "/api/teamlab/execution-plan/cleanup",
+            new TeamLabExecutionPlanCleanupRequest(plan),
+            token,
+            requestTimeout);
+
     public virtual async Task<TeamLabDryRunResponse?> ConfigureTeamLabWireGuardAsync(Guid nodeId,
         TeamLabWireGuardRequest request, CancellationToken token) =>
         await PostTeamLabAsync<TeamLabWireGuardRequest, TeamLabDryRunResponse>(nodeId,
@@ -404,6 +430,22 @@ public class AgentClient
         await PostTeamLabAsync<TeamLabCaptureDeleteRequest, TeamLabCaptureResponse>(nodeId,
             "/api/teamlab/capture/delete", request, token);
 
+    public virtual async Task<TeamLabLinkPolicyResponse?> ApplyTeamLabLinkPolicyAsync(
+        Guid nodeId,
+        TeamLabLinkPolicyApplyRequest request,
+        CancellationToken token,
+        TimeSpan? requestTimeout = null) =>
+        await PostTeamLabAsync<TeamLabLinkPolicyApplyRequest, TeamLabLinkPolicyResponse>(
+            nodeId, "/api/teamlab/link-policy/apply", request, token, requestTimeout);
+
+    public virtual async Task<TeamLabLinkPolicyResponse?> RecoverTeamLabLinkPolicyAsync(
+        Guid nodeId,
+        TeamLabLinkPolicyRecoverRequest request,
+        CancellationToken token,
+        TimeSpan? requestTimeout = null) =>
+        await PostTeamLabAsync<TeamLabLinkPolicyRecoverRequest, TeamLabLinkPolicyResponse>(
+            nodeId, "/api/teamlab/link-policy/recover", request, token, requestTimeout);
+
     public virtual async Task<TeamLabObservationBatchResponse?> ReadTeamLabObservationsAsync(
         Guid nodeId,
         TeamLabObservationBatchRequest request,
@@ -492,19 +534,26 @@ public class AgentClient
         CancellationToken token,
         TimeSpan? requestTimeout = null)
     {
-        var node = await GetNodeAsync(nodeId, token);
-        if (node is null) return default;
+        var operation = AgentOperationName.Resolve(HttpMethod.Post, path);
+        var node = await GetNodeAsync(nodeId, token)
+            ?? throw NodeNotFound(nodeId, operation);
 
         var client = BuildClient(node);
         var body = JsonSerializer.Serialize(request);
         using var deadline = CreateDeadline(token, requestTimeout ?? TeamLabRequestTimeout);
         var response = await client.PostAsync(path, new StringContent(body, Encoding.UTF8, "application/json"),
             deadline.Token);
-        return await ReadTeamLabResponseAsync<TResponse>(
-            response,
-            AgentOperationName.Resolve(HttpMethod.Post, path),
-            node.Id,
-            deadline.Token);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw await CreateAgentExceptionAsync(
+                response,
+                operation,
+                node.Id,
+                "Agent TeamLab request failed.",
+                deadline.Token);
+        }
+
+        return await response.Content.ReadFromJsonAsync<TResponse>(deadline.Token);
     }
 
     private async Task<T?> ReadTeamLabResponseAsync<T>(
@@ -1116,6 +1165,14 @@ public class AgentClient
 
     public virtual async Task DeleteDockerImageAsync(Guid nodeId, string image, CancellationToken token)
     {
+        _ = await DeleteDockerImageWithInventoryAsync(nodeId, image, token);
+    }
+
+    public virtual async Task<AgentImageCacheCleanupResult> DeleteDockerImageWithInventoryAsync(
+        Guid nodeId,
+        string image,
+        CancellationToken token)
+    {
         var node = await GetNodeAsync(nodeId, token);
         if (node is null)
             throw NodeNotFound(nodeId, "image.docker.delete");
@@ -1131,9 +1188,22 @@ public class AgentClient
                 $"Agent Docker image cleanup failed on node {node.Name} ({node.HostAddress}) for image {image}.",
                 token);
         }
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            return AgentImageCacheCleanupResult.Clean;
+        return await response.Content.ReadFromJsonAsync<AgentImageCacheCleanupResult>(token)
+               ?? throw InvalidAgentResponse(node.Id, "image.docker.delete", "Agent returned an empty image cache inventory.");
     }
 
     public virtual async Task DeleteVmImageAsync(Guid nodeId, int templateId, string hash, CancellationToken token)
+    {
+        _ = await DeleteVmImageWithInventoryAsync(nodeId, templateId, hash, token);
+    }
+
+    public virtual async Task<AgentImageCacheCleanupResult> DeleteVmImageWithInventoryAsync(
+        Guid nodeId,
+        int templateId,
+        string hash,
+        CancellationToken token)
     {
         var node = await GetNodeAsync(nodeId, token);
         if (node is null)
@@ -1151,6 +1221,10 @@ public class AgentClient
                 $"Agent VM image cleanup failed on node {node.Name} ({node.HostAddress}) for template {templateId}.",
                 token);
         }
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            return AgentImageCacheCleanupResult.Clean;
+        return await response.Content.ReadFromJsonAsync<AgentImageCacheCleanupResult>(token)
+               ?? throw InvalidAgentResponse(node.Id, "image.vm.delete", "Agent returned an empty image cache inventory.");
     }
 
     public async Task EnsureDockerRegistryAsync(Guid nodeId, int port, CancellationToken token)
@@ -1823,6 +1897,7 @@ public record AgentSyncRequest(
     string? WindowsSensorDownloadUrl = null,
     string? WindowsSensorSha256 = null,
     AgentVmControlPlaneSyncConfig? VmControlPlane = null,
+    TeamLabDataPlaneSyncConfig? TeamLabDataPlane = null,
     bool Restart = true);
 
 public sealed record AgentVmControlPlaneSyncConfig(
@@ -1832,6 +1907,18 @@ public sealed record AgentVmControlPlaneSyncConfig(
     int PrefixLength = 16,
     int ListenPort = 5443,
     string GuestStateRoot = "/var/lib/gzctf/teamlab/guest-control");
+
+public sealed record TeamLabDataPlaneSyncConfig(
+    bool Enabled,
+    TeamLabExecutionModel ExecutionModel,
+    bool ControlPlane,
+    string? NorthboundEndpoint,
+    string? SouthboundEndpoint,
+    string? NorthboundListenEndpoint,
+    string? SouthboundListenEndpoint,
+    string? ChassisEncapIp,
+    string IntegrationBridgeName = "br-int",
+    int ManagedDhcpLeaseSeconds = 3600);
 
 public record AgentSyncResponse(
     bool Success,
@@ -1852,6 +1939,17 @@ public record AgentVmImageDownloadResult(
     public static AgentVmImageDownloadResult Failed(string message) =>
         new(false, message, false, false, null, null);
 }
+
+public sealed record AgentImageCacheCleanupResult(
+    IReadOnlyList<AgentImageCacheInventoryEntry> Inventory,
+    int Removed = 0)
+{
+    public static readonly AgentImageCacheCleanupResult Clean = new([], 0);
+
+    public bool IsClean => Inventory.All(item => !item.Present);
+}
+
+public sealed record AgentImageCacheInventoryEntry(string Kind, string Identity, bool Present);
 
 public sealed record AgentVmImagePublishResult(
     bool Success,
@@ -1914,7 +2012,13 @@ public record TeamLabToolCapabilityReport(
     bool Iptables,
     bool Nftables,
     bool Tcpdump,
-    bool Dumpcap);
+    bool Dumpcap,
+    bool DnsProbe = false,
+    bool OvsVsctl = false,
+    bool OvsdbClient = false,
+    bool OvnController = false,
+    bool OvnNorthboundClient = false,
+    bool OvnSouthboundClient = false);
 
 public record TeamLabDryRunResponse(
     bool Success,
@@ -2005,14 +2109,22 @@ public record TeamLabWireGuardRequest(
     string PeerAllowedIps,
     string[] PlayerAllowedCidrs,
     string[] PlayerBlockedCidrs,
-    bool DryRun = true);
+    bool DryRun = true,
+    TeamLabExecutionModel ExecutionModel = TeamLabExecutionModel.V1,
+    Guid RuntimePublicId = default,
+    string? NetworkKey = null,
+    string? PortKey = null,
+    string? MacAddress = null);
 
 public record TeamLabWireGuardCleanupRequest(
     int RuntimeId,
     int Generation,
     string NamespaceName,
     string InterfaceName,
-    bool DryRun = true);
+    bool DryRun = true,
+    TeamLabExecutionModel ExecutionModel = TeamLabExecutionModel.V1,
+    Guid RuntimePublicId = default,
+    string? NetworkKey = null);
 
 public record TeamLabCleanupRequest(
     int RuntimeId,
@@ -2027,7 +2139,8 @@ public record TeamLabAssetLifecycleRequest(
     string Kind,
     string ResourceId,
     int Generation,
-    bool DryRun = false);
+    bool DryRun = false,
+    TeamLabExecutionModel ExecutionModel = TeamLabExecutionModel.V1);
 
 public record TeamLabAssetLifecycleResponse(
     bool Success,
@@ -2167,6 +2280,41 @@ public record TeamLabCaptureResponse(
     bool Uploaded,
     string[] Commands);
 
+/// <summary>Applies a link/netem policy on a runtime link's host-side veth.</summary>
+public record TeamLabLinkPolicyApplyRequest(
+    Guid RuntimePublicId,
+    int Generation,
+    string NetworkKey,
+    string AssetKey,
+    string Kind,
+    string ParametersJson,
+    bool DryRun = false,
+    int RuntimeId = 0,
+    string? RouterNamespace = null,
+    string? NetworkCidr = null,
+    string? GatewayIp = null);
+
+/// <summary>Recovers (removes) a link policy on a runtime link's host-side veth.</summary>
+public record TeamLabLinkPolicyRecoverRequest(
+    Guid RuntimePublicId,
+    int Generation,
+    string NetworkKey,
+    string AssetKey,
+    string Kind,
+    bool DryRun = false,
+    int RuntimeId = 0,
+    string? RouterNamespace = null,
+    string? NetworkCidr = null,
+    string? GatewayIp = null,
+    string? ParametersJson = null);
+
+public record TeamLabLinkPolicyResponse(
+    bool Success,
+    bool DryRun,
+    string Interface,
+    string State,
+    string Message);
+
 public enum TeamLabObservationEvidenceKind : byte
 {
     Packet = 0,
@@ -2178,7 +2326,8 @@ public record TeamLabObservationBatchRequest(
     int Generation,
     long AfterSequence = 0,
     Guid? ObservationPointId = null,
-    int Limit = 500);
+    int Limit = 500,
+    long AcknowledgeThroughSequence = 0);
 
 public record TeamLabObservationRecord(
     long Sequence,
@@ -2219,6 +2368,7 @@ public record TeamLabObservationBatchResponse(
     string Message,
     long NextSequence,
     long DroppedCount,
+    long PersistedThroughSequence,
     TeamLabObservationRecord[] Records,
     TeamLabObservationHealth Health);
 

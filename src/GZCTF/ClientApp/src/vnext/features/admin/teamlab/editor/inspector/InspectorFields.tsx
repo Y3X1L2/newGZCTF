@@ -1,6 +1,5 @@
-import { ChevronDown, Plus, Trash2 } from 'lucide-react'
+import { Plus, Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import type { TopologyPosition } from '../../model/topologyDocument'
 import { FieldHelpButton } from '../help/FieldHelpButton'
 import styles from './TeamLabInspector.module.css'
 
@@ -66,18 +65,6 @@ export function InspectorSection({ title, icon, children }: { title: ReactNode; 
       </h3>
       <div className={styles.sectionBody}>{children}</div>
     </section>
-  )
-}
-
-export function AdvancedSection({ summary, children }: { summary: string; children: ReactNode }) {
-  return (
-    <details className={styles.advanced}>
-      <summary>
-        <ChevronDown aria-hidden="true" size={15} />
-        {summary}
-      </summary>
-      <div className={styles.advancedBody}>{children}</div>
-    </details>
   )
 }
 
@@ -254,70 +241,6 @@ export function NumberInput({
       type="number"
       value={value}
     />
-  )
-}
-
-export function PositionEditor({
-  position,
-  onChange,
-  readOnly,
-}: {
-  position: TopologyPosition
-  onChange: (position: TopologyPosition) => void
-  readOnly?: boolean
-}) {
-  return (
-    <div className={styles.stack}>
-      <div className={styles.twoColumns}>
-        <NumberInput
-          disabled={readOnly}
-          label="画布 X"
-          onChange={(x) => onChange({ ...position, x })}
-          value={position.x}
-        />
-        <NumberInput
-          disabled={readOnly}
-          label="画布 Y"
-          onChange={(y) => onChange({ ...position, y })}
-          value={position.y}
-        />
-        <NumberInput
-          disabled={readOnly || position.width === null}
-          label="宽度"
-          min={0}
-          onChange={(width) => onChange({ ...position, width })}
-          value={position.width ?? 0}
-        />
-        <NumberInput
-          disabled={readOnly || position.height === null}
-          label="高度"
-          min={0}
-          onChange={(height) => onChange({ ...position, height })}
-          value={position.height ?? 0}
-        />
-      </div>
-      <div className={styles.twoColumns}>
-        <ToggleInput
-          checked={position.width === null}
-          disabled={readOnly}
-          label="自动宽度"
-          onChange={(automatic) => onChange({ ...position, width: automatic ? null : 240 })}
-        />
-        <ToggleInput
-          checked={position.height === null}
-          disabled={readOnly}
-          label="自动高度"
-          onChange={(automatic) => onChange({ ...position, height: automatic ? null : 120 })}
-        />
-      </div>
-      <ToggleInput
-        checked={position.collapsed}
-        disabled={readOnly}
-        help="networkRegions"
-        label="折叠节点"
-        onChange={(collapsed) => onChange({ ...position, collapsed })}
-      />
-    </div>
   )
 }
 

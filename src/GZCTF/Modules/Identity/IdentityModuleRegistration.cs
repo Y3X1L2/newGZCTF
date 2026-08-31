@@ -47,6 +47,14 @@ public static class IdentityModuleRegistration
             AddScopePolicy(options, ApiTokenScopes.TeamLabTrafficRead);
             AddScopePolicy(options, ApiTokenScopes.TeamLabCaptureRead);
             AddScopePolicy(options, ApiTokenScopes.TeamLabCaptureWrite);
+            AddScopePolicy(options, ApiTokenScopes.TeamLabResourcePoolsRead);
+            AddScopePolicy(options, ApiTokenScopes.TeamLabDevicePackagesRead);
+            AddScopePolicy(options, ApiTokenScopes.TeamLabConnectorsRead);
+            AddScopePolicy(options, ApiTokenScopes.TeamLabConnectorsWrite);
+            AddScopePolicy(options, ApiTokenScopes.TeamLabLinkPoliciesRead);
+            AddScopePolicy(options, ApiTokenScopes.TeamLabLinkPoliciesWrite);
+            AddScopePolicy(options, ApiTokenScopes.TeamLabRemoteSessionsRead);
+            AddScopePolicy(options, ApiTokenScopes.TeamLabRemoteSessionsWrite);
             AddScopePolicy(options, ApiTokenScopes.BootstrapProfilesRead);
             AddScopePolicy(options, ApiTokenScopes.BootstrapProfilesWrite);
         });

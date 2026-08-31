@@ -4,6 +4,8 @@ import styles from './TopologyNodeShell.module.css'
 
 export type NodeTone = 'switch' | 'router' | 'docker' | 'linux' | 'windows'
 
+const infrastructureTones = new Set<NodeTone>(['switch', 'router'])
+
 export function TopologyNodeShell({
   icon,
   eyebrow,
@@ -23,8 +25,12 @@ export function TopologyNodeShell({
   readOnly: boolean
   tone: NodeTone
 }) {
+  const shape = infrastructureTones.has(tone) ? styles.infrastructure : ''
   return (
-    <article className={`${styles.node} ${styles[tone]} ${selected ? styles.selected : ''}`}>
+    <article
+      className={`${styles.node} ${styles[tone]} ${shape} ${selected ? styles.selected : ''}`}
+      data-tone={tone}
+    >
       <Handle
         className={styles.handle}
         id="target"
@@ -40,11 +46,13 @@ export function TopologyNodeShell({
         </span>
         {badge ? <span className={styles.badge}>{badge}</span> : null}
       </header>
-      <div className={styles.details}>
-        {details.map((detail) => (
-          <span key={detail}>{detail}</span>
-        ))}
-      </div>
+      {details.length > 0 ? (
+        <div className={styles.details}>
+          {details.map((detail) => (
+            <span key={detail}>{detail}</span>
+          ))}
+        </div>
+      ) : null}
       <Handle
         className={styles.handle}
         id="source"

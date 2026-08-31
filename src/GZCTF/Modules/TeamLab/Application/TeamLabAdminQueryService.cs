@@ -13,8 +13,7 @@ public sealed class TeamLabAdminQueryService(
     AppDbContext context,
     ITeamLabTopologyApplicationService topologies,
     NodeCapacitySnapshotService capacitySnapshots,
-    ITeamLabUsageProjectionProvider usage,
-    TeamLabBootstrapSecretValidator secretValidator)
+    ITeamLabUsageProjectionProvider usage)
 {
     public async Task<TeamLabAdminScenePageModel> ListScenesAsync(
         Guid actorUserId,
@@ -83,8 +82,7 @@ public sealed class TeamLabAdminQueryService(
             from runtime in context.TeamLabRuntimes.AsNoTracking()
             join release in context.TeamLabTopologyReleases.AsNoTracking()
                 on runtime.TopologyReleaseId equals release.Id
-            where !runtime.IsScenarioBuild &&
-                  topologyIds.Contains(release.TopologyId) &&
+            where topologyIds.Contains(release.TopologyId) &&
                   !gameBoundRuntimeIds.Contains(runtime.Id)
             group runtime by release.TopologyId
             into runtimes
@@ -202,7 +200,6 @@ public sealed class TeamLabAdminQueryService(
                 requirement.Id,
                 template?.Name ?? $"模板 {requirement.Id}",
                 template?.ImageType ?? (requirement.Kind == TeamLabAssetKind.Docker ? ImageType.Docker : ImageType.Qcow2),
-                digest,
                 eligible.Count,
                 matching.Count(item => item.Status == ImageDistributionStatus.Ready),
                 matching.Count(item => item.Status is ImageDistributionStatus.Pending or ImageDistributionStatus.Pulling),
@@ -213,8 +210,7 @@ public sealed class TeamLabAdminQueryService(
             from runtime in context.TeamLabRuntimes.AsNoTracking()
             join candidateRelease in context.TeamLabTopologyReleases.AsNoTracking()
                 on runtime.TopologyReleaseId equals candidateRelease.Id
-            where !runtime.IsScenarioBuild &&
-                  candidateRelease.Id == releaseId &&
+            where candidateRelease.Id == releaseId &&
                   !gameBoundRuntimeIds.Contains(runtime.Id)
             orderby runtime.CreatedAt descending, runtime.PublicId descending
             select new TrialRuntimeRow(
@@ -237,7 +233,6 @@ public sealed class TeamLabAdminQueryService(
         }
         if (plan is not null)
             blockers.AddRange(plan.Warnings);
-        var requiredRuntimeSecrets = await secretValidator.GetRequiredSecretsAsync(releaseId, cancellationToken);
         return new TeamLabAdminReleaseReadinessModel(
             topologyId,
             releaseId,
@@ -245,8 +240,7 @@ public sealed class TeamLabAdminQueryService(
             plan,
             images,
             latestTrial is null ? null : ToRuntime(latestTrial),
-            blockers,
-            requiredRuntimeSecrets);
+            blockers);
     }
 
     private async Task<IReadOnlyList<TeamLabPlanningNodeSnapshot>> LoadPlanningNodesAsync(
@@ -275,14 +269,16 @@ public sealed class TeamLabAdminQueryService(
         var vm = execution.Assets.Count(item => item.Kind == TeamLabAssetKind.Vm);
         var cpu = execution.Assets.Sum(item => item.CpuUnits);
         var memory = execution.Assets.Sum(item => item.MemoryMiB);
+        var storage = execution.Assets.Sum(item => item.StorageMiB);
         var availableDocker = nodes.Where(item => item.SupportsDocker).Sum(item => item.AvailableDockerSlots);
         var availableVm = nodes.Where(item => item.SupportsVm).Sum(item => item.AvailableVmSlots);
         var availableCpu = nodes.Sum(item => item.AvailableResources.CpuUnits);
         var availableMemory = nodes.Sum(item => item.AvailableResources.MemoryMiB);
+        var availableStorage = nodes.Sum(item => item.AvailableResources.StorageMiB);
         var nodeSummary = nodes.Count == 0
             ? "当前没有已接入组网的在线可调度节点"
-            : $"当前可用：Docker {availableDocker} 个、VM {availableVm} 个、CPU {availableCpu}、内存 {availableMemory} MiB";
-        return $"资源不足，无法放置该版本。需求：Docker {docker} 个、VM {vm} 个、CPU {cpu}、内存 {memory} MiB；{nodeSummary}。";
+            : $"当前可用：Docker {availableDocker} 个、VM {availableVm} 个、CPU {availableCpu}、内存 {availableMemory} MiB、存储 {availableStorage} MiB";
+        return $"资源不足，无法放置该版本。需求：Docker {docker} 个、VM {vm} 个、CPU {cpu}、内存 {memory} MiB、存储 {storage} MiB；{nodeSummary}。";
     }
 
     public async Task<TeamLabAdminRuntimePageModel> ListTrialRuntimesAsync(
@@ -302,8 +298,7 @@ public sealed class TeamLabAdminQueryService(
                 on runtime.TopologyReleaseId equals release.Id
             join topology in context.TeamLabTopologies.AsNoTracking()
                 on release.TopologyId equals topology.Id
-            where !runtime.IsScenarioBuild &&
-                  (administrator || topology.OwnerUserId == actorUserId) &&
+            where (administrator || topology.OwnerUserId == actorUserId) &&
                   (!topologyId.HasValue || topology.PublicId == topologyId.Value) &&
                   (!cursor.HasValue || runtime.CreatedAt < cursor.Value.Time ||
                    runtime.CreatedAt == cursor.Value.Time && runtime.PublicId.CompareTo(cursor.Value.Id) < 0) &&
@@ -354,11 +349,11 @@ public sealed class TeamLabAdminQueryService(
             "published" => query.Where(item => item.Releases.Any()),
             "running" => query.Where(item => item.Releases.Any(release =>
                 context.TeamLabRuntimes.Any(runtime => runtime.TopologyReleaseId == release.Id &&
-                    !runtime.IsScenarioBuild && runtime.Status == TeamLabRuntimeStatus.Running &&
+                    runtime.Status == TeamLabRuntimeStatus.Running &&
                     !gameBoundRuntimeIds.Contains(runtime.Id)))),
             "failed" => query.Where(item => item.Releases.Any(release =>
                 context.TeamLabRuntimes.Any(runtime => runtime.TopologyReleaseId == release.Id &&
-                    !runtime.IsScenarioBuild && runtime.Status == TeamLabRuntimeStatus.Failed &&
+                    runtime.Status == TeamLabRuntimeStatus.Failed &&
                     !gameBoundRuntimeIds.Contains(runtime.Id)))),
             _ => query
         };

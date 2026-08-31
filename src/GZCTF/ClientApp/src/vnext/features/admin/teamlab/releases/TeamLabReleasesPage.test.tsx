@@ -27,7 +27,7 @@ vi.mock('../shared/TeamLabSceneShell', () => ({
 const release: TeamLabRelease = {
   id: '019f0000-0000-7000-8000-000000000010', topologyId: '019f0000-0000-7000-8000-000000000001',
   version: 2, sourceRevision: 4, schemaVersion: 2, contentHash: 'sha256:0123456789abcdef',
-  publishedBy: 'Teacher A', publishedAt: 1_784_918_400_000,
+  publishedBy: 'Teacher A', publisherName: null, publishedAt: 1_784_918_400_000,
 }
 
 describe('TeamLabReleasesPage', () => {
@@ -35,8 +35,8 @@ describe('TeamLabReleasesPage', () => {
     navigate.mockReset()
     vi.spyOn(teamLabAdminApi, 'listReleases').mockResolvedValue([release])
     vi.spyOn(teamLabAdminApi, 'releaseReadiness').mockResolvedValue({
-      topologyId: release.topologyId, releaseId: release.id, ready: true, images: [], blockingReasons: [], requiredRuntimeSecrets: [], latestTrialRuntime: null,
-      plan: { topologyId: release.topologyId, releaseId: release.id, networks: [], assets: [], shards: [], crossShardConnections: 0, requiredCapabilities: [], warnings: [], planHash: 'sha256:plan', managedInfrastructureCount: 0, bootstrapArtifactCount: 0, observationPointEstimate: 0 },
+      topologyId: release.topologyId, releaseId: release.id, ready: true, images: [], blockingReasons: [], latestTrialRuntime: null,
+      plan: { topologyId: release.topologyId, releaseId: release.id, networks: [], assets: [], shards: [], crossShardConnections: 0, requiredCapabilities: [], warnings: [], planHash: 'sha256:plan', managedInfrastructureCount: 0, observationPointEstimate: 0 },
     })
   })
 

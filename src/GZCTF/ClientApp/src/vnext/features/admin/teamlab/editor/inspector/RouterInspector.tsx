@@ -1,7 +1,7 @@
 import { Route } from 'lucide-react'
 import { updateTopologyConnection, updateTopologyNode } from '../../model/topologyCommands'
 import type { TopologyRouteConnection, TopologyRouterNode } from '../../model/topologyDocument'
-import { AdvancedSection, InspectorSection, PositionEditor, SelectInput, TextInput } from './InspectorFields'
+import { InspectorSection, SelectInput, TextInput } from './InspectorFields'
 import type { InspectorDocumentProps } from './inspectorTypes'
 import { NetworkInterfacesEditor } from './NetworkInterfacesEditor'
 
@@ -21,10 +21,6 @@ export function RouterInspector(props: RouterInspectorProps) {
           <TextInput disabled={readOnly} label="名称" onChange={(name) => update({ name })} value={node.name} />
         </InspectorSection>
         <NetworkInterfacesEditor document={document} nodeKey={node.key} onDocumentChange={onDocumentChange} readOnly={readOnly} />
-        <AdvancedSection summary="高级配置">
-          <TextInput disabled label="节点标识" value={node.key} />
-          <PositionEditor onChange={(position) => update({ position })} position={node.position} readOnly={readOnly} />
-        </AdvancedSection>
       </>
     )
   }
@@ -32,7 +28,7 @@ export function RouterInspector(props: RouterInspectorProps) {
   const connection = props.connection
   const switches = Object.values(document.nodes).filter((node) => node.type === 'switch')
   const routingNodes = Object.values(document.nodes).filter(
-    (node) => node.type === 'router' || (node.type !== 'switch' && node.routingEnabled)
+    (node) => node.type === 'router'
   )
   const update = (patch: Partial<TopologyRouteConnection>) => {
     onDocumentChange(updateTopologyConnection(document, { ...connection, ...patch }).document)

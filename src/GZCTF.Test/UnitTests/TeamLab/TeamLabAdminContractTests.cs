@@ -25,7 +25,7 @@ public sealed class TeamLabAdminContractTests
         await using var context = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
         var service = new TeamLabTopologyApplicationService(
-            context, new TeamLabTopologyValidator(), null!, new TeamLabControlScopeService(context), null!,
+            context, new TeamLabTopologyValidator(), null!, new TeamLabControlScopeService(context),
             new NodeCapacitySnapshotService(context));
         var request = new CreateTeamLabTopologyModel(
             "Draft", [], [], [],

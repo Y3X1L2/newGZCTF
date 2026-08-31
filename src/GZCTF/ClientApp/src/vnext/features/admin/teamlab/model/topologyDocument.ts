@@ -1,6 +1,5 @@
 import type {
   TeamLabAssetResources,
-  TeamLabBootstrapReference,
   TeamLabConnectionDirection,
   TeamLabDependencyCondition,
   TeamLabEndpointObservationMode,
@@ -43,17 +42,16 @@ interface TopologyAssetNodeBase {
   position: TopologyPosition
   imageTemplateId: number
   resources: TeamLabAssetResources
-  routingEnabled: boolean
   exposePort: number | null
-  environment: Readonly<Record<string, string>> | null
-  startCommand: string | null
   healthCheck: TeamLabHealthCheck | null
   orderIndex: number
-  stateless: boolean
-  bootstrap: TeamLabBootstrapReference | null
   endpointObservation: TeamLabEndpointObservationMode
-  bakeAtPublish: boolean
-  imageDigest: string | null
+  /** Device package binding for industrial emulation / protocol simulation assets. */
+  devicePackageId?: number | null
+  /** Raw author parameter JSON for the bound device package. */
+  deviceParameters?: string | null
+  /** Public id of an authorized field connector this asset attaches to. */
+  connectorId?: string | null
 }
 
 export interface TopologyDockerNode extends TopologyAssetNodeBase {

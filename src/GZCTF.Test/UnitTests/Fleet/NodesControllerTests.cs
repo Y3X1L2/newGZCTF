@@ -233,6 +233,13 @@ public class NodesControllerTests
         Assert.Contains("genisoimage", script);
         Assert.Contains("xorriso", script);
         Assert.Contains("cloud-image-utils", script);
+        Assert.Contains("openvswitch-switch", script);
+        Assert.Contains("ovn-host", script);
+        Assert.Contains("need_cmd ovs-vsctl", script);
+        Assert.Contains("need_cmd ovsdb-client", script);
+        Assert.Contains("need_cmd ovn-controller", script);
+        Assert.Contains("need_cmd ovn-nbctl", script);
+        Assert.Contains("need_cmd ovn-sbctl", script);
         Assert.Contains("cmp -s \"$tmp\" /etc/docker/daemon.json", script);
         Assert.Contains("KVM hardware: unavailable", script);
         Assert.Contains("install_dotnet_runtime", script);
@@ -720,6 +727,7 @@ public class NodesControllerTests
         await File.WriteAllBytesAsync(
             Path.Combine(supervisorDir, "gzctf-guest-supervisor.exe"), [5, 6, 7, 8]);
         var nodeId = Guid.Parse("ffffffff-aaaa-bbbb-cccc-dddddddddddd");
+        var expectedSha = NodeDeployService.ComputeAgentBinarySha256();
         context.WorkerNodes.Add(new WorkerNode
         {
             Id = nodeId,
@@ -728,14 +736,25 @@ public class NodesControllerTests
             AuthToken = "node-token",
             Status = NodeStatus.Online,
             Capabilities = NodeCapability.Docker,
-            AgentPort = 5001
+            AgentPort = 5001,
+            AgentBinarySha256 = expectedSha
         });
         await context.SaveChangesAsync();
-        var agent = new RecordingAgentClient();
+        var heartbeatManifest = CreateManifest(includeKvm: false) with { BinarySha256 = expectedSha };
+        var agent = new RecordingAgentClient(_ =>
+        {
+            var heartbeat = context.WorkerNodes.Single(item => item.Id == nodeId);
+            heartbeat.AgentBinarySha256 = expectedSha;
+            heartbeat.CapabilityManifestJson = AgentCapabilityEvaluator.Normalize(heartbeatManifest).Json;
+            context.SaveChanges();
+        });
         var services = new ServiceCollection()
             .AddSingleton(context)
             .AddSingleton<IConfiguration>(new ConfigurationBuilder().Build())
             .AddSingleton<AgentClient>(agent)
+            .AddSingleton<IOperationalEventWriter>(new EfOperationalEventWriter(
+                context, NullLogger<EfOperationalEventWriter>.Instance))
+            .AddScoped<AgentFleetUpdateCoordinator>()
             .AddLogging()
             .BuildServiceProvider();
         var controller = CreateNodesController(context, services);
@@ -750,12 +769,59 @@ public class NodesControllerTests
 
         var ok = Assert.IsType<OkObjectResult>(result);
         var json = JsonSerializer.Serialize(ok.Value);
-        Assert.Contains("Agent sync requested", json, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("synchronized", json, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(nodeId, agent.NodeId);
         Assert.Equal("http://10.24.0.27/api/agent/download", agent.Request?.DownloadUrl);
         Assert.True(agent.Request?.Restart);
         Assert.False(string.IsNullOrWhiteSpace(agent.Request?.ExpectedSha256));
+        Assert.Equal(2, agent.Requests.Count);
+        Assert.Null(agent.Requests[0].LinuxSensorDownloadUrl);
+        Assert.Null(agent.Requests[0].WindowsSensorDownloadUrl);
+        Assert.Null(agent.Requests[0].VmControlPlane);
+        Assert.Null(agent.Requests[0].TeamLabDataPlane);
+        Assert.False(string.IsNullOrWhiteSpace(agent.Requests[1].LinuxSensorDownloadUrl));
+        Assert.False(string.IsNullOrWhiteSpace(agent.Requests[1].WindowsSensorDownloadUrl));
         Assert.False(agent.Request?.VmControlPlane?.Enabled);
+    }
+
+    [Fact]
+    public async Task AgentFleetUpdateRecovery_DoesNotRestoreNodeBeforeConfigurationPhase()
+    {
+        await using var context = CreateContext();
+        var node = new WorkerNode
+        {
+            Id = Guid.NewGuid(),
+            Name = "awaiting-agent",
+            HostAddress = "10.24.0.31",
+            AuthToken = "node-token",
+            Status = NodeStatus.Online,
+            AgentUpdateState = AgentUpdateState.AwaitingHeartbeat,
+            AgentUpdateExpectedSha256 = "expected",
+            AgentBinarySha256 = "expected",
+            AgentUpdateStartedAt = DateTimeOffset.UtcNow,
+            AgentUpdateWasSchedulable = true,
+            IsSchedulable = false
+        };
+        context.WorkerNodes.Add(node);
+        await context.SaveChangesAsync();
+        var services = new ServiceCollection()
+            .AddSingleton(context)
+            .AddSingleton<AgentClient>(new RecordingAgentClient())
+            .AddSingleton<IOperationalEventWriter>(new EfOperationalEventWriter(
+                context, NullLogger<EfOperationalEventWriter>.Instance))
+            .AddLogging()
+            .BuildServiceProvider();
+        var coordinator = new AgentFleetUpdateCoordinator(
+            context,
+            services.GetRequiredService<AgentClient>(),
+            services.GetRequiredService<IOperationalEventWriter>(),
+            NullLogger<AgentFleetUpdateCoordinator>.Instance,
+            Options.Create(new TeamLabNetworkConfig()));
+
+        await coordinator.RecoverPendingAsync(CancellationToken.None);
+
+        Assert.Equal(AgentUpdateState.AwaitingHeartbeat, node.AgentUpdateState);
+        Assert.False(node.IsSchedulable);
     }
 
     static AgentCapabilityManifest CreateManifest(bool includeKvm)
@@ -766,9 +832,13 @@ public class NodesControllerTests
             AgentFeatureIds.DockerPull,
             AgentFeatureIds.TeamLabInfrastructure,
             AgentFeatureIds.TeamLabFabricLeasedLinks,
+            AgentFeatureIds.TeamLabContainerNetworkFinalize,
             AgentFeatureIds.TeamLabObservation,
             AgentFeatureIds.WireGuard,
-            AgentFeatureIds.Pcap
+            AgentFeatureIds.Pcap,
+            AgentFeatureIds.SelfUpdate,
+            AgentFeatureIds.RuntimeInventory,
+            AgentFeatureIds.RuntimeSignals
         };
         if (includeKvm)
         {
@@ -870,22 +940,28 @@ public class NodesControllerTests
 
     private sealed class RecordingAgentClient : AgentClient
     {
-        public RecordingAgentClient() : base(
+        private readonly Action<AgentSyncRequest>? _onSync;
+
+        public RecordingAgentClient(Action<AgentSyncRequest>? onSync = null) : base(
             new ServiceCollection().AddHttpClient().BuildServiceProvider().GetRequiredService<IHttpClientFactory>(),
             new ServiceCollection().BuildServiceProvider().GetRequiredService<IServiceScopeFactory>(),
             new ConfigurationBuilder().Build(),
             NullLogger<AgentClient>.Instance)
         {
+            _onSync = onSync;
         }
 
         public Guid? NodeId { get; private set; }
         public AgentSyncRequest? Request { get; private set; }
+        public List<AgentSyncRequest> Requests { get; } = [];
 
         public override Task<AgentSyncResponse> SyncAgentAsync(Guid nodeId, AgentSyncRequest request,
             CancellationToken token)
         {
             NodeId = nodeId;
             Request = request;
+            Requests.Add(request);
+            _onSync?.Invoke(request);
             return Task.FromResult(new AgentSyncResponse(true, "Agent sync requested.", "1.8.3-test"));
         }
     }

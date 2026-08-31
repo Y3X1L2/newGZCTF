@@ -1,5 +1,7 @@
 using GZCTF.Modules.TeamLab.Domain;
 using GZCTF.Modules.TeamLab.Domain.Runtime;
+using GZCTF.TeamLab.Contracts;
+using GZCTF.TeamLab.Contracts.Execution;
 
 namespace GZCTF.Modules.TeamLab.Application;
 
@@ -14,7 +16,8 @@ public sealed record TeamLabNodeNetworkIntent(
     string Name,
     string Cidr,
     string GatewayIp,
-    string BridgeName);
+    string BridgeName,
+    bool IsEntry = false);
 
 public sealed record TeamLabNodeInterfaceIntent(
     string Key,
@@ -63,7 +66,8 @@ public sealed record TeamLabNodeObservationPointIntent(
     Guid PublicId,
     string TopologyKey,
     TeamLabObservationPointKind Kind,
-    string InterfaceToken);
+    string InterfaceToken,
+    string? NetworkKey = null);
 
 public sealed record TeamLabNodeInfrastructureApplyRequest(
     int RuntimeId,
@@ -125,25 +129,17 @@ public sealed record TeamLabNodeAssetCreateRequest(
     int MemoryMiB,
     int StorageMiB,
     int? ExposePort,
-    bool RoutingEnabled,
     bool ImageReady,
-    IReadOnlyDictionary<string, string> Environment,
     IReadOnlyDictionary<string, string> Secrets,
     IReadOnlyList<TeamLabNodeInterfaceIntent> Interfaces,
-    TeamLabNodeBootstrapIntent? Bootstrap = null,
     TeamLabNodeHealthIntent? Health = null,
     string? DependencyReadyToken = null,
     TeamLabEndpointObservationMode EndpointObservation = TeamLabEndpointObservationMode.Disabled,
     string RouterNamespace = "",
-    string? StartCommand = null,
     Guid? OperationId = null,
     VmRuntimeMode? VmRuntimeMode = null,
-    VmNetworkMode? VmNetworkMode = null);
-
-public sealed record TeamLabNodeBootstrapIntent(
-    Guid ProfileId,
-    int Version,
-    IReadOnlyDictionary<string, string> Parameters);
+    VmNetworkMode? VmNetworkMode = null,
+    string? ImageReference = null);
 
 public sealed record TeamLabNodeHealthIntent(
     TeamLabHealthCheckKind Kind,
@@ -175,21 +171,17 @@ public sealed record TeamLabScenarioArtifactCommitResult(
     string? ErrorCode,
     string? ErrorDetail);
 
-public sealed record TeamLabNodeBootstrapResult(
+public sealed record TeamLabNodeHealthResult(
     bool Success,
     string Message,
-    IReadOnlyList<string> CompletedSteps,
-    IReadOnlyList<string> PassedHealthChecks,
-    int RebootCount)
+    IReadOnlyList<string> PassedHealthChecks)
 {
-    public static TeamLabNodeBootstrapResult Completed(
-        IReadOnlyList<string>? steps = null,
-        IReadOnlyList<string>? healthChecks = null,
-        int rebootCount = 0) =>
-        new(true, "Bootstrap completed.", steps ?? [], healthChecks ?? [], rebootCount);
+    public static TeamLabNodeHealthResult Completed(
+        IReadOnlyList<string>? healthChecks = null) =>
+        new(true, "Health check completed.", healthChecks ?? []);
 
-    public static TeamLabNodeBootstrapResult Failed(string message) =>
-        new(false, message, [], [], 0);
+    public static TeamLabNodeHealthResult Failed(string message) =>
+        new(false, message, []);
 }
 
 public sealed record TeamLabNodeCleanupRequest(
@@ -221,13 +213,21 @@ public sealed record TeamLabNodeAccessApplyRequest(
     string ClientAddress,
     string ClientAllowedIps,
     IReadOnlyList<string> PlayerAllowedCidrs,
-    IReadOnlyList<string> PlayerBlockedCidrs);
+    IReadOnlyList<string> PlayerBlockedCidrs,
+    TeamLabExecutionModel ExecutionModel = TeamLabExecutionModel.V1,
+    Guid RuntimePublicId = default,
+    string? NetworkKey = null,
+    string? PortKey = null,
+    string? MacAddress = null);
 
 public sealed record TeamLabNodeAccessRemoveRequest(
     int RuntimeId,
     int Generation,
     string RouterNamespace,
-    string InterfaceName);
+    string InterfaceName,
+    TeamLabExecutionModel ExecutionModel = TeamLabExecutionModel.V1,
+    Guid RuntimePublicId = default,
+    string? NetworkKey = null);
 
 public sealed record TeamLabNodeObservationRecord(
     long Sequence,
@@ -255,6 +255,7 @@ public sealed record TeamLabNodeObservationResult(
     bool Success,
     string Message,
     long NextSequence,
+    long PersistedThroughSequence,
     long DroppedCount,
     IReadOnlyList<TeamLabNodeObservationRecord> Records,
     TeamLabNodeObservationHealth Health);
@@ -305,6 +306,15 @@ public sealed record TeamLabNodeCaptureResult(
 
 public interface ITeamLabNodeExecutor
 {
+    Task<TeamLabExecutionPlanApplyResponse> ApplyExecutionPlanAsync(
+        Guid workerNodeId,
+        TeamLabExecutionPlanV2 plan,
+        CancellationToken cancellationToken);
+    Task<TeamLabExecutionPlanCleanupResponse> CleanupExecutionPlanAsync(
+        Guid workerNodeId,
+        TeamLabExecutionPlanV2 plan,
+        CancellationToken cancellationToken);
+
     Task<TeamLabNodeRuntimeInventory> GetRuntimeInventoryAsync(
         Guid workerNodeId,
         CancellationToken cancellationToken);
@@ -319,12 +329,7 @@ public interface ITeamLabNodeExecutor
         string runtimeResourceId,
         TeamLabNodeAssetCreateRequest request,
         CancellationToken cancellationToken);
-    Task<TeamLabNodeBootstrapResult> ApplyBootstrapAsync(
-        Guid workerNodeId,
-        string runtimeResourceId,
-        TeamLabNodeAssetCreateRequest request,
-        CancellationToken cancellationToken);
-    Task<TeamLabNodeBootstrapResult> ProbeAssetHealthAsync(
+    Task<TeamLabNodeHealthResult> ProbeAssetHealthAsync(
         Guid workerNodeId,
         string runtimeResourceId,
         TeamLabNodeAssetCreateRequest request,
@@ -334,12 +339,14 @@ public interface ITeamLabNodeExecutor
         TeamLabAssetKind kind,
         string resourceId,
         int generation,
+        TeamLabExecutionModel executionModel,
         CancellationToken cancellationToken);
     Task<TeamLabNodeResult> ResumeAssetAsync(
         Guid workerNodeId,
         TeamLabAssetKind kind,
         string resourceId,
         int generation,
+        TeamLabExecutionModel executionModel,
         CancellationToken cancellationToken);
     Task<TeamLabNodeResult> DestroyAssetAsync(Guid workerNodeId, TeamLabAssetKind kind, string resourceId, CancellationToken cancellationToken);
     Task<TeamLabScenarioArtifactCommitResult> CommitScenarioArtifactAsync(
@@ -355,6 +362,7 @@ public interface ITeamLabNodeExecutor
         int runtimeId,
         int generation,
         long afterSequence,
+        long acknowledgeThroughSequence,
         Guid? observationPointId,
         int limit,
         CancellationToken cancellationToken);

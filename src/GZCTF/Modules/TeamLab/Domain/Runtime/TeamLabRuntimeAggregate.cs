@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using GZCTF.Models.Data;
+using GZCTF.TeamLab.Contracts;
 using GZCTF.Modules.TeamLab.Domain;
 
 namespace GZCTF.Modules.TeamLab.Domain.Runtime;
@@ -12,12 +13,19 @@ public class TeamLabRuntime
     public Guid TopologyReleaseId { get; set; }
     public Guid? CreatedById { get; set; }
     public int Generation { get; set; } = 1;
+    // Kept as a runtime fact for databases upgraded through the scenario-build branch.
+    // TeamLab authoring no longer exposes this implementation detail.
+    public bool IsScenarioBuild { get; set; }
+    /// <summary>
+    /// Execution model selected for this runtime generation. The value is a persisted fact used
+    /// by cleanup; it is never inferred from resource names or fragment markers.
+    /// </summary>
+    public TeamLabExecutionModel ExecutionModel { get; set; } = TeamLabExecutionModel.V2;
     [MaxLength(256)] public string? ExternalReference { get; set; }
     [MaxLength(128)] public string? CreationIdempotencyKey { get; set; }
     [MaxLength(128)] public string CreateRequestHash { get; set; } = string.Empty;
     public int? EntryShardId { get; set; }
     public TeamLabRuntimeStatus Status { get; set; } = TeamLabRuntimeStatus.Pending;
-    public bool IsScenarioBuild { get; set; }
     public bool IsOpenToPlayers { get; set; }
     [MaxLength(1024)] public string? LastError { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
@@ -26,8 +34,8 @@ public class TeamLabRuntime
     public List<TeamLabRuntimeNetwork> Networks { get; set; } = [];
     public List<TeamLabRuntimeAsset> Assets { get; set; } = [];
     public List<TeamLabRuntimeInfrastructure> Infrastructure { get; set; } = [];
+    public List<TeamLabExecutionPlanSnapshot> ExecutionPlanSnapshots { get; set; } = [];
     public List<TeamLabRuntimeDependencyState> DependencyStates { get; set; } = [];
-    public List<TeamLabBootstrapExecution> BootstrapExecutions { get; set; } = [];
     public List<TeamLabObservationPoint> ObservationPoints { get; set; } = [];
     public List<TeamLabObservationCursor> ObservationCursors { get; set; } = [];
     public List<TeamLabFabricLinkLease> FabricLinkLeases { get; set; } = [];
@@ -42,6 +50,25 @@ public class TeamLabRuntime
     public List<TeamLabTrafficCorrelationCursor> TrafficCorrelationCursors { get; set; } = [];
     public List<TeamLabTrafficCaptureJob> TrafficCaptureJobs { get; set; } = [];
     public TeamLabControlScope? ControlScope { get; set; }
+}
+
+/// <summary>
+/// Immutable V2 plan accepted for one runtime generation and node shard. This is the cleanup
+/// authority after deployment; it deliberately does not contain runtime secret overlays.
+/// </summary>
+public sealed class TeamLabExecutionPlanSnapshot
+{
+    [Key] public long Id { get; set; }
+    public int RuntimeId { get; set; }
+    public int Generation { get; set; }
+    public int ShardId { get; set; }
+    public Guid WorkerNodeId { get; set; }
+    [MaxLength(96)] public string PlanDigest { get; set; } = string.Empty;
+    [MaxLength(32)] public string SchemaVersion { get; set; } = "v2";
+    public string PlanJson { get; set; } = string.Empty;
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public TeamLabRuntime Runtime { get; set; } = null!;
+    public TeamLabRuntimeShard Shard { get; set; } = null!;
 }
 
 public class TeamLabRuntimeShard
@@ -107,10 +134,11 @@ public class TeamLabRuntimeAsset
     public TeamLabAssetExecutionStage ExecutionStage { get; set; } = TeamLabAssetExecutionStage.Pending;
     public Guid? AgentOperationId { get; set; }
     public long AgentSignalSequence { get; set; }
-    public bool Stateless { get; set; }
     public TeamLabEndpointObservationMode EndpointObservation { get; set; }
     [MaxLength(128)] public string? ImageDigest { get; set; }
-    [MaxLength(128)] public string? BootstrapDigest { get; set; }
+    public int? DevicePackageId { get; set; }
+    [MaxLength(2048)] public string? DevicePackageParametersJson { get; set; }
+    public Guid? ConnectorId { get; set; }
     public DateTimeOffset? ExecutionUpdatedAt { get; set; }
     [MaxLength(1024)] public string? LastError { get; set; }
     public TeamLabRuntime Runtime { get; set; } = null!;

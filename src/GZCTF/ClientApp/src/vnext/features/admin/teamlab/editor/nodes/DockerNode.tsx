@@ -9,6 +9,7 @@ export const DockerNode = memo(function DockerNode({ data, selected }: NodeProps
   if (node.type !== 'docker') return null
   return (
     <TopologyNodeShell
+      badge={data.isBorder ? '跨网段' : undefined}
       details={[`${node.resources.cpuUnits} CPU`, `${node.resources.memoryMiB} MiB`, `${data.connectionCount} NIC`]}
       eyebrow="Docker"
       icon={<Container size={18} />}

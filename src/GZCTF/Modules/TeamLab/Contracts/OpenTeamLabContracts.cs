@@ -1,5 +1,6 @@
 using GZCTF.Models.Data;
 using GZCTF.Modules.TeamLab.Domain;
+using GZCTF.TeamLab.Contracts;
 
 namespace GZCTF.Modules.TeamLab.Contracts;
 
@@ -49,11 +50,19 @@ public sealed record OpenTeamLabReleaseModel(
     int SchemaVersion,
     string ContentHash,
     DateTimeOffset PublishedAt,
-    TeamLabTopologyEditorModel? Editor = null);
+    TeamLabTopologyEditorModel? Editor = null,
+    bool Archived = false,
+    string? PublisherName = null);
 
 public sealed record OpenTeamLabReleasePageModel(
     IReadOnlyList<OpenTeamLabReleaseModel> Items,
     string? NextCursor);
+
+public sealed record TeamLabProtocolEventReportModel(
+    string Type,
+    string Source,
+    DateTimeOffset? OccurredAt = null,
+    IReadOnlyDictionary<string, string>? Parameters = null);
 
 public sealed record OpenTeamLabFailureModel(
     string Code,
@@ -88,6 +97,7 @@ public sealed record OpenTeamLabRuntimeModel(
     Guid Id,
     Guid ReleaseId,
     int Generation,
+    TeamLabExecutionModel ExecutionModel,
     TeamLabRuntimeStatus Status,
     string Stage,
     bool OpenForAccess,
@@ -124,6 +134,10 @@ public sealed record OpenTeamLabCaptureModel(
     IReadOnlyList<TeamLabCaptureSegmentModel> Segments,
     OpenTeamLabFailureModel? Failure);
 
+public sealed record OpenTeamLabCapturePageModel(
+    IReadOnlyList<OpenTeamLabCaptureModel> Items,
+    string? Next);
+
 public static class OpenTeamLabContractMapper
 {
     public static CreateTeamLabTopologyModel ToInternal(this OpenCreateTeamLabTopologyModel model) =>
@@ -146,13 +160,14 @@ public static class OpenTeamLabContractMapper
 
     public static OpenTeamLabReleaseModel ToOpen(this TeamLabReleaseModel model) =>
         new(model.Id, model.TopologyId, model.Version, model.SourceRevision, model.SchemaVersion,
-            model.ContentHash, model.PublishedAt, model.Editor);
+            model.ContentHash, model.PublishedAt, model.Editor, model.Archived, model.PublisherName);
 
     public static OpenTeamLabRuntimeModel ToOpen(this TeamLabRuntimeProjectionModel model) =>
         new(
             model.Id,
             model.ReleaseId,
             model.Generation,
+            model.ExecutionModel,
             model.Status,
             model.Stage,
             model.OpenForAccess,

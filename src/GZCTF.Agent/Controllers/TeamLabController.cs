@@ -3,7 +3,11 @@ using GZCTF.Agent.Services;
 using GZCTF.Agent.Services.Observation;
 using GZCTF.Agent.Services.RuntimeSignals;
 using GZCTF.Agent.Services.TeamLab;
+using GZCTF.Agent.Services.Vm;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
+using GZCTF.TeamLab.Contracts;
+using GZCTF.TeamLab.Contracts.Execution;
 
 namespace GZCTF.Agent.Controllers;
 
@@ -18,10 +22,40 @@ public class TeamLabController(
     AgentRuntimeSignalJournal runtimeSignals,
     DockerService docker,
     KvmService kvm,
-    AgentOperationGate gate) : ControllerBase
+    LibvirtTeamLabProvider libvirt,
+    AgentOperationGate gate,
+    TeamLabExecutionPlanExecutor executionPlans,
+    TeamLabLinkPolicyService linkPolicies,
+    IOptions<AgentTeamLabConfig> teamLabOptions) : ControllerBase
 {
     [HttpGet("status")]
     public async Task<IActionResult> Status(CancellationToken token) => Ok(await service.GetStatusAsync(token));
+
+    [HttpPost("execution-plan/apply")]
+    public async Task<IActionResult> ApplyExecutionPlan(
+        [FromBody] TeamLabExecutionPlanApplyRequest? request,
+        CancellationToken token)
+    {
+        if (teamLabOptions.Value.ExecutionModel != TeamLabExecutionModel.V2)
+            return NotFound();
+        if (request?.Plan is null) return BadRequest("Execution plan request is required.");
+        await using var permit = await gate.EnterAsync(AgentOperationCategory.TeamLabExecution, token);
+        return Ok(await executionPlans.ApplyAsync(request.Plan, token));
+    }
+
+    [HttpPost("execution-plan/cleanup")]
+    public async Task<IActionResult> CleanupExecutionPlan(
+        [FromBody] TeamLabExecutionPlanCleanupRequest? request,
+        CancellationToken token)
+    {
+        if (teamLabOptions.Value.ExecutionModel != TeamLabExecutionModel.V2)
+            return NotFound();
+        if (request?.Plan is null) return BadRequest("Execution plan request is required.");
+        // Cleanup is a bounded, identity-fenced operation. It must not wait behind an unrelated
+        // long-running apply; the per-plan executor lease still serializes the same shard.
+        await using var permit = await gate.EnterAsync(AgentOperationCategory.Control, token);
+        return Ok(await executionPlans.CleanupAsync(request.Plan, token));
+    }
 
     [HttpPost("shards/apply")]
     public async Task<IActionResult> ApplyInfrastructure(
@@ -139,10 +173,17 @@ public class TeamLabController(
     }
 
     [HttpPost("observations/read")]
-    public IActionResult ReadObservations([FromBody] TeamLabObservationBatchRequest request)
+    public async Task<IActionResult> ReadObservations([FromBody] TeamLabObservationBatchRequest request,
+        CancellationToken token)
     {
-        if (request.RuntimeId <= 0 || request.Generation <= 0 || request.AfterSequence < 0)
+        if (request.RuntimeId <= 0 || request.Generation <= 0 || request.AfterSequence < 0 ||
+            request.AcknowledgeThroughSequence < 0)
             return BadRequest("Invalid TeamLab observation cursor.");
+        if (request.AcknowledgeThroughSequence > request.AfterSequence)
+            return BadRequest("Observation acknowledgement cannot exceed the read cursor.");
+        if (request.AcknowledgeThroughSequence > 0)
+            await observer.AcknowledgeAsync(
+                request.RuntimeId, request.Generation, request.AcknowledgeThroughSequence, token);
         return Ok(observer.Read(request));
     }
 
@@ -159,6 +200,24 @@ public class TeamLabController(
         [FromBody] TeamLabEndpointSensorStartRequest request,
         CancellationToken token) =>
         Ok(await sensors.StartAsync(request, token));
+
+    [HttpPost("link-policy/apply")]
+    public async Task<IActionResult> ApplyLinkPolicy(
+        [FromBody] TeamLabLinkPolicyApplyRequest request,
+        CancellationToken token)
+    {
+        await using var permit = await gate.EnterAsync(AgentOperationCategory.TeamLabNetwork, token);
+        return Ok(await linkPolicies.ApplyAsync(request, token));
+    }
+
+    [HttpPost("link-policy/recover")]
+    public async Task<IActionResult> RecoverLinkPolicy(
+        [FromBody] TeamLabLinkPolicyRecoverRequest request,
+        CancellationToken token)
+    {
+        await using var permit = await gate.EnterAsync(AgentOperationCategory.TeamLabNetwork, token);
+        return Ok(await linkPolicies.RecoverAsync(request, token));
+    }
 
     private async Task<TeamLabAssetLifecycleResponse> ChangeAssetLifecycleAsync(
         TeamLabAssetLifecycleRequest request,
@@ -181,7 +240,17 @@ public class TeamLabController(
                         await docker.ResumeContainerAsync(request.ResourceId, request.Generation, token);
                     break;
                 case "vm":
-                    if (pause)
+                    if (request.ExecutionModel == TeamLabExecutionModel.V2)
+                    {
+                        var result = pause
+                            ? await libvirt.PauseAsync(request.ResourceId, request.Generation, token)
+                            : await libvirt.ResumeAsync(request.ResourceId, request.Generation, token);
+                        if (!result.Success)
+                            throw new AgentOperationException(
+                                "Compute", "runtime.vm_lifecycle_failed", result.State, false,
+                                StatusCodes.Status409Conflict);
+                    }
+                    else if (pause)
                         await kvm.SuspendVmAsync(request.ResourceId, request.Generation, token);
                     else
                         await kvm.ResumeVmAsync(request.ResourceId, request.Generation, token);

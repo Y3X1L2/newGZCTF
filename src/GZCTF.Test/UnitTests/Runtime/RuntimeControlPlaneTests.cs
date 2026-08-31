@@ -116,6 +116,32 @@ public sealed class RuntimeControlPlaneTests
     }
 
     [Fact]
+    public async Task Queue_ControlConflictsWithRunningCreateForSameSubject()
+    {
+        await using var context = CreateContext();
+        var service = CreateQueue(context);
+        var create = await service.EnqueueAsync(
+            DeploymentQueueRequest.GameContainer(1, 2, 3), CancellationToken.None);
+        var running = await context.DeploymentQueueTickets.SingleAsync(item => item.Id == create.TicketId);
+        running.Status = DeploymentQueueTicketStatus.Running;
+        running.ClaimOwner = "worker-1";
+        running.ClaimExpiresAt = DateTimeOffset.UtcNow.AddMinutes(10);
+        await context.SaveChangesAsync();
+
+        var conflict = await Assert.ThrowsAsync<RuntimeApiContractException>(() =>
+            service.EnqueueAsync(DeploymentQueueRequest.GameContainer(1, 2, 3) with
+            {
+                Operation = RuntimeOperationKind.Destroy,
+                TargetNodeId = Guid.NewGuid()
+            }, CancellationToken.None));
+
+        Assert.Equal("runtime_operation_in_progress", conflict.Code);
+        Assert.Equal(DeploymentQueueTicketStatus.Running,
+            (await context.DeploymentQueueTickets.SingleAsync(item => item.Id == create.TicketId)).Status);
+        Assert.Single(await context.DeploymentQueueTickets.ToArrayAsync());
+    }
+
+    [Fact]
     public async Task Recovery_CompletesAbsentDestroyButFailsClosedForExtend()
     {
         await using var context = CreateContext();
@@ -933,7 +959,7 @@ public sealed class RuntimeControlPlaneTests
         1,
         resources ?? new TeamLabAssetResourceModel(10, 256, 512),
         [new TeamLabTopologyInterfaceModel("eth0", networkKey, 10, true)],
-        false);
+        ExposePort: null);
 
     static WorkerNode SeedVmNode(
         AppDbContext context,

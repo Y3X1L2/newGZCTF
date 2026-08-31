@@ -1,0 +1,216 @@
+.page {
+  width: min(var(--yn-page-max-width), 100%);
+  margin: 0 auto;
+  padding: var(--yn-space-7) var(--yn-page-gutter) 72px;
+}
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--yn-space-2);
+  margin-top: var(--yn-space-5);
+  margin-bottom: var(--yn-space-4);
+}
+
+.tab {
+  min-height: 38px;
+  padding: 0 var(--yn-space-4);
+  border: 1px solid var(--yn-color-border);
+  border-radius: var(--yn-radius-md);
+  background: var(--yn-color-surface);
+  color: var(--yn-color-text-secondary);
+  font-size: var(--yn-font-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tab:hover,
+.tab:focus-visible {
+  border-color: var(--yn-color-border-strong);
+  outline: 0;
+}
+
+.tab[data-active='true'] {
+  border-color: var(--yn-color-border-strong);
+  background: var(--yn-color-surface-muted);
+  color: var(--yn-color-text);
+}
+
+.searchBox {
+  display: flex;
+  min-width: min(320px, 100%);
+  min-height: 42px;
+  flex: 1;
+  align-items: center;
+  gap: var(--yn-space-2);
+  padding: 0 var(--yn-space-3);
+  border: 1px solid var(--yn-color-border);
+  border-radius: var(--yn-radius-md);
+  background: var(--yn-color-surface);
+  color: var(--yn-color-muted);
+}
+
+.searchBox:focus-within {
+  border-color: var(--yn-color-border-strong);
+}
+
+.searchBox input {
+  width: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--yn-color-text);
+  box-shadow: none;
+}
+
+.toolbarHint {
+  color: var(--yn-color-muted);
+  font-size: var(--yn-font-xs);
+}
+
+.primaryCell {
+  color: var(--yn-color-text);
+  font-weight: 650;
+}
+
+.mono {
+  font-family: var(--yn-font-mono);
+  font-size: var(--yn-font-xs);
+}
+
+.muted {
+  color: var(--yn-color-muted);
+  font-size: var(--yn-font-xs);
+}
+
+.detailList {
+  display: grid;
+  gap: var(--yn-space-3);
+  margin: 0;
+}
+
+.detailList div {
+  display: grid;
+  gap: 2px;
+}
+
+.detailList dt {
+  color: var(--yn-color-muted);
+  font-size: var(--yn-font-xs);
+  font-weight: 650;
+}
+
+.detailList dd {
+  margin: 0;
+  color: var(--yn-color-text);
+  font-size: var(--yn-font-sm);
+  overflow-wrap: anywhere;
+}
+
+.jsonBlock {
+  max-height: 220px;
+  margin: 0;
+  padding: var(--yn-space-2);
+  border: 1px solid var(--yn-color-border);
+  border-radius: var(--yn-radius-md);
+  background: var(--yn-color-surface-muted);
+  font-family: var(--yn-font-mono);
+  font-size: var(--yn-font-xs);
+  overflow: auto;
+  white-space: pre-wrap;
+}
+
+.connectorDetail {
+  display: grid;
+  gap: var(--yn-space-4);
+}
+
+.subheading {
+  margin: 0;
+  color: var(--yn-color-text);
+  font-size: var(--yn-font-sm);
+}
+
+.leaseList {
+  display: grid;
+  gap: var(--yn-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.leaseList li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--yn-space-3);
+  align-items: baseline;
+  padding: var(--yn-space-2) var(--yn-space-3);
+  border: 1px solid var(--yn-color-border);
+  border-radius: var(--yn-radius-md);
+  font-size: var(--yn-font-xs);
+}
+
+.dialogForm {
+  display: grid;
+  gap: var(--yn-space-2);
+}
+
+.dialogForm label {
+  color: var(--yn-color-text-secondary);
+  font-size: var(--yn-font-sm);
+  font-weight: 650;
+}
+
+.dialogForm input,
+.dialogForm select,
+.dialogForm textarea {
+  min-height: 44px;
+  padding: var(--yn-space-2) var(--yn-space-3);
+  border: 1px solid var(--yn-color-border);
+  border-radius: var(--yn-radius-md);
+  background: var(--yn-color-surface);
+  color: var(--yn-color-text);
+}
+
+.dialogForm textarea {
+  min-height: 64px;
+  resize: vertical;
+  font-family: var(--yn-font-mono);
+  font-size: var(--yn-font-xs);
+}
+
+.dialogForm input:focus,
+.dialogForm select:focus,
+.dialogForm textarea:focus {
+  border-color: var(--yn-color-border-strong);
+  outline: 0;
+}
+
+.dialogFormGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--yn-space-2);
+}
+
+.dialogToggle {
+  display: flex;
+  align-items: center;
+  gap: var(--yn-space-2);
+  color: var(--yn-color-text);
+  font-size: var(--yn-font-sm);
+}
+
+@media (max-width: 760px) {
+  .page {
+    padding-top: var(--yn-space-5);
+  }
+
+  .searchBox {
+    width: 100%;
+    min-width: 100%;
+  }
+
+  .dialogFormGrid {
+    grid-template-columns: 1fr;
+  }
+}

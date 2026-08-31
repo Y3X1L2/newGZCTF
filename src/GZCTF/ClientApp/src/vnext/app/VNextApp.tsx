@@ -154,6 +154,9 @@ const TeamLabWorkspacePage = lazy(() =>
 const TeamLabLibraryPage = lazy(() =>
   import('../features/admin/teamlab/library/TeamLabLibraryPage').then((module) => ({ default: module.TeamLabLibraryPage }))
 )
+const TeamLabResourcesPage = lazy(() =>
+  import('../features/admin/teamlab/resources/TeamLabResourcesPage').then((module) => ({ default: module.TeamLabResourcesPage }))
+)
 const TeamLabSceneShell = lazy(() =>
   import('../features/admin/teamlab/shared/TeamLabSceneShell').then((module) => ({ default: module.TeamLabSceneShell }))
 )
@@ -284,6 +287,7 @@ export function VNextApp() {
             <Route path="exercises" element={<AdminExercisesPage />} />
             <Route path="theory-bank" element={<AdminTheoryBankPage />} />
             <Route path="teamlab" element={<TeamLabLibraryPage />} />
+        <Route path="teamlab/resources" element={<TeamLabResourcesPage />} />
             <Route path="teamlab/:topologyId" element={<TeamLabSceneShell />}>
               <Route index element={<Navigate replace to="design" />} />
               <Route path="design" element={<TeamLabDesignRoute />} />

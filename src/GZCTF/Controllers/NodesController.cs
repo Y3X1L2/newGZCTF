@@ -689,82 +689,15 @@ public class NodesController : ControllerBase
     public async Task<IActionResult> SyncAgent(Guid id)
     {
         var token = HttpContext.RequestAborted;
-        var node = await _context.WorkerNodes.AsNoTracking().FirstOrDefaultAsync(n => n.Id == id, token);
-        if (node is null) return NotFound();
-
+        if (!await _context.WorkerNodes.AnyAsync(node => node.Id == id, token))
+            return NotFound();
         var requestBaseUrl = $"{Request.Scheme}://{Request.Host}{Request.PathBase}";
         var serverUrl = NodeDeployService.ResolveServerUrl(
             HttpContext.RequestServices.GetRequiredService<IConfiguration>(),
             requestBaseUrl);
-        var agentClient = HttpContext.RequestServices.GetRequiredService<AgentClient>();
-        await _events.AppendAndSaveAsync(NodeOperationalEvents.Create(
-            node,
-            OperationalEventCodes.Agent.SyncStarted,
-            OperationalEventOutcome.Started,
-            "Worker node Agent synchronization started.",
-            correlationId: _correlation.Ensure(),
-            detail: new Dictionary<string, object?> { ["operation"] = "agent.sync" }), token);
-
-        try
-        {
-            var result = await agentClient.SyncAgentAsync(id,
-                new AgentSyncRequest(
-                    DownloadUrl: $"{serverUrl.TrimEnd('/')}/api/agent/download",
-                    ExpectedSha256: NodeDeployService.ComputeAgentBinarySha256(),
-                    LinuxSensorDownloadUrl: $"{serverUrl.TrimEnd('/')}/api/agent/endpoint-sensor/linux-x64/download",
-                    LinuxSensorSha256: NodeDeployService.ComputeBundledArtifactSha256(
-                        "agent", "endpoint-sensor", "linux-x64", "gzctf-endpoint-sensor"),
-                    WindowsSensorDownloadUrl: $"{serverUrl.TrimEnd('/')}/api/agent/endpoint-sensor/win-x64/download",
-                    WindowsSensorSha256: NodeDeployService.ComputeBundledArtifactSha256(
-                        "agent", "endpoint-sensor", "win-x64", "gzctf-endpoint-sensor.exe"),
-                    VmControlPlane: new AgentVmControlPlaneSyncConfig(
-                        node.TeamLabNetworkEnabled && node.Capabilities.HasFlag(NodeCapability.Kvm))),
-                token);
-            await _events.AppendAndSaveAsync(NodeOperationalEvents.Create(
-                node,
-                result.Success ? OperationalEventCodes.Agent.SyncSucceeded : OperationalEventCodes.Agent.SyncFailed,
-                result.Success ? OperationalEventOutcome.Succeeded : OperationalEventOutcome.Failed,
-                result.Success
-                    ? "Worker node Agent synchronization completed."
-                    : "Worker node Agent synchronization failed.",
-                result.Success ? OperationalEventSeverity.Information : OperationalEventSeverity.Error,
-                result.Success
-                    ? null
-                    : new OperationalError(
-                        OperationalErrorCategory.AgentProtocol,
-                        OperationalErrorCodes.AgentSyncFailed,
-                        "Agent synchronization failed.",
-                        true,
-                        WorkerNodeId: node.Id,
-                        Operation: "agent.sync"),
-                _correlation.Ensure(),
-                new Dictionary<string, object?> { ["operation"] = "agent.sync" }), token);
-            _logger.SystemLog(
-                $"Worker node Agent sync requested: node={node.Name}, id={node.Id}, success={result.Success}, message={result.Message}.",
-                result.Success ? TaskStatus.Pending : TaskStatus.Failed,
-                result.Success ? LogLevel.Information : LogLevel.Warning);
-            return result.Success ? Ok(result) : BadRequest(result);
-        }
-        catch (Exception ex) when (ex is AgentClientException or HttpRequestException or TaskCanceledException)
-        {
-            var error = ex is AgentClientException agentException
-                ? agentException.Error
-                : OperationalErrorClassifier.FromException(ex, "agent.sync", node.Id);
-            await _events.AppendAndSaveAsync(NodeOperationalEvents.Create(
-                node,
-                OperationalEventCodes.Agent.SyncFailed,
-                OperationalEventOutcome.Failed,
-                "Worker node Agent synchronization failed.",
-                OperationalEventSeverity.Error,
-                error,
-                _correlation.Ensure(),
-                new Dictionary<string, object?> { ["operation"] = "agent.sync" }), token);
-            _logger.LogWarning(ex, "Agent sync failed on node {NodeId}", id);
-            _logger.SystemLog(
-                $"Worker node Agent sync failed: node={node.Name}, id={node.Id}, error={ex.Message}.",
-                TaskStatus.Failed, LogLevel.Warning);
-            return BadRequest(new { message = ex.Message });
-        }
+        var result = await HttpContext.RequestServices.GetRequiredService<AgentFleetUpdateCoordinator>()
+            .SyncAsync(id, serverUrl, _correlation.Ensure(), token);
+        return result.Success ? Ok(result) : BadRequest(result);
     }
 
     [HttpPost("{id:guid}/heartbeat")]

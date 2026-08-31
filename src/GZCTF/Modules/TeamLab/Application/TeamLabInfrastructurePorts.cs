@@ -9,10 +9,37 @@ public enum TeamLabDeploymentStage : byte
     NetworkApplying = 1,
     RoutesApplying = 2,
     AssetBooting = 3,
-    BootstrapInjecting = 4,
-    HealthProbing = 5,
-    ObservationStarting = 6
+    HealthProbing = 4,
+    ObservationStarting = 5
 }
+
+/// <summary>
+/// Physical realization of a TeamLab link policy. The control plane persists
+/// desired state and this port turns it into a real network effect on the
+/// runtime's worker node (tc netem / ip-link). The port is deliberately node
+/// and infrastructure agnostic so the Application layer stays behind the
+/// execution boundary.
+/// </summary>
+public interface ITeamLabLinkPolicyDispatcher
+{
+    Task<TeamLabLinkPolicyDispatchResult> ApplyAsync(
+        Domain.Runtime.TeamLabRuntime runtime,
+        string networkKey,
+        string assetKey,
+        string kind,
+        string parameters,
+        CancellationToken cancellationToken);
+
+    Task<TeamLabLinkPolicyDispatchResult> RecoverAsync(
+        Domain.Runtime.TeamLabRuntime runtime,
+        string networkKey,
+        string assetKey,
+        string kind,
+        string? parameters,
+        CancellationToken cancellationToken);
+}
+
+public sealed record TeamLabLinkPolicyDispatchResult(bool Success, string Message);
 
 public interface ITeamLabDeploymentProgress
 {
@@ -28,6 +55,13 @@ public interface ITeamLabArtifactDistribution
         CancellationToken cancellationToken);
 
     Task ReleaseRuntimeAsync(int runtimeId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Releases release-scoped image distribution references (the preparation
+    /// claim that keeps a release's images warm). Implementations must be
+    /// idempotent so the "last consumer destroyed" path can call it freely.
+    /// </summary>
+    Task ReleaseTeamLabReleaseReferencesAsync(Guid releaseId, CancellationToken token);
 }
 
 public interface ITeamLabCaptureCleanup

@@ -14,7 +14,7 @@ TeamLab 使用以下 API scope：
 
 | Scope | 权限 |
 | --- | --- |
-| `teamlab.topologies:read` | 读取能力、拓扑、发布版本和服务目录 |
+| `teamlab.topologies:read` | 读取能力、拓扑和发布版本 |
 | `teamlab.topologies:write` | 创建、更新、校验、发布拓扑 |
 | `teamlab.runtimes:read` | 读取镜像准备、rollout、runtime 和事件 |
 | `teamlab.runtimes:write` | 准备镜像、管理 rollout/runtime 和访问授权 |
@@ -41,7 +41,7 @@ Idempotency-Key: customer-order-20260808-001
 ## 3. 完整生命周期
 
 1. 创建控制 scope，并为 Token 授予具体 scope。
-2. 查询 `capabilities` 和 `service-profiles`。
+2. 查询 `capabilities`，按模板库中已维护的模板创建拓扑。
 3. 创建拓扑，保存执行定义与编辑器布局。
 4. 校验拓扑；阻断项全部消除后发布不可变版本。
 5. 查询或提交发布版本的镜像准备。
@@ -59,8 +59,6 @@ Idempotency-Key: customer-order-20260808-001
 
 - `GET /api/open/v1/teamlab/capabilities`
 - `GET|POST /api/open/v1/teamlab/scopes`
-- `GET /api/open/v1/teamlab/service-profiles`
-- `GET /api/open/v1/teamlab/service-profiles/{profileId}`
 
 ### 拓扑与发布
 
@@ -127,7 +125,7 @@ Webhook 只接受可公开解析且不指向内网、回环、链路本地或平
 - 列表使用不透明 `after` cursor；调用方不得解析或自行构造 cursor。
 - runtime 事件可按 generation 和 stage 过滤；流量和路径支持各自的筛选字段。
 - 失败统一返回 `application/problem+json`，客户端以稳定 `code` 分支，不解析中文 detail。
-- 常见代码：`scope_archived`、`topology_revision_conflict`、`topology_invalid`、`service_profile_not_found`、`runtime_operation_in_progress`、`resume_blocked`、`rollout_not_drained`、`idempotency_conflict`。
+- 常见代码：`scope_archived`、`topology_revision_conflict`、`topology_invalid`、`runtime_operation_in_progress`、`resume_blocked`、`rollout_not_drained`、`idempotency_conflict`。
 - 恢复动作 ID 包括 `wait_for_node`、`wait_for_capacity`、`retry_image_preparation`、`retry_operation`、`retry_cleanup`、`rebuild_runtime` 和 `drain_runtime`。
 
 ## 6. 容量与清理保证
@@ -139,3 +137,5 @@ Webhook 只接受可公开解析且不指向内网、回环、链路本地或平
 - drain 顺序固定为关闭访问、停止观测、销毁资产和网络、释放容量与镜像引用；重复 drain/destroy 必须收敛到相同终态。
 
 完整字段、请求模型和示例以运行中的中文接口页 `/api-docs` 及唯一机器契约 `/openapi/open-v1.json` 为准。
+
+模板内的系统、镜像摘要、认证状态和静态运维账号由模板库维护；TeamLab 只引用模板，并在发布时由平台锁定当时的不可变摘要。运行时仅允许平台投递实例隔离的 Flag、传感器凭据等机密值，不接受场景作者填写启动命令、环境变量或服务包。

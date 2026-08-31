@@ -2,8 +2,10 @@ import { act, render, waitFor } from '@testing-library/react'
 import type { PropsWithChildren } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { createEmptyTopologyDocument } from '../../model/topologyDocument'
+import { ASSET_NODE_HEIGHT, INFRA_NODE_HEIGHT, NODE_WIDTH } from '../../model/topologyGeometry'
 import { createTopologyNode } from '../nodeFactory'
 import { TeamLabCanvas } from './TeamLabCanvas'
+import { topologyLayers } from './topologyLayers'
 
 const capturedFlowProps = vi.hoisted(() => ({ current: null as Record<string, unknown> | null }))
 
@@ -19,6 +21,102 @@ vi.mock('@xyflow/react', async (importOriginal) => {
 })
 
 describe('TeamLabCanvas', () => {
+  it('never enables render-on-demand culling, so auto-layout edges stay visible during fitView animation', () => {
+    // Regression: onlyRenderVisibleElements culls edges whose endpoints sit
+    // outside the viewport rectangle while the fitView animation is running.
+    // The layout moves every node in one commit; the visibility check still uses
+    // the pre-animation node bounds, so edges disappear (or flash at stale
+    // coordinates) until the animation settles. Browser A/B test confirmed it:
+    // without the flag every edge renders in the same frame as the click.
+    render(
+      <TeamLabCanvas
+        canRedo={false}
+        canUndo={false}
+        connectionMode="network"
+        document={createEmptyTopologyDocument('Canvas')}
+        focusMode={false}
+        layoutRequest={0}
+        leftPanelOpen
+        onAddNode={vi.fn()}
+        onAutoLayout={vi.fn()}
+        onConnectNodes={vi.fn()}
+        onFitRegion={vi.fn()}
+        onMoveNodes={vi.fn()}
+        onMoveRegion={vi.fn()}
+        onNetworkRegionSelect={vi.fn()}
+        onRedo={vi.fn()}
+        onResizeRegion={vi.fn()}
+        onSelectionChange={vi.fn()}
+        onToggleFocus={vi.fn()}
+        onToggleLeftPanel={vi.fn()}
+        onToggleRegion={vi.fn()}
+        onToggleRightPanel={vi.fn()}
+        onUndo={vi.fn()}
+        readOnly={false}
+        rightPanelOpen
+        selectedNetworkKey={null}
+        selection={{ nodeKeys: new Set(), connectionKeys: new Set() }}
+      />
+    )
+
+    expect(capturedFlowProps.current).not.toHaveProperty('onlyRenderVisibleElements')
+  })
+
+  it('projects explicit node width/height, so edge endpoints never wait for a resize measurement', () => {
+    // Regression: without explicit dimensions React Flow computes edge endpoints
+    // from the *measured* node size. Auto layout rebuilds every node in one
+    // commit, delaying the ResizeObserver pass; during that window edges are
+    // drawn to unmeasured (0/undefined)-size coordinates — a vertical strip of
+    // lines at a far-off negative x that never recovers. Headless real-scene
+    // A/B test locked this: memberships/route edges all became x=-1433 lines
+    // after one layout click until dimensions were supplied.
+    const empty = createEmptyTopologyDocument('Canvas')
+    const switchNode = createTopologyNode(empty, 'switch', { x: 40, y: 40 })
+    const withSwitch = { ...empty, nodes: { [switchNode.key]: switchNode } }
+    const assetNode = createTopologyNode(withSwitch, 'docker', { x: 280, y: 40 })
+    const props = {
+      canRedo: false,
+      canUndo: false,
+      connectionMode: 'network' as const,
+      document: {
+        ...withSwitch,
+        nodes: { ...withSwitch.nodes, [assetNode.key]: assetNode },
+      },
+      focusMode: false,
+      layoutRequest: 0,
+      leftPanelOpen: true,
+      onAddNode: vi.fn(),
+      onAutoLayout: vi.fn(),
+      onConnectNodes: vi.fn(),
+      onFitRegion: vi.fn(),
+      onMoveNodes: vi.fn(),
+      onMoveRegion: vi.fn(),
+      onNetworkRegionSelect: vi.fn(),
+      onRedo: vi.fn(),
+      onResizeRegion: vi.fn(),
+      onSelectionChange: vi.fn(),
+      onToggleFocus: vi.fn(),
+      onToggleLeftPanel: vi.fn(),
+      onToggleRegion: vi.fn(),
+      onToggleRightPanel: vi.fn(),
+      onUndo: vi.fn(),
+      readOnly: false,
+      rightPanelOpen: true,
+      selectedNetworkKey: null,
+      selection: { nodeKeys: new Set<string>(), connectionKeys: new Set<string>() },
+    }
+    render(<TeamLabCanvas {...props} />)
+
+    const nodes = capturedFlowProps.current?.nodes as Array<{ id: string; width?: number; height?: number }>
+    const switchFlow = nodes.find((n) => n.id === switchNode.key)
+    const assetFlow = nodes.find((n) => n.id === assetNode.key)
+    expect(switchFlow?.width).toBe(NODE_WIDTH)
+    expect(switchFlow?.height).toBe(INFRA_NODE_HEIGHT)
+    expect(assetFlow?.width).toBe(NODE_WIDTH)
+    expect(assetFlow?.height).toBe(ASSET_NODE_HEIGHT)
+  })
+
+
   it('defaults to canvas panning and exposes an explicit box-selection tool', () => {
     render(
       <TeamLabCanvas
@@ -32,6 +130,7 @@ describe('TeamLabCanvas', () => {
         onAddNode={vi.fn()}
         onAutoLayout={vi.fn()}
         onConnectNodes={vi.fn()}
+        onFitRegion={vi.fn()}
         onMoveNodes={vi.fn()}
         onMoveRegion={vi.fn()}
         onNetworkRegionSelect={vi.fn()}
@@ -91,6 +190,7 @@ describe('TeamLabCanvas', () => {
       onAddNode: vi.fn(),
       onAutoLayout: vi.fn(),
       onConnectNodes: vi.fn(),
+      onFitRegion: vi.fn(),
       onMoveNodes: vi.fn(),
       onMoveRegion: vi.fn(),
       onNetworkRegionSelect: vi.fn(),
@@ -110,7 +210,17 @@ describe('TeamLabCanvas', () => {
     const initialNodes = capturedFlowProps.current?.nodes as Array<{ id: string }>
     const initialEdges = capturedFlowProps.current?.edges as Array<{ id: string }>
     const unchangedNode = initialNodes.find((node) => node.id === assetNode.key)
-    expect(initialNodes.find((node) => node.id.startsWith('region:'))).toMatchObject({ zIndex: 0 })
+
+    // Layering contract: regions are the backdrop, links draw over them, devices
+    // draw over links. With everything left at the default zIndex 0 (the previous
+    // behaviour) React Flow's DOM order buried links under region rectangles.
+    const layered = initialNodes as Array<{ id: string; zIndex?: number }>
+    const regionZ = layered.find((node) => node.id.startsWith('region:'))!.zIndex!
+    const deviceZ = layered.find((node) => node.id === assetNode.key)!.zIndex!
+    const edgeZ = (initialEdges as Array<{ zIndex?: number }>)[0].zIndex!
+    expect(regionZ).toBe(topologyLayers.region)
+    expect(regionZ).toBeLessThan(edgeZ)
+    expect(edgeZ).toBeLessThan(deviceZ)
 
     view.rerender(
       <TeamLabCanvas {...props} selection={{ nodeKeys: new Set([switchNode.key]), connectionKeys: new Set() }} />
@@ -159,6 +269,7 @@ describe('TeamLabCanvas', () => {
         onAddNode={vi.fn()}
         onAutoLayout={vi.fn()}
         onConnectNodes={vi.fn()}
+        onFitRegion={vi.fn()}
         onMoveNodes={vi.fn()}
         onMoveRegion={vi.fn()}
         onNetworkRegionSelect={vi.fn()}

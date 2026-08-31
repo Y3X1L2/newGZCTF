@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { TeamLabTopologyDetail } from '../api/teamlabContracts'
 import { compileTopologyDocument } from './topologyCompiler'
+import { MIN_REGION_HEIGHT, MIN_REGION_WIDTH } from './topologyGeometry'
 import { mapTopologyDetailToDocument } from './topologyMapper'
 
 const position = (x: number) => ({ x, y: 40, width: null, height: null, collapsed: false })
@@ -52,17 +53,13 @@ function detail(): TeamLabTopologyDetail {
           imageTemplateId: 10,
           resources: { cpuUnits: 1, memoryMiB: 512, storageMiB: 2048 },
           interfaces: [{ key: 'web-client', networkKey: 'client', hostOffset: 10, primary: true, orderIndex: 0 }],
-          routingEnabled: false,
           exposePort: 8080,
-          environment: { MODE: 'prod' },
-          startCommand: '/app/start',
           healthCheck: { kind: 'http', port: 8080 },
           orderIndex: 0,
-          stateless: true,
-          bootstrap: { profileId: '019f0000-0000-7000-8000-000000000010', version: 3, parameters: { role: 'web' } },
           endpointObservation: 'required',
-          bakeAtPublish: false,
-          imageDigest: 'sha256:web',
+          devicePackageId: null,
+          deviceParameters: null,
+          connectorId: null,
         },
         {
           key: 'dc',
@@ -71,17 +68,13 @@ function detail(): TeamLabTopologyDetail {
           imageTemplateId: 20,
           resources: { cpuUnits: 4, memoryMiB: 8192, storageMiB: 40960 },
           interfaces: [{ key: 'dc-domain', networkKey: 'domain', hostOffset: 10, primary: true, orderIndex: 0 }],
-          routingEnabled: false,
           exposePort: null,
-          environment: null,
-          startCommand: null,
           healthCheck: { kind: 'tcp', port: 389 },
           orderIndex: 1,
-          stateless: false,
-          bootstrap: null,
           endpointObservation: 'optional',
-          bakeAtPublish: true,
-          imageDigest: 'sha256:dc',
+          devicePackageId: null,
+          deviceParameters: null,
+          connectorId: null,
         },
       ],
       connections: [
@@ -113,7 +106,7 @@ describe('topology API round trip', () => {
     })
     const compiled = compileTopologyDocument(document)
 
-    expect(document.nodes.dc).toMatchObject({ type: 'windows-vm', bakeAtPublish: true })
+    expect(document.nodes.dc).toMatchObject({ type: 'windows-vm' })
     const { editor, schemaVersion, ...definition } = compiled
     const canonicalSource = {
       ...source.definition,
@@ -122,7 +115,63 @@ describe('topology API round trip', () => {
     }
     expect(schemaVersion).toBe(2)
     expect(definition).toEqual(canonicalSource)
-    expect(editor).toEqual(source.editor)
+
+    // Node entries round-trip position only. A node must never carry a size:
+    // that is what let a resized region's size leak onto its switch and then
+    // inflate the region again on the next auto-layout.
+    expect(editor.assets).toEqual(source.editor.assets)
+    expect(editor.infrastructure).toEqual(source.editor.infrastructure)
+    for (const item of [...Object.values(editor.assets), ...Object.values(editor.infrastructure)]) {
+      expect(item.width).toBeNull()
+      expect(item.height).toBeNull()
+    }
+
+    // A region entry is the only record allowed to persist a size. The fixture
+    // has no explicit size, so the compiler writes the members' derived box.
+    expect(Object.keys(editor.networks)).toEqual(Object.keys(source.editor.networks))
+    for (const [key, item] of Object.entries(editor.networks)) {
+      expect(item).toMatchObject({ x: source.editor.networks[key].x, y: source.editor.networks[key].y })
+      expect(item.width).toBeGreaterThanOrEqual(MIN_REGION_WIDTH)
+      expect(item.height).toBeGreaterThanOrEqual(MIN_REGION_HEIGHT)
+    }
+  })
+
+  it('never lets a persisted region size reach a node position', () => {
+    const source = detail()
+    // A region the author dragged much larger, with no explicit switch entry.
+    source.editor = {
+      networks: { client: { x: 40, y: 40, width: 1600, height: 2400, collapsed: false }, domain: position(200) },
+      infrastructure: {},
+      assets: {},
+    }
+    const document = mapTopologyDetailToDocument(source, { resolveVmDeviceType: () => 'linux-vm' })
+
+    for (const node of Object.values(document.nodes)) {
+      expect(node.position.width, `${node.key} inherited a size`).toBeNull()
+      expect(node.position.height, `${node.key} inherited a size`).toBeNull()
+    }
+    // The region itself keeps the author's size.
+    expect(document.networkLayouts.client).toMatchObject({ width: 1600, height: 2400 })
+  })
+
+  it('does not inflate a region across repeated save and reload rounds', () => {
+    let source = detail()
+    source.editor = {
+      networks: { client: { x: 40, y: 40, width: 900, height: 1200, collapsed: false }, domain: position(200) },
+      infrastructure: {},
+      assets: {},
+    }
+    const sizes: string[] = []
+    for (let round = 0; round < 5; round += 1) {
+      const document = mapTopologyDetailToDocument(source, { resolveVmDeviceType: () => 'linux-vm' })
+      const compiled = compileTopologyDocument(document)
+      const region = compiled.editor.networks.client
+      sizes.push(`${region.width}x${region.height}`)
+      source = { ...source, editor: compiled.editor }
+    }
+    // Every round must report the same box. Before the node/region split this
+    // sequence grew without bound (856x1432 -> 952x1664 -> 1048x1896 -> ...).
+    expect(new Set(sizes).size).toBe(1)
   })
 
   it('requires image metadata to distinguish Linux and Windows VM nodes', () => {
@@ -141,7 +190,12 @@ describe('topology API round trip', () => {
     const document = mapTopologyDetailToDocument(source, { resolveVmDeviceType: () => 'linux-vm' })
 
     expect(document.nodes.dc).toMatchObject({ type: 'linux-vm' })
-    expect(document.nodes['switch-client']?.position).toEqual(source.editor.networks.client)
+    // With no infrastructure entry the implicit switch starts inside its region's
+    // header band — it takes the region's origin, never the region's size.
+    const client = source.editor.networks.client
+    expect(document.nodes['switch-client']?.position).toMatchObject({ width: null, height: null })
+    expect(document.nodes['switch-client']?.position.x).toBeGreaterThanOrEqual(client.x)
+    expect(document.nodes['switch-client']?.position.y).toBeGreaterThanOrEqual(client.y)
   })
 
   it('opens schema v1 topologies and upgrades them to schema v2 when compiled', () => {
@@ -156,19 +210,9 @@ describe('topology API round trip', () => {
     }
     source.definition.assets = source.definition.assets.map((asset) => ({
       ...asset,
-      routingEnabled: asset.key === 'web',
-      stateless: false,
-      bootstrap: null,
       endpointObservation: 'disabled',
-      bakeAtPublish: false,
-      imageDigest: null,
     }))
-    source.definition.connections = source.definition.connections.map((connection) => ({
-      ...connection,
-      viaAssetKey: 'web',
-      viaNodeKey: null,
-      direction: 'bidirectional',
-    }))
+    source.definition.connections = []
 
     const document = mapTopologyDetailToDocument(source, { resolveVmDeviceType: () => 'linux-vm' })
     const compiled = compileTopologyDocument(document)

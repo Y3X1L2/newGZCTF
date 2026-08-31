@@ -7,8 +7,7 @@ public enum TeamLabDeploymentNodeKind : byte
 {
     Create = 0,
     GuestReady = 1,
-    Bootstrap = 2,
-    Health = 3
+    Health = 2
 }
 
 public sealed record TeamLabDeploymentNode(string AssetKey, TeamLabDeploymentNodeKind Kind)
@@ -40,19 +39,16 @@ public sealed class TeamLabDependencyGraph
             Add(new TeamLabDeploymentNode(asset.Key, TeamLabDeploymentNodeKind.Create));
             if (asset.Kind == TeamLabAssetKind.Vm)
                 Add(new TeamLabDeploymentNode(asset.Key, TeamLabDeploymentNodeKind.GuestReady));
-            Add(new TeamLabDeploymentNode(asset.Key, TeamLabDeploymentNodeKind.Bootstrap));
             if (asset.HealthCheckKind is not null)
                 Add(new TeamLabDeploymentNode(asset.Key, TeamLabDeploymentNodeKind.Health));
-            Require(Key(asset.Key, TeamLabDeploymentNodeKind.Bootstrap),
-                Key(asset.Key, asset.Kind == TeamLabAssetKind.Vm
-                    ? TeamLabDeploymentNodeKind.GuestReady
-                    : TeamLabDeploymentNodeKind.Create));
             if (asset.Kind == TeamLabAssetKind.Vm)
                 Require(Key(asset.Key, TeamLabDeploymentNodeKind.GuestReady),
                     Key(asset.Key, TeamLabDeploymentNodeKind.Create));
             if (asset.HealthCheckKind is not null)
                 Require(Key(asset.Key, TeamLabDeploymentNodeKind.Health),
-                    Key(asset.Key, TeamLabDeploymentNodeKind.Bootstrap));
+                    Key(asset.Key, asset.Kind == TeamLabAssetKind.Vm
+                        ? TeamLabDeploymentNodeKind.GuestReady
+                        : TeamLabDeploymentNodeKind.Create));
         }
 
         foreach (var dependency in topology.Dependencies)
@@ -65,10 +61,14 @@ public sealed class TeamLabDependencyGraph
                 TeamLabDependencyCondition.GuestReady => dependencyAsset.Kind == TeamLabAssetKind.Vm
                     ? TeamLabDeploymentNodeKind.GuestReady
                     : TeamLabDeploymentNodeKind.Create,
-                TeamLabDependencyCondition.BootstrapCompleted => TeamLabDeploymentNodeKind.Bootstrap,
+                TeamLabDependencyCondition.BootstrapCompleted => dependencyAsset.Kind == TeamLabAssetKind.Vm
+                    ? TeamLabDeploymentNodeKind.GuestReady
+                    : TeamLabDeploymentNodeKind.Create,
                 TeamLabDependencyCondition.ServiceReady => dependencyAsset.HealthCheckKind is not null
                     ? TeamLabDeploymentNodeKind.Health
-                    : TeamLabDeploymentNodeKind.Bootstrap,
+                    : dependencyAsset.Kind == TeamLabAssetKind.Vm
+                        ? TeamLabDeploymentNodeKind.GuestReady
+                        : TeamLabDeploymentNodeKind.Create,
                 _ => throw new ArgumentOutOfRangeException(nameof(dependency.Condition))
             };
             Require(Key(dependency.AssetKey, TeamLabDeploymentNodeKind.Create),
@@ -129,8 +129,6 @@ public sealed class TeamLabDependencyGraph
             if (asset.Kind == TeamLabResourceKind.Vm &&
                 asset.ExecutionStage is >= TeamLabAssetExecutionStage.GuestReady and < TeamLabAssetExecutionStage.Failed)
                 completed.Add(Key(asset.TopologyKey, TeamLabDeploymentNodeKind.GuestReady));
-            if (asset.ExecutionStage is >= TeamLabAssetExecutionStage.BootstrapCompleted and < TeamLabAssetExecutionStage.Failed)
-                completed.Add(Key(asset.TopologyKey, TeamLabDeploymentNodeKind.Bootstrap));
             if (asset.ExecutionStage == TeamLabAssetExecutionStage.ServiceReady)
                 completed.Add(Key(asset.TopologyKey, TeamLabDeploymentNodeKind.Health));
         }

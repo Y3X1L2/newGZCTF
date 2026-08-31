@@ -201,6 +201,17 @@ public class DeploymentQueueService
             .ToListAsync(token);
         if (subjectTickets.Count > 0)
         {
+            if (request.Operation != RuntimeOperationKind.Create &&
+                subjectTickets.Any(ticket => ticket.Status == DeploymentQueueTicketStatus.Running))
+            {
+                // A control operation cannot safely supersede an in-flight create ticket.
+                // The unique active-subject index would otherwise reject the new ticket with a
+                // raw DbUpdateException after the next SaveChanges.
+                throw new RuntimeApiContractException(
+                    "runtime_operation_in_progress",
+                    "此运行时已有执行中的任务，请等待完成后再提交控制操作。",
+                    409);
+            }
             if (request.Operation == RuntimeOperationKind.Create)
             {
                 var subjectTicket = subjectTickets[0];

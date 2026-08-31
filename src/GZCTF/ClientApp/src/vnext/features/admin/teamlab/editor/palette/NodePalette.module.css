@@ -1,12 +1,30 @@
 .palette {
+  --palette-width: 64px;
+
   display: flex;
   z-index: 4;
-  width: 64px;
-  min-width: 64px;
+  width: var(--palette-width);
+  min-width: var(--palette-width);
   min-height: 0;
   flex-direction: column;
+  overflow-y: auto;
   border-right: 1px solid var(--yn-color-border);
   background: var(--yn-color-surface);
+  transition: width var(--yn-motion-normal) var(--yn-ease-standard);
+}
+
+/* Focus mode hides the inspector, so the library can afford inline labels. */
+.palette[data-expanded] {
+  --palette-width: 216px;
+}
+
+.groupTitle {
+  margin: 0 0 var(--yn-space-2);
+  color: var(--yn-color-muted);
+  font-size: var(--yn-font-xs);
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .groups {
@@ -98,7 +116,37 @@
   font-size: var(--yn-font-xs);
 }
 
+/*
+ * Expanded rows: the tooltip becomes the row's inline label rather than a hover
+ * overlay, so the same markup serves both states without duplicating content.
+ */
+.palette[data-expanded] .item {
+  display: grid;
+  width: 100%;
+  height: auto;
+  align-items: center;
+  gap: var(--yn-space-3);
+  grid-template-columns: 20px 1fr;
+  justify-items: start;
+  padding: var(--yn-space-2);
+  text-align: left;
+}
+
+.palette[data-expanded] .tooltip {
+  position: static;
+  max-width: none;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  opacity: 1;
+  transform: none;
+  transition: none;
+  visibility: visible;
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .palette,
   .item,
   .tooltip {
     transition: none;

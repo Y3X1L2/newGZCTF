@@ -132,7 +132,7 @@ public sealed class GuestControlContractTests
             GuestProtocolVersion = GuestControlProtocol.SchemaVersion
         };
 
-        Assert.True(BootstrapProfileCompatibilityService.IsCurrentManagedCertification(
+        Assert.True(ManagedVmCertificationPolicy.IsCurrent(
             certification, template));
         var externalCertification = new ImageTemplateCapabilityCertification
         {
@@ -144,7 +144,7 @@ public sealed class GuestControlContractTests
             PreparationContractVersion = certification.PreparationContractVersion,
             GuestProtocolVersion = certification.GuestProtocolVersion
         };
-        Assert.False(BootstrapProfileCompatibilityService.IsCurrentManagedCertification(
+        Assert.False(ManagedVmCertificationPolicy.IsCurrent(
             externalCertification, template));
         var legacyCertification = new ImageTemplateCapabilityCertification
         {
@@ -155,18 +155,8 @@ public sealed class GuestControlContractTests
             PreparationContractVersion = null,
             GuestProtocolVersion = null
         };
-        Assert.False(BootstrapProfileCompatibilityService.IsCurrentManagedCertification(
+        Assert.False(ManagedVmCertificationPolicy.IsCurrent(
             legacyCertification, template));
-    }
-
-    [Fact]
-    public void BootstrapExecutionContract_ProhibitsAttemptMutation()
-    {
-        var property = typeof(TeamLabBootstrapExecution).GetProperty(nameof(TeamLabBootstrapExecution.Attempt));
-
-        Assert.NotNull(property);
-        Assert.True(property!.SetMethod?.IsPrivate);
-        Assert.Equal(1, new TeamLabBootstrapExecution().Attempt);
     }
 
     private static GuestLifecycleEvent Event(

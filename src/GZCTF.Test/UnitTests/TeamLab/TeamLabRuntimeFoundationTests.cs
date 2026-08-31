@@ -90,7 +90,7 @@ public sealed class TeamLabRuntimeFoundationTests
         var payload = new TeamLabRuntimeOperationPayload(
             new CreateTeamLabRuntimeModel(
                 Guid.NewGuid(), "customer-1", null,
-                [new TeamLabRuntimeOverlayModel("entry", null, new System.Collections.Generic.Dictionary<string, string> { ["FLAG"] = "flag{secret}" })]),
+                [new TeamLabRuntimeOverlayModel("entry", new System.Collections.Generic.Dictionary<string, string> { ["FLAG"] = "flag{secret}" })]),
             null,
             null);
 

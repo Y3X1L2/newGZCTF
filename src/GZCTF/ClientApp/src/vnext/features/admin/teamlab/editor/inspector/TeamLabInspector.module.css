@@ -54,10 +54,8 @@
 }
 
 .sectionBody,
-.stack,
 .interfaceList,
-.keyValueEditor,
-.advancedBody {
+.keyValueEditor {
   display: grid;
   min-width: 0;
   gap: var(--yn-space-3);
@@ -227,57 +225,6 @@
 
 .toggle input:focus-visible + i {
   box-shadow: var(--yn-shadow-focus);
-}
-
-.advanced {
-  border-bottom: 1px solid var(--yn-color-border);
-}
-
-.advanced > summary {
-  display: flex;
-  align-items: center;
-  gap: var(--yn-space-2);
-  padding: var(--yn-space-4);
-  color: var(--yn-color-text-secondary);
-  cursor: pointer;
-  font-size: var(--yn-font-sm);
-  font-weight: 700;
-  list-style: none;
-}
-
-.advanced > summary::-webkit-details-marker {
-  display: none;
-}
-
-.advanced > summary svg {
-  transition: transform var(--yn-motion-fast) var(--yn-ease-standard);
-}
-
-.advanced[open] > summary svg {
-  transform: rotate(180deg);
-}
-
-.advancedBody {
-  border-top: 1px solid var(--yn-color-border);
-}
-
-.advancedBody > .section:last-child {
-  border-bottom: 0;
-}
-
-.advancedBody > .field,
-.advancedBody > .stack {
-  margin-inline: var(--yn-space-4);
-}
-
-.advancedBody > .field:first-child,
-.advancedBody > .stack:first-child {
-  margin-top: var(--yn-space-4);
-}
-
-.advancedBody > .field:last-child,
-.advancedBody > .stack:last-child {
-  margin-bottom: var(--yn-space-4);
 }
 
 .interfaceCard {

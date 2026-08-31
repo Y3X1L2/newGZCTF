@@ -351,17 +351,6 @@ public sealed class RuntimeFactReconciliationService(
                     item.TopologyKey,
                     item.RuntimeResourceId,
                     null)))
-            .Concat(assets.Where(item => !string.IsNullOrWhiteSpace(item.BootstrapDigest) &&
-                                         item.ExecutionStage is TeamLabAssetExecutionStage.BootstrapCompleted or
-                                             TeamLabAssetExecutionStage.ServiceReady)
-                .Select(item => new ExpectedTeamLabControlFact(
-                    item.WorkerNodeId!.Value,
-                    item.RuntimeId,
-                    item.Generation,
-                    "bootstrap-execution",
-                    item.TopologyKey,
-                    item.RuntimeResourceId,
-                    item.BootstrapDigest)))
             .Concat(captures.Select(item => new ExpectedTeamLabControlFact(
                 item.WorkerNodeId,
                 item.CaptureJob.RuntimeId,
@@ -1186,7 +1175,6 @@ public sealed class RuntimeFactReconciliationService(
         ["stage"] = "workload-recovery",
         ["decision"] = decision,
         ["assetKind"] = asset.Kind.ToString(),
-        ["stateless"] = asset.Stateless,
         ["reason"] = reason
     };
 

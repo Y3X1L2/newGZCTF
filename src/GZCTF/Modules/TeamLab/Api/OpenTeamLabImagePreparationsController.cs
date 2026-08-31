@@ -54,6 +54,23 @@ public sealed class OpenTeamLabImagePreparationsController(
         return Accepted($"/api/open/v1/operations/{operation.Id}", operation);
     }
 
+    [HttpDelete("releases/{releaseId:guid}")]
+    [OpenApiOperation("释放镜像准备引用", "幂等释放发布版本的镜像预分发引用，停止继续保留准备状态。")]
+    [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabRuntimesWrite)]
+    [ProducesResponseType(typeof(ApiOperationModel), StatusCodes.Status202Accepted)]
+    public async Task<IActionResult> Release(
+        Guid releaseId,
+        [FromHeader(Name = "Idempotency-Key"), Required] string idempotencyKey,
+        CancellationToken cancellationToken)
+    {
+        var actor = Actor();
+        var scopeId = await RequireScopeAsync(releaseId, true, cancellationToken);
+        var result = await operations.SubmitReleasePreparationReleaseAsync(
+            actor.TokenId, actor.UserId, idempotencyKey, releaseId, scopeId, cancellationToken);
+        var operation = ApiOperationModel.FromEntity(result.Operation);
+        return Accepted($"/api/open/v1/operations/{operation.Id}", operation);
+    }
+
     private async Task<Guid> RequireScopeAsync(
         Guid releaseId,
         bool writable,

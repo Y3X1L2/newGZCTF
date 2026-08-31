@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Text.Json;
 using GZCTF.Agent.Models;
 using GZCTF.Agent.Services.TeamLab;
+using GZCTF.TeamLab.Contracts.Execution;
 
 namespace GZCTF.Agent.Services.Observation;
 
@@ -32,8 +33,36 @@ public sealed class ObservationPointRegistry(ILogger<ObservationPointRegistry> l
         CancellationToken cancellationToken)
     {
         var registrations = Resolve(request);
-        ReplaceGeneration(request.RuntimeId, request.Generation, registrations);
-        var path = RegistryPath(request.RuntimeId, request.Generation);
+        await PersistGenerationAsync(request.RuntimeId, request.Generation, registrations, cancellationToken);
+    }
+
+    public async Task ApplyExecutionPlanAsync(
+        TeamLabExecutionPlanV2 plan,
+        CancellationToken cancellationToken)
+    {
+        var registrations = plan.ObservationPoints
+            .Where(point => point.ObservationPointId != Guid.Empty &&
+                            !string.IsNullOrWhiteSpace(point.InterfaceToken))
+            .Select(point => new ObservationPointRegistration(
+                plan.RuntimeId,
+                plan.Generation,
+                point.ObservationPointId,
+                point.AssetKey,
+                3,
+                point.InterfaceToken))
+            .DistinctBy(item => (item.PublicId, item.InterfaceName))
+            .ToArray();
+        await PersistGenerationAsync(plan.RuntimeId, plan.Generation, registrations, cancellationToken);
+    }
+
+    async Task PersistGenerationAsync(
+        int runtimeId,
+        int generation,
+        IReadOnlyCollection<ObservationPointRegistration> registrations,
+        CancellationToken cancellationToken)
+    {
+        ReplaceGeneration(runtimeId, generation, registrations);
+        var path = RegistryPath(runtimeId, generation);
         var directory = Path.GetDirectoryName(path)!;
         Directory.CreateDirectory(directory);
         var temporary = $"{path}.{Guid.NewGuid():N}.tmp";

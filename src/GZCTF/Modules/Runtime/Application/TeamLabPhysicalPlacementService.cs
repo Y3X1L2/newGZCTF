@@ -147,8 +147,7 @@ public sealed class TeamLabPhysicalPlacementService(
                     assets.Any(item => item.Kind == TeamLabResourceKind.Docker &&
                                       item.EndpointObservation == TeamLabEndpointObservationMode.Required),
                     assets.Any(item => item.Kind == TeamLabResourceKind.Vm &&
-                                      (!string.IsNullOrWhiteSpace(item.BootstrapDigest) ||
-                                       item.EndpointObservation != TeamLabEndpointObservationMode.Disabled)));
+                                      item.EndpointObservation != TeamLabEndpointObservationMode.Disabled));
             })
             .OrderByDescending(item => item.IsEntry)
             .ThenByDescending(item => edges.Where(edge => edge.Touches(item.Key)).Sum(edge => edge.Weight))
@@ -220,22 +219,19 @@ public sealed class TeamLabPhysicalPlacementService(
         var entryNetwork = generationNetworks.SingleOrDefault(item => item.IsEntry)
             ?? throw new InvalidOperationException("TeamLab runtime has no entry network.");
         runtime.EntryShardId = entryNetwork.ShardId;
-        if (!runtime.IsScenarioBuild)
+        if (runtime.PublicUdpMapping is null)
         {
-            if (runtime.PublicUdpMapping is null)
-            {
-                var (mapping, error) = await AllocateUdpMappingAsync(
-                    runtime, entryNetwork.WorkerNodeId!.Value, token);
-                if (error is not null)
-                    return FleetCapacityReservationResult.Failed(error);
-                runtime.PublicUdpMapping = mapping;
-            }
-            else
-            {
-                var error = await RefreshUdpMappingAsync(runtime, entryNetwork.WorkerNodeId!.Value, token);
-                if (error is not null)
-                    return FleetCapacityReservationResult.Failed(error);
-            }
+            var (mapping, error) = await AllocateUdpMappingAsync(
+                runtime, entryNetwork.WorkerNodeId!.Value, token);
+            if (error is not null)
+                return FleetCapacityReservationResult.Failed(error);
+            runtime.PublicUdpMapping = mapping;
+        }
+        else
+        {
+            var error = await RefreshUdpMappingAsync(runtime, entryNetwork.WorkerNodeId!.Value, token);
+            if (error is not null)
+                return FleetCapacityReservationResult.Failed(error);
         }
 
         var reservations = generationAssets.GroupBy(item => item.WorkerNodeId!.Value)

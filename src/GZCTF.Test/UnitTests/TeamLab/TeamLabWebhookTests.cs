@@ -163,7 +163,6 @@ public sealed class TeamLabWebhookTests
             Generation = 1,
             TopologyReleaseId = Guid.NewGuid(),
             Status = TeamLabRuntimeStatus.Running,
-            IsScenarioBuild = false,
             IsOpenToPlayers = false,
             CreatedById = Guid.NewGuid()
         };
@@ -217,7 +216,6 @@ public sealed class TeamLabWebhookTests
             Generation = 1,
             TopologyReleaseId = Guid.NewGuid(),
             Status = TeamLabRuntimeStatus.Running,
-            IsScenarioBuild = false,
             IsOpenToPlayers = false,
             CreatedById = Guid.NewGuid()
         };

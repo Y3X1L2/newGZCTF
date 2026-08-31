@@ -94,6 +94,22 @@ public sealed class TeamLabScopeAuthorizationService(AppDbContext context)
         return await RequireResourceScopeAsync(scopeId, apiTokenId, administrator, writable, cancellationToken);
     }
 
+    public async Task RequireLinkPolicyScopeAsync(
+        Guid policyId,
+        Guid? apiTokenId,
+        bool administrator,
+        bool writable,
+        CancellationToken cancellationToken)
+    {
+        var runtimeId = await context.TeamLabLinkPolicies.AsNoTracking()
+            .Where(item => item.PublicId == policyId)
+            .Select(item => item.Runtime.PublicId)
+            .SingleOrDefaultAsync(cancellationToken);
+        if (runtimeId == Guid.Empty)
+            throw new TeamLabApiContractException("link_policy_not_found", "未找到链路策略", 404);
+        await RequireRuntimeScopeAsync(runtimeId, apiTokenId, administrator, writable, cancellationToken);
+    }
+
     public async Task<IReadOnlySet<Guid>> ListReadableScopesAsync(
         Guid? apiTokenId,
         bool administrator,
@@ -102,10 +118,14 @@ public sealed class TeamLabScopeAuthorizationService(AppDbContext context)
         if (administrator)
             return (await context.TeamLabControlScopes.AsNoTracking()
                 .Select(scope => scope.Id).ToArrayAsync(cancellationToken)).ToHashSet();
-        return (await context.ApiTokenResourceGrants.AsNoTracking()
+        var grants = await context.ApiTokenResourceGrants.AsNoTracking()
                 .Where(grant => grant.TokenId == apiTokenId && grant.ResourceType == "teamlab-scope")
                 .Select(grant => grant.ResourceId)
-                .ToArrayAsync(cancellationToken))
+                .ToArrayAsync(cancellationToken);
+        if (grants.Contains("*", StringComparer.Ordinal))
+            return (await context.TeamLabControlScopes.AsNoTracking()
+                .Select(scope => scope.Id).ToArrayAsync(cancellationToken)).ToHashSet();
+        return grants
             .Select(value => Guid.TryParse(value, out var id) ? id : Guid.Empty)
             .Where(id => id != Guid.Empty)
             .ToHashSet();

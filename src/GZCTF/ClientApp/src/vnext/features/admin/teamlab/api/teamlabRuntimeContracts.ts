@@ -88,7 +88,6 @@ export interface TeamLabRuntimeConstraints {
 
 export interface TeamLabRuntimeOverlay {
   assetKey: string
-  environment: Readonly<Record<string, string>> | null
   secrets: Readonly<Record<string, string>> | null
 }
 

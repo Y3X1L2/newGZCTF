@@ -20,7 +20,6 @@ export function ReleasePlanPanel({ plan }: { plan: TeamLabPlan }) {
       </div>
       <dl className={styles.planFacts}>
         <div><dt>托管基础设施</dt><dd>{plan.managedInfrastructureCount}</dd></div>
-        <div><dt>Bootstrap 制品</dt><dd>{plan.bootstrapArtifactCount}</dd></div>
         <div><dt>观测点估算</dt><dd>{plan.observationPointEstimate}</dd></div>
         <div><dt>所需能力</dt><dd>{plan.requiredCapabilities.length ? plan.requiredCapabilities.join(' · ') : '无额外能力'}</dd></div>
       </dl>

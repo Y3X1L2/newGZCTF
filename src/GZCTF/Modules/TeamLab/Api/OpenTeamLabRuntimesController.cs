@@ -1,12 +1,17 @@
 using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
 using GZCTF.Infrastructure.Api;
+using GZCTF.Infrastructure.Telemetry;
+using GZCTF.Models.Data;
 using GZCTF.Modules.Audit.Contracts;
+using GZCTF.Modules.Audit.Domain;
 using GZCTF.Modules.Identity.Application;
+using GZCTF.Modules.TeamLab.Domain;
 using GZCTF.Modules.TeamLab.Application;
 using GZCTF.Modules.TeamLab.Contracts;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using NSwag.Annotations;
 
 namespace GZCTF.Modules.TeamLab.Api;
@@ -28,7 +33,8 @@ public sealed class OpenTeamLabRuntimesController(
     TeamLabRuntimeOperationApplicationService operations,
     TeamLabScopeAuthorizationService scopeAuthorization,
     TeamLabRuntimeLifecycleGuard lifecycleGuard,
-    TeamLabAccessGrantService access) : ControllerBase
+    TeamLabAccessGrantService access,
+    TeamLabProtocolEventService protocolEvents) : ControllerBase
 {
     [HttpPost]
     [OpenApiOperation("创建运行时", "为单个队伍或自动化属主提交已发布拓扑版本的部署任务。")]
@@ -133,6 +139,22 @@ public sealed class OpenTeamLabRuntimesController(
             await RequireRuntimeScopeAsync(runtimeId, true, cancellationToken), cancellationToken);
         var operation = ApiOperationModel.FromEntity(result.Operation);
         return Accepted($"/api/open/v1/operations/{operation.Id}", operation);
+    }
+
+    [HttpPost("{runtimeId:guid}/protocol-events")]
+    [OpenApiOperation("上报协议事件", "设备/传感器把去敏的协议事件（如点位读写、握手、告警）写入运行时事件流，可用 events?stage=protocol 查询。")]
+    [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabRuntimesWrite)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<IActionResult> ReportProtocolEvent(
+        Guid runtimeId,
+        TeamLabProtocolEventReportModel model,
+        CancellationToken cancellationToken)
+    {
+        var actor = Actor();
+        await scopeAuthorization.RequireRuntimeScopeAsync(
+            runtimeId, actor.TokenId, IsAdministrator(), writable: true, cancellationToken);
+        var result = await protocolEvents.RecordAsync(runtimeId, model, cancellationToken);
+        return Ok(new { runtimeId = result.RuntimeId, stage = result.Stage, type = result.Type, source = result.Source });
     }
 
     [HttpGet("{runtimeId:guid}/events")]

@@ -17,11 +17,11 @@ describe('FieldHelpButton', () => {
       y: 740,
       toJSON: () => ({}),
     })
-    render(<FieldHelpButton fieldKey="stateless" />)
+    render(<FieldHelpButton fieldKey="endpointObservation" />)
 
-    fireEvent.click(screen.getByRole('button', { name: '关于无状态资产' }))
+    fireEvent.click(screen.getByRole('button', { name: '关于端点观测' }))
 
     await waitFor(() => expect(screen.getByRole('tooltip')).toHaveAttribute('data-placement', 'above'))
-    expect(screen.getByRole('tooltip')).toHaveTextContent('无状态资产')
+    expect(screen.getByRole('tooltip')).toHaveTextContent('端点观测')
   })
 })

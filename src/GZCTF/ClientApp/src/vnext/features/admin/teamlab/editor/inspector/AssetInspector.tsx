@@ -1,20 +1,10 @@
-import { Box, Container, Monitor, MonitorCog, Settings2 } from 'lucide-react'
+import { Container, Monitor, MonitorCog } from 'lucide-react'
 import { updateTopologyNode } from '../../model/topologyCommands'
 import type { TopologyAssetNode } from '../../model/topologyDocument'
 import type { TeamLabImageOption } from '../../api'
-import { BootstrapEditor } from './BootstrapEditor'
+import { CapabilityBindingEditor } from './CapabilityBindingEditor'
 import { HealthCheckEditor } from './HealthCheckEditor'
-import {
-  AdvancedSection,
-  InspectorSection,
-  KeyValueEditor,
-  NumberInput,
-  PositionEditor,
-  TextAreaInput,
-  TextInput,
-  ToggleInput,
-  SelectInput,
-} from './InspectorFields'
+import { InspectorSection, SelectInput, TextInput } from './InspectorFields'
 import type { InspectorDocumentProps } from './inspectorTypes'
 import { NetworkInterfacesEditor } from './NetworkInterfacesEditor'
 import { ObservationEditor } from './ObservationEditor'
@@ -57,66 +47,11 @@ export function AssetInspector({
       </InspectorSection>
 
       <ResourceRequirementsEditor onChange={(resources) => update({ resources })} readOnly={readOnly} resources={node.resources} />
+      <CapabilityBindingEditor node={node} onAssetChange={update} readOnly={readOnly} />
       <NetworkInterfacesEditor document={document} nodeKey={node.key} onDocumentChange={onDocumentChange} readOnly={readOnly} />
       <HealthCheckEditor healthCheck={node.healthCheck} onChange={(healthCheck) => update({ healthCheck })} readOnly={readOnly} />
 
-      <AdvancedSection summary="高级配置">
-        <InspectorSection icon={<Settings2 aria-hidden="true" size={16} />} title="运行参数">
-          <ToggleInput checked={node.routingEnabled} disabled={readOnly} label="启用资产路由" onChange={(routingEnabled) => update({ routingEnabled })} />
-          <ToggleInput
-            checked={node.exposePort !== null}
-            disabled={readOnly}
-            label="暴露服务端口"
-            onChange={(enabled) => update({ exposePort: enabled ? 80 : null })}
-          />
-          {node.exposePort !== null ? (
-            <NumberInput disabled={readOnly} label="服务端口" max={65535} min={1} onChange={(exposePort) => update({ exposePort })} value={node.exposePort} />
-          ) : null}
-          <ToggleInput
-            checked={node.environment !== null}
-            disabled={readOnly}
-            description="这里只保存普通环境变量，敏感值由运行时安全参数提供。"
-            label="环境变量"
-            onChange={(enabled) => update({ environment: enabled ? {} : null })}
-          />
-          {node.environment !== null ? (
-            <KeyValueEditor label="环境变量" onChange={(environment) => update({ environment })} readOnly={readOnly} values={node.environment} />
-          ) : null}
-          <TextAreaInput
-            disabled={readOnly}
-            hint="留空表示使用镜像默认启动命令"
-            label="启动命令"
-            onChange={(startCommand) => update({ startCommand: startCommand.trim() ? startCommand : null })}
-            value={node.startCommand ?? ''}
-          />
-          <ToggleInput
-            checked={node.stateless}
-            description="仅用于可随时重建、无需保留本地数据的服务。"
-            disabled={readOnly}
-            help="stateless"
-            label="无状态资产"
-            onChange={(stateless) => update({ stateless })}
-          />
-          <ToggleInput checked={node.bakeAtPublish} disabled={readOnly} help="bakeAtPublish" label="发布时预制" onChange={(bakeAtPublish) => update({ bakeAtPublish })} />
-          <TextInput
-            disabled={readOnly}
-            hint="可选；用于固定不可变镜像版本"
-            help="imageDigest"
-            label="镜像 Digest"
-            onChange={(imageDigest) => update({ imageDigest: imageDigest.trim() ? imageDigest : null })}
-            value={node.imageDigest ?? ''}
-          />
-        </InspectorSection>
-
-        <BootstrapEditor assetType={node.type} bootstrap={node.bootstrap} onChange={(bootstrap) => update({ bootstrap })} readOnly={readOnly} />
-        <ObservationEditor endpointMode={node.endpointObservation} onEndpointModeChange={(endpointObservation) => update({ endpointObservation })} readOnly={readOnly} />
-
-        <InspectorSection icon={<Box aria-hidden="true" size={16} />} title="编辑器元数据">
-          <NumberInput disabled={readOnly} label="排序" min={0} onChange={(orderIndex) => update({ orderIndex })} value={node.orderIndex} />
-          <TextInput disabled label="资产标识" value={node.key} />
-          <PositionEditor onChange={(position) => update({ position })} position={node.position} readOnly={readOnly} />
-        </InspectorSection>
-      </AdvancedSection>
+      <ObservationEditor endpointMode={node.endpointObservation} onEndpointModeChange={(endpointObservation) => update({ endpointObservation })} readOnly={readOnly} />
     </>
   )
 }

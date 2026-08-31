@@ -1,7 +1,7 @@
 import { Network } from 'lucide-react'
 import { updateTopologyNode } from '../../model/topologyCommands'
 import type { TopologySwitchNode } from '../../model/topologyDocument'
-import { AdvancedSection, InspectorSection, NumberInput, PositionEditor, TextInput, ToggleInput } from './InspectorFields'
+import { InspectorSection, NumberInput, TextInput, ToggleInput } from './InspectorFields'
 import type { InspectorDocumentProps } from './inspectorTypes'
 
 export function SwitchInspector({
@@ -21,13 +21,13 @@ export function SwitchInspector({
         <TextInput disabled={readOnly} label="地址池 CIDR" onChange={(poolCidr) => update({ poolCidr })} value={node.poolCidr} />
         <NumberInput disabled={readOnly} label="运行时前缀" max={32} min={1} onChange={(runtimePrefixLength) => update({ runtimePrefixLength })} value={node.runtimePrefixLength} />
         <ToggleInput checked={node.isEntry} disabled={readOnly} label="入口网段" onChange={(isEntry) => update({ isEntry })} />
+        <ToggleInput
+          checked={node.position.collapsed}
+          disabled={readOnly}
+          label="折叠此网段"
+          onChange={(collapsed) => update({ position: { ...node.position, collapsed } })}
+        />
       </InspectorSection>
-      <AdvancedSection summary="高级配置">
-        <TextInput disabled={readOnly} label="网络标识" onChange={(networkKey) => update({ networkKey })} value={node.networkKey} />
-        <NumberInput disabled={readOnly} label="排序" min={0} onChange={(orderIndex) => update({ orderIndex })} value={node.orderIndex} />
-        <TextInput disabled label="节点标识" value={node.key} />
-        <PositionEditor onChange={(position) => update({ position })} position={node.position} readOnly={readOnly} />
-      </AdvancedSection>
     </>
   )
 }

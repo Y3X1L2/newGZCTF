@@ -44,9 +44,7 @@ public static class TeamLabAssetPlanner
                 item.ImageTemplateId,
                 new TeamLabAssetResourceModel(item.CpuUnits, item.MemoryMiB, item.StorageMiB),
                 item.Interfaces.Select(iface => new TeamLabPlanInterfaceModel(
-                    iface.Key, iface.NetworkKey, iface.HostOffset, iface.Primary)).ToArray(),
-                item.RoutingEnabled,
-                item.ImageDigest))
+                    iface.Key, iface.NetworkKey, iface.HostOffset, iface.Primary)).ToArray()))
             .ToArray();
 
         var rawGroups = BuildGroups(definition);
@@ -106,10 +104,6 @@ public static class TeamLabAssetPlanner
             crossShardConnections,
             capabilities
         }, new JsonSerializerOptions(JsonSerializerDefaults.Web));
-        var bootstrapArtifacts = definition.Assets.Where(item => item.Bootstrap is not null)
-            .Select(item => (item.Bootstrap!.ProfileId, item.Bootstrap.Version))
-            .Distinct()
-            .Count();
         var infrastructureFragments = shards.Sum(shard => shard.InfrastructureKeys?.Count ?? 0);
         var observationPointEstimate = networks.Length + infrastructureFragments + shards.Length +
                                        definition.Assets.Count(item =>
@@ -125,7 +119,6 @@ public static class TeamLabAssetPlanner
             [],
             $"sha256:{Convert.ToHexStringLower(SHA256.HashData(hashPayload))}",
             definition.Infrastructure.Count,
-            bootstrapArtifacts,
             observationPointEstimate);
     }
 

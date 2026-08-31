@@ -1,217 +1,269 @@
 import { describe, expect, it } from 'vitest'
+import {
+  DIAGRAM_TARGET_ASPECT,
+  MAX_REGION_HEIGHT,
+  MAX_REGION_WIDTH,
+  nodeSize,
+} from '../../model/topologyGeometry'
+import type { TopologyDocument, TopologyPosition } from '../../model/topologyDocument'
 import { createLargeTopologyFixture } from '../../testing/largeTopologyFixture'
 import { autoLayoutTopology } from './autoLayoutTopology'
+import { buildTopologyGraph } from './topologyGraph'
 
-function regionContains(
-  region: { x: number; y: number; width?: number | null; height?: number | null },
-  node: { position: { x: number; y: number; width?: number | null; height?: number | null } }
-) {
-  const width = node.position.width ?? 208
-  const height = node.position.height ?? 102
-  return node.position.x >= region.x &&
-    node.position.y >= region.y &&
-    node.position.x + width <= region.x + (region.width ?? 0) &&
-    node.position.y + height <= region.y + (region.height ?? 0)
+interface Box {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+const nodeBox = (document: TopologyDocument, key: string): Box => {
+  const node = document.nodes[key]
+  return { x: node.position.x, y: node.position.y, ...nodeSize(node) }
+}
+
+const regionBox = (layout: TopologyPosition): Box => ({
+  x: layout.x,
+  y: layout.y,
+  width: layout.width ?? 0,
+  height: layout.height ?? 0,
+})
+
+const overlaps = (a: Box, b: Box) =>
+  a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y
+
+const contains = (outer: Box, inner: Box) =>
+  inner.x >= outer.x &&
+  inner.y >= outer.y &&
+  inner.x + inner.width <= outer.x + outer.width &&
+  inner.y + inner.height <= outer.y + outer.height
+
+const centreOf = (box: Box) => ({ x: box.x + box.width / 2, y: box.y + box.height / 2 })
+
+function diagramBounds(document: TopologyDocument) {
+  const boxes = [
+    ...Object.keys(document.nodes).map((key) => nodeBox(document, key)),
+    ...Object.values(document.networkLayouts).map(regionBox),
+  ]
+  const minX = Math.min(...boxes.map((box) => box.x))
+  const minY = Math.min(...boxes.map((box) => box.y))
+  const maxX = Math.max(...boxes.map((box) => box.x + box.width))
+  const maxY = Math.max(...boxes.map((box) => box.y + box.height))
+  return { width: maxX - minX, height: maxY - minY }
 }
 
 describe('autoLayoutTopology', () => {
-  it('produces a deterministic non-overlapping layout for the large topology limit', () => {
+  it('is deterministic and leaves connections untouched', () => {
     const source = createLargeTopologyFixture()
     const first = autoLayoutTopology(source)
     const second = autoLayoutTopology(source)
-    const nodes = Object.values(first.nodes)
-
     expect(first.nodes).toEqual(second.nodes)
+    expect(first.networkLayouts).toEqual(second.networkLayouts)
     expect(first.connections).toBe(source.connections)
-    expect(new Set(nodes.map((node) => `${node.position.x}:${node.position.y}`)).size).toBe(nodes.length)
+  })
 
-    for (let left = 0; left < nodes.length; left += 1) {
-      for (let right = left + 1; right < nodes.length; right += 1) {
-        const a = nodes[left].position
-        const b = nodes[right].position
-        const overlaps = a.x < b.x + 208 && a.x + 208 > b.x && a.y < b.y + 102 && a.y + 102 > b.y
-        expect(overlaps, `${nodes[left].key} overlaps ${nodes[right].key}`).toBe(false)
+  it('produces a non-overlapping layout for the large topology limit', () => {
+    const layout = autoLayoutTopology(createLargeTopologyFixture())
+    const keys = Object.keys(layout.nodes)
+
+    for (let left = 0; left < keys.length; left += 1) {
+      for (let right = left + 1; right < keys.length; right += 1) {
+        const a = nodeBox(layout, keys[left])
+        const b = nodeBox(layout, keys[right])
+        expect(overlaps(a, b), `${keys[left]} overlaps ${keys[right]}`).toBe(false)
       }
     }
 
-    const regions = Object.entries(first.networkLayouts)
+    const regions = Object.entries(layout.networkLayouts)
     for (let left = 0; left < regions.length; left += 1) {
       for (let right = left + 1; right < regions.length; right += 1) {
         const [leftKey, a] = regions[left]
         const [rightKey, b] = regions[right]
-        const overlaps = a.x < b.x + (b.width ?? 0) && a.x + (a.width ?? 0) > b.x && a.y < b.y + (b.height ?? 0) && a.y + (a.height ?? 0) > b.y
-        expect(overlaps, `${leftKey} overlaps ${rightKey}`).toBe(false)
+        expect(overlaps(regionBox(a), regionBox(b)), `${leftKey} overlaps ${rightKey}`).toBe(false)
       }
     }
   })
 
-  it('packs disconnected network regions into a compact group instead of one rank per network', () => {
-    const source = createLargeTopologyFixture()
-    const withoutRoutes = {
-      ...source,
-      connections: Object.fromEntries(Object.entries(source.connections).filter(([, connection]) => connection.type !== 'route')),
-    }
-    const layout = autoLayoutTopology(withoutRoutes)
-    const entry = layout.networkLayouts['network-00']
-    const firstIsolated = layout.networkLayouts['network-01']
-    const secondIsolated = layout.networkLayouts['network-02']
-    expect(firstIsolated.x).toBeGreaterThan(entry.x + (entry.width ?? 0))
-    expect(secondIsolated.x).toBeGreaterThan(firstIsolated.x)
-    expect(Math.abs(secondIsolated.y - firstIsolated.y)).toBeLessThanOrEqual(4)
-  })
+  it('keeps every region member inside its own region box', () => {
+    const layout = autoLayoutTopology(createLargeTopologyFixture())
+    // The graph index is the authority on region ownership, so the assertion
+    // uses it rather than re-deriving membership rules inside the test.
+    const graph = buildTopologyGraph(layout)
 
-  it('places an entry network at the centre and direct route branches around it', () => {
-    const source = createLargeTopologyFixture()
-    const branched = {
-      ...source,
-      connections: {
-        ...source.connections,
-        'route-entry-04': {
-          type: 'route' as const,
-          key: 'route-entry-04',
-          fromSwitchKey: 'switch-00',
-          toSwitchKey: 'switch-04',
-          viaNodeKey: 'router-01',
-          direction: 'bidirectional' as const,
-        },
-        'route-entry-08': {
-          type: 'route' as const,
-          key: 'route-entry-08',
-          fromSwitchKey: 'switch-00',
-          toSwitchKey: 'switch-08',
-          viaNodeKey: 'router-02',
-          direction: 'bidirectional' as const,
-        },
-      },
-    }
-    const layout = autoLayoutTopology(branched)
-    const centre = layout.networkLayouts['network-00']
-    const centreX = centre.x + (centre.width ?? 0) / 2
-    const centreY = centre.y + (centre.height ?? 0) / 2
-    expect(Math.abs(centreX)).toBeLessThanOrEqual(4)
-    expect(Math.abs(centreY)).toBeLessThanOrEqual(4)
-
-    const directions = ['network-01', 'network-04', 'network-08'].map((networkKey) => {
+    let checked = 0
+    for (const [networkKey, memberKeys] of graph.membersByNetwork) {
       const region = layout.networkLayouts[networkKey]
-      return `${Math.sign(region.x + (region.width ?? 0) / 2 - centreX)}:${Math.sign(region.y + (region.height ?? 0) / 2 - centreY)}`
-    })
-    expect(new Set(directions).size).toBe(3)
-
-    const chainCentres = ['network-01', 'network-02', 'network-03'].map((networkKey) => {
-      const region = layout.networkLayouts[networkKey]
-      return {
-        x: region.x + (region.width ?? 0) / 2,
-        y: region.y + (region.height ?? 0) / 2,
+      expect(region, `${networkKey} has no region layout`).toBeDefined()
+      for (const key of memberKeys) {
+        expect(contains(regionBox(region), nodeBox(layout, key)), `${key} escapes ${networkKey}`).toBe(true)
+        checked += 1
       }
-    })
-    // A routed chain keeps increasing its distance from the entry, while later
-    // hops fan out from the root ray so a deep branch is not rendered as one
-    // unreadable vertical or horizontal line.
-    expect(chainCentres[0].y).toBeLessThan(centreY)
-    expect(Math.hypot(chainCentres[1].x - centreX, chainCentres[1].y - centreY))
-      .toBeGreaterThan(Math.hypot(chainCentres[0].x - centreX, chainCentres[0].y - centreY))
-    expect(Math.hypot(chainCentres[2].x - centreX, chainCentres[2].y - centreY))
-      .toBeGreaterThan(Math.hypot(chainCentres[1].x - centreX, chainCentres[1].y - centreY))
-    expect(chainCentres.some((centre) => Math.abs(centre.x - centreX) > 4)).toBe(true)
+    }
+    expect(checked).toBeGreaterThan(0)
   })
 
-  it('rebuilds oversized manual regions into a compact overview when requested', () => {
+  it('never emits a node-level width or height, so region sizes cannot leak onto nodes', () => {
     const source = createLargeTopologyFixture()
-    const oversized = {
+    const seeded: TopologyDocument = {
       ...source,
-      networkLayouts: Object.fromEntries(
-        Object.entries(source.networkLayouts).map(([key, layout]) => [
+      nodes: Object.fromEntries(
+        Object.entries(source.nodes).map(([key, node]) => [
           key,
-          { ...layout, width: 4000, height: 3000 },
+          { ...node, position: { ...node.position, width: 900, height: 1400 } },
         ])
       ),
     }
-
-    const layout = autoLayoutTopology(oversized)
-
-    for (const region of Object.values(layout.networkLayouts)) {
-      expect(region.width).toBeLessThan(4000)
-      expect(region.height).toBeLessThan(3000)
+    const layout = autoLayoutTopology(seeded)
+    for (const node of Object.values(layout.nodes)) {
+      expect(node.position.width, `${node.key} kept a node width`).toBeNull()
+      expect(node.position.height, `${node.key} kept a node height`).toBeNull()
     }
   })
 
-  it('sizes a region from its actual members without overlap or clipping', () => {
+  it('rebuilds an oversized manual region from its members instead of compounding it', () => {
     const source = createLargeTopologyFixture()
-    const layout = autoLayoutTopology({
-      ...source,
-      nodes: {
-        ...source.nodes,
-        'asset-000': { ...source.nodes['asset-000'], position: { ...source.nodes['asset-000'].position, width: 400, height: 240 } },
-        'asset-001': { ...source.nodes['asset-001'], position: { ...source.nodes['asset-001'].position, width: 360, height: 180 } },
-      },
-    })
-    const region = layout.networkLayouts['network-00']
-    const first = layout.nodes['asset-000']
-    const second = layout.nodes['asset-001']
-    expect(regionContains(region, first)).toBe(true)
-    expect(regionContains(region, second)).toBe(true)
-    const firstWidth = first.position.width ?? 208
-    expect(first.position.x + firstWidth).toBeLessThanOrEqual(second.position.x)
+    const first = autoLayoutTopology(source)
+    const oversized: TopologyDocument = {
+      ...first,
+      networkLayouts: Object.fromEntries(
+        Object.entries(first.networkLayouts).map(([key, layout]) => [key, { ...layout, width: 3800, height: 2600 }])
+      ),
+    }
+    const rebuilt = autoLayoutTopology(oversized)
+
+    // Idempotence: re-running over its own output must not change any size.
+    expect(rebuilt.networkLayouts).toEqual(first.networkLayouts)
+    for (const region of Object.values(rebuilt.networkLayouts)) {
+      expect(region.width).toBeLessThan(MAX_REGION_WIDTH)
+      expect(region.height).toBeLessThan(MAX_REGION_HEIGHT)
+    }
   })
 
-  it('keeps a finite grid for incomplete drafts without a switch', () => {
+  it('stays stable across repeated layout rounds', () => {
+    let document = autoLayoutTopology(createLargeTopologyFixture())
+    const signature = JSON.stringify(document.networkLayouts)
+    for (let round = 0; round < 5; round += 1) document = autoLayoutTopology(document)
+    expect(JSON.stringify(document.networkLayouts)).toBe(signature)
+  })
+
+  it('orders routing depth into left-to-right columns', () => {
     const source = createLargeTopologyFixture()
-    const layout = autoLayoutTopology({
+    const layout = autoLayoutTopology(source)
+    const entry = centreOf(regionBox(layout.networkLayouts['network-00']))
+    // network-01..03 are one, two and three route hops from the entry network.
+    // Depth advances along +x so every link travels the way its handles point
+    // (target on a card's left edge, source on its right).
+    const hops = ['network-01', 'network-02', 'network-03'].map((key) =>
+      centreOf(regionBox(layout.networkLayouts[key]))
+    )
+    expect(hops[0].x).toBeGreaterThan(entry.x)
+    expect(hops[1].x).toBeGreaterThan(hops[0].x)
+    expect(hops[2].x).toBeGreaterThan(hops[1].x)
+  })
+
+  it('packs a wide topology toward the target diagram aspect', () => {
+    const layout = autoLayoutTopology(createLargeTopologyFixture())
+    const bounds = diagramBounds(layout)
+    const aspect = bounds.width / bounds.height
+    // A single strip (aspect > 6) or a single column (aspect < 0.5) is what the
+    // previous ring layout produced; the tier packer must stay in between.
+    expect(aspect).toBeGreaterThan(DIAGRAM_TARGET_ASPECT / 4)
+    expect(aspect).toBeLessThan(DIAGRAM_TARGET_ASPECT * 4)
+  })
+
+  it('keeps a small two-network scene compact and readable', () => {
+    const source = createLargeTopologyFixture()
+    const smallKeys = ['switch-00', 'switch-01', 'asset-000', 'asset-004', 'router-00']
+    const small: TopologyDocument = {
+      ...source,
+      nodes: Object.fromEntries(Object.entries(source.nodes).filter(([key]) => smallKeys.includes(key))),
+      connections: Object.fromEntries(
+        Object.entries(source.connections).filter(([, connection]) => {
+          if (connection.type === 'membership')
+            return smallKeys.includes(connection.nodeKey) && smallKeys.includes(connection.switchKey)
+          if (connection.type === 'route')
+            return smallKeys.includes(connection.fromSwitchKey) && smallKeys.includes(connection.toSwitchKey)
+          return false
+        })
+      ),
+      networkLayouts: {},
+    }
+    const layout = autoLayoutTopology(small)
+    const bounds = diagramBounds(layout)
+    // The old ring layout produced 304x792 (aspect 0.38) for this shape, which
+    // wasted almost the whole width of a 16:9 canvas after fitView.
+    expect(bounds.width / bounds.height).toBeGreaterThan(0.6)
+    expect(Object.keys(layout.networkLayouts)).toHaveLength(2)
+  })
+
+  it('groups disconnected networks after the routed topology', () => {
+    const source = createLargeTopologyFixture()
+    const withoutRoutes: TopologyDocument = {
+      ...source,
+      connections: Object.fromEntries(
+        Object.entries(source.connections).filter(([, connection]) => connection.type !== 'route')
+      ),
+      networkLayouts: {},
+    }
+    const layout = autoLayoutTopology(withoutRoutes)
+    const entry = regionBox(layout.networkLayouts['network-00'])
+    const isolated = regionBox(layout.networkLayouts['network-05'])
+    // Isolated networks share the trailing block and must not overlap the entry.
+    expect(overlaps(entry, isolated)).toBe(false)
+    expect(Object.keys(layout.networkLayouts)).toHaveLength(32)
+  })
+
+  it('places border routers clear of every region box', () => {
+    const layout = autoLayoutTopology(createLargeTopologyFixture())
+    const routers = Object.values(layout.nodes).filter((node) => node.type === 'router')
+    expect(routers.length).toBeGreaterThan(0)
+    for (const router of routers) {
+      for (const [networkKey, region] of Object.entries(layout.networkLayouts)) {
+        expect(
+          overlaps(nodeBox(layout, router.key), regionBox(region)),
+          `${router.key} overlaps region ${networkKey}`
+        ).toBe(false)
+      }
+    }
+  })
+
+  it('lays out an incomplete draft without a switch on a finite grid', () => {
+    const source = createLargeTopologyFixture()
+    const draft: TopologyDocument = {
       ...source,
       nodes: {
         'asset-000': source.nodes['asset-000'],
         'asset-001': source.nodes['asset-001'],
+        'asset-002': source.nodes['asset-002'],
       },
       connections: {},
       networkLayouts: {},
-    })
-    for (const node of Object.values(layout.nodes)) {
-      expect(Number.isFinite(node.position.x)).toBe(true)
-      expect(Number.isFinite(node.position.y)).toBe(true)
+    }
+    const layout = autoLayoutTopology(draft)
+    const keys = Object.keys(layout.nodes)
+    for (const key of keys) {
+      expect(Number.isFinite(layout.nodes[key].position.x)).toBe(true)
+      expect(Number.isFinite(layout.nodes[key].position.y)).toBe(true)
+    }
+    for (let left = 0; left < keys.length; left += 1) {
+      for (let right = left + 1; right < keys.length; right += 1) {
+        expect(overlaps(nodeBox(layout, keys[left]), nodeBox(layout, keys[right]))).toBe(false)
+      }
     }
   })
 
-  it('uses actual node dimensions in incomplete-draft grids', () => {
+  it('returns a single-node document unchanged', () => {
     const source = createLargeTopologyFixture()
-    const layout = autoLayoutTopology({
-      ...source,
-      nodes: {
-        'asset-000': { ...source.nodes['asset-000'], position: { ...source.nodes['asset-000'].position, width: 400, height: 240 } },
-        'asset-001': source.nodes['asset-001'],
-      },
-      connections: {},
-      networkLayouts: {},
-    })
-    const first = layout.nodes['asset-000'].position
-    const second = layout.nodes['asset-001'].position
-    expect(first.x + (first.width ?? 208) <= second.x || second.x + (second.width ?? 208) <= first.x ||
-      first.y + (first.height ?? 102) <= second.y || second.y + (second.height ?? 102) <= first.y).toBe(true)
+    const single: TopologyDocument = { ...source, nodes: { 'asset-000': source.nodes['asset-000'] } }
+    expect(autoLayoutTopology(single)).toBe(single)
   })
 
-  it('keeps multi-network assets at the centre of all attached regions', () => {
+  it('lays out a very large topology fast enough to stay interactive', () => {
     const source = createLargeTopologyFixture()
-    const layout = autoLayoutTopology({
-      ...source,
-      connections: {
-        ...source.connections,
-        'asset-000-network-01': {
-          type: 'membership', key: 'asset-000-network-01', nodeKey: 'asset-000', switchKey: 'switch-01',
-          hostOffset: 40, primary: false, orderIndex: 1,
-        },
-        'asset-000-network-02': {
-          type: 'membership', key: 'asset-000-network-02', nodeKey: 'asset-000', switchKey: 'switch-02',
-          hostOffset: 40, primary: false, orderIndex: 2,
-        },
-      },
-    })
-    const regions = ['network-00', 'network-01', 'network-02'].map((key) => layout.networkLayouts[key])
-    const centre = regions.reduce((total, region) => ({
-      x: total.x + region.x + (region.width ?? 0) / 2,
-      y: total.y + region.y + (region.height ?? 0) / 2,
-    }), { x: 0, y: 0 })
-    const asset = layout.nodes['asset-000'].position
-    const assetCentre = { x: asset.x + (asset.width ?? 208) / 2, y: asset.y + (asset.height ?? 102) / 2 }
-    expect(Math.abs(assetCentre.x - centre.x / regions.length)).toBeLessThanOrEqual(256)
-    expect(Math.abs(assetCentre.y - centre.y / regions.length)).toBeLessThanOrEqual(256)
+    const started = performance.now()
+    autoLayoutTopology(source)
+    // The previous full-scan overlap search took seconds on this scale and froze
+    // the main thread; the spatial index keeps it well inside one frame budget.
+    expect(performance.now() - started).toBeLessThan(400)
   })
 })

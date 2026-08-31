@@ -21,7 +21,8 @@ public sealed class TeamLabTrafficApplicationService(
     IDistributedLeaseProvider locks,
     ITeamLabTrafficIngestor ingestor,
     TeamLabEventRecorder eventRecorder,
-    ILogger<TeamLabTrafficApplicationService> logger)
+    ILogger<TeamLabTrafficApplicationService> logger,
+    IServiceScopeFactory? scopeFactory = null)
 {
     public Task StartCollectorsAsync(TeamLabRuntime runtime, CancellationToken cancellationToken) =>
         Task.CompletedTask;
@@ -36,6 +37,7 @@ public sealed class TeamLabTrafficApplicationService(
         string? queryText,
         string? protocol,
         string? networkKey,
+        int? port,
         CancellationToken cancellationToken)
     {
         var runtime = await LoadRuntimeAsync(runtimePublicId, cancellationToken);
@@ -48,6 +50,8 @@ public sealed class TeamLabTrafficApplicationService(
             var term = queryText.Trim();
             query = query.Where(item => item.SourceIp.Contains(term) || item.DestinationIp.Contains(term));
         }
+        if (port is { } portValue)
+            query = query.Where(item => item.SourcePort == portValue || item.DestinationPort == portValue);
         if (!string.IsNullOrWhiteSpace(protocol))
         {
             var normalizedProtocol = protocol.Trim().ToUpperInvariant();
@@ -315,12 +319,23 @@ public sealed class TeamLabTrafficApplicationService(
         foreach (var (segment, result) in results)
             ApplyNodeResult(segment, result, now);
         var failed = results.Where(item => !item.Result.Success).ToArray();
-        if (failed.Length > 0)
+        var started = results.Where(item => item.Result.Success).ToArray();
+        if (started.Length == 0)
         {
-            await StopStartedSegmentsAsync(runtime, job, results, cancellationToken);
+            // Nothing could start: the whole capture is failed and there is nothing to keep alive.
             job.Status = TeamLabTrafficCaptureStatus.Failed;
             job.CompletedAt = now;
             job.LastError = $"{failed.Length} 个抓包分片启动失败";
+        }
+        else if (failed.Length > 0)
+        {
+            // Partial start: a subset of observation points is not registered on the target
+            // node (e.g. V1-only taps on a V2 runtime). Keep the successfully-started
+            // segments capturing instead of stopping them as well, so the topology that is
+            // actually present is still captured.
+            job.Status = TeamLabTrafficCaptureStatus.Running;
+            job.StartedAt ??= now;
+            job.LastError = null;
         }
         else
         {
@@ -332,14 +347,14 @@ public sealed class TeamLabTrafficApplicationService(
         eventRecorder.Record(
             runtime,
             "capture",
-            failed.Length == 0 ? TeamLabEventLevel.Success : TeamLabEventLevel.Error,
-            failed.Length == 0
-                ? OperationalEventCodes.TeamLab.CaptureStarted
-                : OperationalEventCodes.TeamLab.CaptureFailed,
-            failed.Length == 0 ? OperationalEventOutcome.Started : OperationalEventOutcome.Failed,
-            failed.Length == 0 ? "Traffic capture started." : "Traffic capture failed to start.",
-            failed.Length == 0 ? null : CaptureError(failed[0].Segment.WorkerNodeId),
-            failed.Length == 0 ? null : failed[0].Segment.WorkerNodeId,
+            started.Length == 0 ? TeamLabEventLevel.Error : TeamLabEventLevel.Success,
+            started.Length == 0
+                ? OperationalEventCodes.TeamLab.CaptureFailed
+                : OperationalEventCodes.TeamLab.CaptureStarted,
+            started.Length == 0 ? OperationalEventOutcome.Failed : OperationalEventOutcome.Started,
+            started.Length == 0 ? "Traffic capture failed to start." : "Traffic capture started.",
+            started.Length == 0 ? CaptureError(failed[0].Segment.WorkerNodeId) : null,
+            started.Length == 0 ? failed[0].Segment.WorkerNodeId : null,
             new Dictionary<string, object?>
             {
                 ["captureScope"] = job.Scope,
@@ -347,9 +362,9 @@ public sealed class TeamLabTrafficApplicationService(
                 ["captureWorkerCount"] = job.Segments.Select(item => item.WorkerNodeId).Distinct().Count()
             });
         PlatformTelemetry.RecordTeamLabCapture(
-            "start", job.Scope, failed.Length == 0 ? "success" : "failure");
+            "start", job.Scope, started.Length == 0 ? "failure" : "success");
         await context.SaveChangesAsync(cancellationToken);
-        if (failed.Length > 0)
+        if (started.Length == 0)
             throw new TeamLabApiContractException(
                 "operation_failed", "流量抓包无法启动", 500);
         return ToModel(job);
@@ -376,6 +391,33 @@ public sealed class TeamLabTrafficApplicationService(
             changed = true;
         }
         return changed;
+    }
+
+    public async Task<TeamLabCapturePageModel> ListCapturesAsync(
+        Guid runtimePublicId,
+        string? after,
+        int limit,
+        CancellationToken cancellationToken)
+    {
+        var runtime = await LoadRuntimeAsync(runtimePublicId, cancellationToken);
+        var take = Math.Clamp(limit, 1, 100);
+        var cursor = DecodeIntCursor(after);
+        var query = context.TeamLabTrafficCaptureJobs
+            .Include(item => item.Segments)
+            .ThenInclude(item => item.ObservationPoint.Network)
+            .Include(item => item.Segments)
+            .ThenInclude(item => item.ObservationPoint.InfrastructureFragment).ThenInclude(item => item.Infrastructure)
+            .Include(item => item.Segments)
+            .ThenInclude(item => item.ObservationPoint.Asset)
+            .Where(item => item.RuntimeId == runtime.Id);
+        if (cursor is not null)
+            query = query.Where(item => item.Id < cursor);
+        var rows = await query.OrderByDescending(item => item.Id)
+            .Take(take + 1)
+            .ToArrayAsync(cancellationToken);
+        return new TeamLabCapturePageModel(
+            rows.Take(take).Select(ToModel).ToArray(),
+            rows.Length > take ? EncodeIntCursor(rows[take - 1].Id) : null);
     }
 
     public async Task<TeamLabCaptureModel> GetCaptureAsync(
@@ -501,6 +543,11 @@ public sealed class TeamLabTrafficApplicationService(
                 item.UploadedAt)).ToArray());
     }
 
+    private const int ObservationReadPageSize = 2_000;
+    private const int ObservationMaxRecordsPerCollection = 16_000;
+    private const int ObservationCollectorConcurrency = 4;
+    private static readonly TimeSpan ObservationCollectionBudget = TimeSpan.FromSeconds(8);
+
     internal async Task CollectAvailableFlowsAsync(CancellationToken cancellationToken)
     {
         var sourceRows = await context.TeamLabObservationPoints.AsNoTracking()
@@ -516,17 +563,41 @@ public sealed class TeamLabTrafficApplicationService(
             .Select(item => new ObservationSource(item.RuntimeId, item.Generation, item.WorkerNodeId))
             .ToArray();
 
-        foreach (var source in sources)
+        if (scopeFactory is null)
         {
-            try
+            foreach (var source in sources)
             {
-                await CollectNodeObservationsAsync(source, cancellationToken);
+                try
+                {
+                    await CollectNodeObservationsAsync(source, cancellationToken);
+                }
+                catch (TimeoutException)
+                {
+                    // Another application instance owns this node collector lease.
+                }
             }
-            catch (TimeoutException)
-            {
-                // Another application instance owns this node collector lease.
-            }
+            return;
         }
+
+        await Parallel.ForEachAsync(sources,
+            new ParallelOptions
+            {
+                CancellationToken = cancellationToken,
+                MaxDegreeOfParallelism = ObservationCollectorConcurrency
+            },
+            async (source, token) =>
+            {
+                try
+                {
+                    await using var scope = scopeFactory.CreateAsyncScope();
+                    await scope.ServiceProvider.GetRequiredService<TeamLabTrafficApplicationService>()
+                        .CollectNodeObservationsAsync(source, token);
+                }
+                catch (TimeoutException)
+                {
+                    // Another application instance owns this node collector lease.
+                }
+            });
     }
 
     private async Task CollectNodeObservationsAsync(
@@ -572,14 +643,28 @@ public sealed class TeamLabTrafficApplicationService(
             context.TeamLabObservationCursors.Add(cursor);
             await context.SaveChangesAsync(cancellationToken);
         }
-
+        var pointsByPublicId = points.ToDictionary(item => item.PublicId);
+        var endpointPoints = points
+            .Where(item => item.Kind == TeamLabObservationPointKind.WorkloadEndpoint)
+            .GroupBy(item => item.TopologyKey, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
+        var networkCidrs = await context.TeamLabRuntimeNetworks.AsNoTracking()
+            .Where(item => item.RuntimeId == source.RuntimeId && item.Generation == source.Generation)
+            .Select(item => new { item.Id, item.Cidr })
+            .ToDictionaryAsync(item => item.Id, item => IPNetwork.Parse(item.Cidr), cancellationToken);
+        var deadline = DateTimeOffset.UtcNow + ObservationCollectionBudget;
+        var collected = 0;
+        while (collected < ObservationMaxRecordsPerCollection && DateTimeOffset.UtcNow < deadline)
+        {
+        var previousSequence = cursor.LastSequence;
         var result = await executor.ReadObservationsAsync(
             source.WorkerNodeId,
             source.RuntimeId,
             source.Generation,
             cursor.LastSequence,
+            cursor.LastSequence,
             null,
-            500,
+            ObservationReadPageSize,
             cancellationToken);
         var now = DateTimeOffset.UtcNow;
         var hadError = points.Any(item => !string.IsNullOrWhiteSpace(item.LastError));
@@ -612,19 +697,13 @@ public sealed class TeamLabTrafficApplicationService(
             return;
         }
 
-        var pointsByPublicId = points.ToDictionary(item => item.PublicId);
-        var endpointPoints = points
-            .Where(item => item.Kind == TeamLabObservationPointKind.WorkloadEndpoint)
-            .GroupBy(item => item.TopologyKey, StringComparer.Ordinal)
-            .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
-        var networkCidrs = await context.TeamLabRuntimeNetworks.AsNoTracking()
-            .Where(item => item.RuntimeId == source.RuntimeId && item.Generation == source.Generation)
-            .Select(item => new { item.Id, item.Cidr })
-            .ToDictionaryAsync(item => item.Id, item => IPNetwork.Parse(item.Cidr), cancellationToken);
+        var durableRecords = result.Records
+            .Where(item => item.Sequence <= result.PersistedThroughSequence)
+            .ToArray();
         var prepared = PrepareObservationBatch(
-            result.Records,
+            durableRecords,
             cursor.LastSequence,
-            result.NextSequence,
+            Math.Min(result.NextSequence, result.PersistedThroughSequence),
             item => !string.IsNullOrWhiteSpace(item.SourceIp) &&
                     !string.IsNullOrWhiteSpace(item.DestinationIp) &&
                     ResolveObservationPoint(item, pointsByPublicId, endpointPoints, networkCidrs) is { } point
@@ -646,7 +725,14 @@ public sealed class TeamLabTrafficApplicationService(
 
         var previousDropped = cursor.DroppedCount;
         var previousRejected = cursor.SensorRejectedCount;
-        cursor.LastSequence = Math.Max(cursor.LastSequence, prepared.NextSequence);
+        // The Agent may discard only data already accepted by the durable Redis stream.
+        // An unavailable stream deliberately leaves the cursor unchanged so its local spool
+        // can retry after the control plane has recovered.
+        var accepted = enqueue.DroppedCount == 0 && !enqueue.Deferred &&
+                       enqueue.AcceptedCount == envelopes.Length;
+        cursor.LastSequence = accepted
+            ? Math.Max(cursor.LastSequence, prepared.NextSequence)
+            : cursor.LastSequence;
         cursor.DroppedCount = Math.Max(cursor.DroppedCount, result.DroppedCount) + enqueue.DroppedCount;
         cursor.SensorRejectedCount = Math.Max(cursor.SensorRejectedCount, result.Health.SensorRejectedCount);
         cursor.LastSensorErrorCode = result.Health.LastSensorErrorCode;
@@ -717,6 +803,11 @@ public sealed class TeamLabTrafficApplicationService(
             PlatformTelemetry.RecordTeamLabObservation("recovered", "mixed");
         }
         await context.SaveChangesAsync(cancellationToken);
+        collected += prepared.Envelopes.Length;
+        if (!accepted || prepared.BlockedByUnresolvedRecord ||
+            result.Records.Count < ObservationReadPageSize || cursor.LastSequence <= previousSequence)
+            return;
+        }
     }
 
     private static IReadOnlyDictionary<string, object?> ObservationDetail(
@@ -848,6 +939,15 @@ public sealed class TeamLabTrafficApplicationService(
                 .ToArray();
         }
 
+        // The V2 execution data plane only registers workload-endpoint observation taps
+        // (the deterministic host-side veth of each asset) on the agents. Legacy
+        // network/router/fabric observation rows carry V1-only interface tokens that do not
+        // exist on a V2 runtime, so those segments report "Observation point is not
+        // registered" from the node. Starting the capture is tolerant to that: segments that
+        // cannot start are recorded as failed while the remaining (endpoint) segments keep
+        // running and capturing, instead of the whole capture failing and stopping the ones
+        // that did start. This keeps NetworkBridge captures valid where they exist while
+        // making V2 runtimes (endpoint-only taps) fully capturable.
         selected = selected.DistinctBy(item => item.Id)
             .OrderBy(item => item.WorkerNodeId)
             .ThenBy(item => item.Kind)
@@ -1102,6 +1202,23 @@ public sealed class TeamLabTrafficApplicationService(
             true,
             WorkerNodeId: workerNodeId,
             Operation: "teamlab.capture");
+
+    private static int? DecodeIntCursor(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        try
+        {
+            var decoded = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(value));
+            return int.TryParse(decoded, out var id) && id > 0 ? id : throw new FormatException();
+        }
+        catch (FormatException)
+        {
+            throw new TeamLabApiContractException("capture_cursor_invalid", "抓包 cursor 无效", 400);
+        }
+    }
+
+    private static string EncodeIntCursor(int id) =>
+        Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(id.ToString()));
 
     private static TimeCursor? DecodeCursor(string? cursor)
     {

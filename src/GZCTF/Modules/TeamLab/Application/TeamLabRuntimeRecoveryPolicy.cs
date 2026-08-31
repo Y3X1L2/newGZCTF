@@ -39,21 +39,8 @@ public sealed class TeamLabRuntimeRecoveryPolicy(IOptions<TeamLabNetworkConfig> 
         bool hasActiveReservation,
         DateTimeOffset now)
     {
-        var resume = CanResumeExistingGeneration(runtime, ticket, now);
-        if (!resume.Allowed) return resume;
-        if (!_config.EnableStatelessAutoRecovery)
-            return TeamLabRecoveryDecision.Deny("Automatic workload rebuild is disabled by default.");
-        if (!inventoryProvesMissing)
-            return TeamLabRecoveryDecision.Deny("Worker inventory did not prove the workload is absent.");
-        if (!asset.Stateless)
-            return TeamLabRecoveryDecision.Deny("Stateful TeamLab assets are never rebuilt automatically.");
-        if (string.IsNullOrWhiteSpace(asset.ImageDigest))
-            return TeamLabRecoveryDecision.Deny("Immutable image digest is missing.");
-        if (asset.BootstrapDigest is not null && string.IsNullOrWhiteSpace(asset.BootstrapDigest))
-            return TeamLabRecoveryDecision.Deny("Immutable bootstrap digest is missing.");
-        if (!hasActiveReservation)
-            return TeamLabRecoveryDecision.Deny("No active replacement capacity reservation exists.");
-        return TeamLabRecoveryDecision.Allow("Stateless asset can be rebuilt from immutable inputs.");
+        return TeamLabRecoveryDecision.Deny(
+            "缺失资产必须由管理员显式重建，平台不会自动替换运行中的场景资产。");
     }
 
     public TeamLabRecoveryDecision CanReplayInfrastructure(

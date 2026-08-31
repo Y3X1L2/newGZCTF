@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -887,6 +887,40 @@ public class TeamLabCommandBuilderTests
     }
 
     [Fact]
+    public async Task ConfigureHostWireGuardAsync_BringsInterfaceUpBeforeAddingRoutes()
+    {
+        var service = CreateService(enable: false);
+
+        var result = await service.ConfigureWireGuardAsync(new TeamLabWireGuardRequest(
+            RuntimeId: 196,
+            Generation: 1,
+            NamespaceName: "unused",
+            InterfaceName: "tlwg196",
+            ListenPort: 32001,
+            AddressCidr: "10.1.1.254/32",
+            InterfacePrivateKey: ValidInterfacePrivateKey,
+            PeerPublicKey: ValidPeerPublicKey,
+            PeerClientAddress: "10.1.1.2/32",
+            PeerAllowedIps: "10.1.1.0/24",
+            PlayerAllowedCidrs: ["10.1.1.0/24"],
+            PlayerBlockedCidrs: [],
+            DryRun: true,
+            ExecutionModel: GZCTF.TeamLab.Contracts.TeamLabExecutionModel.V2,
+            RuntimePublicId: Guid.Parse("019fa217-fcee-73af-bb45-1bc400000001"),
+            NetworkKey: "network",
+            PortKey: "player-gateway",
+            MacAddress: "02:42:ac:10:00:02"), CancellationToken.None);
+
+        Assert.True(result.Success);
+        var upIndex = Array.FindIndex(result.Commands, command => command.Contains("ip link set tlwg196 up", StringComparison.Ordinal));
+        var routeIndex = Array.FindIndex(result.Commands, command => command.Contains("ip route replace 10.1.1.0/24 dev tlwg196", StringComparison.Ordinal));
+        Assert.True(upIndex >= 0, "Expected a WireGuard interface up command.");
+        Assert.True(routeIndex > upIndex, "WireGuard routes must be added after the interface is up.");
+        Assert.DoesNotContain(result.Commands,
+            command => command.Contains("ip link set tlwg198 address", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task ConfigureWireGuardAsync_RejectsPlaceholderKeys()
     {
         var service = CreateService(enable: false);
@@ -1268,6 +1302,14 @@ public class TeamLabCommandBuilderTests
     }
 
     [Fact]
+    public void TeamLabCommandRunner_NormalizesShellCommandLineEndings()
+    {
+        var startInfo = TeamLabCommandRunner.CreateStartInfo("first\r\nsecond\r\n", redirectStandardInput: false);
+
+        Assert.Equal(["-c", "first\nsecond\n"], startInfo.ArgumentList);
+    }
+
+    [Fact]
     public void TeamLabCommandRunner_ReportsExitCodeWhenCommandHasNoOutput()
     {
         Assert.Equal(
@@ -1310,6 +1352,7 @@ public class TeamLabCommandBuilderTests
         var pcap = new TeamLabPcapService(
             registry,
             uploader,
+            commandExecutor,
             options,
             NullLogger<TeamLabPcapService>.Instance);
         var guest = new VmGuestAgentService(NullLogger<VmGuestAgentService>.Instance);
@@ -1329,6 +1372,7 @@ public class TeamLabCommandBuilderTests
             pcap,
             bootstrap,
             new TeamLabRuntimeGenerationStore(options),
+            new TeamLabOvsAttachmentProvider(new OvsdbJsonRpcClient(), options),
             new AgentResourceLock(),
             NullLogger<TeamLabNetworkService>.Instance);
     }

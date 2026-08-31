@@ -27,6 +27,7 @@ public sealed class TeamLabAdminRuntimeController(
     TeamLabCaptureArtifactStore captureArtifacts,
     TeamLabAuthorizationService authorization,
     TeamLabAccessGrantService access,
+    TeamLabLinkPolicyService linkPolicies,
     ILogRepository logs,
     UserManager<UserInfo> users) : ControllerBase
 {
@@ -140,6 +141,39 @@ public sealed class TeamLabAdminRuntimeController(
             cancellationToken);
     }
 
+    [HttpGet("{runtimeId:guid}/link-policies")]
+    public async Task<TeamLabLinkPolicyPageModel> LinkPolicies(
+        Guid runtimeId,
+        [FromQuery] string? status = null,
+        [FromQuery] int limit = 50,
+        [FromQuery] string? after = null,
+        CancellationToken cancellationToken = default)
+    {
+        await RequireAsync(runtimeId, TeamLabRuntimePermission.LifecycleManage, cancellationToken);
+        return await linkPolicies.ListByRuntimeAsync(runtimeId, status, after, limit, cancellationToken);
+    }
+
+    [HttpPost("{runtimeId:guid}/link-policies")]
+    public async Task<IActionResult> ApplyLinkPolicy(
+        Guid runtimeId,
+        ApplyTeamLabLinkPolicyModel model,
+        CancellationToken cancellationToken)
+    {
+        await RequireAsync(runtimeId, TeamLabRuntimePermission.LifecycleManage, cancellationToken);
+        var policy = await linkPolicies.ApplyAsync(model, cancellationToken);
+        return Created($"/api/admin/teamlab/runtimes/{runtimeId:D}/link-policies", policy);
+    }
+
+    [HttpPost("{runtimeId:guid}/link-policies/{policyId:guid}/recover")]
+    public async Task<TeamLabLinkPolicyModel> RecoverLinkPolicy(
+        Guid runtimeId,
+        Guid policyId,
+        CancellationToken cancellationToken)
+    {
+        await RequireAsync(runtimeId, TeamLabRuntimePermission.LifecycleManage, cancellationToken);
+        return await linkPolicies.RecoverAsync(policyId, cancellationToken);
+    }
+
     [HttpGet("{runtimeId:guid}/traffic/flows")]
     public async Task<TeamLabTrafficFlowPageModel> Flows(
         Guid runtimeId,
@@ -148,10 +182,12 @@ public sealed class TeamLabAdminRuntimeController(
         [FromQuery] string? query = null,
         [FromQuery] string? protocol = null,
         [FromQuery] string? networkKey = null,
+        [FromQuery] int? port = null,
         CancellationToken cancellationToken = default)
     {
         await RequireAsync(runtimeId, TeamLabRuntimePermission.MetadataRead, cancellationToken);
-        return await traffic.GetFlowsAsync(runtimeId, after, Math.Clamp(limit, 1, 200), query, protocol, networkKey, cancellationToken);
+        return await traffic.GetFlowsAsync(runtimeId, after, Math.Clamp(limit, 1, 200), query, protocol, networkKey,
+            port, cancellationToken);
     }
 
     [HttpGet("{runtimeId:guid}/traffic/paths")]
@@ -239,6 +275,17 @@ public sealed class TeamLabAdminRuntimeController(
         await RequireAsync(runtimeId, TeamLabRuntimePermission.LifecycleManage, cancellationToken);
         var capture = await traffic.StartCaptureAsync(runtimeId, model, cancellationToken);
         return Created($"/api/admin/teamlab/runtimes/{runtimeId:D}/captures/{capture.Id:D}", capture);
+    }
+
+    [HttpGet("{runtimeId:guid}/captures")]
+    public async Task<TeamLabCapturePageModel> ListCaptures(
+        Guid runtimeId,
+        [FromQuery] string? after = null,
+        [FromQuery, Range(1, 100)] int limit = 50,
+        CancellationToken cancellationToken = default)
+    {
+        await RequireAsync(runtimeId, TeamLabRuntimePermission.MetadataRead, cancellationToken);
+        return await traffic.ListCapturesAsync(runtimeId, after, limit, cancellationToken);
     }
 
     [HttpGet("{runtimeId:guid}/captures/{captureId:guid}")]

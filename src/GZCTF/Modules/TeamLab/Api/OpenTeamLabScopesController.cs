@@ -45,4 +45,16 @@ public sealed class OpenTeamLabScopesController(
         var scope = await scopes.CreateAsync(model, User.IsInRole(nameof(Role.Admin)), cancellationToken);
         return Created($"/api/open/v1/teamlab/scopes/{scope.Id:D}", scope);
     }
+
+    [HttpPost("{scopeId:guid}/archive")]
+    [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabTopologiesWrite)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [OpenApiOperation("Archive a TeamLab control scope", "Archived scopes stay readable and drainable but accept no new writes. Idempotent; only administrator-created tokens may archive.")]
+    public async Task<IActionResult> Archive(Guid scopeId, CancellationToken cancellationToken)
+    {
+        if (!User.IsInRole(nameof(Role.Admin)))
+            throw new TeamLabApiContractException("insufficient_permission", "仅管理员可以归档 TeamLab 控制范围", 403);
+        await scopes.ArchiveAsync(scopeId, cancellationToken);
+        return NoContent();
+    }
 }

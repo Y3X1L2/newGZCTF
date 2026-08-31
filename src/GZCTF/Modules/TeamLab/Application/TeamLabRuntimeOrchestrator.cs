@@ -11,6 +11,7 @@ using GZCTF.Modules.Audit.Contracts;
 using GZCTF.Modules.Audit.Domain;
 using GZCTF.Services.TeamLab;
 using GZCTF.Modules.Runtime.Application;
+using GZCTF.TeamLab.Contracts;
 using Microsoft.EntityFrameworkCore;
 
 namespace GZCTF.Modules.TeamLab.Application;
@@ -28,7 +29,6 @@ public sealed class TeamLabRuntimeOrchestrator(
     ITeamLabArtifactDistribution imageDistribution,
     TeamLabPhysicalPlacementService placement,
     TeamLabRuntimeLifecycleGuard lifecycleGuard,
-    TeamLabBootstrapSecretValidator secretValidator,
     TeamLabRuntimeOperationPayloadProtector operationPayloads,
     ITeamLabRuntimeQueue queue,
     IPublicUdpGatewayProvider publicGateway,
@@ -45,7 +45,6 @@ public sealed class TeamLabRuntimeOrchestrator(
         string? subjectDisplayName,
         CancellationToken cancellationToken)
     {
-        await secretValidator.RequireAsync(command.ReleaseId, command.Overlays, cancellationToken);
         TeamLabQueueTicketResult? admittedTicket = null;
         var result = await planner.CreateAsync(
             command,
@@ -212,8 +211,10 @@ public sealed class TeamLabRuntimeOrchestrator(
                     "runtime_asset_kind_unsupported", "运行时包含不受支持的 workload 资源类型", 409)
             };
             var result = pause
-                ? await nodes.PauseAssetAsync(nodeId, assetKind, asset.RuntimeResourceId, runtime.Generation, cancellationToken)
-                : await nodes.ResumeAssetAsync(nodeId, assetKind, asset.RuntimeResourceId, runtime.Generation, cancellationToken);
+                ? await nodes.PauseAssetAsync(nodeId, assetKind, asset.RuntimeResourceId, runtime.Generation,
+                    runtime.ExecutionModel, cancellationToken)
+                : await nodes.ResumeAssetAsync(nodeId, assetKind, asset.RuntimeResourceId, runtime.Generation,
+                    runtime.ExecutionModel, cancellationToken);
             if (!result.Success)
                 return await FailLifecycleAsync(
                     runtime,
@@ -306,7 +307,6 @@ public sealed class TeamLabRuntimeOrchestrator(
         if (runtime.Status is TeamLabRuntimeStatus.Destroying or TeamLabRuntimeStatus.CleanupPending)
             throw new TeamLabApiContractException("runtime_cleanup_pending", "运行时清理已在进行中", 409);
         var releaseId = command.ReleaseId ?? runtime.TopologyReleaseId;
-        await secretValidator.RequireAsync(releaseId, command.Overlays, cancellationToken);
         var dockerSlots = runtime.Assets.Count(item => item.Generation == runtime.Generation && item.Kind == TeamLabResourceKind.Docker);
         var vmSlots = runtime.Assets.Count(item => item.Generation == runtime.Generation && item.Kind == TeamLabResourceKind.Vm);
         var payload = new TeamLabRuntimeOperationPayload(null, runtime.PublicId, command);
@@ -510,13 +510,6 @@ public sealed class TeamLabRuntimeOrchestrator(
             return TeamLabNodeResult.Failed("Runtime has no topology release.");
         var release = await context.TeamLabTopologyReleases.AsNoTracking().SingleAsync(item => item.Id == releaseId, cancellationToken);
         var definition = TeamLabReleaseCodec.DecodeExecution(release.SchemaVersion, release.CanonicalJson);
-        if (!runtime.IsScenarioBuild)
-            definition = definition with
-            {
-                Assets = definition.Assets.Select(asset => asset.BakeAtPublish
-                    ? asset with { Bootstrap = null, BakeAtPublish = false }
-                    : asset).ToArray()
-            };
         var envelope = runtime.SecretEnvelopes.SingleOrDefault(item => item.Generation == runtime.Generation);
         IReadOnlyDictionary<string, TeamLabRuntimeOverlayModel> overlayValues;
         try
@@ -612,11 +605,15 @@ public sealed class TeamLabRuntimeOrchestrator(
 
             using var rollbackDeadline = new CancellationTokenSource(TimeSpan.FromMinutes(2));
             var cleaned = await cleanup.CleanupAsync(runtime, rollbackDeadline.Token);
+            var identityConflict = exception is TeamLabRuntimeIdentityConflictException;
             return await FailAsync(runtime,
                 cleaned.Success ? exception.Message : $"{exception.Message}; cleanup: {cleaned.Message}",
                 rollbackDeadline.Token,
                 cleanupPending: !cleaned.Success,
-                error: error);
+                error: error,
+                failureStatus: identityConflict && cleaned.Success
+                    ? TeamLabRuntimeStatus.Destroyed
+                    : TeamLabRuntimeStatus.Failed);
         }
     }
 
@@ -757,9 +754,10 @@ public sealed class TeamLabRuntimeOrchestrator(
         bool cleanupPending = false,
         string eventCode = OperationalEventCodes.TeamLab.DeployFailed,
         string stage = "deploy",
-        OperationalError? error = null)
+        OperationalError? error = null,
+        TeamLabRuntimeStatus failureStatus = TeamLabRuntimeStatus.Failed)
     {
-        runtime.Status = cleanupPending ? TeamLabRuntimeStatus.CleanupPending : TeamLabRuntimeStatus.Failed;
+        runtime.Status = cleanupPending ? TeamLabRuntimeStatus.CleanupPending : failureStatus;
         runtime.IsOpenToPlayers = false;
         runtime.LastError = Trim(message);
         runtime.UpdatedAt = DateTimeOffset.UtcNow;
@@ -792,7 +790,6 @@ public sealed class TeamLabRuntimeOrchestrator(
         .Include(item => item.Assets)
         .Include(item => item.Infrastructure).ThenInclude(item => item.Fragments)
         .Include(item => item.DependencyStates)
-        .Include(item => item.BootstrapExecutions)
         .Include(item => item.ObservationPoints)
         .Include(item => item.FabricLinkLeases)
         .Include(item => item.AccessGrants)

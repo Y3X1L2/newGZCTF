@@ -7,11 +7,14 @@ using System.Diagnostics;
 using GZCTF.Infrastructure.Telemetry;
 using GZCTF.Models;
 using GZCTF.Models.Data;
+using GZCTF.Models.Internal;
 using GZCTF.Modules.Audit.Application;
 using GZCTF.Modules.Audit.Domain;
 using GZCTF.Modules.TeamLab.Contracts;
 using GZCTF.Modules.TeamLab.Domain;
+using GZCTF.TeamLab.Contracts;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Npgsql;
 
 namespace GZCTF.Modules.TeamLab.Application;
@@ -19,8 +22,11 @@ namespace GZCTF.Modules.TeamLab.Application;
 public sealed class TeamLabRuntimePlanner(
     AppDbContext context,
     TeamLabRuntimeOverlayService overlayService,
-    TeamLabEventRecorder eventRecorder)
+    TeamLabEventRecorder eventRecorder,
+    TeamLabConnectorService connectors,
+    IOptions<TeamLabNetworkConfig> networkOptions)
 {
+    private readonly TeamLabNetworkConfig _network = networkOptions.Value;
     public async Task<TeamLabRuntimeCreateResult> CreateAsync(
         CreateTeamLabRuntimeModel command,
         Guid runtimeOwnerUserId,
@@ -38,6 +44,9 @@ public sealed class TeamLabRuntimePlanner(
                 "insufficient_permission",
                 "拓扑版本不属于运行时所有者",
                 403);
+        if (release.IsArchived)
+            throw new TeamLabApiContractException(
+                "release_archived", "该拓扑版本已归档，无法创建新的运行时", 409);
 
         var normalizedIdempotencyKey = string.IsNullOrWhiteSpace(creationIdempotencyKey)
             ? null
@@ -88,66 +97,7 @@ public sealed class TeamLabRuntimePlanner(
             normalizedIdempotencyKey,
             requestHash,
             command.Overlays,
-            isScenarioBuild: false,
-            resolveScenarioArtifacts: true,
             admitPlannedRuntime: admitPlannedRuntime,
-            cancellationToken: cancellationToken);
-    }
-
-    public async Task<TeamLabRuntimeCreateResult> CreateScenarioBuildAsync(
-        Guid releaseId,
-        Guid actorUserId,
-        string externalReference,
-        string requestHash,
-        IReadOnlyList<TeamLabRuntimeOverlayModel>? scenarioOverlays,
-        CancellationToken cancellationToken)
-    {
-        var release = await context.TeamLabTopologyReleases.AsNoTracking()
-            .Include(item => item.Topology)
-            .SingleOrDefaultAsync(item => item.Id == releaseId, cancellationToken)
-            ?? throw new TeamLabApiContractException("release_not_found", "未找到拓扑版本", 404);
-        if (release.Topology.OwnerUserId != actorUserId)
-            throw new TeamLabApiContractException(
-                "insufficient_permission",
-                "拓扑版本不属于场景构建操作者",
-                403);
-
-        var normalizedReference = NormalizeExternalReference(externalReference)
-                                  ?? throw new ArgumentException("Scenario build external reference is required.", nameof(externalReference));
-        var existing = await context.TeamLabRuntimes.AsNoTracking()
-            .SingleOrDefaultAsync(item => item.CreatedById == actorUserId &&
-                                          item.ExternalReference == normalizedReference,
-                cancellationToken);
-        if (existing is not null)
-        {
-            if (!existing.IsScenarioBuild ||
-                !string.Equals(existing.CreateRequestHash, requestHash, StringComparison.Ordinal))
-                throw new TeamLabApiContractException(
-                    "external_reference_conflict",
-                    "场景构建引用已被其他运行时请求占用",
-                    409);
-            if (existing.Status == TeamLabRuntimeStatus.Destroyed)
-                return await ResetCoreAsync(
-                    existing.PublicId,
-                    scenarioOverlays,
-                    release.Id,
-                    requestHash,
-                    resolveScenarioArtifacts: false,
-                    admitPlannedRuntime: null,
-                    cancellationToken: cancellationToken);
-            return new TeamLabRuntimeCreateResult(existing.Id, existing.PublicId, true);
-        }
-
-        return await CreatePlannedRuntimeAsync(
-            release,
-            actorUserId,
-            normalizedReference,
-            null,
-            requestHash,
-            scenarioOverlays,
-            isScenarioBuild: true,
-            resolveScenarioArtifacts: false,
-            admitPlannedRuntime: null,
             cancellationToken: cancellationToken);
     }
 
@@ -158,20 +108,19 @@ public sealed class TeamLabRuntimePlanner(
         string? creationIdempotencyKey,
         string requestHash,
         IReadOnlyList<TeamLabRuntimeOverlayModel>? runtimeOverlays,
-        bool isScenarioBuild,
-        bool resolveScenarioArtifacts,
         Func<TeamLabRuntime, CancellationToken, Task>? admitPlannedRuntime,
         CancellationToken cancellationToken)
     {
         var definition = TeamLabReleaseCodec.DecodeExecution(release.SchemaVersion, release.CanonicalJson);
-        await TeamLabTopologyApplicationService.ValidateImageTemplatesAsync(
-            context, definition, cancellationToken, resolveScenarioArtifacts);
+        await TeamLabTopologyApplicationService.ValidateImageTemplatesAsync(context, definition, cancellationToken);
         try
         {
             await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
             var runtime = new TeamLabRuntime
             {
                 TopologyReleaseId = release.Id,
+                IsScenarioBuild = false,
+                ExecutionModel = _network.ExecutionModel,
                 ControlScopeId = release.ControlScopeId,
                 CreatedById = runtimeOwnerUserId,
                 ExternalReference = externalReference,
@@ -179,7 +128,6 @@ public sealed class TeamLabRuntimePlanner(
                 CreateRequestHash = requestHash,
                 Generation = 1,
                 Status = TeamLabRuntimeStatus.Planning,
-                IsScenarioBuild = isScenarioBuild,
                 IsOpenToPlayers = false,
                 CreatedAt = DateTimeOffset.UtcNow,
                 UpdatedAt = DateTimeOffset.UtcNow
@@ -191,7 +139,6 @@ public sealed class TeamLabRuntimePlanner(
                 runtime,
                 definition,
                 runtimeOverlays,
-                resolveScenarioArtifacts,
                 cancellationToken);
             if (admitPlannedRuntime is not null)
                 await admitPlannedRuntime(runtime, cancellationToken);
@@ -234,25 +181,6 @@ public sealed class TeamLabRuntimePlanner(
                                               item.ExternalReference == externalReference,
                     cancellationToken);
             if (existing is null) throw;
-            if (isScenarioBuild)
-            {
-                if (!existing.IsScenarioBuild ||
-                    !string.Equals(existing.CreateRequestHash, requestHash, StringComparison.Ordinal))
-                    throw new TeamLabApiContractException(
-                        "external_reference_conflict",
-                        "The scenario build reference is already used by a different runtime request.",
-                        409);
-                if (existing.Status == TeamLabRuntimeStatus.Destroyed)
-                    return await ResetCoreAsync(
-                        existing.PublicId,
-                        runtimeOverlays,
-                        release.Id,
-                    requestHash,
-                    resolveScenarioArtifacts: false,
-                    admitPlannedRuntime: null,
-                    cancellationToken: cancellationToken);
-                return new TeamLabRuntimeCreateResult(existing.Id, existing.PublicId, true);
-            }
             if (existing.Status == TeamLabRuntimeStatus.Destroyed)
                 return await ResetAndAdmitAsync(
                     existing.PublicId,
@@ -281,7 +209,6 @@ public sealed class TeamLabRuntimePlanner(
             runtimeOverlays,
             targetReleaseId,
             createRequestHash,
-            resolveScenarioArtifacts: true,
             admitPlannedRuntime: null,
             cancellationToken: cancellationToken);
 
@@ -297,7 +224,6 @@ public sealed class TeamLabRuntimePlanner(
             runtimeOverlays,
             targetReleaseId,
             createRequestHash,
-            resolveScenarioArtifacts: true,
             admitPlannedRuntime: admitPlannedRuntime,
             cancellationToken: cancellationToken);
 
@@ -306,7 +232,6 @@ public sealed class TeamLabRuntimePlanner(
         IReadOnlyList<TeamLabRuntimeOverlayModel>? runtimeOverlays,
         Guid? targetReleaseId,
         string? createRequestHash,
-        bool resolveScenarioArtifacts,
         Func<TeamLabRuntime, CancellationToken, Task>? admitPlannedRuntime,
         CancellationToken cancellationToken)
     {
@@ -336,14 +261,14 @@ public sealed class TeamLabRuntimePlanner(
                 "目标拓扑版本不属于运行时所有者",
                 403);
         var definition = TeamLabReleaseCodec.DecodeExecution(release.SchemaVersion, release.CanonicalJson);
-        await TeamLabTopologyApplicationService.ValidateImageTemplatesAsync(
-            context, definition, cancellationToken, allowBakedSourceDrift: resolveScenarioArtifacts);
+        await TeamLabTopologyApplicationService.ValidateImageTemplatesAsync(context, definition, cancellationToken);
         await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
         runtime.Generation++;
         runtime.TopologyReleaseId = release.Id;
         runtime.ControlScopeId = release.ControlScopeId;
         if (createRequestHash is not null) runtime.CreateRequestHash = createRequestHash;
         runtime.EntryShardId = null;
+        runtime.ExecutionModel = _network.ExecutionModel;
         runtime.Status = TeamLabRuntimeStatus.Planning;
         runtime.LastError = null;
         runtime.UpdatedAt = DateTimeOffset.UtcNow;
@@ -351,7 +276,6 @@ public sealed class TeamLabRuntimePlanner(
             runtime,
             definition,
             runtimeOverlays,
-            resolveScenarioArtifacts,
             cancellationToken);
         if (admitPlannedRuntime is not null)
             await admitPlannedRuntime(runtime, cancellationToken);
@@ -363,7 +287,6 @@ public sealed class TeamLabRuntimePlanner(
         TeamLabRuntime runtime,
         TeamLabExecutionTopology definition,
         IReadOnlyList<TeamLabRuntimeOverlayModel>? runtimeOverlays,
-        bool resolveScenarioArtifacts,
         CancellationToken cancellationToken)
     {
         using var activity = PlatformTelemetry.TeamLabActivitySource.StartActivity(
@@ -395,62 +318,33 @@ public sealed class TeamLabRuntimePlanner(
             .ToArrayAsync(cancellationToken);
         var allocated = new List<IPNetwork>(definition.Networks.Count);
         var runtimeNetworkByKey = new Dictionary<string, TeamLabRuntimeNetwork>(StringComparer.Ordinal);
-        var scenarioArtifacts = resolveScenarioArtifacts
-            ? await context.TeamLabReleaseAssetArtifacts.AsNoTracking()
-                .Where(item => item.ReleaseId == runtime.TopologyReleaseId &&
-                               item.Status == TeamLabReleaseArtifactStatus.Ready &&
-                               item.ScenarioImageTemplateId.HasValue)
-                .ToDictionaryAsync(item => item.AssetKey,
-                    item => new ScenarioArtifactReference(
-                        item.ScenarioImageTemplateId!.Value,
-                        item.ArtifactDigest),
-                    StringComparer.Ordinal, cancellationToken)
-            : new Dictionary<string, ScenarioArtifactReference>(StringComparer.Ordinal);
-        if (resolveScenarioArtifacts)
-            foreach (var asset in definition.Assets.Where(item => item.BakeAtPublish))
-                if (!scenarioArtifacts.ContainsKey(asset.Key))
-                    throw new TeamLabApiContractException(
-                        "scenario_artifact_not_ready",
-                        $"资源 '{asset.Key}' 的发布场景 artifact 尚未就绪",
-                        409);
         var resolvedTemplateIds = definition.Assets.ToDictionary(
             item => item.Key,
-            item => resolveScenarioArtifacts && item.BakeAtPublish
-                ? scenarioArtifacts[item.Key].TemplateId
-                : item.ImageTemplateId,
+            item => item.ImageTemplateId,
             StringComparer.Ordinal);
         var templateIds = resolvedTemplateIds.Values.Distinct().ToArray();
         var templateDigests = await context.ImageTemplates.AsNoTracking()
             .Where(item => templateIds.Contains(item.Id))
-            .ToDictionaryAsync(item => item.Id, item => item.ImageHash, cancellationToken);
+            .ToDictionaryAsync(item => item.Id, cancellationToken);
         foreach (var asset in definition.Assets)
         {
             var resolvedTemplateId = resolvedTemplateIds[asset.Key];
-            var expectedDigest = resolveScenarioArtifacts && asset.BakeAtPublish
-                ? scenarioArtifacts[asset.Key].ArtifactDigest
-                : asset.ImageDigest;
-            if (!templateDigests.TryGetValue(resolvedTemplateId, out var currentDigest) ||
-                string.IsNullOrWhiteSpace(currentDigest))
+            var expectedDigest = asset.ImageDigest;
+            if (!templateDigests.TryGetValue(resolvedTemplateId, out var template) ||
+                string.IsNullOrWhiteSpace(template.ImageHash))
                 throw new TeamLabApiContractException(
                     "image_template_unavailable",
                     $"资源 '{asset.Key}' 解析到的镜像模板 {resolvedTemplateId} 不可用",
                     409);
             if (!string.IsNullOrWhiteSpace(expectedDigest) &&
-                !string.Equals(expectedDigest, currentDigest, StringComparison.Ordinal))
+                !string.Equals(expectedDigest, template.ImageHash, StringComparison.Ordinal))
                 throw new TeamLabApiContractException(
                     "image_template_digest_changed",
                     $"资源 '{asset.Key}' 解析到的镜像模板 {resolvedTemplateId} 与已发布 digest 不匹配",
                     409);
         }
-        var bootstrapProfileIds = definition.Assets.Where(item => item.Bootstrap is not null)
-            .Select(item => item.Bootstrap!.ProfileId).Distinct().ToArray();
-        var bootstrapDigests = bootstrapProfileIds.Length == 0
-            ? new Dictionary<(Guid ProfileId, int Version), string>()
-            : (await context.BootstrapProfileVersions.AsNoTracking()
-                    .Where(item => bootstrapProfileIds.Contains(item.Profile.PublicId))
-                    .Select(item => new { item.Profile.PublicId, item.Version, item.ArtifactDigest })
-                    .ToArrayAsync(cancellationToken))
-                .ToDictionary(item => (item.PublicId, item.Version), item => item.ArtifactDigest);
+        await ValidateDevicePackagesAsync(definition, cancellationToken);
+        await AcquireConnectorLeasesAsync(runtime, definition, cancellationToken);
         foreach (var network in definition.Networks.OrderBy(item => item.Key, StringComparer.Ordinal))
         {
             var cidr = Allocate(network.AddressPoolCidr, network.RuntimePrefixLength, usedCidrs.Concat(allocated));
@@ -505,14 +399,16 @@ public sealed class TeamLabRuntimePlanner(
                 InterfaceSummaryJson = JsonSerializer.Serialize(interfaces),
                 Status = TeamLabRuntimeStatus.Pending,
                 ExecutionStage = TeamLabAssetExecutionStage.Pending,
-                Stateless = asset.Stateless,
                 EndpointObservation = asset.EndpointObservation,
-                ImageDigest = resolveScenarioArtifacts && asset.BakeAtPublish
-                    ? scenarioArtifacts[asset.Key].ArtifactDigest
-                    : asset.ImageDigest ?? templateDigests.GetValueOrDefault(resolvedTemplateIds[asset.Key]),
-                BootstrapDigest = asset.Bootstrap is null || resolveScenarioArtifacts && asset.BakeAtPublish
-                    ? null
-                    : bootstrapDigests.GetValueOrDefault((asset.Bootstrap.ProfileId, asset.Bootstrap.Version))
+                ImageDigest = asset.ImageDigest ?? templateDigests.GetValueOrDefault(resolvedTemplateIds[asset.Key])?.ImageHash,
+                Image = asset.Kind == TeamLabAssetKind.Docker && templateDigests.TryGetValue(resolvedTemplateIds[asset.Key], out var dockerTemplate)
+                    ? DockerImageReference.ResolvePullTarget(
+                        dockerTemplate.Name,
+                        dockerTemplate.RegistryUrl).FullImage
+                    : null,
+                DevicePackageId = asset.DevicePackageId,
+                DevicePackageParametersJson = asset.DeviceParametersJson,
+                ConnectorId = asset.ConnectorId
             });
         }
         var connectionsByNode = definition.Connections
@@ -551,6 +447,16 @@ public sealed class TeamLabRuntimePlanner(
                 Condition = dependency.Condition
             });
         }
+        if (runtime.ExecutionModel == TeamLabExecutionModel.V2)
+        {
+            var unsupportedSecret = TeamLabExecutionModelPolicy.FindUnsupportedSecretKey(runtimeOverlays ?? []);
+            if (unsupportedSecret is not null)
+                throw new TeamLabApiContractException(
+                    "execution_model_secrets_unsupported",
+                    $"V2 执行模型暂不支持运行时密钥覆盖，请移除资产密钥 '{unsupportedSecret}' 后重试",
+                    422);
+        }
+
         var envelope = overlayService.Protect(runtime.Id, runtime.Generation, runtimeOverlays,
             definition.Assets.Select(item => item.Key).ToHashSet(StringComparer.Ordinal),
             definition.Assets
@@ -570,7 +476,58 @@ public sealed class TeamLabRuntimePlanner(
         activity?.SetStatus(ActivityStatusCode.Ok);
     }
 
-    private sealed record ScenarioArtifactReference(int TemplateId, string ArtifactDigest);
+    /// <summary>
+    /// Re-checks device packages at planning time against the frozen release
+    /// digest so registry drift never enters a running generation silently.
+    /// </summary>
+    private async Task ValidateDevicePackagesAsync(
+        TeamLabExecutionTopology definition,
+        CancellationToken cancellationToken)
+    {
+        var packageIds = definition.Assets
+            .Where(item => item.DevicePackageId is { } id && id > 0)
+            .Select(item => item.DevicePackageId!.Value)
+            .Distinct()
+            .ToArray();
+        if (packageIds.Length == 0) return;
+        var packages = await context.TeamLabDevicePackages.AsNoTracking()
+            .Where(item => packageIds.Contains(item.Id))
+            .ToDictionaryAsync(item => item.Id, cancellationToken);
+        foreach (var asset in definition.Assets)
+        {
+            if (asset.DevicePackageId is not { } packageId || packageId <= 0) continue;
+            if (!packages.TryGetValue(packageId, out var package) || !package.IsEnabled || package.IsArchived)
+                throw new TeamLabApiContractException(
+                    "device_package_unavailable",
+                    $"资源 '{asset.Key}' 引用的设备包 {packageId} 不可用",
+                    409);
+            if (!string.IsNullOrWhiteSpace(asset.DevicePackageDigest) &&
+                !string.Equals(asset.DevicePackageDigest, package.Digest, StringComparison.Ordinal))
+                throw new TeamLabApiContractException(
+                    "device_package_digest_changed",
+                    $"资源 '{asset.Key}' 引用的设备包 {packageId} 与已发布 digest 不匹配",
+                    409);
+        }
+    }
+
+    /// <summary>
+    /// Connector leases are acquired inside the planning transaction: losing
+    /// the exclusivity race fails creation with a stable conflict, and a later
+    /// planning failure rolls the acquisition back with everything else.
+    /// </summary>
+    private async Task AcquireConnectorLeasesAsync(
+        TeamLabRuntime runtime,
+        TeamLabExecutionTopology definition,
+        CancellationToken cancellationToken)
+    {
+        var connectorIds = definition.Assets
+            .Where(item => item.ConnectorId is { } connectorId && connectorId != Guid.Empty)
+            .Select(item => item.ConnectorId!.Value)
+            .Distinct()
+            .ToArray();
+        foreach (var connectorId in connectorIds)
+            await connectors.AcquireAsync(connectorId, runtime.PublicId, runtime.ControlScopeId, cancellationToken);
+    }
 
     private static IPNetwork? Allocate(string poolCidr, int runtimePrefix, IEnumerable<IPNetwork> unavailable)
     {

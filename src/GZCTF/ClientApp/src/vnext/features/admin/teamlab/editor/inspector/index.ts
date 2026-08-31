@@ -1,5 +1,4 @@
 export { AssetInspector } from './AssetInspector'
-export { BootstrapEditor } from './BootstrapEditor'
 export { DependencyEditor } from './DependencyEditor'
 export { HealthCheckEditor } from './HealthCheckEditor'
 export { NetworkInterfacesEditor } from './NetworkInterfacesEditor'

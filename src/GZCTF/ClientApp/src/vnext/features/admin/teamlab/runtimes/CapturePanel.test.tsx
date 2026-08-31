@@ -26,6 +26,7 @@ describe('CapturePanel', () => {
     const start = vi.spyOn(teamLabRuntimeApi, 'startCapture').mockResolvedValue(running)
     vi.spyOn(teamLabRuntimeApi, 'getCapture').mockResolvedValue(running)
     vi.spyOn(teamLabRuntimeApi, 'stopCapture').mockResolvedValue({ ...running, status: 'completed', completedAt: 1_784_832_300_000 })
+    vi.spyOn(teamLabRuntimeApi, 'listCaptures').mockResolvedValue([])
     render(<SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}><CapturePanel networks={[{ key: 'entry', name: '入口网段', cidr: '10.10.0.0/24', gatewayIp: '10.10.0.1' }]} runtimeId={runtimeId} /></SWRConfig>)
 
     fireEvent.click(screen.getByRole('button', { name: '开始抓包' }))
@@ -35,5 +36,14 @@ describe('CapturePanel', () => {
     fireEvent.click(await screen.findByRole('button', { name: '停止' }))
     const download = await screen.findByRole('link', { name: '下载 PCAP' })
     expect(download).toHaveAttribute('href', teamLabRuntimeApi.captureDownloadPath(runtimeId, running.id))
+  })
+
+  it('restores the latest capture after the panel remounts', async () => {
+    vi.spyOn(teamLabRuntimeApi, 'listCaptures').mockResolvedValue([running])
+    vi.spyOn(teamLabRuntimeApi, 'getCapture').mockResolvedValue(running)
+    render(<SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}><CapturePanel networks={[{ key: 'entry', name: '入口网段', cidr: '10.10.0.0/24', gatewayIp: '10.10.0.1' }]} runtimeId={runtimeId} /></SWRConfig>)
+
+    expect(await screen.findByText('任务标识')).toBeTruthy()
+    expect(screen.getByRole('button', { name: '停止' })).toBeTruthy()
   })
 })

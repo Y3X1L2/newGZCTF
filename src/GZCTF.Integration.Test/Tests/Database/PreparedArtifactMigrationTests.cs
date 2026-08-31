@@ -50,12 +50,10 @@ public sealed class PreparedArtifactMigrationTests : IAsyncLifetime
         Assert.Empty(await migrated.VmPreparedArtifacts.AsNoTracking().ToArrayAsync());
         Assert.Empty(await migrated.Database.GetPendingMigrationsAsync());
 
-        var attemptConstraint = await migrated.Database.SqlQueryRaw<string>("""
-            SELECT conname AS "Value"
-            FROM pg_constraint
-            WHERE conname = 'CK_TeamLabBootstrapExecutions_Attempt'
+        var bootstrapExecutionsRemoved = await migrated.Database.SqlQueryRaw<bool>("""
+            SELECT to_regclass('public."TeamLabBootstrapExecutions"') IS NULL AS "Value"
             """).SingleAsync();
-        Assert.Equal("CK_TeamLabBootstrapExecutions_Attempt", attemptConstraint);
+        Assert.True(bootstrapExecutionsRemoved);
     }
 
     [Fact]

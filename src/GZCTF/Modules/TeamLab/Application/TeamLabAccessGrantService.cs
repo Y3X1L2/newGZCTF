@@ -7,6 +7,7 @@ using GZCTF.Models.Data;
 using GZCTF.Models.Internal;
 using GZCTF.Modules.Audit.Domain;
 using GZCTF.Modules.TeamLab.Contracts;
+using GZCTF.TeamLab.Contracts;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -71,11 +72,6 @@ public sealed class TeamLabAccessGrantService(
             TimeSpan.FromMinutes(2),
             cancellationToken);
         var runtime = await LoadRuntimeAsync(runtimePublicId, cancellationToken);
-        if (runtime.IsScenarioBuild)
-            throw new TeamLabApiContractException(
-                "scenario_runtime_access_forbidden",
-                "场景构建运行时不接受玩家访问授权",
-                409);
         if (runtime.Status != TeamLabRuntimeStatus.Running || runtime.PublicUdpMapping is null)
             throw new TeamLabApiContractException("runtime_not_ready", "运行时尚未就绪，无法访问", 409);
         var entryShard = runtime.Shards.SingleOrDefault(item => item.Id == runtime.EntryShardId && item.Generation == runtime.Generation)
@@ -92,6 +88,7 @@ public sealed class TeamLabAccessGrantService(
             : null;
         var activeGrant = runtime.AccessGrants.SingleOrDefault(item =>
             item.Generation == runtime.Generation && !item.Revoked && item.ExpiresAt > DateTimeOffset.UtcNow);
+        string token;
         if (grant is null && activeGrant is not null)
         {
             if (activeGrant.ConfigurationConsumedAt is not null ||
@@ -100,10 +97,11 @@ public sealed class TeamLabAccessGrantService(
                     "access_grant_already_active",
                     "已存在活跃的访问授权，轮换团队 VPN 密钥前请先显式撤销",
                     409);
-            var existingToken = _protector.Unprotect(activeGrant.ProtectedDownloadToken);
-            return ToModel(runtime, activeGrant, DownloadUrl(runtime, activeGrant, existingToken));
+            token = _protector.Unprotect(activeGrant.ProtectedDownloadToken);
+            if (activeGrant.AppliedAt is not null)
+                return ToModel(runtime, activeGrant, DownloadUrl(runtime, activeGrant, token));
+            grant = activeGrant;
         }
-        string token;
         if (grant is null)
         {
             var client = GenerateKeyPair();
@@ -144,11 +142,12 @@ public sealed class TeamLabAccessGrantService(
         var serverAddress = $"{LastHost(IPNetwork.Parse(entryNetwork.Cidr))}/32";
         var blocked = runtime.Networks.Where(item => item.Generation == runtime.Generation && item.Id != entryNetwork.Id)
             .Select(item => item.Cidr).ToArray();
+        var isV2 = runtime.ExecutionModel == TeamLabExecutionModel.V2;
         var applied = await executor.ConfigureAccessAsync(entryShard.WorkerNodeId,
             new TeamLabNodeAccessApplyRequest(
                 runtime.Id,
                 runtime.Generation,
-                TeamLabResourceNameFactory.RouterNamespace(runtime.Id, entryShard.Id),
+                isV2 ? string.Empty : TeamLabResourceNameFactory.RouterNamespace(runtime.Id, entryShard.Id),
                 TeamLabResourceNameFactory.WireGuardInterface(runtime.Id),
                 runtime.PublicUdpMapping.WorkerWireGuardPort,
                 serverAddress,
@@ -157,7 +156,13 @@ public sealed class TeamLabAccessGrantService(
                 grant.ClientAddress,
                 entryNetwork.Cidr,
                 [entryNetwork.Cidr],
-                blocked), cancellationToken);
+                blocked,
+                runtime.ExecutionModel,
+                runtime.PublicId,
+                isV2 ? entryNetwork.TopologyKey : null,
+                isV2 ? "player-gateway" : null,
+                isV2 ? TeamLabResourceNameFactory.PlayerGatewayMac(runtime.PublicId, runtime.Generation, entryNetwork.TopologyKey) : null),
+            cancellationToken);
         if (!applied.Success)
             throw new TeamLabApiContractException(
                 "operation_failed", "无法将访问授权应用到运行时", 500);
@@ -225,12 +230,17 @@ public sealed class TeamLabAccessGrantService(
         if (grant.Revoked)
             return;
         var entryShard = runtime.Shards.Single(item => item.Id == runtime.EntryShardId && item.Generation == runtime.Generation);
+        var entryNetwork = ResolveEntryNetwork(runtime, entryShard);
+        var isV2 = runtime.ExecutionModel == TeamLabExecutionModel.V2;
         var cleanup = await executor.RemoveAccessAsync(entryShard.WorkerNodeId,
             new TeamLabNodeAccessRemoveRequest(
                 runtime.Id,
                 runtime.Generation,
-                TeamLabResourceNameFactory.RouterNamespace(runtime.Id, entryShard.Id),
-                TeamLabResourceNameFactory.WireGuardInterface(runtime.Id)),
+                isV2 ? string.Empty : TeamLabResourceNameFactory.RouterNamespace(runtime.Id, entryShard.Id),
+                TeamLabResourceNameFactory.WireGuardInterface(runtime.Id),
+                runtime.ExecutionModel,
+                runtime.PublicId,
+                isV2 ? entryNetwork.TopologyKey : null),
             cancellationToken);
         if (!cleanup.Success)
             throw new TeamLabApiContractException(

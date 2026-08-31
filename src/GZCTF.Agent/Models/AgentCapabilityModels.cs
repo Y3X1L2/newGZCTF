@@ -27,6 +27,10 @@ public static class AgentFeatureIds
     public const string VmPreparedImage = "image.vm.prepared.v1";
     public const string VmPreparedImageUpload = "image.vm.prepared-upload.v1";
     public const string RemoteAccessRelay = "remote-access.relay.v1";
+    public const string TeamLabExecutionPlan = "teamlab.execution-plan.v2";
+    public const string TeamLabOvnOvs = "teamlab.ovs-ovn.v1";
+    public const string TeamLabNativeLibvirt = "teamlab.libvirt.native.v1";
+    public const string TeamLabArtifactCache = "teamlab.artifact-cache.v2";
 }
 
 public sealed record AgentExecutionLimits(
@@ -35,7 +39,9 @@ public sealed record AgentExecutionLimits(
     int DockerImageTransfers,
     int VmImageTransfers,
     int TeamLabNetworkOperations = 0,
-    int ControlOperations = 0);
+    int ControlOperations = 0,
+    int TeamLabExecutionOperations = 1,
+    int ArtifactCleanupOperations = 1);
 
 public sealed record AgentHostFacts(
     int LogicalCpu,

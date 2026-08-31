@@ -1,10 +1,12 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using GZCTF.Models;
 using GZCTF.Models.Data;
 using GZCTF.Modules.Audit.Contracts;
 using GZCTF.Modules.Audit.Domain;
 using GZCTF.Modules.Runtime.Contracts;
+using GZCTF.TeamLab.Contracts;
 using GZCTF.Modules.Runtime.Domain;
 using GZCTF.Modules.TeamLab.Domain;
 using GZCTF.Services.TeamLab;
@@ -20,8 +22,10 @@ public sealed class TeamLabRuntimeCleanupService(
     ITeamLabCaptureCleanup captureCleanup,
     IPublicUdpGatewayProvider publicGateway,
     TeamLabEventRecorder eventRecorder,
-    ITeamLabRemoteAccessService remoteAccess)
+    ITeamLabRemoteAccessService remoteAccess,
+    TeamLabReleaseImagePreparationService preparation)
 {
+    private readonly TeamLabReleaseImagePreparationService _preparation = preparation;
     public Task<TeamLabNodeResult> CleanupAsync(
         TeamLabRuntime runtime,
         CancellationToken cancellationToken) =>
@@ -54,10 +58,25 @@ public sealed class TeamLabRuntimeCleanupService(
         await traffic.StopCollectorsAsync(runtime, cancellationToken);
         var errors = (await captureCleanup.ExpireGenerationAsync(
             runtime.Id, generation, cancellationToken)).ToList();
+        var planSnapshots = await context.TeamLabExecutionPlanSnapshots.AsNoTracking()
+            .Where(item => item.RuntimeId == runtime.Id && item.Generation == generation)
+            .ToDictionaryAsync(item => item.ShardId, cancellationToken);
         var results = await Task.WhenAll(shards.Select(async shard =>
         {
             try
             {
+                // A persisted plan is the only evidence V2 was applied. Rows without one
+                // (legacy deployments or destroy-before-apply) use the inventory-based path;
+                // failing on a missing snapshot would strand the runtime and its capacity.
+                if (planSnapshots.TryGetValue(shard.Id, out var snapshot))
+                {
+                    var plan = DeserializeSnapshot(snapshot, runtime, generation);
+                    var cleanup = await executor.CleanupExecutionPlanAsync(
+                        shard.WorkerNodeId, plan, cancellationToken);
+                    return cleanup.Success
+                        ? TeamLabNodeResult.Ok(cleanup.Message ?? "Execution plan cleaned.")
+                        : TeamLabNodeResult.Failed(cleanup.Message ?? "Execution-plan cleanup failed.");
+                }
                 var inventory = await executor.GetRuntimeInventoryAsync(shard.WorkerNodeId, cancellationToken);
                 return await executor.CleanupShardAsync(
                     shard.WorkerNodeId,
@@ -72,6 +91,9 @@ public sealed class TeamLabRuntimeCleanupService(
             }
         }));
         errors.AddRange(results.Where(item => !item.Success).Select(item => item.Message));
+        var accessCleanup = await CleanupHostWireGuardAccessAsync(runtime, cancellationToken);
+        if (accessCleanup is { Success: false })
+            errors.Add(accessCleanup.Message);
         if (runtime.PublicUdpMapping is not null)
         {
             var gateway = await publicGateway.RemoveMappingAsync(runtime.PublicUdpMapping, cancellationToken);
@@ -104,7 +126,8 @@ public sealed class TeamLabRuntimeCleanupService(
             .Where(item => item.RuntimeId == runtime.Id && item.Generation == generation && item.ReleasedAt == null)
             .CountAsync(cancellationToken);
         await FinalizeGenerationAsync(
-            context, runtime, generation, markDestroyedOnSuccess, cancellationToken);
+            context, runtime, generation, markDestroyedOnSuccess, cancellationToken,
+            onLastConsumerDestroyed: (releaseId, ct) => _preparation.ReleaseAsync(releaseId, ct));
         if (fabricLeaseCount > 0)
         {
             eventRecorder.Record(
@@ -131,6 +154,58 @@ public sealed class TeamLabRuntimeCleanupService(
             "Runtime resources were cleaned successfully.");
         await context.SaveChangesAsync(cancellationToken);
         return TeamLabNodeResult.Ok("Runtime resources cleaned.");
+    }
+
+    private async Task<TeamLabNodeResult?> CleanupHostWireGuardAccessAsync(
+        TeamLabRuntime runtime,
+        CancellationToken cancellationToken)
+    {
+        // V1 host WireGuard lives in the per-runtime namespace and is already covered by the
+        // shard cleanup inventory path. V2 host WireGuard is created outside the execution-plan
+        // snapshot, so a failed/unapplied grant can otherwise leave a stale tlwgXXX interface
+        // behind after destroy and cause duplicate gateway-IP conflicts for the next runtime.
+        if (runtime.ExecutionModel != TeamLabExecutionModel.V2)
+            return null;
+        var entryShard = runtime.Shards.SingleOrDefault(item =>
+            item.Id == runtime.EntryShardId && item.Generation == runtime.Generation);
+        if (entryShard is null)
+            return null;
+        var entryNetwork = runtime.Networks.SingleOrDefault(item =>
+            item.Generation == runtime.Generation && item.IsEntry && item.ShardId == entryShard.Id);
+        if (entryNetwork is null)
+            return null;
+
+        var cleanup = await executor.RemoveAccessAsync(entryShard.WorkerNodeId,
+            new TeamLabNodeAccessRemoveRequest(
+                runtime.Id,
+                runtime.Generation,
+                string.Empty,
+                TeamLabResourceNameFactory.WireGuardInterface(runtime.Id),
+                runtime.ExecutionModel,
+                runtime.PublicId,
+                entryNetwork.TopologyKey),
+            cancellationToken);
+        return cleanup.Success
+            ? TeamLabNodeResult.Ok(cleanup.Message ?? "Host WireGuard access cleaned.")
+            : TeamLabNodeResult.Failed(cleanup.Message ?? "Host WireGuard access cleanup failed.");
+    }
+
+    private static GZCTF.TeamLab.Contracts.Execution.TeamLabExecutionPlanV2 DeserializeSnapshot(
+        TeamLabExecutionPlanSnapshot snapshot,
+        TeamLabRuntime runtime,
+        int generation)
+    {
+        var plan = JsonSerializer.Deserialize<GZCTF.TeamLab.Contracts.Execution.TeamLabExecutionPlanV2>(snapshot.PlanJson)
+            ?? throw new TeamLabRuntimeExecutionException(
+                $"Execution-plan cleanup snapshot is unreadable for shard {snapshot.ShardId}.");
+        if (plan.RuntimeId != runtime.Id || plan.RuntimePublicId != runtime.PublicId ||
+            plan.Generation != generation || !string.Equals(plan.ShardKey,
+                snapshot.ShardId.ToString(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal) ||
+            !string.Equals(plan.PlanDigest, snapshot.PlanDigest, StringComparison.Ordinal) ||
+            !plan.IsValid(out _))
+            throw new TeamLabRuntimeExecutionException(
+                $"Execution-plan cleanup snapshot is invalid for shard {snapshot.ShardId}.");
+        return plan;
     }
 
     private async Task MarkCleanupStartedAsync(TeamLabRuntime runtime, CancellationToken cancellationToken)
@@ -226,7 +301,8 @@ public sealed class TeamLabRuntimeCleanupService(
         TeamLabRuntime runtime,
         int generation,
         bool markRuntimeDestroyed,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Func<Guid, CancellationToken, Task>? onLastConsumerDestroyed = null)
     {
         var now = DateTimeOffset.UtcNow;
         foreach (var shard in runtime.Shards.Where(item => item.Generation == generation))
@@ -286,12 +362,61 @@ public sealed class TeamLabRuntimeCleanupService(
         foreach (var lease in fabricLeases)
             lease.ReleasedAt = now;
 
+        // Field connectors and link policies follow the same finalize
+        // semantics as network/fabric leases on a full destroy: released here
+        // synchronously, with the capability-resource worker as the
+        // crash-recovery backstop. A generation reset keeps them so the
+        // rebuilt runtime does not lose its real-world attachments.
+        if (markRuntimeDestroyed)
+        {
+            var connectorLeases = await context.TeamLabConnectorLeases
+                .Where(item => item.RuntimeId == runtime.Id && item.ReleasedAt == null)
+                .ToArrayAsync(cancellationToken);
+            foreach (var lease in connectorLeases)
+            {
+                lease.ReleasedAt = now;
+                lease.ReleaseReason = TeamLabConnectorLeaseReleaseReason.RuntimeDestroyed;
+            }
+            var activePolicies = await context.TeamLabLinkPolicies
+                .Where(policy => policy.RuntimeId == runtime.Id && policy.Status == TeamLabLinkPolicyStatus.Active)
+                .ToArrayAsync(cancellationToken);
+            foreach (var policy in activePolicies)
+            {
+                policy.Status = TeamLabLinkPolicyStatus.Recovered;
+                policy.RecoveredAt = now;
+                policy.RecoverOrigin = TeamLabLinkPolicyRecoverOrigin.RuntimeDestroyed;
+                policy.RecoverAt = null;
+                policy.UpdatedAt = now;
+            }
+        }
+
+        // The immutable plan is the authority only until this generation has been physically
+        // cleaned. Keeping it afterwards turns a bounded recovery record into permanent JSON
+        // retention for every reset.
+        var snapshots = await context.TeamLabExecutionPlanSnapshots
+            .Where(item => item.RuntimeId == runtime.Id && item.Generation == generation)
+            .ToArrayAsync(cancellationToken);
+        context.TeamLabExecutionPlanSnapshots.RemoveRange(snapshots);
+
         if (markRuntimeDestroyed)
             runtime.Status = TeamLabRuntimeStatus.Destroyed;
         runtime.IsOpenToPlayers = false;
         runtime.LastError = null;
         runtime.UpdatedAt = now;
         await context.SaveChangesAsync(cancellationToken);
+
+        // Default closed-loop for prepared images: when the destroyed runtime was
+        // the last consumer of its release, release the release-scoped artifact
+        // references immediately. A later create simply re-queues preparation, so
+        // there is no reason to keep the cache warm at the platform level.
+        if (markRuntimeDestroyed && onLastConsumerDestroyed is not null)
+        {
+            var remainingConsumers = await context.TeamLabRuntimes.AsNoTracking()
+                .CountAsync(item => item.TopologyReleaseId == runtime.TopologyReleaseId &&
+                                    item.Status != TeamLabRuntimeStatus.Destroyed, cancellationToken);
+            if (remainingConsumers == 0)
+                await onLastConsumerDestroyed(runtime.TopologyReleaseId, cancellationToken);
+        }
     }
 
     private static bool IsActiveCaptureSegment(TeamLabTrafficCaptureSegment item) =>

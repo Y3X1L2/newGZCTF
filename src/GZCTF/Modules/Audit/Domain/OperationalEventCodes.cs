@@ -175,6 +175,7 @@ public static class OperationalEventCodes
         public const string AccessOpened = "teamlab.access.opened";
         public const string AccessRevoked = "teamlab.access.revoked";
         public const string SnapshotImported = "teamlab.snapshot.imported";
+        public const string ProtocolEvent = "teamlab.protocol.event";
     }
 
     public static class Recovery

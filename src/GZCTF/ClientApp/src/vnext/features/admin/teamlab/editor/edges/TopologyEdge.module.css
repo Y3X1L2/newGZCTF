@@ -1,19 +1,33 @@
+/*
+ * Link styling.
+ *
+ * Links are painted *above* region containers (see `topologyLayers`), so they
+ * need enough contrast to read over a tinted region surface while staying quieter
+ * than the device cards they connect.
+ */
 .edge {
   fill: none;
   stroke: var(--yn-color-border-strong);
-  stroke-width: 2;
+  stroke-width: 1.75;
   transition:
     stroke var(--yn-motion-fast) var(--yn-ease-standard),
     stroke-width var(--yn-motion-fast) var(--yn-ease-standard);
 }
 
-.network {
+/* An intra-network membership link is structural context: quiet and thin. */
+.membership {
+  stroke: color-mix(in srgb, var(--yn-color-brand) 45%, var(--yn-color-border-strong));
+}
+
+/* A route between networks carries the topology's meaning: strongest weight. */
+.route {
   stroke: var(--yn-color-brand-strong);
+  stroke-width: 2.25;
 }
 
 .dependency {
   stroke: var(--yn-color-warning);
-  stroke-dasharray: 7 5;
+  stroke-dasharray: 6 5;
 }
 
 .traffic {
@@ -28,9 +42,26 @@
   stroke-width: 3;
 }
 
+/*
+ * Label backplate. Without an opaque plate, label text landed directly on region
+ * fills and on other links and became unreadable at any real scene density.
+ */
+.labelPlate {
+  fill: var(--yn-color-surface);
+  stroke: var(--yn-color-border);
+  stroke-width: 1;
+}
+
 .label {
   fill: var(--yn-color-text-secondary);
+  font-family: var(--yn-font-sans);
   font-size: var(--yn-font-xs);
+  font-weight: 550;
+}
+
+/* Level of detail: labels are the first thing to go when zoomed out. */
+:global(.teamlab-lod-compact) .labelGroup {
+  display: none;
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -5,7 +5,6 @@ import type {
   TeamLabAdminRuntimeSummary,
   TeamLabAdminScenePage,
   TeamLabAssetKind,
-  TeamLabBootstrapReference,
   TeamLabCapabilities,
   TeamLabConnectionDirection,
   TeamLabDependencyCondition,
@@ -45,11 +44,11 @@ const dependencyConditions = {
   0: 'network-ready',
   1: 'guest-ready',
   2: 'service-ready',
-  3: 'bootstrap-completed',
+  3: 'guest-ready',
   NetworkReady: 'network-ready',
   GuestReady: 'guest-ready',
   ServiceReady: 'service-ready',
-  BootstrapCompleted: 'bootstrap-completed',
+  BootstrapCompleted: 'guest-ready',
 } as const
 const observationModes = {
   0: 'disabled',
@@ -132,11 +131,6 @@ function optionalArray<T>(value: unknown, label: string, parser: (item: unknown,
   return value === null || value === undefined ? [] : array(value, label, parser)
 }
 
-function stringRecord(value: unknown, label: string): Record<string, string> {
-  const source = record(value, label)
-  return Object.fromEntries(Object.entries(source).map(([key, item]) => [key, string(item, `${label}.${key}`)]))
-}
-
 function enumValue<T extends string>(value: unknown, values: Record<string, T>, label: string): T {
   const parsed = values[String(value)]
   if (!parsed) return teamLabContractFailure(label, value)
@@ -180,16 +174,6 @@ function parseNetwork(value: unknown, label: string): TeamLabTopologyNetwork {
   }
 }
 
-function parseBootstrap(value: unknown, label: string): TeamLabBootstrapReference | null {
-  if (value === null || value === undefined) return null
-  const item = record(value, label)
-  return {
-    profileId: string(item.profileId, `${label}.profileId`),
-    version: number(item.version, `${label}.version`),
-    parameters: stringRecord(item.parameters, `${label}.parameters`),
-  }
-}
-
 function parseAsset(value: unknown, label: string): TeamLabTopologyAsset {
   const item = record(value, label)
   const resources = record(item.resources, `${label}.resources`)
@@ -208,13 +192,7 @@ function parseAsset(value: unknown, label: string): TeamLabTopologyAsset {
       storageMiB: number(resources.storageMiB, `${label}.resources.storageMiB`),
     },
     interfaces: array(item.interfaces, `${label}.interfaces`, parseInterface),
-    routingEnabled: boolean(item.routingEnabled, `${label}.routingEnabled`),
     exposePort: nullableNumber(item.exposePort, `${label}.exposePort`),
-    environment:
-      item.environment === null || item.environment === undefined
-        ? null
-        : stringRecord(item.environment, `${label}.environment`),
-    startCommand: nullableString(item.startCommand, `${label}.startCommand`),
     healthCheck: health
       ? {
           kind: enumValue(health.kind, healthKinds, `${label}.healthCheck.kind`),
@@ -222,11 +200,10 @@ function parseAsset(value: unknown, label: string): TeamLabTopologyAsset {
         }
       : null,
     orderIndex: number(item.orderIndex ?? 0, `${label}.orderIndex`),
-    stateless: boolean(item.stateless ?? false, `${label}.stateless`),
-    bootstrap: parseBootstrap(item.bootstrap, `${label}.bootstrap`),
     endpointObservation: enumValue(item.endpointObservation ?? 0, observationModes, `${label}.endpointObservation`),
-    bakeAtPublish: boolean(item.bakeAtPublish ?? false, `${label}.bakeAtPublish`),
-    imageDigest: nullableString(item.imageDigest, `${label}.imageDigest`),
+    devicePackageId: nullableNumber(item.devicePackageId, `${label}.devicePackageId`),
+    deviceParameters: item.deviceParameters ?? null,
+    connectorId: nullableString(item.connectorId, `${label}.connectorId`),
   }
 }
 
@@ -447,6 +424,7 @@ function parseRelease(value: unknown, label: string): TeamLabRelease {
     schemaVersion: number(item.schemaVersion, `${label}.schemaVersion`),
     contentHash: string(item.contentHash, `${label}.contentHash`),
     publishedBy: nullableString(item.publishedBy, `${label}.publishedBy`),
+    publisherName: nullableString(item.publisherName, `${label}.publisherName`),
     publishedAt: number(item.publishedAt, `${label}.publishedAt`),
   }
 }
@@ -512,8 +490,6 @@ export function parseTeamLabPlan(value: unknown): TeamLabPlan {
           const { orderIndex: _, ...result } = parsed
           return result
         }),
-        routingEnabled: boolean(asset.routingEnabled, `${label}.routingEnabled`),
-        imageDigest: nullableString(asset.imageDigest, `${label}.imageDigest`),
       }
     }),
     shards: array(item.shards, 'TeamLab plan.shards', (entry, label) => {
@@ -532,7 +508,6 @@ export function parseTeamLabPlan(value: unknown): TeamLabPlan {
     warnings: array(item.warnings, 'TeamLab plan.warnings', string),
     planHash: string(item.planHash, 'TeamLab plan.planHash'),
     managedInfrastructureCount: number(item.managedInfrastructureCount ?? 0, 'TeamLab plan.managedInfrastructureCount'),
-    bootstrapArtifactCount: number(item.bootstrapArtifactCount ?? 0, 'TeamLab plan.bootstrapArtifactCount'),
     observationPointEstimate: number(item.observationPointEstimate ?? 0, 'TeamLab plan.observationPointEstimate'),
   }
 }
@@ -550,7 +525,6 @@ export function parseTeamLabReleaseReadiness(value: unknown): TeamLabAdminReleas
         imageTemplateId: number(image.imageTemplateId, `${label}.imageTemplateId`),
         name: string(image.name, `${label}.name`),
         imageType: enumValue(image.imageType, imageTypes, `${label}.imageType`),
-        digest: string(image.digest, `${label}.digest`),
         eligibleNodeCount: number(image.eligibleNodeCount, `${label}.eligibleNodeCount`),
         readyNodeCount: number(image.readyNodeCount, `${label}.readyNodeCount`),
         pendingNodeCount: number(image.pendingNodeCount, `${label}.pendingNodeCount`),
@@ -562,14 +536,6 @@ export function parseTeamLabReleaseReadiness(value: unknown): TeamLabAdminReleas
         ? null
         : parseAdminRuntimeSummary(item.latestTrialRuntime, 'TeamLab release readiness.latestTrialRuntime'),
     blockingReasons: array(item.blockingReasons, 'TeamLab release readiness.blockingReasons', string),
-    requiredRuntimeSecrets: array(item.requiredRuntimeSecrets ?? [], 'TeamLab release readiness.requiredRuntimeSecrets', (entry, label) => {
-      const secret = record(entry, label)
-      return {
-        assetKey: string(secret.assetKey, `${label}.assetKey`),
-        assetName: string(secret.assetName, `${label}.assetName`),
-        parameterKey: string(secret.parameterKey, `${label}.parameterKey`),
-      }
-    }),
   }
 }
 
@@ -580,7 +546,6 @@ const dependencyWire: Record<TeamLabDependencyCondition, number> = {
   'network-ready': 0,
   'guest-ready': 1,
   'service-ready': 2,
-  'bootstrap-completed': 3,
 }
 const observationWire: Record<TeamLabEndpointObservationMode, number> = { disabled: 0, optional: 1, required: 2 }
 const healthWire: Record<TeamLabHealthCheckKind, number> = { tcp: 0, http: 1 }

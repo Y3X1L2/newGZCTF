@@ -20,9 +20,7 @@ public sealed record TeamLabPlanAssetModel(
     TeamLabAssetKind Kind,
     int ImageTemplateId,
     TeamLabAssetResourceModel Resources,
-    IReadOnlyList<TeamLabPlanInterfaceModel> Interfaces,
-    bool RoutingEnabled,
-    string? ImageDigest = null);
+    IReadOnlyList<TeamLabPlanInterfaceModel> Interfaces);
 
 public sealed record TeamLabPlanShardModel(
     string Key,
@@ -43,5 +41,4 @@ public sealed record TeamLabPlanModel(
     IReadOnlyList<string> Warnings,
     string PlanHash,
     int ManagedInfrastructureCount = 0,
-    int BootstrapArtifactCount = 0,
     int ObservationPointEstimate = 0);

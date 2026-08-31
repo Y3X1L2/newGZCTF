@@ -220,7 +220,7 @@ public sealed class TeamLabTopologyV2Tests
                     new TeamLabTopologyInterfaceModel("eth0", "entry", 10, true),
                     new TeamLabTopologyInterfaceModel("eth1", "core", 10, false)
                 ],
-                true)
+                ExposePort: null)
         ],
         [new TeamLabTopologyConnectionModel("entry-core", "entry", "core", "router")]);
 
@@ -235,5 +235,5 @@ public sealed class TeamLabTopologyV2Tests
             templateId,
             new TeamLabAssetResourceModel(10, 256, 512),
             [new TeamLabTopologyInterfaceModel("eth0", network, hostOffset, true)],
-            false);
+            ExposePort: null);
 }

@@ -7,6 +7,7 @@ import {
   copyTopologyFragment,
   deleteTopologyItems,
   duplicateTopologyNodes,
+  fitNetworkRegionToMembers,
   moveNetworkRegion,
   moveTopologyNode,
   pasteTopologyFragment,
@@ -15,7 +16,7 @@ import {
   type TopologyFragment,
 } from '../model/topologyCommands'
 import type { TopologyDocument, TopologyNodeType } from '../model/topologyDocument'
-import { selectAllTopology } from '../model/topologySelection'
+import { ASSET_NODE_HEIGHT, MEMBER_GAP_X, MEMBER_GAP_Y, NODE_WIDTH } from '../model/topologyGeometry'
 import styles from './TeamLabDesignPage.module.css'
 import { TeamLabCanvas } from './canvas/TeamLabCanvas'
 import { TeamLabInspector } from './inspector'
@@ -82,6 +83,7 @@ export function TeamLabDesignPage({
 }: TeamLabDesignPageProps) {
   const { document, canUndo, canRedo, commit, undo, redo } = useEditorHistory(initialDocument)
   const documentRef = useRef(document)
+  const skipServerNotifyRef = useRef(false)
   const commitDocument = useCallback((nextDocument: TopologyDocument) => {
     documentRef.current = nextDocument
     commit(nextDocument)
@@ -103,6 +105,13 @@ export function TeamLabDesignPage({
     documentRef.current = document
     if (lastNotified.current === document) return
     lastNotified.current = document
+    if (skipServerNotifyRef.current) {
+      // Auto-layout is a presentation-only change (editor layout). It must not
+      // be pushed to the server, because a layout tweak would otherwise bump the
+      // topology revision and surface as a new release version.
+      skipServerNotifyRef.current = false
+      return
+    }
     onDocumentChange?.(document)
   }, [document, onDocumentChange])
 
@@ -129,7 +138,12 @@ export function TeamLabDesignPage({
       if (effectiveReadOnly) return
       const currentDocument = documentRef.current
       const index = Object.keys(currentDocument.nodes).length
-      const fallback = { x: 80 + (index % 4) * 240, y: 100 + Math.floor(index / 4) * 160 }
+      // Toolbar-added nodes land on a grid derived from the real card size, so a
+      // fresh node never overlaps the one added before it.
+      const fallback = {
+        x: (index % 4) * (NODE_WIDTH + MEMBER_GAP_X),
+        y: Math.floor(index / 4) * (ASSET_NODE_HEIGHT + MEMBER_GAP_Y),
+      }
       const result = addTopologyNode(currentDocument, createTopologyNode(currentDocument, type, position ?? fallback))
       commitDocument(result.document)
       select([result.value], [])
@@ -171,6 +185,16 @@ export function TeamLabDesignPage({
     },
     [commitDocument, effectiveReadOnly]
   )
+  const resizeRegion = useCallback(
+    (networkKey: string, width: number, height: number) => {
+      if (effectiveReadOnly) return
+      // Resizing a region container changes only the editor's presentation, so it
+      // must not bump the topology revision and appear as a new release version.
+      skipServerNotifyRef.current = true
+      commitDocument(resizeNetworkRegion(documentRef.current, networkKey, width, height).document)
+    },
+    [commitDocument, effectiveReadOnly]
+  )
   const toggleRegion = useCallback(
     (networkKey: string, collapsed: boolean) => {
       if (effectiveReadOnly) return
@@ -178,13 +202,23 @@ export function TeamLabDesignPage({
     },
     [commitDocument, effectiveReadOnly]
   )
-  const resizeRegion = useCallback(
-    (networkKey: string, width: number, height: number) => {
+  const fitRegion = useCallback(
+    (networkKey: string) => {
       if (effectiveReadOnly) return
-      commitDocument(resizeNetworkRegion(documentRef.current, networkKey, width, height).document)
+      // Region sizing is presentation-only, so it must not bump the topology
+      // revision and surface as a new release version.
+      skipServerNotifyRef.current = true
+      commitDocument(fitNetworkRegionToMembers(documentRef.current, networkKey).document)
     },
     [commitDocument, effectiveReadOnly]
   )
+  const selectAll = useCallback(() => {
+    if (effectiveReadOnly) return
+    select(
+      Object.keys(documentRef.current.nodes),
+      Object.keys(documentRef.current.connections)
+    )
+  }, [effectiveReadOnly, select])
   const deleteSelection = useCallback(() => {
     if (effectiveReadOnly || (selection.nodeKeys.size === 0 && selection.connectionKeys.size === 0)) return
     commitDocument(deleteTopologyItems(documentRef.current, selection).document)
@@ -215,9 +249,10 @@ export function TeamLabDesignPage({
   const autoLayout = useCallback(() => {
     const currentDocument = documentRef.current
     if (effectiveReadOnly || Object.keys(currentDocument.nodes).length < 2) return
+    skipServerNotifyRef.current = true
     commitDocument(autoLayoutTopology(currentDocument))
     setLayoutRequest((value) => value + 1)
-    setFeedback('已完成自动排版，可使用撤销恢复原布局。')
+    setFeedback('已完成自动排版（仅本地布局，不会产生新版本）；可使用撤销恢复原布局。')
   }, [commitDocument, effectiveReadOnly])
   const save = useCallback(() => void onSave?.(documentRef.current), [onSave])
   const validate = useCallback(() => void onValidate?.(), [onValidate])
@@ -227,10 +262,6 @@ export function TeamLabDesignPage({
   const redoDocument = useCallback(() => {
     if (!effectiveReadOnly) redo()
   }, [effectiveReadOnly, redo])
-  const selectAll = useCallback(() => {
-    const all = selectAllTopology(documentRef.current)
-    select(all.nodeKeys, all.connectionKeys)
-  }, [select])
   const toggleFocus = useCallback(() => setFocusMode((value) => !value), [])
   const toggleLeftPanel = useCallback(() => setLeftPanelOpen((value) => !value), [])
   const toggleRightPanel = useCallback(() => setRightPanelOpen((value) => !value), [])
@@ -271,8 +302,10 @@ export function TeamLabDesignPage({
   )
   useEditorShortcuts(!effectiveReadOnly, shortcutHandlers)
 
-  const leftVisible = leftPanelOpen && !focusMode
-  const rightVisible = rightPanelOpen && !focusMode
+  // Focus mode keeps the node library available so operators can continue
+  // building topology while the inspector is out of the way.
+  const leftVisible = leftPanelOpen
+  const rightVisible = rightPanelOpen
   return (
     <section className={`${styles.page} ${focusMode ? styles.focusMode : ''}`}>
       <header className={styles.header}>
@@ -281,13 +314,23 @@ export function TeamLabDesignPage({
           <strong>{document.name}</strong>
         </div>
         <div aria-label="连接类型" className={styles.connectionModes} role="group">
-          <button aria-pressed={connectionMode === 'network'} onClick={useNetworkConnections} type="button">
+          <button
+            aria-pressed={connectionMode === 'network'}
+            onClick={useNetworkConnections}
+            title="拖动连线时创建网络连接"
+            type="button"
+          >
             <Network size={15} />
-            网络连接
+            <span>网络连接</span>
           </button>
-          <button aria-pressed={connectionMode === 'dependency'} onClick={useDependencyConnections} type="button">
+          <button
+            aria-pressed={connectionMode === 'dependency'}
+            onClick={useDependencyConnections}
+            title="拖动连线时创建启动依赖"
+            type="button"
+          >
             <Workflow size={15} />
-            启动依赖
+            <span>启动依赖</span>
           </button>
         </div>
         <div className={styles.metrics}>
@@ -354,7 +397,7 @@ export function TeamLabDesignPage({
       ) : null}
       {compact ? <div className={styles.mobileNotice}>移动端以只读模式显示拓扑。</div> : null}
       <div className={styles.workspace}>
-        {leftVisible ? <NodePalette disabled={effectiveReadOnly} onAdd={addPaletteNode} /> : null}
+        {leftVisible ? <NodePalette disabled={effectiveReadOnly} expanded={focusMode} onAdd={addPaletteNode} /> : null}
         <TeamLabCanvas
           canRedo={!effectiveReadOnly && canRedo}
           canUndo={!effectiveReadOnly && canUndo}
@@ -362,12 +405,14 @@ export function TeamLabDesignPage({
           document={document}
           focusMode={focusMode}
           focusNodeKey={focusTarget?.nodeKey}
+          onToggleRegion={toggleRegion}
           leftPanelOpen={leftPanelOpen}
           layoutRequest={layoutRequest}
           onAddNode={addNode}
           onAutoLayout={autoLayout}
           onConnectNodes={connectNodes}
           onMoveNodes={moveNodes}
+          onFitRegion={fitRegion}
           onMoveRegion={moveRegion}
           onRedo={redoDocument}
           onResizeRegion={resizeRegion}
@@ -375,7 +420,6 @@ export function TeamLabDesignPage({
           onNetworkRegionSelect={selectNetworkRegion}
           onToggleFocus={toggleFocus}
           onToggleLeftPanel={toggleLeftPanel}
-          onToggleRegion={toggleRegion}
           onToggleRightPanel={toggleRightPanel}
           onUndo={undoDocument}
           readOnly={effectiveReadOnly}

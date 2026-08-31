@@ -2,7 +2,6 @@ using System.Text.Json;
 using GZCTF.Infrastructure.Persistence.Queries;
 using GZCTF.Models;
 using GZCTF.Models.Data;
-using GZCTF.Modules.Content.Application;
 using GZCTF.Modules.Runtime.Application;
 using GZCTF.Modules.TeamLab.Contracts;
 using GZCTF.Modules.TeamLab.Domain;
@@ -15,7 +14,6 @@ public sealed class TeamLabTopologyApplicationService(
     TeamLabTopologyValidator validator,
     TeamLabReleaseService releases,
     TeamLabControlScopeService controlScopes,
-    BootstrapProfileCompatibilityService bootstrapCompatibility,
     NodeCapacitySnapshotService capacitySnapshots) : ITeamLabTopologyApplicationService
 {
     public async Task<TeamLabTopologyStorageReference> GetStorageReferenceAsync(
@@ -108,6 +106,37 @@ public sealed class TeamLabTopologyApplicationService(
         context.TeamLabTopologies.Add(topology);
         await context.SaveChangesAsync(cancellationToken);
         return ToDetail(topology);
+    }
+
+    /// <summary>
+    /// Clones a topology into a fresh draft owned by the actor. References are
+    /// re-validated, so cloning fails with a stable code when an image,
+    /// device package or connector no longer resolves.
+    /// </summary>
+    public async Task<TeamLabTopologyDetailModel> CloneAsync(
+        Guid topologyId,
+        Guid actorUserId,
+        bool includeAll,
+        CancellationToken cancellationToken)
+    {
+        var source = await RequireTopologyAsync(topologyId, actorUserId, includeAll, cancellationToken);
+        var definition = ToDefinition(source) with { Name = $"{source.Name.Trim()} (副本)" };
+        return await CreateCoreAsync(
+            new CreateTeamLabTopologyModel(
+                definition.Name,
+                definition.Networks,
+                definition.Assets,
+                definition.Connections,
+                DeserializeEditor(source.EditorMetadataJson),
+                definition.Infrastructure,
+                definition.Dependencies,
+                definition.Observation,
+                source.SchemaVersion,
+                source.ControlScopeId),
+            actorUserId,
+            null,
+            true,
+            cancellationToken);
     }
 
     public async Task<IReadOnlyList<TeamLabTopologySummaryModel>> ListAsync(
@@ -231,11 +260,39 @@ public sealed class TeamLabTopologyApplicationService(
             model.Infrastructure, model.Dependencies, model.Observation));
         if (requireValid)
             await RequireValidAsync(definition, model.SchemaVersion, cancellationToken);
-        var identity = await context.TeamLabTopologies.AsNoTracking()
-            .Where(item => item.PublicId == topologyId && (includeAll || item.OwnerUserId == actorUserId))
-            .Select(item => new { item.Id, item.Revision })
-            .SingleOrDefaultAsync(cancellationToken)
-            ?? throw NotFound();
+        var current = await RequireTopologyAsync(topologyId, actorUserId, includeAll, cancellationToken);
+        if (current.Revision != model.Revision)
+            throw new TeamLabApiContractException(
+                "topology_revision_conflict",
+                $"拓扑修订号为 {current.Revision}，不是 {model.Revision}",
+                409);
+
+        var editorJson = SerializeEditor(NormalizeEditor(model.Editor, definition));
+        if (current.SchemaVersion == model.SchemaVersion && SameDefinition(model.SchemaVersion, ToDefinition(current), definition))
+        {
+            var editorUpdate = new TeamLabTopology { Id = current.Id, Revision = model.Revision };
+            context.TeamLabTopologies.Attach(editorUpdate);
+            editorUpdate.EditorMetadataJson = editorJson;
+            editorUpdate.LastMutationOperationId = operationId;
+            editorUpdate.UpdatedAt = DateTimeOffset.UtcNow;
+            context.Entry(editorUpdate).Property(item => item.EditorMetadataJson).IsModified = true;
+            context.Entry(editorUpdate).Property(item => item.LastMutationOperationId).IsModified = true;
+            context.Entry(editorUpdate).Property(item => item.UpdatedAt).IsModified = true;
+            try
+            {
+                await context.SaveChangesAsync(cancellationToken);
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                throw new TeamLabApiContractException(
+                    "topology_revision_conflict",
+                    $"拓扑修订号为 {current.Revision}，不是 {model.Revision}",
+                    409);
+            }
+            return ToDetail(await RequireTopologyAsync(topologyId, actorUserId, includeAll, cancellationToken));
+        }
+
+        var identity = new { current.Id, current.Revision };
 
         await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
         var now = DateTimeOffset.UtcNow;
@@ -244,7 +301,7 @@ public sealed class TeamLabTopologyApplicationService(
             .ExecuteUpdateAsync(setters => setters
                 .SetProperty(item => item.Name, definition.Name)
                 .SetProperty(item => item.SchemaVersion, model.SchemaVersion)
-                .SetProperty(item => item.EditorMetadataJson, SerializeEditor(NormalizeEditor(model.Editor, definition)))
+                .SetProperty(item => item.EditorMetadataJson, editorJson)
                 .SetProperty(item => item.InfrastructureJson, Serialize(definition.Infrastructure ?? []))
                 .SetProperty(item => item.DependenciesJson, Serialize(definition.Dependencies ?? []))
                 .SetProperty(item => item.ObservationJson, Serialize(definition.Observation ?? new TeamLabObservationPolicyModel()))
@@ -359,11 +416,6 @@ public sealed class TeamLabTopologyApplicationService(
         try
         {
             await ValidateImageTemplatesAsync(context, definition, cancellationToken);
-            await bootstrapCompatibility.ValidateReleaseAsync(
-                TeamLabReleaseCodec.DecodeExecution(
-                    topology.SchemaVersion,
-                    TeamLabReleaseCodec.Encode(topology.SchemaVersion, definition)),
-                cancellationToken);
             return result;
         }
         catch (TeamLabApiContractException exception)
@@ -378,11 +430,10 @@ public sealed class TeamLabTopologyApplicationService(
         int revision,
         Guid actorUserId,
         bool includeAll,
-        IReadOnlyList<TeamLabRuntimeOverlayModel>? scenarioOverlays,
         CancellationToken cancellationToken)
     {
         var topology = await RequireTopologyAsync(topologyId, actorUserId, includeAll, cancellationToken);
-        return await releases.PublishAsync(topology, revision, actorUserId, null, scenarioOverlays, cancellationToken);
+        return await releases.PublishAsync(topology, revision, actorUserId, null, cancellationToken);
     }
 
     public async Task<TeamLabReleaseModel> PublishForOperationAsync(
@@ -391,12 +442,11 @@ public sealed class TeamLabTopologyApplicationService(
         Guid actorUserId,
         bool includeAll,
         Guid operationId,
-        IReadOnlyList<TeamLabRuntimeOverlayModel>? scenarioOverlays,
         CancellationToken cancellationToken)
     {
         var topology = await RequireTopologyAsync(topologyId, actorUserId, includeAll, cancellationToken);
         return await releases.PublishAsync(
-            topology, revision, actorUserId, operationId, scenarioOverlays, cancellationToken);
+            topology, revision, actorUserId, operationId, cancellationToken);
     }
 
     public async Task<IReadOnlyList<TeamLabReleaseModel>> ListReleasesAsync(
@@ -410,7 +460,9 @@ public sealed class TeamLabTopologyApplicationService(
             .Where(item => item.TopologyId == topology.Id)
             .OrderByDescending(item => item.Version)
             .ToArrayAsync(cancellationToken);
-        return rows.Select(item => TeamLabReleaseService.ToModel(item, topology.PublicId)).ToArray();
+        var names = await LoadPublisherNamesAsync(rows.Select(item => item.PublishedById).ToArray(), cancellationToken);
+        return rows.Select(item => TeamLabReleaseService.ToModel(item, topology.PublicId,
+            item.PublishedById is { } pid && names.TryGetValue(pid, out var pubName) ? pubName : null)).ToArray();
     }
 
     public async Task<OpenTeamLabReleasePageModel> ListReleasesPageAsync(
@@ -434,8 +486,10 @@ public sealed class TeamLabTopologyApplicationService(
             .ThenBy(item => item.Id)
             .Take(normalizedLimit + 1)
             .ToArrayAsync(cancellationToken);
+        var names = await LoadPublisherNamesAsync(rows.Take(normalizedLimit).Select(item => item.PublishedById).ToArray(), cancellationToken);
         var page = rows.Take(normalizedLimit)
-            .Select(item => TeamLabReleaseService.ToModel(item, topology.PublicId).ToOpen())
+            .Select(item => TeamLabReleaseService.ToModel(item, topology.PublicId,
+                item.PublishedById is { } pid && names.TryGetValue(pid, out var pubName) ? pubName : null).ToOpen())
             .ToArray();
         var nextCursor = rows.Length > normalizedLimit
             ? new GuidTimeCursor(page[^1].PublishedAt, page[^1].Id).Encode()
@@ -454,7 +508,29 @@ public sealed class TeamLabTopologyApplicationService(
         var release = await context.TeamLabTopologyReleases.AsNoTracking()
             .SingleOrDefaultAsync(item => item.TopologyId == topology.Id && item.Id == releaseId, cancellationToken)
             ?? throw new TeamLabApiContractException("release_not_found", "未找到该拓扑版本", 404);
-        return TeamLabReleaseService.ToModel(release, topology.PublicId);
+        var names = await LoadPublisherNamesAsync([release.PublishedById], cancellationToken);
+        return TeamLabReleaseService.ToModel(release, topology.PublicId,
+            release.PublishedById is { } pid && names.TryGetValue(pid, out var pubName) ? pubName : null);
+    }
+
+
+    /// <summary>
+    /// Resolves release publisher display names (real name when set, otherwise the
+    /// account name) so clients never have to render raw user GUIDs.
+    /// </summary>
+    private async Task<IReadOnlyDictionary<Guid, string>> LoadPublisherNamesAsync(
+        IEnumerable<Guid?> publisherIds,
+        CancellationToken cancellationToken)
+    {
+        var ids = publisherIds.Where(id => id.HasValue).Select(id => id!.Value).Distinct().ToArray();
+        if (ids.Length == 0) return new Dictionary<Guid, string>();
+        return await context.Users.AsNoTracking()
+            .Where(user => ids.Contains(user.Id))
+            .Select(user => new { user.Id, user.UserName, user.RealName })
+            .ToDictionaryAsync(
+                user => user.Id,
+                user => string.IsNullOrWhiteSpace(user.RealName) ? user.UserName ?? string.Empty : user.RealName,
+                cancellationToken);
     }
 
     public async Task<TeamLabPlanModel> PlanAsync(
@@ -506,15 +582,14 @@ public sealed class TeamLabTopologyApplicationService(
     internal static async Task ValidateImageTemplatesAsync(
         AppDbContext context,
         TeamLabExecutionTopology topology,
-        CancellationToken cancellationToken,
-        bool allowBakedSourceDrift = false)
+        CancellationToken cancellationToken)
         => await ValidateImageTemplatesAsync(
             context,
             topology.Assets.Select(item => new TeamLabImageTemplateRequirement(
                 item.ImageTemplateId,
                 item.Kind,
                 item.Key,
-                allowBakedSourceDrift && item.BakeAtPublish ? null : item.ImageDigest)).ToArray(),
+                item.ImageDigest)).ToArray(),
             cancellationToken);
 
     private static async Task ValidateImageTemplatesAsync(
@@ -572,18 +647,15 @@ public sealed class TeamLabTopologyApplicationService(
                     item.Interfaces.OrderBy(iface => iface.OrderIndex).ThenBy(iface => iface.Key, StringComparer.Ordinal)
                         .Select(iface => new TeamLabTopologyInterfaceModel(
                             iface.Key, iface.Network.Key, iface.HostOffset, iface.IsPrimary, iface.OrderIndex)).ToArray(),
-                    item.RoutingEnabled,
                     item.ExposePort,
-                    DeserializeEnvironment(item.EnvironmentJson),
-                    item.StartCommand,
                     item.HealthCheckKind is { } kind && item.HealthCheckPort is { } port
                         ? new TeamLabHealthCheckModel(kind, port)
                         : null,
                     item.OrderIndex,
-                    item.Stateless,
-                    Deserialize<TeamLabBootstrapReferenceModel>(item.BootstrapJson),
                     item.EndpointObservation,
-                    item.BakeAtPublish)).ToArray(),
+                    item.DevicePackageId,
+                    ParseDeviceParameters(item.DevicePackageParametersJson),
+                    item.ConnectorId)).ToArray(),
             topology.Connections.OrderBy(item => item.Key, StringComparer.Ordinal)
                 .Select(item => new TeamLabTopologyConnectionModel(
                     item.Key, item.FromNetworkKey, item.ToNetworkKey, item.ViaAssetKey,
@@ -600,7 +672,66 @@ public sealed class TeamLabTopologyApplicationService(
         var validation = validator.Validate(definition, schemaVersion);
         if (!validation.Valid) throw InvalidTopology(validation);
         await ValidateImageTemplatesAsync(context, definition, cancellationToken);
+        await ValidateCapabilityResourcesAsync(context, definition, cancellationToken);
     }
+
+    /// <summary>
+    /// Device packages and field connectors are referenced by id only. A
+    /// reference that no longer resolves to an enabled, non-archived registry
+    /// row is rejected with a stable code so drafts never drift silently.
+    /// </summary>
+    internal static async Task ValidateCapabilityResourcesAsync(
+        AppDbContext context,
+        TeamLabTopologyDefinitionModel definition,
+        CancellationToken cancellationToken)
+    {
+        var packageIds = definition.Assets
+            .Where(item => item.DevicePackageId is { } id && id > 0)
+            .Select(item => item.DevicePackageId!.Value)
+            .Distinct()
+            .ToArray();
+        var packages = await context.TeamLabDevicePackages.AsNoTracking()
+            .Where(item => packageIds.Contains(item.Id))
+            .ToDictionaryAsync(item => item.Id, cancellationToken);
+        foreach (var asset in definition.Assets)
+        {
+            if (asset.DevicePackageId is not { } packageId || packageId <= 0) continue;
+            if (!packages.TryGetValue(packageId, out var package) || !package.IsEnabled || package.IsArchived)
+                throw new TeamLabApiContractException(
+                    "device_package_unavailable",
+                    $"资产 '{asset.Key}' 引用的设备包 {packageId} 不可用",
+                    422);
+            var supportedKinds = JsonSerializer.Deserialize<List<string>>(package.SupportedAssetKindsJson) ?? [];
+            var expectedKind = asset.Kind == TeamLabAssetKind.Docker ? "docker" : "vm";
+            if (!supportedKinds.Contains(expectedKind, StringComparer.Ordinal))
+                throw new TeamLabApiContractException(
+                    "device_package_unavailable",
+                    $"资产 '{asset.Key}' 的资产类型 {expectedKind} 不在设备包 {packageId} 的支持范围内",
+                    422);
+        }
+        var connectorIds = definition.Assets
+            .Where(item => item.ConnectorId is { } connectorId && connectorId != Guid.Empty)
+            .Select(item => item.ConnectorId!.Value)
+            .Distinct()
+            .ToArray();
+        var connectors = await context.TeamLabConnectors.AsNoTracking()
+            .Where(item => connectorIds.Contains(item.PublicId))
+            .ToDictionaryAsync(item => item.PublicId, cancellationToken);
+        foreach (var asset in definition.Assets)
+        {
+            if (asset.ConnectorId is not { } connectorId || connectorId == Guid.Empty) continue;
+            if (!connectors.TryGetValue(connectorId, out var connector) || connector.IsArchived)
+                throw new TeamLabApiContractException(
+                    "connector_unavailable",
+                    $"资产 '{asset.Key}' 引用的现场连接器不可用",
+                    422);
+        }
+    }
+
+    private static JsonElement? ParseDeviceParameters(string? canonicalJson) =>
+        string.IsNullOrWhiteSpace(canonicalJson)
+            ? null
+            : JsonDocument.Parse(canonicalJson).RootElement.Clone();
 
     private async Task<TeamLabTopology> RequireTopologyAsync(
         Guid topologyId,
@@ -697,20 +828,19 @@ public sealed class TeamLabTopologyApplicationService(
                 // Draft assets may be created before an image is selected. The publish validator
                 // rejects that state; persisting it as null keeps the draft outside the image FK.
                 ImageTemplateId = model.ImageTemplateId > 0 ? model.ImageTemplateId : null,
+                DevicePackageId = model.DevicePackageId,
+                DevicePackageParametersJson = model.DeviceParameters is { } parameters
+                    ? JsonSerializer.Serialize(parameters)
+                    : null,
+                ConnectorId = model.ConnectorId,
                 CpuUnits = model.Resources.CpuUnits,
                 MemoryMiB = model.Resources.MemoryMiB,
                 StorageMiB = model.Resources.StorageMiB,
                 ExposePort = model.ExposePort,
-                RoutingEnabled = model.RoutingEnabled,
-                EnvironmentJson = JsonSerializer.Serialize(model.Environment ?? new Dictionary<string, string>()),
-                StartCommand = model.StartCommand,
                 HealthCheckKind = model.HealthCheck?.Kind,
                 HealthCheckPort = model.HealthCheck?.Port,
                 OrderIndex = model.OrderIndex,
-                Stateless = model.Stateless,
-                BootstrapJson = model.Bootstrap is null ? null : Serialize(model.Bootstrap),
-                EndpointObservation = model.EndpointObservation,
-                BakeAtPublish = model.BakeAtPublish
+                EndpointObservation = model.EndpointObservation
             };
             foreach (var iface in model.Interfaces)
             {
@@ -789,6 +919,15 @@ public sealed class TeamLabTopologyApplicationService(
 
     private static string Serialize<T>(T value) => JsonSerializer.Serialize(value);
 
+    private static bool SameDefinition(
+        int schemaVersion,
+        TeamLabTopologyDefinitionModel left,
+        TeamLabTopologyDefinitionModel right) =>
+        string.Equals(
+            TeamLabReleaseCodec.Encode(schemaVersion, left),
+            TeamLabReleaseCodec.Encode(schemaVersion, right),
+            StringComparison.Ordinal);
+
     private static TeamLabTopologyEditorModel DeserializeEditor(string json)
     {
         try
@@ -803,18 +942,6 @@ public sealed class TeamLabTopologyApplicationService(
             return new TeamLabTopologyEditorModel(new Dictionary<string, TeamLabEditorItemModel>(),
                 new Dictionary<string, TeamLabEditorItemModel>(),
                 new Dictionary<string, TeamLabEditorItemModel>());
-        }
-    }
-
-    private static IReadOnlyDictionary<string, string> DeserializeEnvironment(string json)
-    {
-        try
-        {
-            return JsonSerializer.Deserialize<Dictionary<string, string>>(json) ?? new Dictionary<string, string>();
-        }
-        catch (JsonException)
-        {
-            return new Dictionary<string, string>();
         }
     }
 

@@ -22,6 +22,9 @@ public sealed class TeamLabPacketObserver(
     public TeamLabObservationBatchResponse Read(TeamLabObservationBatchRequest request) =>
         spool.Read(request, Health());
 
+    public Task AcknowledgeAsync(int runtimeId, int generation, long sequence, CancellationToken token) =>
+        spool.AcknowledgeAsync(runtimeId, generation, sequence, token);
+
     public TeamLabObservationHealth Health()
     {
         var flow = _flows.Snapshot();

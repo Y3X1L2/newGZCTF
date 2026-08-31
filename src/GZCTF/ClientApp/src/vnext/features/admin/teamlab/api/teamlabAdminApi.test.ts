@@ -44,17 +44,10 @@ function topologyDetail() {
           imageTemplateId: 12,
           resources: { cpuUnits: 1, memoryMiB: 512, storageMiB: 1024 },
           interfaces: [{ key: 'portal-edge-nic', networkKey: 'edge', hostOffset: 10, primary: true, orderIndex: 0 }],
-          routingEnabled: false,
           exposePort: 80,
-          environment: { APP_MODE: 'range' },
-          startCommand: null,
           healthCheck: { kind: 1, port: 80 },
           orderIndex: 0,
-          stateless: true,
-          bootstrap: null,
           endpointObservation: 1,
-          bakeAtPublish: false,
-          imageDigest: 'sha256:abc',
         },
       ],
       connections: [],
@@ -78,7 +71,6 @@ describe('TeamLab admin contract boundary', () => {
     expect(parsed.definition.infrastructure[0]?.kind).toBe('managed-switch')
     expect(parsed.definition.assets[0]).toMatchObject({ kind: 'docker', endpointObservation: 'optional' })
     expect(parsed.definition.assets[0]?.healthCheck?.kind).toBe('http')
-    expect(parsed.definition.assets[0]?.startCommand).toBeNull()
   })
 
   it('rejects malformed unknown responses at the adapter boundary', () => {

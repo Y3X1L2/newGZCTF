@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using GZCTF.Modules.TeamLab.Contracts;
 using GZCTF.Modules.TeamLab.Domain;
 
@@ -48,21 +49,15 @@ public static class TeamLabTopologyV1Normalizer
             asset.Resources.MemoryMiB,
             asset.Resources.StorageMiB,
             asset.Interfaces.Select(ToExecution).ToArray(),
-            asset.RoutingEnabled,
             asset.ExposePort,
-            asset.Environment ?? new Dictionary<string, string>(StringComparer.Ordinal),
-            asset.StartCommand,
             asset.HealthCheck?.Kind,
             asset.HealthCheck?.Port,
             asset.OrderIndex,
-            asset.Stateless,
-            asset.Bootstrap is null
-                ? null
-                : new TeamLabExecutionBootstrapReference(
-                    asset.Bootstrap.ProfileId, asset.Bootstrap.Version, asset.Bootstrap.Parameters),
             asset.EndpointObservation,
-            asset.BakeAtPublish,
-            asset.ImageDigest);
+            null,
+            asset.DevicePackageId,
+            asset.DeviceParameters is { } parameters ? JsonSerializer.Serialize(parameters) : null,
+            asset.ConnectorId);
 
     internal static TeamLabExecutionInterface ToExecution(TeamLabTopologyInterfaceModel iface) =>
         new(iface.Key, iface.NetworkKey, iface.HostOffset, iface.Primary, iface.OrderIndex);

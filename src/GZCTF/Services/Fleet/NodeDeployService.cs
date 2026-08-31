@@ -553,16 +553,16 @@ install_teamlab_network_tools() {
 
   case "$pm" in
     apt)
-      install_pkgs wireguard-tools nftables iptables tcpdump tshark genisoimage xorriso cloud-image-utils dnsmasq-base
+      install_pkgs wireguard-tools nftables iptables tcpdump tshark genisoimage xorriso cloud-image-utils dnsmasq-base openvswitch-switch ovn-host
       ;;
     dnf|yum)
-      install_pkgs wireguard-tools nftables iptables tcpdump wireshark-cli xorriso cloud-utils-growpart dnsmasq || true
+      install_pkgs wireguard-tools nftables iptables tcpdump wireshark-cli xorriso cloud-utils-growpart dnsmasq openvswitch ovn-host || true
       ;;
     zypper)
-      install_pkgs wireguard-tools nftables iptables tcpdump wireshark xorriso dnsmasq || true
+      install_pkgs wireguard-tools nftables iptables tcpdump wireshark xorriso dnsmasq openvswitch ovn || true
       ;;
     pacman)
-      install_pkgs wireguard-tools nftables iptables-nft tcpdump wireshark-cli xorriso cloud-image-utils dnsmasq || true
+      install_pkgs wireguard-tools nftables iptables-nft tcpdump wireshark-cli xorriso cloud-image-utils dnsmasq openvswitch ovn || true
       ;;
   esac
 }
@@ -607,7 +607,12 @@ teamlab_tools_ready() {
   need_cmd wg || return 1
   { need_cmd iptables || need_cmd nft; } || return 1
   need_cmd tcpdump || return 1
-  need_cmd dumpcap || return 1
+      need_cmd dumpcap || return 1
+      need_cmd ovs-vsctl || return 1
+      need_cmd ovsdb-client || return 1
+      need_cmd ovn-controller || return 1
+      need_cmd ovn-nbctl || return 1
+      need_cmd ovn-sbctl || return 1
   { need_cmd genisoimage || need_cmd mkisofs || need_cmd xorriso || need_cmd cloud-localds; } || return 1
 }
 

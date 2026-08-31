@@ -46,20 +46,20 @@ public sealed class TeamLabTopologyAsset
     public string Name { get; set; } = string.Empty;
     public TeamLabAssetKind Kind { get; set; }
     public int? ImageTemplateId { get; set; }
+    /// <summary>Optional device package backing this asset (industrial emulation, honeypot, ...).</summary>
+    public int? DevicePackageId { get; set; }
+    /// <summary>Canonical JSON of the author-facing package parameters; frozen into the release at publish.</summary>
+    public string? DevicePackageParametersJson { get; set; }
+    /// <summary>Public id of an authorized field connector this asset attaches to; by reference only.</summary>
+    public Guid? ConnectorId { get; set; }
     public int CpuUnits { get; set; } = 10;
     public int MemoryMiB { get; set; } = 512;
     public int StorageMiB { get; set; } = 512;
     public int? ExposePort { get; set; }
-    public bool RoutingEnabled { get; set; }
-    public string EnvironmentJson { get; set; } = "{}";
-    public string? StartCommand { get; set; }
     public TeamLabHealthCheckKind? HealthCheckKind { get; set; }
     public int? HealthCheckPort { get; set; }
     public int OrderIndex { get; set; }
-    public bool Stateless { get; set; }
-    public string? BootstrapJson { get; set; }
     public TeamLabEndpointObservationMode EndpointObservation { get; set; }
-    public bool BakeAtPublish { get; set; }
     public TeamLabTopology Topology { get; set; } = null!;
     public List<TeamLabTopologyInterface> Interfaces { get; set; } = [];
 }

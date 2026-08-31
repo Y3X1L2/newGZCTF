@@ -1,5 +1,5 @@
 import { Download, Radio, Square } from 'lucide-react'
-import { useId, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import useSWR from 'swr'
 import { ActionButton, InlineFeedback } from '../../../../shared/Interaction'
 import { DataState } from '../../../../shared/Primitives'
@@ -35,6 +35,28 @@ export function CapturePanel({ runtimeId, networks }: { runtimeId: string; netwo
       refreshInterval: (latest) => latest && liveCaptureStatuses.has(latest.status) ? 2_000 : 0,
     }
   )
+
+  // Keep the page-level capture alive across tab switches: the panel unmounts when the
+  // user leaves the capture tab, so restore the most recent capture from the server on
+  // mount instead of relying on component state.
+  useEffect(() => {
+    let disposed = false
+    async function restoreLatest() {
+      if (captureId) return
+      try {
+        const captures = await teamLabRuntimeApi.listCaptures(runtimeId)
+        const latest = captures[0]
+        if (latest && !disposed) setCaptureId(latest.id)
+      } catch {
+        // The list endpoint is an enhancement; if it is unavailable, keep the
+        // existing "尚未启动抓包" empty state rather than blocking the panel.
+      }
+    }
+    void restoreLatest()
+    return () => {
+      disposed = true
+    }
+  }, [captureId, runtimeId])
 
   const start = async () => {
     if (submitting || (scope === 'network' && !networkKey)) return

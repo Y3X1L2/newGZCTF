@@ -56,6 +56,7 @@ public sealed class TeamLabRuntimeProjectionService(AppDbContext context)
             runtime.PublicId,
             releaseId,
             runtime.Generation,
+            runtime.ExecutionModel,
             runtime.Status,
             Stage(runtime.Status),
             runtime.IsOpenToPlayers,

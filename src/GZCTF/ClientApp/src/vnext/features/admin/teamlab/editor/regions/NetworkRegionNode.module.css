@@ -1,106 +1,185 @@
+/*
+ * A network region is a *container*, not a highlight. It therefore uses a
+ * near-neutral surface tint and reserves saturated colour for meaning: the entry
+ * network (the one reachable from outside) and the selected region.
+ *
+ * Previously both the region and its switch painted themselves with the same
+ * brand green, so a whole scene read as one flat green mass with no hierarchy.
+ */
 .region {
+  --region-accent: var(--yn-color-border-strong);
+  --region-tint: color-mix(in srgb, var(--yn-color-canvas-raised) 88%, var(--yn-color-surface));
+
   display: flex;
   width: 100%;
   height: 100%;
   flex-direction: column;
-  border: 2px solid color-mix(in srgb, var(--yn-color-brand) 72%, var(--yn-color-border-strong));
+  border: 1px solid color-mix(in srgb, var(--region-accent) 42%, var(--yn-color-border));
   border-radius: var(--yn-radius-lg);
-  background: color-mix(in srgb, var(--yn-color-brand-soft) 76%, var(--yn-color-canvas));
-  overflow: hidden;
+  background: var(--region-tint);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--yn-color-surface) 55%, transparent);
   transition:
     border-color var(--yn-motion-fast) var(--yn-ease-standard),
-    background-color var(--yn-motion-fast) var(--yn-ease-standard);
+    box-shadow var(--yn-motion-fast) var(--yn-ease-standard);
 }
 
-.region.selected {
-  border-color: var(--yn-color-brand);
-  background: var(--yn-color-brand-soft);
+/* The entry network is the scene's ingress; it earns the brand accent. */
+.region[data-entry] {
+  --region-accent: var(--yn-color-brand);
+  --region-tint: color-mix(in srgb, var(--yn-color-brand-soft) 30%, var(--yn-color-canvas-raised));
 }
 
-.region > header {
+.region[data-active] {
+  border-color: var(--region-accent);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--yn-color-surface) 55%, transparent),
+    var(--yn-shadow-focus);
+}
+
+.region[data-collapsed] {
+  background: color-mix(in srgb, var(--region-tint) 70%, var(--yn-color-surface));
+}
+
+/*
+ * The title bar sits *inside* the region's top inset (REGION_HEADER_HEIGHT), so
+ * member nodes laid out below it can never be overlapped by region text.
+ */
+.header {
   display: flex;
   min-width: 0;
+  height: 40px;
+  flex: 0 0 auto;
   align-items: center;
   gap: var(--yn-space-2);
-  padding: var(--yn-space-2) var(--yn-space-3);
-  border-bottom: 1px solid color-mix(in srgb, var(--yn-color-brand) 42%, var(--yn-color-border));
-  background: color-mix(in srgb, var(--yn-color-brand-soft) 88%, var(--yn-color-surface));
-  color: var(--yn-color-text-secondary);
+  padding: 0 var(--yn-space-2) 0 var(--yn-space-3);
+  border-bottom: 1px solid color-mix(in srgb, var(--region-accent) 26%, var(--yn-color-border));
+  border-radius: calc(var(--yn-radius-lg) - 1px) calc(var(--yn-radius-lg) - 1px) 0 0;
+  background: color-mix(in srgb, var(--yn-color-surface) 78%, var(--region-tint));
   cursor: move;
   user-select: none;
 }
 
-.region > header > span {
+.icon {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: var(--yn-radius-sm);
+  background: color-mix(in srgb, var(--region-accent) 16%, var(--yn-color-surface));
+  color: var(--region-accent);
+}
+
+.heading {
   display: grid;
   min-width: 0;
   flex: 1;
-  gap: 1px;
 }
 
-.region > header strong {
+.heading strong,
+.heading small {
   overflow: hidden;
-  font-size: var(--yn-font-sm);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.region > header small {
+.heading strong {
+  color: var(--yn-color-text);
+  font-size: var(--yn-font-sm);
+  font-weight: 650;
+  line-height: 1.25;
+}
+
+.heading small {
   color: var(--yn-color-muted);
   font-family: var(--yn-font-mono);
   font-size: var(--yn-font-xs);
+  line-height: 1.25;
 }
 
-.region > header button {
-  display: grid;
-  width: 26px;
-  height: 26px;
+.badges {
+  display: flex;
   flex: 0 0 auto;
+  align-items: center;
+  gap: var(--yn-space-1);
+}
+
+.entryBadge,
+.memberBadge {
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: var(--yn-font-xs);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.entryBadge {
+  background: color-mix(in srgb, var(--yn-color-brand) 18%, var(--yn-color-surface));
+  color: var(--yn-color-brand-strong);
+}
+
+.memberBadge {
+  background: var(--yn-color-surface-muted);
+  color: var(--yn-color-muted);
+  font-family: var(--yn-font-mono);
+}
+
+.controls {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 2px;
+}
+
+.controls button {
+  display: grid;
+  width: 24px;
+  height: 24px;
   place-items: center;
   border: 0;
   border-radius: var(--yn-radius-sm);
   background: transparent;
-  color: var(--yn-color-text-secondary);
+  color: var(--yn-color-muted);
   cursor: pointer;
   transition:
     background var(--yn-motion-fast) var(--yn-ease-standard),
     color var(--yn-motion-fast) var(--yn-ease-standard);
 }
 
-.region > header button:hover:not(:disabled),
-.region > header button:focus-visible {
-  outline: none;
-  background: var(--yn-color-brand-soft);
-  color: var(--yn-color-brand-strong);
+.controls button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--region-accent) 14%, var(--yn-color-surface));
+  color: var(--yn-color-text);
 }
 
-.region > header button:disabled {
+.controls button:focus-visible {
+  outline: 2px solid var(--yn-color-brand);
+  outline-offset: 1px;
+}
+
+.controls button:disabled {
   cursor: not-allowed;
-  opacity: 0.45;
+  opacity: 0.4;
 }
 
-.region > header button svg {
+.collapseButton svg {
   transition: transform var(--yn-motion-fast) var(--yn-ease-standard);
 }
 
-.region.collapsed > header button svg {
+.region[data-collapsed] .collapseButton svg {
   transform: rotate(-90deg);
 }
 
-.region > p {
+.collapsedHint {
   margin: 0;
   padding: var(--yn-space-2) var(--yn-space-3);
   color: var(--yn-color-muted);
   font-size: var(--yn-font-xs);
 }
 
-.region .collapsedHint {
-  color: var(--yn-color-warning);
-}
-
 @media (prefers-reduced-motion: reduce) {
   .region,
-  .region > header button,
-  .region > header button svg {
+  .controls button,
+  .collapseButton svg {
     transition: none;
   }
 }

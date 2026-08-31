@@ -1,4 +1,5 @@
 using System;
+using System.Net;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
@@ -142,4 +143,59 @@ public sealed class AgentRuntimeSignalJournalTests
             if (Directory.Exists(root)) Directory.Delete(root, true);
         }
     }
+
+    [Fact]
+    public async Task PublishPendingAsync_AcknowledgesTerminalConflict()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"gzctf-signal-conflict-{Guid.NewGuid():N}");
+        try
+        {
+            var journal = new AgentRuntimeSignalJournal(Options.Create(new AgentTeamLabConfig
+            {
+                RuntimeStateRoot = root
+            }));
+            var operationId = Guid.CreateVersion7();
+            var signal = await journal.AppendAsync(new AgentRuntimeSignalDraft(
+                operationId,
+                42,
+                3,
+                "docker",
+                "container-1",
+                AgentRuntimeSignalStage.ResourceCreated,
+                AgentRuntimeSignalOutcome.Ready), CancellationToken.None);
+
+            var handler = new StubHttpMessageHandler(new HttpResponseMessage(HttpStatusCode.Conflict)
+            {
+                Content = new StringContent("{\"message\":\"sequence reused\"}")
+            });
+            var factory = new Mock<IHttpClientFactory>();
+            factory.Setup(item => item.CreateClient(It.IsAny<string>())).Returns(new HttpClient(handler));
+            var publisher = new AgentRuntimeSignalPublisher(
+                journal,
+                factory.Object,
+                Options.Create(new AgentConfig
+                {
+                    ServerUrl = "http://127.0.0.1:8080",
+                    NodeId = Guid.CreateVersion7()
+                }),
+                NullLogger<AgentRuntimeSignalPublisher>.Instance);
+
+            await publisher.PublishPendingAsync(operationId, CancellationToken.None);
+
+            Assert.Equal(1, signal.Sequence);
+            Assert.Empty(await journal.ReadPendingAsync(operationId, CancellationToken.None));
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, true);
+        }
+    }
+
+    private sealed class StubHttpMessageHandler(HttpResponseMessage response) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken) => Task.FromResult(response);
+    }
+
 }

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using GZCTF.Modules.TeamLab.Domain;
 
 namespace GZCTF.Modules.TeamLab.Contracts;
@@ -29,17 +30,13 @@ public sealed record TeamLabTopologyAssetModel(
     int ImageTemplateId,
     TeamLabAssetResourceModel Resources,
     IReadOnlyList<TeamLabTopologyInterfaceModel> Interfaces,
-    bool RoutingEnabled,
     int? ExposePort = null,
-    IReadOnlyDictionary<string, string>? Environment = null,
-    string? StartCommand = null,
     TeamLabHealthCheckModel? HealthCheck = null,
     int OrderIndex = 0,
-    bool Stateless = false,
-    TeamLabBootstrapReferenceModel? Bootstrap = null,
     TeamLabEndpointObservationMode EndpointObservation = TeamLabEndpointObservationMode.Disabled,
-    bool BakeAtPublish = false,
-    string? ImageDigest = null);
+    int? DevicePackageId = null,
+    JsonElement? DeviceParameters = null,
+    Guid? ConnectorId = null);
 
 public sealed record TeamLabTopologyConnectionModel(
     string Key,
@@ -94,9 +91,7 @@ public sealed record UpdateTeamLabTopologyModel(
     TeamLabObservationPolicyModel? Observation = null,
     int SchemaVersion = 2);
 
-public sealed record PublishTeamLabTopologyModel(
-    int Revision,
-    IReadOnlyList<TeamLabRuntimeOverlayModel>? ScenarioOverlays = null);
+public sealed record PublishTeamLabTopologyModel(int Revision);
 
 public sealed record TeamLabTopologySummaryModel(
     Guid Id,
@@ -129,8 +124,10 @@ public sealed record TeamLabReleaseModel(
     int SchemaVersion,
     string ContentHash,
     Guid? PublishedBy,
+    string? PublisherName,
     DateTimeOffset PublishedAt,
-    TeamLabTopologyEditorModel? Editor = null);
+    TeamLabTopologyEditorModel? Editor = null,
+    bool Archived = false);
 
 public sealed record TeamLabCapabilitiesModel(
     string ApiVersion,
@@ -149,7 +146,6 @@ public sealed record TeamLabFeatureCapabilitiesModel(
     bool EditorLayout = true,
     int EditorLayoutVersion = 1,
     bool NetworkRegions = true,
-    bool ServiceProfiles = true,
     bool Rollouts = true,
     bool PauseResume = true);
 

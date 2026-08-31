@@ -31,7 +31,6 @@ public sealed class TeamLabDeploymentStageMachine(
         TeamLabDeploymentStage.NetworkApplying => DeploymentStage.NetworkApplying,
         TeamLabDeploymentStage.RoutesApplying => DeploymentStage.RoutesApplying,
         TeamLabDeploymentStage.AssetBooting => DeploymentStage.AssetBooting,
-        TeamLabDeploymentStage.BootstrapInjecting => DeploymentStage.BootstrapInjecting,
         TeamLabDeploymentStage.HealthProbing => DeploymentStage.HealthProbing,
         TeamLabDeploymentStage.ObservationStarting => DeploymentStage.ObservationStarting,
         _ => throw new ArgumentOutOfRangeException(nameof(stage))
@@ -61,6 +60,9 @@ public sealed class TeamLabArtifactDistribution(ImageDistributionService distrib
         if (!result.Success)
             throw new TeamLabRuntimeExecutionException(result.Message);
     }
+
+    public Task ReleaseTeamLabReleaseReferencesAsync(Guid releaseId, CancellationToken token) =>
+        distribution.ReleaseTeamLabReleaseReferencesAsync(releaseId, token);
 
     public Task ReleaseRuntimeAsync(int runtimeId, CancellationToken cancellationToken) =>
         distribution.ReleaseTeamLabRuntimeReferencesAsync(runtimeId, cancellationToken);

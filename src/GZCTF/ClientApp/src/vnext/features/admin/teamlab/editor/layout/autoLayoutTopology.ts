@@ -1,515 +1,417 @@
-import { networkMembersOf } from '../../model/topologyCommands'
-import type { TopologyDocument, TopologyNode, TopologyPosition, TopologySwitchNode } from '../../model/topologyDocument'
+import {
+  ASSET_NODE_HEIGHT,
+  DIAGRAM_TARGET_ASPECT,
+  INFRA_NODE_HEIGHT,
+  MEMBER_GAP_X,
+  MEMBER_GAP_Y,
+  NODE_WIDTH,
+  REGION_GAP_X,
+  REGION_GAP_Y,
+  REGION_HEADER_HEIGHT,
+  REGION_PADDING_BOTTOM,
+  REGION_PADDING_X,
+  TIER_BAND_HEIGHT,
+  nodeSize,
+  nodeSizeOf,
+  planMemberGrid,
+  regionSizeForMembers,
+  snapToGrid,
+} from '../../model/topologyGeometry'
+import type { TopologyDocument, TopologyNode, TopologyPosition } from '../../model/topologyDocument'
+import { buildTopologyGraph, computeRoutingDepth, type TopologyGraph } from './topologyGraph'
 
-const NODE_WIDTH = 208
-const NODE_HEIGHT = 102
-const GRID_SIZE = 8
-const REGION_PADDING = 48
-const MEMBER_GAP = 36
-const REGION_COLUMN_GAP = 216
-const REGION_ROW_GAP = 120
+/**
+ * Deterministic tiered layout for the TeamLab topology editor.
+ *
+ * Reading model: routing depth advances **left to right**, so the entry network
+ * sits at the left and each further hop is a column to its right. That direction
+ * is not arbitrary — device cards expose a target handle on their left edge and a
+ * source handle on their right, so a horizontal flow keeps every link travelling
+ * the way its handles already point, and it fills a wide (16:9) canvas instead of
+ * stacking into a narrow strip. Regions sharing one depth stack vertically inside
+ * that column, and border routers sit in the band *between* the two columns they
+ * bridge, which is exactly where their links want to cross.
+ *
+ * Sizing rule: node boxes come from {@link nodeSize} (intrinsic to the node
+ * type) and never from persisted editor metadata. Region boxes are recomputed
+ * from members every run, so a manual resize cannot compound across saves.
+ */
 
-interface NetworkRegionPlan {
+interface RegionPlan {
   networkKey: string
   switchKey: string
+  /** Assets the region owns, excluding its switch and any border node. */
   memberKeys: readonly string[]
-  rank: number
-  rootSwitchKey: string | null
   width: number
   height: number
+  depth: number
+  branchRootSwitchKey: string | null
 }
 
-interface RegionMemberGrid {
-  assetKeys: readonly string[]
-  columns: number
-  columnWidths: readonly number[]
-  rowHeights: readonly number[]
-  contentWidth: number
-  contentHeight: number
+interface PlacedRegion extends RegionPlan {
+  x: number
+  y: number
 }
 
-interface RouteTopology {
-  distances: ReadonlyMap<string, number>
-  rootSwitches: ReadonlyMap<string, string | null>
-}
+/** Region rectangles a border node must not overlap, indexed on a coarse grid. */
+class SpatialIndex {
+  private readonly cellSize: number
+  private readonly cells = new Map<string, { x: number; y: number; width: number; height: number }[]>()
 
-function nodeSize(node: TopologyNode) {
-  return {
-    width: Math.max(1, node.position.width ?? NODE_WIDTH),
-    height: Math.max(1, node.position.height ?? NODE_HEIGHT),
-  }
-}
-
-function snap(value: number) {
-  return Math.round(value / GRID_SIZE) * GRID_SIZE
-}
-
-function routeTopology(document: TopologyDocument): RouteTopology {
-  const switches = Object.values(document.nodes)
-    .filter((node): node is TopologySwitchNode => node.type === 'switch')
-    .toSorted((left, right) => left.key.localeCompare(right.key))
-  const adjacency = new Map(switches.map((node) => [node.key, new Set<string>()]))
-  for (const connection of Object.values(document.connections)) {
-    if (connection.type !== 'route') continue
-    adjacency.get(connection.fromSwitchKey)?.add(connection.toSwitchKey)
-    adjacency.get(connection.toSwitchKey)?.add(connection.fromSwitchKey)
+  constructor(cellSize: number) {
+    this.cellSize = Math.max(1, cellSize)
   }
 
-  const entry = switches.find((node) => node.isEntry) ?? switches[0]
-  const distances = new Map<string, number>()
-  const rootSwitches = new Map<string, string | null>()
-  if (!entry) return { distances, rootSwitches }
-  distances.set(entry.key, 0)
-  rootSwitches.set(entry.key, null)
-  const queue = [entry.key]
-  for (let index = 0; index < queue.length; index += 1) {
-    const current = queue[index]
-    const distance = distances.get(current) ?? 0
-    for (const next of [...(adjacency.get(current) ?? [])].sort()) {
-      if (distances.has(next)) continue
-      distances.set(next, distance + 1)
-      rootSwitches.set(next, current === entry.key ? next : (rootSwitches.get(current) ?? current))
-      queue.push(next)
+  private *cellKeys(box: { x: number; y: number; width: number; height: number }) {
+    const minX = Math.floor(box.x / this.cellSize)
+    const maxX = Math.floor((box.x + box.width) / this.cellSize)
+    const minY = Math.floor(box.y / this.cellSize)
+    const maxY = Math.floor((box.y + box.height) / this.cellSize)
+    for (let cx = minX; cx <= maxX; cx += 1) {
+      for (let cy = minY; cy <= maxY; cy += 1) yield `${cx}:${cy}`
     }
   }
-  return { distances, rootSwitches }
-}
 
-function memberGrid(document: TopologyDocument, memberKeys: readonly string[]): RegionMemberGrid {
-  const assetKeys = memberKeys.filter((key) => document.nodes[key]?.type !== 'switch' && !isBoundaryNode(document, key))
-  const columns = Math.max(1, Math.min(3, Math.ceil(Math.sqrt(Math.max(assetKeys.length, 1)))))
-  const rows = Math.max(1, Math.ceil(assetKeys.length / columns))
-  const columnWidths = Array.from({ length: columns }, () => 0)
-  const rowHeights = Array.from({ length: rows }, () => 0)
-  assetKeys.forEach((key, index) => {
-    const node = document.nodes[key]
-    if (!node) return
-    const size = nodeSize(node)
-    const column = index % columns
-    const row = Math.floor(index / columns)
-    columnWidths[column] = Math.max(columnWidths[column], size.width)
-    rowHeights[row] = Math.max(rowHeights[row], size.height)
-  })
-  return {
-    assetKeys,
-    columns,
-    columnWidths,
-    rowHeights,
-    contentWidth: columnWidths.reduce((total, width) => total + width, 0) + Math.max(0, columns - 1) * MEMBER_GAP,
-    contentHeight: rowHeights.reduce((total, height) => total + height, 0) + Math.max(0, rows - 1) * MEMBER_GAP,
+  insert(box: { x: number; y: number; width: number; height: number }) {
+    for (const key of this.cellKeys(box)) {
+      const bucket = this.cells.get(key)
+      if (bucket) bucket.push(box)
+      else this.cells.set(key, [box])
+    }
+  }
+
+  /** True when `box` overlaps anything already inserted. O(occupied cells). */
+  intersects(box: { x: number; y: number; width: number; height: number }) {
+    for (const key of this.cellKeys(box)) {
+      for (const other of this.cells.get(key) ?? []) {
+        if (
+          box.x < other.x + other.width &&
+          box.x + box.width > other.x &&
+          box.y < other.y + other.height &&
+          box.y + box.height > other.y
+        )
+          return true
+      }
+    }
+    return false
   }
 }
 
-function isBoundaryNode(document: TopologyDocument, nodeKey: string) {
-  let memberships = 0
-  for (const connection of Object.values(document.connections)) {
-    if (connection.type === 'membership' && connection.nodeKey === nodeKey) memberships += 1
-    if (connection.type === 'route' && connection.viaNodeKey === nodeKey) return true
-  }
-  return memberships > 1
-}
-
-function regionSize(document: TopologyDocument, memberKeys: readonly string[]) {
-  const grid = memberGrid(document, memberKeys)
-  const switchNode = memberKeys.map((key) => document.nodes[key]).find((node) => node?.type === 'switch')
-  const switchSize = switchNode ? nodeSize(switchNode) : { width: NODE_WIDTH, height: NODE_HEIGHT }
-  const minimumWidth = Math.max(switchSize.width + REGION_PADDING * 2, grid.contentWidth + REGION_PADDING * 2)
-  const minimumHeight = REGION_PADDING * 2 + switchSize.height +
-    (grid.assetKeys.length ? MEMBER_GAP + grid.contentHeight : 0)
-  return {
-    width: minimumWidth,
-    height: minimumHeight,
-  }
-}
-
-function networkPlans(document: TopologyDocument): NetworkRegionPlan[] {
-  const switches = Object.values(document.nodes)
-    .filter((node): node is TopologySwitchNode => node.type === 'switch')
-    .toSorted((left, right) => left.networkKey.localeCompare(right.networkKey) || left.key.localeCompare(right.key))
-  const routes = routeTopology(document)
-  const distances = routes.distances
-  return switches.map((node) => {
-    const memberKeys = networkMembersOf(document, node.networkKey).toSorted((left, right) => {
-      const leftNode = document.nodes[left]
-      const rightNode = document.nodes[right]
-      if (leftNode?.type === 'switch') return -1
-      if (rightNode?.type === 'switch') return 1
-      return left.localeCompare(right)
-    })
-    const size = regionSize(document, memberKeys)
-    const rank = distances.get(node.key)
+function regionPlans(document: TopologyDocument, graph: TopologyGraph): RegionPlan[] {
+  const routing = computeRoutingDepth(graph)
+  return graph.switches.map((node) => {
+    const members = graph.membersByNetwork.get(node.networkKey) ?? []
+    const memberKeys = members
+      .filter((key) => key !== node.key)
+      .toSorted((left, right) => left.localeCompare(right))
+    const heights = memberKeys.map((key) => nodeSize(document.nodes[key] ?? node).height)
+    const size = regionSizeForMembers(heights)
     return {
       networkKey: node.networkKey,
       switchKey: node.key,
       memberKeys,
-      // Disconnected networks are placed in their own compact group after the
-      // routed topology. They have no route depth and must not consume a fake,
-      // distant routing ring.
-      rank: rank ?? -1,
-      rootSwitchKey: routes.rootSwitches.get(node.key) ?? null,
-      ...size,
+      width: size.width,
+      height: size.height,
+      // A network with no route path has no depth. It is grouped after the
+      // routed topology instead of consuming a fake, distant tier.
+      depth: routing.depths.get(node.key) ?? -1,
+      branchRootSwitchKey: routing.branchRoots.get(node.key) ?? null,
     }
   })
 }
 
 /**
- * Returns deterministic grid-ring coordinates around the entry network. A grid
- * ring keeps variable-size regions from colliding while retaining the visual
- * reading order of a radial topology: centre -> routed neighbours -> edge.
+ * Splits one depth's regions into stacks (vertical runs). A depth with many
+ * networks would otherwise become one very tall column; splitting it into a few
+ * side-by-side stacks keeps the whole diagram near its target aspect.
  */
-function ringSlots(ring: number, directionOffset = 0) {
-  if (ring === 0) return [{ x: 0, y: 0 }]
-  const perimeter: { x: number; y: number }[] = []
-  for (let x = -ring; x <= ring; x += 1) perimeter.push({ x, y: -ring }, { x, y: ring })
-  for (let y = -ring + 1; y < ring; y += 1) perimeter.push({ x: -ring, y }, { x: ring, y })
-  const cardinalBase = [{ x: 0, y: -ring }, { x: ring, y: 0 }, { x: 0, y: ring }, { x: -ring, y: 0 }]
-  const offset = ((directionOffset % cardinalBase.length) + cardinalBase.length) % cardinalBase.length
-  const cardinal = [...cardinalBase.slice(offset), ...cardinalBase.slice(0, offset)]
-  const cardinalKeys = new Set(cardinal.map((slot) => `${slot.x}:${slot.y}`))
-  const remaining = perimeter
-    .filter((slot) => !cardinalKeys.has(`${slot.x}:${slot.y}`))
-    .toSorted((left, right) =>
-      (Math.atan2(left.y, left.x) + Math.PI / 2 + Math.PI * 2) % (Math.PI * 2) -
-      (Math.atan2(right.y, right.x) + Math.PI / 2 + Math.PI * 2) % (Math.PI * 2)
-    )
-  return [...cardinal, ...remaining]
-}
-
-function radialDirection(index: number, total: number) {
-  // Prefer cardinal directions whenever they are sufficient: users can read
-  // the first routing layer immediately as up, right, down and left. Wider
-  // fan-outs still receive evenly distributed, deterministic bearings.
-  const cardinal = [
-    { x: 0, y: -1 },
-    { x: 1, y: 0 },
-    { x: 0, y: 1 },
-    { x: -1, y: 0 },
-  ]
-  if (total <= cardinal.length) return cardinal[index]
-  const angle = -Math.PI / 2 + (Math.PI * 2 * index) / total
-  return { x: Math.cos(angle), y: Math.sin(angle) }
-}
-
-function branchDirection(
-  rootDirection: { x: number; y: number },
-  rootIndex: number,
-  rank: number
-) {
-  if (rank <= 1) return rootDirection
-
-  // A long route must remain visibly related to its entry branch, but placing
-  // every hop on the same ray turns a valid topology into an unreadable line.
-  // Expand later hops into a deterministic fan while their distance from the
-  // entry still expresses the routing depth.
-  const turn = Math.min(Math.PI / 2, (rank - 1) * (Math.PI / 4)) * (rootIndex % 2 === 0 ? 1 : -1)
-  return {
-    x: rootDirection.x * Math.cos(turn) - rootDirection.y * Math.sin(turn),
-    y: rootDirection.x * Math.sin(turn) + rootDirection.y * Math.cos(turn),
+function packDepth(plans: readonly RegionPlan[], heightBudget: number) {
+  const stacks: RegionPlan[][] = []
+  let current: RegionPlan[] = []
+  let currentHeight = 0
+  for (const plan of plans) {
+    const nextHeight = currentHeight === 0 ? plan.height : currentHeight + REGION_GAP_Y + plan.height
+    if (current.length > 0 && nextHeight > heightBudget) {
+      stacks.push(current)
+      current = [plan]
+      currentHeight = plan.height
+      continue
+    }
+    current.push(plan)
+    currentHeight = nextHeight
   }
+  if (current.length > 0) stacks.push(current)
+  return stacks
 }
 
-function directionSlotOrder(
-  slots: readonly { x: number; y: number }[],
-  direction: { x: number; y: number }
-) {
-  return slots.toSorted((left, right) => {
-    const leftProjection = left.x * direction.x + left.y * direction.y
-    const rightProjection = right.x * direction.x + right.y * direction.y
-    if (rightProjection !== leftProjection) return rightProjection - leftProjection
+const stackHeight = (stack: readonly RegionPlan[]) =>
+  stack.reduce((total, plan) => total + plan.height, 0) + Math.max(0, stack.length - 1) * REGION_GAP_Y
 
-    // For siblings on one layer, keep the closest points to the branch's
-    // centre ray first. This forms a compact fan instead of a loose strip.
-    const leftDeviation = Math.abs(left.x * direction.y - left.y * direction.x)
-    const rightDeviation = Math.abs(right.x * direction.y - right.y * direction.x)
-    if (leftDeviation !== rightDeviation) return leftDeviation - rightDeviation
-    const leftAngle = (Math.atan2(left.y, left.x) + Math.PI * 2) % (Math.PI * 2)
-    const rightAngle = (Math.atan2(right.y, right.x) + Math.PI * 2) % (Math.PI * 2)
-    return leftAngle - rightAngle
-  })
+const stackWidth = (stack: readonly RegionPlan[]) => Math.max(...stack.map((plan) => plan.width), 0)
+
+/**
+ * Height budget for one depth column, chosen so the finished diagram approaches
+ * {@link DIAGRAM_TARGET_ASPECT}: tall enough that a shallow topology is not a
+ * single wide strip, short enough that a broad one is not a single tall column.
+ */
+function depthHeightBudget(plans: readonly RegionPlan[], depthCount: number) {
+  const tallest = Math.max(...plans.map((plan) => plan.height), ASSET_NODE_HEIGHT)
+  const totalArea = plans.reduce((total, plan) => total + plan.width * plan.height, 0)
+  // Width the diagram would take if every depth were a single stack.
+  const estimatedWidth =
+    Math.max(1, depthCount) * (Math.max(...plans.map((plan) => plan.width), 1) + TIER_BAND_HEIGHT)
+  const idealHeight = Math.max(tallest, Math.sqrt(Math.max(totalArea, 1) / DIAGRAM_TARGET_ASPECT))
+  return Math.max(tallest, Math.min(idealHeight, estimatedWidth / DIAGRAM_TARGET_ASPECT))
 }
 
+/** Places a region's switch on its header row and its assets in the member grid. */
 function placeRegionMembers(
   document: TopologyDocument,
-  plan: NetworkRegionPlan,
-  origin: { x: number; y: number },
+  region: PlacedRegion,
   positions: Record<string, TopologyPosition>
 ) {
-  const grid = memberGrid(document, plan.memberKeys)
-  const assets = grid.assetKeys
-  const switchNode = document.nodes[plan.switchKey]
-  const switchSize = switchNode ? nodeSize(switchNode) : { width: NODE_WIDTH, height: NODE_HEIGHT }
+  // Vertical stack inside a region, matching `regionSizeForMembers` exactly:
+  // header band -> switch -> gap -> member grid -> bottom padding.
+  const switchNode = document.nodes[region.switchKey]
   if (switchNode) {
     const size = nodeSize(switchNode)
-    positions[plan.switchKey] = {
+    positions[region.switchKey] = {
       ...switchNode.position,
-      x: snap(origin.x + (plan.width - size.width) / 2),
-      y: snap(origin.y + REGION_PADDING),
+      x: snapToGrid(region.x + (region.width - size.width) / 2),
+      y: snapToGrid(region.y + REGION_HEADER_HEIGHT),
+      width: null,
+      height: null,
     }
   }
-  const columnOffsets = grid.columnWidths.reduce<number[]>((offsets, width, index) => {
-    offsets.push(index === 0 ? 0 : offsets[index - 1] + grid.columnWidths[index - 1] + MEMBER_GAP)
-    return offsets
-  }, [])
-  const rowOffsets = grid.rowHeights.reduce<number[]>((offsets, height, index) => {
-    offsets.push(index === 0 ? 0 : offsets[index - 1] + grid.rowHeights[index - 1] + MEMBER_GAP)
-    return offsets
-  }, [])
-  const startX = origin.x + Math.max(REGION_PADDING, (plan.width - grid.contentWidth) / 2)
-  assets.forEach((key, index) => {
-    const node = document.nodes[key]
-    if (!node) return
-    const size = nodeSize(node)
-    const row = Math.floor(index / grid.columns)
-    const column = index % grid.columns
-    positions[key] = {
-      ...node.position,
-      x: snap(startX + columnOffsets[column] + (grid.columnWidths[column] - size.width) / 2),
-      y: snap(origin.y + REGION_PADDING + switchSize.height + MEMBER_GAP + rowOffsets[row]),
-    }
-  })
-}
 
-function hasNodeOverlap(
-  document: TopologyDocument,
-  positions: Readonly<Record<string, TopologyPosition>>,
-  nodeKey: string,
-  position: TopologyPosition
-) {
-  const node = document.nodes[nodeKey]
-  if (!node) return false
-  const size = nodeSize(node)
-  return Object.entries(positions).some(([otherKey, otherPosition]) => {
-    const other = document.nodes[otherKey]
-    if (!other || otherKey === nodeKey) return false
-    const otherSize = nodeSize(other)
-    return position.x < otherPosition.x + otherSize.width &&
-      position.x + size.width > otherPosition.x &&
-      position.y < otherPosition.y + otherSize.height &&
-      position.y + size.height > otherPosition.y
-  })
+  const heights = region.memberKeys.map((key) => nodeSizeOf(document, key).height)
+  const grid = planMemberGrid(heights)
+  if (grid.rows === 0) return
+
+  const gridTop = region.y + REGION_HEADER_HEIGHT + INFRA_NODE_HEIGHT + MEMBER_GAP_Y
+  const gridLeft = region.x + Math.max(REGION_PADDING_X, (region.width - grid.contentWidth) / 2)
+  let rowTop = gridTop
+  for (let row = 0; row < grid.rows; row += 1) {
+    const rowKeys = region.memberKeys.slice(row * grid.columns, row * grid.columns + grid.columns)
+    const rowTallest = Math.max(...rowKeys.map((key) => nodeSizeOf(document, key).height), 0)
+    rowKeys.forEach((key, column) => {
+      const node = document.nodes[key]
+      if (!node) return
+      const size = nodeSize(node)
+      positions[key] = {
+        ...node.position,
+        x: snapToGrid(gridLeft + column * (NODE_WIDTH + MEMBER_GAP_X) + (NODE_WIDTH - size.width) / 2),
+        y: snapToGrid(rowTop + (rowTallest - size.height) / 2),
+        width: null,
+        height: null,
+      }
+    })
+    rowTop += rowTallest + MEMBER_GAP_Y
+  }
 }
 
 /**
- * Arranges logical networks first, then their members. This avoids the former
- * node-only dagre layout where valid node positions could still make region
- * containers overlap each other.
+ * Places border nodes (routers, dual-homed assets) between the regions they
+ * bridge, nudging along the perpendicular of the region-to-region axis until the
+ * node clears every region box.
  */
-export function autoLayoutTopology(document: TopologyDocument): TopologyDocument {
-  const nodes = Object.values(document.nodes).toSorted((left, right) => left.key.localeCompare(right.key))
-  if (nodes.length < 2) return document
+function placeBorderNodes(
+  document: TopologyDocument,
+  graph: TopologyGraph,
+  placed: readonly PlacedRegion[],
+  positions: Record<string, TopologyPosition>,
+  fallbackOrigin: { x: number; y: number }
+) {
+  const regionByNetwork = new Map(placed.map((region) => [region.networkKey, region]))
+  const index = new SpatialIndex(Math.max(NODE_WIDTH, ASSET_NODE_HEIGHT) * 2)
+  for (const region of placed) index.insert(region)
 
-  const plans = networkPlans(document)
-  if (plans.length === 0) {
-    const columns = Math.max(1, Math.ceil(Math.sqrt(nodes.length)))
-    const rows = Math.ceil(nodes.length / columns)
-    const columnWidths = Array.from({ length: columns }, () => 0)
-    const rowHeights = Array.from({ length: rows }, () => 0)
-    nodes.forEach((node, index) => {
+  const pending = Object.values(document.nodes)
+    .filter((node) => !positions[node.key])
+    .toSorted((left, right) => left.key.localeCompare(right.key))
+
+  let fallbackIndex = 0
+  for (const node of pending) {
+    const size = nodeSize(node)
+    const attached = [...(graph.networksOfNode.get(node.key) ?? [])]
+      .toSorted((a, b) => a.localeCompare(b))
+      .flatMap((networkKey) => {
+        const region = regionByNetwork.get(networkKey)
+        return region ? [region] : []
+      })
+
+    if (attached.length === 0) {
+      // Orphan node: park it in a tidy trailing row rather than at the origin.
+      positions[node.key] = {
+        ...node.position,
+        x: snapToGrid(fallbackOrigin.x + fallbackIndex * (NODE_WIDTH + MEMBER_GAP_X)),
+        y: snapToGrid(fallbackOrigin.y),
+        width: null,
+        height: null,
+      }
+      index.insert({ x: positions[node.key].x, y: positions[node.key].y, ...size })
+      fallbackIndex += 1
+      continue
+    }
+
+    const centre = attached.reduce(
+      (total, region) => ({
+        x: total.x + region.x + region.width / 2,
+        y: total.y + region.y + region.height / 2,
+      }),
+      { x: 0, y: 0 }
+    )
+    const midpoint = { x: centre.x / attached.length, y: centre.y / attached.length }
+
+    // Perpendicular of the axis between the two extreme attached regions keeps a
+    // border node beside its own link rather than drifting across the diagram.
+    const first = attached[0]
+    const last = attached[attached.length - 1]
+    const axis = {
+      x: last.x + last.width / 2 - (first.x + first.width / 2),
+      y: last.y + last.height / 2 - (first.y + first.height / 2),
+    }
+    const length = Math.hypot(axis.x, axis.y) || 1
+    const perpendicular = { x: -axis.y / length, y: axis.x / length }
+    const step = size.height + MEMBER_GAP_Y
+
+    let resolved: TopologyPosition | null = null
+    for (const lane of [0, 1, -1, 2, -2, 3, -3, 4, -4, 5, -5, 6, -6]) {
+      const candidate = {
+        x: snapToGrid(midpoint.x + perpendicular.x * lane * step - size.width / 2),
+        y: snapToGrid(midpoint.y + perpendicular.y * lane * step - size.height / 2),
+      }
+      if (index.intersects({ ...candidate, ...size })) continue
+      resolved = { ...node.position, ...candidate, width: null, height: null }
+      break
+    }
+
+    positions[node.key] = resolved ?? {
+      ...node.position,
+      x: snapToGrid(fallbackOrigin.x + fallbackIndex * (NODE_WIDTH + MEMBER_GAP_X)),
+      y: snapToGrid(fallbackOrigin.y),
+      width: null,
+      height: null,
+    }
+    if (!resolved) fallbackIndex += 1
+    index.insert({ x: positions[node.key].x, y: positions[node.key].y, ...size })
+  }
+}
+
+/** Grid fallback for an incomplete draft that has no switch to anchor regions. */
+function layoutWithoutRegions(document: TopologyDocument): TopologyDocument {
+  const nodes = Object.values(document.nodes).toSorted((left, right) => left.key.localeCompare(right.key))
+  const columns = Math.max(1, Math.min(6, Math.round(Math.sqrt(nodes.length * DIAGRAM_TARGET_ASPECT))))
+  const rows = Math.ceil(nodes.length / columns)
+  const rowHeights = Array.from({ length: rows }, (_unused, row) =>
+    Math.max(...nodes.slice(row * columns, row * columns + columns).map((node) => nodeSize(node).height), 0)
+  )
+  const totalWidth = columns * NODE_WIDTH + (columns - 1) * MEMBER_GAP_X
+  const totalHeight = rowHeights.reduce((total, height) => total + height, 0) + (rows - 1) * MEMBER_GAP_Y
+
+  let rowTop = -totalHeight / 2
+  const nextNodes: Record<string, TopologyNode> = {}
+  for (let row = 0; row < rows; row += 1) {
+    const rowNodes = nodes.slice(row * columns, row * columns + columns)
+    rowNodes.forEach((node, column) => {
       const size = nodeSize(node)
-      columnWidths[index % columns] = Math.max(columnWidths[index % columns], size.width)
-      rowHeights[Math.floor(index / columns)] = Math.max(rowHeights[Math.floor(index / columns)], size.height)
-    })
-    const columnOffsets = columnWidths.reduce<number[]>((offsets, _, index) => {
-      offsets.push(index === 0 ? 0 : offsets[index - 1] + columnWidths[index - 1] + MEMBER_GAP)
-      return offsets
-    }, [])
-    const rowOffsets = rowHeights.reduce<number[]>((offsets, _, index) => {
-      offsets.push(index === 0 ? 0 : offsets[index - 1] + rowHeights[index - 1] + MEMBER_GAP)
-      return offsets
-    }, [])
-    const totalWidth = columnWidths.reduce((total, width) => total + width, 0) + (columns - 1) * MEMBER_GAP
-    const totalHeight = rowHeights.reduce((total, height) => total + height, 0) + (rows - 1) * MEMBER_GAP
-    const nextNodes = Object.fromEntries(nodes.map((node, index) => {
-      const size = nodeSize(node)
-      const column = index % columns
-      const row = Math.floor(index / columns)
-      return [node.key, {
+      nextNodes[node.key] = {
         ...node,
         position: {
           ...node.position,
-          x: snap(columnOffsets[column] - totalWidth / 2 + (columnWidths[column] - size.width) / 2),
-          y: snap(rowOffsets[row] - totalHeight / 2 + (rowHeights[row] - size.height) / 2),
+          x: snapToGrid(-totalWidth / 2 + column * (NODE_WIDTH + MEMBER_GAP_X) + (NODE_WIDTH - size.width) / 2),
+          y: snapToGrid(rowTop + (rowHeights[row] - size.height) / 2),
+          width: null,
+          height: null,
         },
-      }]
-    }))
-    return { ...document, nodes: nextNodes }
-  }
-  const positions: Record<string, TopologyPosition> = {}
-  const networkLayouts: Record<string, TopologyPosition> = { ...document.networkLayouts }
-  const plansByRank = new Map<number, NetworkRegionPlan[]>()
-  for (const plan of plans.filter((item) => item.rank >= 0)) {
-    const group = plansByRank.get(plan.rank) ?? []
-    group.push(plan)
-    plansByRank.set(plan.rank, group)
-  }
-
-  const widestRegion = Math.max(...plans.map((plan) => plan.width))
-  const tallestRegion = Math.max(...plans.map((plan) => plan.height))
-  const slotWidth = widestRegion + REGION_COLUMN_GAP
-  const slotHeight = tallestRegion + REGION_ROW_GAP
-  const rootPlans = plans
-    .filter((plan) => plan.rank === 1 && plan.rootSwitchKey === plan.switchKey)
-    .toSorted((left, right) => left.networkKey.localeCompare(right.networkKey))
-  const rootDirections = new Map(
-    rootPlans.map((plan, index) => [plan.switchKey, radialDirection(index, rootPlans.length)])
-  )
-  const rootIndexes = new Map(rootPlans.map((plan, index) => [plan.switchKey, index]))
-  const occupiedSlots = new Set<string>()
-  let outerRing = 0
-  for (const rank of [...plansByRank.keys()].sort((left, right) => left - right)) {
-    const plansAtRank = plansByRank.get(rank)!.toSorted((left, right) => left.networkKey.localeCompare(right.networkKey))
-    let planIndex = 0
-    // One routing hop equals one visual ring. It is tempting to pack several
-    // hops into the same ring, but doing so hides the actual route depth and
-    // turns a routed branch into an arbitrary line or spiral.
-    let ring = Math.max(0, rank)
-    // A broad routing layer can exceed one ring's slots. Continue on the next
-    // ring rather than allowing regions to overlap or reverting to a strip.
-    while (planIndex < plansAtRank.length) {
-      const candidates = ringSlots(ring).filter((slot) => !occupiedSlots.has(`${ring}:${slot.x}:${slot.y}`))
-      const plan = plansAtRank[planIndex]
-      if (!plan) break
-      const rootDirection = plan.rootSwitchKey ? rootDirections.get(plan.rootSwitchKey) : undefined
-      const rootIndex = plan.rootSwitchKey ? rootIndexes.get(plan.rootSwitchKey) : undefined
-      const direction = rootDirection && rootIndex !== undefined
-        ? branchDirection(rootDirection, rootIndex, rank)
-        : undefined
-      const slots = direction ? directionSlotOrder(candidates, direction) : candidates
-      const slot = slots[0]
-      if (!slot) {
-        ring += 1
-        continue
-      }
-      const origin = {
-        x: slot.x * slotWidth - plan.width / 2,
-        y: slot.y * slotHeight - plan.height / 2,
-      }
-      networkLayouts[plan.networkKey] = {
-        x: snap(origin.x),
-        y: snap(origin.y),
-        width: snap(plan.width),
-        height: snap(plan.height),
-        collapsed: document.networkLayouts[plan.networkKey]?.collapsed ?? false,
-      }
-      placeRegionMembers(document, plan, origin, positions)
-      occupiedSlots.add(`${ring}:${slot.x}:${slot.y}`)
-      planIndex += 1
-    }
-    outerRing = Math.max(outerRing, ring - 1)
-  }
-
-  const disconnectedPlans = plans.filter((plan) => plan.rank < 0).toSorted((left, right) => left.networkKey.localeCompare(right.networkKey))
-  if (disconnectedPlans.length > 0) {
-    const placedRegions = plans
-      .filter((plan) => plan.rank >= 0)
-      .map((plan) => networkLayouts[plan.networkKey])
-      .filter((layout): layout is TopologyPosition => layout !== undefined)
-    const groupStartX = Math.max(0, ...placedRegions.map((layout) => layout.x + (layout.width ?? 0))) + REGION_COLUMN_GAP
-    const groupStartY = Math.min(0, ...placedRegions.map((layout) => layout.y))
-    const groupColumns = Math.max(1, Math.ceil(Math.sqrt(disconnectedPlans.length)))
-    const groupCellWidth = Math.max(...disconnectedPlans.map((plan) => plan.width)) + REGION_COLUMN_GAP
-    const groupCellHeight = Math.max(...disconnectedPlans.map((plan) => plan.height)) + REGION_ROW_GAP
-    disconnectedPlans.forEach((plan, index) => {
-      const column = index % groupColumns
-      const row = Math.floor(index / groupColumns)
-      const origin = {
-        x: groupStartX + column * groupCellWidth,
-        y: groupStartY + row * groupCellHeight,
-      }
-      networkLayouts[plan.networkKey] = {
-        x: snap(origin.x),
-        y: snap(origin.y),
-        width: snap(plan.width),
-        height: snap(plan.height),
-        collapsed: document.networkLayouts[plan.networkKey]?.collapsed ?? false,
-      }
-      placeRegionMembers(document, plan, origin, positions)
+      } as TopologyNode
     })
+    rowTop += rowHeights[row] + MEMBER_GAP_Y
+  }
+  return { ...document, nodes: nextNodes }
+}
+
+export function autoLayoutTopology(document: TopologyDocument): TopologyDocument {
+  if (Object.keys(document.nodes).length < 2) return document
+
+  const graph = buildTopologyGraph(document)
+  const plans = regionPlans(document, graph)
+  if (plans.length === 0) return layoutWithoutRegions(document)
+
+  const routed = plans.filter((plan) => plan.depth >= 0)
+  const isolated = plans
+    .filter((plan) => plan.depth < 0)
+    .toSorted((left, right) => left.networkKey.localeCompare(right.networkKey))
+
+  const depths = [...new Set(routed.map((plan) => plan.depth))].sort((left, right) => left - right)
+  const budget = depthHeightBudget(plans, depths.length + (isolated.length > 0 ? 1 : 0))
+
+  const placed: PlacedRegion[] = []
+  let columnLeft = 0
+
+  const placeStacks = (stacks: readonly RegionPlan[][]) => {
+    for (const stack of stacks) {
+      const width = stackWidth(stack)
+      const height = stackHeight(stack)
+      let cursor = -height / 2
+      for (const plan of stack) {
+        placed.push({ ...plan, x: snapToGrid(columnLeft + (width - plan.width) / 2), y: snapToGrid(cursor) })
+        cursor += plan.height + REGION_GAP_Y
+      }
+      columnLeft += width + REGION_GAP_X
+    }
+    // Replace the trailing column gap with a full band so border routers get a
+    // clear lane between the depths they bridge.
+    columnLeft += TIER_BAND_HEIGHT - REGION_GAP_X
   }
 
-  const regionBySwitch = new Map(plans.map((plan) => [plan.switchKey, networkLayouts[plan.networkKey]]))
-  const unplaced = nodes.filter((node) => !positions[node.key])
-  let fallbackIndex = 0
-  for (const node of unplaced) {
-    const route = Object.values(document.connections).find(
-      (connection): connection is Extract<(typeof document.connections)[string], { type: 'route' }> =>
-        connection.type === 'route' && connection.viaNodeKey === node.key
-    )
-    const attachedSwitches = [...new Set(
-      Object.values(document.connections)
-        .filter((connection): connection is Extract<(typeof document.connections)[string], { type: 'membership' }> =>
-          connection.type === 'membership' && connection.nodeKey === node.key)
-        .map((connection) => connection.switchKey)
-    )].sort()
-    const attachedRegions = attachedSwitches
-      .map((switchKey) => regionBySwitch.get(switchKey))
-      .filter((region): region is TopologyPosition => region !== undefined)
-    const source = route
-      ? regionBySwitch.get(route.fromSwitchKey)
-      : regionBySwitch.get(attachedSwitches[0] ?? '')
-    const target = route
-      ? regionBySwitch.get(route.toSwitchKey)
-      : regionBySwitch.get(attachedSwitches[1] ?? '')
-    const size = nodeSize(node)
-    if (!route && attachedRegions.length >= 3) {
-      const centre = attachedRegions.reduce(
-        (total, region) => ({
-          x: total.x + region.x + (region.width ?? 0) / 2,
-          y: total.y + region.y + (region.height ?? 0) / 2,
-        }),
-        { x: 0, y: 0 }
+  for (const depth of depths) {
+    const column = routed
+      .filter((plan) => plan.depth === depth)
+      // Group one depth by branch so a routed chain stays visually together.
+      .toSorted(
+        (left, right) =>
+          (left.branchRootSwitchKey ?? '').localeCompare(right.branchRootSwitchKey ?? '') ||
+          left.networkKey.localeCompare(right.networkKey)
       )
-      const midpoint = { x: centre.x / attachedRegions.length, y: centre.y / attachedRegions.length }
-      const candidate = [
-        { x: 0, y: 0 }, { x: 1, y: 0 }, { x: -1, y: 0 }, { x: 0, y: 1 }, { x: 0, y: -1 },
-        { x: 1, y: 1 }, { x: -1, y: 1 }, { x: 1, y: -1 }, { x: -1, y: -1 },
-      ].map((offset) => ({
-        ...node.position,
-        x: snap(midpoint.x + offset.x * (size.width + MEMBER_GAP) - size.width / 2),
-        y: snap(midpoint.y + offset.y * (size.height + MEMBER_GAP) - size.height / 2),
-      })).find((position) => !hasNodeOverlap(document, positions, node.key, position))
-      positions[node.key] = candidate ?? {
-        ...node.position,
-        x: snap((outerRing + 2) * slotWidth + fallbackIndex * (NODE_WIDTH + MEMBER_GAP)),
-        y: 0,
-      }
-    } else if (source && target) {
-      const sourceWidth = source.width ?? 0
-      const sourceHeight = source.height ?? 0
-      const targetWidth = target.width ?? 0
-      const targetHeight = target.height ?? 0
-      const sourceCenter = { x: source.x + sourceWidth / 2, y: source.y + sourceHeight / 2 }
-      const targetCenter = { x: target.x + targetWidth / 2, y: target.y + targetHeight / 2 }
-      const dx = targetCenter.x - sourceCenter.x
-      const dy = targetCenter.y - sourceCenter.y
-      const length = Math.hypot(dx, dy) || 1
-      const midpoint = { x: (sourceCenter.x + targetCenter.x) / 2, y: (sourceCenter.y + targetCenter.y) / 2 }
-      const candidate = [0, 1, -1, 2, -2, 3, -3, 4, -4]
-        .map((laneOffset) => ({
-          ...node.position,
-          x: snap(midpoint.x - dy / length * laneOffset * (NODE_HEIGHT + MEMBER_GAP) - size.width / 2),
-          y: snap(midpoint.y + dx / length * laneOffset * (NODE_HEIGHT + MEMBER_GAP) - size.height / 2),
-        }))
-        .find((position) => !hasNodeOverlap(document, positions, node.key, position))
-      positions[node.key] = candidate ?? {
-        ...node.position,
-        x: snap((outerRing + 2) * slotWidth + fallbackIndex * (NODE_WIDTH + MEMBER_GAP)),
-        y: 0,
-      }
-    } else {
-      const column = fallbackIndex % 2
-      const row = Math.floor(fallbackIndex / 2)
-      positions[node.key] = {
-        ...node.position,
-        x: snap((outerRing + 2) * slotWidth + column * (NODE_WIDTH + MEMBER_GAP)),
-        y: snap(row * (NODE_HEIGHT + MEMBER_GAP)),
-      }
-    }
-    fallbackIndex += 1
+    placeStacks(packDepth(column, budget))
   }
+
+  if (isolated.length > 0) placeStacks(packDepth(isolated, budget))
+
+  const positions: Record<string, TopologyPosition> = {}
+  const networkLayouts: Record<string, TopologyPosition> = {}
+  for (const region of placed) {
+    networkLayouts[region.networkKey] = {
+      x: region.x,
+      y: region.y,
+      width: region.width,
+      height: region.height,
+      collapsed: document.networkLayouts[region.networkKey]?.collapsed ?? false,
+    }
+    placeRegionMembers(document, region, positions)
+  }
+
+  // Orphans park in a trailing row beneath the diagram, never at the origin.
+  const diagramBottom = Math.max(...placed.map((region) => region.y + region.height), 0)
+  const diagramLeft = Math.min(...placed.map((region) => region.x), 0)
+  placeBorderNodes(document, graph, placed, positions, {
+    x: diagramLeft,
+    y: diagramBottom + TIER_BAND_HEIGHT,
+  })
 
   const nextNodes = Object.fromEntries(
-    nodes.map((node) => [node.key, { ...node, position: positions[node.key] ?? node.position }])
+    Object.values(document.nodes).map((node) => [
+      node.key,
+      positions[node.key] ? ({ ...node, position: positions[node.key] } as TopologyNode) : node,
+    ])
   )
   return { ...document, nodes: nextNodes, networkLayouts }
+}
+
+/** Region content box, exported so the inspector can describe the derived size. */
+export const regionContentInset = {
+  top: REGION_HEADER_HEIGHT,
+  bottom: REGION_PADDING_BOTTOM,
+  horizontal: REGION_PADDING_X,
 }

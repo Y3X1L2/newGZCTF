@@ -9,6 +9,7 @@ export const LinuxVmNode = memo(function LinuxVmNode({ data, selected }: NodePro
   if (node.type !== 'linux-vm') return null
   return (
     <TopologyNodeShell
+      badge={data.isBorder ? '跨网段' : undefined}
       details={[`${node.resources.cpuUnits} vCPU`, `${node.resources.memoryMiB} MiB`, `${data.connectionCount} 张网卡`]}
       eyebrow="Linux 虚拟机"
       icon={<MonitorCog size={18} />}
