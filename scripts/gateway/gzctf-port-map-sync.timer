@@ -3,6 +3,7 @@ Description=Poll the GZCTF port-map contract
 
 [Timer]
 OnBootSec=5s
+OnActiveSec=5s
 OnUnitActiveSec=3s
 AccuracySec=1s
 Unit=gzctf-port-map-sync.service

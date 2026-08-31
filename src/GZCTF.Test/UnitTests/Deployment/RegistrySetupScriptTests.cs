@@ -57,6 +57,16 @@ public sealed class RegistrySetupScriptTests
     }
 
     [Fact]
+    public void GatewaySyncTimer_TriggersWhenStartedAfterBoot()
+    {
+        var timer = ReadRepositoryFile("scripts", "gateway", "gzctf-port-map-sync.timer");
+
+        Assert.Contains("OnBootSec=5s", timer, StringComparison.Ordinal);
+        Assert.Contains("OnActiveSec=5s", timer, StringComparison.Ordinal);
+        Assert.Contains("OnUnitActiveSec=3s", timer, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task OciArtifactDelete_MethodNotAllowedRemainsFailure()
     {
         var handler = new RecordingHandler(request => request.Method switch
