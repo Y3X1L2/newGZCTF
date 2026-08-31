@@ -1,6 +1,6 @@
 # YINYU 当前开发状态
 
-更新时间：2026-08-25
+更新时间：2026-08-31
 
 本文件只记录已经核对过的当前事实、已知缺口和下一任务入口。历史计划、阶段审查和现场流水放在 `docs/archive/implementation-records/`，不得用来判断当前代码或服务器状态。
 
@@ -10,8 +10,8 @@
 | --- | --- |
 | 仓库 | `https://github.com/Y3X1L2/newGZCTF.git` |
 | 稳定分支 | `main` |
-| 远端代码基线 | `origin/main@55db938`（最近一次成功同步） |
-| 本地任务起点 | `a6fcb38`，仅比远端多一份文档整合提交 |
+| 当前统一基线 | 发布标识 `stable-20260831`；本地 `main`、GitHub `origin/main` 和 10.24 release manifest 必须指向同一提交 |
+| 当前任务分支 | `codex/document-governance-cleanup`；完成发布后从 `main` 创建新的功能分支 |
 | 正式工作区 | `D:\Work\newGZCTF` |
 | 工作树结构 | 单一主仓库、单一 worktree；不依赖其他本地目录 |
 | 技术栈 | .NET 10、ASP.NET Core、EF Core、PostgreSQL、Redis、React 19、TypeScript、Vite、pnpm |
@@ -69,9 +69,11 @@
 
 ## 5. 已验证环境事实
 
-- 2026-08-25 核对 10.24 环境：活动 release 的 manifest 标记提交为 `d2cf79b`，但实际 `GZCTF.dll` 摘要与 manifest 不一致，说明该环境曾进行后端制品热替换。它可以继续提供服务，但不能作为可复现 Git 基线；后续统一时必须从干净提交重新构建并完整发布。
-- 同日发现活动 release 的 `files` 错误指向旧 release 的私有目录，导致数据库仍有记录、shared 中也存在实体文件，但 `/assets/*` 返回 404。在线链接已原子修正为 `/opt/gzctf/shared/files`，主站未重启；发布脚本同步增加固定 shared 路径和回归断言。
+- 2026-08-25 核对 10.24 环境：活动 release 的 manifest 标记提交为 `d2cf79b`，但实际 `GZCTF.dll` 摘要与 manifest 不一致，说明该环境曾进行后端制品热替换；该 release 不作为开发基线。
+- 同日发现活动 release 的 `files` 错误指向旧 release 的私有目录，导致数据库仍有记录、shared 中也存在实体文件，但 `/assets/*` 返回 404。在线链接已原子修正为 `/opt/gzctf/shared/files`，发布脚本已固定 shared 路径并增加回归断言。
 - Game 23 共核对 31 个本地附件，shared 中缺失数为 0；题目 76 附件和示例 `challenge.md` 均从客户端返回 200，内容长度与 SHA-256 正确。
+- 2026-08-31 的统一发布必须复核：10.24 的 `release-manifest.json.gitCommit` 等于 `stable-20260831` 所指提交、manifest 内文件摘要与磁盘文件一致、`publish/files` 指向 shared、主站与 Agent 均无重启循环。
+- 203 公网网关的 Nginx、WireGuard、动态 port-map timer 与 9091/18080 业务独立；本次只更新网关同步器所需配置，不重启或改动 9091/18080 进程。
 
 ## 6. 当前有用文档
 
