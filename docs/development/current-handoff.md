@@ -1,6 +1,6 @@
 # YINYU 当前项目交接说明
 
-更新时间：2026-08-31
+更新时间：2026-09-01
 
 本文面向刚接手项目的开发者或 AI。它补充 `AGENTS.md`、`docs/development/current-state.md` 和 `docs/README.md`，用于快速建立项目上下文；如果与当前运行行为、源码或 OpenAPI 冲突，以真实运行行为和当前源码为准。
 
@@ -35,7 +35,7 @@ git log -5 --oneline --decorate
 提交：81a6e02b7dbe3d1f12094b606e5b3a93fd86de0c
 ```
 
-10.24 运行 release 由该标签精确标识。随后 GitHub `main` 追加了文档-only 交接提交，当前 `main` 可以比运行 release 更新，但没有改变运行时代码；需要复现服务器二进制时使用该稳定标签，需要继续开发时从最新 `origin/main` 创建分支。
+10.24 运行 release 由该标签精确标识。GitHub `main` 已在 `1a390432b1135da055a5a8488575fd10015f0bbd` 合入 Phase 09 TeamLab networking，当前 `main` 明确比运行 release 更新；需要复现服务器二进制时使用该稳定标签，需要继续开发时从最新 `origin/main` 创建分支。
 
 发布物：
 
@@ -61,7 +61,7 @@ manifest 的 `gitCommit` 为 `81a6e02b7dbe3d1f12094b606e5b3a93fd86de0c`，主站
 20260815012026_AddExerciseCreatorTracking
 ```
 
-注意：该迁移文件不在当前源码或 Git 历史中；当前源码可见的最新迁移为 `20260812003330_AddAwdpPoolCollection`。这属于服务器数据库与源码的未闭环漂移，不能把该数据库当作可直接迁移开发的基线。任何新增迁移前，必须在数据库副本上导出 `__EFMigrationsHistory`、执行 schema-only 对比，并找回缺失迁移的真实来源；禁止直接删除迁移历史或修改生产库绕过检查。
+注意：该迁移文件不在当前源码或 Git 历史中；当前源码可见的最新迁移为 `20260816192540_TeamLabCapabilityClosure`。这属于服务器数据库与源码的未闭环漂移，不能把该数据库当作可直接迁移开发的基线。任何生产迁移或数据库开发前，必须在数据库副本上导出 `__EFMigrationsHistory`、执行 schema-only 对比，并找回缺失迁移的真实来源；禁止直接删除迁移历史或修改生产库绕过检查。
 
 发布前备份目录：
 
@@ -118,7 +118,7 @@ Route -> feature controller/hook -> feature panel -> foundation component
 | 自主练习 | `/practice`、筛选、来源导入、附件、多 Flag、Docker 实例、提交、统计和后台管理 | 已进入主线，目标生产仍需完整迁移和运营验收 |
 | AWDP | 服务、轮次、Checker、攻击、修补、重置、恢复、停止、计分和日志 | 真实攻击/修补按人工验收手册执行 |
 | 运行底座 | Agent、Docker/KVM、镜像、分发、容量、队列、事件、日志和恢复 | 多节点故障、容量和长时间运行需现场签收 |
-| TeamLab | 拓扑、发布、计划、runtime、网络、远程访问、流量、抓包和管理页面 | 双 Worker、规模、长期流量和复杂注入需现场验收 |
+| TeamLab | 拓扑、发布、计划、runtime、执行计划 V2、OVN/OVS、链路策略、连接器、设备包、资源池、远程访问、流量、抓包和管理页面 | 10.24 尚未发布本次合并；双 Worker、规模、长期流量和复杂注入需现场验收 |
 | 身份与管理 | 本地登录、Portal SSO、用户、战队、学员组、系统设置、个人主页和管理端 | Portal 对接方源码不在本仓库 |
 
 真实缺口集中记录在 `docs/yinyu-vnext-deferred-contract-gaps.md`、`docs/modules/README.md` 和 `current-state.md`，不要在页面中伪造缺失接口的成功状态。
@@ -214,7 +214,7 @@ python scripts/deployment/deploy-gzctf-release.py `
 
 ### 数据库迁移漂移
 
-10.24 数据库的 `__EFMigrationsHistory` 曾包含当前源码不存在的 `20260815012026_AddExerciseCreatorTracking`。这不是可以用“数据库已是最新”掩盖的问题；在缺失迁移来源和 schema 对比完成前，禁止新增数据库迁移、删除历史记录或对生产库执行手工修补。
+10.24 数据库的 `__EFMigrationsHistory` 曾包含当前源码不存在的 `20260815012026_AddExerciseCreatorTracking`。当前源码已经继续前进到 `20260816192540_TeamLabCapabilityClosure`；这不是可以用“数据库已是最新”掩盖的问题。在缺失迁移来源和 schema 对比完成前，禁止对生产执行新增迁移、删除历史记录或手工修补。
 
 ## 9. 下一位接手者第一步
 

@@ -12,7 +12,9 @@
 - 目标：`286c6662f72d04e37f16523b67af811cce647265`
 - 合并 worktree：`D:\Work\newGZCTF-phase09-merge`
 - 合并提交：`1a390432b1135da055a5a8488575fd10015f0bbd`
+- 验证交接提交：`963bdf379db339d031b545841acdceb214c337d6`
 - 合并分支：`codex/phase-09-teamlab-networking-merge`
+- 远端结果：`origin/main` 已推进到 `963bdf379db339d031b545841acdceb214c337d6`
 
 冲突处理：
 
@@ -31,10 +33,12 @@
 | `VERIFIED` | 前端测试 `275/275` 通过，生产构建和 bundle budget 通过。 |
 | `VERIFIED` | OpenAPI 生成契约测试通过；生成文档为 81 paths、171 schemas。 |
 | `VERIFIED` | EF migrations 可从源码列出至 `20260816192540_TeamLabCapabilityClosure`；未连接数据库。 |
-| `BLOCKED` | 完整集成测试因本机 Docker 不可用而未完成：272 项中 2 通过、270 项因 Testcontainers 无法连接 Docker named pipe 失败。 |
-| `VERIFIED` | `10.0.7.118:8080` 的 `/`、`/api-docs/`、`/health`、`/openapi/open-v1.json` 返回 200；`/openapi/v1.json` 返回 404。 |
+| `BLOCKED` | 完整集成测试因本机 Docker 不可用而未完成：272 项中 2 通过、270 项因 Testcontainers 无法连接 Docker named pipe 失败；Docker Desktop 服务需要当前会话不具备的管理员权限。 |
+| `BLOCKED` | 备用测试站 `10.0.7.118:8080` 先返回 200，随后请求延迟并返回 503；SSH 公钥认证失败，当前没有 `GZCTF_DEPLOY_*` 凭据，不能作为本次稳定发布验证环境。 |
 | `VERIFIED` | `10.24.0.30/31:5001/api/status` 返回 401，证明 Agent 端口可达且认证中间件生效；未发送凭据。 |
-| `BLOCKED` | `10.24.0.27` SSH/HTTP 均超时，无法读取当前 release、manifest、迁移头或执行远端冒烟。 |
+| `VERIFIED` | 网络恢复后，`10.24.0.27` 的主站与 Agent 为 `active/running`，首页、健康端点和公开 OpenAPI 返回 200；运行前端 SHA 为稳定基线 `81a6e02b7dbe3d1f12094b606e5b3a93fd86de0c`。 |
+| `VERIFIED` | 10.24 运行 OpenAPI 为 69 条路径，尚未包含 connectors、resource-pools 和 device-packages，证明合并代码尚未发布到该环境。 |
+| `BLOCKED` | SSH 账户无 `/opt/gzctf/publish` 遍历权限且无非交互 sudo，无法在本次会话重新读取 release manifest、数据库迁移头或容器事实。 |
 | `OPERATOR_ONLY` | TeamLab OVN/OVS/WireGuard/KVM/Docker 跨节点、长期流量、抓包、故障接管和清理验收需要现场合格环境。 |
 
 ## 发布边界
@@ -43,6 +47,6 @@
 
 ## 下一步
 
-1. 在最新 `main` 上快进到合并提交并推送远端。
-2. 重新获取远端状态，确认 `main` 未被其他提交推进。
-3. 待 10.24 网络恢复并完成迁移副本对比后，按发布手册由运维人员执行真实 TeamLab 验收。
+1. 在 PostgreSQL 副本核对生产 `__EFMigrationsHistory`、缺失迁移来源和 schema 差异，并验证升级与恢复。
+2. 准备可识别的完整 release、数据库和 shared 文件备份、独立 release 目录及回滚路径。
+3. 由具备目标环境 sudo/部署凭据的运维人员发布后，执行真实 TeamLab 跨节点网络、访问授权、流量、抓包和销毁清理验收。
