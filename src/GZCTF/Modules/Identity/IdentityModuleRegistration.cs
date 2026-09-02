@@ -30,6 +30,9 @@ public static class IdentityModuleRegistration
             AddScopePolicy(options, ApiTokenScopes.ImagesRead);
             AddScopePolicy(options, ApiTokenScopes.ImagesWrite);
             AddScopePolicy(options, ApiTokenScopes.ImagesDelete);
+            AddScopePolicy(options, ApiTokenScopes.AssetsRead);
+            AddScopePolicy(options, ApiTokenScopes.AssetsWrite);
+            AddScopePolicy(options, ApiTokenScopes.AssetsDelete);
             AddScopePolicy(options, ApiTokenScopes.OperationsRead);
             AddScopePolicy(options, ApiTokenScopes.ChallengesRead);
             AddScopePolicy(options, ApiTokenScopes.ChallengesWrite);

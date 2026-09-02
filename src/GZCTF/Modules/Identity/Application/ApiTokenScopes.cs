@@ -5,6 +5,9 @@ public static class ApiTokenScopes
     public const string ImagesRead = "images:read";
     public const string ImagesWrite = "images:write";
     public const string ImagesDelete = "images:delete";
+    public const string AssetsRead = "assets:read";
+    public const string AssetsWrite = "assets:write";
+    public const string AssetsDelete = "assets:delete";
     public const string OperationsRead = "operations:read";
     public const string ChallengesRead = "challenges:read";
     public const string ChallengesWrite = "challenges:write";
@@ -38,6 +41,9 @@ public static class ApiTokenScopes
         ImagesRead,
         ImagesWrite,
         ImagesDelete,
+        AssetsRead,
+        AssetsWrite,
+        AssetsDelete,
         OperationsRead,
         ChallengesRead,
         ChallengesWrite,

@@ -63,7 +63,8 @@ public sealed class ExerciseMutationOperationHandler(
     {
         var payload = JsonSerializer.Deserialize<ExerciseCreatePayload>(
             job.PayloadJson!, ExerciseExternalApplicationService.JsonOptions) ?? throw new JsonException();
-        var exercise = CreateExercise(payload.Model);
+        var exercise = await CreateExerciseAsync(payload.Model, cancellationToken);
+        exercise.CreatedById = await GetActorUserIdAsync(job.OperationId, cancellationToken);
         await managementService.CreateExerciseAsync(exercise, cancellationToken);
         job.ExerciseId = exercise.Id;
         return SerializeResult([new ExerciseImportResultItem
@@ -81,7 +82,8 @@ public sealed class ExerciseMutationOperationHandler(
         var imported = new List<ExerciseImportResultItem>();
         foreach (var item in payload.Items)
         {
-            var exercise = CreateExercise(item);
+            var exercise = await CreateExerciseAsync(item, cancellationToken);
+            exercise.CreatedById = await GetActorUserIdAsync(job.OperationId, cancellationToken);
             await managementService.CreateExerciseAsync(exercise, cancellationToken);
             imported.Add(new ExerciseImportResultItem
             {
@@ -127,15 +129,21 @@ public sealed class ExerciseMutationOperationHandler(
             new ExerciseMutationResult(imported, updated, deleted),
             ExerciseExternalApplicationService.JsonOptions);
 
-    static ExerciseChallenge CreateExercise(ExerciseCreateModel model)
+    Task<Guid?> GetActorUserIdAsync(Guid operationId, CancellationToken cancellationToken) =>
+        context.ApiOperations.AsNoTracking()
+            .Where(operation => operation.Id == operationId)
+            .Select(operation => operation.ActorUserId)
+            .SingleOrDefaultAsync(cancellationToken);
+
+    async Task<ExerciseChallenge> CreateExerciseAsync(ExerciseCreateModel model, CancellationToken cancellationToken)
     {
         var exercise = new ExerciseChallenge();
         ApplyScalars(exercise, model);
-        ApplyRelations(exercise, model.Flags, model.Attachment);
+        await ApplyRelationsAsync(exercise, model.Flags, model.Attachment, cancellationToken);
         return exercise;
     }
 
-    static ExerciseChallenge CreateExercise(ExerciseImportItemModel model)
+    async Task<ExerciseChallenge> CreateExerciseAsync(ExerciseImportItemModel model, CancellationToken cancellationToken)
     {
         var exercise = new ExerciseChallenge
         {
@@ -149,7 +157,7 @@ public sealed class ExerciseMutationOperationHandler(
             Hints = model.Hints,
             IsEnabled = model.IsEnabled
         };
-        ApplyRelations(exercise, model.Flags, model.Attachment);
+        await ApplyRelationsAsync(exercise, model.Flags, model.Attachment, cancellationToken);
         return exercise;
     }
 
@@ -176,30 +184,46 @@ public sealed class ExerciseMutationOperationHandler(
         exercise.TrainingCourseId = null;
     }
 
-    static void ApplyRelations(
+    async Task ApplyRelationsAsync(
         ExerciseChallenge exercise,
         List<ExerciseOpenApiFlagModel>? flags,
-        ExerciseOpenApiAttachmentModel? attachment)
+        ExerciseOpenApiAttachmentModel? attachment,
+        CancellationToken cancellationToken)
     {
-        exercise.Flags = flags?.Select(flag => new FlagContext
+        exercise.Flags = [];
+        foreach (var flag in flags ?? [])
         {
-            Exercise = exercise,
-            Flag = flag.Flag,
-            IsOccupied = false,
-            OrderIndex = flag.OrderIndex,
-            Description = flag.Description,
-            ScoreMode = flag.ScoreMode,
-            FixedScore = flag.FixedScore,
-            MaxAttempts = flag.MaxAttempts,
-            AttachmentHash = flag.AttachmentHash,
-            AnswerType = flag.AnswerType,
-            CustomName = flag.CustomName,
-            Attachment = CreateAttachment(flag.Attachment)
-        }).ToList() ?? [];
-        exercise.Attachment = CreateAttachment(attachment);
+            exercise.Flags.Add(new FlagContext
+            {
+                Exercise = exercise,
+                Flag = flag.Flag,
+                IsOccupied = false,
+                OrderIndex = flag.OrderIndex,
+                Description = flag.Description,
+                ScoreMode = flag.ScoreMode,
+                FixedScore = flag.FixedScore,
+                MaxAttempts = flag.MaxAttempts,
+                AttachmentHash = flag.AttachmentHash,
+                AnswerType = flag.AnswerType,
+                CustomName = flag.CustomName,
+                Attachment = await CreateAttachmentAsync(flag.Attachment, cancellationToken)
+            });
+        }
+        exercise.Attachment = await CreateAttachmentAsync(attachment, cancellationToken);
     }
 
-    static Attachment? CreateAttachment(ExerciseOpenApiAttachmentModel? model) => model is null
-        ? null
-        : new Attachment { Type = FileType.Remote, RemoteUrl = model.RemoteUrl };
+    async Task<Attachment?> CreateAttachmentAsync(ExerciseOpenApiAttachmentModel? model,
+        CancellationToken cancellationToken)
+    {
+        if (model is null) return null;
+        if (!string.IsNullOrWhiteSpace(model.FileHash))
+        {
+            var file = await context.Files.SingleOrDefaultAsync(item => item.Hash == model.FileHash, cancellationToken)
+                ?? throw new ApiOperationTerminalException("asset_not_found", "The attachment asset was not found.");
+            return new Attachment { Type = FileType.Local, LocalFile = file };
+        }
+        if (!string.IsNullOrWhiteSpace(model.RemoteUrl))
+            return new Attachment { Type = FileType.Remote, RemoteUrl = model.RemoteUrl };
+        throw new ApiOperationTerminalException("attachment_invalid", "An attachment requires fileHash or remoteUrl.");
+    }
 }

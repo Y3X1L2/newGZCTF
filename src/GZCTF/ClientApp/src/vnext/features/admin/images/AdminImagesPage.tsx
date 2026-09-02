@@ -174,6 +174,13 @@ export function AdminImagesPage() {
       render: (template) => <time className={styles.mono}>{formatAdminTime(template.uploadedAt)}</time>,
     },
     {
+      id: 'creator',
+      header: '上传者',
+      width: 'medium',
+      visibility: 'desktop',
+      render: (template) => template.creatorUserName || '未记录',
+    },
+    {
       id: 'action',
       header: '操作',
       width: 'compact',
@@ -406,6 +413,10 @@ export function AdminImagesPage() {
               <div>
                 <dt>登记时间</dt>
                 <dd>{formatAdminTime(selected.uploadedAt)}</dd>
+              </div>
+              <div>
+                <dt>上传者</dt>
+                <dd>{selected.creatorUserName || '未记录'}</dd>
               </div>
               <div className={styles.detailWide}>
                 <dt>Registry</dt>

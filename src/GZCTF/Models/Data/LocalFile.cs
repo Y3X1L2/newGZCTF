@@ -37,6 +37,17 @@ public class LocalFile
     public string Name { get; set; } = string.Empty;
 
     /// <summary>
+    /// Account that first uploaded this content-addressed asset.
+    /// The owner is immutable because identical content may be reused by later uploads.
+    /// </summary>
+    [JsonIgnore]
+    public Guid? CreatedById { get; set; }
+
+    [JsonIgnore]
+    [ForeignKey(nameof(CreatedById))]
+    public UserInfo? CreatedBy { get; set; }
+
+    /// <summary>
     /// Reference count
     /// </summary>
     [JsonIgnore]

@@ -289,7 +289,9 @@ public sealed class ExerciseManagementService(
         var existing = await context.ExerciseChallenges
             .FirstOrDefaultAsync(item => item.Id == exercise.Id && item.TrainingCourseId == null, token)
             ?? throw new InvalidOperationException($"Public exercise {exercise.Id} not found");
+        var createdById = existing.CreatedById;
         context.Entry(existing).CurrentValues.SetValues(exercise);
+        existing.CreatedById = createdById;
         existing.TrainingCourseId = null;
         await context.SaveChangesAsync(token);
         return existing;
@@ -297,6 +299,7 @@ public sealed class ExerciseManagementService(
 
     public async Task<ExerciseChallenge?> GetExerciseForUpdateAsync(int exerciseId, CancellationToken token = default) =>
         await context.ExerciseChallenges
+            .Include(e => e.CreatedBy)
             .Include(e => e.Flags)
             .Include(e => e.Attachment)
             .FirstOrDefaultAsync(e => e.Id == exerciseId && e.TrainingCourseId == null, token);
@@ -348,7 +351,9 @@ public sealed class ExerciseManagementService(
             .FirstOrDefaultAsync(e => e.Id == exercise.Id && e.TrainingCourseId == null, token)
             ?? throw new InvalidOperationException($"Public exercise {exercise.Id} not found");
 
+        var createdById = existing.CreatedById;
         context.Entry(existing).CurrentValues.SetValues(exercise);
+        existing.CreatedById = createdById;
         existing.TrainingCourseId = null;
 
         if (flags is not null)
@@ -373,7 +378,7 @@ public sealed class ExerciseManagementService(
                     ExerciseId = exercise.Id
                 };
                 if (flag.Attachment is not null)
-                    flagCtx.Attachment = CreateAttachment(flag.Attachment);
+                    flagCtx.Attachment = await CreateOpenAttachmentAsync(flag.Attachment, token);
                 context.FlagContexts.Add(flagCtx);
             }
         }
@@ -381,16 +386,26 @@ public sealed class ExerciseManagementService(
         if (attachment is not null)
         {
             await blobRepository.DeleteAttachment(existing.Attachment, token);
-            existing.Attachment = CreateAttachment(attachment);
+            existing.Attachment = await CreateOpenAttachmentAsync(attachment, token);
         }
 
         await context.SaveChangesAsync(token);
         return existing;
     }
 
-    static Attachment? CreateAttachment(ExerciseOpenApiAttachmentModel? model) => model is null
-        ? null
-        : new Attachment { Type = FileType.Remote, RemoteUrl = model.RemoteUrl };
+    async Task<Attachment?> CreateOpenAttachmentAsync(ExerciseOpenApiAttachmentModel? model, CancellationToken token)
+    {
+        if (model is null) return null;
+        if (!string.IsNullOrWhiteSpace(model.FileHash))
+        {
+            var file = await blobRepository.GetBlobByHash(model.FileHash, token)
+                ?? throw new InvalidOperationException("Attachment asset was not found.");
+            return new Attachment { Type = FileType.Local, LocalFile = file };
+        }
+        if (!string.IsNullOrWhiteSpace(model.RemoteUrl))
+            return new Attachment { Type = FileType.Remote, RemoteUrl = model.RemoteUrl };
+        throw new InvalidOperationException("An attachment requires fileHash or remoteUrl.");
+    }
 
     public async Task<ExerciseChallenge> UpdateExerciseWithRelationsAsync(
         ExerciseChallenge exercise,
@@ -404,7 +419,9 @@ public sealed class ExerciseManagementService(
             .FirstOrDefaultAsync(item => item.Id == exercise.Id && item.TrainingCourseId == null, token)
             ?? throw new InvalidOperationException($"Public exercise {exercise.Id} not found");
 
+        var createdById = existing.CreatedById;
         context.Entry(existing).CurrentValues.SetValues(exercise);
+        existing.CreatedById = createdById;
         existing.TrainingCourseId = null;
         var requestedFlags = flags ?? [];
         var requestedIds = requestedFlags.Select(flag => flag.Id).OfType<int>().ToHashSet();

@@ -32,6 +32,7 @@ public static class ContentModuleRegistration
         services.AddScoped<IVmQcow2ImageImportExecutor, VmQcow2ImageImportExecutor>();
         services.AddScoped<IImageImportTemplateStore, EfImageImportTemplateStore>();
         services.AddScoped<ImageImportApplicationService>();
+        services.AddScoped<AssetApplicationService>();
         services.AddSingleton<DockerImageReferencePolicy>();
         services.AddScoped<ImageImportStagingReconciler>();
         services.AddKeyedScoped<IApiOperationHandler, ImageImportOperationHandler>(

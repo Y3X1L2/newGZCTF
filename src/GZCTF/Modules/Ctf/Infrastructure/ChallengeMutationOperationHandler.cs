@@ -231,12 +231,17 @@ public sealed class ChallengeMutationOperationHandler(
                 .ToArrayAsync(cancellationToken)
             : [];
         var pending = new List<(OpenChallengeImportModel Item, GameChallenge Challenge)>(payload.Items.Count);
+        var actorUserId = await context.ApiOperations
+            .Where(operation => operation.Id == operationId)
+            .Select(operation => operation.ActorUserId)
+            .SingleOrDefaultAsync(cancellationToken);
 
         await using (var transaction = await context.Database.BeginTransactionAsync(cancellationToken))
         {
             foreach (var item in payload.Items)
             {
                 var challenge = CreateChallenge(job.GameId, item);
+                challenge.CreatedById = actorUserId;
                 context.GameChallenges.Add(challenge);
                 pending.Add((item, challenge));
                 if (challenge.IsEnabled)

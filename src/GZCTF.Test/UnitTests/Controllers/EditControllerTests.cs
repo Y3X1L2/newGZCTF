@@ -8,6 +8,7 @@ using GZCTF.Models;
 using GZCTF.Models.Data;
 using GZCTF.Models.Internal;
 using GZCTF.Modules.Content.Application;
+using GZCTF.Modules.Exercise.Application;
 using GZCTF.Repositories.Interface;
 using GZCTF.Services;
 using GZCTF.Infrastructure.Cache;

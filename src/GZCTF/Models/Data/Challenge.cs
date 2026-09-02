@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 using System.Security.Cryptography;
 using System.Text.Json.Serialization;
 
@@ -9,6 +10,14 @@ public class Challenge
     [Key]
     [Required]
     public int Id { get; set; }
+
+    /// <summary>Account that originally created the challenge.</summary>
+    [JsonIgnore]
+    public Guid? CreatedById { get; set; }
+
+    [JsonIgnore]
+    [ForeignKey(nameof(CreatedById))]
+    public UserInfo? CreatedBy { get; set; }
 
     /// <summary>
     /// Challenge title

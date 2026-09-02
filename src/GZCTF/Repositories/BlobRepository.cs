@@ -15,7 +15,7 @@ public class BlobRepository(AppDbContext context, ILogger<BlobRepository> logger
         Context.Files.CountAsync(token);
 
     public async Task<LocalFile> CreateOrUpdateBlob(IFormFile file, string? fileName = null,
-        CancellationToken token = default)
+        CancellationToken token = default, Guid? createdById = null)
     {
         await using var tmp = BufferHelper.GetTempStream(file.Length);
 
@@ -25,12 +25,12 @@ public class BlobRepository(AppDbContext context, ILogger<BlobRepository> logger
             LogLevel.Trace);
 
         await file.CopyToAsync(tmp, token);
-        return await StoreBlob(fileName ?? file.FileName, tmp, token);
+        return await StoreBlob(fileName ?? file.FileName, tmp, token, createdById);
     }
 
     public Task<LocalFile> CreateOrUpdateBlobFromStream(string fileName, Stream stream,
-        CancellationToken token = default) =>
-        StoreBlob(fileName, stream, token);
+        CancellationToken token = default, Guid? createdById = null) =>
+        StoreBlob(fileName, stream, token, createdById);
 
     public async Task<LocalFile?> IncrementBlobReference(string fileHash, CancellationToken token = default)
     {
@@ -183,7 +183,7 @@ public class BlobRepository(AppDbContext context, ILogger<BlobRepository> logger
     }
 
     private async Task<LocalFile> StoreBlob(string fileName, Stream contentStream,
-        CancellationToken token = default)
+        CancellationToken token = default, Guid? createdById = null)
     {
         contentStream.Position = 0;
         var hash = await SHA256.HashDataAsync(contentStream, token);
@@ -208,7 +208,13 @@ public class BlobRepository(AppDbContext context, ILogger<BlobRepository> logger
         }
         else
         {
-            localFile = new() { Hash = fileHash, Name = fileName, FileSize = contentStream.Length };
+            localFile = new()
+            {
+                Hash = fileHash,
+                Name = fileName,
+                FileSize = contentStream.Length,
+                CreatedById = createdById
+            };
             await Context.AddAsync(localFile, token);
         }
 

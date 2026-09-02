@@ -650,9 +650,11 @@ public class EditController(
             (!model.ImageTemplateId.HasValue || !await IsReadyWindowsVmTemplate(model.ImageTemplateId.Value, token)))
             return WindowsVmRuntimeConfigError();
 
+        var creator = await userManager.GetUserAsync(User);
         var res = await challengeRepository.CreateChallenge(game!,
             new GameChallenge
             {
+                CreatedById = creator?.Id,
                 Title = model.Title,
                 Type = model.Type,
                 Category = model.Category,

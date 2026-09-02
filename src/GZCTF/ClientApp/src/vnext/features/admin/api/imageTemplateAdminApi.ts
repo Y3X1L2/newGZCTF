@@ -98,6 +98,7 @@ function isImageTemplateSummary(value: unknown): value is ImageTemplateSummary {
     isNullableString(value.imageHash) &&
     isNumber(value.uploadedAt) &&
     isNullableString(value.registryUrl) &&
+    (value.creatorUserName === undefined || isNullableString(value.creatorUserName)) &&
     (value.containsMalware === undefined || isBoolean(value.containsMalware)) &&
     (value.supportsInstanceCredentials === undefined || isBoolean(value.supportsInstanceCredentials)) &&
     (value.canManage === undefined || isBoolean(value.canManage))

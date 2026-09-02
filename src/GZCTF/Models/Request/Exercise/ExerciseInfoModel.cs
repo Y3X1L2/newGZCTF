@@ -48,6 +48,11 @@ public class ExerciseInfoModel
     public ExercisePoolSource PoolSource { get; set; }
 
     /// <summary>
+    /// Creator account, returned only to teachers and administrators.
+    /// </summary>
+    public string? CreatorUserName { get; set; }
+
+    /// <summary>
     /// Number of people who solved the exercise
     /// </summary>
     public int AcceptedCount { get; set; }

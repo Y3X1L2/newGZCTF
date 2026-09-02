@@ -31,6 +31,7 @@ export interface ExerciseAdminFlag {
 
 export interface ExerciseAdminDraft {
   id?: number
+  creatorUserName?: string | null
   title: string
   content: string
   category: ChallengeCategory

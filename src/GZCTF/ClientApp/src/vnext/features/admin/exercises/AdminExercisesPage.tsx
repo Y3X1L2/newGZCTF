@@ -64,6 +64,13 @@ export function AdminExercisesPage() {
       render: (exercise) => `${exercise.acceptedCount} 人完成 · ${exercise.submissionCount} 次`,
     },
     {
+      id: 'creator',
+      header: '出题人',
+      width: 'medium',
+      visibility: 'desktop',
+      render: (exercise) => exercise.creatorUserName || '未记录',
+    },
+    {
       id: 'actions',
       header: '操作',
       width: 'compact',

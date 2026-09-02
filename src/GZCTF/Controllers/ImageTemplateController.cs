@@ -146,6 +146,7 @@ public class ImageTemplateController : ControllerBase
 
         var total = await query.CountAsync();
         var templates = await query
+            .Include(template => template.CreatedBy)
             .Include(template => template.RemoteAccess)
             .OrderByDescending(t => t.UploadedAt)
             .Skip((page - 1) * pageSize)
@@ -156,6 +157,7 @@ public class ImageTemplateController : ControllerBase
         {
             t.Id, t.Name, t.OSType, t.ImageType, t.FileSize, t.Status,
             t.Description, t.ErrorMessage, t.ImageHash, t.UploadedAt, t.RegistryUrl,
+            CreatorUserName = t.CreatedBy?.UserName,
             t.SupportsInstanceCredentials,
             RemoteAccessProtocol = RemoteAccessProtocol(t),
             CanManage = CanManageTemplate(actor, t)
@@ -171,6 +173,7 @@ public class ImageTemplateController : ControllerBase
     {
         var actor = await CurrentUser();
         var template = await _context.ImageTemplates.AsNoTracking()
+            .Include(item => item.CreatedBy)
             .Include(item => item.RemoteAccess)
             .SingleOrDefaultAsync(item => item.Id == id &&
                                           (actor.Role >= Role.Admin ||
@@ -186,6 +189,7 @@ public class ImageTemplateController : ControllerBase
             template.FileSize, template.Status, template.Description,
             template.ErrorMessage, template.ContainsMalware, template.ImageHash, template.UploadedAt,
             template.RegistryUrl, template.SupportsInstanceCredentials,
+            CreatorUserName = template.CreatedBy?.UserName,
             RemoteAccessProtocol = RemoteAccessProtocol(template),
             CanManage = CanManageTemplate(actor, template),
             CapabilityCertifications = certifications
