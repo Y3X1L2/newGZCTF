@@ -362,6 +362,16 @@ public partial class AppDbContext(DbContextOptions<AppDbContext> options) :
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
+        builder.Entity<ExerciseChallenge>(entity =>
+        {
+            entity.HasOne(e => e.CreatedBy)
+                .WithMany()
+                .HasForeignKey(e => e.CreatedById)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasIndex(e => e.CreatedById);
+        });
+
         builder.Entity<StudentGroupMember>(entity =>
         {
             entity.HasOne(e => e.Student)

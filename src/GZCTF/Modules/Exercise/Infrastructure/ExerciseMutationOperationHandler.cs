@@ -64,6 +64,7 @@ public sealed class ExerciseMutationOperationHandler(
         var payload = JsonSerializer.Deserialize<ExerciseCreatePayload>(
             job.PayloadJson!, ExerciseExternalApplicationService.JsonOptions) ?? throw new JsonException();
         var exercise = CreateExercise(payload.Model);
+        exercise.CreatedById = await GetActorUserIdAsync(job.OperationId, cancellationToken);
         await managementService.CreateExerciseAsync(exercise, cancellationToken);
         job.ExerciseId = exercise.Id;
         return SerializeResult([new ExerciseImportResultItem
@@ -78,10 +79,12 @@ public sealed class ExerciseMutationOperationHandler(
     {
         var payload = JsonSerializer.Deserialize<ExerciseImportPayload>(
             job.PayloadJson!, ExerciseExternalApplicationService.JsonOptions) ?? throw new JsonException();
+        var actorUserId = await GetActorUserIdAsync(job.OperationId, cancellationToken);
         var imported = new List<ExerciseImportResultItem>();
         foreach (var item in payload.Items)
         {
             var exercise = CreateExercise(item);
+            exercise.CreatedById = actorUserId;
             await managementService.CreateExerciseAsync(exercise, cancellationToken);
             imported.Add(new ExerciseImportResultItem
             {
@@ -126,6 +129,12 @@ public sealed class ExerciseMutationOperationHandler(
         JsonSerializer.Serialize(
             new ExerciseMutationResult(imported, updated, deleted),
             ExerciseExternalApplicationService.JsonOptions);
+
+    Task<Guid?> GetActorUserIdAsync(Guid operationId, CancellationToken cancellationToken) =>
+        context.ApiOperations.AsNoTracking()
+            .Where(operation => operation.Id == operationId)
+            .Select(operation => operation.ActorUserId)
+            .SingleOrDefaultAsync(cancellationToken);
 
     static ExerciseChallenge CreateExercise(ExerciseCreateModel model)
     {

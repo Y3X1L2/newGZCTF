@@ -1,15 +1,24 @@
 using System;
+using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using GZCTF.Models;
 using GZCTF.Models.Data;
+using GZCTF.Models.Internal;
+using GZCTF.Models.Request.Exercise;
+using GZCTF.Modules.Audit.Domain;
 using GZCTF.Modules.Exercise.Application;
+using GZCTF.Modules.Exercise.Domain;
 using GZCTF.Modules.Exercise.Infrastructure;
 using GZCTF.Modules.Identity.Application;
 using GZCTF.Repositories;
 using GZCTF.Repositories.Interface;
+using GZCTF.Services.Fleet;
 using GZCTF.Utils;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
 
@@ -68,6 +77,40 @@ public class ExerciseWorkflowRegressionTests
             new Mock<IBlobRepository>().Object);
 
         Assert.NotNull(await service.GetExerciseForUpdateAsync(draft.Id));
+    }
+
+    [Fact]
+    public async Task PublicManagement_UpdatePreservesCreatorAndReturnsCreatorName()
+    {
+        await using var context = CreateContext();
+        var creator = new UserInfo { Id = Guid.NewGuid(), UserName = "creator" };
+        var exercise = new ExerciseChallenge
+        {
+            Title = "original",
+            Content = "content",
+            CreatedById = creator.Id
+        };
+        context.Users.Add(creator);
+        context.ExerciseChallenges.Add(exercise);
+        await context.SaveChangesAsync();
+
+        var service = new ExerciseManagementService(
+            context,
+            new Mock<IExerciseChallengeRepository>(MockBehavior.Strict).Object,
+            new Mock<IBlobRepository>().Object);
+
+        await service.UpdateExerciseAsync(new ExerciseChallenge
+        {
+            Id = exercise.Id,
+            Title = "updated",
+            Content = "updated"
+        });
+        context.ChangeTracker.Clear();
+
+        var loaded = Assert.IsType<ExerciseChallenge>(await service.GetExerciseForUpdateAsync(exercise.Id));
+        Assert.Equal(creator.Id, loaded.CreatedById);
+        Assert.Equal("creator", loaded.CreatedBy?.UserName);
+        Assert.Equal("creator", ExerciseManagementModel.FromExercise(loaded).CreatorUserName);
     }
 
     [Fact]
@@ -162,6 +205,113 @@ public class ExerciseWorkflowRegressionTests
         var collected = await service.ImportFromGameAsync(challenge.GameId);
         Assert.Single(collected);
         Assert.Equal(imported.Id, collected[0].Id);
+    }
+
+    [Fact]
+    public async Task ImportFromTraining_CopiesCreatorAttribution()
+    {
+        await using var context = CreateContext();
+        var creator = new UserInfo { Id = Guid.NewGuid(), UserName = "course-author" };
+        var source = new ExerciseChallenge
+        {
+            Title = "course source",
+            Content = "content",
+            TrainingCourseId = 42,
+            CreatedById = creator.Id,
+            Type = ChallengeType.StaticAttachment,
+            Attachment = new Attachment { Type = FileType.Remote, RemoteUrl = "https://example.test/source.zip" },
+            Flags = [new FlagContext { Flag = "flag{training}", IsOccupied = false }]
+        };
+        context.Users.Add(creator);
+        context.ExerciseChallenges.Add(source);
+        await context.SaveChangesAsync();
+
+        var blobRepository = new Mock<IBlobRepository>();
+        var service = new ExerciseManagementService(
+            context,
+            new ExerciseChallengeRepository(context, blobRepository.Object),
+            blobRepository.Object);
+
+        var imported = Assert.Single(await service.ImportFromTrainingAsync(42, [source.Id]));
+
+        Assert.Equal(creator.Id, imported.CreatedById);
+        Assert.Equal(ExercisePoolSource.Training, imported.PoolSource);
+    }
+
+    [Fact]
+    public async Task ExerciseList_ReturnsCreatorOnlyToTeachers()
+    {
+        await using var context = CreateContext();
+        var creator = new UserInfo { Id = Guid.NewGuid(), UserName = "teacher-author" };
+        context.Users.Add(creator);
+        context.ExerciseChallenges.Add(new ExerciseChallenge
+        {
+            Title = "public",
+            Content = "content",
+            IsEnabled = true,
+            CreatedById = creator.Id
+        });
+        await context.SaveChangesAsync();
+
+        var service = new ExerciseService(
+            context,
+            new Mock<IExerciseInstanceRepository>().Object,
+            new DeploymentQueueService(context, NullLogger<DeploymentQueueService>.Instance),
+            new Mock<IOptionsSnapshot<ContainerPolicy>>().Object);
+
+        var teacherModel = Assert.Single(await service.GetExerciseListAsync(null, role: Role.Teacher));
+        var studentModel = Assert.Single(await service.GetExerciseListAsync(null, role: Role.Student));
+
+        Assert.Equal("teacher-author", teacherModel.CreatorUserName);
+        Assert.Null(studentModel.CreatorUserName);
+    }
+
+    [Fact]
+    public async Task ExternalCreate_AssignsOperationActorAsCreator()
+    {
+        await using var context = CreateContext();
+        var operationId = Guid.NewGuid();
+        var actorUserId = Guid.NewGuid();
+        context.ApiOperations.Add(new ApiOperation
+        {
+            Id = operationId,
+            Kind = ExerciseExternalApplicationService.OperationKind,
+            ActorUserId = actorUserId,
+            RouteKey = "POST /api/open/v1/exercises",
+            IdempotencyKey = "creator-test",
+            RequestHash = "hash"
+        });
+        context.ExerciseMutationJobs.Add(new ExerciseMutationJob
+        {
+            OperationId = operationId,
+            Kind = ExerciseMutationKind.Create,
+            PayloadJson = JsonSerializer.Serialize(
+                new ExerciseCreatePayload(new GZCTF.Modules.Exercise.Contracts.ExerciseCreateModel
+                {
+                    Title = "external",
+                    Content = "content"
+                }),
+                new JsonSerializerOptions(JsonSerializerDefaults.Web))
+        });
+        await context.SaveChangesAsync();
+
+        ExerciseChallenge? created = null;
+        var managementService = new Mock<IExerciseManagementService>(MockBehavior.Strict);
+        managementService
+            .Setup(service => service.CreateExerciseAsync(
+                It.IsAny<ExerciseChallenge>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((ExerciseChallenge exercise, CancellationToken _) =>
+            {
+                exercise.Id = 123;
+                created = exercise;
+                return exercise;
+            });
+
+        var handler = new ExerciseMutationOperationHandler(context, managementService.Object);
+        await handler.ExecuteAsync(operationId, "test-worker", default);
+
+        Assert.Equal(actorUserId, Assert.IsType<ExerciseChallenge>(created).CreatedById);
+        managementService.VerifyAll();
     }
 
     [Fact]
