@@ -1,6 +1,6 @@
 # YINYU 当前开发状态
 
-更新时间：2026-09-01
+更新时间：2026-09-02
 
 本文件只记录已经核对过的当前事实、已知缺口和下一任务入口。历史计划、阶段审查和现场流水放在 `docs/archive/implementation-records/`，不得用来判断当前代码或服务器状态。
 
@@ -66,7 +66,7 @@
 3. Windows VM 仅按比赛场景支持；平台使用镜像内固定 RDP 账号，不要求普通比赛使用 Cloudbase-Init。仍需对合格镜像完成双实例、RDP/Guacamole、剪贴板、隔离和销毁清理验收。
 4. AWDP 的真实攻击、修补、异常恢复和安全软件干扰场景由授权测试人员按 `docs/yinyu-awdp-manual-acceptance.md` 手工执行。
 5. 统一认证对接方的门户源码不在本仓库；平台保留 Portal SSO 适配，跨网联调需在目标环境验证。
-6. 10.24 数据库历史曾包含源码中不存在的 `20260815012026_AddExerciseCreatorTracking`，当前源码最新可见迁移为 `20260816192540_TeamLabCapabilityClosure`；任何生产迁移或数据库开发前必须在副本完成迁移历史和 schema 对比，禁止直接改生产迁移表。
+6. 10.24 数据库历史中的 `20260815012026_AddExerciseCreatorTracking` 已从原始提交 `c6a2b7f4b5637f5622cfa6bdb42624d5242a0c80` 恢复到源码，并补齐 `ExerciseChallenge` 创建者模型和读写路径；该迁移无数据回填。本次未部署或修改生产数据库，也未在生产副本执行 schema-only 对比，任何后续生产迁移前仍必须先在副本完成迁移历史和 schema 验证。
 
 ## 5. 已验证环境事实
 

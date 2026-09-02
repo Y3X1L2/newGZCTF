@@ -1,6 +1,6 @@
 # YINYU 当前项目交接说明
 
-更新时间：2026-09-01
+更新时间：2026-09-02
 
 本文面向刚接手项目的开发者或 AI。它补充 `AGENTS.md`、`docs/development/current-state.md` 和 `docs/README.md`，用于快速建立项目上下文；如果与当前运行行为、源码或 OpenAPI 冲突，以真实运行行为和当前源码为准。
 
@@ -61,7 +61,7 @@ manifest 的 `gitCommit` 为 `81a6e02b7dbe3d1f12094b606e5b3a93fd86de0c`，主站
 20260815012026_AddExerciseCreatorTracking
 ```
 
-注意：该迁移文件不在当前源码或 Git 历史中；当前源码可见的最新迁移为 `20260816192540_TeamLabCapabilityClosure`。这属于服务器数据库与源码的未闭环漂移，不能把该数据库当作可直接迁移开发的基线。任何生产迁移或数据库开发前，必须在数据库副本上导出 `__EFMigrationsHistory`、执行 schema-only 对比，并找回缺失迁移的真实来源；禁止直接删除迁移历史或修改生产库绕过检查。
+该迁移的原始来源已从本地 Git 对象恢复：提交 `c6a2b7f4b5637f5622cfa6bdb42624d5242a0c80`。当前修复恢复同一 migration ID 的 `Up`、`Down` 和 Designer，并将 `ExerciseChallenge` 创建者关系补回当前模型和快照；迁移只增加可空字段、索引和 `SET NULL` 外键，不执行数据回填。此次仅修复源码，尚未部署，也未在生产数据库副本上执行 schema-only 对比或迁移验证；后续生产迁移前仍必须先备份并在副本完成验证，禁止直接修改生产迁移表。
 
 发布前备份目录：
 
@@ -214,7 +214,7 @@ python scripts/deployment/deploy-gzctf-release.py `
 
 ### 数据库迁移漂移
 
-10.24 数据库的 `__EFMigrationsHistory` 曾包含当前源码不存在的 `20260815012026_AddExerciseCreatorTracking`。当前源码已经继续前进到 `20260816192540_TeamLabCapabilityClosure`；这不是可以用“数据库已是最新”掩盖的问题。在缺失迁移来源和 schema 对比完成前，禁止对生产执行新增迁移、删除历史记录或手工修补。
+10.24 数据库的 `__EFMigrationsHistory` 曾包含源码缺失的 `20260815012026_AddExerciseCreatorTracking`。原始迁移已从提交 `c6a2b7f4b5637f5622cfa6bdb42624d5242a0c80` 恢复到当前源码，并补齐对应实体、关系、快照和创建者写入路径。恢复不代表生产验证完成：本次未部署、未修改生产数据库，也未在生产副本执行 schema-only 对比；后续迁移前仍需按数据库治理流程验证。
 
 ## 9. 下一位接手者第一步
 
