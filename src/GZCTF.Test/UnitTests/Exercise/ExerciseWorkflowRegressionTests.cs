@@ -1,5 +1,6 @@
 using System;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using GZCTF.Models;
 using GZCTF.Models.Data;
@@ -258,8 +259,8 @@ public class ExerciseWorkflowRegressionTests
             new DeploymentQueueService(context, NullLogger<DeploymentQueueService>.Instance),
             new Mock<IOptionsSnapshot<ContainerPolicy>>().Object);
 
-        var teacherModel = Assert.Single(await service.GetExerciseListAsync(role: Role.Teacher));
-        var studentModel = Assert.Single(await service.GetExerciseListAsync(role: Role.Student));
+        var teacherModel = Assert.Single(await service.GetExerciseListAsync(null, role: Role.Teacher));
+        var studentModel = Assert.Single(await service.GetExerciseListAsync(null, role: Role.Student));
 
         Assert.Equal("teacher-author", teacherModel.CreatorUserName);
         Assert.Null(studentModel.CreatorUserName);
