@@ -22,6 +22,9 @@
 - worktree：`D:\Work\newGZCTF-migration-drift`
 - 起始提交：`3c15e9a7f7de92c00e4ef2d2df569d3d7f5584dd`
 - 稳定运行标签：`stable-20260831` / `81a6e02b7dbe3d1f12094b606e5b3a93fd86de0c`
+- 恢复提交：`d9211241` (`fix(migrations): restore creator tracking history`)
+- 推送分支：`origin/codex/migration-drift-reconciliation`
+- 是否合并 `main`：否，本阶段只完成恢复与验证。
 - 生产范围：`10.24.0.27`，只读访问；备份目录 `/opt/gzctf/backups/stable-20260831-pre/`
 - 涉及模块：EF Core migrations、`AppDbContext`、Exercise、TeamLab、发布/数据库治理运行手册。
 
