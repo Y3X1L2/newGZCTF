@@ -66,7 +66,7 @@
 3. Windows VM 仅按比赛场景支持；平台使用镜像内固定 RDP 账号，不要求普通比赛使用 Cloudbase-Init。仍需对合格镜像完成双实例、RDP/Guacamole、剪贴板、隔离和销毁清理验收。
 4. AWDP 的真实攻击、修补、异常恢复和安全软件干扰场景由授权测试人员按 `docs/yinyu-awdp-manual-acceptance.md` 手工执行。
 5. 统一认证对接方的门户源码不在本仓库；平台保留 Portal SSO 适配，跨网联调需在目标环境验证。
-6. 10.24 数据库历史有两条经历史 DLL 证实、但尚未合入 `main` 的 migration：`20260814075023_AddAssetAndChallengeOwnership` 与 `20260815012026_AddExerciseCreatorTracking`；另有 `20260604165857_AddTheoryExamEntities`、`20260604193010_SyncTheoryExam` 未在源码、可达 Git 历史或保留 DLL 中恢复。恢复分支已在隔离副本验证当前 TeamLab 前向 migration，但它会删除旧 TeamLab 表和字段；在旧 TeamLab 数据完成单独授权的分类/清理、数据库副本复验和维护窗口验收前，禁止对生产执行 migration 或手改 migration history。
+6. `main` 已恢复经历史 DLL 证实的 `20260814075023_AddAssetAndChallengeOwnership` 与 `20260815012026_AddExerciseCreatorTracking`；`20260604165857_AddTheoryExamEntities`、`20260604193010_SyncTheoryExam` 仍未在源码、可达 Git 历史或保留 DLL 中恢复。已清理 10 个经授权的旧 TeamLab 配置值并用清理后新鲜备份完成隔离 bundle 验证，但生产仍有 `qqqtest1` 的两个未授权 pending runtime/queue，未完成其归属和处置前，禁止执行 Phase 09 生产 migration 或 release 切换。
 
 ## 5. 已验证环境事实
 
@@ -77,6 +77,8 @@
 - 2026-09-01 已将 Phase 09 TeamLab networking 合并提交 `1a390432b1135da055a5a8488575fd10015f0bbd` 推入 `main`；本地 Release build、905 项后端单元测试、275 项前端测试、前端生产构建和 OpenAPI 生成契约测试通过。完整集成测试因本机 Docker Desktop 无法启动而未完成。
 - 同日只读复核 10.24：主站与 Agent 服务为 `active/running`，首页、健康端点和公开 OpenAPI 返回 200；运行前端 SHA 仍为 `81a6e02b7dbe3d1f12094b606e5b3a93fd86de0c`，公开 OpenAPI 为 69 条路径，尚未包含本次新增的 connectors、resource-pools 和 device-packages 路由。
 - 2026-09-03 已在 `codex/migration-drift-reconciliation` 从历史 DLL 恢复两条 creator migration，并在无网络、无端口的 PostgreSQL 16 副本中完成生产备份恢复、空库完整 bundle 和生产备份前向 bundle 验证；所有隔离容器、volume 和服务器临时产物均已删除。生产数据库、release、节点和网关未修改。详细结论见 `docs/development/handoffs/2026-09-02-migration-drift-reconciliation.md`。
+- 同日已在发布前备份 `/opt/gzctf/backups/teamlab-release-pre-migration-20260903T080343Z` 后，以完整事务将 6 个授权 `EnvironmentJson` 配置值清为空对象、4 个授权 `RoutingEnabled` 配置值设为 false；未删除 TeamLab 行、比赛绑定、runtime、队列或其他业务数据。清理后备份在隔离 PostgreSQL 16 容器成功恢复并执行当前 `main` bundle 至 `20260816192540_TeamLabCapabilityClosure`，核心业务表计数保持一致；隔离容器和 volume 已删除。
+- `teamlab-phase09-d90e2d1b-20260903T0809Z` 发布包已本地构建且 manifest 指向 `d90e2d1b65cca693d500a9ee4fb21f9bed6026aa`，但未上传/切换生产 release，当前稳定 release 未变。
 - 203 公网网关的 Nginx、WireGuard、动态 port-map timer 与 9091/18080 业务独立；本次只更新网关同步器所需配置，不重启或改动 9091/18080 进程。
 
 ## 6. 当前有用文档
