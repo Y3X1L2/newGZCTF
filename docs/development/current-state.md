@@ -1,6 +1,6 @@
 # YINYU 当前开发状态
 
-更新时间：2026-09-01
+更新时间：2026-09-03
 
 本文件只记录已经核对过的当前事实、已知缺口和下一任务入口。历史计划、阶段审查和现场流水放在 `docs/archive/implementation-records/`，不得用来判断当前代码或服务器状态。
 
@@ -66,7 +66,7 @@
 3. Windows VM 仅按比赛场景支持；平台使用镜像内固定 RDP 账号，不要求普通比赛使用 Cloudbase-Init。仍需对合格镜像完成双实例、RDP/Guacamole、剪贴板、隔离和销毁清理验收。
 4. AWDP 的真实攻击、修补、异常恢复和安全软件干扰场景由授权测试人员按 `docs/yinyu-awdp-manual-acceptance.md` 手工执行。
 5. 统一认证对接方的门户源码不在本仓库；平台保留 Portal SSO 适配，跨网联调需在目标环境验证。
-6. 10.24 数据库历史曾包含源码中不存在的 `20260815012026_AddExerciseCreatorTracking`，当前源码最新可见迁移为 `20260816192540_TeamLabCapabilityClosure`；任何生产迁移或数据库开发前必须在副本完成迁移历史和 schema 对比，禁止直接改生产迁移表。
+6. 10.24 数据库历史有两条经历史 DLL 证实、但尚未合入 `main` 的 migration：`20260814075023_AddAssetAndChallengeOwnership` 与 `20260815012026_AddExerciseCreatorTracking`；另有 `20260604165857_AddTheoryExamEntities`、`20260604193010_SyncTheoryExam` 未在源码、可达 Git 历史或保留 DLL 中恢复。恢复分支已在隔离副本验证当前 TeamLab 前向 migration，但它会删除旧 TeamLab 表和字段；在旧 TeamLab 数据完成单独授权的分类/清理、数据库副本复验和维护窗口验收前，禁止对生产执行 migration 或手改 migration history。
 
 ## 5. 已验证环境事实
 
@@ -76,6 +76,7 @@
 - 2026-08-31 已复核统一发布：10.24 的 `release-manifest.json.gitCommit` 等于 `stable-20260831` 所指提交，manifest 内主站和 Agent 文件摘要与磁盘一致，`publish/files` 指向 shared，主站与 Agent 无重启循环。
 - 2026-09-01 已将 Phase 09 TeamLab networking 合并提交 `1a390432b1135da055a5a8488575fd10015f0bbd` 推入 `main`；本地 Release build、905 项后端单元测试、275 项前端测试、前端生产构建和 OpenAPI 生成契约测试通过。完整集成测试因本机 Docker Desktop 无法启动而未完成。
 - 同日只读复核 10.24：主站与 Agent 服务为 `active/running`，首页、健康端点和公开 OpenAPI 返回 200；运行前端 SHA 仍为 `81a6e02b7dbe3d1f12094b606e5b3a93fd86de0c`，公开 OpenAPI 为 69 条路径，尚未包含本次新增的 connectors、resource-pools 和 device-packages 路由。
+- 2026-09-03 已在 `codex/migration-drift-reconciliation` 从历史 DLL 恢复两条 creator migration，并在无网络、无端口的 PostgreSQL 16 副本中完成生产备份恢复、空库完整 bundle 和生产备份前向 bundle 验证；所有隔离容器、volume 和服务器临时产物均已删除。生产数据库、release、节点和网关未修改。详细结论见 `docs/development/handoffs/2026-09-02-migration-drift-reconciliation.md`。
 - 203 公网网关的 Nginx、WireGuard、动态 port-map timer 与 9091/18080 业务独立；本次只更新网关同步器所需配置，不重启或改动 9091/18080 进程。
 
 ## 6. 当前有用文档
