@@ -75,10 +75,13 @@ public sealed class AgentFleetUpdateCoordinator(
             while (DateTimeOffset.UtcNow < deadline)
             {
                 await context.Entry(node).ReloadAsync(cancellationToken);
-                if (HasExpectedManifest(node, expectedSha, priorCapabilities)) break;
+                if (HasExpectedManifest(node, expectedSha, priorCapabilities,
+                        requireManagedConfiguration: false))
+                    break;
                 await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
             }
-            if (!HasExpectedManifest(node, expectedSha, priorCapabilities))
+            if (!HasExpectedManifest(node, expectedSha, priorCapabilities,
+                    requireManagedConfiguration: false))
                 return await FailAsync(node, correlationId,
                     "The target Agent manifest was not observed before the update deadline.", cancellationToken,
                     CreateSyncFailure(
@@ -97,6 +100,21 @@ public sealed class AgentFleetUpdateCoordinator(
 
             await context.Entry(node).ReloadAsync(cancellationToken);
             await TransitionAsync(node, AgentUpdateState.VerifyingFabric, cancellationToken);
+            deadline = DateTimeOffset.UtcNow + HeartbeatDeadline;
+            while (DateTimeOffset.UtcNow < deadline)
+            {
+                await context.Entry(node).ReloadAsync(cancellationToken);
+                if (HasExpectedManifest(node, expectedSha, priorCapabilities,
+                        requireManagedConfiguration: true) && FabricReady(node))
+                    break;
+                await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
+            }
+            if (!HasExpectedManifest(node, expectedSha, priorCapabilities,
+                    requireManagedConfiguration: true))
+                return await FailAsync(node, correlationId,
+                    "The configured Agent manifest was not observed before the update deadline.", cancellationToken,
+                    CreateSyncFailure(
+                        "The configured Agent manifest was not observed before the update deadline.", node));
             if (!FabricReady(node))
                 return await FailAsync(node, correlationId,
                     "TeamLab Fabric health was not confirmed after Agent synchronization.", cancellationToken,
@@ -151,7 +169,8 @@ public sealed class AgentFleetUpdateCoordinator(
     internal static bool HasExpectedManifest(
         WorkerNode node,
         string expectedSha,
-        NodeCapability requiredCapabilities)
+        NodeCapability requiredCapabilities,
+        bool requireManagedConfiguration = true)
     {
         if (!string.Equals(
                 NormalizeSha(node.AgentBinarySha256),
@@ -179,7 +198,7 @@ public sealed class AgentFleetUpdateCoordinator(
                 AgentFeatureIds.TeamLabFabricLeasedLinks,
                 AgentFeatureIds.TeamLabObservation
             ]);
-            if ((requiredCapabilities & NodeCapability.Kvm) != 0)
+            if (requireManagedConfiguration && (requiredCapabilities & NodeCapability.Kvm) != 0)
                 required.AddRange([
                     AgentFeatureIds.VmGuestManagement,
                     AgentFeatureIds.VmConfigDriveV2,
@@ -317,6 +336,7 @@ public sealed class AgentFleetUpdateCoordinator(
                     .SetProperty(item => item.IsSchedulable, false)
                     .SetProperty(item => item.AgentUpdateCompletedAt, completedAt)
                     .SetProperty(item => item.AgentUpdateLastError, boundedMessage), cancellationToken);
+            await context.Entry(node).ReloadAsync(cancellationToken);
         }
         else
         {
@@ -327,10 +347,6 @@ public sealed class AgentFleetUpdateCoordinator(
             await context.SaveChangesAsync(cancellationToken);
             context.Entry(node).State = EntityState.Unchanged;
         }
-        node.AgentUpdateState = AgentUpdateState.Failed;
-        node.IsSchedulable = false;
-        node.AgentUpdateCompletedAt = completedAt;
-        node.AgentUpdateLastError = boundedMessage;
         await RecordStageAsync(
             node,
             correlationId,
@@ -364,6 +380,9 @@ public sealed class AgentFleetUpdateCoordinator(
         OperationalEventSeverity severity = OperationalEventSeverity.Information,
         OperationalError? error = null)
     {
+        // Heartbeats update the node's xmin independently. Audit persistence must never
+        // retry a stale tracked node update alongside the append-only event.
+        ExcludeNodeFromAuditSave(context, node);
         events.Append(NodeOperationalEvents.Create(
             node,
             eventCode,
@@ -379,6 +398,9 @@ public sealed class AgentFleetUpdateCoordinator(
             }));
         await context.SaveChangesAsync(cancellationToken);
     }
+
+    internal static void ExcludeNodeFromAuditSave(AppDbContext dbContext, WorkerNode node) =>
+        dbContext.Entry(node).State = EntityState.Unchanged;
 
     private static string NormalizeSha(string? value) =>
         (value ?? string.Empty).Trim().Replace("sha256:", string.Empty, StringComparison.OrdinalIgnoreCase);
