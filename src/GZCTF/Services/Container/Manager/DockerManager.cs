@@ -773,13 +773,7 @@ public class DockerManager : IContainerManager, IContainerPatchApplicator, ICont
                     }
                 }
                 : null,
-            Labels =
-                new Dictionary<string, string>
-                {
-                    ["TeamId"] = config.TeamId,
-                    ["UserId"] = config.UserId.ToString(),
-                    ["ChallengeId"] = config.ChallengeId.ToString()
-                },
+            Labels = BuildManagedLabels(config),
             Name = DockerMetadata.GetName(config),
 
             // Keep the legacy dynamic-flag environment variable names for challenge image compatibility.
@@ -805,6 +799,17 @@ public class DockerManager : IContainerManager, IContainerPatchApplicator, ICont
 
         return createParameters;
     }
+
+    internal static IDictionary<string, string> BuildManagedLabels(GZCTF.Models.Internal.ContainerConfig config) =>
+        new Dictionary<string, string>
+        {
+            ["TeamId"] = config.TeamId,
+            ["UserId"] = config.UserId.ToString(),
+            ["ChallengeId"] = config.ChallengeId.ToString(),
+            ["ManagedBy"] = "GZCTF",
+            ["GZCTF.RuntimeId"] = config.RuntimeId.ToString(),
+            ["GZCTF.Generation"] = Math.Max(1, config.Generation).ToString()
+        };
 
     internal static IList<string> BuildStartCommand(string command, bool waitForManagedNetwork) =>
         waitForManagedNetwork
