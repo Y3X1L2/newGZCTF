@@ -785,6 +785,109 @@ public class NodesControllerTests
     }
 
     [Fact]
+    public void AgentFleetUpdateManifest_StagesManagedVmCapabilitiesAfterBinarySync()
+    {
+        const string expectedSha = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        var node = new WorkerNode
+        {
+            AgentBinarySha256 = expectedSha,
+            Capabilities = NodeCapability.Docker | NodeCapability.Kvm,
+            TeamLabNetworkEnabled = true,
+            CapabilityManifestJson = AgentCapabilityEvaluator.Normalize(
+                CreateManifest(includeKvm: true) with { BinarySha256 = expectedSha }).Json
+        };
+
+        Assert.True(AgentFleetUpdateCoordinator.HasExpectedManifest(
+            node, expectedSha, node.Capabilities, requireManagedConfiguration: false));
+        Assert.False(AgentFleetUpdateCoordinator.HasExpectedManifest(
+            node, expectedSha, node.Capabilities, requireManagedConfiguration: true));
+
+        node.CapabilityManifestJson = AgentCapabilityEvaluator.Normalize(
+            CreateManifest(includeKvm: true, includeManagedVm: true) with { BinarySha256 = expectedSha }).Json;
+
+        Assert.True(AgentFleetUpdateCoordinator.HasExpectedManifest(
+            node, expectedSha, node.Capabilities, requireManagedConfiguration: true));
+    }
+
+    [Fact]
+    public async Task AgentFleetUpdate_SynchronizesManagedVmCapabilitiesInSecondPhase()
+    {
+        await using var context = CreateContext();
+        var agentDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "agent");
+        Directory.CreateDirectory(agentDir);
+        await File.WriteAllBytesAsync(Path.Combine(agentDir, "gzctf-agent"), [1, 2, 3, 4]);
+        var nodeId = Guid.NewGuid();
+        var expectedSha = NodeDeployService.ComputeAgentBinarySha256();
+        var node = new WorkerNode
+        {
+            Id = nodeId,
+            Name = "teamlab-kvm-node",
+            HostAddress = "10.24.0.31",
+            AuthToken = "node-token",
+            Status = NodeStatus.Online,
+            Capabilities = NodeCapability.Docker | NodeCapability.Kvm,
+            AgentPort = 5001,
+            IsSchedulable = true,
+            TeamLabNetworkEnabled = true,
+            TeamLabTunnelIp = "10.24.0.31",
+            TeamLabTunnelStatus = TeamLabTunnelStatus.Healthy,
+            TeamLabFabricStatus = TeamLabFabricStatus.Disabled
+        };
+        context.WorkerNodes.Add(node);
+        await context.SaveChangesAsync();
+        var agent = new RecordingAgentClient(request =>
+        {
+            var heartbeat = context.WorkerNodes.Single(item => item.Id == nodeId);
+            var configured = request.VmControlPlane is not null;
+            heartbeat.AgentBinarySha256 = expectedSha;
+            heartbeat.CapabilityManifestJson = AgentCapabilityEvaluator.Normalize(
+                CreateManifest(includeKvm: true, includeManagedVm: configured) with
+                {
+                    BinarySha256 = expectedSha
+                }).Json;
+            if (configured)
+                heartbeat.TeamLabFabricStatus = TeamLabFabricStatus.Healthy;
+            context.SaveChanges();
+        });
+        var coordinator = new AgentFleetUpdateCoordinator(
+            context,
+            agent,
+            new EfOperationalEventWriter(context, NullLogger<EfOperationalEventWriter>.Instance),
+            NullLogger<AgentFleetUpdateCoordinator>.Instance,
+            Options.Create(new TeamLabNetworkConfig()));
+
+        var result = await coordinator.SyncAsync(
+            nodeId, "http://10.24.0.27", Guid.NewGuid(), CancellationToken.None);
+
+        Assert.True(result.Success);
+        Assert.True(result.Schedulable);
+        Assert.Equal(AgentUpdateState.Stable, result.State);
+        Assert.Equal(2, agent.Requests.Count);
+        Assert.Null(agent.Requests[0].VmControlPlane);
+        Assert.NotNull(agent.Requests[1].VmControlPlane);
+    }
+
+    [Fact]
+    public async Task AgentFleetUpdateAudit_DoesNotPersistTrackedNodeChanges()
+    {
+        await using var context = CreateContext();
+        var node = new WorkerNode
+        {
+            Name = "heartbeat-node",
+            HostAddress = "10.24.0.31",
+            AuthToken = "node-token"
+        };
+        context.WorkerNodes.Add(node);
+        await context.SaveChangesAsync();
+        node.AgentUpdateState = AgentUpdateState.Failed;
+        context.Entry(node).State = EntityState.Modified;
+
+        AgentFleetUpdateCoordinator.ExcludeNodeFromAuditSave(context, node);
+
+        Assert.Equal(EntityState.Unchanged, context.Entry(node).State);
+    }
+
+    [Fact]
     public async Task AgentFleetUpdateRecovery_DoesNotRestoreNodeBeforeConfigurationPhase()
     {
         await using var context = CreateContext();
@@ -824,7 +927,7 @@ public class NodesControllerTests
         Assert.False(node.IsSchedulable);
     }
 
-    static AgentCapabilityManifest CreateManifest(bool includeKvm)
+    static AgentCapabilityManifest CreateManifest(bool includeKvm, bool includeManagedVm = false)
     {
         var features = new List<string>
         {
@@ -844,6 +947,13 @@ public class NodesControllerTests
         {
             features.Add(AgentFeatureIds.Kvm);
             features.Add(AgentFeatureIds.VmDownload);
+            features.Add(AgentFeatureIds.VmReadinessSignals);
+        }
+        if (includeManagedVm)
+        {
+            features.Add(AgentFeatureIds.VmGuestManagement);
+            features.Add(AgentFeatureIds.VmConfigDriveV2);
+            features.Add(AgentFeatureIds.VmPreparedImage);
         }
         return new AgentCapabilityManifest("1.8.3-test", "abc", 1, features.ToArray(),
             new AgentExecutionLimits(2, includeKvm ? 1 : 0, 2, includeKvm ? 1 : 0, 4, 2),
