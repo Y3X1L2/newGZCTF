@@ -275,6 +275,88 @@ public class ImageDistributionServiceTests
     }
 
     [Fact]
+    public async Task EnsureDockerImageOnNodeAsync_AttachesAndPreservesExerciseReference()
+    {
+        await using var context = CreateContext();
+        var node = SeedNode(context, "docker-node", NodeCapability.Docker);
+        var template = SeedDockerTemplate(context);
+        var exercise = new ExerciseChallenge
+        {
+            Id = 599,
+            Title = "exercise",
+            Content = "test",
+            Type = ChallengeType.StaticContainer,
+            Environment = EnvironmentType.Docker,
+            ContainerImage = "10.24.0.28:5000/training/web:latest",
+            ExposePort = 80,
+            IsEnabled = true
+        };
+        var ticket = DeploymentQueueTicket.Create(
+            DeploymentQueueRequest.ExerciseContainer(Guid.NewGuid(), exercise.Id));
+        ticket.Status = DeploymentQueueTicketStatus.Running;
+        ticket.TargetNodeId = node.Id;
+        context.AddRange(exercise, ticket, new ImageDistributionRecord
+        {
+            ImageTemplateId = template.Id,
+            WorkerNodeId = node.Id,
+            ImageHash = template.ImageHash!,
+            ImageType = template.ImageType,
+            Status = ImageDistributionStatus.Ready
+        });
+        await context.SaveChangesAsync();
+        var accessor = new DeploymentExecutionContextAccessor();
+        var service = CreateService(context, new RecordingAgentClient(), accessor);
+
+        using (accessor.Push(new DeploymentExecutionContext(node.Id, true, ticket.Id)))
+            await service.EnsureDockerImageOnNodeAsync(
+                exercise.ContainerImage!, node.Id, CancellationToken.None);
+
+        var reference = await context.ImageDistributionReferences.SingleAsync();
+        Assert.Equal(ImageDistributionReferenceKind.Exercise, reference.Kind);
+        Assert.Equal(exercise.Id, reference.ResourceId);
+
+        await service.ReconcileReferencesAsync(CancellationToken.None);
+
+        Assert.Single(await context.ImageDistributionReferences.ToArrayAsync());
+        Assert.Equal(ImageDistributionStatus.Ready,
+            (await context.ImageDistributionRecords.SingleAsync()).Status);
+    }
+
+    [Fact]
+    public async Task CleanupWithoutAgentInventory_FailsClosedWithBackoff()
+    {
+        await using var context = CreateContext();
+        var node = SeedNode(context, "docker-node", NodeCapability.Docker);
+        var template = SeedDockerTemplate(context);
+        var record = new ImageDistributionRecord
+        {
+            ImageTemplateId = template.Id,
+            WorkerNodeId = node.Id,
+            ImageHash = template.ImageHash!,
+            ImageType = template.ImageType,
+            Operation = ImageDistributionOperation.Cleanup,
+            Status = ImageDistributionStatus.CleanupPending,
+            ClaimOwner = "worker-1",
+            ClaimExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5),
+            AttemptCount = 1
+        };
+        context.ImageDistributionRecords.Add(record);
+        await context.SaveChangesAsync();
+        var agent = new RecordingAgentClient { ReturnMissingDockerCleanupInventory = true };
+
+        await CreateService(context, agent)
+            .ProcessClaimedAsync(record.Id, "worker-1", CancellationToken.None);
+
+        await context.Entry(record).ReloadAsync();
+        Assert.Equal(ImageDistributionStatus.Failed, record.Status);
+        Assert.Equal(OperationalErrorCodes.ImageCleanupFailed, record.LastErrorCode);
+        Assert.True(record.Retryable);
+        Assert.Null(record.ClaimOwner);
+        Assert.NotNull(record.NextAttemptAt);
+        Assert.Contains("did not include inventory", record.ErrorMessage);
+    }
+
+    [Fact]
     public async Task DistributeGameAsync_LegacyManagedAddressQueuesInternalTemplate()
     {
         await using var context = CreateContext();
@@ -537,7 +619,10 @@ public class ImageDistributionServiceTests
             (await context.ImageDistributionRecords.SingleAsync()).Status);
     }
 
-    static ImageDistributionService CreateService(AppDbContext context, RecordingAgentClient agent)
+    static ImageDistributionService CreateService(
+        AppDbContext context,
+        RecordingAgentClient agent,
+        DeploymentExecutionContextAccessor? executionContext = null)
     {
         var registry = new DockerImageRegistryService(
             Options.Create(new DockerRegistrySettings { Address = "10.24.0.28:5000", Namespace = "ctf" }),
@@ -561,7 +646,7 @@ public class ImageDistributionServiceTests
             vmRegistry.Object, NullLogger<VmArtifactStore>.Instance);
         var writer = new EfOperationalEventWriter(context, NullLogger<EfOperationalEventWriter>.Instance);
         return new ImageDistributionService(context, agent, registry, artifacts, vmRegistry.Object,
-            new ImageDistributionCoordinator(), new DeploymentExecutionContextAccessor(),
+            new ImageDistributionCoordinator(), executionContext ?? new DeploymentExecutionContextAccessor(),
             writer, NullLogger<ImageDistributionService>.Instance);
     }
 
@@ -643,6 +728,7 @@ public class ImageDistributionServiceTests
         public List<Guid> DeletedVmNodes { get; } = [];
         public Exception? DockerPullException { get; set; }
         public bool VmCacheRemainsAfterCleanup { get; set; }
+        public bool ReturnMissingDockerCleanupInventory { get; set; }
 
         public RecordingAgentClient() : base(new Mock<IHttpClientFactory>().Object,
             new ServiceCollection().BuildServiceProvider().GetRequiredService<IServiceScopeFactory>(),
@@ -686,6 +772,13 @@ public class ImageDistributionServiceTests
             DeletedVmNodes.Add(nodeId);
             return Task.CompletedTask;
         }
+
+        public override Task<AgentImageCacheCleanupResult> DeleteDockerImageWithInventoryAsync(
+            Guid nodeId,
+            string image,
+            CancellationToken token) => Task.FromResult(ReturnMissingDockerCleanupInventory
+            ? new AgentImageCacheCleanupResult(null)
+            : AgentImageCacheCleanupResult.Clean);
 
         public override Task<AgentImageCacheCleanupResult> DeleteVmImageWithInventoryAsync(
             Guid nodeId,

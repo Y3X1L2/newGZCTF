@@ -1941,12 +1941,12 @@ public record AgentVmImageDownloadResult(
 }
 
 public sealed record AgentImageCacheCleanupResult(
-    IReadOnlyList<AgentImageCacheInventoryEntry> Inventory,
+    IReadOnlyList<AgentImageCacheInventoryEntry>? Inventory,
     int Removed = 0)
 {
     public static readonly AgentImageCacheCleanupResult Clean = new([], 0);
 
-    public bool IsClean => Inventory.All(item => !item.Present);
+    public bool IsClean => Inventory?.All(item => !item.Present) == true;
 }
 
 public sealed record AgentImageCacheInventoryEntry(string Kind, string Identity, bool Present);

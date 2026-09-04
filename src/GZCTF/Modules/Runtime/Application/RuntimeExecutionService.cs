@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using GZCTF.Infrastructure.Telemetry;
 using GZCTF.Models.Data;
@@ -17,9 +18,14 @@ public sealed class RuntimeExecutionService(
 {
     const int BatchSize = 64;
     static readonly TimeSpan ClaimTimeout = TimeSpan.FromMinutes(10);
+    readonly ConcurrentDictionary<Guid, Task> _inFlight = new();
 
     public async Task<int> ExecuteScheduledAsync(CancellationToken token)
     {
+        var available = Math.Max(0, BatchSize - _inFlight.Count);
+        if (available == 0)
+            return 0;
+
         using var scope = scopeFactory.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var ids = await context.DeploymentQueueTickets.AsNoTracking()
@@ -27,15 +33,60 @@ public sealed class RuntimeExecutionService(
             .OrderBy(ticket => ticket.Operation == RuntimeOperationKind.Create ? 1 : 0)
             .ThenBy(ticket => ticket.CreatedAt)
             .ThenBy(ticket => ticket.Id)
-            .Take(BatchSize)
+            .Take(available)
             .Select(ticket => ticket.Id)
             .ToListAsync(token);
 
-        if (ids.Count == 0)
-            return 0;
+        var started = 0;
+        foreach (var id in ids)
+        {
+            var start = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var task = RunTrackedAsync(id, start.Task, token);
+            if (_inFlight.TryAdd(id, task))
+            {
+                started++;
+                start.SetResult(true);
+            }
+            else
+            {
+                start.SetResult(false);
+            }
+        }
 
-        var results = await Task.WhenAll(ids.Select(id => ExecuteTicketAsync(id, token)));
-        return results.Count(result => result);
+        return started;
+    }
+
+    async Task RunTrackedAsync(Guid ticketId, Task<bool> start, CancellationToken token)
+    {
+        if (!await start)
+            return;
+
+        try
+        {
+            await ExecuteTicketAsync(ticketId, token);
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+        }
+        catch (Exception exception)
+        {
+            logger.LogError(exception, "Tracked runtime ticket {TicketId} terminated unexpectedly.", ticketId);
+        }
+        finally
+        {
+            _inFlight.TryRemove(ticketId, out _);
+        }
+    }
+
+    internal async Task WaitForIdleAsync(CancellationToken token)
+    {
+        while (!_inFlight.IsEmpty)
+        {
+            var tasks = _inFlight.Values.ToArray();
+            if (tasks.Length == 0)
+                return;
+            await Task.WhenAll(tasks).WaitAsync(token);
+        }
     }
 
     public async Task<bool> ExecuteTicketAsync(Guid ticketId, CancellationToken token)

@@ -9,6 +9,7 @@ using GZCTF.Models;
 using GZCTF.Models.Data;
 using GZCTF.Models.Internal;
 using GZCTF.Modules.Audit.Application;
+using GZCTF.Modules.Audit.Contracts;
 using GZCTF.Modules.Audit.Infrastructure;
 using GZCTF.Modules.Audit.Domain;
 using GZCTF.Modules.Runtime.Application;
@@ -32,6 +33,25 @@ namespace GZCTF.Test.UnitTests.Runtime;
 
 public sealed class RuntimeControlPlaneTests
 {
+    [Fact]
+    public void ExecutionContext_FlowsAcrossDependencyInjectionScopes()
+    {
+        using var provider = new ServiceCollection()
+            .AddSingleton<DeploymentExecutionContextAccessor>()
+            .BuildServiceProvider();
+        using var firstScope = provider.CreateScope();
+        using var secondScope = provider.CreateScope();
+        var first = firstScope.ServiceProvider.GetRequiredService<DeploymentExecutionContextAccessor>();
+        var second = secondScope.ServiceProvider.GetRequiredService<DeploymentExecutionContextAccessor>();
+        var expected = new DeploymentExecutionContext(Guid.NewGuid(), true, Guid.NewGuid(), 3);
+
+        using (first.Push(expected))
+            Assert.Equal(expected, second.Current);
+
+        Assert.Null(first.Current);
+        Assert.Null(second.Current);
+    }
+
     [Fact]
     public void GuestLifecycleStageComparison_DoesNotTreatNetworkAsBootstrapCompletion()
     {
@@ -317,6 +337,125 @@ public sealed class RuntimeControlPlaneTests
         Assert.Equal(1, scheduled);
         release.SetResult();
         await running.WaitAsync(TimeSpan.FromSeconds(2));
+        await execution.WaitForIdleAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(2));
+        await provider.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task BlockedExecution_DoesNotStopLaterScheduledTicket()
+    {
+        var databaseName = Guid.NewGuid().ToString();
+        await using var seed = CreateContext(databaseName);
+        var blockedNode = SeedNode(seed, maxContainers: 1);
+        var readyNode = SeedNode(seed, maxContainers: 1);
+        var blocked = DeploymentQueueTicket.Create(DeploymentQueueRequest.GameContainer(1, 1, 1));
+        blocked.Status = DeploymentQueueTicketStatus.Scheduled;
+        blocked.TargetNodeId = blockedNode.Id;
+        var ready = DeploymentQueueTicket.Create(DeploymentQueueRequest.GameContainer(1, 2, 2));
+        ready.Status = DeploymentQueueTicketStatus.Scheduled;
+        ready.TargetNodeId = readyNode.Id;
+        seed.DeploymentQueueTickets.AddRange(blocked, ready);
+        await seed.SaveChangesAsync();
+
+        var blockedStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var readyCompleted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var executor = new SelectiveBlockingExecutor(blocked.Id, blockedStarted, release, readyCompleted);
+        var provider = BuildExecutionProvider(databaseName, executor);
+        var execution = provider.GetRequiredService<RuntimeExecutionService>();
+
+        Assert.Equal(2, await execution.ExecuteScheduledAsync(CancellationToken.None));
+        await blockedStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        await readyCompleted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+
+        await using (var verify = CreateContext(databaseName))
+        {
+            Assert.Equal(DeploymentQueueTicketStatus.Running,
+                (await verify.DeploymentQueueTickets.SingleAsync(item => item.Id == blocked.Id)).Status);
+            Assert.Equal(DeploymentQueueTicketStatus.Succeeded,
+                (await verify.DeploymentQueueTickets.SingleAsync(item => item.Id == ready.Id)).Status);
+        }
+
+        release.SetResult();
+        await execution.WaitForIdleAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(2));
+        await provider.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task AgentTimeout_MarksQueueTicketFailed()
+    {
+        var databaseName = Guid.NewGuid().ToString();
+        await using var seed = CreateContext(databaseName);
+        var node = SeedNode(seed, maxContainers: 1);
+        var ticket = DeploymentQueueTicket.Create(DeploymentQueueRequest.GameContainer(1, 1, 1));
+        ticket.Status = DeploymentQueueTicketStatus.Scheduled;
+        ticket.TargetNodeId = node.Id;
+        seed.DeploymentQueueTickets.Add(ticket);
+        await seed.SaveChangesAsync();
+
+        var provider = BuildExecutionProvider(databaseName,
+            new ThrowingExecutor(new OperationCanceledException("Agent request timed out.")));
+        var execution = provider.GetRequiredService<RuntimeExecutionService>();
+        Assert.Equal(1, await execution.ExecuteScheduledAsync(CancellationToken.None));
+        await execution.WaitForIdleAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(2));
+
+        await using var verify = CreateContext(databaseName);
+        var failed = await verify.DeploymentQueueTickets.SingleAsync();
+        Assert.Equal(DeploymentQueueTicketStatus.Failed, failed.Status);
+        Assert.Equal(DeploymentStage.Failed, failed.Stage);
+        Assert.Equal(OperationalErrorCodes.AgentTimeout, failed.ErrorCode);
+        Assert.NotNull(failed.CompletedAt);
+        await provider.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task ExecutorFailure_MarksQueueTicketFailed()
+    {
+        var databaseName = Guid.NewGuid().ToString();
+        await using var seed = CreateContext(databaseName);
+        var node = SeedNode(seed, maxContainers: 1);
+        var ticket = DeploymentQueueTicket.Create(DeploymentQueueRequest.GameContainer(1, 1, 1));
+        ticket.Status = DeploymentQueueTicketStatus.Scheduled;
+        ticket.TargetNodeId = node.Id;
+        seed.DeploymentQueueTickets.Add(ticket);
+        await seed.SaveChangesAsync();
+
+        var provider = BuildExecutionProvider(databaseName,
+            new ReturningExecutor(DeploymentExecutionResult.Failed("Image pull failed.")));
+        var execution = provider.GetRequiredService<RuntimeExecutionService>();
+        Assert.Equal(1, await execution.ExecuteScheduledAsync(CancellationToken.None));
+        await execution.WaitForIdleAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(2));
+
+        await using var verify = CreateContext(databaseName);
+        var failed = await verify.DeploymentQueueTickets.SingleAsync();
+        Assert.Equal(DeploymentQueueTicketStatus.Failed, failed.Status);
+        Assert.Equal("Image pull failed.", failed.ErrorMessage);
+        await provider.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task SuccessfulExecution_CompletesQueueTicket()
+    {
+        var databaseName = Guid.NewGuid().ToString();
+        await using var seed = CreateContext(databaseName);
+        var node = SeedNode(seed, maxContainers: 1);
+        var ticket = DeploymentQueueTicket.Create(DeploymentQueueRequest.GameContainer(1, 1, 1));
+        ticket.Status = DeploymentQueueTicketStatus.Scheduled;
+        ticket.TargetNodeId = node.Id;
+        seed.DeploymentQueueTickets.Add(ticket);
+        await seed.SaveChangesAsync();
+
+        var provider = BuildExecutionProvider(databaseName,
+            new ReturningExecutor(DeploymentExecutionResult.Completed()));
+        var execution = provider.GetRequiredService<RuntimeExecutionService>();
+        Assert.Equal(1, await execution.ExecuteScheduledAsync(CancellationToken.None));
+        await execution.WaitForIdleAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(2));
+
+        await using var verify = CreateContext(databaseName);
+        var succeeded = await verify.DeploymentQueueTickets.SingleAsync();
+        Assert.Equal(DeploymentQueueTicketStatus.Succeeded, succeeded.Status);
+        Assert.Equal(DeploymentStage.Ready, succeeded.Stage);
+        Assert.NotNull(succeeded.CompletedAt);
         await provider.DisposeAsync();
     }
 
@@ -1010,5 +1149,40 @@ public sealed class RuntimeControlPlaneTests
             await release.Task.WaitAsync(token);
             return DeploymentExecutionResult.Completed();
         }
+    }
+
+    sealed class SelectiveBlockingExecutor(
+        Guid blockedTicketId,
+        TaskCompletionSource blockedStarted,
+        TaskCompletionSource release,
+        TaskCompletionSource readyCompleted) : DeploymentExecutionService
+    {
+        public override async Task<DeploymentExecutionResult> ExecuteAsync(DeploymentQueueTicket ticket,
+            CancellationToken token)
+        {
+            if (ticket.Id == blockedTicketId)
+            {
+                blockedStarted.TrySetResult();
+                await release.Task.WaitAsync(token);
+            }
+            else
+            {
+                readyCompleted.TrySetResult();
+            }
+
+            return DeploymentExecutionResult.Completed();
+        }
+    }
+
+    sealed class ThrowingExecutor(Exception exception) : DeploymentExecutionService
+    {
+        public override Task<DeploymentExecutionResult> ExecuteAsync(DeploymentQueueTicket ticket,
+            CancellationToken token) => Task.FromException<DeploymentExecutionResult>(exception);
+    }
+
+    sealed class ReturningExecutor(DeploymentExecutionResult result) : DeploymentExecutionService
+    {
+        public override Task<DeploymentExecutionResult> ExecuteAsync(DeploymentQueueTicket ticket,
+            CancellationToken token) => Task.FromResult(result);
     }
 }

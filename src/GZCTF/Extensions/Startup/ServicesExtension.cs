@@ -157,7 +157,7 @@ internal static class ServicesExtension
             builder.Services.AddScoped<FleetCapacityReservationService>();
             builder.Services.AddScoped<DeploymentQueueService>();
             builder.Services.AddScoped<DeploymentQueueViewService>();
-            builder.Services.AddScoped<DeploymentExecutionContextAccessor>();
+            builder.Services.AddSingleton<DeploymentExecutionContextAccessor>();
             builder.Services.AddScoped<DeploymentExecutionService>();
             builder.Services.AddScoped<RuntimeTicketLifecycleDispatcher>();
             builder.Services.AddScoped<RuntimeSchedulingService>();

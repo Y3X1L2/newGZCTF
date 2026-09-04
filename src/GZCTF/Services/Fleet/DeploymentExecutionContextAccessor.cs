@@ -5,12 +5,14 @@ public sealed record DeploymentExecutionContext(Guid TargetNodeId, bool Capacity
 
 public class DeploymentExecutionContextAccessor
 {
-    public DeploymentExecutionContext? Current { get; private set; }
+    readonly AsyncLocal<DeploymentExecutionContext?> _current = new();
+
+    public DeploymentExecutionContext? Current => _current.Value;
 
     public IDisposable Push(DeploymentExecutionContext context)
     {
-        var previous = Current;
-        Current = context;
+        var previous = _current.Value;
+        _current.Value = context;
         return new Popper(this, previous);
     }
 
@@ -31,7 +33,7 @@ public class DeploymentExecutionContextAccessor
             if (_disposed)
                 return;
 
-            _accessor.Current = _previous;
+            _accessor._current.Value = _previous;
             _disposed = true;
         }
     }
