@@ -810,7 +810,7 @@ public class NodesControllerTests
     }
 
     [Fact]
-    public async Task AgentFleetUpdate_SynchronizesManagedVmCapabilitiesInSecondPhase()
+    public async Task AgentFleetUpdate_AllowsExplicitlyDisabledFabricAfterManagedVmSync()
     {
         await using var context = CreateContext();
         var agentDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "agent");
@@ -845,8 +845,6 @@ public class NodesControllerTests
                 {
                     BinarySha256 = expectedSha
                 }).Json;
-            if (configured)
-                heartbeat.TeamLabFabricStatus = TeamLabFabricStatus.Healthy;
             context.SaveChanges();
         });
         var coordinator = new AgentFleetUpdateCoordinator(
@@ -865,6 +863,7 @@ public class NodesControllerTests
         Assert.Equal(2, agent.Requests.Count);
         Assert.Null(agent.Requests[0].VmControlPlane);
         Assert.NotNull(agent.Requests[1].VmControlPlane);
+        Assert.False(agent.Requests[1].TeamLabDataPlane?.Enabled);
     }
 
     [Fact]
