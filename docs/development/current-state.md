@@ -10,9 +10,9 @@
 | --- | --- |
 | 仓库 | `https://github.com/Y3X1L2/newGZCTF.git` |
 | 稳定分支 | `main` |
-| 当前生产基线 | release `teamlab-phase09-d90e2d1b-20260903T1228Z`，提交 `d90e2d1b65cca693d500a9ee4fb21f9bed6026aa`，数据库 migration head `20260816192540_TeamLabCapabilityClosure` |
-| 应用回退基线 | `stable-20260831`，提交 `81a6e02b7dbe3d1f12094b606e5b3a93fd86de0c`；只在数据库兼容性已评估或完整备份恢复决策下回退 |
-| 当前开发基线 | `main`；Phase 09 TeamLab networking 合并提交为 `1a390432b1135da055a5a8488575fd10015f0bbd`，迁移恢复合并提交为 `d90e2d1b65cca693d500a9ee4fb21f9bed6026aa`；新任务从最新 `origin/main` 创建 `codex/<task-name>` 功能分支 |
+| 当前生产基线 | release `docker-provisioning-inventory-3e5526dc-20260904T093342Z`，提交 `3e5526dc1ce336ac5545faacd49a9c0d1ec7ab58`，数据库 migration head `20260816192540_TeamLabCapabilityClosure` |
+| 应用回退基线 | 上一独立 release `docker-provisioning-converged-77ae1757-20260904T091328Z`，提交 `77ae175785e358b6b3739fe8cd6118d3039b24fe`；仅用于启动失败时紧急切回，回退后本机 Docker inventory 标签缺口会重新存在，必须暂停新实例创建；数据回滚点见本文件第 5 节 |
+| 当前开发基线 | `main`；Phase 09 TeamLab networking、迁移恢复和 Game 23 Docker provisioning 修复均已合入；新任务从最新 `origin/main` 创建 `codex/<task-name>` 功能分支 |
 | 正式工作区 | `D:\Work\newGZCTF` |
 | 工作树结构 | 主 worktree 为 `D:\Work\newGZCTF`；并行任务按 `AGENTS.md` 使用独立 worktree，不将服务器目录作为代码基线 |
 | 技术栈 | .NET 10、ASP.NET Core、EF Core、PostgreSQL、Redis、React 19、TypeScript、Vite、pnpm |
@@ -63,7 +63,7 @@
 这些事项不能在文档中写成“已上线”或“已签收”：
 
 1. 自主练习已进入 `main`，但仍需在目标生产数据库备份或副本上完成迁移、真实实例、发布、回滚和内容运营验收。
-2. Phase 09 TeamLab networking 已在 10.24 前向迁移并发布到 `d90e2d1b`；双 Worker 故障接管、长期流量留存、复杂服务注入、规模并发、真实 Docker 创建/销毁和完整跨节点场景仍需授权管理员会话完成现场签收。
+2. Phase 09 TeamLab networking 已在 10.24 前向迁移，当前生产已推进到 `3e5526dc`；Game 23 Docker 创建、入口和销毁链路已实测。双 Worker 故障接管、长期流量留存、复杂服务注入、规模并发和完整跨节点 TeamLab 场景仍需现场签收。
 3. Windows VM 仅按比赛场景支持；平台使用镜像内固定 RDP 账号，不要求普通比赛使用 Cloudbase-Init。仍需对合格镜像完成双实例、RDP/Guacamole、剪贴板、隔离和销毁清理验收。
 4. AWDP 的真实攻击、修补、异常恢复和安全软件干扰场景由授权测试人员按 `docs/yinyu-awdp-manual-acceptance.md` 手工执行。
 5. 统一认证对接方的门户源码不在本仓库；平台保留 Portal SSO 适配，跨网联调需在目标环境验证。
@@ -82,7 +82,9 @@
 - 2026-09-03/04：获得追加授权后，`qqqtest1` 的两条测试 runtime 均通过平台生命周期销毁；原 pending create ticket 为 Cancelled，destroy ticket 为 Succeeded。生产库无 pending TeamLab ticket，所有现存 TeamLab runtime 为 Destroyed。
 - 同期建立并校验新鲜回滚备份 `/opt/gzctf/backups/teamlab-runtime-converged-pre-migration-20260903T122601Z`；用其隔离副本复跑 `d90e2d1b` 发布包的真实 glibc bundle，成功从 124 条 migration 前向至 134 条和 `20260816192540_TeamLabCapabilityClosure`。生产随后用同一 bundle 执行 10 条前向 TeamLab migration，并原子切换至 `teamlab-phase09-d90e2d1b-20260903T1228Z`。release manifest 的 994 个文件及本机 Agent 摘要均已核对一致，主站、Agent、PostgreSQL、Redis、首页、health、OpenAPI、API docs、共享附件、节点 inventory 和队列均正常。
 - 发布后生产的用户 172、比赛 22、比赛题目 110、课程 29、理论试卷 4、AWDP 服务 10、附件 217 与新鲜备份一致。`ExerciseChallenges` 为 590，而新鲜备份为 446；152 条 ID 大于 446 的新增行均为公共练习题，且本次 10 条 TeamLab migration 不向该表插入或回填数据。该业务增量未作处置，不能表述为 migration 导致的数据变化。
-- 发布后尚未通过已认证浏览器会话实际验证本地登录/Portal SSO、Docker 创建-入口-销毁和新 TeamLab runtime。原会话已不可用，未创建 token 或绕过认证；这些由授权操作人员继续完成。
+- 2026-09-04 已修复 Game 23 / Challenge 19 Docker provisioning 卡死：运行执行改为有界独立 in-flight，execution context 可跨嵌套 scope 传播，镜像引用和 cleanup 退避闭环，前端增加准备态最终超时。生产 ticket `01a06bda-d552-7c35-bd90-8bc21372ac39` 在约 3 秒内完成并调度至 `worker-10.24.0.30`，页面显示入口且 10.24 内网端口返回 200；Stop ticket `01a06be2-5347-7232-bd85-77122ee955b9` 成功，相关测试 Container 行和 Docker 资源均已清理。
+- 同次验收发现并修复 Agent 两阶段同步门禁、心跳 `xmin` 与审计保存竞争、TeamLab `Enable` 配置持久化，以及本机 Docker 缺少 Agent inventory 标签的问题。三个节点均为 Online、Stable、schedulable，Agent SHA 前缀均为 `3747f3535da88623`；历史 image cleanup 记录从 301 条收敛为 0。生产本机 TeamLab control-plane 目标仍明确禁用，远端 Fabric 状态因此为 Disabled，不能表述为 TeamLab Fabric 已验收。
+- 本次发布前回滚备份为 `/opt/gzctf/backups/agent-sync-pre-0a3e1c63-20260904T080316Z`；custom dump SHA-256 `03f7e38a120dcb586f5095b3cf6e7b1c22d7ebbae37a780ef51e0021d819d088`，`pg_restore -l` 可读 2,041 个条目，134 条 migration。最终核心计数为用户 172、战队 76、比赛 22、比赛题目 110、课程 29、练习题 605、理论试卷 4、AWDP 服务 10、附件 217，与该备份一致。
 - 203 公网网关的 Nginx、WireGuard、动态 port-map timer 与 9091/18080 业务独立；本次只更新网关同步器所需配置，不重启或改动 9091/18080 进程。
 
 ## 6. 当前有用文档
