@@ -258,12 +258,7 @@ public class AgentMaintenanceService(
             teamLab = new JsonObject();
             root["TeamLab"] = teamLab;
         }
-        var changed = Set(teamLab, "ExecutionModel", desired.ExecutionModel.ToString()) |
-                      Set(teamLab, "OvnNorthboundEndpoint", desired.NorthboundEndpoint) |
-                      Set(teamLab, "OvnSouthboundEndpoint", desired.SouthboundEndpoint) |
-                      Set(teamLab, "OvsIntegrationBridgeName", desired.IntegrationBridgeName) |
-                      Set(teamLab, "ManagedDhcpLeaseSeconds",
-                          Math.Clamp(desired.ManagedDhcpLeaseSeconds, 60, 86_400));
+        var changed = ApplyTeamLabDataPlaneConfig(teamLab, desired);
         if (!changed) return false;
 
         var temporary = CreateSiblingTemporaryPath(AgentConfigPath);
@@ -283,6 +278,14 @@ public class AgentMaintenanceService(
             TryDelete(temporary);
         }
     }
+
+    internal static bool ApplyTeamLabDataPlaneConfig(JsonObject teamLab, TeamLabDataPlaneSyncConfig desired) =>
+        Set(teamLab, "Enable", desired.Enabled) |
+        Set(teamLab, "ExecutionModel", desired.ExecutionModel.ToString()) |
+        Set(teamLab, "OvnNorthboundEndpoint", desired.NorthboundEndpoint) |
+        Set(teamLab, "OvnSouthboundEndpoint", desired.SouthboundEndpoint) |
+        Set(teamLab, "OvsIntegrationBridgeName", desired.IntegrationBridgeName) |
+        Set(teamLab, "ManagedDhcpLeaseSeconds", Math.Clamp(desired.ManagedDhcpLeaseSeconds, 60, 86_400));
 
     private static bool Set(JsonObject target, string name, string? value)
     {
