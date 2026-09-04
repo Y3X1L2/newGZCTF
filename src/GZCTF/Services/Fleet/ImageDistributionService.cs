@@ -155,6 +155,11 @@ public class ImageDistributionService(
             .Select(reference => reference.ResourceId)
             .Distinct()
             .ToArray();
+        var exerciseIds = records.SelectMany(record => record.References)
+            .Where(reference => reference.Kind == ImageDistributionReferenceKind.Exercise)
+            .Select(reference => reference.ResourceId)
+            .Distinct()
+            .ToArray();
         var runtimeIds = records.SelectMany(record => record.References)
             .Where(reference => reference.Kind == ImageDistributionReferenceKind.TeamLabRuntime)
             .Select(reference => reference.ResourceId)
@@ -222,6 +227,34 @@ public class ImageDistributionService(
                 .ToArrayAsync(token))
             .Select(reference => (reference.CourseId, reference.ImageTemplateId))
             .ToHashSet();
+        var exerciseChallenges = await context.ExerciseChallenges.AsNoTracking()
+            .Where(challenge => exerciseIds.Contains(challenge.Id) && challenge.TrainingCourseId == null &&
+                                (challenge.Type == ChallengeType.StaticContainer ||
+                                 challenge.Type == ChallengeType.DynamicContainer))
+            .Select(challenge => new
+            {
+                challenge.Id,
+                challenge.Environment,
+                challenge.ImageTemplateId,
+                challenge.ContainerImage
+            })
+            .ToArrayAsync(token);
+        var exerciseReferences = exerciseChallenges
+            .Where(challenge => challenge.ImageTemplateId.HasValue)
+            .Select(challenge => (challenge.Id, challenge.ImageTemplateId!.Value))
+            .ToHashSet();
+        foreach (var challenge in exerciseChallenges.Where(challenge =>
+                     challenge.Environment == EnvironmentType.Docker &&
+                     !challenge.ImageTemplateId.HasValue &&
+                     !string.IsNullOrWhiteSpace(challenge.ContainerImage)))
+        {
+            var template = await FindReadyDockerTemplateAsync(
+                challenge.ContainerImage!,
+                await dockerRegistry.ResolveImageReferenceAsync(challenge.ContainerImage!, token),
+                token);
+            if (template is not null)
+                exerciseReferences.Add((challenge.Id, template.Id));
+        }
         var runtimeReferences = (await context.TeamLabRuntimeAssets.AsNoTracking()
                 .Where(asset => runtimeIds.Contains(asset.RuntimeId) && asset.SourceTemplateId.HasValue &&
                                 asset.Runtime.Status != TeamLabRuntimeStatus.Destroyed)
@@ -260,6 +293,8 @@ public class ImageDistributionService(
                     !gameReferences.Contains((reference.ResourceId, record.ImageTemplateId)),
                 ImageDistributionReferenceKind.TrainingCourse =>
                     !courseReferences.Contains((reference.ResourceId, record.ImageTemplateId)),
+                ImageDistributionReferenceKind.Exercise =>
+                    !exerciseReferences.Contains((reference.ResourceId, record.ImageTemplateId)),
                 ImageDistributionReferenceKind.TeamLabRuntime =>
                     !runtimeReferences.Contains((reference.ResourceId, record.ImageTemplateId)),
                 ImageDistributionReferenceKind.ImageCertification =>
@@ -443,6 +478,7 @@ public class ImageDistributionService(
             return AgentVmImageDownloadResult.Failed(
                 $"Node {node.Name} cannot host VM template {template.Name} ({template.Id}).");
 
+        reference ??= await ResolveCurrentExecutionReferenceAsync(token);
         var record = await QueueTemplateOnNodeAsync(template, node, reference, token);
         coordinator.Wake();
         record = await WaitForReadyAsync(record.Id, template.Name, node.Name, token);
@@ -471,12 +507,52 @@ public class ImageDistributionService(
         if (node is null || !CanNodeUseImage(node, template))
             throw new InvalidOperationException($"Node {nodeId} cannot host Docker images.");
 
+        reference ??= await ResolveCurrentExecutionReferenceAsync(token);
         var record = await QueueTemplateOnNodeAsync(template, node, reference, token);
         coordinator.Wake();
         record = await WaitForReadyAsync(record.Id, template.Name, node.Name, token);
         if (record.Status != ImageDistributionStatus.Ready)
             throw new InvalidOperationException(record.ErrorMessage ??
                                                 $"Docker image {resolved} is not ready on node {node.Name}.");
+    }
+
+    async Task<ImageDistributionReferenceKey?> ResolveCurrentExecutionReferenceAsync(CancellationToken token)
+    {
+        if (executionContext.Current?.TicketId is not { } ticketId || ticketId == Guid.Empty)
+            return null;
+
+        var ticket = await context.DeploymentQueueTickets.AsNoTracking()
+            .Where(item => item.Id == ticketId)
+            .Select(item => new
+            {
+                item.Kind,
+                item.GameId,
+                item.ChallengeId,
+                item.TeamLabRuntimeId
+            })
+            .SingleOrDefaultAsync(token);
+        if (ticket is null)
+            return null;
+
+        if (ticket.Kind is DeploymentQueueKind.GameContainer or DeploymentQueueKind.ChallengeTestContainer &&
+            ticket.GameId is { } gameId)
+            return ImageDistributionReferenceKey.Game(gameId);
+        if (ticket.Kind == DeploymentQueueKind.ExerciseContainer && ticket.ChallengeId is { } exerciseId)
+            return ImageDistributionReferenceKey.Exercise(exerciseId);
+        if (ticket.Kind == DeploymentQueueKind.TrainingContainer && ticket.ChallengeId is { } trainingExerciseId)
+        {
+            var courseId = await context.ExerciseChallenges.AsNoTracking()
+                .Where(item => item.Id == trainingExerciseId)
+                .Select(item => item.TrainingCourseId)
+                .SingleOrDefaultAsync(token);
+            return courseId is { } id ? ImageDistributionReferenceKey.TrainingCourse(id) : null;
+        }
+        if (ticket.Kind == DeploymentQueueKind.AwdpContainer && ticket.GameId is { } awdpGameId)
+            return ImageDistributionReferenceKey.Game(awdpGameId);
+        if (ticket.Kind == DeploymentQueueKind.TeamLabRuntime && ticket.TeamLabRuntimeId is { } runtimeId)
+            return ImageDistributionReferenceKey.TeamLabRuntime(runtimeId);
+
+        return null;
     }
 
     async Task DistributeDockerImageAsync(string image, ImageDistributionReferenceKey reference, CancellationToken token)
@@ -1347,6 +1423,10 @@ public class ImageDistributionService(
 
     static void EnsureCacheRemoved(AgentImageCacheCleanupResult cleanup, ImageDistributionRecord record)
     {
+        if (cleanup.Inventory is null)
+            throw new IOException(
+                $"Agent image cache cleanup response did not include inventory for template " +
+                $"{record.ImageTemplateId} on node {record.WorkerNodeId}; synchronize the Agent and retry.");
         if (!cleanup.IsClean)
             throw new IOException(
                 $"Agent inventory still reports image cache for template {record.ImageTemplateId} " +

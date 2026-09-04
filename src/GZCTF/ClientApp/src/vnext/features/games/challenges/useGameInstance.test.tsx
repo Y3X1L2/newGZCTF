@@ -136,6 +136,40 @@ describe('useGameInstance', () => {
     unmount()
   })
 
+  it('does not show provisioning forever when the server remains pending', async () => {
+    vi.useFakeTimers()
+    const startedAt = new Date('2026-09-04T01:48:50Z')
+    vi.setSystemTime(startedAt)
+    const pendingChallenge = dockerChallenge(null, ContainerEntryStatus.Pending)
+    const refreshChallenge = vi.fn().mockResolvedValue(pendingChallenge)
+    vi.spyOn(gamePlayerApi, 'createInstance').mockResolvedValue({
+      entry: undefined,
+      expectStopAt: undefined,
+      entryStatus: ContainerEntryStatus.Pending,
+    })
+
+    const { result, unmount } = renderHook(() =>
+      useGameInstance({
+        challenge: dockerChallenge(null),
+        gameId: 23,
+        refreshChallenge,
+        updateChallenge: vi.fn(),
+      })
+    )
+
+    await act(async () => {
+      await result.current.create()
+    })
+    vi.setSystemTime(new Date(startedAt.getTime() + 130 * 60_000))
+    await act(async () => {
+      await result.current.refresh()
+    })
+
+    expect(result.current.phase).toBe('failed')
+    expect(result.current.error).toBe('实例准备超过预期时间，请刷新状态或重新创建。')
+    unmount()
+  })
+
   it('surfaces the deployment queue error for a failed Windows VM', async () => {
     const queueError = 'Windows image has no enabled fixed-account RDP configuration.'
     vi.spyOn(gamePlayerApi, 'vmStatus').mockResolvedValue({

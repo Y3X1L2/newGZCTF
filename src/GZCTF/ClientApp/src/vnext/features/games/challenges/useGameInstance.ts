@@ -4,6 +4,9 @@ import { errorMessage } from '../../../shared/errors'
 import { RuntimeInstanceController, RuntimeInstancePhase } from '../../challenge-runtime/types'
 import { gamePlayerApi, PlayerVmStatus } from '../gamePlayerApi'
 
+// Backend image preparation permits two hours before the bounded Agent create call.
+const dockerProvisioningTimeoutMs = 130 * 60_000
+
 function challengeInstanceKind(challenge?: ChallengeDetailModel): RuntimeInstanceController['kind'] {
   const container =
     challenge?.type === ChallengeType.StaticContainer || challenge?.type === ChallengeType.DynamicContainer
@@ -92,13 +95,17 @@ export function useGameInstance({
           provisioningStartedRef.current = null
           setError(next.context?.instanceEntryError ?? '公网入口发布失败，请联系管理员或稍后刷新。')
           setPhase('failed')
-        } else if (provisioningStartedRef.current && Date.now() - provisioningStartedRef.current < 120_000) {
+        } else if (
+          provisioningStartedRef.current &&
+          Date.now() - provisioningStartedRef.current >= dockerProvisioningTimeoutMs
+        ) {
+          provisioningStartedRef.current = null
+          setError('实例准备超过预期时间，请刷新状态或重新创建。')
+          setPhase('failed')
+        } else if (provisioningStartedRef.current) {
           setPhase('provisioning')
         } else if (entryStatus === ContainerEntryStatus.Pending) {
           setPhase('provisioning')
-        } else if (provisioningStartedRef.current) {
-          setError('实例创建超时，请刷新状态或重新创建。')
-          setPhase('failed')
         } else {
           setPhase('idle')
         }
