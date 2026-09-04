@@ -1,6 +1,6 @@
 # YINYU 当前开发状态
 
-更新时间：2026-09-03
+更新时间：2026-09-04
 
 本文件只记录已经核对过的当前事实、已知缺口和下一任务入口。历史计划、阶段审查和现场流水放在 `docs/archive/implementation-records/`，不得用来判断当前代码或服务器状态。
 
@@ -10,10 +10,11 @@
 | --- | --- |
 | 仓库 | `https://github.com/Y3X1L2/newGZCTF.git` |
 | 稳定分支 | `main` |
-| 运行代码基线 | 发布标识 `stable-20260831`，提交 `81a6e02b7dbe3d1f12094b606e5b3a93fd86de0c`；纯文档提交可以在该标签之后进入 `main` |
-| 当前开发基线 | `main`；Phase 09 TeamLab networking 合并提交为 `1a390432b1135da055a5a8488575fd10015f0bbd`；新任务从最新 `origin/main` 创建 `codex/<task-name>` 功能分支 |
+| 当前生产基线 | release `teamlab-phase09-d90e2d1b-20260903T1228Z`，提交 `d90e2d1b65cca693d500a9ee4fb21f9bed6026aa`，数据库 migration head `20260816192540_TeamLabCapabilityClosure` |
+| 应用回退基线 | `stable-20260831`，提交 `81a6e02b7dbe3d1f12094b606e5b3a93fd86de0c`；只在数据库兼容性已评估或完整备份恢复决策下回退 |
+| 当前开发基线 | `main`；Phase 09 TeamLab networking 合并提交为 `1a390432b1135da055a5a8488575fd10015f0bbd`，迁移恢复合并提交为 `d90e2d1b65cca693d500a9ee4fb21f9bed6026aa`；新任务从最新 `origin/main` 创建 `codex/<task-name>` 功能分支 |
 | 正式工作区 | `D:\Work\newGZCTF` |
-| 工作树结构 | 单一主仓库、单一 worktree；不依赖其他本地目录 |
+| 工作树结构 | 主 worktree 为 `D:\Work\newGZCTF`；并行任务按 `AGENTS.md` 使用独立 worktree，不将服务器目录作为代码基线 |
 | 技术栈 | .NET 10、ASP.NET Core、EF Core、PostgreSQL、Redis、React 19、TypeScript、Vite、pnpm |
 
 开始新任务必须重新执行 `git fetch origin --prune`、读取 `git status` 和 `git log`。本表中的 SHA 不替代实时 Git 状态。
@@ -62,11 +63,11 @@
 这些事项不能在文档中写成“已上线”或“已签收”：
 
 1. 自主练习已进入 `main`，但仍需在目标生产数据库备份或副本上完成迁移、真实实例、发布、回滚和内容运营验收。
-2. Phase 09 TeamLab networking 代码已进入 `main`，但 10.24 稳定环境仍运行 `stable-20260831`，新增迁移和运行能力尚未发布；双 Worker 故障接管、长期流量留存、复杂服务注入、规模并发和完整跨节点场景仍需真实环境签收。
+2. Phase 09 TeamLab networking 已在 10.24 前向迁移并发布到 `d90e2d1b`；双 Worker 故障接管、长期流量留存、复杂服务注入、规模并发、真实 Docker 创建/销毁和完整跨节点场景仍需授权管理员会话完成现场签收。
 3. Windows VM 仅按比赛场景支持；平台使用镜像内固定 RDP 账号，不要求普通比赛使用 Cloudbase-Init。仍需对合格镜像完成双实例、RDP/Guacamole、剪贴板、隔离和销毁清理验收。
 4. AWDP 的真实攻击、修补、异常恢复和安全软件干扰场景由授权测试人员按 `docs/yinyu-awdp-manual-acceptance.md` 手工执行。
 5. 统一认证对接方的门户源码不在本仓库；平台保留 Portal SSO 适配，跨网联调需在目标环境验证。
-6. 10.24 数据库历史有两条经历史 DLL 证实、但尚未合入 `main` 的 migration：`20260814075023_AddAssetAndChallengeOwnership` 与 `20260815012026_AddExerciseCreatorTracking`；另有 `20260604165857_AddTheoryExamEntities`、`20260604193010_SyncTheoryExam` 未在源码、可达 Git 历史或保留 DLL 中恢复。恢复分支已在隔离副本验证当前 TeamLab 前向 migration，但它会删除旧 TeamLab 表和字段；在旧 TeamLab 数据完成单独授权的分类/清理、数据库副本复验和维护窗口验收前，禁止对生产执行 migration 或手改 migration history。
+6. `main` 已恢复经历史 DLL 证实的 `20260814075023_AddAssetAndChallengeOwnership` 与 `20260815012026_AddExerciseCreatorTracking`；`20260604165857_AddTheoryExamEntities`、`20260604193010_SyncTheoryExam` 仍未在源码、可达 Git 历史或保留 DLL 中恢复，禁止伪造。生产已通过 TeamLab 生命周期销毁经授权的 `qqqtest1` 两条测试 runtime，并完成 Phase 09 前向发布；今后数据迁移仍必须先在新鲜生产备份副本验证。
 
 ## 5. 已验证环境事实
 
@@ -76,7 +77,12 @@
 - 2026-08-31 已复核统一发布：10.24 的 `release-manifest.json.gitCommit` 等于 `stable-20260831` 所指提交，manifest 内主站和 Agent 文件摘要与磁盘一致，`publish/files` 指向 shared，主站与 Agent 无重启循环。
 - 2026-09-01 已将 Phase 09 TeamLab networking 合并提交 `1a390432b1135da055a5a8488575fd10015f0bbd` 推入 `main`；本地 Release build、905 项后端单元测试、275 项前端测试、前端生产构建和 OpenAPI 生成契约测试通过。完整集成测试因本机 Docker Desktop 无法启动而未完成。
 - 同日只读复核 10.24：主站与 Agent 服务为 `active/running`，首页、健康端点和公开 OpenAPI 返回 200；运行前端 SHA 仍为 `81a6e02b7dbe3d1f12094b606e5b3a93fd86de0c`，公开 OpenAPI 为 69 条路径，尚未包含本次新增的 connectors、resource-pools 和 device-packages 路由。
-- 2026-09-03 已在 `codex/migration-drift-reconciliation` 从历史 DLL 恢复两条 creator migration，并在无网络、无端口的 PostgreSQL 16 副本中完成生产备份恢复、空库完整 bundle 和生产备份前向 bundle 验证；所有隔离容器、volume 和服务器临时产物均已删除。生产数据库、release、节点和网关未修改。详细结论见 `docs/development/handoffs/2026-09-02-migration-drift-reconciliation.md`。
+- 2026-09-03 已在 `codex/migration-drift-reconciliation` 从历史 DLL 恢复两条 creator migration，并在 PostgreSQL 16 副本中完成生产备份恢复、空库完整 bundle 和生产备份前向 bundle 验证。详细结论见 `docs/development/handoffs/2026-09-02-migration-drift-reconciliation.md`。
+- 同日已在发布前备份 `/opt/gzctf/backups/teamlab-release-pre-migration-20260903T080343Z` 后，以完整事务将 6 个授权 `EnvironmentJson` 配置值清为空对象、4 个授权 `RoutingEnabled` 配置值设为 false；未删除 TeamLab 行、比赛绑定、runtime、队列或其他业务数据。清理后备份在隔离 PostgreSQL 16 容器成功恢复并执行当前 `main` bundle 至 `20260816192540_TeamLabCapabilityClosure`，核心业务表计数保持一致；隔离容器和 volume 已删除。
+- 2026-09-03/04：获得追加授权后，`qqqtest1` 的两条测试 runtime 均通过平台生命周期销毁；原 pending create ticket 为 Cancelled，destroy ticket 为 Succeeded。生产库无 pending TeamLab ticket，所有现存 TeamLab runtime 为 Destroyed。
+- 同期建立并校验新鲜回滚备份 `/opt/gzctf/backups/teamlab-runtime-converged-pre-migration-20260903T122601Z`；用其隔离副本复跑 `d90e2d1b` 发布包的真实 glibc bundle，成功从 124 条 migration 前向至 134 条和 `20260816192540_TeamLabCapabilityClosure`。生产随后用同一 bundle 执行 10 条前向 TeamLab migration，并原子切换至 `teamlab-phase09-d90e2d1b-20260903T1228Z`。release manifest 的 994 个文件及本机 Agent 摘要均已核对一致，主站、Agent、PostgreSQL、Redis、首页、health、OpenAPI、API docs、共享附件、节点 inventory 和队列均正常。
+- 发布后生产的用户 172、比赛 22、比赛题目 110、课程 29、理论试卷 4、AWDP 服务 10、附件 217 与新鲜备份一致。`ExerciseChallenges` 为 590，而新鲜备份为 446；152 条 ID 大于 446 的新增行均为公共练习题，且本次 10 条 TeamLab migration 不向该表插入或回填数据。该业务增量未作处置，不能表述为 migration 导致的数据变化。
+- 发布后尚未通过已认证浏览器会话实际验证本地登录/Portal SSO、Docker 创建-入口-销毁和新 TeamLab runtime。原会话已不可用，未创建 token 或绕过认证；这些由授权操作人员继续完成。
 - 203 公网网关的 Nginx、WireGuard、动态 port-map timer 与 9091/18080 业务独立；本次只更新网关同步器所需配置，不重启或改动 9091/18080 进程。
 
 ## 6. 当前有用文档
