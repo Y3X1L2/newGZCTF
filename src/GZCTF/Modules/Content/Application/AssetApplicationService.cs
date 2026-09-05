@@ -50,6 +50,9 @@ public sealed class AssetApplicationService(
         await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
         if (context.Database.IsNpgsql())
         {
+            var requestLock = $"asset-upload:{apiTokenId}:{key}";
+            await context.Database.ExecuteSqlInterpolatedAsync(
+                $"SELECT pg_advisory_xact_lock(hashtextextended({requestLock}, 0))", cancellationToken);
             var lockKey = "blob:" + hash;
             await context.Database.ExecuteSqlInterpolatedAsync(
                 $"SELECT pg_advisory_xact_lock(hashtextextended({lockKey}, 0))", cancellationToken);
