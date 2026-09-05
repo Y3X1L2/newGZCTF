@@ -328,6 +328,27 @@ shard、路由、capture 和镜像运行引用。
 
 ## 8. 自动化建议
 
+### 附件资产上传与练习绑定
+
+整合候选新增 `POST /api/open/v1/assets`（`assets:write`）和
+`GET /api/open/v1/assets/{hash}`（`assets:read`），不提供外部删除接口。
+上传使用 multipart 的 `file`、可选 `filename`，必须携带 `Idempotency-Key` 和
+RFC 9530 格式的 `Content-Digest: sha-256=:BASE64_SHA256:`；上限为 1 GiB。
+镜像归档继续使用 images API，不使用该附件接口。
+
+上传成功返回 `201`，正文含 `hash/name/size/remoteUrl`，`Operation-Location` 指向已完成操作。
+相同幂等键和内容/名称重试返回原结果，不重复增加引用；键相同但内容或名称变化返回冲突。
+重复内容保留原文件名称。读取和绑定要求成功上传记录或显式 `asset` 资源授权；
+同一账号的其他资产不能绕过 Token 已声明的资产限制。
+
+练习 `attachment` 及 Flag 的 `attachment` 可二选一使用 `fileHash` 或 `remoteUrl`。
+Flag 更新可提交现有 `id` 保留身份，同 hash 更新不会销毁原附件。
+容器题批量导入应提供 `containerImage` 或 Ready 状态的 Docker `imageTemplateId`、
+`exposePort`，以及所需的资源限制和 `flagTemplate`。公共练习不接受 Windows VM 模板。
+教师后台使用独立管理列表，能查看停用题；学生列表仍只展示可见且启用的题目。
+
+### 流水线约定
+
 1. 为流水线签发最小 scope、短有效期 Token。
 2. 使用稳定业务 ID 生成 `Idempotency-Key`。
 3. 先导入并认证镜像，再发布 Bootstrap 和 TeamLab topology。

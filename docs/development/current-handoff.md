@@ -61,7 +61,7 @@ manifest 的 `gitCommit` 为 `81a6e02b7dbe3d1f12094b606e5b3a93fd86de0c`，主站
 20260815012026_AddExerciseCreatorTracking
 ```
 
-注意：该迁移文件不在当前源码或 Git 历史中；当前源码可见的最新迁移为 `20260816192540_TeamLabCapabilityClosure`。这属于服务器数据库与源码的未闭环漂移，不能把该数据库当作可直接迁移开发的基线。任何生产迁移或数据库开发前，必须在数据库副本上导出 `__EFMigrationsHistory`、执行 schema-only 对比，并找回缺失迁移的真实来源；禁止直接删除迁移历史或修改生产库绕过检查。
+以上为历史发布记录。主线已于 2026-09-03 恢复该迁移，原始 Git 提交也已定位为 `c6a2b7f4b5637f5622cfa6bdb42624d5242a0c80`。后续生产迁移与发布事实见 `current-state.md`；不得据此旧发布目录判断现网状态，也不得删除迁移历史或用旧快照覆盖主线。
 
 发布前备份目录：
 
@@ -214,7 +214,7 @@ python scripts/deployment/deploy-gzctf-release.py `
 
 ### 数据库迁移漂移
 
-10.24 数据库的 `__EFMigrationsHistory` 曾包含当前源码不存在的 `20260815012026_AddExerciseCreatorTracking`。当前源码已经继续前进到 `20260816192540_TeamLabCapabilityClosure`；这不是可以用“数据库已是最新”掩盖的问题。在缺失迁移来源和 schema 对比完成前，禁止对生产执行新增迁移、删除历史记录或手工修补。
+`20260815012026_AddExerciseCreatorTracking` 的历史恢复已完成；详见 `handoffs/2026-09-02-migration-drift-reconciliation.md`。另外两条旧 Theory migration 的来源仍未恢复，不得伪造；任何后续升级仍须使用新鲜生产备份副本核验。历史列的存在不代表当前业务模型重新启用了创建者功能。
 
 ## 9. 下一位接手者第一步
 
