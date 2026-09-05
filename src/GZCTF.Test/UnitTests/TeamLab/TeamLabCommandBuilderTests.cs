@@ -19,10 +19,15 @@ using Xunit;
 
 namespace GZCTF.Test.UnitTests.TeamLab;
 
-public class TeamLabCommandBuilderTests
+public class TeamLabCommandBuilderTests : IDisposable
 {
     private const string ValidInterfacePrivateKey = "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=";
     private const string ValidPeerPublicKey = "ISIjJCUmJygpKissLS4vMDEyMzQ1Njc4OTo7PD0+P0A=";
+    private readonly TempDirectory _stateRoot = new();
+    private string DesiredStateRoot => $"{_stateRoot.Path.Replace('\\', '/')}/desired";
+    private string RuntimeStateRoot => Path.Combine(_stateRoot.Path, "runtime");
+
+    public void Dispose() => _stateRoot.Dispose();
 
     [Fact]
     public void DockerGateCommand_PreservesImageEntrypointAndCmdWithoutStartCommand()
@@ -185,7 +190,7 @@ public class TeamLabCommandBuilderTests
         var request = InfrastructureRequest(runtimeId, dryRun: true);
         var planned = await CreateService(enable: false)
             .ApplyInfrastructureAsync(request, CancellationToken.None);
-        var statePath = TeamLabNetworkService.ResolveDesiredStatePath(runtimeId, request.Generation);
+        var statePath = TeamLabNetworkService.ResolveDesiredStatePath(runtimeId, request.Generation, DesiredStateRoot);
         var runtimeDirectory = Path.GetDirectoryName(Path.GetDirectoryName(statePath))!;
         Directory.CreateDirectory(Path.GetDirectoryName(statePath)!);
         try
@@ -228,7 +233,7 @@ public class TeamLabCommandBuilderTests
         var request = InfrastructureRequest(runtimeId, dryRun: true);
         var planned = await CreateService(enable: false)
             .ApplyInfrastructureAsync(request, CancellationToken.None);
-        var statePath = TeamLabNetworkService.ResolveDesiredStatePath(runtimeId, request.Generation);
+        var statePath = TeamLabNetworkService.ResolveDesiredStatePath(runtimeId, request.Generation, DesiredStateRoot);
         var runtimeDirectory = Path.GetDirectoryName(Path.GetDirectoryName(statePath))!;
         Directory.CreateDirectory(Path.GetDirectoryName(statePath)!);
         try
@@ -305,7 +310,7 @@ public class TeamLabCommandBuilderTests
     {
         var runtimeId = 900000 + Random.Shared.Next(1, 90000);
         var request = InfrastructureRequest(runtimeId, dryRun: false);
-        var statePath = TeamLabNetworkService.ResolveDesiredStatePath(runtimeId, request.Generation);
+        var statePath = TeamLabNetworkService.ResolveDesiredStatePath(runtimeId, request.Generation, DesiredStateRoot);
         var runtimeDirectory = Path.GetDirectoryName(Path.GetDirectoryName(statePath))!;
         if (Directory.Exists(runtimeDirectory)) Directory.Delete(runtimeDirectory, true);
         try
@@ -441,10 +446,12 @@ public class TeamLabCommandBuilderTests
             command => command.Contains("ip netns exec tlr123 ip route replace 10.60.0.16/28 via 10.60.0.5"));
     }
 
-    [Fact]
-    public async Task ApplyFabricAsync_DryRunBuildsNamespaceUplinkAndRoutes()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ApplyFabricAsync_DryRunBuildsNamespaceUplinkAndRoutes(bool useNftables)
     {
-        var service = CreateFabricService(enable: false);
+        var service = CreateFabricService(enable: false, useNftables);
 
         var result = await service.ApplyAsync(new TeamLabFabricApplyRequest(
             RuntimeId: 123,
@@ -482,28 +489,104 @@ public class TeamLabCommandBuilderTests
         Assert.Contains(result.Commands,
             command => command.Contains("ip netns exec tlr123 ip route replace 10.180.53.48/28 via 169.254.123.1") &&
                        command.Contains("src 10.77.10.1"));
-        Assert.Contains(result.Commands, command => command.Contains("iptables -N TLF7BG1"));
-        Assert.Contains(result.Commands,
-            command => command.Contains("iptables -C FORWARD -j TLF7BG1") &&
-                       command.Contains("iptables -I FORWARD 1 -j TLF7BG1"));
-        Assert.Contains(result.Commands,
-            command => command.Contains("iptables -A TLF7BG1") &&
-                       command.Contains("-i tlrf123 -d 10.180.53.48/28 -j ACCEPT"));
-        Assert.Contains(result.Commands,
-            command => command.Contains("iptables -A TLF7BG1") &&
-                       command.Contains("-o tlrf123 -s 10.77.10.0/24 -j ACCEPT"));
-        Assert.Contains(result.Commands,
-            command => command.Contains("ip netns exec tlr123 iptables -A TLR7BG1") &&
-                       command.Contains("-s 10.77.10.0/24 -d 10.180.53.48/28 -j ACCEPT"));
-        Assert.Contains(result.Commands,
-            command => command.Contains("ip netns exec tlr123 iptables -A TLR7BG1") &&
-                       command.Contains("-s 10.77.10.0/24 -d 192.168.50.0/24 -j REJECT"));
-        Assert.Contains(result.Commands,
-            command => command.Contains("ip netns exec tlr123 iptables -A TLR7BG1") &&
-                       command.Contains("ESTABLISHED,RELATED -j ACCEPT"));
-        Assert.Contains(result.Commands,
-            command => command.Contains("iptables -t mangle -A TLM7BG1") &&
-                       command.Contains("-o tlrf123n") && command.Contains("--set-mss 1380"));
+        if (useNftables)
+        {
+            Assert.DoesNotContain(result.Commands, command => command.Contains("iptables"));
+            Assert.Contains(result.Commands, command => command.Contains(
+                "add chain inet gzctf_teamlab TLF7BG1 { type filter hook forward priority -50; policy accept; }"));
+            Assert.Contains(result.Commands, command => command.Contains(
+                "nft add rule inet gzctf_teamlab TLF7BG1 iifname 'tlrf123' ip daddr 10.180.53.48/28 accept"));
+            Assert.Contains(result.Commands, command => command.Contains(
+                "nft add rule inet gzctf_teamlab TLF7BG1 oifname 'tlrf123' ip saddr 10.77.10.0/24 accept"));
+            Assert.Contains(result.Commands, command => command.Contains(
+                "add chain inet gzctf_teamlab TLR7BG1 { type filter hook forward priority 0; policy drop; }"));
+            Assert.Contains(result.Commands, command => command.Contains(
+                "ip netns exec tlr123 nft add rule inet gzctf_teamlab TLR7BG1 ip saddr 10.77.10.0/24 ip daddr 10.180.53.48/28 accept"));
+            Assert.Contains(result.Commands, command => command.Contains(
+                "ip netns exec tlr123 nft add rule inet gzctf_teamlab TLR7BG1 ip saddr 10.77.10.0/24 ip daddr 192.168.50.0/24 reject"));
+            Assert.Contains(result.Commands, command => command.Contains(
+                "ip netns exec tlr123 nft add rule inet gzctf_teamlab TLR7BG1 ct state established,related accept"));
+            Assert.Contains(result.Commands, command => command.Contains(
+                "nft add rule inet gzctf_teamlab TLM7BG1 oifname 'tlrf123n' tcp flags syn tcp option maxseg size set 1380"));
+        }
+        else
+        {
+            Assert.DoesNotContain(result.Commands, command => command.Contains(" nft "));
+            Assert.Contains(result.Commands, command => command.Contains("iptables -N TLF7BG1"));
+            Assert.Contains(result.Commands,
+                command => command.Contains("iptables -C FORWARD -j TLF7BG1") &&
+                           command.Contains("iptables -I FORWARD 1 -j TLF7BG1"));
+            Assert.Contains(result.Commands,
+                command => command.Contains("iptables -A TLF7BG1") &&
+                           command.Contains("-i tlrf123 -d 10.180.53.48/28 -j ACCEPT"));
+            Assert.Contains(result.Commands,
+                command => command.Contains("iptables -A TLF7BG1") &&
+                           command.Contains("-o tlrf123 -s 10.77.10.0/24 -j ACCEPT"));
+            Assert.Contains(result.Commands,
+                command => command.Contains("ip netns exec tlr123 iptables -A TLR7BG1") &&
+                           command.Contains("-s 10.77.10.0/24 -d 10.180.53.48/28 -j ACCEPT"));
+            Assert.Contains(result.Commands,
+                command => command.Contains("ip netns exec tlr123 iptables -A TLR7BG1") &&
+                           command.Contains("-s 10.77.10.0/24 -d 192.168.50.0/24 -j REJECT"));
+            Assert.Contains(result.Commands,
+                command => command.Contains("ip netns exec tlr123 iptables -A TLR7BG1") &&
+                           command.Contains("ESTABLISHED,RELATED -j ACCEPT"));
+            Assert.Contains(result.Commands,
+                command => command.Contains("iptables -t mangle -A TLM7BG1") &&
+                           command.Contains("-o tlrf123n") && command.Contains("--set-mss 1380"));
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RouterInputPolicies_DryRunRestrictsIngressAndPlansCleanup(bool useNftables)
+    {
+        var options = Options.Create(new AgentTeamLabConfig { Enable = true, DryRun = true });
+        var runner = new InfrastructureStateTeamLabCommandRunner(probeHealthy: true);
+        var executor = new TeamLabCommandExecutor(options, runner, NullLogger<TeamLabCommandExecutor>.Instance);
+        var firewall = new TeamLabFirewallService(executor, options)
+        {
+            CommandAvailable = command => command == "nft" && useNftables
+        };
+
+        var apply = await firewall.ApplyRouterInputPoliciesAsync(123, 1, "tlr123", ["tlr123n0"],
+            true, CancellationToken.None);
+        var remove = await firewall.RemoveRuntimePoliciesAsync(123, 1, "tlr123", true, CancellationToken.None);
+        var verify = await firewall.VerifyPoliciesRemovedAsync(123, 1, "tlr123", true, CancellationToken.None);
+
+        Assert.True(apply.Success);
+        Assert.True(remove.Success);
+        Assert.True(verify.Success);
+        Assert.True(apply.DryRun && remove.DryRun && verify.DryRun);
+        Assert.Empty(runner.Commands);
+        Assert.Contains(apply.Commands, command => command.Contains(useNftables
+            ? "hook input priority 0; policy drop;"
+            : "iptables -A TLI7BG1 -j REJECT"));
+        Assert.Contains(apply.Commands, command => command.Contains(useNftables
+            ? "TLI7BG1 iifname 'tlr123n0' udp dport 67 accept"
+            : "TLI7BG1 -i tlr123n0 -p udp --dport 67 -j ACCEPT"));
+        Assert.Contains(apply.Commands, command => command.Contains(useNftables
+            ? "TLI7BG1 iifname 'tlwg123' udp dport 53 accept"
+            : "TLI7BG1 -i tlwg123 -p udp --dport 53 -j ACCEPT"));
+        Assert.DoesNotContain(apply.Commands, command => command.Contains(useNftables
+            ? "iifname 'tlwg123' udp dport 67"
+            : "-i tlwg123 -p udp --dport 67"));
+        Assert.Contains(remove.Commands, command => command.Contains(useNftables
+            ? "nft delete chain inet gzctf_teamlab TLI7BG1"
+            : "iptables -D INPUT -j TLI7BG1"));
+        Assert.Contains(verify.Commands, command => command.Contains(useNftables
+            ? "! ip netns exec tlr123 nft list chain inet gzctf_teamlab TLI7BG1"
+            : "! ip netns exec tlr123 iptables -S TLI7BG1"));
+    }
+
+    [Fact]
+    public void DesiredStatePaths_PreserveProductionDefaultsAndAcceptIsolatedRoots()
+    {
+        Assert.Equal("/run/gzctf-teamlab/runtime-123/generation-1/state.json",
+            TeamLabNetworkService.ResolveDesiredStatePath(123, 1));
+        Assert.Equal($"{DesiredStateRoot}/runtime-123/generation-1/state.json",
+            TeamLabNetworkService.ResolveDesiredStatePath(123, 1, DesiredStateRoot));
     }
 
     [Fact]
@@ -685,10 +768,12 @@ public class TeamLabCommandBuilderTests
         }
     }
 
-    [Fact]
-    public async Task CleanupAsync_DryRunRemovesRuntimeFabricForwardRules()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CleanupAsync_DryRunRemovesRuntimeFabricForwardRules(bool useNftables)
     {
-        var service = CreateService(enable: false);
+        var service = CreateService(enable: false, useNftables: useNftables);
 
         var result = await service.CleanupAsync(new TeamLabCleanupRequest(
             RuntimeId: 123,
@@ -701,9 +786,11 @@ public class TeamLabCommandBuilderTests
 
         Assert.True(result.Success);
         Assert.Contains(result.Commands,
-            command => command.Contains("iptables -D FORWARD -j TLF7BG1"));
+            command => command.Contains(useNftables
+                ? "nft delete chain inet gzctf_teamlab TLF7BG1"
+                : "iptables -D FORWARD -j TLF7BG1"));
         Assert.Contains(result.Commands,
-             command => command.Contains("/run/gzctf-teamlab/runtime-123/generation-1"));
+             command => command.Contains($"{DesiredStateRoot}/runtime-123/generation-1"));
     }
 
     [Fact]
@@ -711,7 +798,7 @@ public class TeamLabCommandBuilderTests
     {
         var runtimeId = 800000 + Random.Shared.Next(1, 100000);
         var activeStatePath = Path.Combine(
-            "/var/lib/gzctf/teamlab",
+            RuntimeStateRoot,
             $"runtime-{runtimeId}",
             "active-generation.json");
         Directory.CreateDirectory(Path.GetDirectoryName(activeStatePath)!);
@@ -774,7 +861,7 @@ public class TeamLabCommandBuilderTests
     public async Task CleanupAsync_MissingActiveGenerationWithDesiredStateFailsClosed()
     {
         var runtimeId = 950000 + Random.Shared.Next(1, 40000);
-        var statePath = TeamLabNetworkService.ResolveDesiredStatePath(runtimeId, 1);
+        var statePath = TeamLabNetworkService.ResolveDesiredStatePath(runtimeId, 1, DesiredStateRoot);
         Directory.CreateDirectory(Path.GetDirectoryName(statePath)!);
         await File.WriteAllTextAsync(statePath, "{}");
         var runner = new InfrastructureStateTeamLabCommandRunner(probeHealthy: true);
@@ -803,10 +890,12 @@ public class TeamLabCommandBuilderTests
         }
     }
 
-    [Fact]
-    public async Task ConfigureWireGuardAsync_DryRunBuildsPeerCommand()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ConfigureWireGuardAsync_DryRunBuildsPeerCommand(bool useNftables)
     {
-        var service = CreateService(enable: false);
+        var service = CreateService(enable: false, useNftables: useNftables);
 
         var result = await service.ConfigureWireGuardAsync(new TeamLabWireGuardRequest(
             RuntimeId: 123,
@@ -835,16 +924,18 @@ public class TeamLabCommandBuilderTests
         Assert.DoesNotContain(result.Commands, command => command.Contains("allowed-ips 10.60.0.0/28"));
         Assert.Contains(result.Commands,
             command => command.Contains("ip netns exec tlr123 ip route replace 10.250.0.2/32 dev tlwg123"));
-        Assert.Contains(result.Commands,
-            command => command.Contains("iptables -t nat -A TLNtlwg123 -s 10.250.0.2/32 -d 10.60.0.0/28 -j MASQUERADE"));
+        Assert.Contains(result.Commands, command => command.Contains(useNftables
+            ? "nft add rule ip gzctf_teamlab_nat TLNtlwg123 ip saddr 10.250.0.2/32 ip daddr 10.60.0.0/28 masquerade"
+            : "iptables -t nat -A TLNtlwg123 -s 10.250.0.2/32 -d 10.60.0.0/28 -j MASQUERADE"));
         Assert.DoesNotContain(result.Commands,
             command => command.Contains("ip route replace 10.60.0.0/28 dev tlwg123"));
-        Assert.Contains(result.Commands,
-            command => command.Contains(
-                "iptables -A TLA7BG1 -i tlwg123 -s 10.250.0.2/32 -d 10.60.0.0/28 -j ACCEPT"));
-        Assert.Contains(result.Commands,
-            command => command.Contains(
-                "iptables -A TLA7BG1 -i tlwg123 -s 10.250.0.2/32 -d 10.60.0.16/28 -j REJECT"));
+        Assert.Contains(result.Commands, command => command.Contains(useNftables
+            ? "nft add rule inet gzctf_teamlab TLA7BG1 iifname 'tlwg123' ip saddr 10.250.0.2/32 ip daddr 10.60.0.0/28 accept"
+            : "iptables -A TLA7BG1 -i tlwg123 -s 10.250.0.2/32 -d 10.60.0.0/28 -j ACCEPT"));
+        Assert.Contains(result.Commands, command => command.Contains(useNftables
+            ? "nft add rule inet gzctf_teamlab TLA7BG1 iifname 'tlwg123' ip saddr 10.250.0.2/32 ip daddr 10.60.0.16/28 reject"
+            : "iptables -A TLA7BG1 -i tlwg123 -s 10.250.0.2/32 -d 10.60.0.16/28 -j REJECT"));
+        Assert.DoesNotContain(result.Commands, command => command.Contains(useNftables ? "iptables" : " nft "));
         var configureCommand = Assert.Single(result.Commands,
             command => command.Contains("wg set tlwg123 private-key /dev/stdin", StringComparison.Ordinal));
         Assert.True(
@@ -1318,23 +1409,27 @@ public class TeamLabCommandBuilderTests
         Assert.Equal("permission denied", TeamLabCommandRunner.NormalizeFailureOutput(1, "permission denied"));
     }
 
-    private static TeamLabNetworkService CreateService(
+    private TeamLabNetworkService CreateService(
         bool enable,
         TeamLabCommandRunner? runner = null,
         bool dryRun = true,
-        string? runtimeStateRoot = null)
+        string? runtimeStateRoot = null,
+        bool useNftables = false)
     {
         var config = new AgentTeamLabConfig { Enable = enable, DryRun = dryRun };
-        if (runtimeStateRoot is not null) config.RuntimeStateRoot = runtimeStateRoot;
+        config.RuntimeStateRoot = runtimeStateRoot ?? RuntimeStateRoot;
         var options = Options.Create(config);
         runner ??= new TeamLabCommandRunner(NullLogger<TeamLabCommandRunner>.Instance);
         var commandExecutor = new TeamLabCommandExecutor(
             options,
             runner,
             NullLogger<TeamLabCommandExecutor>.Instance);
-        var bridge = new TeamLabBridgeService(commandExecutor);
+        var bridge = new TeamLabBridgeService(commandExecutor) { DesiredStateRoot = DesiredStateRoot };
         var router = new TeamLabRouterService(commandExecutor);
-        var firewall = new TeamLabFirewallService(commandExecutor, options);
+        var firewall = new TeamLabFirewallService(commandExecutor, options)
+        {
+            CommandAvailable = command => command == "nft" && useNftables
+        };
         var fabric = new TeamLabFabricService(
             commandExecutor,
             firewall,
@@ -1342,8 +1437,12 @@ public class TeamLabCommandBuilderTests
             new TeamLabFabricRouteStore(options),
             options,
             NullLogger<TeamLabFabricService>.Instance);
-        var registry = new ObservationPointRegistry(NullLogger<ObservationPointRegistry>.Instance);
-        var spool = new ObservationBatchSpool(options, NullLogger<ObservationBatchSpool>.Instance);
+        var registry = new ObservationPointRegistry(NullLogger<ObservationPointRegistry>.Instance)
+        {
+            DesiredStateRoot = DesiredStateRoot
+        };
+        var spool = new ObservationBatchSpool(options, NullLogger<ObservationBatchSpool>.Instance,
+            Path.Combine(_stateRoot.Path, "observations"), null);
         var sensors = new EndpointSensorChannelService(
             spool, NullLogger<EndpointSensorChannelService>.Instance);
         var uploader = new PcapSegmentUploader(
@@ -1374,7 +1473,10 @@ public class TeamLabCommandBuilderTests
             new TeamLabRuntimeGenerationStore(options),
             new TeamLabOvsAttachmentProvider(new OvsdbJsonRpcClient(), options),
             new AgentResourceLock(),
-            NullLogger<TeamLabNetworkService>.Instance);
+            NullLogger<TeamLabNetworkService>.Instance)
+        {
+            DesiredStateRoot = DesiredStateRoot
+        };
     }
 
     private static TeamLabBridgeService CreateBridgeService(bool enable)
@@ -1397,7 +1499,7 @@ public class TeamLabCommandBuilderTests
         return new TeamLabRouterService(executor);
     }
 
-    private static TeamLabFabricService CreateFabricService(bool enable)
+    private static TeamLabFabricService CreateFabricService(bool enable, bool useNftables = false)
     {
         var options = Options.Create(new AgentTeamLabConfig { Enable = enable, DryRun = true });
         var runner = new TeamLabCommandRunner(NullLogger<TeamLabCommandRunner>.Instance);
@@ -1407,7 +1509,10 @@ public class TeamLabCommandBuilderTests
             NullLogger<TeamLabCommandExecutor>.Instance);
         return new TeamLabFabricService(
             executor,
-            new TeamLabFirewallService(executor, options),
+            new TeamLabFirewallService(executor, options)
+            {
+                CommandAvailable = command => command == "nft" && useNftables
+            },
             runner,
             new TeamLabFabricRouteStore(options),
             options,

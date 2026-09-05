@@ -17,6 +17,7 @@ public sealed record ObservationPointRegistration(
 public sealed class ObservationPointRegistry(ILogger<ObservationPointRegistry> logger)
 {
     private const string RegistryFileName = "observation-points.json";
+    internal string DesiredStateRoot { get; init; } = TeamLabNetworkService.DefaultDesiredStateRoot;
     private readonly ConcurrentDictionary<string, ObservationPointRegistration> _registrations =
         new(StringComparer.Ordinal);
 
@@ -91,7 +92,7 @@ public sealed class ObservationPointRegistry(ILogger<ObservationPointRegistry> l
 
     public async Task LoadAsync(CancellationToken cancellationToken)
     {
-        const string root = "/run/gzctf-teamlab";
+        var root = DesiredStateRoot;
         if (!Directory.Exists(root)) return;
         foreach (var path in Directory.EnumerateFiles(root, RegistryFileName, SearchOption.AllDirectories)
                      .Order(StringComparer.Ordinal))
@@ -166,6 +167,6 @@ public sealed class ObservationPointRegistry(ILogger<ObservationPointRegistry> l
     private static string Key(ObservationPointRegistration registration) =>
         $"{registration.RuntimeId}:{registration.Generation}:{registration.PublicId:N}:{registration.InterfaceName}";
 
-    private static string RegistryPath(int runtimeId, int generation) =>
-        $"{TeamLabNetworkService.ResolveDesiredStateDirectory(runtimeId, generation)}/{RegistryFileName}";
+    private string RegistryPath(int runtimeId, int generation) =>
+        $"{TeamLabNetworkService.ResolveDesiredStateDirectory(runtimeId, generation, DesiredStateRoot)}/{RegistryFileName}";
 }
