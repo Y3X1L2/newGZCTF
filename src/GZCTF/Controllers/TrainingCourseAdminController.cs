@@ -341,6 +341,18 @@ public class TrainingCourseAdminController(
         course.UpdatedAt = DateTimeOffset.UtcNow;
     }
 
+    private async Task<bool> RetainCourseCoverAsync(string? previous, string? requested, CancellationToken token)
+    {
+        var hash = string.IsNullOrWhiteSpace(requested) ? null : requested.Trim();
+        if (string.Equals(previous, hash, StringComparison.Ordinal))
+            return true;
+        if (hash is not null && await blobRepository.IncrementBlobReference(hash, token) is null)
+            return false;
+        if (previous is not null)
+            await blobRepository.DeleteBlobByHash(previous, token);
+        return true;
+    }
+
     private async Task<List<TrainingCourseStudentLearningSummaryModel>> BuildLearningSummaries(
         int courseId,
         Guid[]? userFilter,
@@ -505,6 +517,9 @@ public class TrainingCourseAdminController(
             UpdatedById = actor.Id,
             Status = TrainingCourseStatus.Draft
         };
+        await using var transaction = await context.Database.BeginTransactionAsync(token);
+        if (!await RetainCourseCoverAsync(null, model.CoverFileHash, token))
+            return BadRequest(new RequestResponse("Cover asset was not found."));
         FillCourse(course, model, actor);
         course.Teachers.Add(new TrainingCourseTeacher
         {
@@ -516,6 +531,7 @@ public class TrainingCourseAdminController(
 
         context.TrainingCourses.Add(course);
         await context.SaveChangesAsync(token);
+        await transaction.CommitAsync(token);
         logger.SystemLog($"Created training course {course.Title}.", TaskStatus.Success, LogLevel.Information);
 
         course = await CourseQuery().SingleAsync(c => c.Id == course.Id, token);
@@ -542,8 +558,12 @@ public class TrainingCourseAdminController(
         if (string.IsNullOrWhiteSpace(model.Title))
             return BadRequest(new RequestResponse("课程名称不能为空。"));
 
+        await using var transaction = await context.Database.BeginTransactionAsync(token);
+        if (!await RetainCourseCoverAsync(course.CoverFileHash, model.CoverFileHash, token))
+            return BadRequest(new RequestResponse("Cover asset was not found."));
         FillCourse(course, model, actor);
         await context.SaveChangesAsync(token);
+        await transaction.CommitAsync(token);
         logger.SystemLog($"Updated training course {course.Title}.", TaskStatus.Success, LogLevel.Information);
         return Ok();
     }

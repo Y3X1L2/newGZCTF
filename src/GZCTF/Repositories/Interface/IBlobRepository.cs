@@ -57,6 +57,9 @@ public interface IBlobRepository : IRepository
     /// <returns></returns>
     public Task<TaskStatus> DeleteBlobByHash(string fileHash, CancellationToken token = default);
 
+    /// <summary>Delete an idle asset; return Denied while any persisted or pending reference exists.</summary>
+    public Task<TaskStatus> DeleteUnreferencedBlobByHash(string fileHash, CancellationToken token = default);
+
     /// <summary>
     /// Get a blob file by its hash
     /// </summary>

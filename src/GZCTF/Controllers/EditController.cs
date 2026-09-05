@@ -379,6 +379,7 @@ public class EditController(
                 return BadRequest(new RequestResponse(localizer[nameof(Resources.Program.File_SizeTooLarge)]));
         }
 
+        await using var transaction = await blobService.BeginTransactionAsync(token);
         var poster = await blobService.CreateOrUpdateImage(file, "poster", 0, token);
 
         if (poster is null)
@@ -386,6 +387,7 @@ public class EditController(
 
         game!.PosterHash = poster.Hash;
         await gameRepository.UpdateGame(game, token);
+        await transaction.CommitAsync(token);
 
         return Ok(poster.Url());
     }

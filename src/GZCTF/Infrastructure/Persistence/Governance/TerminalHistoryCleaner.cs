@@ -82,9 +82,14 @@ public sealed class TerminalHistoryCleaner(AppDbContext context)
     public Task<int> CleanApiOperationsAsync(DateTimeOffset cutoff, int batchSize,
         CancellationToken cancellationToken) => context.Database.ExecuteSqlInterpolatedAsync($$"""
         WITH candidates AS (
-            SELECT "Id" FROM "ApiOperations"
-            WHERE "Status" IN (2, 3) AND "CompletedAt" < {{cutoff}}
-            ORDER BY "CompletedAt", "Id" LIMIT {{batchSize}} FOR UPDATE SKIP LOCKED
+            SELECT operation."Id" FROM "ApiOperations" operation
+            WHERE operation."Status" IN (2, 3) AND operation."CompletedAt" < {{cutoff}}
+              AND NOT (
+                  operation."Kind" = 'asset.upload' AND operation."Status" = 2
+                  AND operation."ResourceType" = 'asset'
+                  AND EXISTS (SELECT 1 FROM "Files" file WHERE file."Hash" = operation."ResourceId")
+              )
+            ORDER BY operation."CompletedAt", operation."Id" LIMIT {{batchSize}} FOR UPDATE OF operation SKIP LOCKED
         )
         DELETE FROM "ApiOperations" target USING candidates
         WHERE target."Id" = candidates."Id"
