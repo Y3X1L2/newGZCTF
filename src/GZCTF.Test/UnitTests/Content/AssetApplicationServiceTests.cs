@@ -185,6 +185,27 @@ public sealed class AssetApplicationServiceTests
 
     static IFormFile File() => new FormFile(new MemoryStream(Content), 0, Content.Length, "file", "attachment.zip");
 
+    [Fact]
+    public async Task Upload_FailureClearsTrackedChangesBeforeLaterMiddlewareSave()
+    {
+        await using var context = CreateContext();
+        var (service, blobs) = CreateService(context);
+        blobs.Setup(repository => repository.CreateOrUpdateBlobFromStream(
+                It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<CancellationToken>()))
+            .Returns((string name, Stream stream, CancellationToken token) =>
+            {
+                context.Files.Add(new LocalFile { Hash = Hash, Name = name });
+                throw new IOException("simulated storage failure");
+            });
+
+        await Assert.ThrowsAsync<IOException>(() =>
+            service.UploadAsync(File(), null, Guid.NewGuid(), Guid.NewGuid(), "failed-upload", Digest, default));
+
+        Assert.Empty(context.ChangeTracker.Entries());
+        await context.SaveChangesAsync();
+        Assert.Empty(context.Files);
+    }
+
     static (AssetApplicationService Service, Mock<IBlobRepository> Blobs) CreateService(AppDbContext context)
     {
         var blobs = new Mock<IBlobRepository>(MockBehavior.Strict);

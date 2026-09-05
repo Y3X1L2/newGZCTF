@@ -48,46 +48,61 @@ public sealed class AssetApplicationService(
 
         // Commit the completed operation with the blob; the async worker must never see a pending upload.
         await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
-        if (context.Database.IsNpgsql())
+        try
         {
-            var requestLock = $"asset-upload:{apiTokenId}:{key}";
-            await context.Database.ExecuteSqlInterpolatedAsync(
-                $"SELECT pg_advisory_xact_lock(hashtextextended({requestLock}, 0))", cancellationToken);
-            var lockKey = "blob:" + hash;
-            await context.Database.ExecuteSqlInterpolatedAsync(
-                $"SELECT pg_advisory_xact_lock(hashtextextended({lockKey}, 0))", cancellationToken);
-        }
-        var result = await idempotency.BeginAsync(apiTokenId, actorUserId, UploadOperationKind,
-            UploadRouteKey, key, requestHash, cancellationToken);
-        if (result.Reused)
-        {
-            if (result.Operation.Status != ApiOperationStatus.Succeeded || result.Operation.ResourceId != hash)
-                throw new AssetApiContractException("asset_upload_incomplete", "The previous upload has not completed.", 409);
-            var original = await blobs.GetBlobByHash(hash, cancellationToken)
-                ?? throw new AssetApiContractException("asset_gone", "The previously uploaded asset no longer exists.", 410);
-            await transaction.CommitAsync(cancellationToken);
-            return new AssetUploadResult(ToDescriptor(original), result.Operation.Id, true);
-        }
+            if (context.Database.IsNpgsql())
+            {
+                var requestLock = $"asset-upload:{apiTokenId}:{key}";
+                await context.Database.ExecuteSqlInterpolatedAsync(
+                    $"SELECT pg_advisory_xact_lock(hashtextextended({requestLock}, 0))", cancellationToken);
+                var lockKey = "blob:" + hash;
+                await context.Database.ExecuteSqlInterpolatedAsync(
+                    $"SELECT pg_advisory_xact_lock(hashtextextended({lockKey}, 0))", cancellationToken);
+            }
+            var result = await idempotency.BeginAsync(apiTokenId, actorUserId, UploadOperationKind,
+                UploadRouteKey, key, requestHash, cancellationToken);
+            if (result.Reused)
+            {
+                if (result.Operation.Status != ApiOperationStatus.Succeeded || result.Operation.ResourceId != hash)
+                    throw new AssetApiContractException("asset_upload_incomplete", "The previous upload has not completed.", 409);
+                var original = await blobs.GetBlobByHash(hash, cancellationToken)
+                    ?? throw new AssetApiContractException("asset_gone", "The previously uploaded asset no longer exists.", 410);
+                await transaction.CommitAsync(cancellationToken);
+                return new AssetUploadResult(ToDescriptor(original), result.Operation.Id, true);
+            }
 
-        // An upload is not an attachment reference. Existing content keeps its original name and reference count.
-        var asset = await blobs.GetBlobByHash(hash, cancellationToken);
-        if (asset is null)
-        {
-            content.Position = 0;
-            asset = await blobs.CreateOrUpdateBlobFromStream(name, content, cancellationToken);
+            // An upload is not an attachment reference. Existing content keeps its original name and reference count.
+            var asset = await blobs.GetBlobByHash(hash, cancellationToken);
+            if (asset is null)
+            {
+                content.Position = 0;
+                asset = await blobs.CreateOrUpdateBlobFromStream(name, content, cancellationToken);
+            }
+            var operation = result.Operation;
+            operation.Status = ApiOperationStatus.Succeeded;
+            operation.Stage = "completed";
+            operation.ResourceType = "asset";
+            operation.ResourceId = asset.Hash;
+            operation.CurrentProgress = operation.TotalProgress = content.Length;
+            operation.StartedAt = operation.CreatedAt;
+            operation.UpdatedAt = DateTimeOffset.UtcNow;
+            operation.CompletedAt = operation.UpdatedAt;
+            await context.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            return new AssetUploadResult(ToDescriptor(asset), operation.Id, false);
         }
-        var operation = result.Operation;
-        operation.Status = ApiOperationStatus.Succeeded;
-        operation.Stage = "completed";
-        operation.ResourceType = "asset";
-        operation.ResourceId = asset.Hash;
-        operation.CurrentProgress = operation.TotalProgress = content.Length;
-        operation.StartedAt = operation.CreatedAt;
-        operation.UpdatedAt = DateTimeOffset.UtcNow;
-        operation.CompletedAt = operation.UpdatedAt;
-        await context.SaveChangesAsync(cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
-        return new AssetUploadResult(ToDescriptor(asset), operation.Id, false);
+        catch
+        {
+            try
+            {
+                await transaction.RollbackAsync(CancellationToken.None);
+            }
+            finally
+            {
+                context.ChangeTracker.Clear();
+            }
+            throw;
+        }
     }
 
     public Task<bool> CanAccessAsync(Guid actorUserId, string hash, CancellationToken cancellationToken) =>

@@ -45,6 +45,9 @@ public sealed class OpenAssetsController(
         CancellationToken cancellationToken)
     {
         var (_, actorId) = GetActor();
+        var restriction = await authorization.AuthorizeAsync(User, null, new ApiResourceRequirement("asset", hash));
+        if (!restriction.Succeeded)
+            return NotFound();
         var grant = await authorization.AuthorizeAsync(User, null, new ApiResourceRequirement("asset", hash, true));
         var asset = await assets.FindAccessibleAsync(hash, actorId, grant.Succeeded, cancellationToken);
         return asset is null ? NotFound() : Ok(asset);
