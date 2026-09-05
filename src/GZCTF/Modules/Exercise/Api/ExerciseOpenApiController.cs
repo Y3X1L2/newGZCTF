@@ -355,6 +355,11 @@ public sealed class ExerciseOpenApiController(
         foreach (var hash in attachments.Where(model => !string.IsNullOrWhiteSpace(model?.FileHash))
                      .Select(model => model!.FileHash!.ToLowerInvariant()).Distinct(StringComparer.Ordinal))
         {
+            var restriction = await authorization.AuthorizeAsync(User, null,
+                new ApiResourceRequirement("asset", hash));
+            if (!restriction.Succeeded)
+                throw new ExerciseApiContractException("asset_access_denied",
+                    "The token's asset grant does not allow this attachment.", 403);
             if (await assets.CanAccessAsync(actorUserId, hash, cancellationToken))
                 continue;
             var grant = await authorization.AuthorizeAsync(User, null,

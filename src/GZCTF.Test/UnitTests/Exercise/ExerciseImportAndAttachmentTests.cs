@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Security.Claims;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -13,6 +14,8 @@ using GZCTF.Models.Request.Edit;
 using GZCTF.Models.Request.Exercise;
 using GZCTF.Modules.Audit.Application;
 using GZCTF.Modules.Audit.Domain;
+using GZCTF.Modules.Content.Application;
+using GZCTF.Modules.Exercise.Api;
 using GZCTF.Modules.Exercise.Application;
 using GZCTF.Modules.Exercise.Contracts;
 using GZCTF.Modules.Exercise.Domain;
@@ -21,6 +24,9 @@ using GZCTF.Modules.Identity.Application;
 using GZCTF.Repositories;
 using GZCTF.Repositories.Interface;
 using GZCTF.Utils;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Moq;
@@ -237,6 +243,76 @@ public class ExerciseImportAndAttachmentTests
             new ActorContext(Guid.NewGuid(), Role.Teacher), "create", model, "create", default));
 
         store.VerifyNoOtherCalls();
+    }
+
+    [Theory]
+    [InlineData(true, null, true)]
+    [InlineData(true, "other", false)]
+    [InlineData(true, "matching", true)]
+    [InlineData(false, null, false)]
+    [InlineData(false, "matching", true)]
+    public async Task ExternalBinding_RespectsAssetRestrictionBeforeUploadOwnership(
+        bool ownsUpload, string? assetGrant, bool allowed)
+    {
+        await using var context = CreateContext();
+        var actor = Guid.NewGuid();
+        var tokenId = Guid.NewGuid();
+        if (ownsUpload)
+        {
+            context.ApiOperations.Add(new ApiOperation
+            {
+                ActorUserId = actor, Kind = AssetApplicationService.UploadOperationKind,
+                Status = ApiOperationStatus.Succeeded, ResourceType = "asset", ResourceId = Hash
+            });
+            await context.SaveChangesAsync();
+        }
+        var claims = new List<Claim>
+        {
+            new(ClaimTypes.NameIdentifier, actor.ToString()),
+            new(ApiTokenClaimTypes.TokenId, tokenId.ToString()),
+            new(ApiTokenClaimTypes.Resource, ApiTokenResourceClaim.Format("exercise", "*"))
+        };
+        if (assetGrant is not null)
+            claims.Add(new Claim(ApiTokenClaimTypes.Resource,
+                ApiTokenResourceClaim.Format("asset", assetGrant == "matching" ? Hash : new string('b', 64))));
+        var authorization = new Mock<IAuthorizationService>();
+        authorization.Setup(service => service.AuthorizeAsync(It.IsAny<ClaimsPrincipal>(), It.IsAny<object>(),
+                It.IsAny<IEnumerable<IAuthorizationRequirement>>()))
+            .Returns(async (ClaimsPrincipal user, object? resource, IEnumerable<IAuthorizationRequirement> requirements) =>
+            {
+                var authContext = new AuthorizationHandlerContext(requirements, user, resource);
+                await new ApiResourceAuthorizationHandler().HandleAsync(authContext);
+                return authContext.HasSucceeded ? AuthorizationResult.Success() : AuthorizationResult.Failed();
+            });
+        var store = new Mock<IExerciseMutationSubmissionStore>(MockBehavior.Strict);
+        if (allowed)
+            store.Setup(service => service.SubmitAsync(It.IsAny<ExerciseMutationSubmission>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new IdempotencyBeginResult(new ApiOperation(), false));
+        var controller = new ExerciseOpenApiController(new Mock<IExerciseManagementService>().Object,
+            new ExerciseExternalApplicationService(store.Object),
+            new AssetApplicationService(context, new Mock<IBlobRepository>().Object, null!), authorization.Object)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(new ClaimsIdentity(claims, "test")) }
+            }
+        };
+        var model = new ExternalCreateModel
+        {
+            Title = "attachment", Content = "content", Attachment = new ExerciseOpenApiAttachmentModel { FileHash = Hash }
+        };
+
+        if (allowed)
+        {
+            Assert.IsType<AcceptedResult>(await controller.Create(model, "create", default));
+            store.Verify(service => service.SubmitAsync(It.IsAny<ExerciseMutationSubmission>(), It.IsAny<CancellationToken>()), Times.Once);
+        }
+        else
+        {
+            var error = await Assert.ThrowsAsync<ExerciseApiContractException>(() => controller.Create(model, "create", default));
+            Assert.Equal(403, error.StatusCode);
+            store.VerifyNoOtherCalls();
+        }
     }
 
     static ExerciseImportItemModel ValidContainerImport() => new()
