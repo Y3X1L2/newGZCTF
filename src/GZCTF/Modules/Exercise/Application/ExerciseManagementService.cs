@@ -279,9 +279,15 @@ public sealed class ExerciseManagementService(
         AttachmentCreateModel? attachment,
         CancellationToken token = default)
     {
+        await ValidateBindingsAsync(exercise, flags, attachment, token);
+        await using var transaction = context.Database.CurrentTransaction is null
+            ? await context.Database.BeginTransactionAsync(token) : null;
         exercise.Attachment = await CreateAttachmentAsync(attachment, token);
         exercise.Flags = await CreateFlagsAsync(exercise, flags, token);
-        return await exerciseRepository.CreateExercise(exercise, token);
+        var created = await exerciseRepository.CreateExercise(exercise, token);
+        if (transaction is not null)
+            await transaction.CommitAsync(token);
+        return created;
     }
 
     public async Task<ExerciseChallenge> UpdateExerciseAsync(ExerciseChallenge exercise, CancellationToken token = default)
@@ -297,9 +303,23 @@ public sealed class ExerciseManagementService(
 
     public async Task<ExerciseChallenge?> GetExerciseForUpdateAsync(int exerciseId, CancellationToken token = default) =>
         await context.ExerciseChallenges
-            .Include(e => e.Flags)
-            .Include(e => e.Attachment)
+            .Include(e => e.Flags).ThenInclude(flag => flag.Attachment).ThenInclude(attachment => attachment!.LocalFile)
+            .Include(e => e.Attachment).ThenInclude(attachment => attachment!.LocalFile)
             .FirstOrDefaultAsync(e => e.Id == exerciseId && e.TrainingCourseId == null, token);
+
+    public async Task<ExerciseInfoModel[]> GetExerciseManagementListAsync(CancellationToken token = default) =>
+        await context.ExerciseChallenges.AsNoTracking()
+            .Where(exercise => exercise.TrainingCourseId == null)
+            .OrderBy(exercise => exercise.Id)
+            .Select(exercise => new ExerciseInfoModel
+            {
+                Id = exercise.Id, Title = exercise.Title, Category = exercise.Category,
+                Type = exercise.Type, Difficulty = exercise.Difficulty, Credit = exercise.Credit,
+                Tags = exercise.Tags ?? new(), IsEnabled = exercise.IsEnabled, PoolSource = exercise.PoolSource,
+                AcceptedCount = context.ExerciseInstances.Count(instance => instance.ExerciseId == exercise.Id &&
+                    instance.SolveTimeUtc > DateTimeOffset.FromUnixTimeSeconds(0)),
+                SubmissionCount = context.ExerciseSubmissions.Count(submission => submission.ExerciseChallengeId == exercise.Id)
+            }).ToArrayAsync(token);
 
     public async Task<ExerciseManagementPage> GetExercisePageAsync(
         ExerciseFilter? filter,
@@ -342,55 +362,22 @@ public sealed class ExerciseManagementService(
         ExerciseOpenApiAttachmentModel? attachment,
         CancellationToken token = default)
     {
-        var existing = await context.ExerciseChallenges
-            .Include(e => e.Flags)
-            .Include(e => e.Attachment)
-            .FirstOrDefaultAsync(e => e.Id == exercise.Id && e.TrainingCourseId == null, token)
+        var existing = await GetExerciseForUpdateAsync(exercise.Id, token)
             ?? throw new InvalidOperationException($"Public exercise {exercise.Id} not found");
-
-        context.Entry(existing).CurrentValues.SetValues(exercise);
-        existing.TrainingCourseId = null;
-
-        if (flags is not null)
+        var current = ExerciseManagementModel.FromExercise(existing);
+        var available = existing.Flags.ToList();
+        var requestedFlags = flags?.Select(flag =>
         {
-            foreach (var existingFlag in existing.Flags)
-                await blobRepository.DeleteAttachment(existingFlag.Attachment, token);
-            context.FlagContexts.RemoveRange(existing.Flags);
-            foreach (var flag in flags)
-            {
-                var flagCtx = new FlagContext
-                {
-                    Flag = flag.Flag,
-                    OrderIndex = flag.OrderIndex,
-                    Description = flag.Description,
-                    ScoreMode = flag.ScoreMode,
-                    FixedScore = flag.FixedScore,
-                    MaxAttempts = flag.MaxAttempts,
-                    AttachmentHash = flag.AttachmentHash,
-                    AnswerType = flag.AnswerType,
-                    CustomName = flag.CustomName,
-                    Exercise = existing,
-                    ExerciseId = exercise.Id
-                };
-                if (flag.Attachment is not null)
-                    flagCtx.Attachment = CreateAttachment(flag.Attachment);
-                context.FlagContexts.Add(flagCtx);
-            }
-        }
-
-        if (attachment is not null)
-        {
-            await blobRepository.DeleteAttachment(existing.Attachment, token);
-            existing.Attachment = CreateAttachment(attachment);
-        }
-
-        await context.SaveChangesAsync(token);
-        return existing;
+            var match = flag.Id.HasValue
+                ? available.FirstOrDefault(item => item.Id == flag.Id.Value)
+                : available.FirstOrDefault(item => item.Flag == flag.Flag && item.OrderIndex == flag.OrderIndex);
+            if (match is not null)
+                available.Remove(match);
+            return flag.ToInternalModel(flag.Id ?? match?.Id);
+        }).ToList() ?? current.Flags;
+        return await UpdateExerciseWithRelationsAsync(exercise, requestedFlags,
+            attachment?.ToInternalModel() ?? current.Attachment, token);
     }
-
-    static Attachment? CreateAttachment(ExerciseOpenApiAttachmentModel? model) => model is null
-        ? null
-        : new Attachment { Type = FileType.Remote, RemoteUrl = model.RemoteUrl };
 
     public async Task<ExerciseChallenge> UpdateExerciseWithRelationsAsync(
         ExerciseChallenge exercise,
@@ -399,14 +386,22 @@ public sealed class ExerciseManagementService(
         CancellationToken token = default)
     {
         var existing = await context.ExerciseChallenges
-            .Include(item => item.Flags)
-            .Include(item => item.Attachment)
+            .Include(item => item.Flags).ThenInclude(flag => flag.Attachment).ThenInclude(attachment => attachment!.LocalFile)
+            .Include(item => item.Attachment).ThenInclude(attachment => attachment!.LocalFile)
             .FirstOrDefaultAsync(item => item.Id == exercise.Id && item.TrainingCourseId == null, token)
             ?? throw new InvalidOperationException($"Public exercise {exercise.Id} not found");
 
+        var requestedFlags = flags ?? [];
+        if (requestedFlags.Any(flag => flag is null))
+            throw new ExerciseApiContractException("exercise_flags_invalid", "A flag cannot be null.", 422);
+        var ids = requestedFlags.Where(flag => flag.Id.HasValue).Select(flag => flag.Id!.Value).ToArray();
+        if (ids.Distinct().Count() != ids.Length || ids.Any(id => existing.Flags.All(flag => flag.Id != id)))
+            throw new ExerciseApiContractException("exercise_flag_id_invalid", "Flag IDs must be unique and belong to this exercise.", 422);
+        await ValidateBindingsAsync(exercise, requestedFlags, attachment, token);
+        await using var transaction = context.Database.CurrentTransaction is null
+            ? await context.Database.BeginTransactionAsync(token) : null;
         context.Entry(existing).CurrentValues.SetValues(exercise);
         existing.TrainingCourseId = null;
-        var requestedFlags = flags ?? [];
         var requestedIds = requestedFlags.Select(flag => flag.Id).OfType<int>().ToHashSet();
         foreach (var removedFlag in existing.Flags.Where(flag => !requestedIds.Contains(flag.Id)).ToArray())
         {
@@ -437,6 +432,8 @@ public sealed class ExerciseManagementService(
             existing.Attachment = replacement;
         }
         await context.SaveChangesAsync(token);
+        if (transaction is not null)
+            await transaction.CommitAsync(token);
         return existing;
     }
 
@@ -468,7 +465,10 @@ public sealed class ExerciseManagementService(
         AttachmentHash = model.AttachmentHash,
         AnswerType = model.AnswerType,
         CustomName = model.CustomName,
-        Attachment = model.ToAttachment(await blobRepository.GetBlobByHash(model.FileHash, token))
+        Attachment = await CreateAttachmentAsync(new AttachmentCreateModel
+        {
+            AttachmentType = model.AttachmentType, FileHash = model.FileHash, RemoteUrl = model.RemoteUrl
+        }, token)
     };
 
     async Task UpdateFlagAsync(
@@ -488,14 +488,64 @@ public sealed class ExerciseManagementService(
         flag.CustomName = model.CustomName;
         if (AttachmentMatches(flag.Attachment, model.AttachmentType, model.FileHash, model.RemoteUrl))
             return;
-        var replacement = model.ToAttachment(await blobRepository.GetBlobByHash(model.FileHash, token));
+        var replacement = await CreateAttachmentAsync(new AttachmentCreateModel
+        {
+            AttachmentType = model.AttachmentType, FileHash = model.FileHash, RemoteUrl = model.RemoteUrl
+        }, token);
         await blobRepository.DeleteAttachment(flag.Attachment, token);
         flag.Attachment = replacement;
     }
 
-    async Task<Attachment?> CreateAttachmentAsync(AttachmentCreateModel? model, CancellationToken token) => model is null
-        ? null
-        : model.ToAttachment(await blobRepository.GetBlobByHash(model.FileHash, token));
+    async Task<Attachment?> CreateAttachmentAsync(AttachmentCreateModel? model, CancellationToken token)
+    {
+        if (model is null || model.AttachmentType == FileType.None)
+            return null;
+        if (model.AttachmentType == FileType.Remote)
+            return new Attachment { Type = FileType.Remote, RemoteUrl = model.RemoteUrl };
+        var localFile = await blobRepository.IncrementBlobReference(model.FileHash!.ToLowerInvariant(), token)
+            ?? throw new ExerciseApiContractException("exercise_attachment_not_found", "The local attachment was not found.", 422);
+        return new Attachment { Type = FileType.Local, LocalFile = localFile };
+    }
+
+    async Task ValidateBindingsAsync(ExerciseChallenge exercise, List<ExerciseFlagCreateModel>? flags,
+        AttachmentCreateModel? attachment, CancellationToken token)
+    {
+        if (flags?.Any(flag => flag is null) == true)
+            throw new ExerciseApiContractException("exercise_flags_invalid", "A flag cannot be null.", 422);
+        ExerciseWriteValidation.ValidateRuntime(exercise.Type, exercise.Environment, exercise.ContainerImage,
+            exercise.ImageTemplateId, exercise.ExposePort, exercise.MemoryLimit, exercise.StorageLimit,
+            exercise.CPUCount, exercise.FlagTemplate);
+        if (exercise.ImageTemplateId.HasValue)
+        {
+            var template = await context.ImageTemplates.AsNoTracking()
+                .SingleOrDefaultAsync(item => item.Id == exercise.ImageTemplateId.Value, token);
+            if (template is not { Status: ImageStatus.Ready, ImageType: ImageType.Docker } ||
+                string.IsNullOrWhiteSpace(template.RegistryUrl))
+                throw new ExerciseApiContractException("exercise_image_template_invalid", "The image template must be a ready Docker image with a registry reference.", 422);
+            exercise.ContainerImage = template.RegistryUrl;
+        }
+        if (exercise.Type.IsContainer())
+            exercise.Environment = EnvironmentType.Docker;
+        var attachments = (flags ?? []).Select(flag => new AttachmentCreateModel
+            { AttachmentType = flag.AttachmentType, FileHash = flag.FileHash, RemoteUrl = flag.RemoteUrl })
+            .Append(attachment);
+        foreach (var model in attachments)
+        {
+            if (model is null || model.AttachmentType == FileType.None)
+                continue;
+            if (!Enum.IsDefined(model.AttachmentType))
+                throw new ExerciseApiContractException("exercise_attachment_invalid", "The attachment type is invalid.", 422);
+            var external = new ExerciseOpenApiAttachmentModel
+            {
+                FileHash = model.AttachmentType == FileType.Local ? model.FileHash : null,
+                RemoteUrl = model.AttachmentType == FileType.Remote ? model.RemoteUrl ?? string.Empty : string.Empty
+            };
+            ExerciseWriteValidation.ValidateAttachment(external);
+            if (model.AttachmentType == FileType.Local &&
+                await blobRepository.GetBlobByHash(model.FileHash!.ToLowerInvariant(), token) is null)
+                throw new ExerciseApiContractException("exercise_attachment_not_found", "The local attachment was not found.", 422);
+        }
+    }
 
     static bool AttachmentMatches(Attachment? attachment, AttachmentCreateModel? model) => model is null
         ? attachment is null

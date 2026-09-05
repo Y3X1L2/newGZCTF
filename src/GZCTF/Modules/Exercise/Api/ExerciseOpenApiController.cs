@@ -8,6 +8,7 @@ using GZCTF.Models.Data;
 using ExerciseFilter = GZCTF.Models.Request.Exercise.ExerciseFilter;
 using GZCTF.Modules.Audit.Application;
 using GZCTF.Modules.Audit.Contracts;
+using GZCTF.Modules.Content.Application;
 using GZCTF.Modules.Exercise.Application;
 using GZCTF.Modules.Exercise.Contracts;
 using GZCTF.Modules.Identity.Application;
@@ -25,6 +26,7 @@ namespace GZCTF.Modules.Exercise.Api;
 public sealed class ExerciseOpenApiController(
     IExerciseManagementService exerciseManagement,
     ExerciseExternalApplicationService mutations,
+    AssetApplicationService assets,
     IAuthorizationService authorization) : ControllerBase
 {
     [HttpGet]
@@ -91,6 +93,8 @@ public sealed class ExerciseOpenApiController(
         await AuthorizeExerciseAsync("*");
         var (tokenId, actorUserId) = GetActor();
         var normalized = model.Items.Select(NormalizeImportItem).ToArray();
+        foreach (var item in normalized)
+            await AuthorizeAttachmentsAsync(actorUserId, item.Attachment, item.Flags, cancellationToken);
         var result = await mutations.SubmitImportAsync(
             tokenId,
             new ActorContext(actorUserId, Role.Teacher, tokenId),
@@ -112,6 +116,7 @@ public sealed class ExerciseOpenApiController(
     {
         await AuthorizeExerciseAsync("*");
         var (tokenId, actorUserId) = GetActor();
+        await AuthorizeAttachmentsAsync(actorUserId, model.Attachment, model.Flags, cancellationToken);
         var result = await mutations.SubmitCreateAsync(
             tokenId,
             new ActorContext(actorUserId, Role.Teacher, tokenId),
@@ -140,6 +145,7 @@ public sealed class ExerciseOpenApiController(
                 "exercise_not_found", $"Exercise {exerciseId} not found.", 404);
 
         var (tokenId, actorUserId) = GetActor();
+        await AuthorizeAttachmentsAsync(actorUserId, model.Attachment, model.Flags, cancellationToken);
         var result = await mutations.SubmitUpdateAsync(
             exerciseId,
             tokenId,
@@ -243,9 +249,12 @@ public sealed class ExerciseOpenApiController(
     };
 
     private static ExerciseOpenApiAttachmentModel? toAttachmentModel(Attachment? attachment) =>
-        attachment?.Type == FileType.Remote && !string.IsNullOrEmpty(attachment.RemoteUrl)
-            ? new ExerciseOpenApiAttachmentModel { RemoteUrl = attachment.RemoteUrl }
-            : null;
+        attachment?.Type switch
+        {
+            FileType.Local => new ExerciseOpenApiAttachmentModel { FileHash = attachment.LocalFile?.Hash },
+            FileType.Remote => new ExerciseOpenApiAttachmentModel { RemoteUrl = attachment.RemoteUrl ?? string.Empty },
+            _ => null
+        };
 
     private static ChallengeCategory[]? ParseCategories(string? value)
     {
@@ -324,19 +333,9 @@ public sealed class ExerciseOpenApiController(
         var title = item.Title?.Trim() ?? string.Empty;
         if (externalId.Length is < 1 or > 128)
             throw new ExerciseApiContractException("exercise_external_id_invalid", "External ID must contain between 1 and 128 characters.", 422);
-        if (title.Length is < 1 or > 256)
-            throw new ExerciseApiContractException("exercise_title_invalid", "Exercise title must contain between 1 and 256 characters.", 422);
-        if (item.Content is null || item.Content.Length > 1_000_000)
-            throw new ExerciseApiContractException("exercise_content_too_large", "Exercise content cannot exceed 1,000,000 characters.", 422);
-        if (!Enum.IsDefined(item.Category) || !Enum.IsDefined(item.Type))
-            throw new ExerciseApiContractException("exercise_enum_invalid", "Exercise category or type is invalid.", 422);
-        if (item.Hints is { Count: > 100 } ||
-            item.Hints?.Any(hint => hint is null || hint.Length > 4096) == true)
-            throw new ExerciseApiContractException("exercise_hints_invalid", "An exercise may contain at most 100 hints of 4,096 characters each.", 422);
-        if (item.Flags is { Count: > 100 })
-            throw new ExerciseApiContractException("exercise_flags_invalid", "An exercise may contain at most 100 flags.", 422);
-        if (item.Flags?.Any(f => string.IsNullOrWhiteSpace(f.Flag) || f.Flag.Length > Limits.MaxFlagLength) == true)
-            throw new ExerciseApiContractException("exercise_flag_content_invalid", $"Each flag must be between 1 and {Limits.MaxFlagLength} characters.", 422);
+        item.ExternalId = externalId;
+        item.Title = title;
+        ExerciseWriteValidation.Validate(item.ToCreateModel());
         return item;
     }
 
@@ -344,6 +343,26 @@ public sealed class ExerciseOpenApiController(
     {
         var operation = ApiOperationModel.FromEntity(result.Operation);
         return Accepted($"/api/open/v1/operations/{operation.Id}", operation);
+    }
+
+    private async Task AuthorizeAttachmentsAsync(Guid actorUserId,
+        ExerciseOpenApiAttachmentModel? attachment, IReadOnlyList<ExerciseOpenApiFlagModel>? flags,
+        CancellationToken cancellationToken)
+    {
+        var attachments = (flags ?? []).Select(flag => flag?.Attachment).Append(attachment).ToArray();
+        foreach (var model in attachments)
+            ExerciseWriteValidation.ValidateAttachment(model);
+        foreach (var hash in attachments.Where(model => !string.IsNullOrWhiteSpace(model?.FileHash))
+                     .Select(model => model!.FileHash!.ToLowerInvariant()).Distinct(StringComparer.Ordinal))
+        {
+            if (await assets.CanAccessAsync(actorUserId, hash, cancellationToken))
+                continue;
+            var grant = await authorization.AuthorizeAsync(User, null,
+                new ApiResourceRequirement("asset", hash, true));
+            if (!grant.Succeeded)
+                throw new ExerciseApiContractException("asset_access_denied",
+                    "The attachment requires an owned upload or an explicit asset grant.", 403);
+        }
     }
 
     private async Task AuthorizeExerciseAsync(string resourceId)

@@ -29,6 +29,12 @@ public class ExerciseController(
         return Ok(exercises);
     }
 
+    [HttpGet("manage")]
+    [RequireTeacher]
+    [ProducesResponseType(typeof(ExerciseInfoModel[]), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetExercisesForManagement(CancellationToken token) =>
+        Ok(await managementService.GetExerciseManagementListAsync(token));
+
     [HttpGet("{id:int}")]
     public async Task<IActionResult> GetExercise(int id, CancellationToken token)
     {

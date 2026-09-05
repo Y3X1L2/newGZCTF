@@ -44,8 +44,15 @@ public sealed class ExerciseMutationOperationHandler(
         }
         catch (JsonException)
         {
+            context.ChangeTracker.Clear();
             throw new ApiOperationTerminalException(
                 "exercise_payload_invalid", "The persisted exercise operation payload is invalid.");
+        }
+        catch
+        {
+            // A failed transaction must not be flushed again while recording the operation failure.
+            context.ChangeTracker.Clear();
+            throw;
         }
     }
 
@@ -64,7 +71,9 @@ public sealed class ExerciseMutationOperationHandler(
         var payload = JsonSerializer.Deserialize<ExerciseCreatePayload>(
             job.PayloadJson!, ExerciseExternalApplicationService.JsonOptions) ?? throw new JsonException();
         var exercise = CreateExercise(payload.Model);
-        await managementService.CreateExerciseAsync(exercise, cancellationToken);
+        await managementService.CreateExerciseWithRelationsAsync(exercise,
+            payload.Model.Flags?.Select(flag => flag.ToInternalModel()).ToList(),
+            payload.Model.Attachment?.ToInternalModel(), cancellationToken);
         job.ExerciseId = exercise.Id;
         return SerializeResult([new ExerciseImportResultItem
         {
@@ -81,8 +90,10 @@ public sealed class ExerciseMutationOperationHandler(
         var imported = new List<ExerciseImportResultItem>();
         foreach (var item in payload.Items)
         {
-            var exercise = CreateExercise(item);
-            await managementService.CreateExerciseAsync(exercise, cancellationToken);
+            var exercise = CreateExercise(item.ToCreateModel());
+            await managementService.CreateExerciseWithRelationsAsync(exercise,
+                item.Flags?.Select(flag => flag.ToInternalModel()).ToList(),
+                item.Attachment?.ToInternalModel(), cancellationToken);
             imported.Add(new ExerciseImportResultItem
             {
                 ExternalId = item.ExternalId,
@@ -102,6 +113,7 @@ public sealed class ExerciseMutationOperationHandler(
             job.PayloadJson!, ExerciseExternalApplicationService.JsonOptions) ?? throw new JsonException();
         var existing = await managementService.GetExerciseForUpdateAsync(exerciseId, cancellationToken)
             ?? throw new ApiOperationTerminalException("exercise_not_found", "The exercise was not found.");
+        ExerciseWriteValidation.Validate(payload.Model);
         ApplyScalars(existing, payload.Model);
         await managementService.UpdateExerciseWithRelationsAsync(
             existing, payload.Model.Flags, payload.Model.Attachment, cancellationToken);
@@ -130,26 +142,8 @@ public sealed class ExerciseMutationOperationHandler(
     static ExerciseChallenge CreateExercise(ExerciseCreateModel model)
     {
         var exercise = new ExerciseChallenge();
+        ExerciseWriteValidation.Validate(model);
         ApplyScalars(exercise, model);
-        ApplyRelations(exercise, model.Flags, model.Attachment);
-        return exercise;
-    }
-
-    static ExerciseChallenge CreateExercise(ExerciseImportItemModel model)
-    {
-        var exercise = new ExerciseChallenge
-        {
-            Title = model.Title,
-            Content = model.Content,
-            Category = model.Category,
-            Type = model.Type,
-            Difficulty = model.Difficulty,
-            Credit = model.Credit,
-            Tags = model.Tags ?? [],
-            Hints = model.Hints,
-            IsEnabled = model.IsEnabled
-        };
-        ApplyRelations(exercise, model.Flags, model.Attachment);
         return exercise;
     }
 
@@ -176,30 +170,4 @@ public sealed class ExerciseMutationOperationHandler(
         exercise.TrainingCourseId = null;
     }
 
-    static void ApplyRelations(
-        ExerciseChallenge exercise,
-        List<ExerciseOpenApiFlagModel>? flags,
-        ExerciseOpenApiAttachmentModel? attachment)
-    {
-        exercise.Flags = flags?.Select(flag => new FlagContext
-        {
-            Exercise = exercise,
-            Flag = flag.Flag,
-            IsOccupied = false,
-            OrderIndex = flag.OrderIndex,
-            Description = flag.Description,
-            ScoreMode = flag.ScoreMode,
-            FixedScore = flag.FixedScore,
-            MaxAttempts = flag.MaxAttempts,
-            AttachmentHash = flag.AttachmentHash,
-            AnswerType = flag.AnswerType,
-            CustomName = flag.CustomName,
-            Attachment = CreateAttachment(flag.Attachment)
-        }).ToList() ?? [];
-        exercise.Attachment = CreateAttachment(attachment);
-    }
-
-    static Attachment? CreateAttachment(ExerciseOpenApiAttachmentModel? model) => model is null
-        ? null
-        : new Attachment { Type = FileType.Remote, RemoteUrl = model.RemoteUrl };
 }

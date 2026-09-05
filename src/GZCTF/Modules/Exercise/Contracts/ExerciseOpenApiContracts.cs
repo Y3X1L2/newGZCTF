@@ -10,6 +10,9 @@ namespace GZCTF.Modules.Exercise.Contracts;
 
 public sealed class ExerciseOpenApiFlagModel
 {
+    [Range(1, int.MaxValue)]
+    public int? Id { get; set; }
+
     [Required, MaxLength(Limits.MaxFlagLength)]
     public string Flag { get; set; } = string.Empty;
 
@@ -36,6 +39,15 @@ public sealed class ExerciseOpenApiFlagModel
     public string? CustomName { get; set; }
 
     public ExerciseOpenApiAttachmentModel? Attachment { get; set; }
+
+    internal GZCTF.Models.Request.Exercise.ExerciseFlagCreateModel ToInternalModel(int? id = null) => new()
+    {
+        Id = id, Flag = Flag, OrderIndex = OrderIndex, Description = Description,
+        ScoreMode = ScoreMode, FixedScore = FixedScore, MaxAttempts = MaxAttempts,
+        AttachmentHash = AttachmentHash, AnswerType = AnswerType, CustomName = CustomName,
+        AttachmentType = Attachment?.ToInternalModel().AttachmentType ?? FileType.None,
+        FileHash = Attachment?.FileHash?.ToLowerInvariant(), RemoteUrl = Attachment?.RemoteUrl
+    };
 }
 
 public sealed class ExerciseOpenApiFlagInfoModel
@@ -55,8 +67,17 @@ public sealed class ExerciseOpenApiFlagInfoModel
 
 public sealed class ExerciseOpenApiAttachmentModel
 {
-    [Required, MaxLength(2048)]
+    [MaxLength(2048)]
     public string RemoteUrl { get; set; } = string.Empty;
+
+    [MaxLength(64)]
+    public string? FileHash { get; set; }
+
+    internal GZCTF.Models.Request.Edit.AttachmentCreateModel ToInternalModel() => new()
+    {
+        AttachmentType = string.IsNullOrWhiteSpace(FileHash) ? FileType.Remote : FileType.Local,
+        FileHash = FileHash?.ToLowerInvariant(), RemoteUrl = RemoteUrl
+    };
 }
 
 public sealed class ExerciseExternalModel
@@ -180,10 +201,31 @@ public sealed class ExerciseImportItemModel
     public bool IsEnabled { get; set; } = true;
     public bool Credit { get; set; }
 
+    public string? ContainerImage { get; set; }
+    public int? MemoryLimit { get; set; }
+    public int? StorageLimit { get; set; }
+    public int? CPUCount { get; set; }
+    public int? ExposePort { get; set; }
+    public NetworkMode? NetworkMode { get; set; }
+    public EnvironmentType Environment { get; set; }
+    public int? ImageTemplateId { get; set; }
+    public string? FlagTemplate { get; set; }
+
     [MaxLength(100)]
     public List<ExerciseOpenApiFlagModel>? Flags { get; set; }
 
     public ExerciseOpenApiAttachmentModel? Attachment { get; set; }
+
+    internal ExerciseCreateModel ToCreateModel() => new()
+    {
+        Title = Title, Content = Content, Category = Category, Type = Type,
+        Difficulty = Difficulty, Credit = Credit, IsEnabled = IsEnabled,
+        Tags = Tags, Hints = Hints, ContainerImage = ContainerImage,
+        MemoryLimit = MemoryLimit, StorageLimit = StorageLimit, CPUCount = CPUCount,
+        ExposePort = ExposePort, NetworkMode = NetworkMode, Environment = Environment,
+        ImageTemplateId = ImageTemplateId, FlagTemplate = FlagTemplate,
+        Flags = Flags, Attachment = Attachment
+    };
 }
 
 public sealed class ExerciseImportResultItem
