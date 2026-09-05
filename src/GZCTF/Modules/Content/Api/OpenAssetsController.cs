@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.Net.Mime;
 using System.Security.Claims;
+using System.Text.Json.Serialization;
 using GZCTF.Modules.Content.Application;
 using GZCTF.Modules.Content.Contracts;
 using GZCTF.Modules.Identity.Application;
@@ -24,8 +25,7 @@ public sealed class OpenAssetsController(
     [RequestFormLimits(MultipartBodyLengthLimit = AssetApplicationService.MaxUploadSize)]
     [ProducesResponseType(typeof(AssetDescriptor), StatusCodes.Status201Created)]
     public async Task<IActionResult> Upload(
-        [FromForm, Required] IFormFile file,
-        [FromForm] string? filename,
+        [FromForm] AssetUploadModel model,
         [FromHeader(Name = "Idempotency-Key"), Required] string idempotencyKey,
         [FromHeader(Name = "Content-Digest"), Required] string contentDigest,
         CancellationToken cancellationToken)
@@ -35,7 +35,7 @@ public sealed class OpenAssetsController(
         var grant = await authorization.AuthorizeAsync(User, null, new ApiResourceRequirement("asset", hash));
         if (!grant.Succeeded)
             throw new AssetApiContractException("insufficient_permission", "The token does not grant this asset.", 403);
-        var result = await assets.UploadAsync(file, filename, tokenId, actorId,
+        var result = await assets.UploadAsync(model.File, model.Filename, tokenId, actorId,
             idempotencyKey, contentDigest, cancellationToken);
         Response.Headers["Operation-Location"] = $"/api/open/v1/operations/{result.OperationId}";
         return Created($"/api/open/v1/assets/{result.Asset.Hash}", result.Asset);
@@ -64,4 +64,16 @@ public sealed class OpenAssetsController(
             return (tokenId, actorId);
         throw new AssetApiContractException("authentication_required", "Authentication is required.", 401);
     }
+}
+
+public sealed class AssetUploadModel
+{
+    [Required]
+    [FromForm(Name = "file")]
+    [JsonPropertyName("file")]
+    public IFormFile File { get; set; } = null!;
+
+    [FromForm(Name = "filename")]
+    [JsonPropertyName("filename")]
+    public string? Filename { get; set; }
 }

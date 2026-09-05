@@ -7,12 +7,15 @@ public sealed class OpenApiContractOperationProcessor : IOperationProcessor
 {
     private const string IdempotencyKeyHeader = "Idempotency-Key";
     private const string DockerArchivePath = "/api/open/v1/images/docker-archives";
+    private const string AssetUploadPath = "/api/open/v1/assets";
 
     public bool Process(OperationProcessorContext context)
     {
         var operation = context.OperationDescription.Operation;
         foreach (var parameter in operation.Parameters.Where(parameter =>
-                     string.Equals(parameter.Name, IdempotencyKeyHeader, StringComparison.OrdinalIgnoreCase)))
+                     string.Equals(parameter.Name, IdempotencyKeyHeader, StringComparison.OrdinalIgnoreCase) ||
+                     context.OperationDescription.Path == AssetUploadPath &&
+                     string.Equals(parameter.Name, "Content-Digest", StringComparison.OrdinalIgnoreCase)))
             parameter.IsRequired = true;
 
         foreach (var response in operation.Responses.Where(item =>
@@ -28,7 +31,7 @@ public sealed class OpenApiContractOperationProcessor : IOperationProcessor
         if (!string.Equals(
                 context.OperationDescription.Path,
                 DockerArchivePath,
-                StringComparison.Ordinal))
+                StringComparison.Ordinal) && context.OperationDescription.Path != AssetUploadPath)
             return true;
 
         var requestBody = operation.RequestBody;
@@ -41,7 +44,8 @@ public sealed class OpenApiContractOperationProcessor : IOperationProcessor
             return true;
 
         requestBody.IsRequired = true;
-        foreach (var propertyName in new[] { "file", "name" })
+        foreach (var propertyName in context.OperationDescription.Path == AssetUploadPath
+                     ? new[] { "file" } : new[] { "file", "name" })
         {
             schema.RequiredProperties.Add(propertyName);
             if (schema.Properties.TryGetValue(propertyName, out var property))

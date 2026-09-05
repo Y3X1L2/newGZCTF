@@ -52,8 +52,9 @@ public sealed class OpenAssetsControllerTests
             }
         };
         var file = new Mock<IFormFile>(MockBehavior.Strict);
-        var error = await Assert.ThrowsAsync<AssetApiContractException>(() => controller.Upload(file.Object,
-            null, "restricted-upload", $"sha-256=:{Convert.ToBase64String(new byte[32])}:", default));
+        var error = await Assert.ThrowsAsync<AssetApiContractException>(() => controller.Upload(
+            new AssetUploadModel { File = file.Object }, "restricted-upload",
+            $"sha-256=:{Convert.ToBase64String(new byte[32])}:", default));
         Assert.Equal(403, error.StatusCode);
         Assert.Empty(await context.ApiOperations.ToArrayAsync());
         file.VerifyNoOtherCalls();
