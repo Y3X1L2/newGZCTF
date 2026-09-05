@@ -137,7 +137,7 @@ public sealed class AssetApplicationService(
         return name;
     }
 
-    static byte[] ParseContentDigest(string contentDigest)
+    internal static byte[] ParseContentDigest(string contentDigest)
     {
         const string prefix = "sha-256=:";
         var value = contentDigest?.Trim() ?? string.Empty;

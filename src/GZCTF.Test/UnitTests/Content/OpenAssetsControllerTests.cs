@@ -27,6 +27,40 @@ namespace GZCTF.Test.UnitTests.Content;
 public sealed class OpenAssetsControllerTests
 {
     [Fact]
+    public async Task Upload_RejectsNonmatchingResourceBeforeAnyStorageWrite()
+    {
+        await using var context = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
+        var blobs = new Mock<IBlobRepository>(MockBehavior.Strict);
+        var assets = new AssetApplicationService(context, blobs.Object,
+            new IdempotencyService(new EfApiOperationStore(context)));
+        var authorization = new Mock<IAuthorizationService>();
+        authorization.Setup(service => service.AuthorizeAsync(It.IsAny<ClaimsPrincipal>(),
+                It.IsAny<object>(), It.IsAny<IEnumerable<IAuthorizationRequirement>>()))
+            .ReturnsAsync(AuthorizationResult.Failed());
+        var controller = new OpenAssetsController(assets, authorization.Object)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext
+                {
+                    User = new ClaimsPrincipal(new ClaimsIdentity([
+                        new Claim(ClaimTypes.NameIdentifier, Guid.NewGuid().ToString()),
+                        new Claim(ApiTokenClaimTypes.TokenId, Guid.NewGuid().ToString())
+                    ], "test-token"))
+                }
+            }
+        };
+        var file = new Mock<IFormFile>(MockBehavior.Strict);
+        var error = await Assert.ThrowsAsync<AssetApiContractException>(() => controller.Upload(file.Object,
+            null, "restricted-upload", $"sha-256=:{Convert.ToBase64String(new byte[32])}:", default));
+        Assert.Equal(403, error.StatusCode);
+        Assert.Empty(await context.ApiOperations.ToArrayAsync());
+        file.VerifyNoOtherCalls();
+        blobs.VerifyNoOtherCalls();
+    }
+
+    [Fact]
     public void Endpoints_RequireAssetScopesAndDoNotExposeDeletion()
     {
         var controller = typeof(OpenAssetsController);

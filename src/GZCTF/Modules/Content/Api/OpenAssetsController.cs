@@ -31,6 +31,10 @@ public sealed class OpenAssetsController(
         CancellationToken cancellationToken)
     {
         var (tokenId, actorId) = GetActor();
+        var hash = Convert.ToHexStringLower(AssetApplicationService.ParseContentDigest(contentDigest));
+        var grant = await authorization.AuthorizeAsync(User, null, new ApiResourceRequirement("asset", hash));
+        if (!grant.Succeeded)
+            throw new AssetApiContractException("insufficient_permission", "The token does not grant this asset.", 403);
         var result = await assets.UploadAsync(file, filename, tokenId, actorId,
             idempotencyKey, contentDigest, cancellationToken);
         Response.Headers["Operation-Location"] = $"/api/open/v1/operations/{result.OperationId}";

@@ -72,7 +72,19 @@ jobs:
           fi
 
       - name: Run backend unit tests
-        run: dotnet test src/GZCTF.Test/GZCTF.Test.csproj --configuration Release --no-build
+        timeout-minutes: 10
+        run: >-
+          dotnet test src/GZCTF.Test/GZCTF.Test.csproj --configuration Release --no-build
+          --blame-hang --blame-hang-timeout 90s --blame-hang-dump-type none
+          --logger "console;verbosity=detailed" --logger trx
+
+      - name: Upload backend test diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-diagnostics-${{ github.sha }}
+          path: src/GZCTF.Test/TestResults
+          if-no-files-found: warn
 
       - name: Prepare Testcontainers images
         run: |
