@@ -1,3 +1,4 @@
+using GZCTF.Models;
 using GZCTF.Modules.Exercise.Contracts;
 
 namespace GZCTF.Modules.Exercise.Application;

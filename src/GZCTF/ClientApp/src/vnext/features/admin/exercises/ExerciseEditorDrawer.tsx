@@ -17,6 +17,7 @@ import {
   ExerciseAdminDraft,
   ExerciseAdminFlag,
   exerciseAdminApi,
+  normalizeExerciseRuntime,
   uploadExerciseAsset,
 } from './exerciseAdminApi'
 import styles from './ExerciseEditorDrawer.module.css'
@@ -120,7 +121,7 @@ export function ExerciseEditorDrawer({
         fileHash: flagFiles[index] ? await uploadExerciseAsset(flagFiles[index] as File) : flag.fileHash,
         remoteUrl: flag.attachmentType === FileType.Remote ? flag.remoteUrl?.trim() || null : null,
       })))
-      const payload: ExerciseAdminDraft = {
+      const payload = normalizeExerciseRuntime({
         ...draft,
         title: draft.title.trim(),
         tags: draft.tags.map((tag) => tag.trim()).filter(Boolean),
@@ -134,7 +135,7 @@ export function ExerciseEditorDrawer({
             ? draft.attachment.remoteUrl?.trim() || null
             : null,
         },
-      }
+      })
       if (exerciseId) await exerciseAdminApi.update(exerciseId, payload)
       else await exerciseAdminApi.create(payload)
       onSaved()

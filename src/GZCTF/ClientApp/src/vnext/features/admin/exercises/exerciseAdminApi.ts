@@ -59,6 +59,20 @@ export interface ExerciseAdminDraft {
   } | null
 }
 
+export function normalizeExerciseRuntime(draft: ExerciseAdminDraft): ExerciseAdminDraft {
+  if (draft.type === ChallengeType.StaticContainer || draft.type === ChallengeType.DynamicContainer) return draft
+  return {
+    ...draft,
+    environment: EnvironmentType.None,
+    imageTemplateId: null,
+    containerImage: null,
+    exposePort: null,
+    memoryLimit: null,
+    storageLimit: null,
+    cpuCount: null,
+  }
+}
+
 async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, init)
   const body = await response.json().catch(() => null) as T | { message?: string; title?: string } | null
