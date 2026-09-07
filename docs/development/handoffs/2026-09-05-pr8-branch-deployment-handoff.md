@@ -1,13 +1,13 @@
 # newGZCTF 分支交付与服务器验证交接
 
-更新时间：2026-09-06。范围仅限 newGZCTF；分支隔离部署续办已完成。
+更新时间：2026-09-07。范围仅限 newGZCTF；隔离部署与生产切换已完成，交付方式已改为 PR #9 审查。
 
 ## 任务目标
 
 - 用户已明确此前的“PR2”实际指 PR #8，不再需要确认编号。
-- 用户要求取消 PR #8，改为独立分支交付，不创建新 PR、不合并 main。
+- 用户此前要求取消 PR #8、仅交付分支；2026-09-07 改为提交 PR，已从现有 fork 分支创建 PR #9，不合并 main。
 - 已对比该分支与 `10.24.0.27` 生产版本，并在无路由隔离环境完成完整发布包、空库和生产备份副本验证；修复只推送分支。
-- 没有创建或重开 PR，没有合并 main；用户随后明确授权生产切换，已按维护窗口完成并保留备份与回退 release。
+- PR #8 未重开，PR #9 已创建但未合并；此前经用户授权完成的生产切换保留备份与回退 release，本轮不重新部署。
 
 ## 基线与交付
 
@@ -18,15 +18,17 @@
 | 原分支 | `codex/practice-consolidation`，保留，不删除 |
 | 当前分支 | `codex/practice-deployment-validation`，直接继承原 PR 提交，不重写历史 |
 | 隔离运行候选 | `9eef8ac12c626672081e81fadbde39946e7d2237` |
-| 已推送远端 | `fork-ssh`，即 `csc-dsc/newGZCTF` |
+| 已推送远端 | `fork`，即 `csc-dsc/newGZCTF`；PR 从该 fork 分支发往主仓库 |
 | 主仓库 main | `Y3X1L2/newGZCTF`，核对时为 `bbd5a5d4da8488ad4c32c7bf49523f3136e63831` |
 | PR #8 | 已关闭，`closed_at=2026-09-05T14:56:57Z`，`merged_at=null` |
-| 主仓库写权限 | API 返回 `push=false`，SSH dry-run 明确拒绝 `csc-dsc`；未能在主仓库创建分支 |
+| PR #9 | https://github.com/Y3X1L2/newGZCTF/pull/9，目标 `main`，未合并 |
+| 主仓库写权限 | API 返回 `push=false`；2026-09-07 HTTPS dry-run 仍以 403 拒绝 `csc-dsc`，因此使用 fork PR，不声称已在主仓库创建源分支 |
 | 交接提交 | 在上述代码基线上仅改文档；精确 SHA 通过 `git log -1` 获取，并核对远端同名分支 |
 
 - 分支：https://github.com/csc-dsc/newGZCTF/tree/codex/practice-deployment-validation
+- 当前 PR：https://github.com/Y3X1L2/newGZCTF/pull/9
 - 已关闭 PR：https://github.com/Y3X1L2/newGZCTF/pull/8
-- 用户认为拥有主仓库建分支权限，但当前凭据实测未获得；后续如需移至主仓库，先确认协作者权限或正确账号，不 force push、不再提交 PR。
+- 用户已确认改用 PR 交付；后续如需把源分支移至主仓库，仍须先确认写权限，不 force push，不擅自合并或重复创建 PR。
 - 原 #6/#7 及本地资料保留在轻量归档引用与 `.local-notes`，无需克隆或恢复旧 worktree。
 
 ## 当前状态
@@ -178,7 +180,7 @@ https://github.com/csc-dsc/newGZCTF/actions/runs/33979724855
 2. 生产已切到 `9eef8ac`；回退时使用 `/opt/gzctf/publish.previous` 和本次新鲜备份，不执行 EF Down 或手改 migration history。
 3. 若要在不接触生产 Docker 的条件下签收内部 `/api/Exercise`，必须提供独立 Docker 执行面，或另立任务解除只读列表 Controller 对 `DockerProvider` 构造副作用的依赖。
 4. `20260802023000_RemoveDestroyedTeamLabUdpMappings.cs` 的迁移注册缺口必须作为独立 migration reconciliation 任务处理；不得补同 ID 的猜测 Designer，也不得在生产手改 history。
-5. 保持 branch-only 交付：不重开 PR #8、不创建新 PR、不合并 main；后续生产操作必须再次获得明确授权。
+5. 当前交付入口为 PR #9；不重开 PR #8、不重复创建 PR、不擅自合并 main。后续生产操作必须再次获得明确授权。
 
 ## 本地工具与资料
 

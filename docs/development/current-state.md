@@ -1,6 +1,6 @@
 # YINYU 当前开发状态
 
-更新时间：2026-09-06
+更新时间：2026-09-07
 
 本文件只记录已经核对过的当前事实、已知缺口和下一任务入口。历史计划、阶段审查和现场流水放在 `docs/archive/implementation-records/`，不得用来判断当前代码或服务器状态。
 
@@ -144,7 +144,7 @@
 
 ## 7. 新任务起点
 
-练习模块增量见 [2026-09-05 整理记录](handoffs/2026-09-05-practice-consolidation.md)。用户已明确关闭 PR #8、不合并，改由独立分支交付。当前交接入口为 [分支与服务器验证交接](handoffs/2026-09-05-pr8-branch-deployment-handoff.md)：分支保存于 `csc-dsc/newGZCTF`，原 11 项失败、隔离部署和 `10.24.0.27` 生产切换已闭环；下一步应优先恢复或确认 `.31` 节点、补真实登录和 Docker 练习实例验收，再决定是否同步远端 Agent。不得创建 PR 或把仍为 `NOT_RUN` 的执行面写成已签收。
+练习模块增量见 [2026-09-05 整理记录](handoffs/2026-09-05-practice-consolidation.md)。用户于 2026-09-07 改为 PR 交付，已从 `csc-dsc:codex/practice-deployment-validation` 向 `Y3X1L2/newGZCTF:main` 创建 [PR #9](https://github.com/Y3X1L2/newGZCTF/pull/9)；旧 PR #8 保持关闭，本轮不合并、不重新部署。当前交接入口为 [分支与服务器验证交接](handoffs/2026-09-05-pr8-branch-deployment-handoff.md)：原 11 项失败、隔离部署和 `10.24.0.27` 生产切换已闭环；下一步应审查 PR、确认 `.31` 节点并补真实登录和 Docker 练习实例验收，再决定是否同步远端 Agent。不得把仍为 `NOT_RUN` 的执行面写成已签收。
 
 1. 同步远端并确认当前分支、工作树和 HEAD。
 2. 阅读本文件、`docs/README.md`、`AGENTS.md` 以及任务涉及模块的现行契约。

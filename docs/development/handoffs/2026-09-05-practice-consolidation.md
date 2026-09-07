@@ -1,6 +1,6 @@
 # 练习模块 PR 整理与验证
 
-> 后续状态：用户已关闭 PR #8，改为独立分支 `codex/practice-deployment-validation`，不创建新 PR。当前服务器事实和接手顺序见 [分支部署交接](2026-09-05-pr8-branch-deployment-handoff.md)；下文 PR 发布/分支名为当时的整理记录。
+> 后续状态：PR #8 已关闭；用户于 2026-09-07 改为 PR 交付，现有 `codex/practice-deployment-validation` 分支已提交 [PR #9](https://github.com/Y3X1L2/newGZCTF/pull/9)，尚未合并。当前服务器事实和接手顺序见 [分支部署交接](2026-09-05-pr8-branch-deployment-handoff.md)；下文 PR 发布/分支名为当时的整理记录。
 
 ## 结论与范围
 
