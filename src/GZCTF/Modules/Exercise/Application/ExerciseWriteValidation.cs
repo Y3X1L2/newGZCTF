@@ -38,14 +38,10 @@ internal static class ExerciseWriteValidation
     {
         if (!Enum.IsDefined(type) || !Enum.IsDefined(environment))
             throw Invalid("exercise_enum_invalid", "Exercise type or environment is invalid.");
+        if (!type.IsContainer())
+            return;
         if (environment == EnvironmentType.WindowsVM)
             throw Invalid("exercise_environment_unsupported", "Public exercises currently support Docker runtimes only.");
-        if (!type.IsContainer())
-        {
-            if (imageTemplateId.HasValue || environment != EnvironmentType.None)
-                throw Invalid("exercise_runtime_invalid", "Attachment exercises cannot bind a runtime template.");
-            return;
-        }
         if (imageTemplateId is <= 0 || (imageTemplateId is null && string.IsNullOrWhiteSpace(containerImage)))
             throw Invalid("exercise_image_required", "Container exercises require an image or a ready Docker template.");
         if (containerImage?.Length > 512)

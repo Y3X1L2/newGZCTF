@@ -41,6 +41,7 @@ describe('exerciseAdminApi', () => {
       title: 'lab', type: ChallengeType.StaticAttachment, environment: EnvironmentType.None,
       imageTemplateId: null, containerImage: null, exposePort: null,
       memoryLimit: null, storageLimit: null, cpuCount: null,
+      networkMode: null, flagTemplate: null,
     })
     expect(draft.imageTemplateId).toBe(12)
     expect(normalized.tags).toBe(draft.tags)

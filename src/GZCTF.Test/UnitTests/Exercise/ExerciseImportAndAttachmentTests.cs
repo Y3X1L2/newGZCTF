@@ -134,6 +134,65 @@ public class ExerciseImportAndAttachmentTests
         blobs.Verify(repository => repository.IncrementBlobReference(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    [Fact]
+    public async Task Update_AttachmentExerciseClearsAllRuntimeBindings()
+    {
+        await using var context = CreateContext();
+        var existing = NewExercise();
+        existing.Type = ChallengeType.StaticContainer;
+        existing.ContainerImage = "registry.test/lab:v1";
+        existing.MemoryLimit = 128;
+        existing.StorageLimit = 512;
+        existing.CPUCount = 2;
+        existing.ExposePort = 8080;
+        existing.NetworkMode = NetworkMode.Open;
+        existing.Environment = EnvironmentType.Docker;
+        existing.FlagTemplate = "flag{[GUID]}";
+        context.ExerciseChallenges.Add(existing);
+        await context.SaveChangesAsync();
+
+        var update = NewExercise();
+        update.Id = existing.Id;
+        update.ContainerImage = existing.ContainerImage;
+        update.MemoryLimit = existing.MemoryLimit;
+        update.StorageLimit = existing.StorageLimit;
+        update.CPUCount = existing.CPUCount;
+        update.ExposePort = existing.ExposePort;
+        update.NetworkMode = existing.NetworkMode;
+        update.Environment = existing.Environment;
+        update.FlagTemplate = existing.FlagTemplate;
+
+        ExerciseWriteValidation.Validate(new ExternalCreateModel
+        {
+            Title = update.Title,
+            Content = update.Content,
+            Type = update.Type,
+            ContainerImage = update.ContainerImage,
+            MemoryLimit = update.MemoryLimit,
+            StorageLimit = update.StorageLimit,
+            CPUCount = update.CPUCount,
+            ExposePort = update.ExposePort,
+            NetworkMode = update.NetworkMode,
+            Environment = update.Environment,
+            ImageTemplateId = 42,
+            FlagTemplate = update.FlagTemplate
+        });
+
+        var result = await CreateService(context, new Mock<IBlobRepository>())
+            .UpdateExerciseWithRelationsAsync(update, new List<ExerciseFlagCreateModel>(), null);
+
+        Assert.Equal(ChallengeType.StaticAttachment, result.Type);
+        Assert.Null(result.ContainerImage);
+        Assert.Null(result.MemoryLimit);
+        Assert.Null(result.StorageLimit);
+        Assert.Null(result.CPUCount);
+        Assert.Null(result.ExposePort);
+        Assert.Null(result.NetworkMode);
+        Assert.Equal(EnvironmentType.None, result.Environment);
+        Assert.Null(result.ImageTemplateId);
+        Assert.Null(result.FlagTemplate);
+    }
+
     [Theory]
     [InlineData(ImageStatus.Importing, ImageType.Docker)]
     [InlineData(ImageStatus.Ready, ImageType.Qcow2)]

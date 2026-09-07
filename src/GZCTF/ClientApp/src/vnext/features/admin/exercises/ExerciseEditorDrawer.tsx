@@ -213,7 +213,7 @@ export function ExerciseEditorDrawer({
                 <TextField label="内存 MB" min={16} onValueChange={(value) => update('memoryLimit', Number(value))} type="number" value={draft.memoryLimit ?? 128} />
                 <TextField label="存储 MB" min={16} onValueChange={(value) => update('storageLimit', Number(value))} type="number" value={draft.storageLimit ?? 256} />
                 <TextField label="CPU 配额" min={1} onValueChange={(value) => update('cpuCount', Number(value))} type="number" value={draft.cpuCount ?? 1} />
-                <SelectField label="网络模式" onValueChange={(value) => update('networkMode', value as NetworkMode)} value={draft.networkMode}>
+                <SelectField label="网络模式" onValueChange={(value) => update('networkMode', value as NetworkMode)} value={draft.networkMode ?? NetworkMode.Open}>
                   {Object.values(NetworkMode).map((value) => <option key={value} value={value}>{value}</option>)}
                 </SelectField>
                 {draft.type === ChallengeType.DynamicContainer ? <TextField label="动态 Flag 模板" onValueChange={(value) => update('flagTemplate', value)} value={draft.flagTemplate ?? ''} /> : null}

@@ -512,6 +512,7 @@ public sealed class ExerciseManagementService(
     {
         if (flags?.Any(flag => flag is null) == true)
             throw new ExerciseApiContractException("exercise_flags_invalid", "A flag cannot be null.", 422);
+        NormalizeRuntimeBindings(exercise);
         ExerciseWriteValidation.ValidateRuntime(exercise.Type, exercise.Environment, exercise.ContainerImage,
             exercise.ImageTemplateId, exercise.ExposePort, exercise.MemoryLimit, exercise.StorageLimit,
             exercise.CPUCount, exercise.FlagTemplate);
@@ -545,6 +546,22 @@ public sealed class ExerciseManagementService(
                 await blobRepository.GetBlobByHash(model.FileHash!.ToLowerInvariant(), token) is null)
                 throw new ExerciseApiContractException("exercise_attachment_not_found", "The local attachment was not found.", 422);
         }
+    }
+
+    static void NormalizeRuntimeBindings(ExerciseChallenge exercise)
+    {
+        if (exercise.Type.IsContainer())
+            return;
+
+        exercise.ContainerImage = null;
+        exercise.MemoryLimit = null;
+        exercise.StorageLimit = null;
+        exercise.CPUCount = null;
+        exercise.ExposePort = null;
+        exercise.NetworkMode = null;
+        exercise.Environment = EnvironmentType.None;
+        exercise.ImageTemplateId = null;
+        exercise.FlagTemplate = null;
     }
 
     static bool AttachmentMatches(Attachment? attachment, AttachmentCreateModel? model) => model is null

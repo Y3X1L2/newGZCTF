@@ -46,7 +46,7 @@ export interface ExerciseAdminDraft {
   storageLimit: number | null
   cpuCount: number | null
   exposePort: number | null
-  networkMode: NetworkMode
+  networkMode: NetworkMode | null
   environment: EnvironmentType
   imageTemplateId: number | null
   flagTemplate: string | null
@@ -70,6 +70,8 @@ export function normalizeExerciseRuntime(draft: ExerciseAdminDraft): ExerciseAdm
     memoryLimit: null,
     storageLimit: null,
     cpuCount: null,
+    networkMode: null,
+    flagTemplate: null,
   }
 }
 
