@@ -10,9 +10,9 @@
 | --- | --- |
 | 仓库 | `https://github.com/Y3X1L2/newGZCTF.git` |
 | 稳定分支 | `main` |
-| 当前生产基线 | 2026-09-06 特权核验为 release `practice-validation-9eef8ac12c626672081e81fadbde39946e7d2237`，提交 `9eef8ac12c626672081e81fadbde39946e7d2237`，数据库 migration head `20260816192540_TeamLabCapabilityClosure`；2026-09-07 公开前端和 OpenAPI 仍与该制品一致，但受 sudo 保护的 manifest、二进制和 migration 未重新读取 |
-| 应用回退基线 | `/opt/gzctf/publish.previous` 指向 release `docker-provisioning-inventory-3e5526dc-20260904T093342Z`，提交 `3e5526dc1ce336ac5545faacd49a9c0d1ec7ab58`；本次发布前完整备份见本文件第 5 节 |
-| 当前开发基线 | `main`；PR #9 已合并，练习管理、资产授权、Blob 引用保护及审计修复均已进入主线；新任务从最新 `origin/main` 创建 `codex/<task-name>` 功能分支 |
+| 当前生产基线 | 2026-09-07 特权复核仍为 release `practice-validation-9eef8ac12c626672081e81fadbde39946e7d2237`；manifest 372 个文件长度与 SHA-256 全部匹配，shared/files 链接正确；数据库 134 条 migration，head `20260816192540_TeamLabCapabilityClosure`。主站未重新部署或重启 |
+| 应用回退基线 | 当前 `/opt/gzctf/publish.previous` 仍指向更旧的 `docker-provisioning-inventory-3e5526dc-20260904T093342Z`；下一次发布必须显式保存并以当前 `9eef8ac...` release 为应用回退目标，不直接沿用该旧软链接；历史备份见第 5 节，新窗口仍须新鲜备份 |
+| 当前开发基线 | `main`；PR #9 审计修复、`f856bc89` Agent 启动恢复与 `ab2bd54b` 练习写接口 DTO 修复已纳入本地主线；`ab2bd54b` 同提交完整候选通过 CI 与隔离真实 Docker 验收。新任务仍须从实时 `origin/main` 创建任务分支，不将代码合并等同生产发布 |
 | 工作树结构 | 不记录某台工作机的瞬时路径；并行任务按 `AGENTS.md` 使用独立 worktree 和分支，不将服务器目录作为代码基线 |
 | 技术栈 | .NET 10、ASP.NET Core、EF Core、PostgreSQL、Redis、React 19、TypeScript、Vite、pnpm |
 
@@ -61,7 +61,7 @@
 
 这些事项不能在文档中写成“已上线”或“已签收”：
 
-1. 自主练习已进入 `main`；分支候选 `9eef8ac` 已完成隔离验证并切入 `10.24.0.27` 生产。真实 Docker 练习实例、浏览器登录态、回滚演练和内容运营验收仍未执行，不能将页面/健康检查等同于完整运行链签收。
+1. 自主练习 `9eef8ac` 已切入 `10.24.0.27`，但不含后续审计修复与 DTO 修复。最终候选 `ab2bd54b` 已通过隔离真实 Docker 创建、入口、Flag 提交、销毁及附件转换/共享引用链路；生产练习写入与实例验收、回退演练和内容运营验收仍未执行，不能把隔离测试等同生产签收。
 2. Phase 09 TeamLab networking 已在 10.24 前向迁移，相关修复包含在当前生产 `9eef8ac`；Game 23 Docker 创建、入口和销毁链路已实测。双 Worker 故障接管、长期流量留存、复杂服务注入、规模并发和完整跨节点 TeamLab 场景仍需现场签收。
 3. Windows VM 仅按比赛场景支持；平台使用镜像内固定 RDP 账号，不要求普通比赛使用 Cloudbase-Init。仍需对合格镜像完成双实例、RDP/Guacamole、剪贴板、隔离和销毁清理验收。
 4. AWDP 的真实攻击、修补、异常恢复和安全软件干扰场景由授权测试人员按 `docs/yinyu-awdp-manual-acceptance.md` 手工执行。
@@ -134,14 +134,27 @@
   manifest 和空白门禁。Release build、973 项单元、276 项集成、前端 87 文件/
   280 项测试和生产构建均通过；main push run `34094573626` 也完整成功，没有
   migration、Designer 或 snapshot 变化。
-- 同日只读复核生产：主站 PID 36118、本机 Agent PID 36120 均保持
-  `active/running`、`NRestarts=0`；首页公开前端代表文件与 `9eef8ac` CI artifact
-  摘要一致，运行 OpenAPI 为 JSON、83 条路径且规范化后与该候选一致，
-  `/api/Exercise` 为 401 JSON。`/healthz` 虽返回 200，但正文为 `Degraded`，不得写成
-  健康；受 sudo 保护的软链接、manifest、二进制摘要和 migration history 本次未重读。
-  `.30:5001` Agent 端点返回 401 JSON，`.31:5001` 仍不可连接，后者延续发布前既有故障。
-  本任务未部署或重启，因此生产不含 `3e4bd99f` 的运行修复；详见
-  [PR #9 审计交接](handoffs/2026-09-07-pr9-review-merge.md)。
+- 同日获得 sudo 授权后完成生产特权复核：主站 PID 36118、本机 Agent PID 36120
+  均保持 `active/running`、`NRestarts=0`；372 个 manifest 文件全部匹配，主站/Agent/
+  前端仍为 `9eef8ac` 制品，shared 链接正确。活动 DLL 的迁移判定为 expected 132、
+  applied 134、pending/newer 均为空；health `Degraded` 已证实来自保留的两条旧
+  Theory 历史，不是有待应用迁移。未改写历史或降低健康门禁。
+- `.31` 离线根因为主机重启丢失 `gzmgt0 / 100.127.0.1/16`，GuestManagement HTTPS
+  绑定失败导致 Agent 重启循环。保存 `/var/backups/gzctf-agent-guest-network-20260907`
+  后安装启动前网桥/专属 nft 恢复脚本与 systemd drop-in，并经已登录管理员页面调用
+  正式 Agent 同步流程，清除阻止调度的 Failed 状态。最终 PID 705090、NRestarts 0，
+  Online/Stable/schedulable，原关机 VM 保留；未整机重启，Fabric 保持 Disabled。
+- `2026-09-07T15:27Z` 三节点均 Online/Stable/schedulable；`.27/.31` Agent SHA
+  前缀同为 `2f12bca5b9befb6d`，`.30` 仍为 `3747f3535da88623` 且有 1 个心跳报告的
+  容器。未同步 `.30` 或操作其现有实例；版本差异按兼容性管理，不为 SHA 一致停业务。
+- 最终发布候选 `ab2bd54b` 修复内部练习 POST/PUT 返回 EF 实体造成的循环序列化
+  500，两项新增真实 HTTP 回归在旧代码上失败、修复后通过。Quality run
+  `34137354005` 全部成功：973 单元、278 集成、6 网络恢复测试、前端 280 项、
+  迁移模型、7 组查询计划与 OpenAPI 向后兼容。完整 Linux 发布物 994 个文件全部
+  摘要匹配；隔离 PostgreSQL/Redis/真实 Agent/嵌套 Docker 完成登录、资产授权、动态
+  练习创建/入口/提交/销毁、附件转换与共享 Blob 引用保护验收，测试资源已清理。
+  该候选尚未部署到 `.27`，详情和维护窗口方案见
+  [运行收敛交接](handoffs/2026-09-07-pr9-runtime-convergence.md)。
 
 ## 6. 当前有用文档
 
@@ -157,7 +170,7 @@
 
 ## 7. 新任务起点
 
-练习模块增量见 [2026-09-05 整理记录](handoffs/2026-09-05-practice-consolidation.md)。[PR #9](https://github.com/Y3X1L2/newGZCTF/pull/9) 已完成独立审计、必要修复并合入 `main`，当前接手入口为 [PR #9 审计交接](handoffs/2026-09-07-pr9-review-merge.md)。生产仍运行 `9eef8ac` 对应公开制品且 health 为 `Degraded`；下一步应先定位 health 具体降级项和 `.31` 离线根因，再按明确授权决定是否构建/发布最终 `main`，补真实登录与 Docker 练习实例验收。不得把源码合并或 HTTP 200 写成执行面已签收。
+练习模块增量见 [2026-09-05 整理记录](handoffs/2026-09-05-practice-consolidation.md)，PR 结论见 [PR #9 审计交接](handoffs/2026-09-07-pr9-review-merge.md)。当前接手入口为 [运行收敛与发布候选交接](handoffs/2026-09-07-pr9-runtime-convergence.md)：`.31` 已恢复并完成正式同步，health 降级已定位，`ab2bd54b` 完整包已通过隔离真实链路。生产仍运行 `9eef8ac`；下一步确认 `.27` 维护窗口和临时业务验收范围，先验证新鲜生产备份副本，再执行原子切换及生产验收。不得将源码合并、候选 CI 或 HTTP 200 写成三方统一。
 
 1. 同步远端并确认当前分支、工作树和 HEAD。
 2. 阅读本文件、`docs/README.md`、`AGENTS.md` 以及任务涉及模块的现行契约。
