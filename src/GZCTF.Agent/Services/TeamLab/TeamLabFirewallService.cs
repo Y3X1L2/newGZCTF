@@ -8,6 +8,8 @@ public sealed class TeamLabFirewallService(
     IOptions<AgentTeamLabConfig> options)
 {
     private readonly int _fabricMss = Math.Clamp(options.Value.FabricMtu - 40, 536, 8960);
+    internal Func<string, bool> CommandAvailable { get; init; } = TeamLabNetworkPrimitives.HasCommand;
+    internal bool UseNftables => CommandAvailable("nft");
 
     public Task<TeamLabDryRunResponse> ApplyRuntimePoliciesAsync(
         int runtimeId,
@@ -24,7 +26,7 @@ public sealed class TeamLabFirewallService(
         validation = TeamLabNetworkPrimitives.ValidateLinuxName(fabricInterfaceName, nameof(fabricInterfaceName));
         if (validation is not null)
             return Task.FromResult(new TeamLabDryRunResponse(false, dryRun, validation, []));
-        var commands = TeamLabNetworkPrimitives.HasCommand("nft")
+        var commands = UseNftables
             ? BuildNftRuntimePolicyCommands(runtimeId, generation, namespaceName, fabricInterfaceName, _fabricMss, policies)
             : BuildIptablesRuntimePolicyCommands(runtimeId, generation, namespaceName, fabricInterfaceName, _fabricMss, policies);
         return executor.ExecuteAsync(commands, dryRun, token);
@@ -50,7 +52,7 @@ public sealed class TeamLabFirewallService(
         }
 
         var interfaces = routerInterfaces.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
-        var commands = TeamLabNetworkPrimitives.HasCommand("nft")
+        var commands = UseNftables
             ? BuildNftInputPolicyCommands(runtimeId, generation, namespaceName, interfaces)
             : BuildIptablesInputPolicyCommands(runtimeId, generation, namespaceName, interfaces);
         return executor.ExecuteAsync(commands, dryRun, token);
@@ -82,7 +84,7 @@ public sealed class TeamLabFirewallService(
             .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal)
             .ToArray();
-        var commands = TeamLabNetworkPrimitives.HasCommand("nft")
+        var commands = UseNftables
             ? BuildNftFabricPolicyCommands(runtimeId, generation, hostInterface, routes)
             : BuildIptablesFabricPolicyCommands(runtimeId, generation, hostInterface, routes);
         return executor.ExecuteAsync(commands, dryRun, token);
@@ -103,7 +105,7 @@ public sealed class TeamLabFirewallService(
         var mssChain = MssChainName(runtimeId, generation);
         var accessChain = AccessChainName(runtimeId, generation);
         var inputChain = InputChainName(runtimeId, generation);
-        IReadOnlyList<string> commands = TeamLabNetworkPrimitives.HasCommand("nft")
+        IReadOnlyList<string> commands = UseNftables
             ? [
                 $"ip netns exec {namespaceName} nft flush chain inet gzctf_teamlab {inputChain} 2>/dev/null || true",
                 $"ip netns exec {namespaceName} nft delete chain inet gzctf_teamlab {inputChain} 2>/dev/null || true",
@@ -140,7 +142,7 @@ public sealed class TeamLabFirewallService(
         if (validation is not null)
             return Task.FromResult(new TeamLabDryRunResponse(false, dryRun, validation, []));
         var chain = FabricChainName(runtimeId, generation);
-        IReadOnlyList<string> commands = TeamLabNetworkPrimitives.HasCommand("nft")
+        IReadOnlyList<string> commands = UseNftables
             ? [
                 $"nft flush chain inet gzctf_teamlab {chain} 2>/dev/null || true",
                 $"nft delete chain inet gzctf_teamlab {chain} 2>/dev/null || true"
@@ -169,7 +171,7 @@ public sealed class TeamLabFirewallService(
         var accessChain = AccessChainName(runtimeId, generation);
         var inputChain = InputChainName(runtimeId, generation);
         var fabricChain = FabricChainName(runtimeId, generation);
-        IReadOnlyList<string> commands = TeamLabNetworkPrimitives.HasCommand("nft")
+        IReadOnlyList<string> commands = UseNftables
             ? [
                 $"if ip netns list | awk '{{print $1}}' | grep -Fx {TeamLabNetworkPrimitives.ShellQuote(namespaceName)} >/dev/null; then ! ip netns exec {namespaceName} nft list chain inet gzctf_teamlab {inputChain} >/dev/null 2>&1 && ! ip netns exec {namespaceName} nft list chain inet gzctf_teamlab {chain} >/dev/null 2>&1 && ! ip netns exec {namespaceName} nft list chain inet gzctf_teamlab {accessChain} >/dev/null 2>&1 && ! ip netns exec {namespaceName} nft list chain inet gzctf_teamlab {mssChain} >/dev/null 2>&1; fi",
                 $"! nft list chain inet gzctf_teamlab {fabricChain} >/dev/null 2>&1"

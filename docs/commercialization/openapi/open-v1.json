@@ -8821,6 +8821,124 @@
         ]
       }
     },
+    "/api/open/v1/assets": {
+      "post": {
+        "tags": [
+          "OpenAssets"
+        ],
+        "operationId": "OpenAssets_Upload",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "x-originalName": "idempotencyKey",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "Content-Digest",
+            "x-originalName": "contentDigest",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 2
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "nullable": false
+                  },
+                  "filename": {
+                    "type": "string",
+                    "nullable": true
+                  }
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssetDescriptor"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/assets/{hash}": {
+      "get": {
+        "tags": [
+          "OpenAssets"
+        ],
+        "operationId": "OpenAssets_Get",
+        "parameters": [
+          {
+            "name": "hash",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "x-position": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssetDescriptor"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
     "/api/open/v1/bootstrap-profiles": {
       "post": {
         "tags": [
@@ -13366,6 +13484,13 @@
           "flag"
         ],
         "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 2147483647.0,
+            "minimum": 1.0,
+            "nullable": true
+          },
           "flag": {
             "type": "string",
             "maxLength": 127,
@@ -13449,14 +13574,15 @@
       "ExerciseOpenApiAttachmentModel": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "remoteUrl"
-        ],
         "properties": {
           "remoteUrl": {
             "type": "string",
-            "maxLength": 2048,
-            "minLength": 1
+            "maxLength": 2048
+          },
+          "fileHash": {
+            "type": "string",
+            "maxLength": 64,
+            "nullable": true
           }
         }
       },
@@ -13855,6 +13981,50 @@
           },
           "credit": {
             "type": "boolean"
+          },
+          "containerImage": {
+            "type": "string",
+            "nullable": true
+          },
+          "memoryLimit": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "storageLimit": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "cpuCount": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "exposePort": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "networkMode": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/NetworkMode"
+              }
+            ]
+          },
+          "environment": {
+            "$ref": "#/components/schemas/EnvironmentType"
+          },
+          "imageTemplateId": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "flagTemplate": {
+            "type": "string",
+            "nullable": true
           },
           "flags": {
             "type": "array",
@@ -14644,6 +14814,25 @@
               "type": "integer",
               "format": "int32"
             }
+          }
+        }
+      },
+      "AssetDescriptor": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "hash": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "remoteUrl": {
+            "type": "string"
           }
         }
       },

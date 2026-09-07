@@ -7,7 +7,7 @@ $contracts = @{
     'participations' = @('^IX_Participations_Game_Status_Division_Team$')
     'training-progress' = @('^IX_TrainingCourseProgress_Course_Status_Updated_User$')
     'theory-tags' = @('^UX_TheoryQuestionTags_NormalizedName$', '^IX_TheoryQuestionTagBindings_Tag_Question$')
-    'deployment-queue' = @('^IX_DeploymentQueueTickets_Status_Created_Id$')
+    'deployment-queue' = @('^IX_DeploymentQueueTickets_Status_NotBefore_Created_Id$')
     'teamlab-flow' = @('^(IX_TeamLabFlows_Runtime_Generation_Time_Id|TeamLabTrafficFlows_p\d+_RuntimeId_Generation_Captured_idx)$')
     'logs' = @('^(IX_Logs_Level_Time_Id|Logs_p\d+_Level_TimeUtc_Id_idx)$')
 }

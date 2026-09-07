@@ -648,6 +648,7 @@ public class AccountController(
 
         var user = await userManager.GetUserAsync(User);
 
+        await using var transaction = await blobService.BeginTransactionAsync(token);
         if (user!.AvatarHash is not null)
             await blobService.DeleteBlobByHash(user.AvatarHash, token);
 
@@ -662,6 +663,7 @@ public class AccountController(
         if (result != IdentityResult.Success)
             return BadRequest(new RequestResponse(localizer[nameof(Resources.Program.Account_UserUpdateFailed)]));
 
+        await transaction.CommitAsync(token);
         logger.Log(StaticLocalizer[nameof(Resources.Program.Account_AvatarUpdated), avatar.Hash[..8]], user,
             TaskStatus.Success);
 

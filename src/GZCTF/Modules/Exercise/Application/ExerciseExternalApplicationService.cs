@@ -113,6 +113,22 @@ public sealed class ExerciseExternalApplicationService(IExerciseMutationSubmissi
         if (exerciseId is <= 0)
             throw new ExerciseApiContractException("exercise_not_found", "The exercise was not found.", 404);
 
+        if (payload is ExerciseCreatePayload create)
+            ExerciseWriteValidation.Validate(create.Model);
+        if (payload is ExerciseImportPayload import)
+        {
+            if (import.Items.Count is < 1 or > 100 || import.Items.Any(item => item is null))
+                throw new ExerciseApiContractException("exercise_import_invalid", "Import between 1 and 100 exercises.", 422);
+            var ids = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var item in import.Items)
+            {
+                if (string.IsNullOrWhiteSpace(item.ExternalId) || item.ExternalId.Length > 128 ||
+                    !ids.Add(item.ExternalId.Trim()))
+                    throw new ExerciseApiContractException("exercise_external_id_invalid", "External IDs must be nonempty and unique within the batch.", 422);
+                ExerciseWriteValidation.Validate(item.ToCreateModel());
+            }
+        }
+
         var normalizedKey = ExternalIdempotencyKey.Normalize(idempotencyKey);
         var payloadJson = JsonSerializer.Serialize(payload, JsonOptions);
         var requestHash = Convert.ToHexStringLower(SHA256.HashData(

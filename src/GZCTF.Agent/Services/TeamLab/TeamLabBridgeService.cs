@@ -6,6 +6,7 @@ namespace GZCTF.Agent.Services.TeamLab;
 
 public sealed partial class TeamLabBridgeService(TeamLabCommandExecutor executor)
 {
+    internal string DesiredStateRoot { get; init; } = TeamLabNetworkService.DefaultDesiredStateRoot;
     public Task<TeamLabDryRunResponse> ApplyAsync(
         TeamLabBridgeRequest request,
         CancellationToken token)
@@ -29,8 +30,8 @@ public sealed partial class TeamLabBridgeService(TeamLabCommandExecutor executor
         if (validation is not null) return Task.FromResult(Failure(validation, request.DryRun));
 
         var directory = request.Generation > 0
-            ? $"{TeamLabNetworkService.ResolveDesiredStateDirectory(request.RuntimeId, request.Generation)}/dns/{request.ServiceName}"
-            : $"/run/gzctf-teamlab/{request.ServiceName}";
+            ? $"{TeamLabNetworkService.ResolveDesiredStateDirectory(request.RuntimeId, request.Generation, DesiredStateRoot)}/dns/{request.ServiceName}"
+            : $"{DesiredStateRoot}/{request.ServiceName}";
         var hostsFile = $"{directory}/hosts";
         var leasesFile = $"{directory}/dhcp-hosts";
         var dhcpLeaseFile = $"{directory}/leases";

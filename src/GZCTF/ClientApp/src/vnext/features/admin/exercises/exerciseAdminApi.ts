@@ -12,6 +12,7 @@ import api, {
 import { ExerciseInfoDto } from '../../practice/api/practiceApi'
 
 const BASE = '/api/exercise'
+const MANAGEMENT_LIST = `${BASE}/manage`
 
 export interface ExerciseAdminFlag {
   id?: number | null
@@ -58,6 +59,20 @@ export interface ExerciseAdminDraft {
   } | null
 }
 
+export function normalizeExerciseRuntime(draft: ExerciseAdminDraft): ExerciseAdminDraft {
+  if (draft.type === ChallengeType.StaticContainer || draft.type === ChallengeType.DynamicContainer) return draft
+  return {
+    ...draft,
+    environment: EnvironmentType.None,
+    imageTemplateId: null,
+    containerImage: null,
+    exposePort: null,
+    memoryLimit: null,
+    storageLimit: null,
+    cpuCount: null,
+  }
+}
+
 async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, init)
   const body = await response.json().catch(() => null) as T | { message?: string; title?: string } | null
@@ -69,7 +84,7 @@ async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
 }
 
 export function useAdminExercises() {
-  return useSWR<ExerciseInfoDto[]>(BASE, () => requestJson<ExerciseInfoDto[]>(BASE), {
+  return useSWR<ExerciseInfoDto[]>(MANAGEMENT_LIST, () => exerciseAdminApi.list(), {
     revalidateOnFocus: false,
   })
 }
@@ -82,6 +97,9 @@ export async function uploadExerciseAsset(file: File) {
 }
 
 export const exerciseAdminApi = {
+  list() {
+    return requestJson<ExerciseInfoDto[]>(MANAGEMENT_LIST)
+  },
   detail(id: number) {
     return requestJson<ExerciseAdminDraft>(`${BASE}/${id}/manage`)
   },

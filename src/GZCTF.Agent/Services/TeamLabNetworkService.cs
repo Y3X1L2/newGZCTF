@@ -32,6 +32,8 @@ public partial class TeamLabNetworkService(
     ILogger<TeamLabNetworkService> logger)
 {
     private readonly AgentTeamLabConfig _config = options.Value;
+    internal const string DefaultDesiredStateRoot = "/run/gzctf-teamlab";
+    internal string DesiredStateRoot { get; init; } = DefaultDesiredStateRoot;
 
     public Task<TeamLabStatusResponse> GetStatusAsync(CancellationToken token)
     {
@@ -136,7 +138,7 @@ public partial class TeamLabNetworkService(
         var fabricRequest = BuildFabricRequest(normalized, request.DryRun);
         var digest = ComputeDesiredStateDigest(normalized);
         var resources = BuildInfrastructureFacts(normalized);
-        var statePath = ResolveDesiredStatePath(request.RuntimeId, request.Generation);
+        var statePath = ResolveDesiredStatePath(request.RuntimeId, request.Generation, DesiredStateRoot);
         if (!_config.DryRun && !request.DryRun && _config.Enable)
         {
             var stateDigestMatches = await DesiredStateMatchesAsync(statePath, digest, token);
@@ -240,8 +242,9 @@ public partial class TeamLabNetworkService(
             responses.SelectMany(item => item.Commands).ToArray());
     }
 
-    internal static string ResolveDesiredStateDirectory(int runtimeId, int generation) =>
-        $"/run/gzctf-teamlab/runtime-{runtimeId}/generation-{generation}";
+    internal static string ResolveDesiredStateDirectory(int runtimeId, int generation,
+        string root = DefaultDesiredStateRoot) =>
+        $"{root}/runtime-{runtimeId}/generation-{generation}";
 
     internal static string RuntimeLockKey(int runtimeId) => $"teamlab-runtime:{runtimeId}";
 
@@ -277,8 +280,9 @@ public partial class TeamLabNetworkService(
             : TeamLabCleanupOwnership.SharedResourcesNotOwned;
     }
 
-    internal static string ResolveDesiredStatePath(int runtimeId, int generation) =>
-        $"{ResolveDesiredStateDirectory(runtimeId, generation)}/state.json";
+    internal static string ResolveDesiredStatePath(int runtimeId, int generation,
+        string root = DefaultDesiredStateRoot) =>
+        $"{ResolveDesiredStateDirectory(runtimeId, generation, root)}/state.json";
 
     public async Task<TeamLabInfrastructureStateResponse> GetInfrastructureStateAsync(
         int runtimeId,
@@ -287,7 +291,7 @@ public partial class TeamLabNetworkService(
     {
         if (runtimeId <= 0 || generation <= 0)
             throw new ArgumentOutOfRangeException(nameof(runtimeId));
-        var path = ResolveDesiredStatePath(runtimeId, generation);
+        var path = ResolveDesiredStatePath(runtimeId, generation, DesiredStateRoot);
         if (!File.Exists(path))
             return new TeamLabInfrastructureStateResponse(
                 false, runtimeId, generation, 0, null, [], null);
@@ -318,7 +322,7 @@ public partial class TeamLabNetworkService(
     public async Task<IReadOnlyList<RuntimeInventoryResource>> GetManagedRuntimeInventoryAsync(
         CancellationToken token)
     {
-        const string root = "/run/gzctf-teamlab";
+        var root = DesiredStateRoot;
         List<RuntimeInventoryResource> resources = [];
         if (Directory.Exists(root))
         {
@@ -461,14 +465,15 @@ public partial class TeamLabNetworkService(
         TeamLabInfrastructureApplyRequest request,
         CancellationToken token) =>
         await runner.RunAsync(BuildInfrastructureFactProbeCommand(
-            request, Math.Clamp(_config.FabricMtu - 40, 536, 8960)), token);
+            request, Math.Clamp(_config.FabricMtu - 40, 536, 8960), DesiredStateRoot), token);
 
     internal static string BuildInfrastructureFactProbeCommand(TeamLabInfrastructureApplyRequest request) =>
         BuildInfrastructureFactProbeCommand(request, 1380);
 
     private static string BuildInfrastructureFactProbeCommand(
         TeamLabInfrastructureApplyRequest request,
-        int fabricMss)
+        int fabricMss,
+        string desiredStateRoot = DefaultDesiredStateRoot)
     {
         var namespaceName = request.RouterNamespace;
         var commands = new List<string>
@@ -482,7 +487,7 @@ public partial class TeamLabNetworkService(
             var hostInterface = TrimInterfaceName($"{namespaceName}h{index}");
             var namespaceInterface = TrimInterfaceName($"{namespaceName}n{index}");
             var pidFile =
-                $"{ResolveDesiredStateDirectory(request.RuntimeId, request.Generation)}/dns/{item.DhcpDnsServiceName}/dnsmasq.pid";
+                $"{ResolveDesiredStateDirectory(request.RuntimeId, request.Generation, desiredStateRoot)}/dns/{item.DhcpDnsServiceName}/dnsmasq.pid";
             commands.Add($"ip link show {item.BridgeName} >/dev/null");
             commands.Add($"ip link show {hostInterface} >/dev/null");
             commands.Add($"ip -o link show {hostInterface} | grep -F 'master {item.BridgeName}' >/dev/null");
@@ -865,7 +870,7 @@ public partial class TeamLabNetworkService(
         return await ExecuteOrPlanAsync(commands, request.DryRun, token);
     }
 
-    private static string[] BuildHostWireGuardCommands(TeamLabWireGuardRequest request)
+    private string[] BuildHostWireGuardCommands(TeamLabWireGuardRequest request)
     {
         var iface = request.InterfaceName;
         var commands = new List<string>
@@ -884,12 +889,12 @@ public partial class TeamLabNetworkService(
         return commands.ToArray();
     }
 
-    private static string[] BuildHostWireGuardCleanupCommands(TeamLabWireGuardCleanupRequest request)
+    private string[] BuildHostWireGuardCleanupCommands(TeamLabWireGuardCleanupRequest request)
     {
         var iface = request.InterfaceName;
         var natChain = $"TLN{iface}";
         var commands = new List<string>();
-        if (HasCommand("nft"))
+        if (firewallService.UseNftables)
         {
             commands.Add($"nft delete table ip gzctf_teamlab_nat_{iface} 2>/dev/null || true");
         }
@@ -903,7 +908,7 @@ public partial class TeamLabNetworkService(
         return commands.ToArray();
     }
 
-    private static string[] BuildHostNatCommands(string interfaceName, string peerClientAddress,
+    private string[] BuildHostNatCommands(string interfaceName, string peerClientAddress,
         IEnumerable<string> allowedCidrs)
     {
         var natChain = $"TLN{interfaceName}";
@@ -912,7 +917,7 @@ public partial class TeamLabNetworkService(
             .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal)
             .ToArray();
-        if (HasCommand("nft"))
+        if (firewallService.UseNftables)
         {
             return new[]
             {
@@ -960,9 +965,9 @@ public partial class TeamLabNetworkService(
         {
             return Failure(exception.Message, request.DryRun);
         }
-        var generationDirectory = ResolveDesiredStateDirectory(request.RuntimeId, request.Generation);
+        var generationDirectory = ResolveDesiredStateDirectory(request.RuntimeId, request.Generation, DesiredStateRoot);
         var runtimeDirectory = Path.GetDirectoryName(generationDirectory)!;
-        var desiredStateExists = File.Exists(ResolveDesiredStatePath(request.RuntimeId, request.Generation));
+        var desiredStateExists = File.Exists(ResolveDesiredStatePath(request.RuntimeId, request.Generation, DesiredStateRoot));
         var ownership = ResolveCleanupOwnership(
             activeGeneration?.Generation, request.Generation, desiredStateExists, request.DryRun);
         if (ownership == TeamLabCleanupOwnership.Refuse)
@@ -1396,7 +1401,7 @@ public partial class TeamLabNetworkService(
             .Select(cidr => $"ip netns exec {namespaceName} ip route replace {cidr} dev {interfaceName}")
             .ToArray();
 
-    private static string[] BuildPlayerNatCommands(string namespaceName, string interfaceName,
+    private string[] BuildPlayerNatCommands(string namespaceName, string interfaceName,
         string peerClientAddress, IEnumerable<string> allowedCidrs)
     {
         var chain = PlayerNatChain(interfaceName);
@@ -1405,7 +1410,7 @@ public partial class TeamLabNetworkService(
             .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal)
             .ToArray();
-        if (HasCommand("nft"))
+        if (firewallService.UseNftables)
         {
             return new[]
             {
@@ -1435,7 +1440,7 @@ public partial class TeamLabNetworkService(
 
     private static string PlayerNatChain(string interfaceName) => $"TLN{interfaceName}";
 
-    private static string[] BuildPlayerAccessCommands(int runtimeId, int generation, string namespaceName,
+    private string[] BuildPlayerAccessCommands(int runtimeId, int generation, string namespaceName,
         string interfaceName, string peerClientAddress, IEnumerable<string> allowedCidrs,
         IEnumerable<string> blockedCidrs)
     {
@@ -1450,7 +1455,7 @@ public partial class TeamLabNetworkService(
                      .Distinct(StringComparer.Ordinal)
                      .Order(StringComparer.Ordinal)
                      .ToArray();
-        if (HasCommand("nft"))
+        if (firewallService.UseNftables)
         {
             var commands = new List<string>
             {
@@ -1476,11 +1481,11 @@ public partial class TeamLabNetworkService(
         return iptables.ToArray();
     }
 
-    private static string[] BuildPlayerAccessCleanupCommands(int runtimeId, int generation,
+    private string[] BuildPlayerAccessCleanupCommands(int runtimeId, int generation,
         string namespaceName, string interfaceName)
     {
         var accessChain = TeamLabFirewallService.AccessChainName(runtimeId, generation);
-        if (HasCommand("nft"))
+        if (firewallService.UseNftables)
             return [
                 $"ip netns exec {namespaceName} nft flush chain inet gzctf_teamlab {accessChain} 2>/dev/null || true",
                 $"ip netns exec {namespaceName} nft add rule inet gzctf_teamlab {accessChain} return 2>/dev/null || true",

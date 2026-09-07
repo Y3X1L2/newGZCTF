@@ -35,6 +35,8 @@ const scopeOptions = [
   { value: 'images:read', label: '读取镜像' },
   { value: 'images:write', label: '写入镜像' },
   { value: 'images:delete', label: '删除镜像' },
+  { value: 'assets:read', label: '读取附件' },
+  { value: 'assets:write', label: '上传附件' },
   { value: 'challenges:read', label: '读取比赛题目' },
   { value: 'challenges:write', label: '导入比赛题目' },
   { value: 'challenges:delete', label: '删除比赛题目' },

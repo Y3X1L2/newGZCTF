@@ -126,10 +126,11 @@ public class AssetsController(
     [HttpDelete("api/[controller]/{hash:length(64)}")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status409Conflict)]
     [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Delete(string hash, CancellationToken token)
     {
-        var result = await blobService.DeleteBlobByHash(hash, token);
+        var result = await blobService.DeleteUnreferencedBlobByHash(hash, token);
 
         logger.SystemLog(StaticLocalizer[nameof(Resources.Program.Assets_DeleteFile), hash[..8]], result,
             LogLevel.Information);
@@ -138,6 +139,7 @@ public class AssetsController(
         {
             TaskStatus.Success => Ok(),
             TaskStatus.NotFound => NotFound(),
+            TaskStatus.Denied => Conflict(new RequestResponse("Asset is still in use.", StatusCodes.Status409Conflict)),
             _ => BadRequest(new RequestResponse(localizer[nameof(Resources.Program.File_DeletionFailed)]))
         };
     }

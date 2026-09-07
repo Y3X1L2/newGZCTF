@@ -10,6 +10,8 @@ export const tokenScopeOptions = [
   ['images:read', '读取镜像'],
   ['images:write', '写入镜像'],
   ['images:delete', '删除镜像'],
+  ['assets:read', '读取附件'],
+  ['assets:write', '上传附件'],
   ['challenges:read', '读取比赛题目'],
   ['challenges:write', '导入比赛题目'],
   ['challenges:delete', '删除比赛题目'],

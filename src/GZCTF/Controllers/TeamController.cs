@@ -681,6 +681,7 @@ public partial class TeamController(
                 return BadRequest(new RequestResponse(localizer[nameof(Resources.Program.File_SizeTooLarge)]));
         }
 
+        await using var transaction = await blobService.BeginTransactionAsync(token);
         if (team.AvatarHash is not null)
             _ = await blobService.DeleteBlobByHash(team.AvatarHash, token);
 
@@ -691,6 +692,7 @@ public partial class TeamController(
 
         team.AvatarHash = avatar.Hash;
         await teamRepository.SaveAsync(token);
+        await transaction.CommitAsync(token);
 
         logger.Log(StaticLocalizer[nameof(Resources.Program.Team_AvatarUpdated), team.Name, avatar.Hash[..8]],
             user, TaskStatus.Success);

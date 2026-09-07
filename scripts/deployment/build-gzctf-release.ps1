@@ -56,7 +56,7 @@ foreach ($relative in $required) {
     }
 }
 
-$files = Get-ChildItem $publishRoot -Recurse -File | Sort-Object FullName | ForEach-Object {
+$files = Get-ChildItem $publishRoot -Recurse -File -Force | Sort-Object FullName | ForEach-Object {
     $relative = $_.FullName.Substring($publishRoot.Length).TrimStart('\', '/').Replace('\', '/')
     [ordered]@{
         path = $relative

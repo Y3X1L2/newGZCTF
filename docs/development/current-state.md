@@ -1,6 +1,6 @@
 # YINYU 当前开发状态
 
-更新时间：2026-09-04
+更新时间：2026-09-07
 
 本文件只记录已经核对过的当前事实、已知缺口和下一任务入口。历史计划、阶段审查和现场流水放在 `docs/archive/implementation-records/`，不得用来判断当前代码或服务器状态。
 
@@ -10,11 +10,11 @@
 | --- | --- |
 | 仓库 | `https://github.com/Y3X1L2/newGZCTF.git` |
 | 稳定分支 | `main` |
-| 当前生产基线 | release `docker-provisioning-inventory-3e5526dc-20260904T093342Z`，提交 `3e5526dc1ce336ac5545faacd49a9c0d1ec7ab58`，数据库 migration head `20260816192540_TeamLabCapabilityClosure` |
-| 应用回退基线 | 上一独立 release `docker-provisioning-converged-77ae1757-20260904T091328Z`，提交 `77ae175785e358b6b3739fe8cd6118d3039b24fe`；仅用于启动失败时紧急切回，回退后本机 Docker inventory 标签缺口会重新存在，必须暂停新实例创建；数据回滚点见本文件第 5 节 |
+| 当前生产基线 | release `practice-validation-9eef8ac12c626672081e81fadbde39946e7d2237`，提交 `9eef8ac12c626672081e81fadbde39946e7d2237`，数据库 migration head `20260816192540_TeamLabCapabilityClosure` |
+| 应用回退基线 | `/opt/gzctf/publish.previous` 指向 release `docker-provisioning-inventory-3e5526dc-20260904T093342Z`，提交 `3e5526dc1ce336ac5545faacd49a9c0d1ec7ab58`；本次发布前完整备份见本文件第 5 节 |
 | 当前开发基线 | `main`；Phase 09 TeamLab networking、迁移恢复和 Game 23 Docker provisioning 修复均已合入；新任务从最新 `origin/main` 创建 `codex/<task-name>` 功能分支 |
-| 正式工作区 | `D:\Work\newGZCTF` |
-| 工作树结构 | 主 worktree 为 `D:\Work\newGZCTF`；并行任务按 `AGENTS.md` 使用独立 worktree，不将服务器目录作为代码基线 |
+| 正式工作区 | 本次工作机为 `D:\newGZCTF` |
+| 工作树结构 | 本次工作机只保留一个活动 worktree，分支为 `codex/practice-deployment-validation`；并行任务按 `AGENTS.md` 使用独立 worktree，不将服务器目录作为代码基线 |
 | 技术栈 | .NET 10、ASP.NET Core、EF Core、PostgreSQL、Redis、React 19、TypeScript、Vite、pnpm |
 
 开始新任务必须重新执行 `git fetch origin --prune`、读取 `git status` 和 `git log`。本表中的 SHA 不替代实时 Git 状态。
@@ -62,8 +62,8 @@
 
 这些事项不能在文档中写成“已上线”或“已签收”：
 
-1. 自主练习已进入 `main`，但仍需在目标生产数据库备份或副本上完成迁移、真实实例、发布、回滚和内容运营验收。
-2. Phase 09 TeamLab networking 已在 10.24 前向迁移，当前生产已推进到 `3e5526dc`；Game 23 Docker 创建、入口和销毁链路已实测。双 Worker 故障接管、长期流量留存、复杂服务注入、规模并发和完整跨节点 TeamLab 场景仍需现场签收。
+1. 自主练习已进入 `main`；分支候选 `9eef8ac` 已完成隔离验证并切入 `10.24.0.27` 生产。真实 Docker 练习实例、浏览器登录态、回滚演练和内容运营验收仍未执行，不能将页面/健康检查等同于完整运行链签收。
+2. Phase 09 TeamLab networking 已在 10.24 前向迁移，相关修复包含在当前生产 `9eef8ac`；Game 23 Docker 创建、入口和销毁链路已实测。双 Worker 故障接管、长期流量留存、复杂服务注入、规模并发和完整跨节点 TeamLab 场景仍需现场签收。
 3. Windows VM 仅按比赛场景支持；平台使用镜像内固定 RDP 账号，不要求普通比赛使用 Cloudbase-Init。仍需对合格镜像完成双实例、RDP/Guacamole、剪贴板、隔离和销毁清理验收。
 4. AWDP 的真实攻击、修补、异常恢复和安全软件干扰场景由授权测试人员按 `docs/yinyu-awdp-manual-acceptance.md` 手工执行。
 5. 统一认证对接方的门户源码不在本仓库；平台保留 Portal SSO 适配，跨网联调需在目标环境验证。
@@ -86,6 +86,49 @@
 - 同次验收发现并修复 Agent 两阶段同步门禁、心跳 `xmin` 与审计保存竞争、TeamLab `Enable` 配置持久化，以及本机 Docker 缺少 Agent inventory 标签的问题。三个节点均为 Online、Stable、schedulable，Agent SHA 前缀均为 `3747f3535da88623`；历史 image cleanup 记录从 301 条收敛为 0。生产本机 TeamLab control-plane 目标仍明确禁用，远端 Fabric 状态因此为 Disabled，不能表述为 TeamLab Fabric 已验收。
 - 本次发布前回滚备份为 `/opt/gzctf/backups/agent-sync-pre-0a3e1c63-20260904T080316Z`；custom dump SHA-256 `03f7e38a120dcb586f5095b3cf6e7b1c22d7ebbae37a780ef51e0021d819d088`，`pg_restore -l` 可读 2,041 个条目，134 条 migration。最终核心计数为用户 172、战队 76、比赛 22、比赛题目 110、课程 29、练习题 605、理论试卷 4、AWDP 服务 10、附件 217，与该备份一致。
 - 203 公网网关的 Nginx、WireGuard、动态 port-map timer 与 9091/18080 业务独立；本次只更新网关同步器所需配置，不重启或改动 9091/18080 进程。
+- 2026-09-06：`codex/practice-deployment-validation` 的运行候选
+  `9eef8ac12c626672081e81fadbde39946e7d2237` 在 fork Actions run
+  `33979724855` 通过前端 280 项、后端单元 971 项、集成 275 项、迁移模型、
+  7 组查询计划、OpenAPI 向后兼容和完整 Linux release 构建。发布 manifest
+  精确覆盖 372 个文件，前端与 release SHA 一致；发布脚本已修复 Linux dotfile
+  漏记问题。
+- 同一候选在 `10.24.0.27` 的无路由 network namespace 中完成隔离验收：空库
+  bundle 生成 132 条实际可发现迁移，主站以 `www-data` 且无 Docker/libvirt/KVM
+  文件描述符启动，首页、health、OpenAPI、注册登录、权限拒绝、资产上传幂等/
+  冲突、练习导入 operation 和附件摘要回读通过。经 SHA256SUMS 验证的
+  `agent-sync-pre-0a3e1c63-20260904T080316Z` 备份副本保持 134 条历史迁移，
+  候选 bundle 报告无待应用迁移，迁移前后用户 172、战队 76、赛事 22、赛题
+  110、课程 29、练习 605、理论试卷 4、AWDP 服务 10、文件 217、镜像 456
+  均不变。
+- `20260802023000_RemoveDestroyedTeamLabUdpMappings.cs` 缺少 Designer/迁移元数据，
+  不属于上述 132 条 bundle migration；不能把文件存在误报为可执行迁移。严格
+  隔离下内部 `/api/Exercise` 会因 Controller 构造时初始化 Docker provider 而在
+  无 socket 条件返回 500，因此生产副本上的既有练习列表与真实 Docker/KVM/
+  TeamLab 执行链仍为 `NOT_RUN`。本次未挂生产 Docker socket，未切换生产；所有
+  测试进程、容器、volume、release 和目录已删除，随后生产 release、PID、服务
+  重启次数、HTTP 状态、迁移与核心计数复核不变。
+- 2026-09-06 生产维护窗口：在确认活动部署票据、容器、VM 和 TeamLab runtime
+  均为 0 后，停止主站与 Agent，于服务器保存发布前备份
+  `/opt/gzctf/backups/practice-deployment-pre-9eef8ac-20260906T032027Z`。备份总计
+  1,359,448,361 bytes，数据库 dump 776,051,891 bytes、2,063 个 catalog 条目，
+  SHA-256 为 `fa62f3473dc3693fb23a1be4ae1c0285e6800289b3a2670160b6c9904d26284d`；
+  同时保存 schema、迁移历史、核心计数、旧 release、共享文件、应用配置、
+  systemd 和 Nginx，`SHA256SUMS` 全部通过且 catalog 包含 DataProtectionKeys。
+- 同一窗口中候选 bundle 报告 `No migrations were applied`，迁移保持 134/head
+  `20260816192540_TeamLabCapabilityClosure`，备份前后核心计数一致；随后原子切换
+  `/opt/gzctf/publish` 至 `practice-validation-9eef8ac.../publish`，旧 `3e5526dc`
+  release 保留在 `/opt/gzctf/publish.previous`。服务停止于 `03:20:27Z`，新 release
+  于 `03:26:46Z` 健康，维护窗口约 6 分 19 秒。
+- 发布后主站 PID 36118、Agent PID 36120，均 active/running、NRestarts 0；主站、
+  登录页、练习路由、配置、OpenAPI、API docs、health、metrics 和共享附件摘要检查
+  通过。manifest 372 个文件，主站/Agent/前端摘要与提交 `9eef8ac` 一致；数据库仍为
+  用户 172、战队 76、赛事 22、赛题 110、课程 29、练习 605、理论试卷 4、AWDP
+  服务 10、文件 217、镜像 456，活动票据和镜像工作均为 0，journal 无 error。
+- 节点现场状态为 Local Server 与 `worker-10.24.0.30` 在线可调度；
+  `worker-10.24.0.31` 心跳已中断约 25.9 小时，早于本次发布，不归因于切换。
+  browser-harness 因现有 Edge 未允许 remote debugging 而无法附着，未改用其他
+  浏览器工具；因此真实登录和 Docker 练习实例仍为 `NOT_RUN`。本次只切换
+  `10.24.0.27` 主站与本机 Agent，未同步远端 Worker Agent。
 
 ## 6. 当前有用文档
 
@@ -100,6 +143,8 @@
 - TeamLab：[功能说明](../commercialization/teamlab-networking-feature-guide.md)
 
 ## 7. 新任务起点
+
+练习模块增量见 [2026-09-05 整理记录](handoffs/2026-09-05-practice-consolidation.md)。用户于 2026-09-07 改为 PR 交付，已从 `csc-dsc:codex/practice-deployment-validation` 向 `Y3X1L2/newGZCTF:main` 创建 [PR #9](https://github.com/Y3X1L2/newGZCTF/pull/9)；旧 PR #8 保持关闭，本轮不合并、不重新部署。当前交接入口为 [分支与服务器验证交接](handoffs/2026-09-05-pr8-branch-deployment-handoff.md)：原 11 项失败、隔离部署和 `10.24.0.27` 生产切换已闭环；下一步应审查 PR、确认 `.31` 节点并补真实登录和 Docker 练习实例验收，再决定是否同步远端 Agent。不得把仍为 `NOT_RUN` 的执行面写成已签收。
 
 1. 同步远端并确认当前分支、工作树和 HEAD。
 2. 阅读本文件、`docs/README.md`、`AGENTS.md` 以及任务涉及模块的现行契约。

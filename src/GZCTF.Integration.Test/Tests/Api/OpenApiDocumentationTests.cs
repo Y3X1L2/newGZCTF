@@ -36,6 +36,14 @@ public sealed class OpenApiDocumentationTests
         Assert.All(document.RootElement.GetProperty("paths").EnumerateObject(), path =>
             Assert.StartsWith("/api/open/v1/", path.Name, StringComparison.Ordinal));
 
+        var upload = document.RootElement.GetProperty("paths").GetProperty("/api/open/v1/assets").GetProperty("post");
+        var form = upload.GetProperty("requestBody").GetProperty("content")
+            .GetProperty("multipart/form-data").GetProperty("schema");
+        Assert.Equal("binary", form.GetProperty("properties").GetProperty("file").GetProperty("format").GetString());
+        Assert.Contains(form.GetProperty("required").EnumerateArray(), item => item.GetString() == "file");
+        Assert.Contains(upload.GetProperty("parameters").EnumerateArray(), item =>
+            item.GetProperty("name").GetString() == "Content-Digest" && item.GetProperty("required").GetBoolean());
+
         var internalResponse = await client.GetAsync("/openapi/v1.json");
         Assert.Equal(HttpStatusCode.NotFound, internalResponse.StatusCode);
 

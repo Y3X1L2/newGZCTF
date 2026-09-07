@@ -128,6 +128,7 @@ public class GZCTFApplicationFactory : WebApplicationFactory<Program>, IAsyncLif
                 ["ConnectionStrings:Database"] = _connectionString,
                 ["ConnectionStrings:RedisCache"] = _redisConnectionString,
                 ["ConnectionStrings:Storage"] = _storageConnectionString ?? "disk://path=./files/test",
+                ["KvmSettings:ImageStoragePath"] = Path.Combine(testProjectDir, "images"),
                 ["DisableRateLimit"] = "true",
                 ["CaptchaConfig:Provider"] = "None",
                 ["XorKey"] = "integration-test-xor-key",

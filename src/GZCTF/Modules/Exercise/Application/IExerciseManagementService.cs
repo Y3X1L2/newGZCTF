@@ -28,6 +28,7 @@ public interface IExerciseManagementService
     Task<ExerciseChallenge[]> ImportFromTrainingAsync(int courseId, int[]? challengeIds = null, CancellationToken token = default);
 
     Task<ExerciseChallenge?> GetExerciseForUpdateAsync(int exerciseId, CancellationToken token = default);
+    Task<ExerciseInfoModel[]> GetExerciseManagementListAsync(CancellationToken token = default);
     Task<ExerciseManagementPage> GetExercisePageAsync(
         ExerciseFilter? filter,
         int limit,
