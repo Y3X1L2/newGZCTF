@@ -10,11 +10,10 @@
 | --- | --- |
 | 仓库 | `https://github.com/Y3X1L2/newGZCTF.git` |
 | 稳定分支 | `main` |
-| 当前生产基线 | release `practice-validation-9eef8ac12c626672081e81fadbde39946e7d2237`，提交 `9eef8ac12c626672081e81fadbde39946e7d2237`，数据库 migration head `20260816192540_TeamLabCapabilityClosure` |
+| 当前生产基线 | 2026-09-06 特权核验为 release `practice-validation-9eef8ac12c626672081e81fadbde39946e7d2237`，提交 `9eef8ac12c626672081e81fadbde39946e7d2237`，数据库 migration head `20260816192540_TeamLabCapabilityClosure`；2026-09-07 公开前端和 OpenAPI 仍与该制品一致，但受 sudo 保护的 manifest、二进制和 migration 未重新读取 |
 | 应用回退基线 | `/opt/gzctf/publish.previous` 指向 release `docker-provisioning-inventory-3e5526dc-20260904T093342Z`，提交 `3e5526dc1ce336ac5545faacd49a9c0d1ec7ab58`；本次发布前完整备份见本文件第 5 节 |
-| 当前开发基线 | `main`；Phase 09 TeamLab networking、迁移恢复和 Game 23 Docker provisioning 修复均已合入；新任务从最新 `origin/main` 创建 `codex/<task-name>` 功能分支 |
-| 正式工作区 | 本次工作机为 `D:\newGZCTF` |
-| 工作树结构 | 本次工作机只保留一个活动 worktree，分支为 `codex/practice-deployment-validation`；并行任务按 `AGENTS.md` 使用独立 worktree，不将服务器目录作为代码基线 |
+| 当前开发基线 | `main`；PR #9 已合并，练习管理、资产授权、Blob 引用保护及审计修复均已进入主线；新任务从最新 `origin/main` 创建 `codex/<task-name>` 功能分支 |
+| 工作树结构 | 不记录某台工作机的瞬时路径；并行任务按 `AGENTS.md` 使用独立 worktree 和分支，不将服务器目录作为代码基线 |
 | 技术栈 | .NET 10、ASP.NET Core、EF Core、PostgreSQL、Redis、React 19、TypeScript、Vite、pnpm |
 
 开始新任务必须重新执行 `git fetch origin --prune`、读取 `git status` 和 `git log`。本表中的 SHA 不替代实时 Git 状态。
@@ -129,6 +128,20 @@
   browser-harness 因现有 Edge 未允许 remote debugging 而无法附着，未改用其他
   浏览器工具；因此真实登录和 Docker 练习实例仍为 `NOT_RUN`。本次只切换
   `10.24.0.27` 主站与本机 Agent，未同步远端 Worker Agent。
+- 2026-09-07 PR #9 独立审计完成：原 head `bd1e546e` 以 merge commit
+  `c615e61d` 纳入 `main`，并追加 `3e4bd99f` 修复容器题转附件题时服务端残留
+  运行字段、`51c2884f` 强化 PostgreSQL 并发上传、OpenAPI 敏感字段、隐藏文件
+  manifest 和空白门禁。Release build、973 项单元、276 项集成、前端 87 文件/
+  280 项测试和生产构建均通过；main push run `34094573626` 也完整成功，没有
+  migration、Designer 或 snapshot 变化。
+- 同日只读复核生产：主站 PID 36118、本机 Agent PID 36120 均保持
+  `active/running`、`NRestarts=0`；首页公开前端代表文件与 `9eef8ac` CI artifact
+  摘要一致，运行 OpenAPI 为 JSON、83 条路径且规范化后与该候选一致，
+  `/api/Exercise` 为 401 JSON。`/healthz` 虽返回 200，但正文为 `Degraded`，不得写成
+  健康；受 sudo 保护的软链接、manifest、二进制摘要和 migration history 本次未重读。
+  `.30:5001` Agent 端点返回 401 JSON，`.31:5001` 仍不可连接，后者延续发布前既有故障。
+  本任务未部署或重启，因此生产不含 `3e4bd99f` 的运行修复；详见
+  [PR #9 审计交接](handoffs/2026-09-07-pr9-review-merge.md)。
 
 ## 6. 当前有用文档
 
@@ -144,7 +157,7 @@
 
 ## 7. 新任务起点
 
-练习模块增量见 [2026-09-05 整理记录](handoffs/2026-09-05-practice-consolidation.md)。用户于 2026-09-07 改为 PR 交付，已从 `csc-dsc:codex/practice-deployment-validation` 向 `Y3X1L2/newGZCTF:main` 创建 [PR #9](https://github.com/Y3X1L2/newGZCTF/pull/9)；旧 PR #8 保持关闭，本轮不合并、不重新部署。当前交接入口为 [分支与服务器验证交接](handoffs/2026-09-05-pr8-branch-deployment-handoff.md)：原 11 项失败、隔离部署和 `10.24.0.27` 生产切换已闭环；下一步应审查 PR、确认 `.31` 节点并补真实登录和 Docker 练习实例验收，再决定是否同步远端 Agent。不得把仍为 `NOT_RUN` 的执行面写成已签收。
+练习模块增量见 [2026-09-05 整理记录](handoffs/2026-09-05-practice-consolidation.md)。[PR #9](https://github.com/Y3X1L2/newGZCTF/pull/9) 已完成独立审计、必要修复并合入 `main`，当前接手入口为 [PR #9 审计交接](handoffs/2026-09-07-pr9-review-merge.md)。生产仍运行 `9eef8ac` 对应公开制品且 health 为 `Degraded`；下一步应先定位 health 具体降级项和 `.31` 离线根因，再按明确授权决定是否构建/发布最终 `main`，补真实登录与 Docker 练习实例验收。不得把源码合并或 HTTP 200 写成执行面已签收。
 
 1. 同步远端并确认当前分支、工作树和 HEAD。
 2. 阅读本文件、`docs/README.md`、`AGENTS.md` 以及任务涉及模块的现行契约。
