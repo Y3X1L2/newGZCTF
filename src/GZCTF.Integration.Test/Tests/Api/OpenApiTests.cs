@@ -241,16 +241,10 @@ public class OpenApiTests(GZCTFApplicationFactory factory, ITestOutputHelper out
             .ToArray();
 
         Assert.NotEmpty(teamLabSchemas);
-        foreach (var schema in teamLabSchemas)
-        {
-            if (!schema.Value.TryGetProperty("properties", out var properties)) continue;
-            Assert.False(properties.TryGetProperty("runtimeResourceId", out _),
-                $"{schema.Name} must not expose runtimeResourceId.");
-            Assert.False(properties.TryGetProperty("protectedDownloadToken", out _),
-                $"{schema.Name} must not expose protectedDownloadToken.");
-            Assert.False(properties.TryGetProperty("protectedSecret", out _),
-                $"{schema.Name} must not expose protectedSecret.");
-        }
+        var serialized = string.Join('\n', teamLabSchemas.Select(schema => schema.Value.GetRawText()));
+        Assert.DoesNotContain("runtimeResourceId", serialized, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("protectedDownloadToken", serialized, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("protectedSecret", serialized, StringComparison.OrdinalIgnoreCase);
 
         var openRequestSchemas = schemas.EnumerateObject()
             .Where(schema => schema.Name.StartsWith("Open", StringComparison.Ordinal) &&

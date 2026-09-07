@@ -1,11 +1,17 @@
 using GZCTF.Integration.Test.Base;
 using GZCTF.Models.Data;
 using GZCTF.Infrastructure.Persistence.Governance;
+using GZCTF.Modules.Audit.Application;
 using GZCTF.Modules.Audit.Domain;
+using GZCTF.Modules.Audit.Infrastructure;
+using GZCTF.Modules.Content.Application;
+using GZCTF.Modules.Content.Contracts;
+using GZCTF.Modules.Identity.Domain;
 using GZCTF.Repositories;
 using GZCTF.Storage;
 using GZCTF.Storage.Interface;
 using GZCTF.Utils;
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
@@ -89,6 +95,60 @@ public sealed class BlobReferenceSafetyIntegrationTests(GZCTFApplicationFactory 
 
             await using var verify = database.CreateContext();
             Assert.Equal(7u, (await verify.Files.SingleAsync()).ReferenceCount);
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
+    public async Task ConcurrentAssetUploadRetry_ReusesOneOperationAndOneBlobReference()
+    {
+        await using var database = await IsolatedPostgresDatabase.CreateAsync(factory.DatabaseConnectionString);
+        var root = Path.Combine(Path.GetTempPath(), "gzctf-blob-safety", Guid.NewGuid().ToString("N"));
+        try
+        {
+            var storage = StorageProviderFactory.Create($"disk://path={root}");
+            Guid actorId;
+            Guid apiTokenId;
+            await using (var setup = database.CreateContext())
+            {
+                var actor = new UserInfo { UserName = $"asset{Guid.NewGuid():N}"[..13] };
+                var apiToken = new ApiToken
+                {
+                    Name = "concurrent asset upload",
+                    CreatorId = actor.Id,
+                    SecretHash = new byte[32]
+                };
+                setup.Users.Add(actor);
+                setup.Set<ApiToken>().Add(apiToken);
+                await setup.SaveChangesAsync();
+                actorId = actor.Id;
+                apiTokenId = apiToken.Id;
+            }
+
+            var payload = "concurrent-asset"u8.ToArray();
+            var digest = $"sha-256=:{Convert.ToBase64String(System.Security.Cryptography.SHA256.HashData(payload))}:";
+            async Task<AssetUploadResult> UploadAsync()
+            {
+                await using var context = database.CreateContext();
+                var repository = new BlobRepository(context, NullLogger<BlobRepository>.Instance, storage);
+                var service = new AssetApplicationService(context, repository,
+                    new IdempotencyService(new EfApiOperationStore(context)));
+                await using var content = new MemoryStream(payload);
+                var file = new FormFile(content, 0, payload.Length, "file", "asset.bin");
+                return await service.UploadAsync(file, null, apiTokenId, actorId,
+                    "concurrent-upload", digest, default);
+            }
+
+            var results = await Task.WhenAll(Enumerable.Range(0, 4).Select(_ => UploadAsync()));
+
+            Assert.Single(results.Select(result => result.OperationId).Distinct());
+            Assert.Single(results, result => !result.Reused);
+            await using var verify = database.CreateContext();
+            Assert.Equal(1u, (await verify.Files.SingleAsync()).ReferenceCount);
+            Assert.Single(await verify.ApiOperations.ToArrayAsync());
         }
         finally
         {

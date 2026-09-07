@@ -57,6 +57,18 @@ public sealed class RegistrySetupScriptTests
     }
 
     [Fact]
+    public void ReleaseBuildScript_IncludesHiddenFilesInManifest()
+    {
+        var script = ReadRepositoryFile("scripts", "deployment", "build-gzctf-release.ps1");
+
+        Assert.Contains("Get-ChildItem $publishRoot -Recurse -File -Force", script, StringComparison.Ordinal);
+        Assert.True(
+            script.IndexOf("Get-ChildItem $publishRoot", StringComparison.Ordinal) <
+            script.IndexOf("Copy-Item $manifestPath", StringComparison.Ordinal),
+            "The manifest must enumerate the complete publish tree before it is copied into the archive.");
+    }
+
+    [Fact]
     public void GatewaySyncTimer_TriggersWhenStartedAfterBoot()
     {
         var timer = ReadRepositoryFile("scripts", "gateway", "gzctf-port-map-sync.timer");
