@@ -71,6 +71,9 @@ jobs:
             exit 1
           fi
 
+      - name: Verify Agent guest network recovery
+        run: python3 -m unittest discover -s scripts/deployment -p test_restore_agent_guest_network.py -v
+
       - name: Run backend unit tests
         timeout-minutes: 10
         run: >-
