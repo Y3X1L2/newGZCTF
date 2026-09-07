@@ -155,7 +155,7 @@ public class ExerciseController(
 
         var created = await managementService.CreateExerciseWithRelationsAsync(
             exercise, model.Flags, model.Attachment, token);
-        return Ok(created);
+        return Ok(ExerciseManagementModel.FromExercise(created));
     }
 
     [HttpPut("{id:int}")]
@@ -187,7 +187,7 @@ public class ExerciseController(
                 SubmissionLimit = model.SubmissionLimit
             }, model.Flags, model.Attachment, token);
 
-        return Ok(exercise);
+        return Ok(ExerciseManagementModel.FromExercise(exercise));
     }
 
     [HttpDelete("{id:int}")]

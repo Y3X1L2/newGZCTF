@@ -34,3 +34,11 @@
 - 恢复后发现主站 AgentUpdateState 仍为 Failed，实际调度仍被阻止；用户提供已登录的管理员浏览器，从正式节点页提交 `.31` 同步。
 - 同步使用配置中的旧公网下载地址，下载阶段较慢，最终于 `2026-09-07T14:21:45Z` 成功；另通过内网维护接口复核 Agent/传感器已经是相同摘要，返回 already up to date。主站节点状态为 Online、IsSchedulable=true、AgentUpdateState=Stable，心跳摘要与本机 Agent 同为 `2f12bca5...`，Fabric 仍 Disabled。未直接改写节点数据库状态。
 - 新脚本 6 项单元测试通过，并加入 Quality CI；只恢复来宾管理网络，不启用 TeamLab/Fabric。
+
+## 发布包实测与新增阻断
+
+- `f856bc89` 完整发布包构建成功，前后端 manifest SHA 一致，994 个文件摘要全部通过。其 CI run `34132973273` 完整通过。
+- 本机隔离 PostgreSQL、Redis、嵌套 Docker 29.8.0 和发布包主站/Agent 实测通过：Linux bundle 创建 132 条迁移、主站无默认出口路由、真实 Agent 心跳、管理员登录、资产上传/幂等/冲突/限制、动态 Docker 创建、TCP 入口、实例 Flag 提交和销毁。
+- **P1 阻断，代码已修复**：练习创建/更新返回 EF 实体，带 Flag 时响应形成 `Flags.Exercise.Flags` 循环；事务已提交但 HTTP 返回 500，可能诱发重复创建。实际发布包的容器转附件流程复现；新增两项真实 HTTP 集成测试在旧代码上均得到 500，DTO 修复后 2/2 通过。
+- 修复使用既有 `ExerciseManagementModel.FromExercise` 作为创建和更新响应，与管理详情契约一致。原 `f856bc89` 包不得用于主站正式切换；修复验证后重新构建独立候选。
+- 本机 Docker Desktop 启动曾受失效 Unix socket 阻塞；保留两个仅含零字节 socket 的目录为 `run.pr9-backup-20260907` 和 `docker-secrets-engine.pr9-backup-20260907`，用户重新打开后引擎正常。未恢复出厂设置或删除镜像、数据卷。

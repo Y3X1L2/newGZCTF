@@ -18,6 +18,65 @@ public sealed class ExerciseWorkflowTests(GZCTFApplicationFactory factory)
     private const string Password = "Exercise@Test123";
 
     [Fact]
+    public async Task ManagementCreate_ReturnsDraftWithoutEntityNavigationCycles()
+    {
+        var teacher = await TestDataSeeder.CreateUserAsync(
+            factory.Services, TestDataSeeder.RandomName(), Password, role: Role.Teacher);
+        using var client = factory.CreateClient();
+        (await client.PostAsJsonAsync("/api/Account/LogIn",
+            new LoginModel { UserName = teacher.UserName, Password = Password })).EnsureSuccessStatusCode();
+
+        using var response = await client.PostAsJsonAsync("/api/exercise", new
+        {
+            title = "Management create " + Guid.NewGuid().ToString("N"),
+            content = "Management response regression",
+            type = "StaticAttachment",
+            flags = new[]
+            {
+                new { flag = "flag{first}", orderIndex = 0 },
+                new { flag = "flag{second}", orderIndex = 1 }
+            }
+        });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var draft = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(draft.GetProperty("id").GetInt32() > 0);
+        Assert.Equal(2, draft.GetProperty("flags").GetArrayLength());
+        foreach (var flag in draft.GetProperty("flags").EnumerateArray())
+        {
+            Assert.True(flag.GetProperty("id").GetInt32() > 0);
+            Assert.Equal("None", flag.GetProperty("attachmentType").GetString());
+            Assert.False(flag.TryGetProperty("exercise", out _));
+        }
+    }
+
+    [Fact]
+    public async Task ManagementUpdate_ReturnsDraftAndPreservesFlagIdentity()
+    {
+        var teacher = await TestDataSeeder.CreateUserAsync(
+            factory.Services, TestDataSeeder.RandomName(), Password, role: Role.Teacher);
+        var fixture = await CreateExercisesAsync();
+        using var client = factory.CreateClient();
+        (await client.PostAsJsonAsync("/api/Account/LogIn",
+            new LoginModel { UserName = teacher.UserName, Password = Password })).EnsureSuccessStatusCode();
+
+        using var response = await client.PutAsJsonAsync($"/api/exercise/{fixture.StaticExerciseId}", new
+        {
+            title = "Updated management response", content = "Updated content", type = "StaticAttachment",
+            flags = new[] { new { id = fixture.StaticFlagId, flag = fixture.StaticFlag, orderIndex = 0 } }
+        });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var draft = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(fixture.StaticExerciseId, draft.GetProperty("id").GetInt32());
+        Assert.Equal("Updated management response", draft.GetProperty("title").GetString());
+        var flag = Assert.Single(draft.GetProperty("flags").EnumerateArray());
+        Assert.Equal(fixture.StaticFlagId, flag.GetProperty("id").GetInt32());
+        Assert.Equal("None", flag.GetProperty("attachmentType").GetString());
+        Assert.False(flag.TryGetProperty("exercise", out _));
+    }
+
+    [Fact]
     public async Task Student_CanBrowseSolveAndQueueExerciseContainer()
     {
         var user = await TestDataSeeder.CreateUserAsync(
