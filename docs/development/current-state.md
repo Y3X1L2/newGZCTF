@@ -12,7 +12,7 @@
 | 稳定分支 | `main` |
 | 当前生产基线 | 2026-09-07 特权复核仍为 release `practice-validation-9eef8ac12c626672081e81fadbde39946e7d2237`；manifest 372 个文件长度与 SHA-256 全部匹配，shared/files 链接正确；数据库 134 条 migration，head `20260816192540_TeamLabCapabilityClosure`。主站未重新部署或重启 |
 | 应用回退基线 | 当前 `/opt/gzctf/publish.previous` 仍指向更旧的 `docker-provisioning-inventory-3e5526dc-20260904T093342Z`；下一次发布必须显式保存并以当前 `9eef8ac...` release 为应用回退目标，不直接沿用该旧软链接；历史备份见第 5 节，新窗口仍须新鲜备份 |
-| 当前开发基线 | `main`；PR #9 审计修复、`f856bc89` Agent 启动恢复与 `ab2bd54b` 练习写接口 DTO 修复已纳入本地主线；`ab2bd54b` 同提交完整候选通过 CI 与隔离真实 Docker 验收。新任务仍须从实时 `origin/main` 创建任务分支，不将代码合并等同生产发布 |
+| 当前开发基线 | `main`；PR #9 审计修复、`f856bc89` Agent 启动恢复与 `ab2bd54b` 练习写接口 DTO 修复已纳入本地及 GitHub 主线；`ab2bd54b` 同提交完整候选通过 CI 与隔离真实 Docker 验收。新任务仍须从实时 `origin/main` 创建任务分支，不将代码合并等同生产发布 |
 | 工作树结构 | 不记录某台工作机的瞬时路径；并行任务按 `AGENTS.md` 使用独立 worktree 和分支，不将服务器目录作为代码基线 |
 | 技术栈 | .NET 10、ASP.NET Core、EF Core、PostgreSQL、Redis、React 19、TypeScript、Vite、pnpm |
 

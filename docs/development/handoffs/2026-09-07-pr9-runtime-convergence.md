@@ -71,6 +71,9 @@
 
 ## 完成边界与下一步
 
+- 已在推送前重新核对远端未前进，将验证后的代码与文档快进推入 `main`；核对时本地 main、GitHub main 与任务分支均为 `8aff8f33bd25f2c50d856d95daa176c6ce85116f`。之后仅追加收尾文档，不改候选 `ab2bd54b` 的运行代码；文档提交使用 `[skip ci]`，完整候选 CI 证据仍为 run `34137354005`。
+- 日常 `codex/pve-storage-safeguards` 已正常 merge 主线，保留独立提交 `e65b7d5f` 与 3 行 PVE 现场记录，源码与主干一致；该功能分支未推送，不删除或强制对齐其 SHA。其他历史 worktree 未改动。
+- 已删除本任务在 `.27` 上传的 `/tmp/gzctf-pr9-migration-probe.dll` 与 `.31` 的 `/tmp/gzctf-pr9-guest-network.py`、`.conf`，本地原文件和正式安装可用于恢复；正式脚本、drop-in、root 备份及发布归档均保留，SSH 诊断会话已关闭。
 - `.31` 在线恢复和平台正式同步已完成；`.27` 主站未部署、未重启，PID 36118、本机 Agent PID 36120、NRestarts 均保持 0。生产仍是 `9eef8ac...`，未包含本次 DTO 修复和 PR 审计后的运行修复。
 - 发布候选已完成完整 CI 和隔离真实 Docker 链路，不等同于生产已切换或所有基础设施签收；三方尚未统一。
 - 尚待：主站正式切换授权、新鲜生产备份副本恢复验证、生产练习写入/实例链路验收和回退演练；`.31` 整机重启持久性、KVM/Windows VM、跨节点 TeamLab、AWDP、Portal SSO 与公网入口专项验收不在本轮完成范围。
