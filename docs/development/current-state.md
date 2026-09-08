@@ -1,6 +1,6 @@
 # YINYU 当前开发状态
 
-更新时间：2026-09-07
+更新时间：2026-09-08
 
 本文件只记录已经核对过的当前事实、已知缺口和下一任务入口。历史计划、阶段审查和现场流水放在 `docs/archive/implementation-records/`，不得用来判断当前代码或服务器状态。
 
@@ -10,8 +10,8 @@
 | --- | --- |
 | 仓库 | `https://github.com/Y3X1L2/newGZCTF.git` |
 | 稳定分支 | `main` |
-| 当前生产基线 | 2026-09-07 特权复核仍为 release `practice-validation-9eef8ac12c626672081e81fadbde39946e7d2237`；manifest 372 个文件长度与 SHA-256 全部匹配，shared/files 链接正确；数据库 134 条 migration，head `20260816192540_TeamLabCapabilityClosure`。主站未重新部署或重启 |
-| 应用回退基线 | 当前 `/opt/gzctf/publish.previous` 仍指向更旧的 `docker-provisioning-inventory-3e5526dc-20260904T093342Z`；下一次发布必须显式保存并以当前 `9eef8ac...` release 为应用回退目标，不直接沿用该旧软链接；历史备份见第 5 节，新窗口仍须新鲜备份 |
+| 当前生产基线 | 2026-09-08 已发布 `pr9-converged-ab2bd54b7e16d454e3a8f54960c4bb4689047c4a-20260908`；主站及本机 Agent 对应 `ab2bd54b`，manifest 994 文件匹配、shared/files 链接正确；数据库 134 条 migration，head `20260816192540_TeamLabCapabilityClosure`。两份备份恢复验证通过；用户确认业务测试完成、临时题已删除，停止联网后未复核资源清理 |
+| 应用回退基线 | `/opt/gzctf/publish.previous` 已指向 `practice-validation-9eef8ac12c626672081e81fadbde39946e7d2237/publish`；新鲜备份 `/opt/gzctf/backups/pr9-rollout-pre-ab2bd54b-20260908T080802Z`，包含停止写入后的数据库与附件备份、恢复和后置报告；旧版本和备份均保留 |
 | 当前开发基线 | `main`；PR #9 审计修复、`f856bc89` Agent 启动恢复与 `ab2bd54b` 练习写接口 DTO 修复已纳入本地及 GitHub 主线；`ab2bd54b` 同提交完整候选通过 CI 与隔离真实 Docker 验收。新任务仍须从实时 `origin/main` 创建任务分支，不将代码合并等同生产发布 |
 | 工作树结构 | 不记录某台工作机的瞬时路径；并行任务按 `AGENTS.md` 使用独立 worktree 和分支，不将服务器目录作为代码基线 |
 | 技术栈 | .NET 10、ASP.NET Core、EF Core、PostgreSQL、Redis、React 19、TypeScript、Vite、pnpm |
@@ -61,12 +61,13 @@
 
 这些事项不能在文档中写成“已上线”或“已签收”：
 
-1. 自主练习 `9eef8ac` 已切入 `10.24.0.27`，但不含后续审计修复与 DTO 修复。最终候选 `ab2bd54b` 已通过隔离真实 Docker 创建、入口、Flag 提交、销毁及附件转换/共享引用链路；生产练习写入与实例验收、回退演练和内容运营验收仍未执行，不能把隔离测试等同生产签收。
-2. Phase 09 TeamLab networking 已在 10.24 前向迁移，相关修复包含在当前生产 `9eef8ac`；Game 23 Docker 创建、入口和销毁链路已实测。双 Worker 故障接管、长期流量留存、复杂服务注入、规模并发和完整跨节点 TeamLab 场景仍需现场签收。
+1. 自主练习审计修复和 DTO 修复已随 `ab2bd54b` 切入 `.27`。自动化观察到临时题创建/编辑、`.30` Docker 创建和实际入口访问；用户接手后确认测试完成并删除题目。自动化没有观察到生产 Flag Accepted、销毁票据或最终端口回收；该人工结果不替代资源级审计。回退演练和内容运营验收仍未执行。
+2. Phase 09 TeamLab networking 已在 10.24 前向迁移，`9eef8ac` 已包含的相关修复继续保留在当前生产 `ab2bd54b`；Game 23 Docker 创建、入口和销毁链路已实测。双 Worker 故障接管、长期流量留存、复杂服务注入、规模并发和完整跨节点 TeamLab 场景仍需现场签收。
 3. Windows VM 仅按比赛场景支持；平台使用镜像内固定 RDP 账号，不要求普通比赛使用 Cloudbase-Init。仍需对合格镜像完成双实例、RDP/Guacamole、剪贴板、隔离和销毁清理验收。
 4. AWDP 的真实攻击、修补、异常恢复和安全软件干扰场景由授权测试人员按 `docs/yinyu-awdp-manual-acceptance.md` 手工执行。
 5. 统一认证对接方的门户源码不在本仓库；平台保留 Portal SSO 适配，跨网联调需在目标环境验证。
 6. `main` 已恢复经历史 DLL 证实的 `20260814075023_AddAssetAndChallengeOwnership` 与 `20260815012026_AddExerciseCreatorTracking`；`20260604165857_AddTheoryExamEntities`、`20260604193010_SyncTheoryExam` 仍未在源码、可达 Git 历史或保留 DLL 中恢复，禁止伪造。生产已通过 TeamLab 生命周期销毁经授权的 `qqqtest1` 两条测试 runtime，并完成 Phase 09 前向发布；今后数据迁移仍必须先在新鲜生产备份副本验证。
+7. `teamlab-flow` 分区保留任务存在 SQL `42601` 语法错误，发布前已按小时发生，本次未修复。另在新服务启动后观察到一次指标持久化并发冲突，之后心跳/指标恢复；需要独立并发回归。既有 SSH.NET 依赖风险与 Blob 自动 GC 缺口继续保留。
 
 ## 5. 已验证环境事实
 
@@ -153,8 +154,23 @@
   迁移模型、7 组查询计划与 OpenAPI 向后兼容。完整 Linux 发布物 994 个文件全部
   摘要匹配；隔离 PostgreSQL/Redis/真实 Agent/嵌套 Docker 完成登录、资产授权、动态
   练习创建/入口/提交/销毁、附件转换与共享 Blob 引用保护验收，测试资源已清理。
-  该候选尚未部署到 `.27`，详情和维护窗口方案见
+  上述为发布前候选验证记录，详情和维护窗口方案见
   [运行收敛交接](handoffs/2026-09-07-pr9-runtime-convergence.md)。
+- 2026-09-08 授权维护窗口：预备备份和停止写入后的最终备份均在无默认路由的独立
+  PostgreSQL 实际恢复，候选 bundle 无待应用迁移，134 条历史及核心计数一致。主站和
+  本机 Agent 于 `08:29:37Z` 停止、`08:32:15Z` 恢复，停机约 2 分 38 秒；最终副本于
+  `08:40:36Z` 验证通过，原子回退指针保存旧 `9eef8ac`。两次恢复临时资源均已清理。
+- `08:46Z` 核验新主站 PID 143895、本机 Agent PID 143896、NRestarts 0；994 文件
+  manifest、实际进程文件、6 个前端代表文件与候选一致，已知附件 253892 bytes 摘要
+  匹配。OpenAPI 83 路径、JSON API 授权拒绝正常，管理员已有会话有效。指标端口
+  `3001/healthz` 为 200 / Degraded，业务端口 `8080/healthz` 按源码限制为 404。
+  数据保留错误及一次指标并发冲突已分类记录，不能写成“日志无错误”。
+- 临时练习 614 首次因旧镜像地址未注册 Ready 模板而创建失败；只修正临时题为模板
+  154 正式引用后，create ticket `01a0803a-49e1-7239-b972-bd6995e6519b` 成功，`.30`
+  容器入口实际可访问。用户要求停止联网后，自行完成测试并确认删除该题。之后只做
+  本地文档收尾，没有再次请求靶机、提交 Flag 或检查远端清理。
+  完整备份、运行证据、人工接手范围和待办见
+  [生产发布交接](handoffs/2026-09-08-pr9-production-rollout.md)。
 
 ## 6. 当前有用文档
 
@@ -170,7 +186,7 @@
 
 ## 7. 新任务起点
 
-练习模块增量见 [2026-09-05 整理记录](handoffs/2026-09-05-practice-consolidation.md)，PR 结论见 [PR #9 审计交接](handoffs/2026-09-07-pr9-review-merge.md)。当前接手入口为 [运行收敛与发布候选交接](handoffs/2026-09-07-pr9-runtime-convergence.md)：`.31` 已恢复并完成正式同步，health 降级已定位，`ab2bd54b` 完整包已通过隔离真实链路。生产仍运行 `9eef8ac`；下一步确认 `.27` 维护窗口和临时业务验收范围，先验证新鲜生产备份副本，再执行原子切换及生产验收。不得将源码合并、候选 CI 或 HTTP 200 写成三方统一。
+当前接手入口为 [2026-09-08 生产发布交接](handoffs/2026-09-08-pr9-production-rollout.md)：`.27` 已发布 `ab2bd54b`，两份备份恢复和后置检查通过，用户确认测试完成并删除临时题。运行代码与最后核验的本地/GitHub 主线一致，之后的 Git SHA 差异来自文档；网络限制下未重新核对远端，也未推送本轮收尾文档。优先处理独立的数据保留 SQL 缺陷、指标并发回归和现有专项缺口。继续工作前遵守用户停止网络连接与自动测试的要求，不擅自重复靶机验收；远端临时工具清理和文档推送待明确解除网络限制后执行。
 
 1. 同步远端并确认当前分支、工作树和 HEAD。
 2. 阅读本文件、`docs/README.md`、`AGENTS.md` 以及任务涉及模块的现行契约。

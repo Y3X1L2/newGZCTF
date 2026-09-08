@@ -4,7 +4,7 @@
 
 本文面向刚接手项目的开发者或 AI。它补充 `AGENTS.md`、`docs/development/current-state.md` 和 `docs/README.md`，用于快速建立项目上下文；如果与当前运行行为、源码或 OpenAPI 冲突，以真实运行行为和当前源码为准。
 
-> 2026-09-07 更新：PR #9 已独立审计、修复并合并；后续 `.31` 已恢复并经平台正式同步，health 降级已证实来自两条旧 Theory migration 历史。`ab2bd54b` 候选已通过完整 CI 和隔离真实 Docker 练习链路，生产仍为 `9eef8ac`，尚未切换。当前接手入口为 [运行收敛与发布候选交接](handoffs/2026-09-07-pr9-runtime-convergence.md)。本文下方的 2026-09-01 release、工作机路径和旧端口说明仅作历史背景，当前事实以 `current-state.md` 为准。
+> 2026-09-08 更新：`.27` 主站及本机 Agent 已发布 `ab2bd54b`，预备和最终备份均通过实际恢复验证；旧 `9eef8ac` 保留为回退目标。自动化完成临时练习创建和容器入口访问，用户接手后确认测试完成并删除题目。用户要求停止网络连接，收尾只修改本地文档；远端资源清理未重新复核，GitHub 尚未同步本轮文档。已知 health 历史迁移降级、数据保留 SQL 错误及一次已恢复的指标并发冲突详见 [生产发布交接](handoffs/2026-09-08-pr9-production-rollout.md)。下方 2026-09-01 的 release、路径和旧端口说明仅作历史背景，当前事实以 `current-state.md` 为准。
 
 ## 1. 接手顺序
 
