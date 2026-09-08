@@ -17,6 +17,12 @@ public interface ITeamLabRuntimeApplicationService
     Task<TeamLabRuntimeProjectionModel> GetByStorageIdAsync(int runtimeId, CancellationToken cancellationToken);
     Task<TeamLabRuntimeProjectionModel> PauseAsync(Guid runtimeId, CancellationToken cancellationToken);
     Task<TeamLabRuntimeProjectionModel> ResumeAsync(Guid runtimeId, CancellationToken cancellationToken);
+    Task<TeamLabRuntimeProjectionModel> EnqueueLifecycleAsync(Guid runtimeId, bool pause, Guid actorUserId,
+        CancellationToken cancellationToken);
+    Task<TeamLabQueueTicketResult> EnqueueLifecycleTicketAsync(Guid runtimeId, bool pause, Guid actorUserId,
+        Guid? operationId, Guid? rolloutId, CancellationToken cancellationToken);
+    Task<TeamLabNodeResult> ExecuteQueuedLifecycleAsync(int runtimeId, int generation, bool pause,
+        CancellationToken cancellationToken, string? protectedPayload = null);
     Task<TeamLabRuntimeProjectionModel> PauseRolloutTargetAsync(Guid runtimeId, int rolloutId, CancellationToken cancellationToken);
     Task<TeamLabRuntimeProjectionModel> ResumeRolloutTargetAsync(Guid runtimeId, int rolloutId, CancellationToken cancellationToken);
     Task<TeamLabRuntimeProjectionModel> ResetRolloutTargetAsync(Guid runtimeId, int rolloutId, Guid? operationId, CancellationToken cancellationToken);

@@ -19,6 +19,67 @@ namespace GZCTF.Services.Fleet;
 
 public class AgentClient
 {
+    public virtual async Task<TeamLabFileResult> ManageTeamLabVmFilesAsync(Guid nodeId, TeamLabVmFileRequest request, CancellationToken token)
+    {
+        var node = await GetNodeAsync(nodeId, token) ?? throw NodeNotFound(nodeId, "teamlab.files");
+        using var client = BuildClient(node);
+        using var deadline = CreateDeadline(token, TimeSpan.FromSeconds(40));
+        using var response = await client.PostAsJsonAsync("/api/teamlab/vm-files", request, deadline.Token);
+        if (!response.IsSuccessStatusCode)
+            throw await CreateAgentExceptionAsync(response, "teamlab.files", nodeId, "VM 文件操作失败。", deadline.Token);
+        return await response.Content.ReadFromJsonAsync<TeamLabFileResult>(deadline.Token)
+            ?? throw InvalidAgentResponse(nodeId, "teamlab.files", "Agent 未返回文件操作结果。");
+    }
+    public virtual async Task<TeamLabAssetControlResult> ControlTeamLabAssetAsync(Guid nodeId, TeamLabAssetControlRequest request, CancellationToken token)
+    {
+        var node = await GetNodeAsync(nodeId, token) ?? throw NodeNotFound(nodeId, "teamlab.asset-control");
+        using var client = BuildClient(node);
+        using var deadline = CreateDeadline(token, TimeSpan.FromMinutes(3));
+        using var response = await client.PostAsJsonAsync("/api/teamlab/execution-plan/asset-control", request, deadline.Token);
+        if (!response.IsSuccessStatusCode)
+            throw await CreateAgentExceptionAsync(response, "teamlab.asset-control", nodeId, "单资产操作失败。", deadline.Token);
+        return await response.Content.ReadFromJsonAsync<TeamLabAssetControlResult>(deadline.Token)
+            ?? throw InvalidAgentResponse(nodeId, "teamlab.asset-control", "Agent 未返回资产操作结果。");
+    }
+    public virtual async Task<TeamLabFileResult> ManageTeamLabContainerFilesAsync(
+        Guid nodeId, TeamLabContainerFileRequest request, CancellationToken token)
+    {
+        var node = await GetNodeAsync(nodeId, token) ?? throw NodeNotFound(nodeId, "teamlab.files");
+        using var client = BuildClient(node);
+        using var deadline = CreateDeadline(token, TimeSpan.FromSeconds(40));
+        using var response = await client.PostAsJsonAsync("/api/teamlab/diagnostics/container/files", request, deadline.Token);
+        if (!response.IsSuccessStatusCode)
+            throw await CreateAgentExceptionAsync(response, "teamlab.files", nodeId, "容器文件操作失败。", deadline.Token);
+        return await response.Content.ReadFromJsonAsync<TeamLabFileResult>(deadline.Token)
+            ?? throw InvalidAgentResponse(nodeId, "teamlab.files", "Agent 未返回文件操作结果。");
+    }
+
+    public virtual async Task<TeamLabVmDiagnostics> GetTeamLabVmDiagnosticsAsync(
+        Guid nodeId, TeamLabVmDiagnosticsRequest request, CancellationToken token)
+    {
+        var node = await GetNodeAsync(nodeId, token) ?? throw NodeNotFound(nodeId, "teamlab.diagnostics");
+        using var client = BuildClient(node);
+        using var deadline = CreateDeadline(token, TimeSpan.FromSeconds(15));
+        using var response = await client.PostAsJsonAsync("/api/teamlab/diagnostics/vm", request, deadline.Token);
+        if (!response.IsSuccessStatusCode)
+            throw await CreateAgentExceptionAsync(response, "teamlab.diagnostics", nodeId, "VM 诊断读取失败。", deadline.Token);
+        return await response.Content.ReadFromJsonAsync<TeamLabVmDiagnostics>(deadline.Token)
+            ?? throw InvalidAgentResponse(nodeId, "teamlab.diagnostics", "Agent 未返回 VM 诊断结果。");
+    }
+
+    public virtual async Task<GZCTF.TeamLab.Contracts.TeamLabContainerDiagnostics> GetTeamLabContainerDiagnosticsAsync(
+        Guid nodeId, GZCTF.TeamLab.Contracts.TeamLabContainerDiagnosticsRequest request, CancellationToken token)
+    {
+        var node = await GetNodeAsync(nodeId, token) ?? throw NodeNotFound(nodeId, "teamlab.diagnostics");
+        using var client = BuildClient(node);
+        using var deadline = CreateDeadline(token, TimeSpan.FromSeconds(15));
+        using var response = await client.PostAsJsonAsync("/api/teamlab/diagnostics/container", request, deadline.Token);
+        if (!response.IsSuccessStatusCode)
+            throw await CreateAgentExceptionAsync(response, "teamlab.diagnostics", nodeId,
+                "资产诊断读取失败。", deadline.Token);
+        return await response.Content.ReadFromJsonAsync<GZCTF.TeamLab.Contracts.TeamLabContainerDiagnostics>(deadline.Token)
+            ?? throw InvalidAgentResponse(nodeId, "teamlab.diagnostics", "Agent 未返回诊断结果。");
+    }
     private static readonly TimeSpan TeamLabRequestTimeout = TimeSpan.FromSeconds(60);
     private static readonly TimeSpan EndpointSensorStartTimeout = TimeSpan.FromMinutes(2);
 
@@ -233,6 +294,18 @@ public class AgentClient
             await browser.CloseAsync(WebSocketCloseStatus.NormalClosure, "terminal_closed", CancellationToken.None);
     }
 
+    public virtual async Task<IReadOnlyList<Guid>> GetRemoteSessionInventoryAsync(Guid nodeId, CancellationToken token)
+    {
+        var node = await GetNodeAsync(nodeId, token) ?? throw NodeNotFound(nodeId, "remote.inventory");
+        var client = BuildClient(node);
+        using var deadline = CreateDeadline(token, TimeSpan.FromSeconds(10));
+        using var response = await client.GetAsync("/api/remote-access/inventory", deadline.Token);
+        if (!response.IsSuccessStatusCode)
+            throw await CreateAgentExceptionAsync(response, "remote.inventory", node.Id, "Remote session inventory failed.", token);
+        return await response.Content.ReadFromJsonAsync<Guid[]>(deadline.Token)
+            ?? throw InvalidAgentResponse(node.Id, "remote.inventory", "Empty remote session inventory.");
+    }
+
     private static async Task CopyWebSocketAsync(WebSocket source, WebSocket target, CancellationToken token)
     {
         var buffer = new byte[8192];
@@ -316,6 +389,9 @@ public class AgentClient
             new TeamLabExecutionPlanApplyRequest(plan),
             token,
             requestTimeout);
+
+    public virtual Task<TeamLabDeviceObservation?> ProbeTeamLabDeviceAsync(Guid nodeId, TeamLabDeviceProbeRequest request, CancellationToken token) =>
+        PostTeamLabAsync<TeamLabDeviceProbeRequest, TeamLabDeviceObservation>(nodeId, "/api/teamlab/execution-plan/device-probe", request, token, TimeSpan.FromSeconds(20));
 
     public virtual Task<TeamLabExecutionPlanCleanupResponse?> CleanupTeamLabExecutionPlanAsync(
         Guid nodeId,
@@ -1690,7 +1766,8 @@ public sealed record AgentRemoteRelayRequest(
     string NativeId,
     string TargetAddress,
     int TargetPort,
-    DateTimeOffset ExpiresAt);
+    DateTimeOffset ExpiresAt,
+    bool VncConsole = false);
 
 public sealed record AgentRemoteRelayResponse(Guid SessionId, int Port, DateTimeOffset ExpiresAt);
 
@@ -2292,7 +2369,8 @@ public record TeamLabLinkPolicyApplyRequest(
     int RuntimeId = 0,
     string? RouterNamespace = null,
     string? NetworkCidr = null,
-    string? GatewayIp = null);
+    string? GatewayIp = null,
+    string? NetworkDigest = null);
 
 /// <summary>Recovers (removes) a link policy on a runtime link's host-side veth.</summary>
 public record TeamLabLinkPolicyRecoverRequest(
@@ -2306,7 +2384,8 @@ public record TeamLabLinkPolicyRecoverRequest(
     string? RouterNamespace = null,
     string? NetworkCidr = null,
     string? GatewayIp = null,
-    string? ParametersJson = null);
+    string? ParametersJson = null,
+    string? NetworkDigest = null);
 
 public record TeamLabLinkPolicyResponse(
     bool Success,

@@ -29,8 +29,43 @@ public sealed class TeamLabAdminRuntimeController(
     TeamLabAccessGrantService access,
     TeamLabLinkPolicyService linkPolicies,
     ILogRepository logs,
-    UserManager<UserInfo> users) : ControllerBase
+    UserManager<UserInfo> users,
+    TeamLabAssetDiagnosticsService diagnostics) : ControllerBase
 {
+    [HttpGet("search")]
+    public async Task<TeamLabRuntimeSearchPage> Search([FromQuery] TeamLabRuntimeSearchQuery query, CancellationToken token)
+    {
+        var actor = await ActorAsync();
+        Response.Headers.CacheControl = "no-store";
+        return await queries.SearchRuntimesAsync(query, actor.Id, actor.Role >= Role.Admin, token);
+    }
+
+    [HttpGet("{runtimeId:guid}/assets/{assetId:int}/vm-diagnostics")]
+    public async Task<GZCTF.TeamLab.Contracts.TeamLabVmDiagnostics> VmDiagnostics(
+        Guid runtimeId, int assetId, CancellationToken cancellationToken)
+    {
+        var actor = await ActorAsync();
+        Response.Headers.CacheControl = "no-store";
+        return await diagnostics.ReadVmAsync(runtimeId, assetId, actor.Id, actor.Role >= Role.Admin, cancellationToken);
+    }
+
+    [HttpGet("{runtimeId:guid}/tasks")]
+    public async Task<TeamLabRuntimeTaskPageModel> Tasks(Guid runtimeId, [FromQuery] int? generation = null,
+        [FromQuery] string? after = null, [FromQuery] int limit = 20, CancellationToken cancellationToken = default)
+    {
+        await RequireAsync(runtimeId, TeamLabRuntimePermission.MetadataRead, cancellationToken);
+        Response.Headers.CacheControl = "no-store";
+        return await queries.ListRuntimeTasksAsync(runtimeId, generation, after, limit, cancellationToken);
+    }
+
+    [HttpGet("{runtimeId:guid}/assets/{assetId:int}/diagnostics")]
+    public async Task<GZCTF.TeamLab.Contracts.TeamLabContainerDiagnostics> Diagnostics(
+        Guid runtimeId, int assetId, [FromQuery] int tail = 200, CancellationToken cancellationToken = default)
+    {
+        var actor = await ActorAsync();
+        Response.Headers.CacheControl = "no-store";
+        return await diagnostics.ReadAsync(runtimeId, assetId, actor.Id, actor.Role >= Role.Admin, tail, cancellationToken);
+    }
     [HttpGet]
     public async Task<TeamLabAdminRuntimePageModel> List(
         [FromQuery] Guid? topologyId = null,
@@ -111,6 +146,24 @@ public sealed class TeamLabAdminRuntimeController(
         await runtimes.ResetAndEnqueueAsync(runtimeId, model, null, cancellationToken);
         return Accepted($"/api/admin/teamlab/runtimes/{runtimeId:D}",
             await runtimes.GetAsync(runtimeId, cancellationToken));
+    }
+
+    [HttpPost("{runtimeId:guid}/pause")]
+    public async Task<ActionResult<TeamLabRuntimeProjectionModel>> Pause(Guid runtimeId, CancellationToken cancellationToken)
+    {
+        await RequireAsync(runtimeId, TeamLabRuntimePermission.LifecycleManage, cancellationToken);
+        var actor = await ActorAsync();
+        return Accepted($"/api/admin/teamlab/runtimes/{runtimeId:D}",
+            await runtimes.EnqueueLifecycleAsync(runtimeId, true, actor.Id, cancellationToken));
+    }
+
+    [HttpPost("{runtimeId:guid}/resume")]
+    public async Task<ActionResult<TeamLabRuntimeProjectionModel>> Resume(Guid runtimeId, CancellationToken cancellationToken)
+    {
+        await RequireAsync(runtimeId, TeamLabRuntimePermission.LifecycleManage, cancellationToken);
+        var actor = await ActorAsync();
+        return Accepted($"/api/admin/teamlab/runtimes/{runtimeId:D}",
+            await runtimes.EnqueueLifecycleAsync(runtimeId, false, actor.Id, cancellationToken));
     }
 
     [HttpDelete("{runtimeId:guid}")]

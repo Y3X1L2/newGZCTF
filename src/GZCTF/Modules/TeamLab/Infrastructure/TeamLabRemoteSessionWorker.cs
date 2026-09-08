@@ -15,6 +15,7 @@ public sealed class TeamLabRemoteSessionWorker(
             {
                 using var scope = scopes.CreateScope();
                 await scope.ServiceProvider.GetRequiredService<ITeamLabRemoteAccessService>().ExpireAsync(stoppingToken);
+                await scope.ServiceProvider.GetRequiredService<TeamLabRemoteAuditService>().MaintainAsync(stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { }
             catch (Exception exception) { logger.LogError(exception, "TeamLab 远程会话过期清理失败"); }

@@ -74,6 +74,8 @@ public sealed class TeamLabAccessGrantService(
         var runtime = await LoadRuntimeAsync(runtimePublicId, cancellationToken);
         if (runtime.Status != TeamLabRuntimeStatus.Running || runtime.PublicUdpMapping is null)
             throw new TeamLabApiContractException("runtime_not_ready", "运行时尚未就绪，无法访问", 409);
+        if (!runtime.PublicUdpMapping.IsSynced)
+            throw new TeamLabApiContractException("public_gateway_unavailable", "公网入口尚未就绪，不能生成 VPN 配置；场景内网运行和资产运维不受影响。", 409);
         var entryShard = runtime.Shards.SingleOrDefault(item => item.Id == runtime.EntryShardId && item.Generation == runtime.Generation)
             ?? throw new TeamLabApiContractException("runtime_invalid", "运行时入口分片缺失", 500);
         var entryNetwork = ResolveEntryNetwork(runtime, entryShard);

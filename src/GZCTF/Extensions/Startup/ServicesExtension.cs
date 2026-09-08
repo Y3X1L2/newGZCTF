@@ -250,7 +250,7 @@ internal static class ServicesExtension
                 client.DefaultRequestHeaders.Accept.Clear();
                 client.DefaultRequestHeaders.Accept.Add(
                     new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
-            });
+            }).RemoveAllLoggers();
             builder.Services.AddHttpClient("PortalSso", client =>
             {
                 client.DefaultRequestHeaders.Accept.Clear();

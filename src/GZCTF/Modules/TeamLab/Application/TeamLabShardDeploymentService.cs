@@ -422,7 +422,7 @@ public sealed class TeamLabShardDeploymentService(
                 var actual = result.Response!.Inventory.First(item =>
                     string.Equals(item.AssetKey, asset.TopologyKey, StringComparison.Ordinal));
                 asset.RuntimeResourceId = actual.ResourceId;
-                asset.NativeIdentity = actual.ResourceId;
+                asset.NativeIdentity = asset.Kind == TeamLabResourceKind.Vm ? actual.NativeIdentity : actual.ResourceId;
                 asset.ExecutionStage = asset.Kind == TeamLabResourceKind.Vm
                     ? TeamLabAssetExecutionStage.Pending
                     : TeamLabAssetExecutionStage.GuestReady;
@@ -582,6 +582,25 @@ public sealed class TeamLabShardDeploymentService(
             .OrderBy(item => item.Id)
             .ToArray();
         var ownerShardId = orderedShards[0].Id;
+        var connectorIds = definition.Assets.Where(asset => asset.ConnectorId != null).Select(asset => asset.ConnectorId!.Value).Distinct().ToArray();
+        var registeredConnectors = await context.TeamLabConnectors.AsNoTracking()
+            .Where(connector => connectorIds.Contains(connector.PublicId)).ToDictionaryAsync(connector => connector.PublicId, cancellationToken);
+        var connectorIntents = new Dictionary<string, List<TeamLabConnectorAttachmentV2>>(StringComparer.Ordinal);
+        foreach (var asset in definition.Assets.Where(asset => asset.ConnectorId != null))
+        {
+            if (!registeredConnectors.TryGetValue(asset.ConnectorId!.Value, out var connector))
+                throw new TeamLabApiContractException("connector_unavailable", "连接器不存在。", 422);
+            var binding = TeamLabConnectorConfiguration.Require(connector);
+            var networkKey = asset.Interfaces.SingleOrDefault(item => item.Primary)?.NetworkKey
+                ?? (asset.Interfaces.Count == 1 ? asset.Interfaces[0].NetworkKey : null);
+            if (networkKey is null || orderedShards.All(shard => shard.WorkerNodeId != binding.NodeId))
+                throw new TeamLabApiContractException("connector_placement_invalid", "连接器必须有明确主网卡，并部署到登记的物理节点。", 422);
+            if (!connectorIntents.TryGetValue(networkKey, out var bindings)) connectorIntents[networkKey] = bindings = [];
+            if (connectorIntents.Any(pair => pair.Key != networkKey && pair.Value.Any(item => item.ConnectorId == binding.ConnectorId)))
+                throw new TeamLabApiContractException("connector_network_conflict", "同一独占网卡不能连接到多个场景网段。", 422);
+            if (connectorIntents.Values.SelectMany(items => items).All(item => item.ConnectorId != binding.ConnectorId))
+                bindings.Add(binding);
+        }
         var plans = new Dictionary<int, TeamLabExecutionPlanV2>();
         foreach (var shard in orderedShards)
         {
@@ -600,7 +619,7 @@ public sealed class TeamLabShardDeploymentService(
                     .Select(item => item.Value).ToArray(),
                 shardAssets,
                 infrastructure[shard.Id].ObservationPoints,
-                digests));
+                digests, connectorIntents.ToDictionary(item => item.Key, item => (IReadOnlyList<TeamLabConnectorAttachmentV2>)item.Value)));
         }
         return plans;
     }
@@ -697,6 +716,11 @@ public sealed class TeamLabShardDeploymentService(
                 asset.Image ?? DockerImageReference.ResolvePullTarget(template.Name, template.RegistryUrl).FullImage,
                 cancellationToken)
             : null;
+        var device = asset.DevicePackageId is { } packageId
+            ? await TeamLabDeviceExecutionCompiler.CompileAsync(
+                await context.TeamLabDevicePackages.AsNoTracking().SingleAsync(item => item.Id == packageId, cancellationToken),
+                topologyAsset.Kind, template.ImageHash!, asset.DevicePackageParametersJson, cancellationToken)
+            : null;
         return new TeamLabNodeAssetCreateRequest(
                 runtime.Id, asset.Id, runtime.PublicId, runtime.Generation, asset.TopologyKey, asset.Name, topologyAsset.Kind,
                 asset.SourceTemplateId ?? topologyAsset.ImageTemplateId, topologyAsset.CpuUnits, topologyAsset.MemoryMiB,
@@ -712,7 +736,8 @@ public sealed class TeamLabShardDeploymentService(
                 topologyAsset.Kind == TeamLabAssetKind.Vm ? template.VmNetworkMode : null,
                 topologyAsset.Kind == TeamLabAssetKind.Docker
                     ? imageReference
-                    : null);
+                    : null,
+                device);
     }
 
     private async Task<NodeExecution> ExecuteNodeAsync(

@@ -131,6 +131,10 @@ public static class OperationalEventCodes
         public const string FabricLeaseReleased = "teamlab.fabric.lease_released";
         public const string NetworkApplied = "teamlab.network.applied";
         public const string AssetCreated = "teamlab.asset.created";
+        public const string AssetDiagnosticsRead = "teamlab.asset.diagnostics_read";
+        public const string AssetFilesAccessed = "teamlab.asset.files_accessed";
+        public const string AssetControlled = "teamlab.asset.controlled";
+        public const string RemoteAuditDownloaded = "teamlab.remote.audit_downloaded";
         public const string AssetCreateFailed = "teamlab.asset.create_failed";
         public const string GuestReady = "teamlab.guest.ready";
         public const string GuestReadinessFailed = "teamlab.guest.readiness_failed";
@@ -176,6 +180,7 @@ public static class OperationalEventCodes
         public const string AccessRevoked = "teamlab.access.revoked";
         public const string SnapshotImported = "teamlab.snapshot.imported";
         public const string ProtocolEvent = "teamlab.protocol.event";
+        public const string DeviceHealthChanged = "teamlab.device-health.changed";
     }
 
     public static class Recovery

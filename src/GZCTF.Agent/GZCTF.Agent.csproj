@@ -13,6 +13,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="GZCTF.Test" />
+    <InternalsVisibleTo Include="GZCTF.Integration.Test" />
   </ItemGroup>
 
   <ItemGroup>
@@ -22,6 +23,7 @@
 
   <ItemGroup>
     <PackageReference Include="Docker.DotNet" />
+    <PackageReference Include="SSH.NET" />
     <PackageReference Include="PacketDotNet" />
     <PackageReference Include="SharpPcap" />
   </ItemGroup>

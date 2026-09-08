@@ -8,7 +8,8 @@ public sealed record CreateRemoteRelayRequest(
     string NativeId,
     string TargetAddress,
     int TargetPort,
-    DateTimeOffset ExpiresAt);
+    DateTimeOffset ExpiresAt,
+    bool VncConsole = false);
 
 public sealed record RemoteRelayResponse(Guid SessionId, int Port, DateTimeOffset ExpiresAt);
 

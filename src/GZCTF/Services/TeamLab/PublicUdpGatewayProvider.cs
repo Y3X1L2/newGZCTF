@@ -7,6 +7,7 @@ namespace GZCTF.Services.TeamLab;
 
 public interface IPublicUdpGatewayProvider
 {
+    bool Enabled => true;
     Task<PublicUdpGatewaySyncResult> SyncMappingAsync(TeamLabPublicUdpMapping mapping, CancellationToken token);
     Task<PublicUdpGatewaySyncResult> RemoveMappingAsync(TeamLabPublicUdpMapping mapping, CancellationToken token);
 }
@@ -18,6 +19,7 @@ public class PublicUdpGatewayProvider(
     ILogger<PublicUdpGatewayProvider> logger) : IPublicUdpGatewayProvider
 {
     private readonly PublicUdpGatewayConfig _config = options.Value;
+    public bool Enabled => _config.Enable;
 
     public async Task<PublicUdpGatewaySyncResult> SyncMappingAsync(TeamLabPublicUdpMapping mapping, CancellationToken token)
     {

@@ -15,6 +15,85 @@ public sealed class TeamLabAdminQueryService(
     NodeCapacitySnapshotService capacitySnapshots,
     ITeamLabUsageProjectionProvider usage)
 {
+    public async Task<TeamLabRuntimeSearchPage> SearchRuntimesAsync(TeamLabRuntimeSearchQuery filter,
+        Guid actorId, bool administrator, CancellationToken token)
+    {
+        if (filter.Limit is < 1 or > 100 || filter.Generation is <= 0 ||
+            filter.Search?.Length > 128 || filter.Node?.Length > 128 ||
+            filter.Status.HasValue && !Enum.IsDefined(filter.Status.Value))
+            throw new TeamLabApiContractException("runtime_search_invalid", "运行实例筛选条件无效。", 400);
+        var cursor = DecodeCursor(filter.After, "runtime_search_cursor_invalid");
+        var query = context.TeamLabRuntimes.AsNoTracking();
+        if (!administrator) query = query.Where(item => item.CreatedById == actorId);
+        if (filter.Status.HasValue) query = query.Where(item => item.Status == filter.Status.Value);
+        if (filter.Generation.HasValue) query = query.Where(item => item.Generation == filter.Generation.Value);
+        if (filter.ReleaseId.HasValue) query = query.Where(item => item.TopologyReleaseId == filter.ReleaseId.Value);
+        if (filter.CreatedById.HasValue) query = query.Where(item => item.CreatedById == filter.CreatedById.Value);
+        if (filter.ErrorsOnly) query = query.Where(item => item.Status == TeamLabRuntimeStatus.Failed ||
+            item.Status == TeamLabRuntimeStatus.CleanupPending || item.LastError != null || item.Assets.Any(asset =>
+            asset.Generation == item.Generation && asset.Status == TeamLabRuntimeStatus.Failed));
+        if (!string.IsNullOrWhiteSpace(filter.Search))
+        {
+            var term = filter.Search.Trim().ToLowerInvariant();
+            if (Guid.TryParse(term, out var id)) query = query.Where(item => item.PublicId == id);
+            else query = query.Where(item => item.ExternalReference != null && item.ExternalReference.ToLower().Contains(term) ||
+                item.Assets.Any(asset => asset.Generation == item.Generation &&
+                    (asset.Name.ToLower().Contains(term) || asset.TopologyKey.ToLower().Contains(term))));
+        }
+        if (!string.IsNullOrWhiteSpace(filter.Node))
+        {
+            var node = filter.Node.Trim().ToLowerInvariant();
+            query = query.Where(item => item.Shards.Any(shard => shard.Generation == item.Generation &&
+                shard.WorkerNode.Name.ToLower().Contains(node)));
+        }
+        if (cursor is { } value) query = query.Where(item => item.CreatedAt < value.Time ||
+            item.CreatedAt == value.Time && item.PublicId.CompareTo(value.Id) < 0);
+        var rows = await query.OrderByDescending(item => item.CreatedAt).ThenByDescending(item => item.PublicId)
+            .Take(filter.Limit + 1).Select(item => new
+            {
+                item.PublicId, item.TopologyReleaseId, item.ExternalReference, item.Generation, item.Status,
+                item.CreatedById, item.CreatedAt,
+                TopologyId = context.TeamLabTopologyReleases.Where(release => release.Id == item.TopologyReleaseId)
+                    .Select(release => (Guid?)release.Topology.PublicId).FirstOrDefault(),
+                AssetCount = item.Assets.Count(asset => asset.Generation == item.Generation),
+                HasError = item.Status == TeamLabRuntimeStatus.Failed || item.Status == TeamLabRuntimeStatus.CleanupPending ||
+                    item.LastError != null || item.Assets.Any(asset =>
+                    asset.Generation == item.Generation && asset.Status == TeamLabRuntimeStatus.Failed)
+            }).ToArrayAsync(token);
+        var items = rows.Take(filter.Limit).Select(item => new TeamLabRuntimeSearchItem(item.PublicId, item.TopologyId,
+            item.TopologyReleaseId, item.ExternalReference, item.Generation, Stage(item.Status),
+            item.CreatedById, item.CreatedAt, item.AssetCount, item.HasError)).ToArray();
+        return new(items, rows.Length > filter.Limit ? new GuidTimeCursor(items[^1].CreatedAt, items[^1].Id).Encode() : null);
+    }
+
+    public async Task<TeamLabRuntimeTaskPageModel> ListRuntimeTasksAsync(Guid runtimeId, int? generation,
+        string? after, int limit, CancellationToken cancellationToken)
+    {
+        if (limit is < 1 or > 100 || generation is <= 0)
+            throw new TeamLabApiContractException("task_filter_invalid", "任务分页大小或代次无效。", 400);
+        var cursor = DecodeCursor(after, "task_cursor_invalid");
+        var storageId = await context.TeamLabRuntimes.AsNoTracking().Where(item => item.PublicId == runtimeId)
+            .Select(item => (int?)item.Id).SingleOrDefaultAsync(cancellationToken)
+            ?? throw new TeamLabApiContractException("runtime_not_found", "未找到运行时。", 404);
+        var query = context.DeploymentQueueTickets.AsNoTracking()
+            .Where(item => item.Kind == DeploymentQueueKind.TeamLabRuntime && item.TeamLabRuntimeId == storageId);
+        if (generation.HasValue) query = query.Where(item => item.Generation == generation.Value);
+        if (cursor is { } value)
+            query = query.Where(item => item.CreatedAt < value.Time ||
+                item.CreatedAt == value.Time && item.Id.CompareTo(value.Id) < 0);
+        var rows = await query.OrderByDescending(item => item.CreatedAt).ThenByDescending(item => item.Id)
+            .Take(limit + 1).Select(item => new
+            {
+                item.Id, item.Generation, item.Operation, item.Status, item.Stage, item.ApiOperationId,
+                item.CreatedAt, item.StartedAt, item.CompletedAt, item.ErrorCode, item.BlockedReasonCode, item.Retryable
+            }).ToArrayAsync(cancellationToken);
+        var items = rows.Take(limit).Select(item => new TeamLabRuntimeTaskModel(item.Id, item.Generation,
+            item.Operation.ToString().ToLowerInvariant(), item.Status.ToString().ToLowerInvariant(),
+            TeamLabFailurePresentation.Stage(item.Stage), item.ApiOperationId, item.CreatedAt,
+            item.StartedAt, item.CompletedAt, item.ErrorCode, item.BlockedReasonCode, item.Retryable)).ToArray();
+        return new(items, rows.Length > limit ? new GuidTimeCursor(items[^1].CreatedAt, items[^1].Id).Encode() : null);
+    }
+
     public async Task<TeamLabAdminScenePageModel> ListScenesAsync(
         Guid actorUserId,
         bool administrator,

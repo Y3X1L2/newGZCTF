@@ -103,6 +103,38 @@ public sealed class LibvirtTeamLabProvider(
         }
     }
 
+    public Task<LibvirtAssetResult> ChangePowerAsync(
+        TeamLabExecutionPlanV2 plan, TeamLabAssetExecutionSpecV2 asset, string action,
+        string? expectedNativeIdentity, CancellationToken token)
+    {
+        token.ThrowIfCancellationRequested();
+        var native = GetConnection();
+        var domain = native.Lookup(DomainName(plan, asset));
+        try
+        {
+            if (domain == 0 || !MatchesStableUuid(domain, plan, asset) || !MatchesExecutionPlan(native.GetXml(domain), plan))
+                return Task.FromResult(LibvirtAssetResult.Failed("compute", "VM execution identity changed."));
+            var identity = GetInventory(plan).SingleOrDefault(item => item.AssetKey == asset.AssetKey)?.NativeIdentity;
+            if (expectedNativeIdentity is not null && identity != expectedNativeIdentity)
+                return Task.FromResult(LibvirtAssetResult.Failed("compute", "VM native identity changed."));
+            var state = GetState(domain);
+            var result = action switch
+            {
+                "inspect" => 0,
+                "stop" when state == "shutoff" => 0,
+                "stop" => LibvirtNativeInterop.DomainDestroy(domain),
+                "pause" when state == "paused" => 0,
+                "pause" when state == "running" => LibvirtNativeInterop.DomainSuspend(domain),
+                "resume" when state == "running" => 0,
+                "resume" when state == "paused" => LibvirtNativeInterop.DomainResume(domain),
+                _ => -1
+            };
+            return Task.FromResult(result < 0 ? LibvirtAssetResult.Failed("compute", "VM power operation failed.")
+                : new LibvirtAssetResult(true, GetState(domain), asset.ResourceId));
+        }
+        finally { if (domain != 0) LibvirtNativeInterop.DomainFree(domain); }
+    }
+
     public Task<LibvirtAssetResult> PauseAsync(
         string domainName,
         int expectedGeneration,
@@ -176,8 +208,11 @@ public sealed class LibvirtTeamLabProvider(
                 var asset = plan.Assets.FirstOrDefault(item =>
                     item.Kind.Equals("vm", StringComparison.OrdinalIgnoreCase) &&
                     string.Equals(DomainName(plan, item), name, StringComparison.Ordinal));
+                var uuid = new StringBuilder(37);
+                if (LibvirtNativeInterop.DomainGetUuidString(domain, uuid) < 0 || !Guid.TryParse(uuid.ToString(), out _))
+                    throw new InvalidOperationException("libvirt failed to read the VM native identity.");
                 result.Add(new TeamLabExecutionInventoryFactV2(
-                    "vm", asset?.AssetKey ?? $"residual:{name}", name, GetState(domain), plan.Generation));
+                    "vm", asset?.AssetKey ?? $"residual:{name}", name, GetState(domain), plan.Generation, uuid.ToString()));
             }
             finally { LibvirtNativeInterop.DomainFree(domain); }
         }
@@ -377,7 +412,13 @@ public sealed class LibvirtTeamLabProvider(
             new XElement("currentMemory", new XAttribute("unit", "MiB"), Math.Max(256, asset.MemoryMiB)),
             new XElement("vcpu", Math.Clamp(asset.Cpu, 1, 64)),
             new XElement("os", new XElement("type", new XAttribute("arch", "x86_64"), "hvm")),
+            asset.Device is { } device ? new XElement("sysinfo", new XAttribute("type", "fwcfg"),
+                new XElement("entry", new XAttribute("name", "opt/org.gzctf/device-parameters"), device.ParametersJson)) : null,
             new XElement("devices",
+                new XElement("graphics", new XAttribute("type", "vnc"), new XAttribute("autoport", "yes"),
+                    new XAttribute("listen", "127.0.0.1"),
+                    new XElement("listen", new XAttribute("type", "address"), new XAttribute("address", "127.0.0.1"))),
+                new XElement("video", new XElement("model", new XAttribute("type", "vga"))),
                 new XElement("disk", new XAttribute("type", "file"), new XAttribute("device", "disk"),
                     new XElement("driver", new XAttribute("name", "qemu"), new XAttribute("type", "qcow2")),
                     new XElement("source", new XAttribute("file", overlay)),

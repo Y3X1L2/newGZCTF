@@ -17,6 +17,9 @@ public sealed class RemoteAccessRelayService(
     private const int FirstPort = 47000;
     private const int PortCount = 1000;
     private readonly ConcurrentDictionary<Guid, Relay> _relays = new();
+
+    public Guid[] ActiveSessionIds() => _relays.Where(item => item.Value.ExpiresAt > DateTimeOffset.UtcNow)
+        .Select(item => item.Key).Concat(terminals.ActiveSessionIds()).Distinct().ToArray();
     // Reuse the operator-configured console source policy. ServerUrl is only an additional
     // literal-address convenience and must not become the sole path to authorize Guacamole.
     private readonly RdpProxyAccessPolicy _sourcePolicy = RdpProxyAccessPolicy.Create(
@@ -25,24 +28,35 @@ public sealed class RemoteAccessRelayService(
     public async Task<RemoteRelayResponse> CreateAsync(CreateRemoteRelayRequest request, CancellationToken cancellationToken)
     {
         if (request.SessionId == Guid.Empty || request.RuntimeId <= 0 || request.Generation <= 0 ||
-            request.TargetPort is < 1 or > 65535 || request.ExpiresAt <= DateTimeOffset.UtcNow ||
-            request.ExpiresAt > DateTimeOffset.UtcNow.AddHours(2) ||
-            !IPAddress.TryParse(request.TargetAddress, out var targetAddress))
+            request.ExpiresAt <= DateTimeOffset.UtcNow || request.ExpiresAt > DateTimeOffset.UtcNow.AddHours(2))
             throw new AgentOperationException("RemoteAccess", "remote_access.invalid_request", "The remote access relay request is invalid.", false);
+        IPAddress managementAddress;
+        var targetPort = request.TargetPort;
+        if (request.VncConsole)
+        {
+            managementAddress = IPAddress.Loopback;
+            targetPort = await kvm.GetVncConsolePortAsync(request.VmName, request.Generation, request.NativeId, cancellationToken);
+            await EnsureVncConsoleAsync(targetPort, cancellationToken);
+        }
+        else
+        {
+            if (request.TargetPort is < 1 or > 65535 || !IPAddress.TryParse(request.TargetAddress, out var targetAddress))
+                throw new AgentOperationException("RemoteAccess", "remote_access.invalid_request", "The remote access relay target is invalid.", false);
+            var verified = await kvm.ExecuteWithIdentityAsync(
+                request.VmName, request.Generation, request.NativeId,
+                token => kvm.GetIpAddressWithDiagnosticAsync(request.VmName, token), cancellationToken);
+            if (!IPAddress.TryParse(verified.IpAddress, out var guestAddress) || !guestAddress.Equals(targetAddress))
+                throw new AgentOperationException("RemoteAccess", "remote_access.asset_identity_mismatch", "The requested target does not match the active VM identity.", false);
 
-        var verified = await kvm.ExecuteWithIdentityAsync(
-            request.VmName, request.Generation, request.NativeId,
-            token => kvm.GetIpAddressWithDiagnosticAsync(request.VmName, token), cancellationToken);
-        if (!IPAddress.TryParse(verified.IpAddress, out var guestAddress) || !guestAddress.Equals(targetAddress))
-            throw new AgentOperationException("RemoteAccess", "remote_access.asset_identity_mismatch", "The requested target does not match the active VM identity.", false);
-
-        var management = await kvm.ExecuteWithIdentityAsync(
-            request.VmName, request.Generation, request.NativeId,
-            token => kvm.GetManagementIpAddressWithDiagnosticAsync(request.VmName, token), cancellationToken);
-        if (!IPAddress.TryParse(management.IpAddress, out var managementAddress))
-            throw new AgentOperationException("RemoteAccess", "remote_access.management_address_unavailable",
-                "The VM management address is unavailable; remote operations cannot use the player network.", false);
-        await EnsureTargetReachableAsync(managementAddress, request.TargetPort, cancellationToken);
+            var management = await kvm.ExecuteWithIdentityAsync(
+                request.VmName, request.Generation, request.NativeId,
+                token => kvm.GetManagementIpAddressWithDiagnosticAsync(request.VmName, token), cancellationToken);
+            if (!IPAddress.TryParse(management.IpAddress, out var resolvedManagementAddress))
+                throw new AgentOperationException("RemoteAccess", "remote_access.management_address_unavailable",
+                    "The VM management address is unavailable; remote operations cannot use the player network.", false);
+            managementAddress = resolvedManagementAddress;
+            await EnsureTargetReachableAsync(managementAddress, request.TargetPort, cancellationToken);
+        }
 
         if (_relays.TryGetValue(request.SessionId, out var existing))
             return new RemoteRelayResponse(request.SessionId, existing.Port, existing.ExpiresAt);
@@ -55,7 +69,7 @@ public sealed class RemoteAccessRelayService(
             {
                 var listener = new TcpListener(IPAddress.Any, port);
                 listener.Start(16);
-                var relay = new Relay(request.SessionId, port, managementAddress, request.TargetPort, request.ExpiresAt,
+                var relay = new Relay(request.SessionId, port, managementAddress, targetPort, request.ExpiresAt,
                     listener, _sourcePolicy, _relays, logger);
                 if (_relays.TryAdd(request.SessionId, relay))
                 {
@@ -72,15 +86,34 @@ public sealed class RemoteAccessRelayService(
 
     public Task DeleteAsync(Guid sessionId)
     {
-        if (_relays.TryRemove(sessionId, out var relay)) relay.Dispose();
+        if (_relays.TryRemove(sessionId, out var relay))
+            relay.Dispose();
         return Task.CompletedTask;
     }
 
-    public Task CancelTerminalAsync(Guid sessionId)
+    public Task CancelTerminalAsync(Guid sessionId) => terminals.CancelAndWaitAsync(sessionId);
+
+    internal static async Task EnsureVncConsoleAsync(int port, CancellationToken token)
     {
-        terminals.Cancel(sessionId);
-        return Task.CompletedTask;
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(token);
+        deadline.CancelAfter(TimeSpan.FromSeconds(5));
+        using var client = new TcpClient();
+        try
+        {
+            await client.ConnectAsync(IPAddress.Loopback, port, deadline.Token);
+            var banner = new byte[12];
+            await client.GetStream().ReadExactlyAsync(banner, deadline.Token);
+            if (!IsVncBanner(banner))
+                throw new IOException("Invalid VNC protocol banner.");
+        }
+        catch (Exception exception) when (!token.IsCancellationRequested && exception is SocketException or IOException or OperationCanceledException)
+        {
+            throw new AgentOperationException("RemoteAccess", "remote_access.console_unavailable", "The VNC console did not complete its protocol probe.", true);
+        }
     }
+
+    internal static bool IsVncBanner(byte[] bytes) => bytes.Length == 12 &&
+        System.Text.Encoding.ASCII.GetString(bytes) is "RFB 003.003\n" or "RFB 003.007\n" or "RFB 003.008\n";
 
     private static async Task EnsureTargetReachableAsync(IPAddress address, int port, CancellationToken cancellationToken)
     {
@@ -118,7 +151,8 @@ public sealed class RemoteAccessRelayService(
                 while (!linked.IsCancellationRequested)
                 {
                     TcpClient client;
-                    try { client = await listener.AcceptTcpClientAsync(linked.Token); }
+                    try
+                    { client = await listener.AcceptTcpClientAsync(linked.Token); }
                     catch (OperationCanceledException) { break; }
                     if (!sourcePolicy.IsAllowed(((IPEndPoint?)client.Client.RemoteEndPoint)?.Address))
                     {

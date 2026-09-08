@@ -52,6 +52,7 @@ builder.Services.AddSingleton<OvsdbJsonRpcClient>();
 builder.Services.AddSingleton<TeamLabDataPlanePreparationService>();
 builder.Services.AddSingleton<TeamLabOvnNetworkProvider>();
 builder.Services.AddSingleton<TeamLabOvsAttachmentProvider>();
+builder.Services.AddSingleton<TeamLabManagedNicProvider>();
 builder.Services.AddSingleton<LinuxNetworkAttachmentService>();
 builder.Services.AddSingleton<TeamLabExecutionEventJournal>();
 builder.Services.AddSingleton<TeamLabExecutionPlanExecutor>();

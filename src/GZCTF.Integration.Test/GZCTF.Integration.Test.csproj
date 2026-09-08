@@ -30,6 +30,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Update="Fixtures/Sftp/Dockerfile" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="Fixtures/Ovn/Dockerfile" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="Fixtures/Hybrid/*" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../scenarios/devices/modbus-plc/*" Link="Fixtures/Modbus/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <ProjectReference Include="..\GZCTF\GZCTF.csproj" />
     <ProjectReference Include="..\GZCTF.Agent\GZCTF.Agent.csproj" />
     <ProjectReference Include="..\GZCTF.GuestControl.Contracts\GZCTF.GuestControl.Contracts.csproj" />

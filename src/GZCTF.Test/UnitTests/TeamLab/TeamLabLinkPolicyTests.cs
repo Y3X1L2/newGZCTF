@@ -16,6 +16,83 @@ namespace GZCTF.Test.UnitTests.TeamLab;
 
 public sealed class TeamLabLinkPolicyTests
 {
+    [Fact]
+    public async Task FailedRecoveryRemainsVisibleAndCanBeRetried()
+    {
+        using var context = CreateContext();
+        var runtime = await AddRuntimeAsync(context);
+        var created = await CreateService(context).ApplyAsync(Command(runtime.PublicId, "latency", """{"delayMillis":10}"""), default);
+        var failed = await CreateService(context, false).RecoverAsync(created.Id, default);
+        Assert.Equal("failed", failed.Status);
+        Assert.Null(failed.RecoveredAt);
+        Assert.NotNull(failed.LastError);
+        var recovered = await CreateService(context).RecoverAsync(created.Id, default);
+        Assert.Equal("recovered", recovered.Status);
+        Assert.Null(recovered.LastError);
+    }
+
+    [Fact]
+    public async Task ScheduledRecoveryRequiresRealDispatcherSuccess()
+    {
+        using var context = CreateContext();
+        var runtime = await AddRuntimeAsync(context);
+        var created = await CreateService(context).ApplyAsync(Command(runtime.PublicId, "latency", """{"delayMillis":10}"""), default);
+        var policy = await context.TeamLabLinkPolicies.SingleAsync(item => item.PublicId == created.Id);
+        policy.RecoverAt = DateTimeOffset.UtcNow.AddMinutes(-1);
+        await context.SaveChangesAsync();
+        Assert.Equal(0, await CreateService(context, false).RecoverDueAsync(20, default));
+        Assert.Equal(TeamLabLinkPolicyStatus.Failed, policy.Status);
+        Assert.Null(policy.RecoveredAt);
+        policy.UpdatedAt = DateTimeOffset.UtcNow.AddMinutes(-2);
+        await context.SaveChangesAsync();
+        Assert.Equal(1, await CreateService(context).RecoverDueAsync(20, default));
+        Assert.Equal(TeamLabLinkPolicyRecoverOrigin.Scheduled, policy.RecoverOrigin);
+    }
+
+    [Fact]
+    public async Task PreviousGenerationPolicyCannotModifyCurrentNetwork()
+    {
+        using var context = CreateContext();
+        var runtime = await AddRuntimeAsync(context);
+        var created = await CreateService(context).ApplyAsync(Command(runtime.PublicId, "latency", """{"delayMillis":10}"""), default);
+        runtime.Generation++;
+        await context.SaveChangesAsync();
+        var dispatcher = new Mock<ITeamLabLinkPolicyDispatcher>(MockBehavior.Strict);
+        var result = await new TeamLabLinkPolicyService(context, dispatcher.Object).RecoverAsync(created.Id, default);
+        Assert.Equal("failed", result.Status);
+        Assert.Null(result.RecoveredAt);
+        dispatcher.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public void DispatcherTargetsSelectedAssetNodeInsteadOfFirstShard()
+    {
+        var first = Guid.NewGuid();
+        var second = Guid.NewGuid();
+        var runtime = new TeamLabRuntime { Generation = 3,
+            Shards = [new() { Id = 1, WorkerNodeId = first, Generation = 3 }, new() { Id = 2, WorkerNodeId = second, Generation = 3 }],
+            Assets = [new() { TopologyKey = "plc", WorkerNodeId = second, ShardId = 2, Generation = 3 }] };
+        var target = GZCTF.Modules.TeamLab.Infrastructure.TeamLabLinkPolicyDispatcher.Resolve(runtime, "plc");
+        Assert.NotNull(target);
+        Assert.Equal(second, target.Value.NodeId);
+        Assert.Null(GZCTF.Modules.TeamLab.Infrastructure.TeamLabLinkPolicyDispatcher.Resolve(runtime, "missing"));
+    }
+
+    [Theory]
+    [InlineData("router-one\nrouter-two", null)]
+    [InlineData("", null)]
+    [InlineData("[]", null)]
+    [InlineData("\"router-owned\"\n", "router-owned")]
+    public void NatLookupNeverGuessesAnAmbiguousRouter(string output, string? expected)
+    {
+        Assert.Equal(expected, GZCTF.Agent.Services.TeamLab.TeamLabLinkPolicyService.UniqueIdentifier(output));
+        var id = Guid.NewGuid();
+        var command = GZCTF.Agent.Services.TeamLab.TeamLabLinkPolicyService.BuildRouterLookupCommand("unix:/run/ovn/ovnnb_db.sock", id, 3);
+        Assert.Contains($"external_ids:gzctf-runtime={id:D}", command);
+        Assert.Contains("external_ids:gzctf-generation=3", command);
+        Assert.DoesNotContain("head -1", command);
+    }
+
     private static AppDbContext CreateContext() =>
         new(new DbContextOptionsBuilder<AppDbContext>()
             .UseInMemoryDatabase($"link-policies-{Guid.NewGuid():N}")
@@ -105,11 +182,33 @@ public sealed class TeamLabLinkPolicyTests
     }
 
     [Theory]
+    [InlineData(80, 80)]
+    [InlineData(18080, 80)]
+    public void PortMappingAlwaysUsesPortScopedVip(int externalPort, int internalPort)
+    {
+        var parameters = JsonSerializer.Serialize(new { mode = "dnat", externalPort, internalPort, internalAddress = "10.80.0.2", protocol = "udp" });
+        var commands = GZCTF.Agent.Services.TeamLab.TeamLabLinkPolicyService.BuildNatCommands("unix:/test", "router-owned", null,
+            "10.80.0.0/24", "10.80.0.1", parameters, out var error);
+        Assert.Null(error);
+        var command = Assert.Single(commands);
+        Assert.Contains($"10.80.0.1:{externalPort}", command);
+        Assert.Contains($"10.80.0.2:{internalPort}", command);
+        Assert.Contains("lb-add", command);
+        Assert.DoesNotContain("dnat_and_snat", command);
+        var cleanup = GZCTF.Agent.Services.TeamLab.TeamLabLinkPolicyService.BuildNatRecoverCommands("unix:/test", "router-owned", parameters,
+            "10.80.0.1", out error);
+        Assert.Null(error);
+        Assert.DoesNotContain("|| true", Assert.Single(cleanup));
+        Assert.Contains("lb-del", cleanup[0]);
+    }
+
+    [Theory]
     [InlineData("latency", """{"delayMillis":0}""")]
     [InlineData("packet-loss", """{"lossPercent":101}""")]
     [InlineData("latency", """{}""")]
     [InlineData("access-rule", """{"direction":"sideways","action":"deny"}""")]
     [InlineData("nat", """{"mode":"dnat","externalPort":80}""")]
+    [InlineData("nat", """{"mode":"dnat","externalPort":80.5,"internalAddress":"10.0.0.2"}""")]
     [InlineData("link-break", "[]")]
     public async Task Apply_RejectsInvalidKindParameters(string kind, string parameters)
     {

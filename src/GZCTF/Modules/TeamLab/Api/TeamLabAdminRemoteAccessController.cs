@@ -5,6 +5,7 @@ using GZCTF.Modules.TeamLab.Contracts;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using System.Net.WebSockets;
+using GZCTF.Modules.TeamLab.Domain.Runtime;
 
 namespace GZCTF.Modules.TeamLab.Api;
 
@@ -15,6 +16,16 @@ public sealed class TeamLabAdminRemoteAccessController(
     ITeamLabRemoteAccessService remoteAccess,
     UserManager<UserInfo> users) : ControllerBase
 {
+    [HttpGet("remote-sessions")]
+    public async Task<TeamLabRemoteSessionPage> List(CancellationToken cancellationToken,
+        Guid? runtimeId = null, Guid? workerNodeId = null, Guid? requestedByUserId = null,
+        TeamLabRemoteSessionStatus? status = null, long? after = null, int limit = 50)
+    {
+        var actor = await ActorAsync();
+        return await remoteAccess.ListAsync(actor.Id, actor.Role >= Role.Admin, runtimeId, workerNodeId,
+            requestedByUserId, status, after, limit, cancellationToken);
+    }
+
     [HttpGet("runtimes/{runtimeId:guid}/assets/{assetId:int}/remote-access")]
     public async Task<TeamLabRemoteAccessAvailabilityModel> GetAvailability(
         Guid runtimeId, int assetId, CancellationToken cancellationToken)
@@ -36,8 +47,9 @@ public sealed class TeamLabAdminRemoteAccessController(
         Guid runtimeId, int assetId, CreateTeamLabRemoteSessionModel model, CancellationToken cancellationToken)
     {
         var actor = await ActorAsync();
-        var session = await remoteAccess.CreateAsync(runtimeId, assetId, actor.Id, actor.Role >= Role.Admin,
-            model.Reason, cancellationToken);
+        var session = model.VncConsole
+            ? await remoteAccess.CreateConsoleAsync(runtimeId, assetId, actor.Id, actor.Role >= Role.Admin, model.Reason, cancellationToken)
+            : await remoteAccess.CreateAsync(runtimeId, assetId, actor.Id, actor.Role >= Role.Admin, model.Reason, cancellationToken);
         return Created($"/api/admin/teamlab/remote-sessions/{session.Id:D}", session);
     }
 

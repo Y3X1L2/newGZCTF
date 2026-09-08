@@ -1,6 +1,7 @@
 using Docker.DotNet;
 using Docker.DotNet.Models;
 using GZCTF.Agent.Models;
+using GZCTF.TeamLab.Contracts;
 using Microsoft.Extensions.Options;
 using System.Net;
 using System.Net.Sockets;
@@ -27,6 +28,16 @@ public class DockerService
         _resourceLock = resourceLock;
         _logger = logger;
         _client = new DockerClientConfiguration(new Uri(_config.Uri)).CreateClient();
+    }
+
+    public async Task<bool> IsAvailableAsync(CancellationToken token)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(token);
+        timeout.CancelAfter(TimeSpan.FromSeconds(3));
+        try { await _client.System.PingAsync(timeout.Token); return true; }
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { throw; }
+        catch (Exception error) when (error is HttpRequestException or IOException or DockerApiException or OperationCanceledException)
+        { return false; }
     }
 
     public async Task<AgentContainerResponse?> CreateContainerAsync(CreateContainerRequest request, CancellationToken token)
@@ -257,6 +268,33 @@ public class DockerService
         return BuildContainerResponse(inspect, primaryNetwork, portSpec, request.ExposedPort);
     }
 
+    public async Task ControlTeamLabPowerAsync(string containerId, int runtimeId, int generation,
+        string planDigest, string action, CancellationToken token)
+    {
+        var inspect = await _client.Containers.InspectContainerAsync(containerId, token);
+        var labels = inspect.Config.Labels;
+        if (labels is null || !labels.TryGetValue("ManagedBy", out var owner) || owner != "GZCTF" ||
+            !labels.TryGetValue("GZCTF.RuntimeId", out var runtime) || runtime != runtimeId.ToString(System.Globalization.CultureInfo.InvariantCulture) ||
+            !labels.TryGetValue("GZCTF.Generation", out var actualGeneration) || actualGeneration != generation.ToString(System.Globalization.CultureInfo.InvariantCulture) ||
+            !labels.TryGetValue("GZCTF.TeamLabPlanDigest", out var digest) || !string.Equals(digest, planDigest, StringComparison.OrdinalIgnoreCase))
+            throw new AgentOperationException("Conflict", "asset_control.identity_conflict", "Container execution identity changed.", false, 409);
+        switch (action)
+        {
+            case "inspect": break;
+            case "stop":
+                if (inspect.State.Paused) await _client.Containers.UnpauseContainerAsync(inspect.ID, token);
+                if (inspect.State.Running) await _client.Containers.StopContainerAsync(inspect.ID, new ContainerStopParameters { WaitBeforeKillSeconds = 10 }, token);
+                break;
+            case "pause":
+                if (!inspect.State.Paused) await _client.Containers.PauseContainerAsync(inspect.ID, token);
+                break;
+            case "resume":
+                if (inspect.State.Paused) await _client.Containers.UnpauseContainerAsync(inspect.ID, token);
+                break;
+            default: throw new ArgumentException("Unsupported container power action.", nameof(action));
+        }
+    }
+
     public async Task StartContainerAsync(
         string containerId,
         int expectedGeneration,
@@ -268,7 +306,8 @@ public class DockerService
                 "Conflict", "runtime.identity_conflict",
                 "Container generation does not match the requested runtime identity.", false,
                 StatusCodes.Status409Conflict);
-        if (inspect.State?.Running == true) return;
+        if (inspect.State?.Running == true)
+            return;
         await _client.Containers.StartContainerAsync(containerId, new ContainerStartParameters(), token);
     }
 
@@ -349,7 +388,9 @@ public class DockerService
 
     public async Task PauseContainerAsync(string containerId, int expectedGeneration, CancellationToken token)
     {
-        await EnsureManagedContainerGenerationAsync(containerId, expectedGeneration, token);
+        var inspect = await EnsureManagedContainerGenerationAsync(containerId, expectedGeneration, token);
+        if (inspect.State.Paused)
+            return;
         try
         {
             await _client.Containers.PauseContainerAsync(containerId, token);
@@ -362,7 +403,9 @@ public class DockerService
 
     public async Task ResumeContainerAsync(string containerId, int expectedGeneration, CancellationToken token)
     {
-        await EnsureManagedContainerGenerationAsync(containerId, expectedGeneration, token);
+        var inspect = await EnsureManagedContainerGenerationAsync(containerId, expectedGeneration, token);
+        if (inspect.State.Running && !inspect.State.Paused)
+            return;
         try
         {
             await _client.Containers.UnpauseContainerAsync(containerId, token);
@@ -373,7 +416,7 @@ public class DockerService
         }
     }
 
-    private async Task EnsureManagedContainerGenerationAsync(
+    private async Task<ContainerInspectResponse> EnsureManagedContainerGenerationAsync(
         string containerId,
         int expectedGeneration,
         CancellationToken token)
@@ -401,6 +444,7 @@ public class DockerService
                 "Conflict", "runtime.identity_conflict",
                 "Container generation does not match the requested runtime identity.", false,
                 StatusCodes.Status409Conflict);
+        return inspect;
     }
 
     internal static bool MatchesExpectedGeneration(
@@ -698,57 +742,185 @@ public class DockerService
         int generation,
         string containerId,
         WebSocket socket,
-        CancellationToken token)
+        CancellationToken token,
+        Action<Func<CancellationToken, Task>>? registerCleanup = null)
     {
         var identity = await InspectTeamLabContainerAsync(containerId, token);
         if (identity is null || !identity.Running || identity.RuntimeId != runtimeId || identity.Generation != generation)
             throw new AgentOperationException("RemoteAccess", "remote_access.container_identity_mismatch",
                 "The requested container does not match the active TeamLab runtime identity.", false);
 
-        var exec = await _client.Exec.ExecCreateContainerAsync(containerId, new ContainerExecCreateParameters
-        {
-            AttachStdin = true,
-            AttachStdout = true,
-            AttachStderr = true,
-            Tty = true,
-            Cmd = ["/bin/sh"]
-        }, token);
-        using var stream = await _client.Exec.StartAndAttachContainerExecAsync(exec.ID, false, token);
-        using var linked = CancellationTokenSource.CreateLinkedTokenSource(token);
-        var input = CopySocketToTerminalAsync(socket, stream, linked.Token);
-        var output = CopyTerminalToSocketAsync(socket, stream, linked.Token);
-        await Task.WhenAny(input, output);
-        linked.Cancel();
-        try { await Task.WhenAll(input, output); }
-        catch (OperationCanceledException) when (linked.IsCancellationRequested) { }
-    }
+        var prerequisite = await ExecuteContainerCommandAsync(containerId,
+            ["/bin/sh", "-c", "command -v tr >/dev/null && command -v grep >/dev/null && command -v kill >/dev/null && test -r /proc/self/environ"],
+            TimeSpan.FromSeconds(5), token);
+        if (!prerequisite.Succeeded)
+            throw new AgentOperationException("RemoteAccess", "remote_access.terminal_unsupported",
+                "The container does not provide the shell and process utilities required for managed terminal cleanup.", false);
 
-    private static async Task CopySocketToTerminalAsync(WebSocket socket, MultiplexedStream terminal, CancellationToken token)
-    {
-        var buffer = new byte[8192];
-        while (socket.State == WebSocketState.Open && !token.IsCancellationRequested)
+        var marker = Guid.NewGuid().ToString("N");
+        registerCleanup?.Invoke(ct => CleanupTerminalProcessesAsync(containerId, marker, ct));
+        try
         {
-            var result = await socket.ReceiveAsync(buffer, token);
-            if (result.MessageType == WebSocketMessageType.Close) break;
-            await terminal.WriteAsync(buffer, 0, result.Count, token);
-            while (!result.EndOfMessage)
+            var exec = await _client.Exec.ExecCreateContainerAsync(containerId, new ContainerExecCreateParameters
             {
-                result = await socket.ReceiveAsync(buffer, token);
-                if (result.MessageType == WebSocketMessageType.Close) return;
-                await terminal.WriteAsync(buffer, 0, result.Count, token);
-            }
+                AttachStdin = true,
+                AttachStdout = true,
+                AttachStderr = true,
+                Tty = true,
+                Env = ["TERM=xterm-256color", "LANG=C.UTF-8", $"GZCTF_TERMINAL_SESSION={marker}"],
+                Cmd = ["/bin/sh", "-c", "if [ -n \"$SHELL\" ] && [ -x \"$SHELL\" ]; then exec \"$SHELL\" -i; else exec /bin/sh -i; fi"]
+            }, token);
+            // Docker.DotNet 3.x treats HTTP 101 as an error; use the standard HTTP duplex
+            // stream for PTY attachment while keeping exec creation/resize in the SDK.
+            using var connection = await DockerTerminalConnection.OpenAsync(new Uri(_config.Uri), exec.ID, token);
+            var stream = connection.Stream;
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(token);
+            var input = TeamLabTerminalProtocol.CopyInputAsync(socket,
+                (bytes, ct) => stream.WriteAsync(bytes, 0, bytes.Length, ct),
+                (cols, rows, ct) => _client.Exec.ResizeContainerExecTtyAsync(exec.ID,
+                    new ContainerResizeParameters { Width = (uint)cols, Height = (uint)rows }, ct), linked.Token);
+            var output = CopyTerminalToSocketAsync(socket, stream, linked.Token);
+            await Task.WhenAny(input, output);
+            linked.Cancel();
+            try
+            { await Task.WhenAll(input, output); }
+            catch (OperationCanceledException) when (linked.IsCancellationRequested) { }
+        }
+        finally
+        {
+            using var cleanupTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            await CleanupTerminalProcessesAsync(containerId, marker, cleanupTimeout.Token);
         }
     }
 
-    private static async Task CopyTerminalToSocketAsync(WebSocket socket, MultiplexedStream terminal, CancellationToken token)
+    public async Task<TeamLabFileResult> ManageTeamLabFilesAsync(TeamLabContainerFileRequest request, CancellationToken token)
+    {
+        if (!TeamLabFileLimits.IsValidPath(request.Path) || request.RuntimeId <= 0 || request.Generation <= 0 ||
+            request.Operation is not ("list" or "download" or "upload" or "delete") ||
+            request.Content is { Length: > TeamLabFileLimits.MaxBytes })
+            throw new AgentOperationException("Validation", "files.invalid_request", "Invalid file request.", false);
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(token);
+        deadline.CancelAfter(TimeSpan.FromSeconds(30));
+        var inspect = await _client.Containers.InspectContainerAsync(request.ContainerId, deadline.Token);
+        var labels = inspect.Config.Labels;
+        if (labels is null || !labels.TryGetValue("ManagedBy", out var owner) || owner != "GZCTF" ||
+            !labels.TryGetValue("GZCTF.RuntimeId", out var runtime) || runtime != request.RuntimeId.ToString(System.Globalization.CultureInfo.InvariantCulture) ||
+            !labels.TryGetValue("GZCTF.Generation", out var generation) || generation != request.Generation.ToString(System.Globalization.CultureInfo.InvariantCulture))
+            throw new AgentOperationException("Conflict", "files.identity_mismatch", "Container ownership does not match.", false, 409);
+        if (!OperatingSystem.IsLinux() || inspect.State is not { Running: true, Pid: > 0 })
+            throw new AgentOperationException("Conflict", "files.unavailable", "A running Linux container is required.", false, 409);
+        try
+        {
+            using var store = TeamLab.LinuxContainerFileStore.ForProcess(inspect.State.Pid, inspect.ID);
+            var current = await _client.Containers.InspectContainerAsync(inspect.ID, deadline.Token);
+            if (current.State.Pid != inspect.State.Pid || current.State.StartedAt != inspect.State.StartedAt)
+                throw new IOException("Container process changed during file access.");
+            return await store.ExecuteAsync(request, deadline.Token);
+        }
+        catch (TeamLab.LinuxContainerFileStore.NativeFileException error)
+        {
+            var (code, message, status) = error.ErrorNumber switch
+            {
+                2 => ("files.not_found", "未找到文件或目录。", 404),
+                17 => ("files.destination_exists", "目标已存在，请确认后覆盖。", 409),
+                39 => ("files.directory_not_empty", "目录不是空目录，不能删除。", 409),
+                13 or 30 => ("files.permission_denied", "该路径不允许此文件操作。", 403),
+                28 => ("files.storage_full", "目标文件系统空间不足。", 507),
+                _ => ("files.path_unavailable", "该路径不可用于文件操作，请检查挂载边界和文件类型。", 409)
+            };
+            throw new AgentOperationException("Validation", code, message, false, status);
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            throw new AgentOperationException("Validation", "files.path_unavailable",
+                "File operation failed: check the path, mount boundary, file size, destination conflict and Agent host PID access.", false, 409);
+        }
+    }
+
+    public async Task<TeamLabContainerDiagnostics> GetTeamLabDiagnosticsAsync(
+        TeamLabContainerDiagnosticsRequest request, CancellationToken token)
+    {
+        if (request.Tail is < 1 or > 1000 || request.RuntimeId <= 0 || request.Generation <= 0 ||
+            string.IsNullOrWhiteSpace(request.ContainerId))
+            throw new AgentOperationException("Validation", "diagnostics.invalid_request", "Invalid diagnostic request.", false);
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(token);
+        deadline.CancelAfter(TimeSpan.FromSeconds(10));
+        var inspect = await _client.Containers.InspectContainerAsync(request.ContainerId, deadline.Token);
+        var labels = inspect.Config.Labels;
+        if (labels is null || !labels.TryGetValue("ManagedBy", out var managedBy) || managedBy != "GZCTF" ||
+            !labels.TryGetValue("GZCTF.RuntimeId", out var runtimeId) || runtimeId != request.RuntimeId.ToString(System.Globalization.CultureInfo.InvariantCulture) ||
+            !labels.TryGetValue("GZCTF.Generation", out var generation) || generation != request.Generation.ToString(System.Globalization.CultureInfo.InvariantCulture))
+            throw new AgentOperationException("Validation", "diagnostics.identity_mismatch", "Container ownership or generation does not match.", false);
+        const int limit = 64 * 1024;
+        using var output = new MemoryStream();
+        var buffer = new byte[8192];
+        var truncated = false;
+        string? logsError = null;
+        try
+        {
+            using var logs = await _client.Containers.GetContainerLogsAsync(inspect.ID, inspect.Config.Tty,
+                new ContainerLogsParameters { ShowStdout = true, ShowStderr = true, Follow = false,
+                    Timestamps = true, Tail = request.Tail.ToString(System.Globalization.CultureInfo.InvariantCulture) }, deadline.Token);
+            while (true)
+            {
+                var chunk = await logs.ReadOutputAsync(buffer, 0, buffer.Length, deadline.Token);
+                if (chunk.EOF) break;
+                var remaining = limit - (int)output.Length;
+                output.Write(buffer, 0, Math.Min(chunk.Count, remaining));
+                if (chunk.Count > remaining) { truncated = true; break; }
+            }
+        }
+        catch (DockerApiException ex) when (ex.StatusCode != HttpStatusCode.NotFound)
+        {
+            logsError = "diagnostics.logs_unavailable";
+        }
+        catch (OperationCanceledException) when (!token.IsCancellationRequested && deadline.IsCancellationRequested)
+        {
+            logsError = "diagnostics.logs_timeout";
+        }
+        token.ThrowIfCancellationRequested();
+        return new(inspect.State.Status, inspect.State.Paused, inspect.State.ExitCode, inspect.RestartCount,
+            inspect.State.StartedAt, inspect.State.FinishedAt,
+            DecodeDiagnosticOutput(output.ToArray(), truncated || logsError is not null), truncated,
+            DateTimeOffset.UtcNow, logsError);
+    }
+
+    internal static string DecodeDiagnosticOutput(byte[] bytes, bool incomplete)
+    {
+        var chars = new char[Encoding.UTF8.GetMaxCharCount(bytes.Length)];
+        // A bounded read may end within a character; keep that suffix buffered rather than inventing a replacement.
+        var count = Encoding.UTF8.GetDecoder().GetChars(bytes, 0, bytes.Length, chars, 0, flush: !incomplete);
+        return new string(chars, 0, count);
+    }
+
+    private async Task CleanupTerminalProcessesAsync(string containerId, string marker, CancellationToken token)
+    {
+        var identity = await InspectTeamLabContainerAsync(containerId, token);
+        if (identity is null || !identity.Running)
+            return;
+        // Match a random, exec-only environment identity inside this container. No
+        // command text, credentials or host process IDs are used to select processes.
+        var command = "command -v tr >/dev/null && command -v grep >/dev/null || exit 127; " +
+            "for f in /proc/[0-9]*/environ; do " +
+            $"tr '\\000' '\\n' < \"$f\" 2>/dev/null | grep -Fqx 'GZCTF_TERMINAL_SESSION={marker}' || continue; " +
+            "p=${f#/proc/}; p=${p%/environ}; kill -KILL \"$p\" 2>/dev/null || true; done; " +
+            "for f in /proc/[0-9]*/environ; do " +
+            $"tr '\\000' '\\n' < \"$f\" 2>/dev/null | grep -Fqx 'GZCTF_TERMINAL_SESSION={marker}' && exit 1; done; exit 0";
+        var result = await ExecuteContainerCommandAsync(containerId, ["/bin/sh", "-c", command], TimeSpan.FromSeconds(5), token);
+        if (!result.Succeeded)
+            throw new AgentOperationException("RemoteAccess", "remote_access.cleanup_pending",
+                "Terminal process cleanup is incomplete.", true);
+    }
+
+    private static async Task CopyTerminalToSocketAsync(WebSocket socket, Stream terminal, CancellationToken token)
     {
         var buffer = new byte[8192];
         while (socket.State == WebSocketState.Open && !token.IsCancellationRequested)
         {
-            var result = await terminal.ReadOutputAsync(buffer, 0, buffer.Length, token);
-            if (result.EOF) break;
-            if (result.Count > 0)
-                await socket.SendAsync(buffer.AsMemory(0, result.Count), WebSocketMessageType.Text, true, token);
+            var count = await terminal.ReadAsync(buffer, token);
+            if (count == 0)
+                break;
+            await socket.SendAsync(buffer.AsMemory(0, count), WebSocketMessageType.Binary, true, token);
         }
     }
 

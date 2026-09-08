@@ -34,6 +34,7 @@ public sealed class TeamLabDevicePackageService(AppDbContext context)
         var assetKinds = ParseAssetKinds(command.SupportedAssetKinds);
         var ports = ParsePorts(command.Ports);
         var parameters = ParameterSchema(command.ParameterSchema);
+        await TeamLabDeviceExecutionCompiler.ReadSchemaAsync(parameters, cancellationToken);
         var health = HealthDeclaration(command.HealthDeclaration);
         var eventTypes = StringListJson(
             command.ProtocolEventTypes, 32, "device_package_protocol_event_types_invalid", "设备包协议事件类型无效");
@@ -144,7 +145,8 @@ public sealed class TeamLabDevicePackageService(AppDbContext context)
         package.IsEnabled,
         package.IsArchived,
         package.CreatedAt,
-        package.UpdatedAt);
+        package.UpdatedAt,
+        package.Id);
 
     private static IReadOnlyList<string> ParseAssetKinds(IReadOnlyList<string>? kinds)
     {

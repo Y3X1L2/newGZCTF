@@ -12,6 +12,9 @@ public sealed class RemoteAccessController(
     RemoteAccessRelayService relays,
     TeamLabTerminalSessionRegistry terminals) : ControllerBase
 {
+    [HttpGet("inventory")]
+    public Guid[] Inventory() => relays.ActiveSessionIds();
+
     [HttpPost("relays")]
     public Task<RemoteRelayResponse> CreateRelay(CreateRemoteRelayRequest request, CancellationToken cancellationToken) =>
         relays.CreateAsync(request, cancellationToken);
@@ -52,18 +55,25 @@ public sealed class RemoteAccessController(
                 "The terminal request is invalid.", false);
 
         var terminalToken = terminals.Attach(sessionId, expiresAt);
+        Exception? failure = null;
         try
         {
             using var expiry = new CancellationTokenSource(expiresAt - DateTimeOffset.UtcNow);
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, expiry.Token, terminalToken);
             using var socket = await HttpContext.WebSockets.AcceptWebSocketAsync();
-            await docker.RunTeamLabTerminalAsync(runtimeId, generation, containerId, socket, linked.Token);
+            await docker.RunTeamLabTerminalAsync(runtimeId, generation, containerId, socket, linked.Token,
+                cleanup => terminals.RegisterCleanup(sessionId, cleanup));
             if (socket.State is WebSocketState.Open or WebSocketState.CloseReceived)
                 await socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "terminal_closed", CancellationToken.None);
         }
+        catch (Exception exception)
+        {
+            failure = exception;
+            throw;
+        }
         finally
         {
-            terminals.Detach(sessionId);
+            terminals.Detach(sessionId, failure);
         }
     }
 }

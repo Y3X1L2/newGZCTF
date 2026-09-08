@@ -6,6 +6,9 @@ namespace GZCTF.Modules.TeamLab.Infrastructure;
 
 public sealed class AgentTeamLabRemoteRelayGateway(AgentClient agent) : ITeamLabRemoteRelayGateway
 {
+    public Task<IReadOnlyList<Guid>> InventoryAsync(Guid workerNodeId, CancellationToken cancellationToken) =>
+        agent.GetRemoteSessionInventoryAsync(workerNodeId, cancellationToken);
+
     public async Task<TeamLabRemoteRelayResult> CreateAsync(
         Guid workerNodeId,
         TeamLabRemoteRelayRequest request,
@@ -19,7 +22,7 @@ public sealed class AgentTeamLabRemoteRelayGateway(AgentClient agent) : ITeamLab
             request.NativeIdentity,
             request.TargetAddress,
             request.TargetPort,
-            request.ExpiresAt), cancellationToken);
+            request.ExpiresAt, request.VncConsole), cancellationToken);
         return new TeamLabRemoteRelayResult(relay.Port, relay.ExpiresAt);
     }
 

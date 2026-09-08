@@ -23,7 +23,8 @@ public sealed class TeamLabRuntimeOperationHandler(
     ApiOperationService operations,
     ITeamLabRolloutApplicationService rolloutService,
     TeamLabReleaseImagePreparationService preparation,
-    TeamLabWebhookService webhooks) : IApiOperationHandler
+    TeamLabWebhookService webhooks,
+    ITeamLabRemoteAccessService remoteAccess) : IApiOperationHandler
 {
     public string Kind => TeamLabRuntimeOperationApplicationService.OperationKind;
 
@@ -115,33 +116,21 @@ public sealed class TeamLabRuntimeOperationHandler(
             await operations.UpdateProgressAsync(operationId, leaseOwner,
                 job.Kind == TeamLabRuntimeOperationKind.RuntimePause ? "runtime-pausing" : "runtime-resuming",
                 0, 1, "teamlab-runtime", runtimeId.ToString("D"), null, cancellationToken);
-            TeamLabRuntimeProjectionModel projection;
-            if (payload.RolloutId is { } rolloutPublicId)
-            {
-                var rolloutId = await context.TeamLabRollouts.AsNoTracking()
-                    .Where(rollout => rollout.PublicId == rolloutPublicId)
-                    .Select(rollout => (int?)rollout.Id)
-                    .SingleAsync(cancellationToken)
-                    ?? throw new ApiOperationTerminalException("teamlab_payload_invalid", "rollout 不存在。");
-                projection = job.Kind == TeamLabRuntimeOperationKind.RuntimePause
-                    ? await runtimes.PauseRolloutTargetAsync(runtimeId, rolloutId, cancellationToken)
-                    : await runtimes.ResumeRolloutTargetAsync(runtimeId, rolloutId, cancellationToken);
-            }
-            else
-            {
-                projection = job.Kind == TeamLabRuntimeOperationKind.RuntimePause
-                    ? await runtimes.PauseAsync(runtimeId, cancellationToken)
-                    : await runtimes.ResumeAsync(runtimeId, cancellationToken);
-            }
+            var ticketId = await context.DeploymentQueueTickets.AsNoTracking()
+                .Where(ticket => ticket.ApiOperationId == operationId && ticket.TeamLabRuntimeId != null)
+                .Select(ticket => (Guid?)ticket.Id).SingleOrDefaultAsync(cancellationToken);
+            if (ticketId is null)
+                ticketId = (await runtimes.EnqueueLifecycleTicketAsync(runtimeId,
+                    job.Kind == TeamLabRuntimeOperationKind.RuntimePause,
+                    operation.ActorUserId ?? throw MissingPayload("操作执行者"),
+                    operationId, payload.RolloutId, cancellationToken)).TicketId;
             job.RuntimePublicId = runtimeId;
             job.RuntimeId = await context.TeamLabRuntimes.AsNoTracking()
                 .Where(runtime => runtime.PublicId == runtimeId)
                 .Select(runtime => (int?)runtime.Id)
                 .SingleAsync(cancellationToken);
-            await operations.UpdateProgressAsync(operationId, leaseOwner,
-                job.Kind == TeamLabRuntimeOperationKind.RuntimePause ? "runtime-paused" : "runtime-resumed",
-                1, 1, "teamlab-runtime", runtimeId.ToString("D"), null, cancellationToken);
-            await CompleteJobAsync(job, projection.ToOpen(), cancellationToken);
+            await context.SaveChangesAsync(cancellationToken);
+            await WaitForTicketAsync(job, ticketId.Value, operationId, leaseOwner, cancellationToken);
             return;
         }
 
@@ -277,6 +266,36 @@ public sealed class TeamLabRuntimeOperationHandler(
 
         switch (job.Kind)
         {
+            case TeamLabRuntimeOperationKind.RemoteSessionCreate:
+            case TeamLabRuntimeOperationKind.RemoteSessionEnd:
+            {
+                var runtimeId = payload.RuntimeId ?? throw MissingPayload("运行时 ID");
+                await RequireRuntimeScopeAsync(runtimeId, payload, operation, isAdministrator, true, cancellationToken);
+                TeamLabRemoteSessionModel result;
+                if (job.Kind == TeamLabRuntimeOperationKind.RemoteSessionCreate)
+                    result = await remoteAccess.CreateForOperationAsync(runtimeId,
+                        payload.RemoteAssetId ?? throw MissingPayload("资产 ID"), actorUserId,
+                        payload.RemoteReason ?? throw MissingPayload("访问原因"), operation.Id, cancellationToken, payload.RemoteVncConsole);
+                else
+                {
+                    var sessionId = payload.RemoteSessionId ?? throw MissingPayload("会话 ID");
+                    var session = await remoteAccess.GetAsync(sessionId, actorUserId, false, cancellationToken);
+                    if (session.RuntimeId != runtimeId)
+                        throw new ApiOperationTerminalException("teamlab_scope_mismatch", "会话不属于请求的运行时。");
+                    try { await remoteAccess.EndAsync(sessionId, actorUserId, false, "api-close", cancellationToken); }
+                    catch (TeamLabApiContractException exception) when (exception.Code == "remote_session_cleanup_pending")
+                    {
+                        throw new ApiOperationDeferredException("remote-session-cleaning", exception.Code,
+                            "远程会话正在等待基础设施清理。", TimeSpan.FromSeconds(30));
+                    }
+                    result = await remoteAccess.GetAsync(sessionId, actorUserId, false, cancellationToken);
+                }
+                await operations.UpdateProgressAsync(operation.Id, leaseOwner,
+                    job.Kind == TeamLabRuntimeOperationKind.RemoteSessionCreate ? "remote-session-ready" : "remote-session-ended",
+                    1, 1, "teamlab-remote-session", result.Id.ToString("D"), null, cancellationToken);
+                await CompleteJobAsync(job, new { sessionId = result.Id, runtimeId = result.RuntimeId }, cancellationToken);
+                return;
+            }
             case TeamLabRuntimeOperationKind.TopologyCreate:
             {
                 await operations.UpdateProgressAsync(operation.Id, leaseOwner, "topology-creating", 0, 1,
@@ -549,7 +568,8 @@ public sealed class TeamLabRuntimeOperationHandler(
             TeamLabRuntimeOperationKind.ReleasePreparation or TeamLabRuntimeOperationKind.ReleasePreparationRelease or
             TeamLabRuntimeOperationKind.WebhookCreate or
             TeamLabRuntimeOperationKind.WebhookRevoke or
-            TeamLabRuntimeOperationKind.WebhookReplay;
+            TeamLabRuntimeOperationKind.WebhookReplay or
+            TeamLabRuntimeOperationKind.RemoteSessionCreate or TeamLabRuntimeOperationKind.RemoteSessionEnd;
 
     private Task<bool> IsAdministratorAsync(Guid? actorUserId, CancellationToken cancellationToken) =>
         actorUserId is not { } userId
@@ -617,6 +637,8 @@ public sealed class TeamLabRuntimeOperationHandler(
                 DeploymentQueueTicketStatus.Cancelled => ("runtime-cancelled", 4L),
                 _ => ("runtime-queued", 1L)
             };
+            if (ticket.Operation is RuntimeOperationKind.Pause or RuntimeOperationKind.Resume)
+                stage = LifecycleTicketStage(ticket.Operation, ticket.Status);
             await operations.UpdateProgressAsync(operationId, leaseOwner, stage, progress, 4,
                 "teamlab-runtime", job.RuntimePublicId?.ToString("D"), ticket.Id, cancellationToken);
             if (ticket.Status == DeploymentQueueTicketStatus.Succeeded)
@@ -642,6 +664,18 @@ public sealed class TeamLabRuntimeOperationHandler(
             throw new ApiOperationTerminalException("teamlab_payload_missing", "TeamLab 操作负载不可用。");
         return protector.Unprotect(job.ProtectedPayload);
     }
+
+    internal static string LifecycleTicketStage(RuntimeOperationKind operation, DeploymentQueueTicketStatus status) =>
+        status switch
+        {
+            DeploymentQueueTicketStatus.Pending => "runtime-queued",
+            DeploymentQueueTicketStatus.Scheduling or DeploymentQueueTicketStatus.Scheduled => "runtime-assigned",
+            DeploymentQueueTicketStatus.Running => operation == RuntimeOperationKind.Pause ? "runtime-pausing" : "runtime-resuming",
+            DeploymentQueueTicketStatus.Succeeded => operation == RuntimeOperationKind.Pause ? "runtime-paused" : "runtime-resumed",
+            DeploymentQueueTicketStatus.Failed => "runtime-failed",
+            DeploymentQueueTicketStatus.Cancelled => "runtime-cancelled",
+            _ => "runtime-queued"
+        };
 
     private async Task CompleteJobAsync<T>(TeamLabRuntimeOperationJob job, T result, CancellationToken cancellationToken)
     {

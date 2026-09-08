@@ -68,10 +68,21 @@ public sealed class DeploymentQueueController(
             return NotFound();
 
         await queue.CancelAsync(ticket.Id, "Deployment queue ticket was cancelled by administrator.", token);
+        await context.Entry(ticket).ReloadAsync(token);
+        if (ticket.Status != DeploymentQueueTicketStatus.Cancelled)
+            return CancellationConflict(ticket.Status);
         var node = ticket.TargetNode;
         logger.SystemLog(
             $"Deployment queue ticket {ticket.Id} cancelled by administrator: kind={ticket.Kind}, game={ticket.GameId}, team={ticket.OwnerTeamId}, user={ticket.OwnerUserId}, challenge={ticket.ChallengeId}, node={node?.Name ?? node?.HostAddress ?? "unassigned"}.",
             TaskStatus.Exit, LogLevel.Information);
         return NoContent();
     }
+
+    internal static ConflictObjectResult CancellationConflict(DeploymentQueueTicketStatus status) => new(new
+    {
+        code = status == DeploymentQueueTicketStatus.Running ? "ticket_running" : "ticket_not_cancellable",
+        message = status == DeploymentQueueTicketStatus.Running
+            ? "任务正在执行，不能直接取消。请通过运行资源的停止或销毁操作进行清理。"
+            : "任务状态已变化，无法取消。请刷新后查看实际结果。"
+    });
 }

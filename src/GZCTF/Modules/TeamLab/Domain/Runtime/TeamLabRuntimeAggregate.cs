@@ -132,6 +132,8 @@ public class TeamLabRuntimeAsset
     [MaxLength(4096)] public string InterfaceSummaryJson { get; set; } = "[]";
     public TeamLabRuntimeStatus Status { get; set; } = TeamLabRuntimeStatus.Pending;
     public TeamLabAssetExecutionStage ExecutionStage { get; set; } = TeamLabAssetExecutionStage.Pending;
+    [MaxLength(16)] public string? DesiredPowerState { get; set; }
+    [MaxLength(96)] public string? SftpHostKeySha256 { get; set; }
     public Guid? AgentOperationId { get; set; }
     public long AgentSignalSequence { get; set; }
     public TeamLabEndpointObservationMode EndpointObservation { get; set; }
@@ -139,6 +141,8 @@ public class TeamLabRuntimeAsset
     public int? DevicePackageId { get; set; }
     [MaxLength(2048)] public string? DevicePackageParametersJson { get; set; }
     public Guid? ConnectorId { get; set; }
+    [MaxLength(8192)] public string? DeviceObservationJson { get; set; }
+    public DateTimeOffset? DeviceNextProbeAt { get; set; }
     public DateTimeOffset? ExecutionUpdatedAt { get; set; }
     [MaxLength(1024)] public string? LastError { get; set; }
     public TeamLabRuntime Runtime { get; set; } = null!;

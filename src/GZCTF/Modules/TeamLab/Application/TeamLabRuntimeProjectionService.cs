@@ -43,6 +43,9 @@ public sealed class TeamLabRuntimeProjectionService(AppDbContext context)
                 .FirstOrDefaultAsync(cancellationToken);
         }
         var runtimeFailure = TeamLabFailurePresentation.ForRuntime(runtime.Status, ticket, runtime.PublicId);
+        var managedRolloutId = await context.TeamLabRolloutTargets.AsNoTracking()
+            .Where(item => item.RuntimeId == runtime.Id && item.Rollout.Status != TeamLabRolloutStatus.Completed)
+            .Select(item => (Guid?)item.Rollout.PublicId).FirstOrDefaultAsync(cancellationToken);
         var subStages = ticket is null
             ? [new TeamLabRuntimeSubStageProjectionModel(Stage(runtime.Status), RuntimeStatus(runtime.Status), null)]
             : new[]
@@ -104,14 +107,15 @@ public sealed class TeamLabRuntimeProjectionService(AppDbContext context)
             runtime.ControlScopeId ?? release.ControlScopeId,
             release.Version,
             TeamLabFailurePresentation.RecoveryActions(runtime.Status, runtimeFailure),
-            runtimeFailure);
+            runtimeFailure,
+            managedRolloutId);
     }
 
     private static TeamLabRuntimeStatus EffectiveAssetStatus(
         TeamLabRuntimeStatus runtimeStatus,
         TeamLabRuntimeAsset asset) =>
         runtimeStatus == TeamLabRuntimeStatus.Running &&
-        asset.Status != TeamLabRuntimeStatus.Failed &&
+        asset.Status is not (TeamLabRuntimeStatus.Failed or TeamLabRuntimeStatus.Paused or TeamLabRuntimeStatus.Stopped) &&
         !string.IsNullOrWhiteSpace(asset.RuntimeResourceId)
             ? TeamLabRuntimeStatus.Running
             : asset.Status;

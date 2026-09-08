@@ -26,7 +26,8 @@ public sealed record TeamLabDevicePackageModel(
     bool Enabled,
     bool Archived,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    int BindingId = 0);
 
 public sealed record TeamLabDevicePackagePageModel(
     IReadOnlyList<TeamLabDevicePackageModel> Items,
@@ -87,7 +88,10 @@ public sealed record RegisterTeamLabConnectorModel(
     bool SupportsSharedUse,
     int Capacity,
     string? AttachmentReference,
-    string? Description);
+    string? Description,
+    TeamLabManagedNicModel? ManagedNic = null);
+
+public sealed record TeamLabManagedNicModel(Guid NodeId, string InterfaceName, string MacAddress);
 
 public sealed record SetTeamLabConnectorHealthModel(string Health);
 

@@ -1,6 +1,5 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
-using Serilog;
 
 namespace GZCTF.Extensions.Startup;
 
@@ -25,7 +24,6 @@ internal static class DatabaseExtension
                     if (!builder.Environment.IsDevelopment())
                         return;
 
-                    options.EnableSensitiveDataLogging();
                     options.EnableDetailedErrors();
                 }
             );
@@ -41,13 +39,12 @@ internal static class DatabaseExtension
             }
             catch (Exception e)
             {
-                if (builder.Configuration.GetSection("ConnectionStrings").GetSection("Database").Exists())
-                    Log.Logger.Error(StaticLocalizer[
-                        nameof(Resources.Program.Database_CurrentConnectionString),
-                        builder.Configuration.GetConnectionString("Database") ?? "null"]);
                 ExitWithFatalMessage(
-                    StaticLocalizer[nameof(Resources.Program.Database_ConnectionFailed), e.Message]);
+                    StaticLocalizer[nameof(Resources.Program.Database_ConnectionFailed), FailureCategory(e)]);
             }
         }
     }
+
+    // Provider exception messages can contain connection strings or supplied configuration values.
+    internal static string FailureCategory(Exception exception) => exception.GetType().Name;
 }

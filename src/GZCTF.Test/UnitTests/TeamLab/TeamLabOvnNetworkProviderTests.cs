@@ -13,6 +13,21 @@ namespace GZCTF.Test.UnitTests.TeamLab;
 public sealed class TeamLabOvnNetworkProviderTests
 {
     [Fact]
+    public void StaticPortDoesNotReceiveDhcpOptionsFromItsDockerNeighbor()
+    {
+        var plan = Plan();
+        plan = plan with { Networks = [plan.Networks[0] with
+        {
+            Ports = [.. plan.Networks[0].Ports, new("static-vm", "vm-peer", "02:00:00:00:00:02", "10.0.1.20")],
+            DhcpLeases = [new("02:00:00:00:00:01", "10.0.1.10", "docker-1")]
+        }] };
+        var rows = Provider().BuildApplyOperations(plan).Where(operation => operation["table"]?.GetValue<string>() == "Logical_Switch_Port")
+            .Select(operation => operation["row"]!).ToArray();
+        Assert.NotNull(rows.Single(row => row["name"]!.GetValue<string>() == TeamLabOvnNaming.LogicalPortId(plan, "network-a", "port-a"))["dhcpv4_options"]);
+        Assert.Null(rows.Single(row => row["name"]!.GetValue<string>() == TeamLabOvnNaming.LogicalPortId(plan, "network-a", "static-vm"))["dhcpv4_options"]);
+    }
+
+    [Fact]
     public void ApplyOperations_EncodeMapsInOvsdbFormat()
     {
         var provider = Provider();
@@ -122,6 +137,7 @@ public sealed class TeamLabOvnNetworkProviderTests
         Assert.True(IndexOf("Logical_Router_Policy") < IndexOf("Logical_Router"));
         Assert.True(IndexOf("Logical_Router_Static_Route") < IndexOf("Logical_Router"));
         Assert.True(IndexOf("Logical_Router_Port") < IndexOf("Logical_Router"));
+        Assert.True(IndexOf("Load_Balancer") < IndexOf("Logical_Router"));
         Assert.True(IndexOf("ACL") < IndexOf("Logical_Switch"));
         Assert.True(IndexOf("DNS") < IndexOf("Logical_Switch"));
         Assert.True(IndexOf("Logical_Switch_Port") < IndexOf("Logical_Switch"));
@@ -134,7 +150,7 @@ public sealed class TeamLabOvnNetworkProviderTests
         var plan = Plan();
         var operations = TeamLabOvnNetworkProvider.BuildRemoveOperations(plan);
 
-        Assert.Equal(16, operations.Count);
+        Assert.Equal(18, operations.Count);
         foreach (var operation in operations)
         {
             var condition = (operation["where"] as JsonArray)?[0] as JsonArray;
@@ -147,7 +163,7 @@ public sealed class TeamLabOvnNetworkProviderTests
             Assert.NotNull(digest);
             Assert.Equal(plan.NetworkDigest, digest![1]?.GetValue<string>());
         }
-        foreach (var update in operations.Take(7))
+        foreach (var update in operations.Where(operation => operation["op"]?.GetValue<string>() == "update"))
         {
             Assert.Equal("update", update["op"]?.GetValue<string>());
             var row = update["row"] as JsonObject;
@@ -156,7 +172,7 @@ public sealed class TeamLabOvnNetworkProviderTests
             Assert.Equal("set", value?[0]?.GetValue<string>());
             Assert.Empty(value![1]!.AsArray());
         }
-        foreach (var delete in operations.Skip(7))
+        foreach (var delete in operations.SkipWhile(operation => operation["op"]?.GetValue<string>() == "update"))
         {
             Assert.Equal("delete", delete["op"]?.GetValue<string>());
             Assert.NotNull(delete["table"]);

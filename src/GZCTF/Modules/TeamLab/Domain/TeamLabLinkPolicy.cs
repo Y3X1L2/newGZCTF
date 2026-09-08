@@ -41,6 +41,7 @@ public sealed class TeamLabLinkPolicy
     public int Id { get; set; }
     public Guid PublicId { get; set; } = Guid.CreateVersion7();
     public int RuntimeId { get; set; }
+    public int? Generation { get; set; }
     public Guid? ControlScopeId { get; set; }
     [MaxLength(64)] public string NetworkKey { get; set; } = string.Empty;
     [MaxLength(64)] public string? AssetKey { get; set; }

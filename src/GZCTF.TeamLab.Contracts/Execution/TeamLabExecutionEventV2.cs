@@ -41,4 +41,5 @@ public sealed record TeamLabExecutionInventoryFactV2(
     string AssetKey,
     string ResourceId,
     string State,
-    int Generation);
+    int Generation,
+    string? NativeIdentity = null);

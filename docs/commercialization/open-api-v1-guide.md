@@ -347,7 +347,20 @@ Flag 更新可提交现有 `id` 保留身份，同 hash 更新不会销毁原附
 `exposePort`，以及所需的资源限制和 `flagTemplate`。公共练习不接受 Windows VM 模板。
 教师后台使用独立管理列表，能查看停用题；学生列表仍只展示可见且启用的题目。
 
-### 流水线约定
+### TeamLab 远程会话
+
+Token 需要 `teamlab.remote-sessions:read`、`teamlab.remote-sessions:write` 和用于轮询的 `operations:read`，以及目标运行时的控制范围授权；操作者还必须具有该运行时的远程运维权限。Token 不因其创建者为管理员而绕过资源授权。
+
+1. `GET /api/open/v1/teamlab/runtimes/{runtimeId}/remote-access` 查询资产协议及不可用原因。
+2. `POST /api/open/v1/teamlab/runtimes/{runtimeId}/assets/{assetId}/remote-sessions`，携带 `Idempotency-Key`，正文为 `{"reason":"故障排查与验证"}`，返回 `202` 和 operation。
+3. 轮询 operation；成功结果含 `sessionId` 和 `runtimeId`。通过 `GET /api/open/v1/teamlab/remote-sessions/{sessionId}` 查询实时状态，不把创建结果当作当前连接状态。
+4. VM 使用 `POST .../remote-sessions/{sessionId}/connect` 获取一次性 URL。该响应禁止缓存，URL 不写入 operation；重复消费返回冲突，链接遗失或到期需先关闭旧会话再重新创建。该消费接口不是可重放的异步资源创建命令。
+5. 容器使用 `GET .../remote-sessions/{sessionId}/terminal` 升级 WebSocket，Bearer 身份必须通过 Authorization 头发送。Binary 消息承载 PTY 字节；Text 消息支持 `{"type":"resize","cols":120,"rows":40}`，尺寸范围为列 2-500、行 1-300，单条消息最多 64 KiB。浏览器原生 WebSocket 无法设置该头，不应把 Token 拼入 URL；浏览器产品使用站内会话认证入口。
+6. `DELETE .../remote-sessions/{sessionId}` 携带 `Idempotency-Key`，返回 `202`。operation 等待基础设施清理；清理尚未完成时保持等待并重试，而非报告已结束。
+
+创建进程中断后，已成功创建的稳定会话可被原 operation 回读；外部资源结果不确定时清理原会话并返回 `remote_session_creation_interrupted`，不创建替代会话。先确认旧会话清理结束，再用新 key 创建。当前 VM 一次性连接地址只在主站内存保留，主站重启后无法恢复该地址，这项恢复能力仍待补齐。
+
+### 通用流水线约定
 
 1. 为流水线签发最小 scope、短有效期 Token。
 2. 使用稳定业务 ID 生成 `Idempotency-Key`。

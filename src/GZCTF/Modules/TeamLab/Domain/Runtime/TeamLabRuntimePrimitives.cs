@@ -12,7 +12,8 @@ public enum TeamLabRuntimeStatus : byte
     CleanupPending = 7,
     Paused = 8,
     Destroying = 9,
-    Destroyed = 10
+    Destroyed = 10,
+    Stopped = 11
 }
 
 public enum TeamLabResetCheckpoint : byte

@@ -10,7 +10,8 @@ public enum TeamLabRemoteProtocol : byte
 {
     ContainerTerminal = 1,
     Ssh = 2,
-    Rdp = 3
+    Rdp = 3,
+    Vnc = 4
 }
 
 public sealed class TeamLabRemoteProtocolJsonConverter : JsonConverter<TeamLabRemoteProtocol>
@@ -26,6 +27,7 @@ public sealed class TeamLabRemoteProtocolJsonConverter : JsonConverter<TeamLabRe
             TeamLabRemoteProtocol.ContainerTerminal => "containerTerminal",
             TeamLabRemoteProtocol.Ssh => "ssh",
             TeamLabRemoteProtocol.Rdp => "rdp",
+            TeamLabRemoteProtocol.Vnc => "vnc",
             _ => value.ToString()
         });
 }
@@ -63,6 +65,7 @@ public sealed class TeamLabRemoteSession
     [MaxLength(128)] public string? RelayId { get; set; }
     [MaxLength(128)] public string? GuacamoleConnectionId { get; set; }
     [MaxLength(128)] public string? GuacamoleUserId { get; set; }
+    public bool GuacamoleCreationStarted { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset ExpiresAt { get; set; }
     public DateTimeOffset? ConnectedAt { get; set; }
@@ -86,5 +89,6 @@ public sealed class TeamLabRemoteAuditFile
     public long Size { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset? ExpiresAt { get; set; }
+    public DateTimeOffset? ReadyAt { get; set; }
     public TeamLabRemoteSession Session { get; set; } = null!;
 }

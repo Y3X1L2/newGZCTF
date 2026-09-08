@@ -231,6 +231,25 @@ public class OpenApiTests(GZCTFApplicationFactory factory, ITestOutputHelper out
     }
 
     [Fact]
+    public async Task OpenV1_RemoteSessionWritesUseOperationsAndDedicatedContracts()
+    {
+        using var document = JsonDocument.Parse(await _client.GetStringAsync(OpenV1DocumentPath));
+        var paths = document.RootElement.GetProperty("paths");
+        var create = paths.GetProperty("/api/open/v1/teamlab/runtimes/{runtimeId}/assets/{assetId}/remote-sessions").GetProperty("post");
+        var close = paths.GetProperty("/api/open/v1/teamlab/remote-sessions/{sessionId}").GetProperty("delete");
+        foreach (var operation in new[] { create, close })
+        {
+            Assert.True(operation.GetProperty("responses").TryGetProperty("202", out _));
+            Assert.Contains(operation.GetProperty("parameters").EnumerateArray(), item =>
+                item.GetProperty("name").GetString() == "Idempotency-Key" && item.GetProperty("required").GetBoolean());
+        }
+        var schemas = document.RootElement.GetProperty("components").GetProperty("schemas");
+        Assert.True(schemas.TryGetProperty("OpenTeamLabRemoteSessionModel", out _));
+        Assert.False(schemas.TryGetProperty("TeamLabRemoteSessionModel", out _));
+        Assert.True(schemas.TryGetProperty("OpenCreateTeamLabRemoteSessionModel", out _));
+    }
+
+    [Fact]
     public async Task OpenV1_TeamLabSchemasPreserveEditorAndHideSensitiveRuntimeState()
     {
         var content = await _client.GetStringAsync(OpenV1DocumentPath);

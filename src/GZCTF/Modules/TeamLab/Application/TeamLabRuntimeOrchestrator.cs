@@ -123,6 +123,63 @@ public sealed class TeamLabRuntimeOrchestrator(
     public Task<TeamLabRuntimeProjectionModel> ResumeAsync(Guid runtimeId, CancellationToken cancellationToken) =>
         ChangeLifecycleAsync(runtimeId, pause: false, enforceDirectControl: true, cancellationToken: cancellationToken);
 
+    public async Task<TeamLabRuntimeProjectionModel> EnqueueLifecycleAsync(
+        Guid runtimeId, bool pause, Guid actorUserId, CancellationToken cancellationToken)
+    {
+        await EnqueueLifecycleTicketAsync(runtimeId, pause, actorUserId, null, null, cancellationToken);
+        return await projections.GetAsync(runtimeId, cancellationToken);
+    }
+
+    public async Task<TeamLabQueueTicketResult> EnqueueLifecycleTicketAsync(
+        Guid runtimeId, bool pause, Guid actorUserId, Guid? operationId, Guid? rolloutId,
+        CancellationToken cancellationToken)
+    {
+        if (rolloutId is { } managedRolloutId)
+        {
+            var storageId = await context.TeamLabRollouts.Where(item => item.PublicId == managedRolloutId)
+                .Select(item => item.Id).SingleAsync(cancellationToken);
+            await lifecycleGuard.RequireRolloutTargetAsync(runtimeId, storageId, cancellationToken);
+        }
+        else
+            await RequireDirectLifecycleControlAsync(runtimeId, cancellationToken);
+        var runtime = await LoadRuntimeByPublicIdAsync(runtimeId, cancellationToken);
+        var target = pause ? TeamLabRuntimeStatus.Paused : TeamLabRuntimeStatus.Running;
+        var expected = pause ? TeamLabRuntimeStatus.Running : TeamLabRuntimeStatus.Paused;
+        if (runtime.Status != expected && runtime.Status != target &&
+            !(pause && runtime.Status == TeamLabRuntimeStatus.Failed && runtime.LastError == "runtime_pause_failed"))
+            throw new TeamLabApiContractException("runtime_lifecycle_unavailable", "当前运行状态不允许此操作", 409);
+        // Admission serializes all controls for this runtime through the existing subject key.
+        var payload = rolloutId is null ? null : operationPayloads.Protect(
+            new TeamLabRuntimeOperationPayload(null, runtimeId, null) { RolloutId = rolloutId });
+        return await queue.EnqueueAsync(new TeamLabQueueRequest(
+            runtime.Id, 0, 0, actorUserId, operationId, runtime.PublicId,
+            WorkloadSchedulingIdentity.ForRuntime(runtime.Id, $"teamlab-runtime:{runtime.Id}", runtime.CreatedById),
+            runtime.ExternalReference ?? runtime.PublicId.ToString("D"),
+            pause ? "pause runtime" : "resume runtime", runtime.Generation,
+            pause ? RuntimeOperationKind.Pause : RuntimeOperationKind.Resume,
+            ProtectedPayload: payload), cancellationToken);
+    }
+
+    public async Task<TeamLabNodeResult> ExecuteQueuedLifecycleAsync(
+        int runtimeId, int generation, bool pause, CancellationToken cancellationToken, string? protectedPayload = null)
+    {
+        var runtime = await LoadRuntimeAsync(runtimeId, cancellationToken);
+        if (runtime.Generation != generation)
+            return TeamLabNodeResult.Failed("Runtime lifecycle ticket has a stale generation.");
+        int? rolloutId = null;
+        if (protectedPayload is not null)
+        {
+            var payload = operationPayloads.Unprotect(protectedPayload);
+            if (payload.RuntimeId != runtime.PublicId || payload.RolloutId is null)
+                return TeamLabNodeResult.Failed("Runtime lifecycle ticket has an invalid rollout identity.");
+            rolloutId = await context.TeamLabRollouts.Where(item => item.PublicId == payload.RolloutId)
+                .Select(item => item.Id).SingleAsync(cancellationToken);
+        }
+        await ChangeLifecycleAsync(runtime.PublicId, pause, rolloutId: rolloutId, enforceDirectControl: rolloutId is null,
+            cancellationToken: cancellationToken);
+        return TeamLabNodeResult.Ok();
+    }
+
     public Task<TeamLabRuntimeProjectionModel> PauseRolloutTargetAsync(Guid runtimeId, int rolloutId, CancellationToken cancellationToken) =>
         ChangeLifecycleAsync(runtimeId, pause: true, rolloutId: rolloutId, cancellationToken: cancellationToken);
 
@@ -175,7 +232,8 @@ public sealed class TeamLabRuntimeOrchestrator(
         var targetStatus = pause ? TeamLabRuntimeStatus.Paused : TeamLabRuntimeStatus.Running;
         if (runtime.Status == targetStatus)
             return await projections.GetAsync(runtimeId, cancellationToken);
-        if (runtime.Status != expectedStatus)
+        if (runtime.Status != expectedStatus &&
+            !(pause && runtime.Status == TeamLabRuntimeStatus.Failed && runtime.LastError == "runtime_pause_failed"))
             throw new TeamLabApiContractException(
                 pause ? "runtime_not_pauseable" : "runtime_not_resumable",
                 pause ? "仅运行中的运行时可以暂停" : "仅已暂停的运行时可以恢复",
@@ -191,7 +249,9 @@ public sealed class TeamLabRuntimeOrchestrator(
         await context.SaveChangesAsync(cancellationToken);
 
         foreach (var asset in runtime.Assets
-                     .Where(item => item.Generation == runtime.Generation)
+                     .Where(item => item.Generation == runtime.Generation &&
+                         item.Kind is TeamLabResourceKind.Docker or TeamLabResourceKind.Vm &&
+                         item.DesiredPowerState is not ("stopped" or "paused"))
                      .OrderBy(item => item.WorkerNodeId)
                      .ThenBy(item => item.Id))
         {
@@ -226,6 +286,8 @@ public sealed class TeamLabRuntimeOrchestrator(
             asset.Status = targetStatus;
             asset.LastError = null;
             asset.ExecutionUpdatedAt = DateTimeOffset.UtcNow;
+            // Persist each acknowledged asset so partial execution remains visible after a restart.
+            await context.SaveChangesAsync(cancellationToken);
         }
 
         runtime.Status = targetStatus;
@@ -500,6 +562,8 @@ public sealed class TeamLabRuntimeOrchestrator(
         var runtime = await LoadRuntimeAsync(runtimeId, cancellationToken);
         using var activity = PlatformTelemetry.TeamLabActivitySource.StartActivity(
             "teamlab.deploy", ActivityKind.Internal);
+        if (runtime.Assets.Any(item => item.Generation == runtime.Generation && item.DesiredPowerState is "stopped" or "paused"))
+            return TeamLabNodeResult.Failed("Explicit asset power intent prevents full deployment replay.");
         activity?.SetTag("gzctf.teamlab_runtime_id", runtime.Id);
         activity?.SetTag("teamlab.generation", runtime.Generation);
         if (runtime.Status == TeamLabRuntimeStatus.Running) return TeamLabNodeResult.Ok("Runtime is already running.");
@@ -547,7 +611,7 @@ public sealed class TeamLabRuntimeOrchestrator(
         try
         {
             await deployment.DeployAsync(runtime, definition, overlayValues, cancellationToken);
-            if (runtime.PublicUdpMapping is not null)
+            if (runtime.PublicUdpMapping is not null && publicGateway.Enabled)
             {
                 var gateway = await publicGateway.SyncMappingAsync(runtime.PublicUdpMapping, cancellationToken);
                 if (!gateway.Success) throw new TeamLabRuntimeExecutionException(gateway.Message);

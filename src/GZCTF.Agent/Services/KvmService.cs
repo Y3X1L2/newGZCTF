@@ -9,10 +9,123 @@ using GZCTF.Agent.Services.Vm;
 using GZCTF.Agent.Services.GuestControl;
 using Microsoft.Extensions.Options;
 
+using System.Text;
+
 namespace GZCTF.Agent.Services;
 
 public class KvmService
 {
+    public async Task<int> GetVncConsolePortAsync(string domainName, int generation, string nativeId, CancellationToken token)
+    {
+        if (string.IsNullOrWhiteSpace(domainName) || !SafeNamePattern.IsMatch(domainName) || generation <= 0 || !Guid.TryParse(nativeId, out var uuid) || uuid == Guid.Empty)
+            throw new AgentOperationException("RemoteAccess", "remote_access.console_identity_invalid", "VM console identity is invalid.", false);
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(token);
+        deadline.CancelAfter(TimeSpan.FromSeconds(10));
+        await using var identityLock = await _resourceLock.AcquireAsync($"vm:{domainName}", deadline.Token);
+        var xml = await RunVmDiagnosticCommandAsync("dumpxml", domainName, deadline.Token);
+        var state = (await RunVmDiagnosticCommandAsync("domstate", domainName, deadline.Token)).Trim();
+        if (state is not ("running" or "paused" or "blocked"))
+            throw new AgentOperationException("RemoteAccess", "remote_access.console_unavailable", "The VM console is not active.", false);
+        return ParseVncConsolePort(xml, new(domainName, generation, uuid));
+    }
+
+    internal static int ParseVncConsolePort(string xml, GZCTF.TeamLab.Contracts.TeamLabVmDiagnosticsRequest identity)
+    {
+        RequireDiagnosticIdentity(xml, identity);
+        var graphics = System.Xml.Linq.XDocument.Parse(xml).Root?.Element("devices")?.Elements("graphics")
+            .SingleOrDefault(item => (string?)item.Attribute("type") == "vnc");
+        var address = (string?)graphics?.Attribute("listen") ?? (string?)graphics?.Element("listen")?.Attribute("address");
+        if (graphics is null || address != "127.0.0.1" ||
+            !int.TryParse((string?)graphics.Attribute("port"), out var port) || port is < 5900 or > 65535 ||
+            !string.IsNullOrEmpty((string?)graphics.Attribute("passwd")))
+            throw new AgentOperationException("RemoteAccess", "remote_access.console_unavailable",
+                "The VM has no active platform-managed loopback VNC console.", false);
+        return port;
+    }
+
+    public async Task<GZCTF.TeamLab.Contracts.TeamLabVmDiagnostics> GetTeamLabDiagnosticsAsync(
+        GZCTF.TeamLab.Contracts.TeamLabVmDiagnosticsRequest request, CancellationToken token)
+    {
+        if (string.IsNullOrWhiteSpace(request.DomainName) || !SafeNamePattern.IsMatch(request.DomainName) || request.Generation <= 0 || request.NativeId == Guid.Empty)
+            throw new AgentOperationException("Validation", "diagnostics.invalid_request", "Invalid VM diagnostic identity.", false);
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(token);
+        deadline.CancelAfter(TimeSpan.FromSeconds(10));
+        await using var identityLock = await _resourceLock.AcquireAsync($"vm:{request.DomainName}", deadline.Token);
+        var xml = await RunVmDiagnosticCommandAsync("dumpxml", request.DomainName, deadline.Token);
+        RequireDiagnosticIdentity(xml, request);
+        var state = (await RunVmDiagnosticCommandAsync("domstate", request.DomainName, deadline.Token)).Trim();
+        // Re-read identity after sampling so a concurrently replaced domain cannot supply another VM's state.
+        RequireDiagnosticIdentity(await RunVmDiagnosticCommandAsync("dumpxml", request.DomainName, deadline.Token), request);
+        if (string.IsNullOrWhiteSpace(state))
+            throw new AgentOperationException("Kvm", "diagnostics.state_unavailable", "libvirt returned no domain state.", true);
+        return new(state, request.NativeId, DateTimeOffset.UtcNow);
+    }
+
+    private async Task<string> RunVmDiagnosticCommandAsync(string command, string domainName, CancellationToken token)
+    {
+        var start = new ProcessStartInfo("virsh")
+        { UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true };
+        start.ArgumentList.Add("--connect");
+        start.ArgumentList.Add(_config.LibvirtUri);
+        start.ArgumentList.Add(command);
+        start.ArgumentList.Add(domainName);
+        start.Environment["LC_ALL"] = "C";
+        using var process = StartVmDiagnosticProcess(start);
+        try
+        {
+            var output = ReadDiagnosticTextAsync(process.StandardOutput, token);
+            var error = ReadDiagnosticTextAsync(process.StandardError, token);
+            await Task.WhenAll(output, error, process.WaitForExitAsync(token));
+            if (process.ExitCode != 0)
+                throw new AgentOperationException("Kvm", "diagnostics.unavailable", "libvirt diagnostic query failed.", true);
+            return await output;
+        }
+        finally
+        {
+            if (!process.HasExited) process.Kill(entireProcessTree: true);
+            await process.WaitForExitAsync(CancellationToken.None);
+        }
+    }
+
+    private static Process StartVmDiagnosticProcess(ProcessStartInfo start)
+    {
+        try
+        {
+            return Process.Start(start) ?? throw new AgentOperationException("Kvm", "diagnostics.unavailable",
+                "Could not start libvirt diagnostic query.", true);
+        }
+        catch (System.ComponentModel.Win32Exception)
+        {
+            throw new AgentOperationException("Kvm", "diagnostics.kvm_unavailable", "libvirt diagnostic tools are unavailable.", false);
+        }
+    }
+
+    internal static async Task<string> ReadDiagnosticTextAsync(StreamReader reader, CancellationToken token)
+    {
+        var text = new StringBuilder();
+        var buffer = new char[4096];
+        while (true)
+        {
+            var count = await reader.ReadAsync(buffer.AsMemory(), token);
+            if (count == 0) return text.ToString();
+            if (text.Length + count > 512 * 1024)
+                throw new AgentOperationException("Kvm", "diagnostics.output_limit", "libvirt diagnostic output exceeded its limit.", false);
+            text.Append(buffer, 0, count);
+        }
+    }
+
+    internal static void RequireDiagnosticIdentity(string xml, GZCTF.TeamLab.Contracts.TeamLabVmDiagnosticsRequest request)
+    {
+        using var reader = System.Xml.XmlReader.Create(new StringReader(xml), new System.Xml.XmlReaderSettings
+        { DtdProcessing = System.Xml.DtdProcessing.Prohibit, XmlResolver = null });
+        var domain = System.Xml.Linq.XDocument.Load(reader).Root;
+        var description = domain?.Element("description")?.Value ?? string.Empty;
+        if (domain?.Name.LocalName != "domain" || domain.Element("name")?.Value != request.DomainName ||
+            !Guid.TryParse(domain.Element("uuid")?.Value, out var nativeId) || nativeId != request.NativeId ||
+            ParseDomainGeneration(description) != request.Generation)
+            throw new AgentOperationException("Conflict", "diagnostics.identity_mismatch", "VM ownership or generation does not match.", false);
+    }
+
     internal enum VmCreateDisposition
     {
         Create,

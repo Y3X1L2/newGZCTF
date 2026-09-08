@@ -84,7 +84,8 @@ public sealed record TeamLabRuntimeProjectionModel(
     Guid? ControlScopeId = null,
     int? ReleaseVersion = null,
     IReadOnlyList<string>? RecoveryActions = null,
-    TeamLabFailureProjectionModel? Failure = null);
+    TeamLabFailureProjectionModel? Failure = null,
+    Guid? ManagedRolloutId = null);
 
 public sealed record TeamLabRuntimeEventModel(
     long Cursor,

@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Net;
 using System.Net.Sockets;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace GZCTF.TeamLab.Contracts.Execution;
 
@@ -47,6 +48,14 @@ public sealed record TeamLabExecutionPlanV2(
             return false;
         }
 
+        if (Assets.Any(asset => asset.Device is { } device && (!device.IsValid(asset.ImageDigest) ||
+                device.HealthProtocol is not null && !asset.HealthChecks.Any(check => check.Protocol == device.HealthProtocol &&
+                    check.Port == device.HealthPort && check.Path == device.HealthPath))))
+        {
+            error = "Device package identity, parameters or health checks do not match the execution asset.";
+            return false;
+        }
+
         if (Networks.Any(network => network.DnsRecords is { } records && records
                 .GroupBy(record => record.Hostname, StringComparer.OrdinalIgnoreCase)
                 .Any(group => group.Count() != 1)))
@@ -56,6 +65,15 @@ public sealed record TeamLabExecutionPlanV2(
         }
 
         var networkKeys = Networks.Select(item => item.Key).ToHashSet(StringComparer.Ordinal);
+        var connectors = Networks.SelectMany(network => network.Connectors ?? []).ToArray();
+        if (connectors.Any(connector => !connector.IsValid()) ||
+            Networks.Any(network => (network.Connectors ?? []).Any(connector => network.Ports.Any(port => port.Key == connector.PortKey))) ||
+            connectors.GroupBy(connector => connector.ConnectorId).Any(group => group.Count() > 1) ||
+            connectors.GroupBy(connector => (connector.NodeId, connector.InterfaceName)).Any(group => group.Count() > 1))
+        {
+            error = "Connector interface identities are invalid or repeated across networks.";
+            return false;
+        }
         var networkPortRecords = Networks.SelectMany(network => network.Ports
             .Select(port => (NetworkKey: network.Key, PortKey: port.Key, port.AssetKey, port.IpAddress)))
             .ToArray();
@@ -151,11 +169,11 @@ public sealed record TeamLabExecutionPlanV2(
                 string.IsNullOrWhiteSpace(port.Key) ||
                 string.IsNullOrWhiteSpace(port.MacAddress)) ||
             Networks.Any(network => network.Ports.Any(port =>
-                network.DhcpLeases is { } leases && !leases.Any(lease =>
+                network.DhcpLeases is { } leases && leases.Any(lease =>
                     string.Equals(lease.MacAddress, port.MacAddress, StringComparison.OrdinalIgnoreCase) &&
-                    string.Equals(lease.IpAddress, port.IpAddress, StringComparison.OrdinalIgnoreCase)))))
+                    !string.Equals(lease.IpAddress, port.IpAddress, StringComparison.OrdinalIgnoreCase)))))
         {
-            error = "Every network port must have a valid key, MAC address, and DHCP binding.";
+            error = "Every network port must have a valid key and MAC address, and any declared DHCP binding must match its address.";
             return false;
         }
 
@@ -297,7 +315,8 @@ public sealed record TeamLabNetworkIntentV2(
     string? DhcpDnsServiceName = null,
     IReadOnlyList<TeamLabDhcpLeaseV2>? DhcpLeases = null,
     IReadOnlyList<TeamLabDnsRecordV2>? DnsRecords = null,
-    TeamLabPlayerGatewayV2? PlayerGateway = null);
+    TeamLabPlayerGatewayV2? PlayerGateway = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<TeamLabConnectorAttachmentV2>? Connectors = null);
 
 public sealed record TeamLabPlayerGatewayV2(
     string PortKey,
@@ -347,7 +366,8 @@ public sealed record TeamLabAssetExecutionSpecV2(
     int MemoryMiB,
     IReadOnlyList<TeamLabAssetNetworkAttachmentV2> NetworkAttachments,
     IReadOnlyList<TeamLabHealthCheckV2> HealthChecks,
-    string? ImageReference = null);
+    string? ImageReference = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] TeamLabDeviceExecutionV2? Device = null);
 
 public sealed record TeamLabAssetNetworkAttachmentV2(
     string NetworkKey,

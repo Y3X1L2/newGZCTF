@@ -10,9 +10,10 @@ using Microsoft.Extensions.Options;
 
 namespace GZCTF.Agent.Services.TeamLab;
 
-public sealed class TeamLabExecutionPlanExecutor(
+public sealed partial class TeamLabExecutionPlanExecutor(
     TeamLabOvnNetworkProvider ovn,
     TeamLabOvsAttachmentProvider ovs,
+    TeamLabManagedNicProvider managedNics,
     LinuxNetworkAttachmentService linuxNetwork,
     DockerService docker,
     LibvirtTeamLabProvider libvirt,
@@ -43,7 +44,32 @@ public sealed class TeamLabExecutionPlanExecutor(
                     item.AssetKey == asset.AssetKey &&
                     item.Generation == plan.Generation &&
                     item.State.Equals("running", StringComparison.OrdinalIgnoreCase))))
+            {
+                var network = await ovn.ProbeAsync(plan, cancellationToken);
+                if (!network.Success)
+                    return Failure(plan, "network", network.Message);
+                foreach (var intent in plan.Networks)
+                foreach (var connector in (intent.Connectors ?? []).Where(item => item.NodeId == agent.NodeId))
+                {
+                    var result = await managedNics.ProbeAsync(plan, intent.Key, connector, cancellationToken);
+                    if (!result.Success) return Failure(plan, "network", result.Message);
+                }
+                foreach (var asset in plan.Assets)
+                foreach (var attachment in asset.NetworkAttachments)
+                {
+                    var interfaceName = asset.Kind.Equals("vm", StringComparison.OrdinalIgnoreCase)
+                        ? TeamLabExecutionIdentityV2.VmTapName(plan.RuntimePublicId, plan.Generation, asset.AssetKey, attachment.NetworkKey)
+                        : LinuxNetworkAttachmentService.HostInterfaceName(plan, asset.AssetKey, attachment.NetworkKey);
+                    var vmIdentity = asset.Kind.Equals("vm", StringComparison.OrdinalIgnoreCase)
+                        ? inventory.Single(item => item.AssetKey == asset.AssetKey).NativeIdentity : null;
+                    if (asset.Kind.Equals("vm", StringComparison.OrdinalIgnoreCase) && string.IsNullOrWhiteSpace(vmIdentity))
+                        return Failure(plan, "network", "VM inventory has no native identity for its network attachment.");
+                    var actual = await ovs.ProbeAsync(plan, interfaceName, attachment.NetworkKey, attachment.PortKey, cancellationToken, vmIdentity);
+                    if (!actual.Success)
+                        return Failure(plan, "network", actual.Message);
+                }
                 return existing with { AlreadyApplied = true, Inventory = inventory };
+            }
             journal.Remove(plan);
         }
         return await ApplyCoreAsync(plan, cancellationToken);
@@ -76,6 +102,17 @@ public sealed class TeamLabExecutionPlanExecutor(
 
         var events = new ConcurrentQueue<TeamLabExecutionEventV2>();
         events.Enqueue(Event(plan, null, "network", "succeeded", null, network.Message));
+        foreach (var intent in plan.Networks)
+        foreach (var connector in (intent.Connectors ?? []).Where(item => item.NodeId == agent.NodeId))
+        {
+            var result = await managedNics.AttachAsync(plan, intent.Key, connector, cancellationToken);
+            if (!result.Success)
+            {
+                using var cleanup = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+                await CleanupCoreAsync(plan, cleanup.Token);
+                return Failure(plan, "network", result.Message);
+            }
+        }
         var dockerAssets = plan.Assets.Where(asset => asset.Kind.Equals("docker", StringComparison.OrdinalIgnoreCase)).ToArray();
         var vmAssets = plan.Assets.Where(asset => asset.Kind.Equals("vm", StringComparison.OrdinalIgnoreCase)).ToArray();
         var dockerLimit = Math.Max(1, agent.ExecutionLimits.DockerCreates ?? 1);
@@ -264,6 +301,13 @@ public sealed class TeamLabExecutionPlanExecutor(
                 events.Enqueue(Event(plan, null, "cleanup", "failed", "vm_residual_cleanup_failed", residual.State));
         }
 
+        foreach (var intent in plan.Networks)
+        foreach (var connector in (intent.Connectors ?? []).Where(item => item.NodeId == agent.NodeId))
+        {
+            var result = await managedNics.DetachAsync(plan, intent.Key, connector, cancellationToken);
+            events.Enqueue(Event(plan, connector.PortKey, "cleanup", result.Success ? "succeeded" : "failed",
+                result.Success ? null : "connector_cleanup_failed", result.Message));
+        }
         var network = await ovn.RemoveAsync(plan, cancellationToken);
         events.Enqueue(Event(plan, null, "cleanup", network.Success ? "succeeded" : "failed",
             network.Success ? null : "network_cleanup_failed", network.Message));
@@ -331,7 +375,9 @@ public sealed class TeamLabExecutionPlanExecutor(
         TeamLabExecutionPlanV2 plan,
         CancellationToken cancellationToken)
     {
-        var inventory = (await docker.GetManagedRuntimeInventoryAsync(cancellationToken))
+        var dockerInventory = plan.Assets.Any(asset => asset.Kind.Equals("docker", StringComparison.OrdinalIgnoreCase))
+            ? await docker.GetManagedRuntimeInventoryAsync(cancellationToken) : [];
+        var inventory = dockerInventory
             .Where(item => item.RuntimeId == plan.RuntimeId && item.Generation == plan.Generation &&
                            string.Equals(item.ShardKey, plan.ShardKey, StringComparison.Ordinal))
             .Select(item => new TeamLabExecutionInventoryFactV2(
@@ -345,7 +391,7 @@ public sealed class TeamLabExecutionPlanExecutor(
     }
 
     async Task ApplyDockerAsync(TeamLabExecutionPlanV2 plan, TeamLabAssetExecutionSpecV2 asset,
-        ConcurrentQueue<TeamLabExecutionEventV2> events, CancellationToken token)
+        ConcurrentQueue<TeamLabExecutionEventV2> events, CancellationToken token, bool preserveContainer = false)
     {
         var request = new CreateContainerRequest
         {
@@ -366,6 +412,9 @@ public sealed class TeamLabExecutionPlanExecutor(
             CPUCount = Math.Max(1, asset.Cpu),
             TeamLabPlanDigest = plan.PlanDigest,
             TeamLabShardKey = plan.ShardKey,
+            EnvironmentVariables = asset.Device is { } device
+                ? new Dictionary<string, string> { ["GZCTF_DEVICE_PARAMETERS"] = device.ParametersJson }
+                : [],
             DnsServers = asset.NetworkAttachments
                 .Where(attachment => attachment.Primary && !string.IsNullOrWhiteSpace(attachment.GatewayIp))
                 .Select(attachment => attachment.GatewayIp!)
@@ -408,7 +457,7 @@ public sealed class TeamLabExecutionPlanExecutor(
         }
         finally
         {
-            if (!completed)
+            if (!completed && !preserveContainer)
             {
                 if (container is not null)
                 {
@@ -466,6 +515,7 @@ public sealed class TeamLabExecutionPlanExecutor(
             return;
         }
         events.Enqueue(Event(plan, asset.AssetKey, "compute", "succeeded", null, result.ResourceId));
+        await RunHealthChecksAsync(plan, asset, events, token);
     }
 
     async Task<bool> RunHealthChecksAsync(
@@ -483,9 +533,11 @@ public sealed class TeamLabExecutionPlanExecutor(
             {
                 if (check.Port is < 1 or > 65535 || !IPAddress.TryParse(check.Host, out _))
                     throw new InvalidOperationException("Health check target is invalid.");
-                if (containerPid is not > 0)
+                if (asset.Kind == "vm")
+                    await RunVmHealthProbeAsync(check, deadline.Token);
+                else if (containerPid is not > 0)
                     throw new InvalidOperationException("Container health checks require a running container process.");
-                await RunContainerHealthProbeAsync(containerPid.Value, check, deadline.Token);
+                else await RunContainerHealthProbeAsync(containerPid.Value, check, deadline.Token);
                 events.Enqueue(Event(plan, asset.AssetKey, "service", "succeeded", null,
                     $"{check.Protocol.ToUpperInvariant()} health check passed."));
             }
@@ -512,9 +564,7 @@ public sealed class TeamLabExecutionPlanExecutor(
             !check.Protocol.Equals("http", StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException($"Unsupported health check protocol '{check.Protocol}'.");
 
-        var script = check.Protocol.Equals("tcp", StringComparison.OrdinalIgnoreCase)
-            ? $"exec 3<>/dev/tcp/{check.Host}/{check.Port}"
-            : $"exec 3<>/dev/tcp/{check.Host}/{check.Port}; IFS=' ' read -r -a parts <&3; code=${{parts[1]}}; (( code >= 200 && code < 400 ))";
+        var script = BuildHealthProbeScript(check);
         using var process = new Process
         {
             StartInfo = new ProcessStartInfo
@@ -547,6 +597,18 @@ public sealed class TeamLabExecutionPlanExecutor(
             await process.WaitForExitAsync(CancellationToken.None);
             throw;
         }
+    }
+
+    internal static string BuildHealthProbeScript(TeamLabHealthCheckV2 check)
+    {
+        if (!IPAddress.TryParse(check.Host, out _) || check.Port is < 1 or > 65535 ||
+            check.Protocol is not ("tcp" or "http") ||
+            check.Path is { } path && (!path.StartsWith('/') || path.Any(char.IsControl)))
+            throw new ArgumentException("Invalid health probe target.");
+        var connect = $"exec 3<>/dev/tcp/{TeamLabNetworkPrimitives.ShellQuote(check.Host)}/{check.Port}";
+        return check.Protocol == "tcp" ? connect : connect +
+            $"; printf 'GET %s HTTP/1.0\\r\\nHost: %s\\r\\nConnection: close\\r\\n\\r\\n' {TeamLabNetworkPrimitives.ShellQuote(check.Path ?? "/")} {TeamLabNetworkPrimitives.ShellQuote(check.Host)} >&3; " +
+            "IFS=' ' read -r protocol code remaining <&3; [[ \"$protocol\" == HTTP/* && \"$code\" =~ ^[23][0-9][0-9]$ ]]";
     }
 
     static TeamLabExecutionEventV2 Event(TeamLabExecutionPlanV2 plan, string? assetKey, string stage,

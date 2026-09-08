@@ -13,6 +13,22 @@ namespace GZCTF.Test.UnitTests.TeamLab;
 public sealed class TeamLabExecutionPlanV2Tests
 {
     [Fact]
+    public void Plan_AllowsStaticPeerNextToDhcpPortButRejectsConflictingLease()
+    {
+        var original = Plan();
+        var network = original.Networks[0] with
+        {
+            Ports = [.. original.Networks[0].Ports, new("vm-static", "vm-peer", "02:00:00:00:00:02", "10.0.1.20")],
+            DhcpLeases = [new("02:00:00:00:00:01", "10.0.1.10", "docker-1")]
+        };
+        var mixed = WithDigests(original with { Networks = [network] });
+        Assert.True(mixed.IsValid(out var error), error);
+        var conflict = WithDigests(original with { Networks = [network with
+        { DhcpLeases = [new("02:00:00:00:00:01", "10.0.1.99", "docker-1")] }] });
+        Assert.False(conflict.IsValid(out _));
+    }
+
+    [Fact]
     public void Plan_RejectsAttachmentToPortOutsideItsNetwork()
     {
         var plan = Plan() with

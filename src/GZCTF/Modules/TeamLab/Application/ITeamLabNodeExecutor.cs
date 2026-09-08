@@ -139,7 +139,8 @@ public sealed record TeamLabNodeAssetCreateRequest(
     Guid? OperationId = null,
     VmRuntimeMode? VmRuntimeMode = null,
     VmNetworkMode? VmNetworkMode = null,
-    string? ImageReference = null);
+    string? ImageReference = null,
+    GZCTF.TeamLab.Contracts.Execution.TeamLabDeviceExecutionV2? Device = null);
 
 public sealed record TeamLabNodeHealthIntent(
     TeamLabHealthCheckKind Kind,

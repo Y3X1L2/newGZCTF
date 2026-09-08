@@ -23,6 +23,11 @@ public static class TeamLabModuleRegistration
                 network.ReservedCidrs, network.FabricLinkPool, network.RuntimeNetworkBaseCidr));
         });
         services.AddScoped<TeamLabReleaseService>();
+        services.AddScoped<TeamLabAssetFileService>();
+        services.AddScoped<TeamLabAssetControlService>();
+        services.AddScoped<TeamLabRuntimeDifferenceService>();
+        services.AddScoped<ITeamLabAssetControlGateway, AgentTeamLabAssetControlGateway>();
+        services.AddScoped<ITeamLabAssetFileGateway, AgentTeamLabAssetFileGateway>();
         services.AddScoped<TeamLabReleaseImagePreparationService>();
         services.AddScoped<TeamLabControlScopeService>();
         services.AddScoped<TeamLabScopeAuthorizationService>();
@@ -37,8 +42,16 @@ public static class TeamLabModuleRegistration
         services.AddScoped<ITeamLabUsageProjectionProvider, TeamLabEmptyUsageProjectionProvider>();
         services.AddScoped<TeamLabAuthorizationService>();
         services.AddScoped<TeamLabRemoteAccessAuthorizationService>();
+        services.AddScoped<TeamLabAssetDiagnosticsService>();
+        services.AddScoped<ITeamLabAssetDiagnosticsGateway, AgentTeamLabAssetDiagnosticsGateway>();
         services.AddScoped<ITeamLabRemoteRelayGateway, AgentTeamLabRemoteRelayGateway>();
         services.AddScoped<ITeamLabRemoteAccessService, TeamLabRemoteAccessService>();
+        services.AddOptions<GZCTF.Modules.TeamLab.Contracts.TeamLabRemoteAuditOptions>()
+            .BindConfiguration("TeamLab:RemoteAudit")
+            .Validate(value => value.RetentionDays is >= 1 and <= 3650 && value.MaxStorageBytes >= 16384 &&
+                value.MaxStorageBytes <= 10L * 1024 * 1024 * 1024, "Remote audit retention or quota is invalid.")
+            .ValidateOnStart();
+        services.AddScoped<TeamLabRemoteAuditService>();
         services.AddHostedService<TeamLabRemoteSessionWorker>();
         services.AddScoped<TeamLabRuntimeLifecycleGuard>();
         services.AddScoped<TeamLabTrafficApplicationService>();
@@ -85,6 +98,9 @@ public static class TeamLabModuleRegistration
         services.AddScoped<ITeamLabWebhookDeliverer, HttpTeamLabWebhookDeliverer>();
         services.AddHostedService<TeamLabWebhookDeliveryWorker>();
         services.AddScoped<TeamLabDevicePackageService>();
+        services.AddScoped<ITeamLabDeviceObserver, AgentTeamLabDeviceObserver>();
+        services.AddScoped<TeamLabDeviceObservationService>();
+        services.AddHostedService<TeamLabDeviceObservationWorker>();
         services.AddScoped<TeamLabConnectorService>();
         services.AddScoped<TeamLabLinkPolicyService>();
         services.AddScoped<TeamLabProtocolEventService>();
