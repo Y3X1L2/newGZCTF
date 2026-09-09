@@ -9,8 +9,8 @@ import type {
 import { teamLabParsing as parse } from './teamlabParsers'
 
 const root = '/api/admin/teamlab'
-const protocols = { ContainerTerminal: 'containerTerminal', Ssh: 'ssh', Rdp: 'rdp', containerTerminal: 'containerTerminal', ssh: 'ssh', rdp: 'rdp', 0: 'containerTerminal', 1: 'ssh', 2: 'rdp' } as const
-const statuses = { Creating: 'creating', Ready: 'ready', Connected: 'connected', Ending: 'ending', Ended: 'ended', Failed: 'failed', 0: 'creating', 1: 'ready', 2: 'connected', 3: 'ending', 4: 'ended', 5: 'failed' } as const
+const protocols = { ContainerTerminal: 'containerTerminal', Ssh: 'ssh', Rdp: 'rdp', Vnc: 'vnc', containerTerminal: 'containerTerminal', ssh: 'ssh', rdp: 'rdp', vnc: 'vnc', 1: 'containerTerminal', 2: 'ssh', 3: 'rdp', 4: 'vnc' } as const
+const statuses = { Creating: 'creating', Ready: 'ready', Connected: 'connected', Ending: 'ending', Ended: 'ended', Failed: 'failed', 1: 'creating', 2: 'ready', 3: 'connected', 4: 'ending', 5: 'ended', 6: 'failed' } as const
 
 function availability(value: unknown): TeamLabRemoteAccessAvailability {
   const item = parse.record(value, '远程运维可用性')
@@ -52,6 +52,16 @@ function connect(value: unknown): TeamLabRemoteConnect {
 
 export function createTeamLabRemoteAccessApi(client: RuntimeJsonClient = runtimeJsonClient) {
   return {
+    async list(filters: { runtimeId?: string; workerNodeId?: string; requestedByUserId?: string; status?: number; after?: number } = {}) {
+      const page = parse.record(await client.get(`${root}/remote-sessions`, { ...filters, limit: 50 }), '远程会话列表')
+      return {
+        items: parse.array(page.items, '远程会话列表.items', (entry) => {
+          const item = parse.record(entry, '会话条目')
+          return { session: session(item.session), workerNodeId: parse.string(item.workerNodeId, '节点'), requestedByUserId: parse.string(item.requestedByUserId, '操作者') }
+        }),
+        nextCursor: parse.nullableNumber(page.nextCursor, '远程会话列表.nextCursor'),
+      }
+    },
     async getAvailability(runtimeId: string, assetId: number) {
       return availability(await client.get(`${root}/runtimes/${runtimeId}/assets/${assetId}/remote-access`))
     },
@@ -60,6 +70,9 @@ export function createTeamLabRemoteAccessApi(client: RuntimeJsonClient = runtime
     },
     async createSession(runtimeId: string, assetId: number, reason: string) {
       return session(await client.postJson(`${root}/runtimes/${runtimeId}/assets/${assetId}/remote-sessions`, { reason }))
+    },
+    async createConsoleSession(runtimeId: string, assetId: number, reason: string) {
+      return session(await client.postJson(`${root}/runtimes/${runtimeId}/assets/${assetId}/remote-sessions`, { reason, vncConsole: true }))
     },
     async getSession(sessionId: string) {
       return session(await client.get(`${root}/remote-sessions/${sessionId}`))

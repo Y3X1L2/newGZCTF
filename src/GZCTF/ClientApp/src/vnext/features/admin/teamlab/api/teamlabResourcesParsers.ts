@@ -19,6 +19,9 @@ import type {
 } from './teamlabResourcesContracts'
 import { teamLabParsing as parse } from './teamlabParsers'
 
+const time = (value: unknown, label: string) => new Date(parse.number(value, label)).toISOString()
+const nullableTime = (value: unknown, label: string) => value == null ? null : time(value, label)
+
 const artifactKinds = { 'oci-image': 'oci-image', 'vm-image': 'vm-image' } as const
 const connectorKinds = {
   'managed-nic': 'managed-nic',
@@ -72,6 +75,7 @@ export function parseTeamLabDevicePackage(value: unknown, label = 'devicePackage
   const item = parse.record(value, label)
   return {
     id: parse.string(item.id, `${label}.id`),
+    bindingId: item.bindingId == null ? undefined : parse.number(item.bindingId, `${label}.bindingId`),
     name: parse.string(item.name, `${label}.name`),
     displayName: parse.string(item.displayName, `${label}.displayName`),
     version: parse.string(item.version, `${label}.version`),
@@ -88,7 +92,7 @@ export function parseTeamLabDevicePackage(value: unknown, label = 'devicePackage
         parse.string(entry, entryLabel)
       ),
     cpuMillis: parse.number(item.cpuMillis, `${label}.cpuMillis`),
-    memoryMiB: parse.number(item.memoryMiB, `${label}.memoryMiB`),
+    memoryMiB: parse.number(item.memoryMib, `${label}.memoryMib`),
     storageGib: parse.number(item.storageGib, `${label}.storageGib`),
     ports: parse.array(item.ports ?? [], `${label}.ports`, parseDevicePort),
     parameterSchema: item.parameterSchema ?? null,
@@ -98,8 +102,8 @@ export function parseTeamLabDevicePackage(value: unknown, label = 'devicePackage
     ),
     enabled: parse.boolean(item.enabled, `${label}.enabled`),
     archived: parse.boolean(item.archived, `${label}.archived`),
-    createdAt: parse.string(item.createdAt, `${label}.createdAt`),
-    updatedAt: parse.string(item.updatedAt, `${label}.updatedAt`),
+    createdAt: time(item.createdAt, `${label}.createdAt`),
+    updatedAt: time(item.updatedAt, `${label}.updatedAt`),
   }
 }
 
@@ -118,8 +122,8 @@ function parseConnectorLease(value: unknown, label: string): TeamLabConnectorLea
     connectorId: parse.string(item.connectorId, `${label}.connectorId`),
     runtimeId: parse.string(item.runtimeId, `${label}.runtimeId`),
     slot: parse.number(item.slot, `${label}.slot`),
-    acquiredAt: parse.string(item.acquiredAt, `${label}.acquiredAt`),
-    releasedAt: parse.nullableString(item.releasedAt, `${label}.releasedAt`),
+    acquiredAt: time(item.acquiredAt, `${label}.acquiredAt`),
+    releasedAt: nullableTime(item.releasedAt, `${label}.releasedAt`),
     releaseReason: parse.enumValue(
       item.releaseReason,
       releaseReasons as Record<string, TeamLabConnectorReleaseReason>,
@@ -141,11 +145,11 @@ export function parseTeamLabConnector(value: unknown, label = 'connector'): Team
     occupiedSlots: parse.number(item.occupiedSlots, `${label}.occupiedSlots`),
     activeLeases: parse.array(item.activeLeases ?? [], `${label}.activeLeases`, parseConnectorLease),
     health: parse.enumValue(item.health, connectorHealths as Record<string, TeamLabConnectorHealth>, `${label}.health`),
-    healthObservedAt: parse.nullableString(item.healthObservedAt, `${label}.healthObservedAt`),
+    healthObservedAt: nullableTime(item.healthObservedAt, `${label}.healthObservedAt`),
     description: parse.nullableString(item.description, `${label}.description`),
     archived: parse.boolean(item.archived, `${label}.archived`),
-    createdAt: parse.string(item.createdAt, `${label}.createdAt`),
-    updatedAt: parse.string(item.updatedAt, `${label}.updatedAt`),
+    createdAt: time(item.createdAt, `${label}.createdAt`),
+    updatedAt: time(item.updatedAt, `${label}.updatedAt`),
   }
 }
 
@@ -169,7 +173,7 @@ function parseNodeCacheEntry(value: unknown, label: string): TeamLabNodeCacheEnt
     attemptCount: parse.number(item.attemptCount, `${label}.attemptCount`),
     activeReferenceCount: parse.number(item.activeReferenceCount, `${label}.activeReferenceCount`),
     lastErrorCode: parse.nullableString(item.lastErrorCode, `${label}.lastErrorCode`),
-    progressUpdatedAt: parse.nullableString(item.progressUpdatedAt, `${label}.progressUpdatedAt`),
+    progressUpdatedAt: nullableTime(item.progressUpdatedAt, `${label}.progressUpdatedAt`),
   }
 }
 
@@ -191,9 +195,9 @@ export function parseTeamLabLinkPolicy(value: unknown, label = 'linkPolicy'): Te
     kind: parse.enumValue(item.kind, linkPolicyKinds as Record<string, TeamLabLinkPolicyKind>, `${label}.kind`),
     parameters: item.parameters ?? null,
     status: parse.enumValue(item.status, linkPolicyStatuses as Record<string, TeamLabLinkPolicyStatus>, `${label}.status`),
-    recoverAt: parse.nullableString(item.recoverAt, `${label}.recoverAt`),
-    appliedAt: parse.string(item.appliedAt, `${label}.appliedAt`),
-    recoveredAt: parse.nullableString(item.recoveredAt, `${label}.recoveredAt`),
+    recoverAt: nullableTime(item.recoverAt, `${label}.recoverAt`),
+    appliedAt: time(item.appliedAt, `${label}.appliedAt`),
+    recoveredAt: nullableTime(item.recoveredAt, `${label}.recoveredAt`),
     recoverOrigin: parse.enumValue(
       item.recoverOrigin,
       recoverOrigins as Record<string, TeamLabLinkPolicyRecoverOrigin>,

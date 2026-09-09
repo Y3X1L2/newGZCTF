@@ -56,6 +56,12 @@ export interface TeamLabRuntimeAsset {
 }
 
 export interface TeamLabRuntime {
+  managedRolloutId?: string | null
+  currentOperationId?: string | null
+  subStages?: readonly { id: string; status: string; message: string | null }[]
+  failure?: { code: string; stage: string; retryable: boolean; detail: string | null } | null
+  deploymentQueueTicketId?: string | null
+  queueStatus?: 'pending' | 'scheduling' | 'scheduled' | 'running' | 'succeeded' | 'failed' | 'cancelled' | null
   id: string
   releaseId: string
   generation: number

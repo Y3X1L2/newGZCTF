@@ -6,12 +6,12 @@ export function useHomePosts() {
   return api.info.useInfoGetLatestPosts({ ...swrOptions, refreshInterval: 5 * 60 * 1000 })
 }
 
-export function useHomeCourses() {
+export function useHomeCourses(enabled: boolean) {
   return api.trainingCourse.useTrainingCourseCourses({
     ...swrOptions,
     refreshInterval: 5 * 60 * 1000,
     shouldRetryOnError: false,
-  })
+  }, enabled)
 }
 
 export function useHomeTrainingOverview(enabled: boolean) {

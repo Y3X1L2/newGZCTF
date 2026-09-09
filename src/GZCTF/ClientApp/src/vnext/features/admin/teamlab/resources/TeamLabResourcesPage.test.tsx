@@ -1,6 +1,7 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TeamLabConnector, TeamLabDevicePackage } from '../api'
+import { teamLabResourcesApi } from '../api'
 import { TeamLabResourcesPage } from './TeamLabResourcesPage'
 import { useConnectorRegistry, useDevicePackageCatalog, useNodeArtifactCache } from './useTeamLabResources'
 
@@ -8,6 +9,7 @@ vi.mock('./useTeamLabResources', () => ({
   useDevicePackageCatalog: vi.fn(),
   useConnectorRegistry: vi.fn(),
   useNodeArtifactCache: vi.fn(),
+  useConnectorNodes: vi.fn(() => ({ data: [], error: undefined })),
 }))
 
 const devicePackage: TeamLabDevicePackage = {
@@ -168,5 +170,32 @@ describe('TeamLabResourcesPage', () => {
     render(<TeamLabResourcesPage />)
 
     expect(screen.getByText('暂无设备包')).toBeInTheDocument()
+  })
+
+  it('updates the open detail after disabling and enabling a package', async () => {
+    const update = vi.spyOn(teamLabResourcesApi, 'setDevicePackageEnabled')
+      .mockResolvedValueOnce({ ...devicePackage, enabled: false })
+      .mockResolvedValueOnce({ ...devicePackage, enabled: true })
+    render(<TeamLabResourcesPage />)
+    fireEvent.click(screen.getByRole('row', { name: /PLC 模拟器/ }))
+    fireEvent.click(screen.getByRole('button', { name: '停用' }))
+    fireEvent.click(await screen.findByRole('button', { name: '启用' }))
+    await screen.findByRole('button', { name: '停用' })
+    expect(update).toHaveBeenNthCalledWith(1, devicePackage.id, false)
+    expect(update).toHaveBeenNthCalledWith(2, devicePackage.id, true)
+    update.mockRestore()
+  })
+
+  it('keeps a rejected archive open and shows the error in the confirmation', async () => {
+    const archive = vi.spyOn(teamLabResourcesApi, 'archiveDevicePackage').mockRejectedValue(new Error('资源仍被引用'))
+    render(<TeamLabResourcesPage />)
+    fireEvent.click(screen.getByRole('row', { name: /PLC 模拟器/ }))
+    fireEvent.click(screen.getByRole('button', { name: '归档' }))
+    const dialog = screen.getByRole('dialog', { name: '归档设备包' })
+    fireEvent.click(within(dialog).getByRole('button', { name: '归档' }))
+    await within(dialog).findByText('资源仍被引用')
+    expect(dialog).toBeInTheDocument()
+    expect(archive).toHaveBeenCalledWith(devicePackage.id)
+    archive.mockRestore()
   })
 })

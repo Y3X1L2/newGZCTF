@@ -1,6 +1,6 @@
 import { Plus, Search } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router'
+import { useNavigate, useSearchParams } from 'react-router'
 import { RuntimeApiError } from '../../api/runtimeJsonClient'
 import { ActionButton, InlineFeedback } from '../../../../shared/Interaction'
 import { DataState } from '../../../../shared/Primitives'
@@ -19,13 +19,19 @@ import { TeamLabCreateDialog } from './TeamLabCreateDialog'
 import { TeamLabSceneTable } from './TeamLabSceneTable'
 import { useTeamLabCatalog, type TeamLabSceneOwnerFilter, type TeamLabSceneStatusFilter } from './useTeamLabCatalog'
 import styles from './TeamLabLibraryPage.module.css'
+import { RemoteSessionsPanel } from '../runtimes/RemoteSessionsPanel'
+import { RuntimeSearchPanel } from './RuntimeSearchPanel'
 
 export function TeamLabLibraryPage() {
   const navigate = useNavigate()
   const catalog = useTeamLabCatalog()
   const [createOpen, setCreateOpen] = useState(false)
+  const [params, setParams] = useSearchParams()
+  const view = params.get('view') === 'runtimes' ? 'runtimes' : params.get('view') === 'sessions' ? 'sessions' : 'scenes'
+  const setView = (value: 'scenes' | 'runtimes' | 'sessions') => setParams({ view: value })
 
-  useVNextPageTitle('TeamLab 场景库')
+  const title = view === 'runtimes' ? '运行实例检索' : view === 'sessions' ? '远程会话管理' : '组网场景库'
+  useVNextPageTitle(title)
 
   const metrics = useMemo(() => {
     const scenes = catalog.page?.items ?? []
@@ -41,11 +47,19 @@ export function TeamLabLibraryPage() {
   return (
     <div className={styles.page}>
       <AdminPageHeader
-        actions={<ActionButton icon={<Plus size={16} />} onClick={() => setCreateOpen(true)} tone="primary" type="button">创建场景</ActionButton>}
-        description="维护可复用的网络场景、不可变发布版本和试运行记录。"
+        actions={view === 'scenes' ? <ActionButton icon={<Plus size={16} />} onClick={() => setCreateOpen(true)} tone="primary" type="button">创建场景</ActionButton> : undefined}
+        description={view === 'scenes' ? '维护可复用的网络场景、不可变发布版本和试运行记录。' : undefined}
         eyebrow="TEAMLAB ORCHESTRATION"
-        title="组网场景库"
+        title={title}
       />
+      <nav className={styles.views} aria-label="组网工作台视图">
+        <button type="button" aria-pressed={view === 'scenes'} onClick={() => setView('scenes')}>场景库</button>
+        <button type="button" aria-pressed={view === 'runtimes'} onClick={() => setView('runtimes')}>运行实例</button>
+        <button type="button" aria-pressed={view === 'sessions'} onClick={() => setView('sessions')}>远程会话</button>
+      </nav>
+      {view === 'sessions' ? <RemoteSessionsPanel /> : null}
+      {view === 'runtimes' ? <RuntimeSearchPanel /> : null}
+      {view === 'scenes' ? <>
       <MetricStrip>
         <MetricItem detail="当前页" label="场景" value={metrics.scenes} />
         <MetricItem detail="当前修订已发布" label="可用版本" tone={metrics.published ? 'success' : 'neutral'} value={metrics.published} />
@@ -109,6 +123,7 @@ export function TeamLabLibraryPage() {
         </>
       )}
 
+      </> : null}
       <TeamLabCreateDialog
         onClose={() => setCreateOpen(false)}
         onCreated={(topologyId) => {

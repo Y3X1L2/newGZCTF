@@ -98,7 +98,7 @@ describe('TeamLabRuntimeDetailPage', () => {
     expect(screen.getAllByText('runtime-ready')).toHaveLength(2)
     expect(screen.getAllByText('worker-a').length).toBeGreaterThan(0)
     expect(screen.getByText('10.10.0.10')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /暂停|恢复/ })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '暂停' })).toBeInTheDocument()
   })
 
   it('loads traffic panels only after the observability tab is selected', () => {
@@ -113,6 +113,18 @@ describe('TeamLabRuntimeDetailPage', () => {
     fireEvent.click(screen.getByRole('button', { name: '流量观测' }))
     expect(screen.getByRole('heading', { name: '流量元数据' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: '端到端路径' })).toBeInTheDocument()
+  })
+
+  it('disables direct lifecycle controls for rollout-managed runtimes', () => {
+    vi.mocked(useTeamLabRuntime).mockReturnValue({ runtime: { ...runtime, managedRolloutId: 'rollout-a' },
+      error: undefined, isLoading: false, isRefreshing: false, mutate: vi.fn() })
+    render(<MemoryRouter initialEntries={[`/admin/teamlab/topology-a/runtimes/${runtime.id}?from=runtime-search`]}>
+      <Routes><Route path="/admin/teamlab/:topologyId/runtimes/:runtimeId" element={<TeamLabRuntimeDetailPage />} /></Routes>
+    </MemoryRouter>)
+    expect(screen.getByRole('button', { name: '暂停' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '重置' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '销毁' })).toBeDisabled()
+    expect(screen.getByRole('link', { name: '运行实例检索' })).toHaveAttribute('href', '/admin/teamlab?view=runtimes')
   })
 
   it('offers an explicit idempotent cleanup recovery action', () => {

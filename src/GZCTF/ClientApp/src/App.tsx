@@ -9,6 +9,7 @@ import { VNextThemeProvider } from './vnext/app/VNextThemeProvider'
 import './vnext/design/globals.css'
 import './vnext/design/tokens.css'
 import '@xyflow/react/dist/style.css'
+import '@xterm/xterm/css/xterm.css'
 
 export const App: FC = () => {
   const swrConfig = useMemo(() => createSWRConfig(), [])

@@ -2,8 +2,10 @@ import { Cpu } from 'lucide-react'
 import useSWR from 'swr'
 import { teamLabResourceKeys, teamLabResourcesApi } from '../../api'
 import { connectorKindLabels } from '../../resources/resourcesPresentation'
-import { InspectorSection, SelectInput, TextAreaInput } from './InspectorFields'
+import { InspectorSection, SelectInput } from './InspectorFields'
+import { DeviceParametersEditor } from './DeviceParametersEditor'
 import type { TopologyAssetNode } from '../../model/topologyDocument'
+import type { TeamLabImageOption } from '../../api/teamlabImageCatalog'
 
 /**
  * Industrial emulation and field-integration binding for an asset. Device
@@ -15,10 +17,12 @@ export function CapabilityBindingEditor({
   node,
   onAssetChange,
   readOnly,
+  imageOptions,
 }: {
   node: TopologyAssetNode
   onAssetChange: (patch: Partial<TopologyAssetNode>) => void
   readOnly?: boolean
+  imageOptions: readonly TeamLabImageOption[]
 }) {
   const packages = useSWR(teamLabResourceKeys.devicePackages(null), () =>
     teamLabResourcesApi.listDevicePackages({ limit: 100 })
@@ -28,13 +32,16 @@ export function CapabilityBindingEditor({
   )
   const expectedKind = node.type === 'docker' ? 'docker' : 'vm'
   const packageOptions = (packages.data?.items ?? []).filter(
-    (item) => item.enabled && !item.archived && item.supportedAssetKinds.includes(expectedKind)
+    (item) => item.enabled && !item.archived && (item.bindingId ?? 0) > 0 && item.supportedAssetKinds.includes(expectedKind)
   )
   const connectorOptions = (connectors.data?.items ?? []).filter((item) => !item.archived)
-  const boundPackage = packageOptions.find((item) => String(item.id) === String(node.devicePackageId ?? ''))
+  const boundPackage = packageOptions.find((item) => item.bindingId === node.devicePackageId)
   const boundConnector = connectorOptions.find((item) => String(item.id) === (node.connectorId ?? ''))
   const boundPackageMissing = Boolean(node.devicePackageId) && !boundPackage
   const boundConnectorMissing = Boolean(node.connectorId) && !boundConnector
+  const digest = (value: string | null | undefined) => value?.replace(/^sha256:/i, '').toLowerCase()
+  const imageFor = (value: string | null) => value ? imageOptions.find(item => item.id === node.imageTemplateId && digest(item.digest) === digest(value))
+    ?? imageOptions.find(item => digest(item.digest) === digest(value)) : undefined
 
   const updateParameters = (text: string) => {
     onAssetChange({ deviceParameters: text.trim() ? text : null })
@@ -42,15 +49,24 @@ export function CapabilityBindingEditor({
 
   return (
     <InspectorSection icon={<Cpu aria-hidden="true" size={16} />} title="扩展能力">
+      {packages.error || connectors.error ? <p role="alert">扩展资源加载失败，请刷新重试；现有绑定不会被清除。</p> : null}
       <SelectInput
         disabled={readOnly}
         help="设备包承载工控仿真、蜜罐等协议模拟能力，由外部制品流水线发布。"
         label="设备包"
         onChange={(value) => {
           const packageId = Number(value)
+          const selected = packageOptions.find(item => item.bindingId === packageId)
+          const image = selected ? imageFor(selected.digest) : undefined
+          if (packageId > 0 && (!selected || !image)) return
           onAssetChange({
             devicePackageId: packageId > 0 ? packageId : null,
             deviceParameters: null,
+            ...(selected && image ? { imageTemplateId: image.id, resources: {
+              cpuUnits: Math.max(node.resources.cpuUnits, Math.ceil(selected.cpuMillis / 1000)),
+              memoryMiB: Math.max(node.resources.memoryMiB, selected.memoryMiB),
+              storageMiB: Math.max(node.resources.storageMiB, selected.storageGib * 1024),
+            } } : {}),
           })
         }}
         value={String(node.devicePackageId ?? 0)}
@@ -60,16 +76,16 @@ export function CapabilityBindingEditor({
           <option value={String(node.devicePackageId)}>当前设备包 #{node.devicePackageId}（不可用）</option>
         ) : null}
         {packageOptions.map((item) => (
-          <option key={item.id} value={item.id}>
-            {item.displayName} · {item.version} (#{item.id})
+          <option key={item.id} value={item.bindingId} disabled={!imageFor(item.digest)}>
+            {item.displayName} · {item.version}{!imageFor(item.digest) ? '（请先导入对应镜像）' : ''}
           </option>
         ))}
       </SelectInput>
       {node.devicePackageId ? (
-        <TextAreaInput
+        <DeviceParametersEditor
+          key={`${node.key}:${node.devicePackageId}`}
+          schema={boundPackage?.parameterSchema}
           disabled={readOnly}
-          help="作者可配置参数，发布时冻结；语义校验由设备包运行时执行。留空表示使用默认值。"
-          label="设备包参数（JSON）"
           onChange={updateParameters}
           value={node.deviceParameters ?? ''}
         />

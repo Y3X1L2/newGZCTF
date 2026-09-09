@@ -53,7 +53,7 @@
 .tabs a[aria-current='page']::after {
   position: absolute;
   right: 0;
-  bottom: -1px;
+  bottom: 0;
   left: 0;
   height: 2px;
   background: var(--yn-color-brand);

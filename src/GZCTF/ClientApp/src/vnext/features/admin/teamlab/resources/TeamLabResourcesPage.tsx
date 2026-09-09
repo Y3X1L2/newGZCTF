@@ -87,8 +87,10 @@ function DevicePackagesTab() {
     try {
       await action()
       await catalog.mutate()
+      return true
     } catch (reason) {
       setActionError(reason)
+      return false
     } finally {
       setBusy(false)
     }
@@ -147,7 +149,7 @@ function DevicePackagesTab() {
             columns={columns}
             emptyDescription="登记外部流水线产出的设备包后，场景资产即可引用。"
             emptyTitle="暂无设备包"
-            onRowClick={setSelected}
+            onRowClick={(row) => { setActionError(null); setSelected(row) }}
             rowKey={(row) => row.id}
             rows={[...(catalog.page?.items ?? [])]}
           />
@@ -180,14 +182,17 @@ function DevicePackagesTab() {
             <>
               <ActionButton
                 disabled={busy}
-                onClick={() => void run(() => teamLabResourcesApi.setDevicePackageEnabled(selected.id, !selected.enabled))}
+                onClick={() => void run(async () => {
+                  const updated = await teamLabResourcesApi.setDevicePackageEnabled(selected.id, !selected.enabled)
+                  setSelected(current => current?.id === updated.id ? updated : current)
+                })}
                 type="button"
               >
                 {selected.enabled ? '停用' : '启用'}
               </ActionButton>
               <ActionButton
                 disabled={busy}
-                onClick={() => setArchiveTarget(selected)}
+                onClick={() => { setActionError(null); setArchiveTarget(selected) }}
                 tone="danger"
                 type="button"
               >
@@ -197,6 +202,7 @@ function DevicePackagesTab() {
           ) : null
         }
       >
+        {actionError ? <InlineFeedback tone="danger">{errorMessage(actionError, '设备包操作失败。')}</InlineFeedback> : null}
         {selected ? (
           <dl className={styles.detailList}>
             <div>
@@ -233,13 +239,15 @@ function DevicePackagesTab() {
 
       <VNextConfirmDialog
         confirmLabel="归档"
-        description="归档后设备包不再出现在场景资产选择中，已引用它的历史版本保持可读。"
+        description={actionError ? errorMessage(actionError, '设备包归档失败，请重试。') : '归档后设备包不再出现在场景资产选择中，已引用它的历史版本保持可读。'}
         message={`确认归档设备包 ${archiveTarget?.displayName ?? ''} ${archiveTarget?.version ?? ''}？`}
         onClose={() => setArchiveTarget(null)}
-        onConfirm={() => {
+        onConfirm={async () => {
           const target = archiveTarget
-          setArchiveTarget(null)
-          if (target) void run(() => teamLabResourcesApi.archiveDevicePackage(target.id))
+          if (!target) return false
+          const saved = await run(() => teamLabResourcesApi.archiveDevicePackage(target.id))
+          if (saved) { setSelected(null); setArchiveTarget(null) }
+          return saved
         }}
         open={Boolean(archiveTarget)}
         title="归档设备包"
@@ -262,8 +270,10 @@ function ConnectorsTab() {
     try {
       await action()
       await registry.mutate()
+      return true
     } catch (reason) {
       setActionError(reason)
+      return false
     } finally {
       setBusy(false)
     }
@@ -312,7 +322,7 @@ function ConnectorsTab() {
             columns={columns}
             emptyDescription="登记现场资源后，场景资产即可按 ID 引用。"
             emptyTitle="暂无现场连接器"
-            onRowClick={setSelected}
+            onRowClick={(row) => { setActionError(null); setSelected(row) }}
             rowKey={(row) => row.id}
             rows={[...(registry.page?.items ?? [])]}
           />
@@ -346,7 +356,10 @@ function ConnectorsTab() {
               <ActionButton
                 disabled={busy || selected.health === 'unreachable'}
                 onClick={() =>
-                  selected && void run(() => teamLabResourcesApi.setConnectorHealth(selected.id, 'unreachable'))
+                  selected && void run(async () => {
+                    const updated = await teamLabResourcesApi.setConnectorHealth(selected.id, 'unreachable')
+                    setSelected(current => current?.id === updated.id ? updated : current)
+                  })
                 }
                 tone="danger"
                 type="button"
@@ -355,12 +368,15 @@ function ConnectorsTab() {
               </ActionButton>
               <ActionButton
                 disabled={busy || selected.health === 'healthy'}
-                onClick={() => selected && void run(() => teamLabResourcesApi.setConnectorHealth(selected.id, 'healthy'))}
+                onClick={() => selected && void run(async () => {
+                  const updated = await teamLabResourcesApi.setConnectorHealth(selected.id, 'healthy')
+                  setSelected(current => current?.id === updated.id ? updated : current)
+                })}
                 type="button"
               >
                 标记健康
               </ActionButton>
-              <ActionButton disabled={busy} onClick={() => setArchiveTarget(selected)} tone="danger" type="button">
+              <ActionButton disabled={busy} onClick={() => { setActionError(null); setArchiveTarget(selected) }} tone="danger" type="button">
                 归档
               </ActionButton>
             </>
@@ -399,13 +415,15 @@ function ConnectorsTab() {
 
       <VNextConfirmDialog
         confirmLabel="归档"
-        description="仍有活动租约的连接器无法归档。"
+        description={actionError ? errorMessage(actionError, '连接器归档失败，请重试。') : '仍有活动租约的连接器无法归档。'}
         message={`确认归档连接器 ${archiveTarget?.displayName ?? ''}？`}
         onClose={() => setArchiveTarget(null)}
-        onConfirm={() => {
+        onConfirm={async () => {
           const target = archiveTarget
-          setArchiveTarget(null)
-          if (target) void run(() => teamLabResourcesApi.archiveConnector(target.id))
+          if (!target) return false
+          const saved = await run(() => teamLabResourcesApi.archiveConnector(target.id))
+          if (saved) { setSelected(null); setArchiveTarget(null) }
+          return saved
         }}
         open={Boolean(archiveTarget)}
         title="归档连接器"

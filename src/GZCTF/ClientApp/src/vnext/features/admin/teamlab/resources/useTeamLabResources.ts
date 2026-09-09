@@ -2,6 +2,11 @@ import { useDeferredValue, useEffect, useMemo, useState } from 'react'
 import useSWR from 'swr'
 import { teamLabResourceKeys, teamLabResourcesApi } from '../api'
 import { useAdminCursorState } from '../../shared/useAdminCursorState'
+import { nodeAdminApi } from '../../api/nodeAdminApi'
+
+export function useConnectorNodes(enabled: boolean) {
+  return useSWR(enabled ? 'vnext:teamlab:connector-nodes' : null, () => nodeAdminApi.list())
+}
 
 const pageSize = 30
 

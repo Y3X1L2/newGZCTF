@@ -10,6 +10,19 @@
  * ---------------------------------------------------------------
  */
 
+export enum BootstrapProfileStatus {
+  Active = 0,
+  Deleting = 1,
+  Deleted = 2,
+}
+
+export enum ApiOperationStatus {
+  Pending = 0,
+  Running = 1,
+  Succeeded = 2,
+  Failed = 3,
+}
+
 /** Training course resource type */
 export enum TrainingCourseResourceType {
   File = "File",
@@ -89,6 +102,46 @@ export enum StudentGroupManagerRole {
   Assistant = "Assistant",
 }
 
+export enum OperationalErrorCategory {
+  Authorization = 0,
+  Validation = 1,
+  Conflict = 2,
+  Scheduling = 3,
+  Capacity = 4,
+  ImageRegistry = 5,
+  ImageTransfer = 6,
+  NodeUnavailable = 7,
+  AgentProtocol = 8,
+  AgentTransport = 9,
+  Docker = 10,
+  Kvm = 11,
+  Network = 12,
+  HealthCheck = 13,
+  Storage = 14,
+  Database = 15,
+  Cache = 16,
+  Unknown = 17,
+}
+
+export enum OperationalEventOutcome {
+  Started = 0,
+  Pending = 1,
+  Blocked = 2,
+  Succeeded = 3,
+  Failed = 4,
+  Cancelled = 5,
+  Recovered = 6,
+  Observed = 7,
+}
+
+export enum OperationalEventSeverity {
+  Debug = 0,
+  Information = 1,
+  Warning = 2,
+  Error = 3,
+  Critical = 4,
+}
+
 export enum CaptchaProvider {
   None = "None",
   HashPow = "HashPow",
@@ -100,32 +153,43 @@ export enum ContainerPortMappingType {
   PlatformProxy = "PlatformProxy",
 }
 
-export enum DeploymentQueueTicketStatus {
-  Pending = 0,
-  Assigned = 1,
-  Creating = 2,
-  Completed = 3,
-  Failed = 4,
-  Cancelled = 5,
+export enum VmNetworkMode {
+  Dhcp = 0,
+  Preconfigured = 1,
 }
 
-export enum DeploymentQueueKind {
-  GameContainer = 1,
-  ExerciseContainer = 2,
-  Vm = 3,
-  TeamLabRuntime = 4,
+export enum VmRuntimeMode {
+  Managed = 0,
+  Opaque = 1,
 }
 
-/** Challenge difficulty */
-export enum Difficulty {
-  Baby = "Baby",
-  Trivial = "Trivial",
-  Easy = "Easy",
-  Normal = "Normal",
-  Medium = "Medium",
-  Hard = "Hard",
-  Expert = "Expert",
-  Insane = "Insane",
+export enum VmArtifactStatus {
+  None = 0,
+  Building = 1,
+  Ready = 2,
+  Failed = 3,
+  Invalidated = 4,
+}
+
+export enum ImageStatus {
+  Ready = 0,
+  Importing = 1,
+  Error = 2,
+  Deleting = 3,
+}
+
+export enum OSType {
+  Linux = 0,
+  Windows = 1,
+}
+
+export enum AgentUpdateState {
+  Stable = 0,
+  Cordoned = 1,
+  Syncing = 2,
+  AwaitingHeartbeat = 3,
+  VerifyingFabric = 4,
+  Failed = 5,
 }
 
 export enum TeamLabFabricStatus {
@@ -200,6 +264,97 @@ export enum SubmissionType {
   Normal = "Normal",
 }
 
+/**
+ * Origin of a public exercise-pool entry. Source challenges are copied into the
+ * pool so their original game/course lifecycle remains isolated.
+ */
+export enum ExercisePoolSource {
+  Exercise = "Exercise",
+  Game = "Game",
+  Training = "Training",
+}
+
+export enum DeploymentStage {
+  Queued = 0,
+  AdmissionChecking = 1,
+  CapacityWaiting = 2,
+  ImagePreparing = 3,
+  ImagePulling = 4,
+  ImageVerifying = 5,
+  NodeExecutionWaiting = 6,
+  ContainerCreating = 7,
+  VmCreating = 8,
+  RuntimeNetworkApplying = 9,
+  RuntimeAssetsCreating = 10,
+  BootProbing = 11,
+  AccessOpening = 12,
+  Extending = 13,
+  Stopping = 14,
+  Destroying = 15,
+  RollingBack = 16,
+  Ready = 17,
+  Failed = 18,
+  Cancelled = 19,
+  ArtifactsVerifying = 20,
+  NetworkApplying = 21,
+  RoutesApplying = 22,
+  AssetBooting = 23,
+  GuestWaiting = 24,
+  BootstrapInjecting = 25,
+  BootstrapRunning = 26,
+  GuestRebooting = 27,
+  HealthProbing = 28,
+  ObservationStarting = 29,
+}
+
+export enum RuntimeOperationKind {
+  Create = 1,
+  Extend = 2,
+  Stop = 3,
+  Reset = 4,
+  Destroy = 5,
+  Pause = 6,
+  Resume = 7,
+  AssetControl = 8,
+}
+
+export enum DeploymentQueueKind {
+  GameContainer = 1,
+  ExerciseContainer = 2,
+  TrainingContainer = 3,
+  AwdpContainer = 4,
+  ChallengeTestContainer = 5,
+  VirtualMachine = 6,
+  TeamLabRuntime = 7,
+}
+
+/** Environment type for challenge deployment */
+export enum EnvironmentType {
+  None = "None",
+  Docker = "Docker",
+  WindowsVM = "WindowsVM",
+}
+
+/** Container network mode */
+export enum NetworkMode {
+  Open = "Open",
+  Isolated = "Isolated",
+  Custom = "Custom",
+}
+
+/** Answer type for challenge submission */
+export enum AnswerType {
+  Flag = "Flag",
+  File = "File",
+  Custom = "Custom",
+}
+
+/** Flag score mode */
+export enum FlagScoreMode {
+  InheritDecay = "InheritDecay",
+  FixedScore = "FixedScore",
+}
+
 /** Player-facing container entry publication status. */
 export enum ContainerEntryStatus {
   Pending = "Pending",
@@ -212,6 +367,19 @@ export enum ContainerStatus {
   Pending = "Pending",
   Running = "Running",
   Destroyed = "Destroyed",
+}
+
+export enum FileType {
+  None = "None",
+  Local = "Local",
+  Remote = "Remote",
+}
+
+export enum ChallengeType {
+  StaticAttachment = "StaticAttachment",
+  StaticContainer = "StaticContainer",
+  DynamicAttachment = "DynamicAttachment",
+  DynamicContainer = "DynamicContainer",
 }
 
 /** Game participant permission */
@@ -307,109 +475,16 @@ export enum AwdpRoundStatus {
   Finished = "Finished",
 }
 
-export enum ParticipationStatus {
-  Pending = "Pending",
-  Accepted = "Accepted",
-  Rejected = "Rejected",
-  Suspended = "Suspended",
-  Unsubmitted = "Unsubmitted",
-}
-
-/** Task execution status */
-export enum TaskStatus {
-  Success = "Success",
-  Failed = "Failed",
-  Duplicate = "Duplicate",
-  Denied = "Denied",
-  NotFound = "NotFound",
-  Exit = "Exit",
-  Unhealthy = "Unhealthy",
-  Degraded = "Degraded",
-  Pending = "Pending",
-}
-
-/** User role enumeration */
-export enum Role {
-  Banned = "Banned",
-  Student = "Student",
-  User = "Student",
-  Teacher = "Teacher",
-  Monitor = "Teacher",
-  Admin = "Admin",
-  SuperAdmin = "SuperAdmin",
-}
-
-/** Login response status */
-export enum RegisterStatus {
-  LoggedIn = "LoggedIn",
-  AdminConfirmationRequired = "AdminConfirmationRequired",
-  EmailConfirmationRequired = "EmailConfirmationRequired",
-}
-
-export enum ImageStatus {
-  Ready = 0,
-  Importing = 1,
-  Error = 2,
-  Deleting = 3,
-}
-
-export enum ImageType {
-  Docker = 0,
-  Qcow2 = 1,
-  Ova = 2,
-  Vmdk = 3,
-}
-
-export enum OSType {
-  Linux = 0,
-  Windows = 1,
-}
-
-export enum ApiOperationStatus {
-  Pending = 0,
-  Running = 1,
-  Succeeded = 2,
-  Failed = 3,
-}
-
-export enum FileType {
-  None = "None",
-  Local = "Local",
-  Remote = "Remote",
-}
-
-/** Answer type for challenge submission */
-export enum AnswerType {
-  Flag = "Flag",
-  File = "File",
-  Custom = "Custom",
-}
-
-/** Flag score mode */
-export enum FlagScoreMode {
-  InheritDecay = "InheritDecay",
-  FixedScore = "FixedScore",
-}
-
-/** Container network mode */
-export enum NetworkMode {
-  Open = "Open",
-  Isolated = "Isolated",
-  Custom = "Custom",
-}
-
-/** Environment type for challenge deployment */
-export enum EnvironmentType {
-  None = "None",
-  Docker = "Docker",
-  WindowsVM = "WindowsVM",
-}
-
-export enum ChallengeType {
-  StaticAttachment = "StaticAttachment",
-  StaticContainer = "StaticContainer",
-  DynamicAttachment = "DynamicAttachment",
-  DynamicContainer = "DynamicContainer",
+/** Challenge difficulty */
+export enum Difficulty {
+  Baby = "Baby",
+  Trivial = "Trivial",
+  Easy = "Easy",
+  Normal = "Normal",
+  Medium = "Medium",
+  Hard = "Hard",
+  Expert = "Expert",
+  Insane = "Insane",
 }
 
 /** Challenge category */
@@ -430,6 +505,79 @@ export enum ChallengeCategory {
   IR = "IR",
 }
 
+export enum ParticipationStatus {
+  Pending = "Pending",
+  Accepted = "Accepted",
+  Rejected = "Rejected",
+  Suspended = "Suspended",
+  Unsubmitted = "Unsubmitted",
+}
+
+/** Login response status */
+export enum RegisterStatus {
+  LoggedIn = "LoggedIn",
+  AdminConfirmationRequired = "AdminConfirmationRequired",
+  EmailConfirmationRequired = "EmailConfirmationRequired",
+}
+
+/** User role enumeration */
+export enum Role {
+  Banned = "Banned",
+  Student = "Student",
+  User = "Student",
+  Teacher = "Teacher",
+  Monitor = "Teacher",
+  Admin = "Admin",
+  SuperAdmin = "SuperAdmin",
+}
+
+export enum ImageType {
+  Docker = 0,
+  Qcow2 = 1,
+  Ova = 2,
+  Vmdk = 3,
+}
+
+export enum TeamLabDependencyCondition {
+  NetworkReady = 0,
+  GuestReady = 1,
+  ServiceReady = 2,
+  BootstrapCompleted = 3,
+}
+
+export enum TeamLabInfrastructureKind {
+  ManagedSwitch = 0,
+  ManagedRouter = 1,
+}
+
+export enum TeamLabConnectionDirection {
+  FromTo = 0,
+  Bidirectional = 1,
+}
+
+export enum TeamLabEndpointObservationMode {
+  Disabled = 0,
+  Optional = 1,
+  Required = 2,
+}
+
+export enum TeamLabHealthCheckKind {
+  Tcp = 0,
+  Http = 1,
+}
+
+export enum TeamLabTrafficCaptureSegmentStatus {
+  Pending = 0,
+  Running = 1,
+  Stopping = 2,
+  Captured = 3,
+  Uploading = 4,
+  Uploaded = 5,
+  Failed = 6,
+  Expired = 7,
+  CleanupPending = 8,
+}
+
 export enum TeamLabTrafficCaptureStatus {
   Pending = 0,
   Running = 1,
@@ -437,11 +585,25 @@ export enum TeamLabTrafficCaptureStatus {
   Completed = 3,
   Failed = 4,
   Expired = 5,
+  CleanupPending = 6,
 }
 
-export enum TeamLabHealthCheckKind {
-  Tcp = 0,
-  Http = 1,
+export enum TeamLabObservationPointKind {
+  NetworkBridge = 0,
+  RouterFragment = 1,
+  FabricUplink = 2,
+  WorkloadEndpoint = 3,
+}
+
+export enum TeamLabTrafficEvidenceKind {
+  Packet = 0,
+  EndpointProcess = 1,
+}
+
+export enum TeamLabPathConfidence {
+  PacketExact = 0,
+  ProcessCorrelated = 1,
+  TemporallyRelated = 2,
 }
 
 export enum TeamLabEventLevel {
@@ -451,9 +613,37 @@ export enum TeamLabEventLevel {
   Error = 3,
 }
 
+/** Task execution status */
+export enum TaskStatus {
+  Success = "Success",
+  Failed = "Failed",
+  Duplicate = "Duplicate",
+  Denied = "Denied",
+  NotFound = "NotFound",
+  Exit = "Exit",
+  Unhealthy = "Unhealthy",
+  Degraded = "Degraded",
+  Pending = "Pending",
+}
+
+export enum DeploymentQueueTicketStatus {
+  Pending = 0,
+  Scheduling = 1,
+  Scheduled = 2,
+  Running = 3,
+  Succeeded = 4,
+  Failed = 5,
+  Cancelled = 6,
+}
+
 export enum TeamLabAssetKind {
   Docker = 0,
   Vm = 1,
+}
+
+export enum TeamLabExecutionModel {
+  V1 = 0,
+  V2 = 1,
 }
 
 export enum TeamLabRuntimeStatus {
@@ -465,28 +655,389 @@ export enum TeamLabRuntimeStatus {
   Running = 5,
   Failed = 6,
   CleanupPending = 7,
-  Stopped = 8,
+  Paused = 8,
   Destroying = 9,
   Destroyed = 10,
+  Stopped = 11,
 }
 
-export interface CreateTeamLabRuntimeModel {
+export enum TeamLabRemoteSessionStatus {
+  Creating = 1,
+  Ready = 2,
+  Connected = 3,
+  Ending = 4,
+  Ended = 5,
+  Failed = 6,
+}
+
+export enum TeamLabRemoteProtocol {
+  ContainerTerminal = 1,
+  Ssh = 2,
+  Rdp = 3,
+  Vnc = 4,
+}
+
+export interface TeamLabDevicePackagePageModel {
+  items?: TeamLabDevicePackageModel[];
+  next?: string | null;
+}
+
+export interface TeamLabDevicePackageModel {
+  /** @format guid */
+  id?: string;
+  name?: string;
+  displayName?: string;
+  version?: string;
+  artifactKind?: string;
+  artifactReference?: string;
+  digest?: string | null;
+  description?: string | null;
+  supportedAssetKinds?: string[];
+  /** @format int32 */
+  cpuMillis?: number;
+  /** @format int32 */
+  memoryMib?: number;
+  /** @format int32 */
+  storageGib?: number;
+  ports?: TeamLabDevicePackagePortModel[];
+  parameterSchema?: any;
+  healthDeclaration?: any;
+  protocolEventTypes?: string[];
+  enabled?: boolean;
+  archived?: boolean;
+  /** @format uint64 */
+  createdAt?: number;
+  /** @format uint64 */
+  updatedAt?: number;
+  /** @format int32 */
+  bindingId?: number;
+}
+
+export interface TeamLabDevicePackagePortModel {
+  name?: string;
+  /** @format int32 */
+  port?: number;
+  protocol?: string;
+}
+
+export interface TeamLabConnectorPageModel {
+  items?: TeamLabConnectorModel[];
+  next?: string | null;
+}
+
+export interface TeamLabConnectorModel {
+  /** @format guid */
+  id?: string;
+  name?: string;
+  displayName?: string;
+  kind?: string;
+  /** @format guid */
+  controlScopeId?: string | null;
+  supportsSharedUse?: boolean;
+  /** @format int32 */
+  capacity?: number;
+  /** @format int32 */
+  occupiedSlots?: number;
+  activeLeases?: TeamLabConnectorLeaseModel[];
+  health?: string;
+  /** @format uint64 */
+  healthObservedAt?: number | null;
+  description?: string | null;
+  archived?: boolean;
+  /** @format uint64 */
+  createdAt?: number;
+  /** @format uint64 */
+  updatedAt?: number;
+}
+
+export interface TeamLabConnectorLeaseModel {
+  /** @format guid */
+  id?: string;
+  /** @format guid */
+  connectorId?: string;
+  /** @format guid */
+  runtimeId?: string;
+  /** @format int32 */
+  slot?: number;
+  /** @format uint64 */
+  acquiredAt?: number;
+  /** @format uint64 */
+  releasedAt?: number | null;
+  releaseReason?: string;
+}
+
+export interface TeamLabResourcePoolSnapshotModel {
+  computeNodes?: TeamLabComputeNodePoolModel[];
+  templates?: TeamLabTemplatePoolModel[];
+}
+
+export interface TeamLabComputeNodePoolModel {
+  /** @format guid */
+  id?: string;
+  name?: string;
+  status?: string;
+  schedulable?: boolean;
+  dockerCapable?: boolean;
+  kvmCapable?: boolean;
+  teamLabNetworkEnabled?: boolean;
+  fabricStatus?: string;
+  /** @format int32 */
+  currentContainers?: number;
+  /** @format int32 */
+  maxContainers?: number;
+  /** @format int32 */
+  currentVms?: number;
+  /** @format int32 */
+  maxVms?: number;
+  /** @format double */
+  cpuLoadPercent?: number;
+  /** @format double */
+  memoryLoadPercent?: number;
+  agentVersion?: string | null;
+  /** @format uint64 */
+  lastHeartbeat?: number | null;
+  /** @format uint64 */
+  metricObservedAt?: number | null;
+}
+
+export interface TeamLabTemplatePoolModel {
+  /** @format int32 */
+  id?: number;
+  name?: string;
+  osType?: string;
+  imageType?: string;
+  status?: string;
+  /** @format int64 */
+  fileSizeBytes?: number;
+  digest?: string | null;
+  supportsInstanceCredentials?: boolean;
+  /** @format uint64 */
+  uploadedAt?: number;
+}
+
+export interface TeamLabNodeCachePageModel {
+  items?: TeamLabNodeCachePoolModel[];
+  next?: string | null;
+}
+
+export interface TeamLabNodeCachePoolModel {
+  /** @format int32 */
+  templateId?: number;
+  /** @format guid */
+  nodeId?: string;
+  imageHash?: string | null;
+  status?: string;
+  operation?: string;
+  stage?: string;
+  /** @format int32 */
+  attemptCount?: number;
+  /** @format int32 */
+  activeReferenceCount?: number;
+  lastErrorCode?: string | null;
+  /** @format uint64 */
+  progressUpdatedAt?: number | null;
+}
+
+export interface RegisterTeamLabDevicePackageModel {
+  name?: string;
+  displayName?: string;
+  version?: string;
+  artifactKind?: string;
+  artifactReference?: string;
+  digest?: string | null;
+  description?: string | null;
+  supportedAssetKinds?: string[] | null;
+  /** @format int32 */
+  cpuMillis?: number;
+  /** @format int32 */
+  memoryMib?: number;
+  /** @format int32 */
+  storageGib?: number;
+  ports?: TeamLabDevicePackagePortModel[] | null;
+  parameterSchema?: any;
+  healthDeclaration?: any;
+  protocolEventTypes?: string[] | null;
+}
+
+export interface RegisterTeamLabConnectorModel {
+  name?: string;
+  displayName?: string;
+  kind?: string;
+  /** @format guid */
+  controlScopeId?: string | null;
+  supportsSharedUse?: boolean;
+  /** @format int32 */
+  capacity?: number;
+  attachmentReference?: string | null;
+  description?: string | null;
+  managedNic?: TeamLabManagedNicModel | null;
+}
+
+export interface TeamLabManagedNicModel {
+  /** @format guid */
+  nodeId?: string;
+  interfaceName?: string;
+  macAddress?: string;
+}
+
+export interface SetTeamLabConnectorHealthModel {
+  health?: string;
+}
+
+export interface ReleaseTeamLabConnectorLeaseModel {
+  /** @format guid */
+  runtimeId?: string;
+}
+
+export interface TeamLabRemoteSessionPage {
+  items?: TeamLabRemoteSessionListItem[];
+  /** @format int64 */
+  nextCursor?: number | null;
+}
+
+export interface TeamLabRemoteSessionListItem {
+  session?: TeamLabRemoteSessionModel;
+  /** @format guid */
+  workerNodeId?: string;
+  /** @format guid */
+  requestedByUserId?: string;
+}
+
+export interface TeamLabRemoteSessionModel {
+  /** @format guid */
+  id?: string;
+  /** @format guid */
+  runtimeId?: string;
+  /** @format int32 */
+  assetId?: number;
+  assetName?: string;
+  protocol?: TeamLabRemoteProtocol;
+  status?: TeamLabRemoteSessionStatus;
+  reason?: string;
+  /** @format uint64 */
+  createdAt?: number;
+  /** @format uint64 */
+  expiresAt?: number;
+  /** @format uint64 */
+  connectedAt?: number | null;
+  /** @format uint64 */
+  endedAt?: number | null;
+  endReason?: string | null;
+}
+
+export interface TeamLabRemoteAccessAvailabilityModel {
+  /** @format int32 */
+  assetId?: number;
+  assetName?: string;
+  protocol?: TeamLabRemoteProtocol | null;
+  available?: boolean;
+  unavailableReason?: string | null;
+}
+
+export interface CreateTeamLabRemoteSessionModel {
+  reason?: string;
+  vncConsole?: boolean;
+}
+
+export interface TeamLabRemoteConnectModel {
+  url?: string;
+  /** @format uint64 */
+  expiresAt?: number;
+}
+
+export interface TeamLabRuntimeSearchPage {
+  items?: TeamLabRuntimeSearchItem[];
+  nextCursor?: string | null;
+}
+
+export interface TeamLabRuntimeSearchItem {
+  /** @format guid */
+  id?: string;
+  /** @format guid */
+  topologyId?: string | null;
   /** @format guid */
   releaseId?: string;
-  externalReference?: string | null;
-  constraints?: TeamLabRuntimeConstraintsModel | null;
-  overlays?: TeamLabRuntimeOverlayModel[] | null;
+  reference?: string | null;
+  /** @format int32 */
+  generation?: number;
+  status?: string;
+  /** @format guid */
+  createdById?: string | null;
+  /** @format uint64 */
+  createdAt?: number;
+  /** @format int32 */
+  assetCount?: number;
+  hasError?: boolean;
 }
 
-export interface TeamLabRuntimeConstraintsModel {
-  preferredRegion?: string | null;
-  requiredCapabilities?: string[];
+export interface TeamLabVmDiagnostics {
+  state?: string;
+  /** @format guid */
+  nativeId?: string;
+  /** @format uint64 */
+  observedAt?: number;
 }
 
-export interface TeamLabRuntimeOverlayModel {
-  assetKey?: string;
-  environment?: Record<string, string>;
-  secrets?: Record<string, string>;
+export interface TeamLabRuntimeTaskPageModel {
+  items?: TeamLabRuntimeTaskModel[];
+  nextCursor?: string | null;
+}
+
+export interface TeamLabRuntimeTaskModel {
+  /** @format guid */
+  id?: string;
+  /** @format int32 */
+  generation?: number;
+  operation?: string;
+  status?: string;
+  stage?: string;
+  /** @format guid */
+  operationId?: string | null;
+  /** @format uint64 */
+  createdAt?: number;
+  /** @format uint64 */
+  startedAt?: number | null;
+  /** @format uint64 */
+  completedAt?: number | null;
+  errorCode?: string | null;
+  blockedReasonCode?: string | null;
+  retryable?: boolean;
+}
+
+export interface TeamLabContainerDiagnostics {
+  state?: string;
+  paused?: boolean;
+  /** @format int64 */
+  exitCode?: number;
+  /** @format int64 */
+  restartCount?: number;
+  startedAt?: string;
+  finishedAt?: string;
+  logs?: string;
+  truncated?: boolean;
+  /** @format uint64 */
+  observedAt?: number;
+  logsError?: string | null;
+}
+
+export interface TeamLabAdminRuntimePageModel {
+  items?: TeamLabAdminRuntimeSummaryModel[];
+  nextCursor?: string | null;
+}
+
+export interface TeamLabAdminRuntimeSummaryModel {
+  /** @format guid */
+  id?: string;
+  /** @format guid */
+  releaseId?: string;
+  status?: TeamLabRuntimeStatus;
+  stage?: string;
+  openForAccess?: boolean;
+  /** @format uint64 */
+  createdAt?: number;
+  /** @format uint64 */
+  updatedAt?: number | null;
+  error?: string | null;
 }
 
 export interface TeamLabRuntimeProjectionModel {
@@ -496,6 +1047,7 @@ export interface TeamLabRuntimeProjectionModel {
   releaseId?: string;
   /** @format int32 */
   generation?: number;
+  executionModel?: TeamLabExecutionModel;
   status?: TeamLabRuntimeStatus;
   stage?: string;
   openForAccess?: boolean;
@@ -507,15 +1059,43 @@ export interface TeamLabRuntimeProjectionModel {
   /** @format uint64 */
   updatedAt?: number | null;
   error?: string | null;
+  /** @format guid */
+  currentOperationId?: string | null;
+  /** @format guid */
+  deploymentQueueTicketId?: string | null;
+  queueStatus?: DeploymentQueueTicketStatus | null;
+  subStages?: TeamLabRuntimeSubStageProjectionModel[] | null;
+  /** @format guid */
+  controlScopeId?: string | null;
+  /** @format int32 */
+  releaseVersion?: number | null;
+  recoveryActions?: string[] | null;
+  failure?: TeamLabFailureProjectionModel | null;
+  /** @format guid */
+  managedRolloutId?: string | null;
 }
 
 export interface TeamLabRuntimeShardProjectionModel {
   /** @format guid */
   id?: string;
+  /** @format guid */
+  workerNodeId?: string;
+  workerNodeName?: string;
   status?: TeamLabRuntimeStatus;
   networkKeys?: string[];
   assetKeys?: string[];
   error?: string | null;
+  failure?: TeamLabFailureProjectionModel | null;
+}
+
+export interface TeamLabFailureProjectionModel {
+  code?: string;
+  stage?: string;
+  retryable?: boolean;
+  actions?: string[];
+  resourceType?: string | null;
+  resourceId?: string | null;
+  detail?: string | null;
 }
 
 export interface TeamLabRuntimeNetworkProjectionModel {
@@ -526,6 +1106,8 @@ export interface TeamLabRuntimeNetworkProjectionModel {
 }
 
 export interface TeamLabRuntimeAssetProjectionModel {
+  /** @format int32 */
+  id?: number;
   key?: string;
   name?: string;
   kind?: TeamLabAssetKind;
@@ -533,6 +1115,63 @@ export interface TeamLabRuntimeAssetProjectionModel {
   primaryIp?: string | null;
   status?: TeamLabRuntimeStatus;
   error?: string | null;
+  failure?: TeamLabFailureProjectionModel | null;
+}
+
+export interface TeamLabRuntimeSubStageProjectionModel {
+  id?: string;
+  status?: string;
+  message?: string | null;
+}
+
+export interface CreateTeamLabTrialRuntimeModel {
+  /** @format guid */
+  releaseId?: string;
+  constraints?: TeamLabRuntimeConstraintsModel | null;
+  overlays?: TeamLabRuntimeOverlayModel[] | null;
+  externalReference?: string | null;
+}
+
+export interface TeamLabRuntimeConstraintsModel {
+  preferredRegion?: string | null;
+  requiredCapabilities?: string[];
+}
+
+export interface TeamLabRuntimeOverlayModel {
+  assetKey?: string;
+  secrets?: Record<string, string>;
+}
+
+export interface LogMessagePageModel {
+  items?: LogMessageModel[];
+  nextCursor?: string | null;
+}
+
+/** Log information (Admin) */
+export interface LogMessageModel {
+  /** @format int64 */
+  id?: number;
+  /** @format uint64 */
+  time?: number;
+  name?: string | null;
+  level?: string | null;
+  ip?: string | null;
+  msg?: string | null;
+  status?: TaskStatus | null;
+  /** @format guid */
+  correlationId?: string | null;
+  traceId?: string | null;
+  eventCode?: string | null;
+  errorCategory?: string | null;
+  errorCode?: string | null;
+  /** @format guid */
+  workerNodeId?: string | null;
+  workerNodeName?: string | null;
+  /** @format guid */
+  deploymentTicketId?: string | null;
+  resourceType?: string | null;
+  resourceId?: string | null;
+  resourceDisplayName?: string | null;
 }
 
 export interface ResetTeamLabRuntimeModel {
@@ -555,6 +1194,142 @@ export interface TeamLabRuntimeEventModel {
   createdAt?: number;
 }
 
+export interface TeamLabLinkPolicyPageModel {
+  items?: TeamLabLinkPolicyModel[];
+  next?: string | null;
+}
+
+export interface TeamLabLinkPolicyModel {
+  /** @format guid */
+  id?: string;
+  /** @format guid */
+  runtimeId?: string;
+  networkKey?: string;
+  assetKey?: string | null;
+  kind?: string;
+  parameters?: any;
+  status?: string;
+  /** @format uint64 */
+  recoverAt?: number | null;
+  /** @format uint64 */
+  appliedAt?: number;
+  /** @format uint64 */
+  recoveredAt?: number | null;
+  recoverOrigin?: string;
+  lastError?: string | null;
+}
+
+export interface ApplyTeamLabLinkPolicyModel {
+  /** @format guid */
+  runtimeId?: string;
+  networkKey?: string;
+  assetKey?: string | null;
+  kind?: string;
+  parameters?: any;
+  /** @format uint64 */
+  recoverAt?: number | null;
+}
+
+export interface TeamLabTrafficFlowPageModel {
+  items?: TeamLabTrafficFlowProjectionModel[];
+  nextCursor?: string | null;
+  completeness?: TeamLabTrafficCompletenessModel;
+}
+
+export interface TeamLabTrafficFlowProjectionModel {
+  cursor?: string;
+  /** @format guid */
+  shardId?: string;
+  networkKey?: string;
+  sourceIp?: string;
+  /** @format int32 */
+  sourcePort?: number | null;
+  destinationIp?: string;
+  /** @format int32 */
+  destinationPort?: number | null;
+  protocol?: string;
+  /** @format int64 */
+  bytes?: number;
+  /** @format int64 */
+  packets?: number;
+  /** @format uint64 */
+  firstSeen?: number;
+  /** @format uint64 */
+  lastSeen?: number;
+}
+
+export interface TeamLabTrafficCompletenessModel {
+  complete?: boolean;
+  /** @format int64 */
+  droppedRecords?: number;
+}
+
+export interface TeamLabTrafficPathPageModel {
+  items?: TeamLabTrafficPathSummaryModel[];
+  nextCursor?: string | null;
+  completeness?: TeamLabTrafficCompletenessModel;
+}
+
+export interface TeamLabTrafficPathSummaryModel {
+  cursor?: string;
+  /** @format guid */
+  id?: string;
+  confidence?: TeamLabPathConfidence;
+  sourceIp?: string;
+  /** @format int32 */
+  sourcePort?: number | null;
+  destinationIp?: string;
+  /** @format int32 */
+  destinationPort?: number | null;
+  protocol?: string;
+  /** @format uint64 */
+  startedAt?: number;
+  /** @format uint64 */
+  endedAt?: number;
+  /** @format int32 */
+  hopCount?: number;
+}
+
+export interface TeamLabTrafficPathModel {
+  /** @format guid */
+  id?: string;
+  confidence?: TeamLabPathConfidence;
+  sourceIp?: string;
+  /** @format int32 */
+  sourcePort?: number | null;
+  destinationIp?: string;
+  /** @format int32 */
+  destinationPort?: number | null;
+  protocol?: string;
+  /** @format uint64 */
+  startedAt?: number;
+  /** @format uint64 */
+  endedAt?: number;
+  hops?: TeamLabTrafficPathHopModel[];
+}
+
+export interface TeamLabTrafficPathHopModel {
+  /** @format int32 */
+  ordinal?: number;
+  /** @format uint64 */
+  observedAt?: number;
+  evidenceKind?: TeamLabTrafficEvidenceKind;
+  observationPointKind?: TeamLabObservationPointKind;
+  /** @format guid */
+  shardId?: string | null;
+  networkKey?: string | null;
+  infrastructureKey?: string | null;
+  assetKey?: string | null;
+  direction?: string;
+  sourceIp?: string;
+  /** @format int32 */
+  sourcePort?: number | null;
+  destinationIp?: string;
+  /** @format int32 */
+  destinationPort?: number | null;
+  protocol?: string;
+}
+
 export interface TeamLabAccessGrantModel {
   /** @format guid */
   id?: string;
@@ -574,6 +1349,76 @@ export interface TeamLabAccessGrantCreateModel {
   type?: string;
 }
 
+export interface TeamLabCaptureModel {
+  /** @format guid */
+  id?: string;
+  status?: TeamLabTrafficCaptureStatus;
+  scope?: string;
+  networkKey?: string | null;
+  /** @format int64 */
+  maxBytes?: number;
+  /** @format int32 */
+  maxSeconds?: number;
+  /** @format int64 */
+  capturedBytes?: number;
+  /** @format uint64 */
+  createdAt?: number;
+  /** @format uint64 */
+  startedAt?: number | null;
+  /** @format uint64 */
+  completedAt?: number | null;
+  /** @format uint64 */
+  expiresAt?: number | null;
+  segments?: TeamLabCaptureSegmentModel[];
+  error?: string | null;
+}
+
+export interface TeamLabCaptureSegmentModel {
+  /** @format guid */
+  id?: string;
+  status?: TeamLabTrafficCaptureSegmentStatus;
+  /** @format guid */
+  observationPointId?: string;
+  observationPointKind?: TeamLabObservationPointKind;
+  networkKey?: string | null;
+  infrastructureKey?: string | null;
+  assetKey?: string | null;
+  /** @format int64 */
+  capturedBytes?: number;
+  /** @format int64 */
+  uploadedBytes?: number;
+  sha256?: string | null;
+  error?: string | null;
+}
+
+export interface CreateTeamLabCaptureModel {
+  scope?: string;
+  networkKey?: string | null;
+  /** @format int32 */
+  maxSeconds?: number;
+  /** @format int64 */
+  maxBytes?: number;
+  /** @format int32 */
+  expiresInSeconds?: number;
+}
+
+export interface TeamLabCapturePageModel {
+  items?: TeamLabCaptureModel[];
+  next?: string | null;
+}
+
+export interface TeamLabControlScopeModel {
+  /** @format guid */
+  id?: string;
+  key?: string;
+  displayName?: string;
+  archived?: boolean;
+  /** @format uint64 */
+  createdAt?: number;
+  /** @format uint64 */
+  updatedAt?: number;
+}
+
 export interface TeamLabCapabilitiesModel {
   apiVersion?: string;
   topologySchemaVersions?: number[];
@@ -589,6 +1434,12 @@ export interface TeamLabFeatureCapabilitiesModel {
   windowsVm?: boolean;
   trafficFlows?: boolean;
   onDemandPcap?: boolean;
+  editorLayout?: boolean;
+  /** @format int32 */
+  editorLayoutVersion?: number;
+  networkRegions?: boolean;
+  rollouts?: boolean;
+  pauseResume?: boolean;
 }
 
 export interface TeamLabContractLimitsModel {
@@ -600,9 +1451,66 @@ export interface TeamLabContractLimitsModel {
   interfacesPerAsset?: number;
 }
 
+export interface TeamLabAdminScenePageModel {
+  items?: TeamLabAdminSceneSummaryModel[];
+  nextCursor?: string | null;
+}
+
+export interface TeamLabAdminSceneSummaryModel {
+  /** @format guid */
+  id?: string;
+  name?: string;
+  /** @format guid */
+  ownerId?: string | null;
+  ownerDisplayName?: string;
+  /** @format int32 */
+  revision?: number;
+  /** @format int32 */
+  schemaVersion?: number;
+  /** @format int32 */
+  networkCount?: number;
+  /** @format int32 */
+  assetCount?: number;
+  /** @format int32 */
+  infrastructureCount?: number;
+  latestRelease?: TeamLabAdminReleaseSummaryModel | null;
+  validation?: TeamLabAdminValidationSummaryModel | null;
+  latestTrialRuntime?: TeamLabAdminRuntimeSummaryModel | null;
+  /** @format int32 */
+  gameReferenceCount?: number;
+  /** @format uint64 */
+  createdAt?: number;
+  /** @format uint64 */
+  updatedAt?: number;
+}
+
+export interface TeamLabAdminReleaseSummaryModel {
+  /** @format guid */
+  id?: string;
+  /** @format int32 */
+  version?: number;
+  /** @format int32 */
+  sourceRevision?: number;
+  contentHash?: string;
+  /** @format uint64 */
+  publishedAt?: number;
+}
+
+export interface TeamLabAdminValidationSummaryModel {
+  /** @format int32 */
+  revision?: number;
+  valid?: boolean;
+  /** @format int32 */
+  issueCount?: number;
+  /** @format uint64 */
+  validatedAt?: number;
+}
+
 export interface TeamLabTopologyDetailModel {
   /** @format guid */
   id?: string;
+  /** @format guid */
+  controlScopeId?: string | null;
   /** @format int32 */
   revision?: number;
   /** @format int32 */
@@ -620,6 +1528,9 @@ export interface TeamLabTopologyDefinitionModel {
   networks?: TeamLabTopologyNetworkModel[];
   assets?: TeamLabTopologyAssetModel[];
   connections?: TeamLabTopologyConnectionModel[];
+  infrastructure?: TeamLabTopologyInfrastructureModel[] | null;
+  dependencies?: TeamLabTopologyDependencyModel[] | null;
+  observation?: TeamLabObservationPolicyModel | null;
 }
 
 export interface TeamLabTopologyNetworkModel {
@@ -645,14 +1556,17 @@ export interface TeamLabTopologyAssetModel {
   imageTemplateId?: number;
   resources?: TeamLabAssetResourceModel;
   interfaces?: TeamLabTopologyInterfaceModel[];
-  routingEnabled?: boolean;
   /** @format int32 */
   exposePort?: number | null;
-  environment?: Record<string, string>;
-  startCommand?: string | null;
   healthCheck?: TeamLabHealthCheckModel | null;
   /** @format int32 */
   orderIndex?: number;
+  endpointObservation?: TeamLabEndpointObservationMode;
+  /** @format int32 */
+  devicePackageId?: number | null;
+  deviceParameters?: any;
+  /** @format guid */
+  connectorId?: string | null;
 }
 
 export interface TeamLabAssetResourceModel {
@@ -684,12 +1598,35 @@ export interface TeamLabTopologyConnectionModel {
   key?: string;
   fromNetworkKey?: string;
   toNetworkKey?: string;
-  viaAssetKey?: string;
+  viaAssetKey?: string | null;
+  viaNodeKey?: string | null;
+  direction?: TeamLabConnectionDirection | null;
+}
+
+export interface TeamLabTopologyInfrastructureModel {
+  key?: string;
+  name?: string;
+  kind?: TeamLabInfrastructureKind;
+  interfaces?: TeamLabTopologyInterfaceModel[];
+  networkKey?: string | null;
+}
+
+export interface TeamLabTopologyDependencyModel {
+  assetKey?: string;
+  dependsOnKey?: string;
+  condition?: TeamLabDependencyCondition;
+}
+
+export interface TeamLabObservationPolicyModel {
+  flowMetadataEnabled?: boolean;
+  onDemandPcapEnabled?: boolean;
+  endpointObservation?: TeamLabEndpointObservationMode;
 }
 
 export interface TeamLabTopologyEditorModel {
   networks?: Record<string, TeamLabEditorItemModel>;
   assets?: Record<string, TeamLabEditorItemModel>;
+  infrastructure?: Record<string, TeamLabEditorItemModel>;
 }
 
 export interface TeamLabEditorItemModel {
@@ -710,20 +1647,13 @@ export interface CreateTeamLabTopologyModel {
   assets?: TeamLabTopologyAssetModel[];
   connections?: TeamLabTopologyConnectionModel[];
   editor?: TeamLabTopologyEditorModel | null;
-}
-
-export interface TeamLabTopologySummaryModel {
-  /** @format guid */
-  id?: string;
-  name?: string;
-  /** @format int32 */
-  revision?: number;
+  infrastructure?: TeamLabTopologyInfrastructureModel[] | null;
+  dependencies?: TeamLabTopologyDependencyModel[] | null;
+  observation?: TeamLabObservationPolicyModel | null;
   /** @format int32 */
   schemaVersion?: number;
-  /** @format uint64 */
-  createdAt?: number;
-  /** @format uint64 */
-  updatedAt?: number;
+  /** @format guid */
+  controlScopeId?: string | null;
 }
 
 export interface UpdateTeamLabTopologyModel {
@@ -734,6 +1664,11 @@ export interface UpdateTeamLabTopologyModel {
   assets?: TeamLabTopologyAssetModel[];
   connections?: TeamLabTopologyConnectionModel[];
   editor?: TeamLabTopologyEditorModel | null;
+  infrastructure?: TeamLabTopologyInfrastructureModel[] | null;
+  dependencies?: TeamLabTopologyDependencyModel[] | null;
+  observation?: TeamLabObservationPolicyModel | null;
+  /** @format int32 */
+  schemaVersion?: number;
 }
 
 export interface TeamLabValidationResultModel {
@@ -761,8 +1696,11 @@ export interface TeamLabReleaseModel {
   contentHash?: string;
   /** @format guid */
   publishedBy?: string | null;
+  publisherName?: string | null;
   /** @format uint64 */
   publishedAt?: number;
+  editor?: TeamLabTopologyEditorModel | null;
+  archived?: boolean;
 }
 
 export interface PublishTeamLabTopologyModel {
@@ -783,6 +1721,10 @@ export interface TeamLabPlanModel {
   requiredCapabilities?: string[];
   warnings?: string[];
   planHash?: string;
+  /** @format int32 */
+  managedInfrastructureCount?: number;
+  /** @format int32 */
+  observationPointEstimate?: number;
 }
 
 export interface TeamLabPlanNetworkModel {
@@ -800,7 +1742,6 @@ export interface TeamLabPlanAssetModel {
   imageTemplateId?: number;
   resources?: TeamLabAssetResourceModel;
   interfaces?: TeamLabPlanInterfaceModel[];
-  routingEnabled?: boolean;
 }
 
 export interface TeamLabPlanInterfaceModel {
@@ -819,381 +1760,147 @@ export interface TeamLabPlanShardModel {
   dockerSlots?: number;
   /** @format int32 */
   vmSlots?: number;
+  infrastructureKeys?: string[] | null;
 }
 
-export interface TeamLabTrafficFlowPageModel {
-  items?: TeamLabTrafficFlowProjectionModel[];
-  nextCursor?: string | null;
-}
-
-export interface TeamLabTrafficFlowProjectionModel {
-  cursor?: string;
+export interface TeamLabAdminReleaseReadinessModel {
   /** @format guid */
-  shardId?: string;
-  networkKey?: string;
-  sourceIp?: string;
-  /** @format int32 */
-  sourcePort?: number | null;
-  destinationIp?: string;
-  /** @format int32 */
-  destinationPort?: number | null;
-  protocol?: string;
-  /** @format int64 */
-  bytes?: number;
-  /** @format int64 */
-  packets?: number;
-  /** @format uint64 */
-  firstSeen?: number;
-  /** @format uint64 */
-  lastSeen?: number;
+  topologyId?: string;
+  /** @format guid */
+  releaseId?: string;
+  ready?: boolean;
+  plan?: TeamLabPlanModel | null;
+  images?: TeamLabAdminImageReadinessModel[];
+  latestTrialRuntime?: TeamLabAdminRuntimeSummaryModel | null;
+  blockingReasons?: string[];
 }
 
-export interface TeamLabCaptureModel {
+export interface TeamLabAdminImageReadinessModel {
+  /** @format int32 */
+  imageTemplateId?: number;
+  name?: string;
+  imageType?: ImageType;
+  /** @format int32 */
+  eligibleNodeCount?: number;
+  /** @format int32 */
+  readyNodeCount?: number;
+  /** @format int32 */
+  pendingNodeCount?: number;
+  /** @format int32 */
+  failedNodeCount?: number;
+}
+
+export interface TeamLabAssetControlAvailability {
+  allowed?: boolean;
+  reason?: string | null;
+}
+
+export interface TeamLabQueueTicketResult {
+  /** @format guid */
+  ticketId?: string;
+}
+
+export interface TeamLabAssetControlCommand {
+  /** @format int32 */
+  generation?: number;
+  action?: string;
+  reason?: string;
+  confirmed?: boolean;
+}
+
+export interface TeamLabAssetControlTask {
   /** @format guid */
   id?: string;
-  status?: TeamLabTrafficCaptureStatus;
-  scope?: string;
-  networkKey?: string | null;
+  status?: string;
+  stage?: string | null;
+  errorCode?: string | null;
+  canRetry?: boolean;
+}
+
+export interface TeamLabFileResult {
+  entries?: TeamLabFileEntry[] | null;
+  /** @format byte */
+  content?: Blob | null;
+  hostKeySha256?: string | null;
+}
+
+export interface TeamLabFileEntry {
+  name?: string;
+  kind?: string;
   /** @format int64 */
-  maxBytes?: number;
+  size?: number;
+}
+
+export interface TeamLabAssetFileCommand {
   /** @format int32 */
-  maxSeconds?: number;
+  generation?: number;
+  operation?: string;
+  path?: string;
+  /** @format byte */
+  content?: Blob | null;
+  overwrite?: boolean;
+  confirmed?: boolean;
+}
+
+export interface TeamLabDeviceHealthModel {
+  /** @format int32 */
+  assetId?: number;
+  name?: string;
+  /** @format int32 */
+  generation?: number;
+  observation?: TeamLabDeviceObservation | null;
+  /** @format uint64 */
+  nextProbeAt?: number | null;
+}
+
+export interface TeamLabDeviceObservation {
+  status?: string;
+  /** @format uint64 */
+  observedAt?: number;
+  errorCode?: string | null;
+  bootId?: string | null;
+  protocolCounters?: Record<string, number>;
+}
+
+export interface TeamLabRemoteAuditPage {
+  state?: string;
+  /** @format int32 */
+  retentionDays?: number;
+  items?: TeamLabRemoteAuditFileModel[];
+}
+
+export interface TeamLabRemoteAuditFileModel {
   /** @format int64 */
-  capturedBytes?: number;
+  id?: number;
+  /** @format int64 */
+  size?: number;
+  sha256?: string;
   /** @format uint64 */
   createdAt?: number;
-  /** @format uint64 */
-  startedAt?: number | null;
-  /** @format uint64 */
-  completedAt?: number | null;
   /** @format uint64 */
   expiresAt?: number | null;
-  error?: string | null;
 }
 
-export interface CreateTeamLabCaptureModel {
-  scope?: string;
-  networkKey?: string | null;
+export interface RuntimeDifferencePreview {
   /** @format int32 */
-  maxSeconds?: number;
-  /** @format int64 */
-  maxBytes?: number;
-  /** @format int32 */
-  expiresInSeconds?: number;
-}
-
-export interface OpenChallengePageModel {
-  items?: OpenChallengeSummaryModel[];
-  nextCursor?: string | null;
-}
-
-export interface OpenChallengeSummaryModel {
-  /** @format int32 */
-  id?: number;
-  title?: string;
-  /** Challenge category */
-  category?: ChallengeCategory;
-  type?: ChallengeType;
-  isEnabled?: boolean;
+  generation?: number;
   /** @format uint64 */
-  deadlineUtc?: number | null;
-  /** @format int32 */
-  originalScore?: number;
-  /** Environment type for challenge deployment */
-  environment?: EnvironmentType;
-  /** @format int32 */
-  imageTemplateId?: number | null;
+  observedAt?: number;
+  operationInProgress?: boolean;
+  items?: RuntimeResourceDifference[];
 }
 
-export interface OpenChallengeModel {
+export interface RuntimeResourceDifference {
   /** @format int32 */
-  id?: number;
-  title?: string;
-  content?: string;
-  /** Challenge category */
-  category?: ChallengeCategory;
-  type?: ChallengeType;
-  hints?: string[];
-  isEnabled?: boolean;
-  /** @format uint64 */
-  deadlineUtc?: number | null;
-  /** @format int32 */
-  submissionLimit?: number;
-  /** @format int32 */
-  originalScore?: number;
-  /** @format double */
-  minScoreRate?: number;
-  /** @format double */
-  difficulty?: number;
-  disableBloodBonus?: boolean;
-  flagTemplate?: string | null;
-  /** Environment type for challenge deployment */
-  environment?: EnvironmentType;
-  containerImage?: string | null;
-  /** @format int32 */
-  exposePort?: number | null;
-  /** @format int32 */
-  imageTemplateId?: number | null;
-  /** @format int32 */
-  cpuCount?: number;
-  /** @format int32 */
-  memoryLimit?: number;
-  /** @format int32 */
-  storageLimit?: number;
-  /** Container network mode */
-  networkMode?: NetworkMode;
-  enableTrafficCapture?: boolean;
-  fileName?: string | null;
-  flags?: OpenChallengeFlagInfoModel[];
-  attachment?: OpenChallengeAttachmentInfoModel | null;
-}
-
-export interface OpenChallengeFlagInfoModel {
-  /** @format int32 */
-  id?: number;
-  flag?: string;
-  /** @format int32 */
-  orderIndex?: number;
-  description?: string | null;
-  /** Flag score mode */
-  scoreMode?: FlagScoreMode;
-  /** @format int32 */
-  fixedScore?: number;
-  /** @format int32 */
-  maxAttempts?: number;
-  attachmentHash?: string | null;
-  /** Answer type for challenge submission */
-  answerType?: AnswerType;
-  customName?: string | null;
-  attachment?: OpenChallengeAttachmentInfoModel | null;
-}
-
-export interface OpenChallengeAttachmentInfoModel {
-  type?: FileType;
-  url?: string;
-}
-
-export interface ProblemDetails {
-  type?: string | null;
-  title?: string | null;
-  /** @format int32 */
-  status?: number | null;
-  detail?: string | null;
-  instance?: string | null;
-  [key: string]: any;
-}
-
-export interface ApiOperationModel {
+  assetId?: number | null;
   /** @format guid */
-  id?: string;
-  kind?: string;
-  status?: ApiOperationStatus;
-  stage?: string;
-  resourceType?: string | null;
-  resourceId?: string | null;
-  /** @format guid */
-  deploymentQueueTicketId?: string | null;
-  /** @format int64 */
-  currentProgress?: number;
-  /** @format int64 */
-  totalProgress?: number;
-  /** @format int32 */
-  attemptCount?: number;
-  errorCode?: string | null;
-  errorDetail?: string | null;
-  result?: any;
-  /** @format uint64 */
-  createdAt?: number;
-  /** @format uint64 */
-  startedAt?: number | null;
-  /** @format uint64 */
-  updatedAt?: number;
-  /** @format uint64 */
-  completedAt?: number | null;
-}
-
-export interface OpenChallengeImportModel {
-  /**
-   * @minLength 1
-   * @maxLength 128
-   */
-  externalId: string;
-  /**
-   * @minLength 1
-   * @maxLength 256
-   */
-  title: string;
-  /**
-   * @minLength 1
-   * @maxLength 1000000
-   */
-  content: string;
-  /** Challenge category */
-  category?: ChallengeCategory;
-  type?: ChallengeType;
-  /** @maxItems 100 */
-  hints?: string[] | null;
-  isEnabled?: boolean;
-  /** @format uint64 */
-  deadlineUtc?: number | null;
-  /**
-   * @format int32
-   * @min 0
-   * @max 10000
-   */
-  submissionLimit?: number;
-  /**
-   * @format int32
-   * @min 1
-   * @max 1000000
-   */
-  originalScore?: number;
-  /**
-   * @format double
-   * @min 0
-   * @max 1
-   */
-  minScoreRate?: number;
-  /**
-   * @format double
-   * @min 0.01
-   * @max 1000000
-   */
-  difficulty?: number;
-  disableBloodBonus?: boolean;
-  /** @maxLength 120 */
-  flagTemplate?: string | null;
-  environment?: EnvironmentType | null;
-  /** @maxLength 512 */
-  containerImage?: string | null;
-  /**
-   * @format int32
-   * @min 1
-   * @max 65535
-   */
-  exposePort?: number | null;
-  /** @format int32 */
-  imageTemplateId?: number | null;
-  /**
-   * @format int32
-   * @min 1
-   * @max 1024
-   */
-  cpuCount?: number;
-  /**
-   * @format int32
-   * @min 32
-   * @max 1048576
-   */
-  memoryLimit?: number;
-  /**
-   * @format int32
-   * @min 0
-   * @max 1048576
-   */
-  storageLimit?: number;
-  /** Container network mode */
-  networkMode?: NetworkMode;
-  enableTrafficCapture?: boolean;
-  /** @maxLength 256 */
-  fileName?: string | null;
-  /** @maxItems 100 */
-  flags: OpenChallengeFlagModel[];
-  attachment?: OpenChallengeAttachmentModel | null;
-}
-
-export interface OpenChallengeFlagModel {
-  /**
-   * @minLength 1
-   * @maxLength 127
-   */
-  flag: string;
-  /**
-   * @format int32
-   * @min 0
-   * @max 10000
-   */
-  orderIndex?: number;
-  /** @maxLength 512 */
-  description?: string | null;
-  /** Flag score mode */
-  scoreMode?: FlagScoreMode;
-  /**
-   * @format int32
-   * @min 0
-   * @max 1000000
-   */
-  fixedScore?: number;
-  /**
-   * @format int32
-   * @min 0
-   * @max 100000
-   */
-  maxAttempts?: number;
-  /** @maxLength 128 */
-  attachmentHash?: string | null;
-  /** Answer type for challenge submission */
-  answerType?: AnswerType;
-  /** @maxLength 64 */
-  customName?: string | null;
-  attachment?: OpenChallengeAttachmentModel | null;
-}
-
-export interface OpenChallengeAttachmentModel {
-  /**
-   * @minLength 1
-   * @maxLength 2048
-   */
-  remoteUrl: string;
-}
-
-export interface OpenChallengeBatchImportModel {
-  /**
-   * @maxItems 100
-   * @minItems 1
-   */
-  items: OpenChallengeImportModel[];
-}
-
-export interface OpenChallengeBatchDeleteModel {
-  /**
-   * @maxItems 100
-   * @minItems 1
-   */
-  challengeIds: number[];
-}
-
-export interface DockerImageReferenceImportModel {
-  /**
-   * @minLength 1
-   * @maxLength 256
-   */
-  name: string;
-  /**
-   * @minLength 1
-   * @maxLength 512
-   */
-  registryUrl: string;
-  osType?: OSType;
-  /** @maxLength 128 */
-  expectedDigest?: string | null;
-}
-
-export interface OpenImageTemplateModel {
-  /** @format int32 */
-  id?: number;
+  workerNodeId?: string | null;
+  resourceKind?: string;
   name?: string;
-  osType?: OSType;
-  imageType?: ImageType;
-  status?: ImageStatus;
-  registryUrl?: string | null;
-  /** @format int64 */
-  fileSize?: number;
-  description?: string | null;
-  errorMessage?: string | null;
-  imageHash?: string | null;
-  /** @format uint64 */
-  uploadedAt?: number;
+  expectedState?: string;
+  actualState?: string | null;
+  difference?: string;
+  suggestedAction?: string | null;
 }
 
 export interface ApiTokenResponse {
@@ -1245,6 +1952,64 @@ export interface ApiTokenCreateModel {
   requestsPerMinute?: number;
   /** @format uint64 */
   expiresAt?: number | null;
+}
+
+export interface ProblemDetails {
+  type?: string | null;
+  title?: string | null;
+  /** @format int32 */
+  status?: number | null;
+  detail?: string | null;
+  instance?: string | null;
+  [key: string]: any;
+}
+
+/** Public account capabilities used to compose authentication pages. */
+export interface AccountCapabilitiesModel {
+  /** Whether local username and password login is available. */
+  allowPasswordLogin?: boolean;
+  /** Whether self-service account registration is available. */
+  allowRegister?: boolean;
+  /** Whether password recovery by email is available. */
+  passwordRecoveryAvailable?: boolean;
+  /** Whether new accounts require email confirmation. */
+  emailConfirmationRequired?: boolean;
+  /** Unified identity portal entry shown by the login page. */
+  portalSso?: PortalSsoCapabilityModel;
+}
+
+export interface PortalSsoCapabilityModel {
+  enabled?: boolean;
+  entryUrl?: string | null;
+}
+
+export interface AccountSummaryModel {
+  /** @format guid */
+  id?: string;
+  userName?: string;
+  /** User role enumeration */
+  role?: Role;
+  bio?: string;
+  avatar?: string | null;
+  /** @format int32 */
+  solved?: number;
+  /** @format int32 */
+  activeDays?: number;
+  /** @format int32 */
+  runningInstances?: number;
+  /** @format int32 */
+  pendingReviews?: number;
+  continueItems?: AccountSummaryContinueItemModel[];
+}
+
+export interface AccountSummaryContinueItemModel {
+  id?: string;
+  kind?: string;
+  title?: string;
+  subtitle?: string;
+  route?: string;
+  /** @format uint64 */
+  endsAt?: number | null;
 }
 
 /** Request response */
@@ -1730,31 +2495,6 @@ export interface AdminUserInfoModel {
   studentGroupIds?: number[] | null;
 }
 
-/** Log information (Admin) */
-export interface LogMessageModel {
-  /** @format int64 */
-  id?: number;
-  /**
-   * Log time
-   * @format uint64
-   */
-  time?: number;
-  /** Username */
-  name?: string | null;
-  level?: string | null;
-  /** IP address */
-  ip?: string | null;
-  /** Log message */
-  msg?: string | null;
-  /** Task status */
-  status?: TaskStatus | null;
-}
-
-export interface LogMessagePageModel {
-  items?: LogMessageModel[];
-  nextCursor?: string | null;
-}
-
 /** Modify the participation information */
 export interface ParticipationEditModel {
   /** Participation Status */
@@ -1906,6 +2646,13 @@ export interface AwdpServiceViewModel {
   /** @format int32 */
   id?: number;
   name?: string;
+  content?: string;
+  /** Challenge category */
+  category?: ChallengeCategory;
+  /** Challenge difficulty */
+  difficulty?: Difficulty;
+  tags?: string[] | null;
+  flagTemplate?: string;
   imageName?: string;
   /** @format int32 */
   exposePort?: number;
@@ -1967,6 +2714,13 @@ export interface AwdpServiceCreateModel {
    * @minLength 1
    */
   name: string;
+  content?: string;
+  /** Challenge category */
+  category?: ChallengeCategory;
+  /** Challenge difficulty */
+  difficulty?: Difficulty;
+  tags?: string[] | null;
+  flagTemplate?: string;
   /**
    * 容器镜像名
    * @minLength 1
@@ -2772,6 +3526,31 @@ export interface ChallengeUpdateModel {
   imageTemplateId?: number | null;
 }
 
+export interface DeploymentQueueStatusModel {
+  /** @format guid */
+  ticketId?: string;
+  kind?: DeploymentQueueKind;
+  status?: DeploymentQueueTicketStatus;
+  operation?: RuntimeOperationKind;
+  stage?: DeploymentStage;
+  /** @format guid */
+  targetNodeId?: string | null;
+  targetNodeName?: string | null;
+  /** @format int32 */
+  queuePosition?: number;
+  /** @format int32 */
+  peopleAhead?: number;
+  errorMessage?: string | null;
+  blockedReasonCode?: string | null;
+  stageMessage?: string | null;
+  /** @format uint64 */
+  createdAt?: number;
+  /** @format uint64 */
+  startedAt?: number | null;
+  /** @format uint64 */
+  completedAt?: number | null;
+}
+
 /** New attachment information (Edit) */
 export interface AttachmentCreateModel {
   /** Attachment type */
@@ -2831,6 +3610,120 @@ export interface FlagCreateModel {
   /** File URL (remote file) */
   remoteUrl?: string | null;
 }
+
+/** Basic exercise information */
+export interface ExerciseInfoModel {
+  /**
+   * Exercise ID
+   * @format int32
+   */
+  id?: number;
+  /** Exercise title */
+  title?: string;
+  /** Difficulty of the exercise, used for tags, sorting, etc. */
+  difficulty?: Difficulty;
+  /** Exercise category */
+  category?: ChallengeCategory;
+  /** Exercise challenge type. */
+  type?: ChallengeType;
+  /** Whether the exercise is enabled. */
+  isEnabled?: boolean;
+  /** Additional tags for the exercise */
+  tags?: string[] | null;
+  /** Exercise points */
+  credit?: boolean;
+  /**
+   * Origin of a public exercise-pool entry. Source challenges are copied into the
+   * pool so their original game/course lifecycle remains isolated.
+   */
+  poolSource?: ExercisePoolSource;
+  /**
+   * Number of people who solved the exercise
+   * @format int32
+   */
+  acceptedCount?: number;
+  /**
+   * Number of submissions
+   * @format int32
+   */
+  submissionCount?: number;
+  /** Whether the current user completed this exercise. */
+  solved?: boolean;
+  /**
+   * Accepted submissions made by the current user.
+   * @format int32
+   */
+  userAcceptedCount?: number;
+  /**
+   * Total submissions made by the current user.
+   * @format int32
+   */
+  userSubmissionCount?: number;
+}
+
+/** Flag submission */
+export interface FlagSubmitModel {
+  /**
+   * Flag content
+   * @minLength 1
+   */
+  flag: string;
+  /**
+   * Specific Flag ID being submitted against (multi-flag challenges)
+   * @format int32
+   */
+  flagId?: number | null;
+}
+
+export interface ExerciseImportFromGameModel {
+  /** @format int32 */
+  gameId?: number;
+  challengeIds?: number[] | null;
+}
+
+export interface ExerciseImportFromTrainingModel {
+  /** @format int32 */
+  courseId?: number;
+  challengeIds?: number[] | null;
+}
+
+export interface ExerciseCreateModel {
+  title?: string;
+  content?: string;
+  /** Challenge category */
+  category?: ChallengeCategory;
+  type?: ChallengeType;
+  /** Challenge difficulty */
+  difficulty?: Difficulty;
+  credit?: boolean;
+  isEnabled?: boolean;
+  tags?: string[] | null;
+  hints?: string[] | null;
+  containerImage?: string | null;
+  /** @format int32 */
+  memoryLimit?: number | null;
+  /** @format int32 */
+  storageLimit?: number | null;
+  /** @format int32 */
+  cpuCount?: number | null;
+  /** @format int32 */
+  exposePort?: number | null;
+  networkMode?: NetworkMode | null;
+  /** Environment type for challenge deployment */
+  environment?: EnvironmentType;
+  /** @format int32 */
+  imageTemplateId?: number | null;
+  flagTemplate?: string | null;
+  /** @format int32 */
+  submissionLimit?: number;
+  flags?: ExerciseFlagCreateModel[] | null;
+  attachment?: AttachmentCreateModel | null;
+}
+
+export type ExerciseFlagCreateModel = FlagCreateModel & {
+  /** @format int32 */
+  id?: number | null;
+};
 
 /** Basic game information, excluding detailed description and current team registration status */
 export interface BasicGameInfoModel {
@@ -3246,6 +4139,11 @@ export interface FormattableDataOfEventType {
   values: string[];
 }
 
+export interface SubmissionPageModel {
+  items?: Submission[];
+  nextCursor?: string | null;
+}
+
 export interface Submission {
   /**
    * Submitted answer string
@@ -3296,11 +4194,6 @@ export interface Submission {
   flagId?: number | null;
   /** Flag context */
   flagContext?: FlagContext | null;
-}
-
-export interface SubmissionPageModel {
-  items?: Submission[];
-  nextCursor?: string | null;
 }
 
 export interface FlagContext {
@@ -3714,46 +4607,24 @@ export interface BloodBonus {
   noBonus?: boolean;
 }
 
-/** Represents a user in the identity system */
 export interface IdentityUserOfGuid {
-  /**
-   * Gets or sets the primary key for this user.
-   * @format guid
-   */
+  /** @format guid */
   id?: string;
-  /** Gets or sets the user name for this user. */
   userName?: string | null;
-  /** Gets or sets the normalized user name for this user. */
   normalizedUserName?: string | null;
-  /** Gets or sets the email address for this user. */
   email?: string | null;
-  /** Gets or sets the normalized email address for this user. */
   normalizedEmail?: string | null;
-  /** Gets or sets a flag indicating if a user has confirmed their email address. */
   emailConfirmed?: boolean;
-  /** Gets or sets a salted and hashed representation of the password for this user. */
   passwordHash?: string | null;
-  /** A random value that must change whenever a users credentials change (password changed, login removed) */
   securityStamp?: string | null;
-  /** A random value that must change whenever a user is persisted to the store */
   concurrencyStamp?: string | null;
-  /** Gets or sets a telephone number for the user. */
   phoneNumber?: string | null;
-  /** Gets or sets a flag indicating if a user has confirmed their telephone address. */
   phoneNumberConfirmed?: boolean;
-  /** Gets or sets a flag indicating if two factor authentication is enabled for this user. */
   twoFactorEnabled?: boolean;
-  /**
-   * Gets or sets the date and time, in UTC, when any user lockout ends.
-   * @format uint64
-   */
+  /** @format uint64 */
   lockoutEnd?: number | null;
-  /** Gets or sets a flag indicating if the user could be locked out. */
   lockoutEnabled?: boolean;
-  /**
-   * Gets or sets the number of failed login attempts for the current user.
-   * @format int32
-   */
+  /** @format int32 */
   accessFailedCount?: number;
 }
 
@@ -3825,6 +4696,11 @@ export interface Container {
    * @minLength 1
    */
   containerId: string;
+  /**
+   * Monotonic runtime generation used to reject stale create/control operations.
+   * @format int32
+   */
+  runtimeGeneration?: number;
   /** Container status */
   status: ContainerStatus;
   /**
@@ -3858,8 +4734,30 @@ export interface Container {
    * @format int32
    */
   publicPort?: number | null;
+  /**
+   * Stable owner identity used for compare-owner public port lease operations.
+   * @format guid
+   */
+  publicPortLeaseId?: string | null;
+  /**
+   * Publication state of the player-facing entry.
+   * Direct entries are ready immediately; gateway-backed entries require an acknowledgement.
+   */
+  entryStatus?: ContainerEntryStatus;
+  /**
+   * Time when the current player-facing route was confirmed by the gateway.
+   * @format uint64
+   */
+  entryReadyAt?: number | null;
+  /**
+   * Sanitized route publication failure exposed to the player.
+   * @maxLength 512
+   */
+  entryError?: string | null;
   /** Container instance access method */
   entry?: string;
+  /** Player-facing entry. Pending and failed routes are intentionally withheld. */
+  readyEntry?: string | null;
   /** Whether traffic capture is enabled */
   enableTrafficCapture?: boolean;
   /** Shortened container GUID for logging purposes */
@@ -3905,19 +4803,21 @@ export interface WorkerNode {
   /** @format int32 */
   currentContainers?: number;
   /** @format int32 */
-  reservedContainers?: number;
-  /** @format int32 */
   maxContainers?: number;
   /** @format int32 */
   currentVms?: number;
-  /** @format int32 */
-  reservedVms?: number;
   /** @format int32 */
   maxVms?: number;
   /** @format int32 */
   usedPorts?: number;
   /** @format int32 */
   totalPorts?: number;
+  /** @format int64 */
+  liveMetricSequence?: number;
+  /** @format uint64 */
+  liveMetricObservedAt?: number | null;
+  /** @format uint64 */
+  liveMetricReceivedAt?: number | null;
   /** @format uint64 */
   registeredAt?: number;
   /** @format uint64 */
@@ -3942,19 +4842,31 @@ export interface WorkerNode {
   /** @format int32 */
   teamLabTunnelConfigVersion?: number;
   /** @maxLength 64 */
-  teamLabAgentVersion?: string | null;
-  /** @format int32 */
-  teamLabProtocolVersion?: number;
-  /** @maxLength 64 */
   teamLabFabricIp?: string | null;
   teamLabFabricStatus?: TeamLabFabricStatus;
-  /** @maxLength 4096 */
-  teamLabCapabilitiesJson?: string;
+  /** @maxLength 64 */
+  agentVersion?: string | null;
+  /** @maxLength 128 */
+  agentBinarySha256?: string | null;
+  /** @format int32 */
+  capabilityManifestSchemaVersion?: number;
+  /** @maxLength 8192 */
+  capabilityManifestJson?: string;
+  /** @maxLength 64 */
+  capabilityHash?: string | null;
+  /** @format uint64 */
+  capabilityObservedAt?: number | null;
+  agentUpdateState?: AgentUpdateState;
+  agentUpdateWasSchedulable?: boolean;
+  /** @maxLength 128 */
+  agentUpdateExpectedSha256?: string | null;
+  /** @maxLength 1024 */
+  agentUpdateLastError?: string | null;
+  /** @format uint64 */
+  agentUpdateStartedAt?: number | null;
+  /** @format uint64 */
+  agentUpdateCompletedAt?: number | null;
   concurrencyToken?: number;
-  /** @format int32 */
-  allocatedContainers?: number;
-  /** @format int32 */
-  allocatedVms?: number;
 }
 
 export interface Challenge {
@@ -4113,6 +5025,11 @@ export interface ImageTemplate {
   originalArchiveName?: string | null;
   /** @format guid */
   createdById?: string | null;
+  vmArtifactStatus?: VmArtifactStatus;
+  vmRuntimeMode?: VmRuntimeMode;
+  vmNetworkMode?: VmNetworkMode;
+  /** @format int64 */
+  preparedArtifactId?: number | null;
 }
 
 export type ExerciseChallenge = Challenge & {
@@ -4127,6 +5044,30 @@ export type ExerciseChallenge = Challenge & {
    * @format int32
    */
   trainingCourseId?: number | null;
+  /** Source classification shown in the public exercise pool. */
+  poolSource?: ExercisePoolSource;
+  /**
+   * Original game ID when this entry was collected from a game.
+   * @format int32
+   */
+  sourceGameId?: number | null;
+  /**
+   * Original course ID when this entry was collected from training.
+   * @format int32
+   */
+  sourceTrainingCourseId?: number | null;
+  /**
+   * Original source challenge ID used for idempotent collection.
+   * @format int32
+   */
+  sourceChallengeId?: number | null;
+  /**
+   * Original AWDP service ID when this entry was collected from an AWDP game.
+   * @format int32
+   */
+  sourceAwdpServiceId?: number | null;
+  /** Lowest role allowed to browse and run this pool entry. */
+  minimumVisibleRole?: Role;
   /** Dependent exercise challenges */
   dependencies?: ExerciseChallenge[];
 };
@@ -4344,10 +5285,7 @@ export interface ClientFlagContext {
   fileSize?: number | null;
 }
 
-/**
- * Multi-flag step metadata — exposed to players for guided solving.
- * Does NOT contain the actual flag values.
- */
+/** Multi-flag step metadata exposed to players without the answer value. */
 export interface FlagStepInfo {
   /** @format int32 */
   id?: number;
@@ -4367,20 +5305,6 @@ export interface FlagSubmitResultModel {
   status: AnswerResult;
   /** Blood rank awarded by this submission */
   bloodType: SubmissionType;
-}
-
-/** Flag submission */
-export interface FlagSubmitModel {
-  /**
-   * Flag content
-   * @minLength 1
-   */
-  flag: string;
-  /**
-   * Specific Flag ID being submitted against (multi-flag challenges)
-   * @format int32
-   */
-  flagId?: number | null;
 }
 
 /** Game writeup submission information */
@@ -4415,6 +5339,17 @@ export interface VmStatusResponse {
   queue?: DeploymentQueueStatusModel | null;
   /** VM IP address (null if not yet assigned) */
   ipAddress?: string | null;
+  /** Worker address for native RDP access (null until RDP is ready) */
+  rdpHost?: string | null;
+  /**
+   * Worker proxy port for native RDP access (null until RDP is ready)
+   * @format int32
+   */
+  rdpPort?: number | null;
+  /** Fixed username configured on the image template */
+  rdpUsername?: string | null;
+  /** Fixed password configured on the image template */
+  rdpPassword?: string | null;
   /** Guacamole RDP URL (null if not yet ready) */
   rdpUrl?: string | null;
   /**
@@ -4422,27 +5357,6 @@ export interface VmStatusResponse {
    * @format uint64
    */
   createdAt?: number;
-}
-
-export interface DeploymentQueueStatusModel {
-  /** @format guid */
-  ticketId?: string;
-  kind?: DeploymentQueueKind;
-  status?: DeploymentQueueTicketStatus;
-  /** @format guid */
-  targetNodeId?: string | null;
-  targetNodeName?: string | null;
-  /** @format int32 */
-  queuePosition?: number;
-  /** @format int32 */
-  peopleAhead?: number;
-  errorMessage?: string | null;
-  /** @format uint64 */
-  createdAt?: number;
-  /** @format uint64 */
-  startedAt?: number | null;
-  /** @format uint64 */
-  completedAt?: number | null;
 }
 
 export interface GamePhase {
@@ -4463,6 +5377,16 @@ export interface GamePhase {
   /** @maxLength 2048 */
   securityPolicy?: string | null;
   game?: Game | null;
+}
+
+export interface UpdateImageRemoteAccessModel {
+  enabled?: boolean;
+  protocol?: TeamLabRemoteProtocol;
+  /** @format int32 */
+  port?: number;
+  username?: string | null;
+  credential?: string | null;
+  clearCredential?: boolean;
 }
 
 export interface LocalImportRequest {
@@ -4576,6 +5500,13 @@ export interface HashPowChallenge {
   difficulty?: number;
 }
 
+export interface PortMapAckRequest {
+  revision?: string;
+  succeeded?: boolean;
+  leaseIds?: string[];
+  error?: string | null;
+}
+
 export interface NodeDeployRequest {
   /** @minLength 1 */
   hostAddress: string;
@@ -4603,6 +5534,10 @@ export interface EnableTeamLabNetworkRequest {
 }
 
 export interface HeartbeatRequest {
+  /** @format int64 */
+  sequence?: number;
+  /** @format uint64 */
+  observedAt?: number | null;
   /** @format float */
   cpuLoad?: number;
   /** @format float */
@@ -4613,24 +5548,143 @@ export interface HeartbeatRequest {
   currentVms?: number;
   /** @format int32 */
   usedPorts?: number;
-  agentVersion?: string | null;
-  /** @format int32 */
-  teamLabProtocolVersion?: number | null;
+  capabilityManifest?: AgentCapabilityManifest | null;
   teamLabFabricIp?: string | null;
   teamLabFabricStatus?: TeamLabFabricStatus | null;
-  teamLabCapabilities?: TeamLabNodeCapabilityReport | null;
 }
 
-export interface TeamLabNodeCapabilityReport {
-  docker?: boolean;
-  kvm?: boolean;
+export interface AgentCapabilityManifest {
+  agentVersion?: string;
+  binarySha256?: string | null;
+  /** @format int32 */
+  manifestSchemaVersion?: number;
+  features?: string[];
+  executionLimits?: AgentExecutionLimits;
+  host?: AgentHostFacts;
+  /** @format uint64 */
+  observedAt?: number;
+}
+
+export interface AgentExecutionLimits {
+  /** @format int32 */
+  dockerCreates?: number;
+  /** @format int32 */
+  vmCreates?: number;
+  /** @format int32 */
+  dockerImageTransfers?: number;
+  /** @format int32 */
+  vmImageTransfers?: number;
+  /** @format int32 */
+  teamLabNetworkOperations?: number;
+  /** @format int32 */
+  controlOperations?: number;
+  /** @format int32 */
+  teamLabExecutionOperations?: number;
+  /** @format int32 */
+  artifactCleanupOperations?: number;
+}
+
+export interface AgentHostFacts {
+  /** @format int32 */
+  logicalCpu?: number;
+  /** @format int64 */
+  totalMemoryBytes?: number;
+  /** @format int64 */
+  availableVmImageStorageBytes?: number;
   kvmDevice?: boolean;
   cpuVirtualization?: boolean;
-  wireGuard?: boolean;
-  iptables?: boolean;
-  nftables?: boolean;
-  tcpdump?: boolean;
-  dumpcap?: boolean;
+}
+
+export interface OperationalEventViewPageModel {
+  items?: OperationalEventViewModel[];
+  nextCursor?: string | null;
+}
+
+export interface OperationalEventViewModel {
+  event?: OperationalEventModel;
+  domain?: string;
+  labels?: OperationalEventLabels;
+}
+
+export interface OperationalEventModel {
+  /** @format int64 */
+  id?: number;
+  /** @format uint64 */
+  occurredAt?: number;
+  /** @format guid */
+  correlationId?: string;
+  traceId?: string | null;
+  eventCode?: string;
+  severity?: OperationalEventSeverity;
+  outcome?: OperationalEventOutcome;
+  errorCategory?: OperationalErrorCategory | null;
+  errorCode?: string | null;
+  retryable?: boolean;
+  message?: string;
+  detail?: Record<string, any>;
+  /** @format guid */
+  actorUserId?: string | null;
+  /** @format guid */
+  ownerUserId?: string | null;
+  /** @format int32 */
+  ownerTeamId?: number | null;
+  /** @format int32 */
+  gameId?: number | null;
+  /** @format int32 */
+  courseId?: number | null;
+  /** @format int32 */
+  challengeId?: number | null;
+  /** @format int32 */
+  imageTemplateId?: number | null;
+  /** @format guid */
+  workerNodeId?: string | null;
+  /** @format guid */
+  deploymentTicketId?: string | null;
+  /** @format int32 */
+  teamLabRuntimeId?: number | null;
+  /** @format guid */
+  vmInstanceId?: string | null;
+  subjectType?: string | null;
+  subjectId?: string | null;
+  subjectDisplayName?: string | null;
+  resourceType?: string | null;
+  resourceId?: string | null;
+  resourceDisplayName?: string | null;
+}
+
+export interface OperationalEventLabels {
+  actor?: string | null;
+  owner?: string | null;
+  team?: string | null;
+  game?: string | null;
+  course?: string | null;
+  challenge?: string | null;
+  imageTemplate?: string | null;
+  workerNode?: string | null;
+  deploymentTicket?: string | null;
+  teamLabRuntime?: string | null;
+  vmInstance?: string | null;
+  subject?: string | null;
+  resource?: string | null;
+}
+
+export interface OperationalCorrelationSummaryModel {
+  /** @format guid */
+  correlationId?: string;
+  /** @format uint64 */
+  startedAt?: number;
+  /** @format uint64 */
+  completedAt?: number;
+  outcome?: OperationalEventOutcome;
+  errorCategory?: OperationalErrorCategory | null;
+  errorCode?: string | null;
+  /** @format int32 */
+  eventCount?: number;
+  domains?: string[];
+  workerNodes?: string[];
+  subject?: string | null;
+  resource?: string | null;
+  timeline?: OperationalEventViewPageModel;
 }
 
 export interface BindPenetrationTopologyModel {
@@ -4638,7 +5692,43 @@ export interface BindPenetrationTopologyModel {
   topologyId?: string;
 }
 
+export interface PenetrationGameLabBindingModel {
+  /** @format int32 */
+  gameId?: number;
+  /** @format guid */
+  topologyId?: string;
+  /** @format guid */
+  activeReleaseId?: string | null;
+  /** @format int32 */
+  maxResetCount?: number;
+  /** @format int64 */
+  objectiveRevision?: number;
+  objectives?: PenetrationObjectiveModel[];
+}
+
+export interface PenetrationObjectiveModel {
+  /** @format int32 */
+  id?: number;
+  key?: string;
+  assetKey?: string;
+  title?: string;
+  description?: string | null;
+  category?: string;
+  /** @format int32 */
+  score?: number;
+  dynamic?: boolean;
+  /** @format int32 */
+  maxAttempts?: number;
+  visible?: boolean;
+  checkpoint?: boolean;
+  prerequisiteKeys?: string[];
+  /** @format int32 */
+  orderIndex?: number;
+}
+
 export interface ReplacePenetrationObjectivesModel {
+  /** @format int64 */
+  revision?: number;
   /** @format int32 */
   maxResetCount?: number;
   objectives?: PenetrationObjectiveWriteModel[];
@@ -4662,13 +5752,19 @@ export interface PenetrationObjectiveWriteModel {
   prerequisiteKeys?: string[] | null;
   /** @format int32 */
   orderIndex?: number;
+  /** @format int32 */
+  id?: number | null;
+}
+
+export interface TeamLabOperatorGrantWriteModel {
+  viewAssets?: boolean;
+  operateAssets?: boolean;
 }
 
 export interface PenetrationSubmitModel {
   /** @format int32 */
   objectiveId?: number;
-  /** @minLength 1 */
-  flag: string;
+  flag?: string;
 }
 
 export interface StudentGroupBriefModel {
@@ -5684,9 +6780,1504 @@ export interface TrainingCourseSubmitResultModel {
   courseCompleted?: boolean;
 }
 
-export interface RequiredProbeModel {
+export interface PublicUserProfileModel {
+  /** @format guid */
+  id?: string;
+  userName?: string;
+  /** User role enumeration */
+  role?: Role;
+  bio?: string;
+  avatar?: string | null;
+  /** @format uint64 */
+  registeredAt?: number;
+  publicTeam?: PublicUserTeamModel | null;
+  taughtCourses?: PublicUserCourseModel[];
+}
+
+export interface PublicUserTeamModel {
+  /** @format int32 */
+  id?: number;
+  name?: string;
+  avatar?: string | null;
+}
+
+export interface PublicUserCourseModel {
+  /** @format int32 */
+  id?: number;
+  title?: string;
+}
+
+export interface UserProfileOverviewModel {
+  window?: string;
+  /** @format uint64 */
+  generatedAt?: number;
+  metrics?: UserProfileMetricsModel;
+  dimensions?: UserSkillDimensionModel[];
+  trend?: UserProfileTrendPointModel[];
+}
+
+export interface UserProfileMetricsModel {
+  /** @format int32 */
+  solved?: number;
+  /** @format int32 */
+  submissions?: number;
+  /** @format int32 */
+  acceptedSubmissions?: number;
+  /** @format double */
+  successRate?: number;
+  /** @format int32 */
+  gameCount?: number;
+  /** @format int32 */
+  courseCount?: number;
+  /** @format int32 */
+  activeDays?: number;
+}
+
+export interface UserSkillDimensionModel {
+  id?: string;
+  label?: string;
+  /** @format int32 */
+  solved?: number;
+  /** @format int32 */
+  attempted?: number;
+  /** @format int32 */
+  submissions?: number;
+  /** @format int32 */
+  acceptedSubmissions?: number;
+  /** @format double */
+  successRate?: number;
+  /** @format int32 */
+  benchmarkP90?: number;
+  /** @format double */
+  radarValue?: number;
+  sampleSufficient?: boolean;
+}
+
+export interface UserProfileTrendPointModel {
+  /** @format date */
+  date?: string;
+  /** @format int32 */
+  cumulativeSolved?: number;
+  /** @format int32 */
+  delta?: number;
+}
+
+export interface UserActivityPointModel {
+  /** @format date */
+  date?: string;
+  /** @format int32 */
+  ctf?: number;
+  /** @format int32 */
+  training?: number;
+  /** @format int32 */
+  theory?: number;
+  /** @format int32 */
+  awdp?: number;
+  /** @format int32 */
+  penetration?: number;
+  /** @format int32 */
+  total?: number;
+}
+
+export interface UserProfileHistoryPageModel {
+  items?: UserProfileHistoryItemModel[];
+  nextCursor?: string | null;
+}
+
+export interface UserProfileHistoryItemModel {
+  id?: string;
+  type?: string;
+  /** @format uint64 */
+  occurredAt?: number;
+  title?: string;
+  summary?: string;
+  route?: string | null;
+}
+
+export interface UserPrivateOverviewModel {
+  /** @format int32 */
+  approvedCourses?: number;
+  /** @format int32 */
+  learningCourses?: number;
+  /** @format int32 */
+  completedCourses?: number;
+  /** @format int32 */
+  pendingEnrollments?: number;
+  /** @format int32 */
+  submittedTheoryAssignments?: number;
+}
+
+export type ExternalApiProblemDetailsModel = ProblemDetails & {
+  code?: string;
+  traceId?: string;
+  [key: string]: any;
+};
+
+export interface AcquireTeamLabConnectorLeaseModel {
+  /** @format guid */
+  runtimeId?: string;
+}
+
+/** Release-level preparation state for external callers. */
+export interface TeamLabReleasePreparationModel {
+  /** @format guid */
+  releaseId?: string;
+  state?: string;
+  planAvailable?: boolean;
+  readyToStart?: boolean;
+  blockers?: string[];
+  images?: TeamLabReleaseImagePreparationModel[];
+}
+
+/** Per-template preparation projection. No worker address or Agent detail is exposed. */
+export interface TeamLabReleaseImagePreparationModel {
+  /** @format int32 */
+  templateId?: number;
+  templateName?: string;
+  imageType?: string;
+  /** @format int32 */
+  eligibleNodeCount?: number;
+  /** @format int32 */
+  readyNodeCount?: number;
+  /** @format int32 */
+  preparingNodeCount?: number;
+  /** @format int32 */
+  failedNodeCount?: number;
+  failure?: OpenTeamLabFailureModel | null;
+}
+
+export interface OpenTeamLabFailureModel {
+  code?: string;
+  stage?: string;
+  retryable?: boolean;
+  actions?: string[] | null;
+  resourceType?: string | null;
+  resourceId?: string | null;
+  detail?: string | null;
+}
+
+export interface ApiOperationModel {
+  /** @format guid */
+  id?: string;
+  kind?: string;
+  status?: ApiOperationStatus;
+  stage?: string;
+  resourceType?: string | null;
+  resourceId?: string | null;
+  /** @format guid */
+  deploymentQueueTicketId?: string | null;
+  /** @format int64 */
+  currentProgress?: number;
+  /** @format int64 */
+  totalProgress?: number;
+  /** @format int32 */
+  attemptCount?: number;
+  errorCode?: string | null;
+  errorDetail?: string | null;
+  result?: any;
+  /** @format uint64 */
+  createdAt?: number;
+  /** @format uint64 */
+  startedAt?: number | null;
+  /** @format uint64 */
+  updatedAt?: number;
+  /** @format uint64 */
+  completedAt?: number | null;
+}
+
+export interface OpenTeamLabRemoteAvailabilityModel {
+  /** @format int32 */
+  assetId?: number;
+  assetName?: string;
+  protocol?: TeamLabRemoteProtocol | null;
+  available?: boolean;
+  unavailableReason?: string | null;
+}
+
+export interface OpenCreateTeamLabRemoteSessionModel {
+  /**
+   * @minLength 4
+   * @maxLength 500
+   */
+  reason: string;
+  vncConsole?: boolean;
+}
+
+export interface OpenTeamLabRemoteSessionModel {
+  /** @format guid */
+  id?: string;
+  /** @format guid */
+  runtimeId?: string;
+  /** @format int32 */
+  assetId?: number;
+  assetName?: string;
+  protocol?: TeamLabRemoteProtocol;
+  status?: TeamLabRemoteSessionStatus;
+  reason?: string;
+  /** @format uint64 */
+  createdAt?: number;
+  /** @format uint64 */
+  expiresAt?: number;
+  /** @format uint64 */
+  connectedAt?: number | null;
+  /** @format uint64 */
+  endedAt?: number | null;
+  endReason?: string | null;
+}
+
+export interface TeamLabRolloutPageModel {
+  items?: TeamLabRolloutModel[];
+  nextCursor?: string | null;
+}
+
+export interface TeamLabRolloutModel {
+  /** @format guid */
+  id?: string;
+  /** @format guid */
+  releaseId?: string;
+  status?: string;
+  preparationRequested?: boolean;
+  desiredAccessOpen?: boolean;
+  drainRequested?: boolean;
+  pauseRequested?: boolean;
+  counts?: TeamLabRolloutCountsModel;
+  /** @format uint64 */
+  preparedAt?: number | null;
+  /** @format uint64 */
+  accessOpenedAt?: number | null;
+  /** @format uint64 */
+  drainingAt?: number | null;
+  /** @format uint64 */
+  completedAt?: number | null;
+  /** @format uint64 */
+  createdAt?: number;
+  /** @format uint64 */
+  updatedAt?: number;
+  error?: string | null;
+  /** @format guid */
+  controlScopeId?: string | null;
+  adapterKind?: string | null;
+  externalReference?: string | null;
+  /** @format int32 */
+  revision?: number;
+}
+
+export interface TeamLabRolloutCountsModel {
+  /** @format int32 */
+  total?: number;
+  /** @format int32 */
+  pending?: number;
+  /** @format int32 */
+  provisioning?: number;
+  /** @format int32 */
+  ready?: number;
+  /** @format int32 */
+  accessOpen?: number;
+  /** @format int32 */
+  failed?: number;
+  /** @format int32 */
+  draining?: number;
+  /** @format int32 */
+  destroyed?: number;
+  /** @format int32 */
+  paused?: number;
+}
+
+export interface CreateTeamLabRolloutModel {
+  /** @format guid */
+  controlScopeId?: string;
+  /** @format guid */
+  releaseId?: string;
+  externalReference?: string;
+  targets?: TeamLabRolloutTargetInputModel[];
+}
+
+export interface TeamLabRolloutTargetInputModel {
+  externalSubject?: string;
+  displayName?: string;
+}
+
+export interface TeamLabRolloutTargetPageModel {
+  items?: TeamLabRolloutTargetModel[];
+  nextCursor?: string | null;
+}
+
+export interface TeamLabRolloutTargetModel {
+  /** @format guid */
+  id?: string;
+  externalSubject?: string;
+  displayName?: string;
+  /** @format guid */
+  runtimeId?: string | null;
+  status?: string;
+  /** @format guid */
+  operationId?: string | null;
+  runtimeStatus?: TeamLabRuntimeStatus | null;
+  runtimeStage?: string | null;
+  /** @format uint64 */
+  createdAt?: number;
+  /** @format uint64 */
+  updatedAt?: number;
+  error?: string | null;
+}
+
+export interface ReplaceTeamLabRolloutTargetsModel {
+  targets?: TeamLabRolloutTargetInputModel[];
+}
+
+export interface CreateTeamLabRuntimeModel {
+  /** @format guid */
+  releaseId?: string;
+  externalReference?: string | null;
+  constraints?: TeamLabRuntimeConstraintsModel | null;
+  overlays?: TeamLabRuntimeOverlayModel[] | null;
+}
+
+export interface OpenTeamLabRuntimeModel {
+  /** @format guid */
+  id?: string;
+  /** @format guid */
+  releaseId?: string;
+  /** @format int32 */
+  generation?: number;
+  executionModel?: TeamLabExecutionModel;
+  status?: TeamLabRuntimeStatus;
+  stage?: string;
+  openForAccess?: boolean;
+  shards?: OpenTeamLabRuntimeShardModel[];
+  networks?: TeamLabRuntimeNetworkProjectionModel[];
+  assets?: OpenTeamLabRuntimeAssetModel[];
+  /** @format uint64 */
+  createdAt?: number;
+  /** @format uint64 */
+  updatedAt?: number | null;
+  failure?: OpenTeamLabFailureModel | null;
+  /** @format guid */
+  currentOperationId?: string | null;
+  /** @format guid */
+  deploymentQueueTicketId?: string | null;
+  queueStatus?: DeploymentQueueTicketStatus | null;
+  subStages?: OpenTeamLabRuntimeSubStageModel[] | null;
+  /** @format guid */
+  controlScopeId?: string | null;
+  /** @format int32 */
+  releaseVersion?: number | null;
+  recoveryActions?: string[] | null;
+}
+
+export interface OpenTeamLabRuntimeShardModel {
+  /** @format guid */
+  id?: string;
+  status?: TeamLabRuntimeStatus;
+  networkKeys?: string[];
+  assetKeys?: string[];
+  failure?: OpenTeamLabFailureModel | null;
+}
+
+export interface OpenTeamLabRuntimeAssetModel {
+  key?: string;
+  name?: string;
+  kind?: TeamLabAssetKind;
+  primaryIp?: string | null;
+  status?: TeamLabRuntimeStatus;
+  failure?: OpenTeamLabFailureModel | null;
+}
+
+export interface OpenTeamLabRuntimeSubStageModel {
+  id?: string;
+  status?: string;
+  message?: string | null;
+}
+
+export interface TeamLabProtocolEventReportModel {
+  type?: string;
+  source?: string;
+  /** @format uint64 */
+  occurredAt?: number | null;
+  parameters?: Record<string, string>;
+}
+
+export interface OpenTeamLabRuntimeEventPageModel {
+  items?: TeamLabRuntimeEventModel[];
+  nextCursor?: string | null;
+}
+
+export interface CreateTeamLabControlScopeModel {
+  key?: string;
+  displayName?: string;
+}
+
+export interface OpenCreateTeamLabTopologyModel {
+  name?: string;
+  networks?: TeamLabTopologyNetworkModel[];
+  assets?: TeamLabTopologyAssetModel[];
+  connections?: TeamLabTopologyConnectionModel[];
+  editor?: TeamLabTopologyEditorModel | null;
+  infrastructure?: TeamLabTopologyInfrastructureModel[] | null;
+  dependencies?: TeamLabTopologyDependencyModel[] | null;
+  observation?: TeamLabObservationPolicyModel | null;
+  /** @format int32 */
+  schemaVersion?: number;
+  /** @format guid */
+  controlScopeId?: string | null;
+}
+
+export interface OpenTeamLabTopologyPageModel {
+  items?: TeamLabTopologySummaryModel[];
+  nextCursor?: string | null;
+}
+
+export interface TeamLabTopologySummaryModel {
+  /** @format guid */
+  id?: string;
+  /** @format guid */
+  controlScopeId?: string | null;
+  name?: string;
+  /** @format int32 */
+  revision?: number;
+  /** @format int32 */
+  schemaVersion?: number;
+  /** @format uint64 */
+  createdAt?: number;
+  /** @format uint64 */
+  updatedAt?: number;
+}
+
+export interface OpenTeamLabTopologyDetailModel {
+  /** @format guid */
+  id?: string;
+  /** @format guid */
+  controlScopeId?: string | null;
+  /** @format int32 */
+  revision?: number;
+  /** @format int32 */
+  schemaVersion?: number;
+  definition?: TeamLabTopologyDefinitionModel;
+  editor?: TeamLabTopologyEditorModel;
+  /** @format uint64 */
+  createdAt?: number;
+  /** @format uint64 */
+  updatedAt?: number;
+}
+
+export interface OpenUpdateTeamLabTopologyModel {
+  /** @format int32 */
+  revision?: number;
+  name?: string;
+  networks?: TeamLabTopologyNetworkModel[];
+  assets?: TeamLabTopologyAssetModel[];
+  connections?: TeamLabTopologyConnectionModel[];
+  editor?: TeamLabTopologyEditorModel | null;
+  infrastructure?: TeamLabTopologyInfrastructureModel[] | null;
+  dependencies?: TeamLabTopologyDependencyModel[] | null;
+  observation?: TeamLabObservationPolicyModel | null;
+  /** @format int32 */
+  schemaVersion?: number;
+}
+
+export interface OpenTeamLabReleasePageModel {
+  items?: OpenTeamLabReleaseModel[];
+  nextCursor?: string | null;
+}
+
+export interface OpenTeamLabReleaseModel {
+  /** @format guid */
+  id?: string;
+  /** @format guid */
+  topologyId?: string;
+  /** @format int32 */
+  version?: number;
+  /** @format int32 */
+  sourceRevision?: number;
+  /** @format int32 */
+  schemaVersion?: number;
+  contentHash?: string;
+  /** @format uint64 */
+  publishedAt?: number;
+  editor?: TeamLabTopologyEditorModel | null;
+  archived?: boolean;
+  publisherName?: string | null;
+}
+
+export interface OpenTeamLabCapturePageModel {
+  items?: OpenTeamLabCaptureModel[];
+  next?: string | null;
+}
+
+export interface OpenTeamLabCaptureModel {
+  /** @format guid */
+  id?: string;
+  status?: TeamLabTrafficCaptureStatus;
+  scope?: string;
+  networkKey?: string | null;
+  /** @format int64 */
+  maxBytes?: number;
+  /** @format int32 */
+  maxSeconds?: number;
+  /** @format int64 */
+  capturedBytes?: number;
+  /** @format uint64 */
+  createdAt?: number;
+  /** @format uint64 */
+  startedAt?: number | null;
+  /** @format uint64 */
+  completedAt?: number | null;
+  /** @format uint64 */
+  expiresAt?: number | null;
+  segments?: TeamLabCaptureSegmentModel[];
+  failure?: OpenTeamLabFailureModel | null;
+}
+
+export interface CreateTeamLabWebhookModel {
+  /** @format guid */
+  controlScopeId?: string;
+  endpointUrl?: string;
+  eventTypes?: string[];
+  enabled?: boolean;
+  /** @format int64 */
+  fromEventId?: number | null;
+}
+
+export interface TeamLabWebhookPageModel {
+  items?: TeamLabWebhookModel[];
+  nextCursor?: string | null;
+}
+
+export interface TeamLabWebhookModel {
+  /** @format guid */
+  id?: string;
+  /** @format guid */
+  controlScopeId?: string;
+  endpointUrl?: string;
+  eventTypes?: string[];
+  active?: boolean;
+  /** @format int64 */
+  deliveryCursor?: number;
+  /** @format int32 */
+  consecutiveFailures?: number;
+  /** @format uint64 */
+  nextDeliveryAt?: number | null;
+  /** @format uint64 */
+  createdAt?: number;
+  /** @format uint64 */
+  revokedAt?: number | null;
+  recentFailures?: TeamLabWebhookFailureModel[];
+}
+
+export interface TeamLabWebhookFailureModel {
+  /** @format int64 */
+  id?: number;
+  /** @format int64 */
+  eventId?: number;
+  eventStage?: string;
+  error?: string;
+  /** @format uint64 */
+  occurredAt?: number;
+}
+
+export interface TeamImportBatchModel {
+  /**
+   * @maxItems 200
+   * @minItems 1
+   */
+  items: TeamImportModel[];
+}
+
+export type TeamImportModel = ExternalImportItemModel & {
+  /**
+   * @minLength 1
+   * @maxLength 20
+   */
+  name: string;
+  /** @maxLength 72 */
+  bio?: string | null;
+  locked?: boolean;
+  captain: ExternalUserReferenceModel;
+  /** @maxItems 100 */
+  members?: ExternalUserReferenceModel[];
+};
+
+export interface ExternalUserReferenceModel {
+  /** @format guid */
+  userId?: string | null;
+  /** @maxLength 64 */
+  userName?: string | null;
+}
+
+export interface ExternalImportItemModel {
+  /**
+   * @minLength 1
+   * @maxLength 128
+   */
+  externalId: string;
+}
+
+export interface TheoryQuestionImportBatchModel {
+  /**
+   * @maxItems 1000
+   * @minItems 1
+   */
+  items: TheoryQuestionImportModel[];
+}
+
+export type TheoryQuestionImportModel = TheoryQuestionEditModel & {
+  /**
+   * @minLength 1
+   * @maxLength 128
+   */
+  externalId: string;
+};
+
+export interface TheoryPaperImportModel {
+  /**
+   * @minLength 1
+   * @maxLength 256
+   */
+  title: string;
+  /** @maxLength 1000000 */
+  description?: string;
+  publish?: boolean;
+  /**
+   * @maxItems 1000
+   * @minItems 1
+   */
+  questions: TheoryPaperQuestionImportModel[];
+}
+
+export type TheoryPaperQuestionImportModel = TheoryQuestionEditModel & {
+  /** @format int32 */
+  sourceQuestionId?: number | null;
+  /**
+   * @format int32
+   * @min 1
+   * @max 2147483647
+   */
+  score?: number;
+  /** @format int32 */
+  order?: number;
+};
+
+export interface TrainingCourseImportBatchModel {
+  /**
+   * @maxItems 50
+   * @minItems 1
+   */
+  items: TrainingCourseImportModel[];
+}
+
+export type TrainingCourseImportModel = ExternalImportItemModel & {
+  /**
+   * @minLength 1
+   * @maxLength 128
+   */
+  title: string;
+  /** @maxLength 128 */
+  slug?: string;
+  /** @maxLength 512 */
+  summary?: string;
+  /** @maxLength 1000000 */
+  description?: string;
+  /** @maxItems 16 */
+  tags?: string[];
+  /** Training course enrollment policy */
+  enrollmentPolicy?: TrainingCourseEnrollmentPolicy;
+  publish?: boolean;
+  /** @maxItems 500 */
+  chapters?: TrainingChapterImportModel[];
+  /** @maxItems 500 */
+  exercises?: TrainingExerciseImportModel[];
+  /** @maxItems 1000 */
+  theoryQuestions?: TrainingTheoryQuestionImportModel[];
+  /** @maxItems 500 */
+  theoryPapers?: TrainingTheoryPaperImportModel[];
+};
+
+export type TrainingChapterImportModel = ExternalImportItemModel & {
+  /** @maxLength 128 */
+  parentExternalId?: string | null;
+  /**
+   * @minLength 1
+   * @maxLength 128
+   */
+  title: string;
+  /** @maxLength 512 */
+  summary?: string;
+  /** @maxLength 1000000 */
+  content?: string;
+  /** Training article format */
+  contentType?: TrainingArticleContentType;
+  completionPolicy?: TrainingChapterCompletionPolicy;
+  /** Training course video provider */
+  videoProvider?: TrainingCourseVideoProvider;
+  /** @maxLength 1024 */
+  videoUrl?: string | null;
+  /** @format int32 */
+  order?: number;
+  isPublished?: boolean;
+};
+
+export interface TrainingExerciseImportModel {
+  /**
+   * @minLength 1
+   * @maxLength 128
+   */
+  externalId: string;
+  /**
+   * @minLength 1
+   * @maxLength 256
+   */
+  title: string;
+  /**
+   * @minLength 1
+   * @maxLength 1000000
+   */
+  content: string;
+  /** Challenge category */
+  category?: ChallengeCategory;
+  type?: ChallengeType;
+  /** Challenge difficulty */
+  difficulty?: Difficulty;
+  credit?: boolean;
+  isEnabled?: boolean;
+  /** @maxItems 100 */
+  tags?: string[] | null;
+  /** @maxItems 512 */
+  hints?: string[] | null;
+  /** @maxLength 512 */
+  containerImage?: string | null;
+  /** @format int32 */
+  memoryLimit?: number | null;
+  /** @format int32 */
+  storageLimit?: number | null;
+  /** @format int32 */
+  cpuCount?: number | null;
+  /** @format int32 */
+  exposePort?: number | null;
+  networkMode?: NetworkMode | null;
+  /** Environment type for challenge deployment */
+  environment?: EnvironmentType;
+  /** @format int32 */
+  imageTemplateId?: number | null;
+  /** @maxLength 120 */
+  flagTemplate?: string | null;
+  /** @maxItems 100 */
+  flags?: ExerciseOpenApiFlagModel[] | null;
+  attachment?: ExerciseOpenApiAttachmentModel | null;
+  /** @maxLength 128 */
+  chapterExternalId?: string | null;
+  /** @format int32 */
+  order?: number;
+  isRequired?: boolean;
+  /** @maxLength 128 */
+  displayTitle?: string | null;
+}
+
+export interface ExerciseOpenApiFlagModel {
+  /**
+   * @format int32
+   * @min 1
+   * @max 2147483647
+   */
+  id?: number | null;
+  /**
+   * @minLength 1
+   * @maxLength 127
+   */
+  flag: string;
+  /**
+   * @format int32
+   * @min 0
+   * @max 10000
+   */
+  orderIndex?: number;
+  /** @maxLength 512 */
+  description?: string | null;
+  /** Flag score mode */
+  scoreMode?: FlagScoreMode;
+  /**
+   * @format int32
+   * @min 0
+   * @max 1000000
+   */
+  fixedScore?: number;
+  /**
+   * @format int32
+   * @min 0
+   * @max 100000
+   */
+  maxAttempts?: number;
+  /** @maxLength 128 */
+  attachmentHash?: string | null;
+  /** Answer type for challenge submission */
+  answerType?: AnswerType;
+  /** @maxLength 64 */
+  customName?: string | null;
+  attachment?: ExerciseOpenApiAttachmentModel | null;
+}
+
+export interface ExerciseOpenApiAttachmentModel {
+  /** @maxLength 2048 */
+  remoteUrl?: string;
+  /** @maxLength 64 */
+  fileHash?: string | null;
+}
+
+export type TrainingTheoryQuestionImportModel = TheoryQuestionEditModel & {
+  /**
+   * @minLength 1
+   * @maxLength 128
+   */
+  externalId: string;
+};
+
+export type TrainingTheoryPaperImportModel = ExternalImportItemModel & {
+  /**
+   * @minLength 1
+   * @maxLength 128
+   */
+  chapterExternalId: string;
+  /**
+   * @minLength 1
+   * @maxLength 128
+   */
+  title: string;
+  /** @maxLength 1000000 */
+  description?: string;
+  /**
+   * @format int32
+   * @min 1
+   * @max 100
+   */
+  passRate?: number;
+  allowRetake?: boolean;
+  showCorrectAnswerAfterSubmit?: boolean;
+  publish?: boolean;
+  /** @maxItems 500 */
+  questions?: TrainingTheoryPaperQuestionImportModel[];
+};
+
+export type TrainingTheoryPaperQuestionImportModel = TheoryQuestionEditModel & {
+  /** @maxLength 128 */
+  sourceQuestionExternalId?: string | null;
+  /**
+   * @format int32
+   * @min 1
+   * @max 2147483647
+   */
+  score?: number;
+  /** @format int32 */
+  order?: number;
+};
+
+export interface ExerciseExternalPageModel {
+  items?: ExerciseExternalSummaryModel[];
+  nextCursor?: string | null;
+}
+
+export interface ExerciseExternalSummaryModel {
+  /** @format int32 */
+  id?: number;
+  title?: string;
+  /** Challenge category */
+  category?: ChallengeCategory;
+  type?: ChallengeType;
+  /** Challenge difficulty */
+  difficulty?: Difficulty;
+  credit?: boolean;
+  tags?: string[];
+  isEnabled?: boolean;
+  /**
+   * Origin of a public exercise-pool entry. Source challenges are copied into the
+   * pool so their original game/course lifecycle remains isolated.
+   */
+  poolSource?: ExercisePoolSource;
+}
+
+export interface ExerciseExternalModel {
+  /** @format int32 */
+  id?: number;
+  title?: string;
+  content?: string;
+  /** Challenge category */
+  category?: ChallengeCategory;
+  type?: ChallengeType;
+  /** Challenge difficulty */
+  difficulty?: Difficulty;
+  credit?: boolean;
+  tags?: string[];
+  hints?: string[];
+  isEnabled?: boolean;
+  /**
+   * Origin of a public exercise-pool entry. Source challenges are copied into the
+   * pool so their original game/course lifecycle remains isolated.
+   */
+  poolSource?: ExercisePoolSource;
+  containerImage?: string | null;
+  /** @format int32 */
+  memoryLimit?: number | null;
+  /** @format int32 */
+  storageLimit?: number | null;
+  /** @format int32 */
+  cpuCount?: number | null;
+  /** @format int32 */
+  exposePort?: number | null;
+  networkMode?: NetworkMode | null;
+  /** Environment type for challenge deployment */
+  environment?: EnvironmentType;
+  /** @format int32 */
+  imageTemplateId?: number | null;
+  flagTemplate?: string | null;
+  attachment?: ExerciseOpenApiAttachmentModel | null;
+  flags?: ExerciseOpenApiFlagInfoModel[];
+}
+
+export interface ExerciseOpenApiFlagInfoModel {
+  /** @format int32 */
+  id?: number;
+  flag?: string;
+  /** @format int32 */
+  orderIndex?: number;
+  description?: string | null;
+  /** Flag score mode */
+  scoreMode?: FlagScoreMode;
+  /** @format int32 */
+  fixedScore?: number;
+  /** @format int32 */
+  maxAttempts?: number;
+  attachmentHash?: string | null;
+  /** Answer type for challenge submission */
+  answerType?: AnswerType;
+  customName?: string | null;
+  attachment?: ExerciseOpenApiAttachmentModel | null;
+}
+
+export interface ExerciseImportFromExternalModel {
+  /**
+   * @maxItems 100
+   * @minItems 1
+   */
+  items: ExerciseImportItemModel[];
+}
+
+export interface ExerciseImportItemModel {
+  /**
+   * @minLength 1
+   * @maxLength 128
+   */
+  externalId: string;
+  /**
+   * @minLength 1
+   * @maxLength 256
+   */
+  title: string;
+  /**
+   * @minLength 1
+   * @maxLength 1000000
+   */
+  content: string;
+  /** Challenge category */
+  category?: ChallengeCategory;
+  type?: ChallengeType;
+  /** Challenge difficulty */
+  difficulty?: Difficulty;
+  /** @maxItems 100 */
+  tags?: string[] | null;
+  /** @maxItems 512 */
+  hints?: string[] | null;
+  isEnabled?: boolean;
+  credit?: boolean;
+  containerImage?: string | null;
+  /** @format int32 */
+  memoryLimit?: number | null;
+  /** @format int32 */
+  storageLimit?: number | null;
+  /** @format int32 */
+  cpuCount?: number | null;
+  /** @format int32 */
+  exposePort?: number | null;
+  networkMode?: NetworkMode | null;
+  /** Environment type for challenge deployment */
+  environment?: EnvironmentType;
+  /** @format int32 */
+  imageTemplateId?: number | null;
+  flagTemplate?: string | null;
+  /** @maxItems 100 */
+  flags?: ExerciseOpenApiFlagModel[] | null;
+  attachment?: ExerciseOpenApiAttachmentModel | null;
+}
+
+export interface ExerciseCreateModel2 {
+  /**
+   * @minLength 1
+   * @maxLength 256
+   */
+  title: string;
   /** @minLength 1 */
-  value: string;
+  content: string;
+  /** Challenge category */
+  category?: ChallengeCategory;
+  type?: ChallengeType;
+  /** Challenge difficulty */
+  difficulty?: Difficulty;
+  credit?: boolean;
+  isEnabled?: boolean;
+  /** @maxItems 100 */
+  tags?: string[] | null;
+  /** @maxItems 512 */
+  hints?: string[] | null;
+  containerImage?: string | null;
+  /** @format int32 */
+  memoryLimit?: number | null;
+  /** @format int32 */
+  storageLimit?: number | null;
+  /** @format int32 */
+  cpuCount?: number | null;
+  /** @format int32 */
+  exposePort?: number | null;
+  networkMode?: NetworkMode | null;
+  /** Environment type for challenge deployment */
+  environment?: EnvironmentType;
+  /** @format int32 */
+  imageTemplateId?: number | null;
+  flagTemplate?: string | null;
+  /** @maxItems 100 */
+  flags?: ExerciseOpenApiFlagModel[] | null;
+  attachment?: ExerciseOpenApiAttachmentModel | null;
+}
+
+export interface OpenAwdpServiceImportModel {
+  /**
+   * @minLength 1
+   * @maxLength 128
+   */
+  externalId: string;
+  /**
+   * @minLength 1
+   * @maxLength 128
+   */
+  name: string;
+  /** @maxLength 1000000 */
+  content?: string;
+  /** Challenge category */
+  category?: ChallengeCategory;
+  /** Challenge difficulty */
+  difficulty?: Difficulty;
+  /** @maxItems 100 */
+  tags?: string[] | null;
+  /**
+   * @minLength 1
+   * @maxLength 120
+   */
+  flagTemplate: string;
+  /**
+   * @minLength 1
+   * @maxLength 256
+   */
+  imageName: string;
+  /**
+   * @format int32
+   * @min 1
+   * @max 65535
+   */
+  exposePort?: number;
+  /** @maxLength 65536 */
+  checkerScript?: string | null;
+  /** @maxLength 256 */
+  checkerEntrypoint?: string | null;
+  /** @maxLength 65536 */
+  expScript?: string | null;
+  /** @maxLength 256 */
+  expEntrypoint?: string | null;
+  /**
+   * @format int32
+   * @min 0
+   * @max 1000000
+   */
+  originalScore?: number;
+  /**
+   * @format int32
+   * @min 0
+   * @max 1000000
+   */
+  attackPoints?: number;
+  /**
+   * @format int32
+   * @min 0
+   * @max 1000000
+   */
+  slaPoints?: number;
+  /**
+   * @format int32
+   * @min 0
+   * @max 1000000
+   */
+  patchPoints?: number;
+  /**
+   * @format int32
+   * @min 0
+   * @max 1000000
+   */
+  serviceAbnormalPenalty?: number;
+  /**
+   * @format int32
+   * @min 1
+   * @max 100000
+   */
+  maxAttackPerRound?: number;
+  /**
+   * @format int32
+   * @min 1
+   * @max 100000
+   */
+  attackPhaseMinutes?: number;
+  /**
+   * @format int32
+   * @min 1
+   * @max 100000
+   */
+  patchPhaseMinutes?: number;
+  /**
+   * @format int32
+   * @min 1
+   * @max 100000
+   */
+  totalRounds?: number;
+  /**
+   * @format int32
+   * @min 0
+   * @max 100000
+   */
+  maxResetCount?: number;
+  /**
+   * @format int32
+   * @min 0
+   * @max 100000
+   */
+  maxRecoveryCount?: number;
+}
+
+export interface OpenAwdpServiceBatchImportModel {
+  /**
+   * @maxItems 100
+   * @minItems 1
+   */
+  items: OpenAwdpServiceImportModel[];
+}
+
+export interface OpenChallengePageModel {
+  items?: OpenChallengeSummaryModel[];
+  nextCursor?: string | null;
+}
+
+export interface OpenChallengeSummaryModel {
+  /** @format int32 */
+  id?: number;
+  title?: string;
+  /** Challenge category */
+  category?: ChallengeCategory;
+  type?: ChallengeType;
+  isEnabled?: boolean;
+  /** @format uint64 */
+  deadlineUtc?: number | null;
+  /** @format int32 */
+  originalScore?: number;
+  /** Environment type for challenge deployment */
+  environment?: EnvironmentType;
+  /** @format int32 */
+  imageTemplateId?: number | null;
+}
+
+export interface OpenChallengeModel {
+  /** @format int32 */
+  id?: number;
+  title?: string;
+  content?: string;
+  /** Challenge category */
+  category?: ChallengeCategory;
+  type?: ChallengeType;
+  hints?: string[];
+  isEnabled?: boolean;
+  /** @format uint64 */
+  deadlineUtc?: number | null;
+  /** @format int32 */
+  submissionLimit?: number;
+  /** @format int32 */
+  originalScore?: number;
+  /** @format double */
+  minScoreRate?: number;
+  /** @format double */
+  difficulty?: number;
+  disableBloodBonus?: boolean;
+  flagTemplate?: string | null;
+  /** Environment type for challenge deployment */
+  environment?: EnvironmentType;
+  containerImage?: string | null;
+  /** @format int32 */
+  exposePort?: number | null;
+  /** @format int32 */
+  imageTemplateId?: number | null;
+  /** @format int32 */
+  cpuCount?: number;
+  /** @format int32 */
+  memoryLimit?: number;
+  /** @format int32 */
+  storageLimit?: number;
+  /** Container network mode */
+  networkMode?: NetworkMode;
+  enableTrafficCapture?: boolean;
+  fileName?: string | null;
+  flags?: OpenChallengeFlagInfoModel[];
+  attachment?: OpenChallengeAttachmentInfoModel | null;
+}
+
+export interface OpenChallengeFlagInfoModel {
+  /** @format int32 */
+  id?: number;
+  flag?: string;
+  /** @format int32 */
+  orderIndex?: number;
+  description?: string | null;
+  /** Flag score mode */
+  scoreMode?: FlagScoreMode;
+  /** @format int32 */
+  fixedScore?: number;
+  /** @format int32 */
+  maxAttempts?: number;
+  attachmentHash?: string | null;
+  /** Answer type for challenge submission */
+  answerType?: AnswerType;
+  customName?: string | null;
+  attachment?: OpenChallengeAttachmentInfoModel | null;
+}
+
+export interface OpenChallengeAttachmentInfoModel {
+  type?: FileType;
+  url?: string;
+}
+
+export interface OpenChallengeImportModel {
+  /**
+   * @minLength 1
+   * @maxLength 128
+   */
+  externalId: string;
+  /**
+   * @minLength 1
+   * @maxLength 256
+   */
+  title: string;
+  /**
+   * @minLength 1
+   * @maxLength 1000000
+   */
+  content: string;
+  /** Challenge category */
+  category?: ChallengeCategory;
+  type?: ChallengeType;
+  /** @maxItems 100 */
+  hints?: string[] | null;
+  isEnabled?: boolean;
+  /** @format uint64 */
+  deadlineUtc?: number | null;
+  /**
+   * @format int32
+   * @min 0
+   * @max 10000
+   */
+  submissionLimit?: number;
+  /**
+   * @format int32
+   * @min 1
+   * @max 1000000
+   */
+  originalScore?: number;
+  /**
+   * @format double
+   * @min 0
+   * @max 1
+   */
+  minScoreRate?: number;
+  /**
+   * @format double
+   * @min 0.01
+   * @max 1000000
+   */
+  difficulty?: number;
+  disableBloodBonus?: boolean;
+  /** @maxLength 120 */
+  flagTemplate?: string | null;
+  environment?: EnvironmentType | null;
+  /** @maxLength 512 */
+  containerImage?: string | null;
+  /**
+   * @format int32
+   * @min 1
+   * @max 65535
+   */
+  exposePort?: number | null;
+  /** @format int32 */
+  imageTemplateId?: number | null;
+  /**
+   * @format int32
+   * @min 1
+   * @max 1024
+   */
+  cpuCount?: number;
+  /**
+   * @format int32
+   * @min 32
+   * @max 1048576
+   */
+  memoryLimit?: number;
+  /**
+   * @format int32
+   * @min 0
+   * @max 1048576
+   */
+  storageLimit?: number;
+  /** Container network mode */
+  networkMode?: NetworkMode;
+  enableTrafficCapture?: boolean;
+  /** @maxLength 256 */
+  fileName?: string | null;
+  /** @maxItems 100 */
+  flags: OpenChallengeFlagModel[];
+  attachment?: OpenChallengeAttachmentModel | null;
+}
+
+export interface OpenChallengeFlagModel {
+  /**
+   * @minLength 1
+   * @maxLength 127
+   */
+  flag: string;
+  /**
+   * @format int32
+   * @min 0
+   * @max 10000
+   */
+  orderIndex?: number;
+  /** @maxLength 512 */
+  description?: string | null;
+  /** Flag score mode */
+  scoreMode?: FlagScoreMode;
+  /**
+   * @format int32
+   * @min 0
+   * @max 1000000
+   */
+  fixedScore?: number;
+  /**
+   * @format int32
+   * @min 0
+   * @max 100000
+   */
+  maxAttempts?: number;
+  /** @maxLength 128 */
+  attachmentHash?: string | null;
+  /** Answer type for challenge submission */
+  answerType?: AnswerType;
+  /** @maxLength 64 */
+  customName?: string | null;
+  attachment?: OpenChallengeAttachmentModel | null;
+}
+
+export interface OpenChallengeAttachmentModel {
+  /**
+   * @minLength 1
+   * @maxLength 2048
+   */
+  remoteUrl: string;
+}
+
+export interface OpenChallengeBatchImportModel {
+  /**
+   * @maxItems 100
+   * @minItems 1
+   */
+  items: OpenChallengeImportModel[];
+}
+
+export interface OpenChallengeBatchDeleteModel {
+  /**
+   * @maxItems 100
+   * @minItems 1
+   */
+  challengeIds: number[];
+}
+
+export interface AssetDescriptor {
+  hash?: string;
+  name?: string;
+  /** @format int64 */
+  size?: number;
+  remoteUrl?: string;
+}
+
+export interface BootstrapProfileCreateModel {
+  name?: string;
+  description?: string | null;
+}
+
+export interface BootstrapProfileCursorPage {
+  items?: BootstrapProfileModel[];
+  nextCursor?: string | null;
+}
+
+export interface BootstrapProfileModel {
+  /** @format guid */
+  id?: string;
+  name?: string;
+  description?: string | null;
+  status?: BootstrapProfileStatus;
+  /** @format int32 */
+  latestVersion?: number | null;
+  /** @format uint64 */
+  createdAt?: number;
+  /** @format uint64 */
+  updatedAt?: number | null;
+}
+
+export interface DockerImageReferenceImportModel {
+  /**
+   * @minLength 1
+   * @maxLength 256
+   */
+  name: string;
+  /**
+   * @minLength 1
+   * @maxLength 512
+   */
+  registryUrl: string;
+  osType?: OSType;
+  /** @maxLength 128 */
+  expectedDigest?: string | null;
+}
+
+export interface OpenImageTemplateModel {
+  /** @format int32 */
+  id?: number;
+  name?: string;
+  osType?: OSType;
+  imageType?: ImageType;
+  status?: ImageStatus;
+  registryUrl?: string | null;
+  /** @format int64 */
+  fileSize?: number;
+  description?: string | null;
+  errorMessage?: string | null;
+  imageHash?: string | null;
+  vmArtifactStatus?: VmArtifactStatus;
+  vmRuntimeMode?: VmRuntimeMode;
+  vmNetworkMode?: VmNetworkMode;
+  /** @format uint64 */
+  uploadedAt?: number;
+}
+
+export interface ImageTemplateCertificationRequest {
+  capabilities?: string[];
+  evidenceDigest?: string | null;
+  probeKind?: string;
 }
 
 import { apiLanguage } from "@Utils/I18n";
@@ -5869,45 +8460,401 @@ import useSWR, { MutatorOptions, SWRConfiguration, mutate } from "swr";
  * @title YINYU CTF Platform API
  * @version v1
  *
- * YINYU CTF Platform API Document
+ * YINYU CTF Platform internal API document
  */
 export class Api<
   SecurityDataType extends unknown,
 > extends HttpClient<SecurityDataType> {
-  openTeamLabRuntimes = {
+  internalTeamLabCaptureUpload = {
     /**
      * No description
      *
-     * @tags OpenTeamLabRuntimes
-     * @name OpenTeamLabRuntimesCreate
-     * @request POST:/api/open/v1/teamlab/runtimes
+     * @tags InternalTeamLabCaptureUpload
+     * @name InternalTeamLabCaptureUploadUpload
+     * @request PUT:/api/internal/teamlab/captures/{captureId}/segments/{segmentId}
      */
-    openTeamLabRuntimesCreate: (
-      data: CreateTeamLabRuntimeModel,
+    internalTeamLabCaptureUploadUpload: (
+      captureId: string,
+      segmentId: string,
       params: RequestParams = {},
     ) =>
       this.request<Blob, any>({
-        path: `/api/open/v1/teamlab/runtimes`,
+        path: `/api/internal/teamlab/captures/${captureId}/segments/${segmentId}`,
+        method: "PUT",
+        ...params,
+      }),
+  };
+  teamLabAdminCapabilityResources = {
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminCapabilityResources
+     * @name TeamLabAdminCapabilityResourcesArchiveConnector
+     * @request POST:/api/admin/teamlab/connectors/{connectorId}/archive
+     */
+    teamLabAdminCapabilityResourcesArchiveConnector: (
+      connectorId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, any>({
+        path: `/api/admin/teamlab/connectors/${connectorId}/archive`,
         method: "POST",
-        body: data,
-        type: ContentType.Json,
         ...params,
       }),
 
     /**
      * No description
      *
-     * @tags OpenTeamLabRuntimes
-     * @name OpenTeamLabRuntimesCreateAccessGrant
-     * @request POST:/api/open/v1/teamlab/runtimes/{runtimeId}/access-grants
+     * @tags TeamLabAdminCapabilityResources
+     * @name TeamLabAdminCapabilityResourcesArchiveDevicePackage
+     * @request POST:/api/admin/teamlab/device-packages/{packageId}/archive
      */
-    openTeamLabRuntimesCreateAccessGrant: (
-      runtimeId: string,
-      data: TeamLabAccessGrantCreateModel,
+    teamLabAdminCapabilityResourcesArchiveDevicePackage: (
+      packageId: string,
       params: RequestParams = {},
     ) =>
-      this.request<TeamLabAccessGrantModel, any>({
-        path: `/api/open/v1/teamlab/runtimes/${runtimeId}/access-grants`,
+      this.request<void, any>({
+        path: `/api/admin/teamlab/device-packages/${packageId}/archive`,
+        method: "POST",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminCapabilityResources
+     * @name TeamLabAdminCapabilityResourcesDisableDevicePackage
+     * @request POST:/api/admin/teamlab/device-packages/{packageId}/disable
+     */
+    teamLabAdminCapabilityResourcesDisableDevicePackage: (
+      packageId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabDevicePackageModel, any>({
+        path: `/api/admin/teamlab/device-packages/${packageId}/disable`,
+        method: "POST",
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminCapabilityResources
+     * @name TeamLabAdminCapabilityResourcesEnableDevicePackage
+     * @request POST:/api/admin/teamlab/device-packages/{packageId}/enable
+     */
+    teamLabAdminCapabilityResourcesEnableDevicePackage: (
+      packageId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabDevicePackageModel, any>({
+        path: `/api/admin/teamlab/device-packages/${packageId}/enable`,
+        method: "POST",
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminCapabilityResources
+     * @name TeamLabAdminCapabilityResourcesGetDevicePackage
+     * @request GET:/api/admin/teamlab/device-packages/{packageId}
+     */
+    teamLabAdminCapabilityResourcesGetDevicePackage: (
+      packageId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabDevicePackageModel, any>({
+        path: `/api/admin/teamlab/device-packages/${packageId}`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminCapabilityResources
+     * @name TeamLabAdminCapabilityResourcesGetDevicePackage
+     * @request GET:/api/admin/teamlab/device-packages/{packageId}
+     */
+    useTeamLabAdminCapabilityResourcesGetDevicePackage: (
+      packageId: string,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<TeamLabDevicePackageModel, any>(
+        doFetch ? `/api/admin/teamlab/device-packages/${packageId}` : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminCapabilityResources
+     * @name TeamLabAdminCapabilityResourcesGetDevicePackage
+     * @request GET:/api/admin/teamlab/device-packages/{packageId}
+     */
+    mutateTeamLabAdminCapabilityResourcesGetDevicePackage: (
+      packageId: string,
+      data?: TeamLabDevicePackageModel | Promise<TeamLabDevicePackageModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<TeamLabDevicePackageModel>(
+        `/api/admin/teamlab/device-packages/${packageId}`,
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminCapabilityResources
+     * @name TeamLabAdminCapabilityResourcesListConnectors
+     * @request GET:/api/admin/teamlab/connectors
+     */
+    teamLabAdminCapabilityResourcesListConnectors: (
+      query?: {
+        /** @format guid */
+        scopeId?: string | null;
+        /**
+         * @format int32
+         * @default 50
+         */
+        limit?: number;
+        after?: string | null;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabConnectorPageModel, any>({
+        path: `/api/admin/teamlab/connectors`,
+        method: "GET",
+        query: query,
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminCapabilityResources
+     * @name TeamLabAdminCapabilityResourcesListConnectors
+     * @request GET:/api/admin/teamlab/connectors
+     */
+    useTeamLabAdminCapabilityResourcesListConnectors: (
+      query?: {
+        /** @format guid */
+        scopeId?: string | null;
+        /**
+         * @format int32
+         * @default 50
+         */
+        limit?: number;
+        after?: string | null;
+      },
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<TeamLabConnectorPageModel, any>(
+        doFetch ? [`/api/admin/teamlab/connectors`, query] : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminCapabilityResources
+     * @name TeamLabAdminCapabilityResourcesListConnectors
+     * @request GET:/api/admin/teamlab/connectors
+     */
+    mutateTeamLabAdminCapabilityResourcesListConnectors: (
+      query?: {
+        /** @format guid */
+        scopeId?: string | null;
+        /**
+         * @format int32
+         * @default 50
+         */
+        limit?: number;
+        after?: string | null;
+      },
+      data?: TeamLabConnectorPageModel | Promise<TeamLabConnectorPageModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<TeamLabConnectorPageModel>(
+        [`/api/admin/teamlab/connectors`, query],
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminCapabilityResources
+     * @name TeamLabAdminCapabilityResourcesListDevicePackages
+     * @request GET:/api/admin/teamlab/device-packages
+     */
+    teamLabAdminCapabilityResourcesListDevicePackages: (
+      query?: {
+        name?: string | null;
+        /**
+         * @format int32
+         * @default 50
+         */
+        limit?: number;
+        after?: string | null;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabDevicePackagePageModel, any>({
+        path: `/api/admin/teamlab/device-packages`,
+        method: "GET",
+        query: query,
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminCapabilityResources
+     * @name TeamLabAdminCapabilityResourcesListDevicePackages
+     * @request GET:/api/admin/teamlab/device-packages
+     */
+    useTeamLabAdminCapabilityResourcesListDevicePackages: (
+      query?: {
+        name?: string | null;
+        /**
+         * @format int32
+         * @default 50
+         */
+        limit?: number;
+        after?: string | null;
+      },
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<TeamLabDevicePackagePageModel, any>(
+        doFetch ? [`/api/admin/teamlab/device-packages`, query] : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminCapabilityResources
+     * @name TeamLabAdminCapabilityResourcesListDevicePackages
+     * @request GET:/api/admin/teamlab/device-packages
+     */
+    mutateTeamLabAdminCapabilityResourcesListDevicePackages: (
+      query?: {
+        name?: string | null;
+        /**
+         * @format int32
+         * @default 50
+         */
+        limit?: number;
+        after?: string | null;
+      },
+      data?:
+        | TeamLabDevicePackagePageModel
+        | Promise<TeamLabDevicePackagePageModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<TeamLabDevicePackagePageModel>(
+        [`/api/admin/teamlab/device-packages`, query],
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminCapabilityResources
+     * @name TeamLabAdminCapabilityResourcesListNodeCache
+     * @request GET:/api/admin/teamlab/resource-pools/node-cache
+     */
+    teamLabAdminCapabilityResourcesListNodeCache: (
+      query?: {
+        /**
+         * @format int32
+         * @default 50
+         */
+        limit?: number;
+        after?: string | null;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabNodeCachePageModel, any>({
+        path: `/api/admin/teamlab/resource-pools/node-cache`,
+        method: "GET",
+        query: query,
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminCapabilityResources
+     * @name TeamLabAdminCapabilityResourcesListNodeCache
+     * @request GET:/api/admin/teamlab/resource-pools/node-cache
+     */
+    useTeamLabAdminCapabilityResourcesListNodeCache: (
+      query?: {
+        /**
+         * @format int32
+         * @default 50
+         */
+        limit?: number;
+        after?: string | null;
+      },
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<TeamLabNodeCachePageModel, any>(
+        doFetch
+          ? [`/api/admin/teamlab/resource-pools/node-cache`, query]
+          : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminCapabilityResources
+     * @name TeamLabAdminCapabilityResourcesListNodeCache
+     * @request GET:/api/admin/teamlab/resource-pools/node-cache
+     */
+    mutateTeamLabAdminCapabilityResourcesListNodeCache: (
+      query?: {
+        /**
+         * @format int32
+         * @default 50
+         */
+        limit?: number;
+        after?: string | null;
+      },
+      data?: TeamLabNodeCachePageModel | Promise<TeamLabNodeCachePageModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<TeamLabNodeCachePageModel>(
+        [`/api/admin/teamlab/resource-pools/node-cache`, query],
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminCapabilityResources
+     * @name TeamLabAdminCapabilityResourcesRegisterConnector
+     * @request POST:/api/admin/teamlab/connectors
+     */
+    teamLabAdminCapabilityResourcesRegisterConnector: (
+      data: RegisterTeamLabConnectorModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabConnectorModel, any>({
+        path: `/api/admin/teamlab/connectors`,
         method: "POST",
         body: data,
         type: ContentType.Json,
@@ -5918,16 +8865,206 @@ export class Api<
     /**
      * No description
      *
-     * @tags OpenTeamLabRuntimes
-     * @name OpenTeamLabRuntimesDestroy
-     * @request DELETE:/api/open/v1/teamlab/runtimes/{runtimeId}
+     * @tags TeamLabAdminCapabilityResources
+     * @name TeamLabAdminCapabilityResourcesRegisterDevicePackage
+     * @request POST:/api/admin/teamlab/device-packages
      */
-    openTeamLabRuntimesDestroy: (
+    teamLabAdminCapabilityResourcesRegisterDevicePackage: (
+      data: RegisterTeamLabDevicePackageModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabDevicePackageModel, any>({
+        path: `/api/admin/teamlab/device-packages`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminCapabilityResources
+     * @name TeamLabAdminCapabilityResourcesResourcePoolSnapshot
+     * @request GET:/api/admin/teamlab/resource-pools
+     */
+    teamLabAdminCapabilityResourcesResourcePoolSnapshot: (
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabResourcePoolSnapshotModel, any>({
+        path: `/api/admin/teamlab/resource-pools`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminCapabilityResources
+     * @name TeamLabAdminCapabilityResourcesResourcePoolSnapshot
+     * @request GET:/api/admin/teamlab/resource-pools
+     */
+    useTeamLabAdminCapabilityResourcesResourcePoolSnapshot: (
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<TeamLabResourcePoolSnapshotModel, any>(
+        doFetch ? `/api/admin/teamlab/resource-pools` : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminCapabilityResources
+     * @name TeamLabAdminCapabilityResourcesResourcePoolSnapshot
+     * @request GET:/api/admin/teamlab/resource-pools
+     */
+    mutateTeamLabAdminCapabilityResourcesResourcePoolSnapshot: (
+      data?:
+        | TeamLabResourcePoolSnapshotModel
+        | Promise<TeamLabResourcePoolSnapshotModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<TeamLabResourcePoolSnapshotModel>(
+        `/api/admin/teamlab/resource-pools`,
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminCapabilityResources
+     * @name TeamLabAdminCapabilityResourcesRevokeConnectorLease
+     * @request POST:/api/admin/teamlab/connectors/{connectorId}/leases/revoke
+     */
+    teamLabAdminCapabilityResourcesRevokeConnectorLease: (
+      connectorId: string,
+      data: ReleaseTeamLabConnectorLeaseModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabConnectorLeaseModel, any>({
+        path: `/api/admin/teamlab/connectors/${connectorId}/leases/revoke`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminCapabilityResources
+     * @name TeamLabAdminCapabilityResourcesSetConnectorHealth
+     * @request POST:/api/admin/teamlab/connectors/{connectorId}/health
+     */
+    teamLabAdminCapabilityResourcesSetConnectorHealth: (
+      connectorId: string,
+      data: SetTeamLabConnectorHealthModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabConnectorModel, any>({
+        path: `/api/admin/teamlab/connectors/${connectorId}/health`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+  };
+  teamLabAdminRemoteAccess = {
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRemoteAccess
+     * @name TeamLabAdminRemoteAccessConnect
+     * @request GET:/api/admin/teamlab/remote-sessions/{sessionId}/connect
+     */
+    teamLabAdminRemoteAccessConnect: (
+      sessionId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabRemoteConnectModel, any>({
+        path: `/api/admin/teamlab/remote-sessions/${sessionId}/connect`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRemoteAccess
+     * @name TeamLabAdminRemoteAccessConnect
+     * @request GET:/api/admin/teamlab/remote-sessions/{sessionId}/connect
+     */
+    useTeamLabAdminRemoteAccessConnect: (
+      sessionId: string,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<TeamLabRemoteConnectModel, any>(
+        doFetch
+          ? `/api/admin/teamlab/remote-sessions/${sessionId}/connect`
+          : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRemoteAccess
+     * @name TeamLabAdminRemoteAccessConnect
+     * @request GET:/api/admin/teamlab/remote-sessions/{sessionId}/connect
+     */
+    mutateTeamLabAdminRemoteAccessConnect: (
+      sessionId: string,
+      data?: TeamLabRemoteConnectModel | Promise<TeamLabRemoteConnectModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<TeamLabRemoteConnectModel>(
+        `/api/admin/teamlab/remote-sessions/${sessionId}/connect`,
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRemoteAccess
+     * @name TeamLabAdminRemoteAccessCreate
+     * @request POST:/api/admin/teamlab/runtimes/{runtimeId}/assets/{assetId}/remote-sessions
+     */
+    teamLabAdminRemoteAccessCreate: (
       runtimeId: string,
+      assetId: number,
+      data: CreateTeamLabRemoteSessionModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabRemoteSessionModel, any>({
+        path: `/api/admin/teamlab/runtimes/${runtimeId}/assets/${assetId}/remote-sessions`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRemoteAccess
+     * @name TeamLabAdminRemoteAccessEnd
+     * @request DELETE:/api/admin/teamlab/remote-sessions/{sessionId}
+     */
+    teamLabAdminRemoteAccessEnd: (
+      sessionId: string,
       params: RequestParams = {},
     ) =>
       this.request<Blob, any>({
-        path: `/api/open/v1/teamlab/runtimes/${runtimeId}`,
+        path: `/api/admin/teamlab/remote-sessions/${sessionId}`,
         method: "DELETE",
         ...params,
       }),
@@ -5935,11 +9072,458 @@ export class Api<
     /**
      * No description
      *
-     * @tags OpenTeamLabRuntimes
-     * @name OpenTeamLabRuntimesDownloadAccessConfiguration
-     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/access-grants/{grantId}/download
+     * @tags TeamLabAdminRemoteAccess
+     * @name TeamLabAdminRemoteAccessGet
+     * @request GET:/api/admin/teamlab/remote-sessions/{sessionId}
      */
-    openTeamLabRuntimesDownloadAccessConfiguration: (
+    teamLabAdminRemoteAccessGet: (
+      sessionId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabRemoteSessionModel, any>({
+        path: `/api/admin/teamlab/remote-sessions/${sessionId}`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRemoteAccess
+     * @name TeamLabAdminRemoteAccessGet
+     * @request GET:/api/admin/teamlab/remote-sessions/{sessionId}
+     */
+    useTeamLabAdminRemoteAccessGet: (
+      sessionId: string,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<TeamLabRemoteSessionModel, any>(
+        doFetch ? `/api/admin/teamlab/remote-sessions/${sessionId}` : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRemoteAccess
+     * @name TeamLabAdminRemoteAccessGet
+     * @request GET:/api/admin/teamlab/remote-sessions/{sessionId}
+     */
+    mutateTeamLabAdminRemoteAccessGet: (
+      sessionId: string,
+      data?: TeamLabRemoteSessionModel | Promise<TeamLabRemoteSessionModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<TeamLabRemoteSessionModel>(
+        `/api/admin/teamlab/remote-sessions/${sessionId}`,
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRemoteAccess
+     * @name TeamLabAdminRemoteAccessGetAvailability
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/assets/{assetId}/remote-access
+     */
+    teamLabAdminRemoteAccessGetAvailability: (
+      runtimeId: string,
+      assetId: number,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabRemoteAccessAvailabilityModel, any>({
+        path: `/api/admin/teamlab/runtimes/${runtimeId}/assets/${assetId}/remote-access`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRemoteAccess
+     * @name TeamLabAdminRemoteAccessGetAvailability
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/assets/{assetId}/remote-access
+     */
+    useTeamLabAdminRemoteAccessGetAvailability: (
+      runtimeId: string,
+      assetId: number,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<TeamLabRemoteAccessAvailabilityModel, any>(
+        doFetch
+          ? `/api/admin/teamlab/runtimes/${runtimeId}/assets/${assetId}/remote-access`
+          : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRemoteAccess
+     * @name TeamLabAdminRemoteAccessGetAvailability
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/assets/{assetId}/remote-access
+     */
+    mutateTeamLabAdminRemoteAccessGetAvailability: (
+      runtimeId: string,
+      assetId: number,
+      data?:
+        | TeamLabRemoteAccessAvailabilityModel
+        | Promise<TeamLabRemoteAccessAvailabilityModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<TeamLabRemoteAccessAvailabilityModel>(
+        `/api/admin/teamlab/runtimes/${runtimeId}/assets/${assetId}/remote-access`,
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRemoteAccess
+     * @name TeamLabAdminRemoteAccessGetAvailabilityBatch
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/remote-access
+     */
+    teamLabAdminRemoteAccessGetAvailabilityBatch: (
+      runtimeId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabRemoteAccessAvailabilityModel[], any>({
+        path: `/api/admin/teamlab/runtimes/${runtimeId}/remote-access`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRemoteAccess
+     * @name TeamLabAdminRemoteAccessGetAvailabilityBatch
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/remote-access
+     */
+    useTeamLabAdminRemoteAccessGetAvailabilityBatch: (
+      runtimeId: string,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<TeamLabRemoteAccessAvailabilityModel[], any>(
+        doFetch
+          ? `/api/admin/teamlab/runtimes/${runtimeId}/remote-access`
+          : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRemoteAccess
+     * @name TeamLabAdminRemoteAccessGetAvailabilityBatch
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/remote-access
+     */
+    mutateTeamLabAdminRemoteAccessGetAvailabilityBatch: (
+      runtimeId: string,
+      data?:
+        | TeamLabRemoteAccessAvailabilityModel[]
+        | Promise<TeamLabRemoteAccessAvailabilityModel[]>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<TeamLabRemoteAccessAvailabilityModel[]>(
+        `/api/admin/teamlab/runtimes/${runtimeId}/remote-access`,
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRemoteAccess
+     * @name TeamLabAdminRemoteAccessList
+     * @request GET:/api/admin/teamlab/remote-sessions
+     */
+    teamLabAdminRemoteAccessList: (
+      query?: {
+        /** @format guid */
+        runtimeId?: string | null;
+        /** @format guid */
+        workerNodeId?: string | null;
+        /** @format guid */
+        requestedByUserId?: string | null;
+        status?: TeamLabRemoteSessionStatus | null;
+        /** @format int64 */
+        after?: number | null;
+        /**
+         * @format int32
+         * @default 50
+         */
+        limit?: number;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabRemoteSessionPage, any>({
+        path: `/api/admin/teamlab/remote-sessions`,
+        method: "GET",
+        query: query,
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRemoteAccess
+     * @name TeamLabAdminRemoteAccessList
+     * @request GET:/api/admin/teamlab/remote-sessions
+     */
+    useTeamLabAdminRemoteAccessList: (
+      query?: {
+        /** @format guid */
+        runtimeId?: string | null;
+        /** @format guid */
+        workerNodeId?: string | null;
+        /** @format guid */
+        requestedByUserId?: string | null;
+        status?: TeamLabRemoteSessionStatus | null;
+        /** @format int64 */
+        after?: number | null;
+        /**
+         * @format int32
+         * @default 50
+         */
+        limit?: number;
+      },
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<TeamLabRemoteSessionPage, any>(
+        doFetch ? [`/api/admin/teamlab/remote-sessions`, query] : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRemoteAccess
+     * @name TeamLabAdminRemoteAccessList
+     * @request GET:/api/admin/teamlab/remote-sessions
+     */
+    mutateTeamLabAdminRemoteAccessList: (
+      query?: {
+        /** @format guid */
+        runtimeId?: string | null;
+        /** @format guid */
+        workerNodeId?: string | null;
+        /** @format guid */
+        requestedByUserId?: string | null;
+        status?: TeamLabRemoteSessionStatus | null;
+        /** @format int64 */
+        after?: number | null;
+        /**
+         * @format int32
+         * @default 50
+         */
+        limit?: number;
+      },
+      data?: TeamLabRemoteSessionPage | Promise<TeamLabRemoteSessionPage>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<TeamLabRemoteSessionPage>(
+        [`/api/admin/teamlab/remote-sessions`, query],
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRemoteAccess
+     * @name TeamLabAdminRemoteAccessTerminal
+     * @request GET:/api/admin/teamlab/remote-sessions/{sessionId}/terminal
+     */
+    teamLabAdminRemoteAccessTerminal: (
+      sessionId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, any>({
+        path: `/api/admin/teamlab/remote-sessions/${sessionId}/terminal`,
+        method: "GET",
+        ...params,
+      }),
+  };
+  teamLabAdminRuntime = {
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimeApplyLinkPolicy
+     * @request POST:/api/admin/teamlab/runtimes/{runtimeId}/link-policies
+     */
+    teamLabAdminRuntimeApplyLinkPolicy: (
+      runtimeId: string,
+      data: ApplyTeamLabLinkPolicyModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<Blob, any>({
+        path: `/api/admin/teamlab/runtimes/${runtimeId}/link-policies`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimeCreateAccessGrant
+     * @request POST:/api/admin/teamlab/runtimes/{runtimeId}/access-grants
+     */
+    teamLabAdminRuntimeCreateAccessGrant: (
+      runtimeId: string,
+      data: TeamLabAccessGrantCreateModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabAccessGrantModel, any>({
+        path: `/api/admin/teamlab/runtimes/${runtimeId}/access-grants`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimeCreateTrial
+     * @request POST:/api/admin/teamlab/runtimes/trials
+     */
+    teamLabAdminRuntimeCreateTrial: (
+      data: CreateTeamLabTrialRuntimeModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabRuntimeProjectionModel, any>({
+        path: `/api/admin/teamlab/runtimes/trials`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimeDestroy
+     * @request DELETE:/api/admin/teamlab/runtimes/{runtimeId}
+     */
+    teamLabAdminRuntimeDestroy: (
+      runtimeId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabRuntimeProjectionModel, any>({
+        path: `/api/admin/teamlab/runtimes/${runtimeId}`,
+        method: "DELETE",
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimeDiagnostics
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/assets/{assetId}/diagnostics
+     */
+    teamLabAdminRuntimeDiagnostics: (
+      runtimeId: string,
+      assetId: number,
+      query?: {
+        /**
+         * @format int32
+         * @default 200
+         */
+        tail?: number;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabContainerDiagnostics, any>({
+        path: `/api/admin/teamlab/runtimes/${runtimeId}/assets/${assetId}/diagnostics`,
+        method: "GET",
+        query: query,
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimeDiagnostics
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/assets/{assetId}/diagnostics
+     */
+    useTeamLabAdminRuntimeDiagnostics: (
+      runtimeId: string,
+      assetId: number,
+      query?: {
+        /**
+         * @format int32
+         * @default 200
+         */
+        tail?: number;
+      },
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<TeamLabContainerDiagnostics, any>(
+        doFetch
+          ? [
+              `/api/admin/teamlab/runtimes/${runtimeId}/assets/${assetId}/diagnostics`,
+              query,
+            ]
+          : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimeDiagnostics
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/assets/{assetId}/diagnostics
+     */
+    mutateTeamLabAdminRuntimeDiagnostics: (
+      runtimeId: string,
+      assetId: number,
+      query?: {
+        /**
+         * @format int32
+         * @default 200
+         */
+        tail?: number;
+      },
+      data?: TeamLabContainerDiagnostics | Promise<TeamLabContainerDiagnostics>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<TeamLabContainerDiagnostics>(
+        [
+          `/api/admin/teamlab/runtimes/${runtimeId}/assets/${assetId}/diagnostics`,
+          query,
+        ],
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimeDownloadAccessGrant
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/access-grants/{grantId}/download
+     */
+    teamLabAdminRuntimeDownloadAccessGrant: (
       runtimeId: string,
       grantId: string,
       query?: {
@@ -5948,7 +9532,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<Blob, any>({
-        path: `/api/open/v1/teamlab/runtimes/${runtimeId}/access-grants/${grantId}/download`,
+        path: `/api/admin/teamlab/runtimes/${runtimeId}/access-grants/${grantId}/download`,
         method: "GET",
         query: query,
         ...params,
@@ -5956,11 +9540,11 @@ export class Api<
     /**
      * No description
      *
-     * @tags OpenTeamLabRuntimes
-     * @name OpenTeamLabRuntimesDownloadAccessConfiguration
-     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/access-grants/{grantId}/download
+     * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimeDownloadAccessGrant
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/access-grants/{grantId}/download
      */
-    useOpenTeamLabRuntimesDownloadAccessConfiguration: (
+    useTeamLabAdminRuntimeDownloadAccessGrant: (
       runtimeId: string,
       grantId: string,
       query?: {
@@ -5972,7 +9556,7 @@ export class Api<
       useSWR<Blob, any>(
         doFetch
           ? [
-              `/api/open/v1/teamlab/runtimes/${runtimeId}/access-grants/${grantId}/download`,
+              `/api/admin/teamlab/runtimes/${runtimeId}/access-grants/${grantId}/download`,
               query,
             ]
           : null,
@@ -5982,11 +9566,11 @@ export class Api<
     /**
      * No description
      *
-     * @tags OpenTeamLabRuntimes
-     * @name OpenTeamLabRuntimesDownloadAccessConfiguration
-     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/access-grants/{grantId}/download
+     * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimeDownloadAccessGrant
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/access-grants/{grantId}/download
      */
-    mutateOpenTeamLabRuntimesDownloadAccessConfiguration: (
+    mutateTeamLabAdminRuntimeDownloadAccessGrant: (
       runtimeId: string,
       grantId: string,
       query?: {
@@ -5997,1195 +9581,13 @@ export class Api<
     ) =>
       mutate<Blob>(
         [
-          `/api/open/v1/teamlab/runtimes/${runtimeId}/access-grants/${grantId}/download`,
+          `/api/admin/teamlab/runtimes/${runtimeId}/access-grants/${grantId}/download`,
           query,
         ],
         data,
         options,
       ),
 
-    /**
-     * No description
-     *
-     * @tags OpenTeamLabRuntimes
-     * @name OpenTeamLabRuntimesEvents
-     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/events
-     */
-    openTeamLabRuntimesEvents: (
-      runtimeId: string,
-      query?: {
-        /**
-         * @format int64
-         * @default 0
-         */
-        after?: number;
-        /**
-         * @format int32
-         * @min 1
-         * @max 200
-         * @default 100
-         */
-        limit?: number;
-      },
-      params: RequestParams = {},
-    ) =>
-      this.request<TeamLabRuntimeEventModel[], any>({
-        path: `/api/open/v1/teamlab/runtimes/${runtimeId}/events`,
-        method: "GET",
-        query: query,
-        format: "json",
-        ...params,
-      }),
-    /**
-     * No description
-     *
-     * @tags OpenTeamLabRuntimes
-     * @name OpenTeamLabRuntimesEvents
-     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/events
-     */
-    useOpenTeamLabRuntimesEvents: (
-      runtimeId: string,
-      query?: {
-        /**
-         * @format int64
-         * @default 0
-         */
-        after?: number;
-        /**
-         * @format int32
-         * @min 1
-         * @max 200
-         * @default 100
-         */
-        limit?: number;
-      },
-      options?: SWRConfiguration,
-      doFetch: boolean = true,
-    ) =>
-      useSWR<TeamLabRuntimeEventModel[], any>(
-        doFetch
-          ? [`/api/open/v1/teamlab/runtimes/${runtimeId}/events`, query]
-          : null,
-        options,
-      ),
-
-    /**
-     * No description
-     *
-     * @tags OpenTeamLabRuntimes
-     * @name OpenTeamLabRuntimesEvents
-     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/events
-     */
-    mutateOpenTeamLabRuntimesEvents: (
-      runtimeId: string,
-      query?: {
-        /**
-         * @format int64
-         * @default 0
-         */
-        after?: number;
-        /**
-         * @format int32
-         * @min 1
-         * @max 200
-         * @default 100
-         */
-        limit?: number;
-      },
-      data?: TeamLabRuntimeEventModel[] | Promise<TeamLabRuntimeEventModel[]>,
-      options?: MutatorOptions,
-    ) =>
-      mutate<TeamLabRuntimeEventModel[]>(
-        [`/api/open/v1/teamlab/runtimes/${runtimeId}/events`, query],
-        data,
-        options,
-      ),
-
-    /**
-     * No description
-     *
-     * @tags OpenTeamLabRuntimes
-     * @name OpenTeamLabRuntimesGet
-     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}
-     */
-    openTeamLabRuntimesGet: (runtimeId: string, params: RequestParams = {}) =>
-      this.request<TeamLabRuntimeProjectionModel, any>({
-        path: `/api/open/v1/teamlab/runtimes/${runtimeId}`,
-        method: "GET",
-        format: "json",
-        ...params,
-      }),
-    /**
-     * No description
-     *
-     * @tags OpenTeamLabRuntimes
-     * @name OpenTeamLabRuntimesGet
-     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}
-     */
-    useOpenTeamLabRuntimesGet: (
-      runtimeId: string,
-      options?: SWRConfiguration,
-      doFetch: boolean = true,
-    ) =>
-      useSWR<TeamLabRuntimeProjectionModel, any>(
-        doFetch ? `/api/open/v1/teamlab/runtimes/${runtimeId}` : null,
-        options,
-      ),
-
-    /**
-     * No description
-     *
-     * @tags OpenTeamLabRuntimes
-     * @name OpenTeamLabRuntimesGet
-     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}
-     */
-    mutateOpenTeamLabRuntimesGet: (
-      runtimeId: string,
-      data?:
-        | TeamLabRuntimeProjectionModel
-        | Promise<TeamLabRuntimeProjectionModel>,
-      options?: MutatorOptions,
-    ) =>
-      mutate<TeamLabRuntimeProjectionModel>(
-        `/api/open/v1/teamlab/runtimes/${runtimeId}`,
-        data,
-        options,
-      ),
-
-    /**
-     * No description
-     *
-     * @tags OpenTeamLabRuntimes
-     * @name OpenTeamLabRuntimesReset
-     * @request POST:/api/open/v1/teamlab/runtimes/{runtimeId}/reset
-     */
-    openTeamLabRuntimesReset: (
-      runtimeId: string,
-      data: ResetTeamLabRuntimeModel,
-      params: RequestParams = {},
-    ) =>
-      this.request<Blob, any>({
-        path: `/api/open/v1/teamlab/runtimes/${runtimeId}/reset`,
-        method: "POST",
-        body: data,
-        type: ContentType.Json,
-        ...params,
-      }),
-
-    /**
-     * No description
-     *
-     * @tags OpenTeamLabRuntimes
-     * @name OpenTeamLabRuntimesRevokeAccessGrant
-     * @request DELETE:/api/open/v1/teamlab/runtimes/{runtimeId}/access-grants/{grantId}
-     */
-    openTeamLabRuntimesRevokeAccessGrant: (
-      runtimeId: string,
-      grantId: string,
-      params: RequestParams = {},
-    ) =>
-      this.request<Blob, any>({
-        path: `/api/open/v1/teamlab/runtimes/${runtimeId}/access-grants/${grantId}`,
-        method: "DELETE",
-        ...params,
-      }),
-  };
-  openTeamLabTopologies = {
-    /**
-     * No description
-     *
-     * @tags OpenTeamLabTopologies
-     * @name OpenTeamLabTopologiesCapabilities
-     * @request GET:/api/open/v1/teamlab/capabilities
-     */
-    openTeamLabTopologiesCapabilities: (params: RequestParams = {}) =>
-      this.request<TeamLabCapabilitiesModel, any>({
-        path: `/api/open/v1/teamlab/capabilities`,
-        method: "GET",
-        format: "json",
-        ...params,
-      }),
-    /**
-     * No description
-     *
-     * @tags OpenTeamLabTopologies
-     * @name OpenTeamLabTopologiesCapabilities
-     * @request GET:/api/open/v1/teamlab/capabilities
-     */
-    useOpenTeamLabTopologiesCapabilities: (
-      options?: SWRConfiguration,
-      doFetch: boolean = true,
-    ) =>
-      useSWR<TeamLabCapabilitiesModel, any>(
-        doFetch ? `/api/open/v1/teamlab/capabilities` : null,
-        options,
-      ),
-
-    /**
-     * No description
-     *
-     * @tags OpenTeamLabTopologies
-     * @name OpenTeamLabTopologiesCapabilities
-     * @request GET:/api/open/v1/teamlab/capabilities
-     */
-    mutateOpenTeamLabTopologiesCapabilities: (
-      data?: TeamLabCapabilitiesModel | Promise<TeamLabCapabilitiesModel>,
-      options?: MutatorOptions,
-    ) =>
-      mutate<TeamLabCapabilitiesModel>(
-        `/api/open/v1/teamlab/capabilities`,
-        data,
-        options,
-      ),
-
-    /**
-     * No description
-     *
-     * @tags OpenTeamLabTopologies
-     * @name OpenTeamLabTopologiesCreate
-     * @request POST:/api/open/v1/teamlab/topologies
-     */
-    openTeamLabTopologiesCreate: (
-      data: CreateTeamLabTopologyModel,
-      params: RequestParams = {},
-    ) =>
-      this.request<TeamLabTopologyDetailModel, any>({
-        path: `/api/open/v1/teamlab/topologies`,
-        method: "POST",
-        body: data,
-        type: ContentType.Json,
-        format: "json",
-        ...params,
-      }),
-
-    /**
-     * No description
-     *
-     * @tags OpenTeamLabTopologies
-     * @name OpenTeamLabTopologiesDelete
-     * @request DELETE:/api/open/v1/teamlab/topologies/{topologyId}
-     */
-    openTeamLabTopologiesDelete: (
-      topologyId: string,
-      params: RequestParams = {},
-    ) =>
-      this.request<Blob, any>({
-        path: `/api/open/v1/teamlab/topologies/${topologyId}`,
-        method: "DELETE",
-        ...params,
-      }),
-
-    /**
-     * No description
-     *
-     * @tags OpenTeamLabTopologies
-     * @name OpenTeamLabTopologiesGet
-     * @request GET:/api/open/v1/teamlab/topologies/{topologyId}
-     */
-    openTeamLabTopologiesGet: (
-      topologyId: string,
-      params: RequestParams = {},
-    ) =>
-      this.request<TeamLabTopologyDetailModel, any>({
-        path: `/api/open/v1/teamlab/topologies/${topologyId}`,
-        method: "GET",
-        format: "json",
-        ...params,
-      }),
-    /**
-     * No description
-     *
-     * @tags OpenTeamLabTopologies
-     * @name OpenTeamLabTopologiesGet
-     * @request GET:/api/open/v1/teamlab/topologies/{topologyId}
-     */
-    useOpenTeamLabTopologiesGet: (
-      topologyId: string,
-      options?: SWRConfiguration,
-      doFetch: boolean = true,
-    ) =>
-      useSWR<TeamLabTopologyDetailModel, any>(
-        doFetch ? `/api/open/v1/teamlab/topologies/${topologyId}` : null,
-        options,
-      ),
-
-    /**
-     * No description
-     *
-     * @tags OpenTeamLabTopologies
-     * @name OpenTeamLabTopologiesGet
-     * @request GET:/api/open/v1/teamlab/topologies/{topologyId}
-     */
-    mutateOpenTeamLabTopologiesGet: (
-      topologyId: string,
-      data?: TeamLabTopologyDetailModel | Promise<TeamLabTopologyDetailModel>,
-      options?: MutatorOptions,
-    ) =>
-      mutate<TeamLabTopologyDetailModel>(
-        `/api/open/v1/teamlab/topologies/${topologyId}`,
-        data,
-        options,
-      ),
-
-    /**
-     * No description
-     *
-     * @tags OpenTeamLabTopologies
-     * @name OpenTeamLabTopologiesGetRelease
-     * @request GET:/api/open/v1/teamlab/topologies/{topologyId}/releases/{releaseId}
-     */
-    openTeamLabTopologiesGetRelease: (
-      topologyId: string,
-      releaseId: string,
-      params: RequestParams = {},
-    ) =>
-      this.request<TeamLabReleaseModel, any>({
-        path: `/api/open/v1/teamlab/topologies/${topologyId}/releases/${releaseId}`,
-        method: "GET",
-        format: "json",
-        ...params,
-      }),
-    /**
-     * No description
-     *
-     * @tags OpenTeamLabTopologies
-     * @name OpenTeamLabTopologiesGetRelease
-     * @request GET:/api/open/v1/teamlab/topologies/{topologyId}/releases/{releaseId}
-     */
-    useOpenTeamLabTopologiesGetRelease: (
-      topologyId: string,
-      releaseId: string,
-      options?: SWRConfiguration,
-      doFetch: boolean = true,
-    ) =>
-      useSWR<TeamLabReleaseModel, any>(
-        doFetch
-          ? `/api/open/v1/teamlab/topologies/${topologyId}/releases/${releaseId}`
-          : null,
-        options,
-      ),
-
-    /**
-     * No description
-     *
-     * @tags OpenTeamLabTopologies
-     * @name OpenTeamLabTopologiesGetRelease
-     * @request GET:/api/open/v1/teamlab/topologies/{topologyId}/releases/{releaseId}
-     */
-    mutateOpenTeamLabTopologiesGetRelease: (
-      topologyId: string,
-      releaseId: string,
-      data?: TeamLabReleaseModel | Promise<TeamLabReleaseModel>,
-      options?: MutatorOptions,
-    ) =>
-      mutate<TeamLabReleaseModel>(
-        `/api/open/v1/teamlab/topologies/${topologyId}/releases/${releaseId}`,
-        data,
-        options,
-      ),
-
-    /**
-     * No description
-     *
-     * @tags OpenTeamLabTopologies
-     * @name OpenTeamLabTopologiesList
-     * @request GET:/api/open/v1/teamlab/topologies
-     */
-    openTeamLabTopologiesList: (params: RequestParams = {}) =>
-      this.request<TeamLabTopologySummaryModel[], any>({
-        path: `/api/open/v1/teamlab/topologies`,
-        method: "GET",
-        format: "json",
-        ...params,
-      }),
-    /**
-     * No description
-     *
-     * @tags OpenTeamLabTopologies
-     * @name OpenTeamLabTopologiesList
-     * @request GET:/api/open/v1/teamlab/topologies
-     */
-    useOpenTeamLabTopologiesList: (
-      options?: SWRConfiguration,
-      doFetch: boolean = true,
-    ) =>
-      useSWR<TeamLabTopologySummaryModel[], any>(
-        doFetch ? `/api/open/v1/teamlab/topologies` : null,
-        options,
-      ),
-
-    /**
-     * No description
-     *
-     * @tags OpenTeamLabTopologies
-     * @name OpenTeamLabTopologiesList
-     * @request GET:/api/open/v1/teamlab/topologies
-     */
-    mutateOpenTeamLabTopologiesList: (
-      data?:
-        | TeamLabTopologySummaryModel[]
-        | Promise<TeamLabTopologySummaryModel[]>,
-      options?: MutatorOptions,
-    ) =>
-      mutate<TeamLabTopologySummaryModel[]>(
-        `/api/open/v1/teamlab/topologies`,
-        data,
-        options,
-      ),
-
-    /**
-     * No description
-     *
-     * @tags OpenTeamLabTopologies
-     * @name OpenTeamLabTopologiesListReleases
-     * @request GET:/api/open/v1/teamlab/topologies/{topologyId}/releases
-     */
-    openTeamLabTopologiesListReleases: (
-      topologyId: string,
-      params: RequestParams = {},
-    ) =>
-      this.request<TeamLabReleaseModel[], any>({
-        path: `/api/open/v1/teamlab/topologies/${topologyId}/releases`,
-        method: "GET",
-        format: "json",
-        ...params,
-      }),
-    /**
-     * No description
-     *
-     * @tags OpenTeamLabTopologies
-     * @name OpenTeamLabTopologiesListReleases
-     * @request GET:/api/open/v1/teamlab/topologies/{topologyId}/releases
-     */
-    useOpenTeamLabTopologiesListReleases: (
-      topologyId: string,
-      options?: SWRConfiguration,
-      doFetch: boolean = true,
-    ) =>
-      useSWR<TeamLabReleaseModel[], any>(
-        doFetch
-          ? `/api/open/v1/teamlab/topologies/${topologyId}/releases`
-          : null,
-        options,
-      ),
-
-    /**
-     * No description
-     *
-     * @tags OpenTeamLabTopologies
-     * @name OpenTeamLabTopologiesListReleases
-     * @request GET:/api/open/v1/teamlab/topologies/{topologyId}/releases
-     */
-    mutateOpenTeamLabTopologiesListReleases: (
-      topologyId: string,
-      data?: TeamLabReleaseModel[] | Promise<TeamLabReleaseModel[]>,
-      options?: MutatorOptions,
-    ) =>
-      mutate<TeamLabReleaseModel[]>(
-        `/api/open/v1/teamlab/topologies/${topologyId}/releases`,
-        data,
-        options,
-      ),
-
-    /**
-     * No description
-     *
-     * @tags OpenTeamLabTopologies
-     * @name OpenTeamLabTopologiesPlan
-     * @request POST:/api/open/v1/teamlab/topologies/{topologyId}/releases/{releaseId}/plan
-     */
-    openTeamLabTopologiesPlan: (
-      topologyId: string,
-      releaseId: string,
-      params: RequestParams = {},
-    ) =>
-      this.request<TeamLabPlanModel, any>({
-        path: `/api/open/v1/teamlab/topologies/${topologyId}/releases/${releaseId}/plan`,
-        method: "POST",
-        format: "json",
-        ...params,
-      }),
-
-    /**
-     * No description
-     *
-     * @tags OpenTeamLabTopologies
-     * @name OpenTeamLabTopologiesPublish
-     * @request POST:/api/open/v1/teamlab/topologies/{topologyId}/releases
-     */
-    openTeamLabTopologiesPublish: (
-      topologyId: string,
-      data: PublishTeamLabTopologyModel,
-      params: RequestParams = {},
-    ) =>
-      this.request<TeamLabReleaseModel, any>({
-        path: `/api/open/v1/teamlab/topologies/${topologyId}/releases`,
-        method: "POST",
-        body: data,
-        type: ContentType.Json,
-        format: "json",
-        ...params,
-      }),
-
-    /**
-     * No description
-     *
-     * @tags OpenTeamLabTopologies
-     * @name OpenTeamLabTopologiesUpdate
-     * @request PUT:/api/open/v1/teamlab/topologies/{topologyId}
-     */
-    openTeamLabTopologiesUpdate: (
-      topologyId: string,
-      data: UpdateTeamLabTopologyModel,
-      params: RequestParams = {},
-    ) =>
-      this.request<TeamLabTopologyDetailModel, any>({
-        path: `/api/open/v1/teamlab/topologies/${topologyId}`,
-        method: "PUT",
-        body: data,
-        type: ContentType.Json,
-        format: "json",
-        ...params,
-      }),
-
-    /**
-     * No description
-     *
-     * @tags OpenTeamLabTopologies
-     * @name OpenTeamLabTopologiesValidate
-     * @request POST:/api/open/v1/teamlab/topologies/{topologyId}/validate
-     */
-    openTeamLabTopologiesValidate: (
-      topologyId: string,
-      params: RequestParams = {},
-    ) =>
-      this.request<TeamLabValidationResultModel, any>({
-        path: `/api/open/v1/teamlab/topologies/${topologyId}/validate`,
-        method: "POST",
-        format: "json",
-        ...params,
-      }),
-  };
-  openTeamLabTraffic = {
-    /**
-     * No description
-     *
-     * @tags OpenTeamLabTraffic
-     * @name OpenTeamLabTrafficDownloadCapture
-     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/captures/{captureId}/download
-     */
-    openTeamLabTrafficDownloadCapture: (
-      runtimeId: string,
-      captureId: string,
-      params: RequestParams = {},
-    ) =>
-      this.request<Blob, any>({
-        path: `/api/open/v1/teamlab/runtimes/${runtimeId}/captures/${captureId}/download`,
-        method: "GET",
-        ...params,
-      }),
-    /**
-     * No description
-     *
-     * @tags OpenTeamLabTraffic
-     * @name OpenTeamLabTrafficDownloadCapture
-     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/captures/{captureId}/download
-     */
-    useOpenTeamLabTrafficDownloadCapture: (
-      runtimeId: string,
-      captureId: string,
-      options?: SWRConfiguration,
-      doFetch: boolean = true,
-    ) =>
-      useSWR<Blob, any>(
-        doFetch
-          ? `/api/open/v1/teamlab/runtimes/${runtimeId}/captures/${captureId}/download`
-          : null,
-        options,
-      ),
-
-    /**
-     * No description
-     *
-     * @tags OpenTeamLabTraffic
-     * @name OpenTeamLabTrafficDownloadCapture
-     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/captures/{captureId}/download
-     */
-    mutateOpenTeamLabTrafficDownloadCapture: (
-      runtimeId: string,
-      captureId: string,
-      data?: Blob | Promise<Blob>,
-      options?: MutatorOptions,
-    ) =>
-      mutate<Blob>(
-        `/api/open/v1/teamlab/runtimes/${runtimeId}/captures/${captureId}/download`,
-        data,
-        options,
-      ),
-
-    /**
-     * No description
-     *
-     * @tags OpenTeamLabTraffic
-     * @name OpenTeamLabTrafficGetCapture
-     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/captures/{captureId}
-     */
-    openTeamLabTrafficGetCapture: (
-      runtimeId: string,
-      captureId: string,
-      params: RequestParams = {},
-    ) =>
-      this.request<TeamLabCaptureModel, any>({
-        path: `/api/open/v1/teamlab/runtimes/${runtimeId}/captures/${captureId}`,
-        method: "GET",
-        format: "json",
-        ...params,
-      }),
-    /**
-     * No description
-     *
-     * @tags OpenTeamLabTraffic
-     * @name OpenTeamLabTrafficGetCapture
-     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/captures/{captureId}
-     */
-    useOpenTeamLabTrafficGetCapture: (
-      runtimeId: string,
-      captureId: string,
-      options?: SWRConfiguration,
-      doFetch: boolean = true,
-    ) =>
-      useSWR<TeamLabCaptureModel, any>(
-        doFetch
-          ? `/api/open/v1/teamlab/runtimes/${runtimeId}/captures/${captureId}`
-          : null,
-        options,
-      ),
-
-    /**
-     * No description
-     *
-     * @tags OpenTeamLabTraffic
-     * @name OpenTeamLabTrafficGetCapture
-     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/captures/{captureId}
-     */
-    mutateOpenTeamLabTrafficGetCapture: (
-      runtimeId: string,
-      captureId: string,
-      data?: TeamLabCaptureModel | Promise<TeamLabCaptureModel>,
-      options?: MutatorOptions,
-    ) =>
-      mutate<TeamLabCaptureModel>(
-        `/api/open/v1/teamlab/runtimes/${runtimeId}/captures/${captureId}`,
-        data,
-        options,
-      ),
-
-    /**
-     * No description
-     *
-     * @tags OpenTeamLabTraffic
-     * @name OpenTeamLabTrafficGetFlows
-     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/traffic/flows
-     */
-    openTeamLabTrafficGetFlows: (
-      runtimeId: string,
-      query?: {
-        after?: string | null;
-        /**
-         * @format int32
-         * @min 1
-         * @max 200
-         * @default 100
-         */
-        limit?: number;
-      },
-      params: RequestParams = {},
-    ) =>
-      this.request<TeamLabTrafficFlowPageModel, any>({
-        path: `/api/open/v1/teamlab/runtimes/${runtimeId}/traffic/flows`,
-        method: "GET",
-        query: query,
-        format: "json",
-        ...params,
-      }),
-    /**
-     * No description
-     *
-     * @tags OpenTeamLabTraffic
-     * @name OpenTeamLabTrafficGetFlows
-     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/traffic/flows
-     */
-    useOpenTeamLabTrafficGetFlows: (
-      runtimeId: string,
-      query?: {
-        after?: string | null;
-        /**
-         * @format int32
-         * @min 1
-         * @max 200
-         * @default 100
-         */
-        limit?: number;
-      },
-      options?: SWRConfiguration,
-      doFetch: boolean = true,
-    ) =>
-      useSWR<TeamLabTrafficFlowPageModel, any>(
-        doFetch
-          ? [`/api/open/v1/teamlab/runtimes/${runtimeId}/traffic/flows`, query]
-          : null,
-        options,
-      ),
-
-    /**
-     * No description
-     *
-     * @tags OpenTeamLabTraffic
-     * @name OpenTeamLabTrafficGetFlows
-     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/traffic/flows
-     */
-    mutateOpenTeamLabTrafficGetFlows: (
-      runtimeId: string,
-      query?: {
-        after?: string | null;
-        /**
-         * @format int32
-         * @min 1
-         * @max 200
-         * @default 100
-         */
-        limit?: number;
-      },
-      data?: TeamLabTrafficFlowPageModel | Promise<TeamLabTrafficFlowPageModel>,
-      options?: MutatorOptions,
-    ) =>
-      mutate<TeamLabTrafficFlowPageModel>(
-        [`/api/open/v1/teamlab/runtimes/${runtimeId}/traffic/flows`, query],
-        data,
-        options,
-      ),
-
-    /**
-     * No description
-     *
-     * @tags OpenTeamLabTraffic
-     * @name OpenTeamLabTrafficStartCapture
-     * @request POST:/api/open/v1/teamlab/runtimes/{runtimeId}/captures
-     */
-    openTeamLabTrafficStartCapture: (
-      runtimeId: string,
-      data: CreateTeamLabCaptureModel,
-      params: RequestParams = {},
-    ) =>
-      this.request<TeamLabCaptureModel, any>({
-        path: `/api/open/v1/teamlab/runtimes/${runtimeId}/captures`,
-        method: "POST",
-        body: data,
-        type: ContentType.Json,
-        format: "json",
-        ...params,
-      }),
-
-    /**
-     * No description
-     *
-     * @tags OpenTeamLabTraffic
-     * @name OpenTeamLabTrafficStopCapture
-     * @request POST:/api/open/v1/teamlab/runtimes/{runtimeId}/captures/{captureId}/stop
-     */
-    openTeamLabTrafficStopCapture: (
-      runtimeId: string,
-      captureId: string,
-      params: RequestParams = {},
-    ) =>
-      this.request<TeamLabCaptureModel, any>({
-        path: `/api/open/v1/teamlab/runtimes/${runtimeId}/captures/${captureId}/stop`,
-        method: "POST",
-        format: "json",
-        ...params,
-      }),
-  };
-  openChallenges = {
-    /**
-     * No description
-     *
-     * @tags OpenChallenges
-     * @name OpenChallengesDelete
-     * @request DELETE:/api/open/v1/games/{gameId}/challenges/{challengeId}
-     */
-    openChallengesDelete: (
-      gameId: number,
-      challengeId: number,
-      params: RequestParams = {},
-    ) =>
-      this.request<ApiOperationModel, any>({
-        path: `/api/open/v1/games/${gameId}/challenges/${challengeId}`,
-        method: "DELETE",
-        format: "json",
-        ...params,
-      }),
-
-    /**
-     * No description
-     *
-     * @tags OpenChallenges
-     * @name OpenChallengesDeleteBatch
-     * @request POST:/api/open/v1/games/{gameId}/challenges/batch-delete
-     */
-    openChallengesDeleteBatch: (
-      gameId: number,
-      data: OpenChallengeBatchDeleteModel,
-      params: RequestParams = {},
-    ) =>
-      this.request<ApiOperationModel, any>({
-        path: `/api/open/v1/games/${gameId}/challenges/batch-delete`,
-        method: "POST",
-        body: data,
-        type: ContentType.Json,
-        format: "json",
-        ...params,
-      }),
-
-    /**
-     * No description
-     *
-     * @tags OpenChallenges
-     * @name OpenChallengesGet
-     * @request GET:/api/open/v1/games/{gameId}/challenges/{challengeId}
-     */
-    openChallengesGet: (
-      gameId: number,
-      challengeId: number,
-      params: RequestParams = {},
-    ) =>
-      this.request<OpenChallengeModel, ProblemDetails>({
-        path: `/api/open/v1/games/${gameId}/challenges/${challengeId}`,
-        method: "GET",
-        format: "json",
-        ...params,
-      }),
-    /**
-     * No description
-     *
-     * @tags OpenChallenges
-     * @name OpenChallengesGet
-     * @request GET:/api/open/v1/games/{gameId}/challenges/{challengeId}
-     */
-    useOpenChallengesGet: (
-      gameId: number,
-      challengeId: number,
-      options?: SWRConfiguration,
-      doFetch: boolean = true,
-    ) =>
-      useSWR<OpenChallengeModel, ProblemDetails>(
-        doFetch
-          ? `/api/open/v1/games/${gameId}/challenges/${challengeId}`
-          : null,
-        options,
-      ),
-
-    /**
-     * No description
-     *
-     * @tags OpenChallenges
-     * @name OpenChallengesGet
-     * @request GET:/api/open/v1/games/{gameId}/challenges/{challengeId}
-     */
-    mutateOpenChallengesGet: (
-      gameId: number,
-      challengeId: number,
-      data?: OpenChallengeModel | Promise<OpenChallengeModel>,
-      options?: MutatorOptions,
-    ) =>
-      mutate<OpenChallengeModel>(
-        `/api/open/v1/games/${gameId}/challenges/${challengeId}`,
-        data,
-        options,
-      ),
-
-    /**
-     * No description
-     *
-     * @tags OpenChallenges
-     * @name OpenChallengesImportBatch
-     * @request POST:/api/open/v1/games/{gameId}/challenges/batch
-     */
-    openChallengesImportBatch: (
-      gameId: number,
-      data: OpenChallengeBatchImportModel,
-      params: RequestParams = {},
-    ) =>
-      this.request<ApiOperationModel, any>({
-        path: `/api/open/v1/games/${gameId}/challenges/batch`,
-        method: "POST",
-        body: data,
-        type: ContentType.Json,
-        format: "json",
-        ...params,
-      }),
-
-    /**
-     * No description
-     *
-     * @tags OpenChallenges
-     * @name OpenChallengesImportOne
-     * @request POST:/api/open/v1/games/{gameId}/challenges
-     */
-    openChallengesImportOne: (
-      gameId: number,
-      data: OpenChallengeImportModel,
-      params: RequestParams = {},
-    ) =>
-      this.request<ApiOperationModel, any>({
-        path: `/api/open/v1/games/${gameId}/challenges`,
-        method: "POST",
-        body: data,
-        type: ContentType.Json,
-        format: "json",
-        ...params,
-      }),
-
-    /**
-     * No description
-     *
-     * @tags OpenChallenges
-     * @name OpenChallengesList
-     * @request GET:/api/open/v1/games/{gameId}/challenges
-     */
-    openChallengesList: (
-      gameId: number,
-      query?: {
-        /**
-         * @format int32
-         * @min 1
-         * @max 100
-         * @default 50
-         */
-        limit?: number;
-        after?: string | null;
-      },
-      params: RequestParams = {},
-    ) =>
-      this.request<OpenChallengePageModel, any>({
-        path: `/api/open/v1/games/${gameId}/challenges`,
-        method: "GET",
-        query: query,
-        format: "json",
-        ...params,
-      }),
-    /**
-     * No description
-     *
-     * @tags OpenChallenges
-     * @name OpenChallengesList
-     * @request GET:/api/open/v1/games/{gameId}/challenges
-     */
-    useOpenChallengesList: (
-      gameId: number,
-      query?: {
-        /**
-         * @format int32
-         * @min 1
-         * @max 100
-         * @default 50
-         */
-        limit?: number;
-        after?: string | null;
-      },
-      options?: SWRConfiguration,
-      doFetch: boolean = true,
-    ) =>
-      useSWR<OpenChallengePageModel, any>(
-        doFetch ? [`/api/open/v1/games/${gameId}/challenges`, query] : null,
-        options,
-      ),
-
-    /**
-     * No description
-     *
-     * @tags OpenChallenges
-     * @name OpenChallengesList
-     * @request GET:/api/open/v1/games/{gameId}/challenges
-     */
-    mutateOpenChallengesList: (
-      gameId: number,
-      query?: {
-        /**
-         * @format int32
-         * @min 1
-         * @max 100
-         * @default 50
-         */
-        limit?: number;
-        after?: string | null;
-      },
-      data?: OpenChallengePageModel | Promise<OpenChallengePageModel>,
-      options?: MutatorOptions,
-    ) =>
-      mutate<OpenChallengePageModel>(
-        [`/api/open/v1/games/${gameId}/challenges`, query],
-        data,
-        options,
-      ),
-  };
-  openImages = {
-    /**
-     * No description
-     *
-     * @tags OpenImages
-     * @name OpenImagesDelete
-     * @request DELETE:/api/open/v1/images/{imageTemplateId}
-     */
-    openImagesDelete: (imageTemplateId: number, params: RequestParams = {}) =>
-      this.request<void, ProblemDetails>({
-        path: `/api/open/v1/images/${imageTemplateId}`,
-        method: "DELETE",
-        ...params,
-      }),
-
-    /**
-     * No description
-     *
-     * @tags OpenImages
-     * @name OpenImagesGet
-     * @request GET:/api/open/v1/images/{imageTemplateId}
-     */
-    openImagesGet: (imageTemplateId: number, params: RequestParams = {}) =>
-      this.request<OpenImageTemplateModel, ProblemDetails>({
-        path: `/api/open/v1/images/${imageTemplateId}`,
-        method: "GET",
-        format: "json",
-        ...params,
-      }),
-    /**
-     * No description
-     *
-     * @tags OpenImages
-     * @name OpenImagesGet
-     * @request GET:/api/open/v1/images/{imageTemplateId}
-     */
-    useOpenImagesGet: (
-      imageTemplateId: number,
-      options?: SWRConfiguration,
-      doFetch: boolean = true,
-    ) =>
-      useSWR<OpenImageTemplateModel, ProblemDetails>(
-        doFetch ? `/api/open/v1/images/${imageTemplateId}` : null,
-        options,
-      ),
-
-    /**
-     * No description
-     *
-     * @tags OpenImages
-     * @name OpenImagesGet
-     * @request GET:/api/open/v1/images/{imageTemplateId}
-     */
-    mutateOpenImagesGet: (
-      imageTemplateId: number,
-      data?: OpenImageTemplateModel | Promise<OpenImageTemplateModel>,
-      options?: MutatorOptions,
-    ) =>
-      mutate<OpenImageTemplateModel>(
-        `/api/open/v1/images/${imageTemplateId}`,
-        data,
-        options,
-      ),
-
-    /**
-     * No description
-     *
-     * @tags OpenImages
-     * @name OpenImagesRegisterDockerArchive
-     * @request POST:/api/open/v1/images/docker-archives
-     */
-    openImagesRegisterDockerArchive: (
-      data: {
-        /** @format binary */
-        file?: File | null;
-        name?: string | null;
-        sourceImage?: string | null;
-        osType?: OSType;
-        expectedDigest?: string | null;
-      },
-      params: RequestParams = {},
-    ) =>
-      this.request<ApiOperationModel, any>({
-        path: `/api/open/v1/images/docker-archives`,
-        method: "POST",
-        body: data,
-        type: ContentType.FormData,
-        format: "json",
-        ...params,
-      }),
-
-    /**
-     * No description
-     *
-     * @tags OpenImages
-     * @name OpenImagesRegisterDockerReference
-     * @request POST:/api/open/v1/images/docker-references
-     */
-    openImagesRegisterDockerReference: (
-      data: DockerImageReferenceImportModel,
-      params: RequestParams = {},
-    ) =>
-      this.request<ApiOperationModel, any>({
-        path: `/api/open/v1/images/docker-references`,
-        method: "POST",
-        body: data,
-        type: ContentType.Json,
-        format: "json",
-        ...params,
-      }),
-  };
-  operations = {
-    /**
-     * No description
-     *
-     * @tags Operations
-     * @name OperationsGet
-     * @request GET:/api/open/v1/operations/{id}
-     */
-    operationsGet: (id: string, params: RequestParams = {}) =>
-      this.request<ApiOperationModel, ProblemDetails>({
-        path: `/api/open/v1/operations/${id}`,
-        method: "GET",
-        format: "json",
-        ...params,
-      }),
-    /**
-     * No description
-     *
-     * @tags Operations
-     * @name OperationsGet
-     * @request GET:/api/open/v1/operations/{id}
-     */
-    useOperationsGet: (
-      id: string,
-      options?: SWRConfiguration,
-      doFetch: boolean = true,
-    ) =>
-      useSWR<ApiOperationModel, ProblemDetails>(
-        doFetch ? `/api/open/v1/operations/${id}` : null,
-        options,
-      ),
-
-    /**
-     * No description
-     *
-     * @tags Operations
-     * @name OperationsGet
-     * @request GET:/api/open/v1/operations/{id}
-     */
-    mutateOperationsGet: (
-      id: string,
-      data?: ApiOperationModel | Promise<ApiOperationModel>,
-      options?: MutatorOptions,
-    ) =>
-      mutate<ApiOperationModel>(`/api/open/v1/operations/${id}`, data, options),
-  };
-  teamLabAdminRuntime = {
     /**
      * No description
      *
@@ -7262,6 +9664,9 @@ export class Api<
          * @default 100
          */
         limit?: number;
+        /** @format int32 */
+        generation?: number | null;
+        stage?: string | null;
       },
       params: RequestParams = {},
     ) =>
@@ -7292,6 +9697,9 @@ export class Api<
          * @default 100
          */
         limit?: number;
+        /** @format int32 */
+        generation?: number | null;
+        stage?: string | null;
       },
       options?: SWRConfiguration,
       doFetch: boolean = true,
@@ -7323,6 +9731,9 @@ export class Api<
          * @default 100
          */
         limit?: number;
+        /** @format int32 */
+        generation?: number | null;
+        stage?: string | null;
       },
       data?: TeamLabRuntimeEventModel[] | Promise<TeamLabRuntimeEventModel[]>,
       options?: MutatorOptions,
@@ -7349,6 +9760,11 @@ export class Api<
          * @default 100
          */
         limit?: number;
+        query?: string | null;
+        protocol?: string | null;
+        networkKey?: string | null;
+        /** @format int32 */
+        port?: number | null;
       },
       params: RequestParams = {},
     ) =>
@@ -7375,6 +9791,11 @@ export class Api<
          * @default 100
          */
         limit?: number;
+        query?: string | null;
+        protocol?: string | null;
+        networkKey?: string | null;
+        /** @format int32 */
+        port?: number | null;
       },
       options?: SWRConfiguration,
       doFetch: boolean = true,
@@ -7402,6 +9823,11 @@ export class Api<
          * @default 100
          */
         limit?: number;
+        query?: string | null;
+        protocol?: string | null;
+        networkKey?: string | null;
+        /** @format int32 */
+        port?: number | null;
       },
       data?: TeamLabTrafficFlowPageModel | Promise<TeamLabTrafficFlowPageModel>,
       options?: MutatorOptions,
@@ -7524,6 +9950,758 @@ export class Api<
      * No description
      *
      * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimeLinkPolicies
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/link-policies
+     */
+    teamLabAdminRuntimeLinkPolicies: (
+      runtimeId: string,
+      query?: {
+        status?: string | null;
+        /**
+         * @format int32
+         * @default 50
+         */
+        limit?: number;
+        after?: string | null;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabLinkPolicyPageModel, any>({
+        path: `/api/admin/teamlab/runtimes/${runtimeId}/link-policies`,
+        method: "GET",
+        query: query,
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimeLinkPolicies
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/link-policies
+     */
+    useTeamLabAdminRuntimeLinkPolicies: (
+      runtimeId: string,
+      query?: {
+        status?: string | null;
+        /**
+         * @format int32
+         * @default 50
+         */
+        limit?: number;
+        after?: string | null;
+      },
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<TeamLabLinkPolicyPageModel, any>(
+        doFetch
+          ? [`/api/admin/teamlab/runtimes/${runtimeId}/link-policies`, query]
+          : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimeLinkPolicies
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/link-policies
+     */
+    mutateTeamLabAdminRuntimeLinkPolicies: (
+      runtimeId: string,
+      query?: {
+        status?: string | null;
+        /**
+         * @format int32
+         * @default 50
+         */
+        limit?: number;
+        after?: string | null;
+      },
+      data?: TeamLabLinkPolicyPageModel | Promise<TeamLabLinkPolicyPageModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<TeamLabLinkPolicyPageModel>(
+        [`/api/admin/teamlab/runtimes/${runtimeId}/link-policies`, query],
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimeList
+     * @request GET:/api/admin/teamlab/runtimes
+     */
+    teamLabAdminRuntimeList: (
+      query?: {
+        /** @format guid */
+        topologyId?: string | null;
+        after?: string | null;
+        /**
+         * @format int32
+         * @default 30
+         */
+        limit?: number;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabAdminRuntimePageModel, any>({
+        path: `/api/admin/teamlab/runtimes`,
+        method: "GET",
+        query: query,
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimeList
+     * @request GET:/api/admin/teamlab/runtimes
+     */
+    useTeamLabAdminRuntimeList: (
+      query?: {
+        /** @format guid */
+        topologyId?: string | null;
+        after?: string | null;
+        /**
+         * @format int32
+         * @default 30
+         */
+        limit?: number;
+      },
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<TeamLabAdminRuntimePageModel, any>(
+        doFetch ? [`/api/admin/teamlab/runtimes`, query] : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimeList
+     * @request GET:/api/admin/teamlab/runtimes
+     */
+    mutateTeamLabAdminRuntimeList: (
+      query?: {
+        /** @format guid */
+        topologyId?: string | null;
+        after?: string | null;
+        /**
+         * @format int32
+         * @default 30
+         */
+        limit?: number;
+      },
+      data?:
+        | TeamLabAdminRuntimePageModel
+        | Promise<TeamLabAdminRuntimePageModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<TeamLabAdminRuntimePageModel>(
+        [`/api/admin/teamlab/runtimes`, query],
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimeListAccessGrants
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/access-grants
+     */
+    teamLabAdminRuntimeListAccessGrants: (
+      runtimeId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabAccessGrantModel[], any>({
+        path: `/api/admin/teamlab/runtimes/${runtimeId}/access-grants`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimeListAccessGrants
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/access-grants
+     */
+    useTeamLabAdminRuntimeListAccessGrants: (
+      runtimeId: string,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<TeamLabAccessGrantModel[], any>(
+        doFetch
+          ? `/api/admin/teamlab/runtimes/${runtimeId}/access-grants`
+          : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimeListAccessGrants
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/access-grants
+     */
+    mutateTeamLabAdminRuntimeListAccessGrants: (
+      runtimeId: string,
+      data?: TeamLabAccessGrantModel[] | Promise<TeamLabAccessGrantModel[]>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<TeamLabAccessGrantModel[]>(
+        `/api/admin/teamlab/runtimes/${runtimeId}/access-grants`,
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimeListCaptures
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/captures
+     */
+    teamLabAdminRuntimeListCaptures: (
+      runtimeId: string,
+      query?: {
+        after?: string | null;
+        /**
+         * @format int32
+         * @min 1
+         * @max 100
+         * @default 50
+         */
+        limit?: number;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabCapturePageModel, any>({
+        path: `/api/admin/teamlab/runtimes/${runtimeId}/captures`,
+        method: "GET",
+        query: query,
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimeListCaptures
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/captures
+     */
+    useTeamLabAdminRuntimeListCaptures: (
+      runtimeId: string,
+      query?: {
+        after?: string | null;
+        /**
+         * @format int32
+         * @min 1
+         * @max 100
+         * @default 50
+         */
+        limit?: number;
+      },
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<TeamLabCapturePageModel, any>(
+        doFetch
+          ? [`/api/admin/teamlab/runtimes/${runtimeId}/captures`, query]
+          : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimeListCaptures
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/captures
+     */
+    mutateTeamLabAdminRuntimeListCaptures: (
+      runtimeId: string,
+      query?: {
+        after?: string | null;
+        /**
+         * @format int32
+         * @min 1
+         * @max 100
+         * @default 50
+         */
+        limit?: number;
+      },
+      data?: TeamLabCapturePageModel | Promise<TeamLabCapturePageModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<TeamLabCapturePageModel>(
+        [`/api/admin/teamlab/runtimes/${runtimeId}/captures`, query],
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimeLogs
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/logs
+     */
+    teamLabAdminRuntimeLogs: (
+      runtimeId: string,
+      query?: {
+        Cursor?: string | null;
+        /**
+         * @format int32
+         * @min 1
+         * @max 200
+         */
+        Count?: number;
+        Level?: string | null;
+        /** @format guid */
+        CorrelationId?: string | null;
+        Logger?: string | null;
+        EventCode?: string | null;
+        Keyword?: string | null;
+        /** @format guid */
+        WorkerNodeId?: string | null;
+        /** @format guid */
+        DeploymentTicketId?: string | null;
+        ResourceType?: string | null;
+        ResourceId?: string | null;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<LogMessagePageModel, any>({
+        path: `/api/admin/teamlab/runtimes/${runtimeId}/logs`,
+        method: "GET",
+        query: query,
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimeLogs
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/logs
+     */
+    useTeamLabAdminRuntimeLogs: (
+      runtimeId: string,
+      query?: {
+        Cursor?: string | null;
+        /**
+         * @format int32
+         * @min 1
+         * @max 200
+         */
+        Count?: number;
+        Level?: string | null;
+        /** @format guid */
+        CorrelationId?: string | null;
+        Logger?: string | null;
+        EventCode?: string | null;
+        Keyword?: string | null;
+        /** @format guid */
+        WorkerNodeId?: string | null;
+        /** @format guid */
+        DeploymentTicketId?: string | null;
+        ResourceType?: string | null;
+        ResourceId?: string | null;
+      },
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<LogMessagePageModel, any>(
+        doFetch
+          ? [`/api/admin/teamlab/runtimes/${runtimeId}/logs`, query]
+          : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimeLogs
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/logs
+     */
+    mutateTeamLabAdminRuntimeLogs: (
+      runtimeId: string,
+      query?: {
+        Cursor?: string | null;
+        /**
+         * @format int32
+         * @min 1
+         * @max 200
+         */
+        Count?: number;
+        Level?: string | null;
+        /** @format guid */
+        CorrelationId?: string | null;
+        Logger?: string | null;
+        EventCode?: string | null;
+        Keyword?: string | null;
+        /** @format guid */
+        WorkerNodeId?: string | null;
+        /** @format guid */
+        DeploymentTicketId?: string | null;
+        ResourceType?: string | null;
+        ResourceId?: string | null;
+      },
+      data?: LogMessagePageModel | Promise<LogMessagePageModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<LogMessagePageModel>(
+        [`/api/admin/teamlab/runtimes/${runtimeId}/logs`, query],
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimePath
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/traffic/paths/{pathId}
+     */
+    teamLabAdminRuntimePath: (
+      runtimeId: string,
+      pathId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabTrafficPathModel, any>({
+        path: `/api/admin/teamlab/runtimes/${runtimeId}/traffic/paths/${pathId}`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimePath
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/traffic/paths/{pathId}
+     */
+    useTeamLabAdminRuntimePath: (
+      runtimeId: string,
+      pathId: string,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<TeamLabTrafficPathModel, any>(
+        doFetch
+          ? `/api/admin/teamlab/runtimes/${runtimeId}/traffic/paths/${pathId}`
+          : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimePath
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/traffic/paths/{pathId}
+     */
+    mutateTeamLabAdminRuntimePath: (
+      runtimeId: string,
+      pathId: string,
+      data?: TeamLabTrafficPathModel | Promise<TeamLabTrafficPathModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<TeamLabTrafficPathModel>(
+        `/api/admin/teamlab/runtimes/${runtimeId}/traffic/paths/${pathId}`,
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimePaths
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/traffic/paths
+     */
+    teamLabAdminRuntimePaths: (
+      runtimeId: string,
+      query?: {
+        after?: string | null;
+        /**
+         * @format int32
+         * @default 100
+         */
+        limit?: number;
+        query?: string | null;
+        protocol?: string | null;
+        confidence?: string | null;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabTrafficPathPageModel, any>({
+        path: `/api/admin/teamlab/runtimes/${runtimeId}/traffic/paths`,
+        method: "GET",
+        query: query,
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimePaths
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/traffic/paths
+     */
+    useTeamLabAdminRuntimePaths: (
+      runtimeId: string,
+      query?: {
+        after?: string | null;
+        /**
+         * @format int32
+         * @default 100
+         */
+        limit?: number;
+        query?: string | null;
+        protocol?: string | null;
+        confidence?: string | null;
+      },
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<TeamLabTrafficPathPageModel, any>(
+        doFetch
+          ? [`/api/admin/teamlab/runtimes/${runtimeId}/traffic/paths`, query]
+          : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimePaths
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/traffic/paths
+     */
+    mutateTeamLabAdminRuntimePaths: (
+      runtimeId: string,
+      query?: {
+        after?: string | null;
+        /**
+         * @format int32
+         * @default 100
+         */
+        limit?: number;
+        query?: string | null;
+        protocol?: string | null;
+        confidence?: string | null;
+      },
+      data?: TeamLabTrafficPathPageModel | Promise<TeamLabTrafficPathPageModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<TeamLabTrafficPathPageModel>(
+        [`/api/admin/teamlab/runtimes/${runtimeId}/traffic/paths`, query],
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimePause
+     * @request POST:/api/admin/teamlab/runtimes/{runtimeId}/pause
+     */
+    teamLabAdminRuntimePause: (runtimeId: string, params: RequestParams = {}) =>
+      this.request<TeamLabRuntimeProjectionModel, any>({
+        path: `/api/admin/teamlab/runtimes/${runtimeId}/pause`,
+        method: "POST",
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimeRecoverLinkPolicy
+     * @request POST:/api/admin/teamlab/runtimes/{runtimeId}/link-policies/{policyId}/recover
+     */
+    teamLabAdminRuntimeRecoverLinkPolicy: (
+      runtimeId: string,
+      policyId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabLinkPolicyModel, any>({
+        path: `/api/admin/teamlab/runtimes/${runtimeId}/link-policies/${policyId}/recover`,
+        method: "POST",
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimeReset
+     * @request POST:/api/admin/teamlab/runtimes/{runtimeId}/reset
+     */
+    teamLabAdminRuntimeReset: (
+      runtimeId: string,
+      data: ResetTeamLabRuntimeModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabRuntimeProjectionModel, any>({
+        path: `/api/admin/teamlab/runtimes/${runtimeId}/reset`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimeResume
+     * @request POST:/api/admin/teamlab/runtimes/{runtimeId}/resume
+     */
+    teamLabAdminRuntimeResume: (
+      runtimeId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabRuntimeProjectionModel, any>({
+        path: `/api/admin/teamlab/runtimes/${runtimeId}/resume`,
+        method: "POST",
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimeRevokeAccessGrant
+     * @request DELETE:/api/admin/teamlab/runtimes/{runtimeId}/access-grants/{grantId}
+     */
+    teamLabAdminRuntimeRevokeAccessGrant: (
+      runtimeId: string,
+      grantId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<Blob, any>({
+        path: `/api/admin/teamlab/runtimes/${runtimeId}/access-grants/${grantId}`,
+        method: "DELETE",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimeSearch
+     * @request GET:/api/admin/teamlab/runtimes/search
+     */
+    teamLabAdminRuntimeSearch: (
+      query?: {
+        Search?: string | null;
+        Status?: TeamLabRuntimeStatus | null;
+        Node?: string | null;
+        /** @format int32 */
+        Generation?: number | null;
+        /** @format guid */
+        ReleaseId?: string | null;
+        /** @format guid */
+        CreatedById?: string | null;
+        ErrorsOnly?: boolean;
+        After?: string | null;
+        /** @format int32 */
+        Limit?: number;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabRuntimeSearchPage, any>({
+        path: `/api/admin/teamlab/runtimes/search`,
+        method: "GET",
+        query: query,
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimeSearch
+     * @request GET:/api/admin/teamlab/runtimes/search
+     */
+    useTeamLabAdminRuntimeSearch: (
+      query?: {
+        Search?: string | null;
+        Status?: TeamLabRuntimeStatus | null;
+        Node?: string | null;
+        /** @format int32 */
+        Generation?: number | null;
+        /** @format guid */
+        ReleaseId?: string | null;
+        /** @format guid */
+        CreatedById?: string | null;
+        ErrorsOnly?: boolean;
+        After?: string | null;
+        /** @format int32 */
+        Limit?: number;
+      },
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<TeamLabRuntimeSearchPage, any>(
+        doFetch ? [`/api/admin/teamlab/runtimes/search`, query] : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimeSearch
+     * @request GET:/api/admin/teamlab/runtimes/search
+     */
+    mutateTeamLabAdminRuntimeSearch: (
+      query?: {
+        Search?: string | null;
+        Status?: TeamLabRuntimeStatus | null;
+        Node?: string | null;
+        /** @format int32 */
+        Generation?: number | null;
+        /** @format guid */
+        ReleaseId?: string | null;
+        /** @format guid */
+        CreatedById?: string | null;
+        ErrorsOnly?: boolean;
+        After?: string | null;
+        /** @format int32 */
+        Limit?: number;
+      },
+      data?: TeamLabRuntimeSearchPage | Promise<TeamLabRuntimeSearchPage>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<TeamLabRuntimeSearchPage>(
+        [`/api/admin/teamlab/runtimes/search`, query],
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
      * @name TeamLabAdminRuntimeStartCapture
      * @request POST:/api/admin/teamlab/runtimes/{runtimeId}/captures
      */
@@ -7559,6 +10737,210 @@ export class Api<
         format: "json",
         ...params,
       }),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimeTasks
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/tasks
+     */
+    teamLabAdminRuntimeTasks: (
+      runtimeId: string,
+      query?: {
+        /** @format int32 */
+        generation?: number | null;
+        after?: string | null;
+        /**
+         * @format int32
+         * @default 20
+         */
+        limit?: number;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabRuntimeTaskPageModel, any>({
+        path: `/api/admin/teamlab/runtimes/${runtimeId}/tasks`,
+        method: "GET",
+        query: query,
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimeTasks
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/tasks
+     */
+    useTeamLabAdminRuntimeTasks: (
+      runtimeId: string,
+      query?: {
+        /** @format int32 */
+        generation?: number | null;
+        after?: string | null;
+        /**
+         * @format int32
+         * @default 20
+         */
+        limit?: number;
+      },
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<TeamLabRuntimeTaskPageModel, any>(
+        doFetch
+          ? [`/api/admin/teamlab/runtimes/${runtimeId}/tasks`, query]
+          : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimeTasks
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/tasks
+     */
+    mutateTeamLabAdminRuntimeTasks: (
+      runtimeId: string,
+      query?: {
+        /** @format int32 */
+        generation?: number | null;
+        after?: string | null;
+        /**
+         * @format int32
+         * @default 20
+         */
+        limit?: number;
+      },
+      data?: TeamLabRuntimeTaskPageModel | Promise<TeamLabRuntimeTaskPageModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<TeamLabRuntimeTaskPageModel>(
+        [`/api/admin/teamlab/runtimes/${runtimeId}/tasks`, query],
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimeVmDiagnostics
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/assets/{assetId}/vm-diagnostics
+     */
+    teamLabAdminRuntimeVmDiagnostics: (
+      runtimeId: string,
+      assetId: number,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabVmDiagnostics, any>({
+        path: `/api/admin/teamlab/runtimes/${runtimeId}/assets/${assetId}/vm-diagnostics`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimeVmDiagnostics
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/assets/{assetId}/vm-diagnostics
+     */
+    useTeamLabAdminRuntimeVmDiagnostics: (
+      runtimeId: string,
+      assetId: number,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<TeamLabVmDiagnostics, any>(
+        doFetch
+          ? `/api/admin/teamlab/runtimes/${runtimeId}/assets/${assetId}/vm-diagnostics`
+          : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimeVmDiagnostics
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/assets/{assetId}/vm-diagnostics
+     */
+    mutateTeamLabAdminRuntimeVmDiagnostics: (
+      runtimeId: string,
+      assetId: number,
+      data?: TeamLabVmDiagnostics | Promise<TeamLabVmDiagnostics>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<TeamLabVmDiagnostics>(
+        `/api/admin/teamlab/runtimes/${runtimeId}/assets/${assetId}/vm-diagnostics`,
+        data,
+        options,
+      ),
+  };
+  teamLabAdminScopes = {
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminScopes
+     * @name TeamLabAdminScopesArchive
+     * @request POST:/api/admin/teamlab/scopes/{scopeId}/archive
+     */
+    teamLabAdminScopesArchive: (scopeId: string, params: RequestParams = {}) =>
+      this.request<void, any>({
+        path: `/api/admin/teamlab/scopes/${scopeId}/archive`,
+        method: "POST",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminScopes
+     * @name TeamLabAdminScopesList
+     * @request GET:/api/admin/teamlab/scopes
+     */
+    teamLabAdminScopesList: (params: RequestParams = {}) =>
+      this.request<TeamLabControlScopeModel[], any>({
+        path: `/api/admin/teamlab/scopes`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminScopes
+     * @name TeamLabAdminScopesList
+     * @request GET:/api/admin/teamlab/scopes
+     */
+    useTeamLabAdminScopesList: (
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<TeamLabControlScopeModel[], any>(
+        doFetch ? `/api/admin/teamlab/scopes` : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminScopes
+     * @name TeamLabAdminScopesList
+     * @request GET:/api/admin/teamlab/scopes
+     */
+    mutateTeamLabAdminScopesList: (
+      data?: TeamLabControlScopeModel[] | Promise<TeamLabControlScopeModel[]>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<TeamLabControlScopeModel[]>(
+        `/api/admin/teamlab/scopes`,
+        data,
+        options,
+      ),
   };
   teamLabAdminTopology = {
     /**
@@ -7701,10 +11083,26 @@ export class Api<
      * @name TeamLabAdminTopologyList
      * @request GET:/api/admin/teamlab/topologies
      */
-    teamLabAdminTopologyList: (params: RequestParams = {}) =>
-      this.request<TeamLabTopologySummaryModel[], any>({
+    teamLabAdminTopologyList: (
+      query?: {
+        search?: string | null;
+        owner?: string | null;
+        /** @format guid */
+        ownerId?: string | null;
+        status?: string | null;
+        after?: string | null;
+        /**
+         * @format int32
+         * @default 30
+         */
+        limit?: number;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabAdminScenePageModel, any>({
         path: `/api/admin/teamlab/topologies`,
         method: "GET",
+        query: query,
         format: "json",
         ...params,
       }),
@@ -7716,11 +11114,24 @@ export class Api<
      * @request GET:/api/admin/teamlab/topologies
      */
     useTeamLabAdminTopologyList: (
+      query?: {
+        search?: string | null;
+        owner?: string | null;
+        /** @format guid */
+        ownerId?: string | null;
+        status?: string | null;
+        after?: string | null;
+        /**
+         * @format int32
+         * @default 30
+         */
+        limit?: number;
+      },
       options?: SWRConfiguration,
       doFetch: boolean = true,
     ) =>
-      useSWR<TeamLabTopologySummaryModel[], any>(
-        doFetch ? `/api/admin/teamlab/topologies` : null,
+      useSWR<TeamLabAdminScenePageModel, any>(
+        doFetch ? [`/api/admin/teamlab/topologies`, query] : null,
         options,
       ),
 
@@ -7732,13 +11143,24 @@ export class Api<
      * @request GET:/api/admin/teamlab/topologies
      */
     mutateTeamLabAdminTopologyList: (
-      data?:
-        | TeamLabTopologySummaryModel[]
-        | Promise<TeamLabTopologySummaryModel[]>,
+      query?: {
+        search?: string | null;
+        owner?: string | null;
+        /** @format guid */
+        ownerId?: string | null;
+        status?: string | null;
+        after?: string | null;
+        /**
+         * @format int32
+         * @default 30
+         */
+        limit?: number;
+      },
+      data?: TeamLabAdminScenePageModel | Promise<TeamLabAdminScenePageModel>,
       options?: MutatorOptions,
     ) =>
-      mutate<TeamLabTopologySummaryModel[]>(
-        `/api/admin/teamlab/topologies`,
+      mutate<TeamLabAdminScenePageModel>(
+        [`/api/admin/teamlab/topologies`, query],
         data,
         options,
       ),
@@ -7766,6 +11188,25 @@ export class Api<
      * No description
      *
      * @tags TeamLabAdminTopology
+     * @name TeamLabAdminTopologyPrepareImages
+     * @request POST:/api/admin/teamlab/topologies/{topologyId}/releases/{releaseId}/images/prepare
+     */
+    teamLabAdminTopologyPrepareImages: (
+      topologyId: string,
+      releaseId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabAdminReleaseReadinessModel, any>({
+        path: `/api/admin/teamlab/topologies/${topologyId}/releases/${releaseId}/images/prepare`,
+        method: "POST",
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminTopology
      * @name TeamLabAdminTopologyPublish
      * @request POST:/api/admin/teamlab/topologies/{topologyId}/releases
      */
@@ -7782,6 +11223,65 @@ export class Api<
         format: "json",
         ...params,
       }),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminTopology
+     * @name TeamLabAdminTopologyReadiness
+     * @request GET:/api/admin/teamlab/topologies/{topologyId}/releases/{releaseId}/readiness
+     */
+    teamLabAdminTopologyReadiness: (
+      topologyId: string,
+      releaseId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabAdminReleaseReadinessModel, any>({
+        path: `/api/admin/teamlab/topologies/${topologyId}/releases/${releaseId}/readiness`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminTopology
+     * @name TeamLabAdminTopologyReadiness
+     * @request GET:/api/admin/teamlab/topologies/{topologyId}/releases/{releaseId}/readiness
+     */
+    useTeamLabAdminTopologyReadiness: (
+      topologyId: string,
+      releaseId: string,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<TeamLabAdminReleaseReadinessModel, any>(
+        doFetch
+          ? `/api/admin/teamlab/topologies/${topologyId}/releases/${releaseId}/readiness`
+          : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminTopology
+     * @name TeamLabAdminTopologyReadiness
+     * @request GET:/api/admin/teamlab/topologies/{topologyId}/releases/{releaseId}/readiness
+     */
+    mutateTeamLabAdminTopologyReadiness: (
+      topologyId: string,
+      releaseId: string,
+      data?:
+        | TeamLabAdminReleaseReadinessModel
+        | Promise<TeamLabAdminReleaseReadinessModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<TeamLabAdminReleaseReadinessModel>(
+        `/api/admin/teamlab/topologies/${topologyId}/releases/${releaseId}/readiness`,
+        data,
+        options,
+      ),
 
     /**
      * No description
@@ -7870,6 +11370,522 @@ export class Api<
       this.request<TeamLabValidationResultModel, any>({
         path: `/api/admin/teamlab/topologies/${topologyId}/validate`,
         method: "POST",
+        format: "json",
+        ...params,
+      }),
+  };
+  teamLabAssetControl = {
+    /**
+     * No description
+     *
+     * @tags TeamLabAssetControl
+     * @name TeamLabAssetControlAvailability
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/assets/{assetId}/control
+     */
+    teamLabAssetControlAvailability: (
+      runtimeId: string,
+      assetId: number,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabAssetControlAvailability, any>({
+        path: `/api/admin/teamlab/runtimes/${runtimeId}/assets/${assetId}/control`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags TeamLabAssetControl
+     * @name TeamLabAssetControlAvailability
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/assets/{assetId}/control
+     */
+    useTeamLabAssetControlAvailability: (
+      runtimeId: string,
+      assetId: number,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<TeamLabAssetControlAvailability, any>(
+        doFetch
+          ? `/api/admin/teamlab/runtimes/${runtimeId}/assets/${assetId}/control`
+          : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAssetControl
+     * @name TeamLabAssetControlAvailability
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/assets/{assetId}/control
+     */
+    mutateTeamLabAssetControlAvailability: (
+      runtimeId: string,
+      assetId: number,
+      data?:
+        | TeamLabAssetControlAvailability
+        | Promise<TeamLabAssetControlAvailability>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<TeamLabAssetControlAvailability>(
+        `/api/admin/teamlab/runtimes/${runtimeId}/assets/${assetId}/control`,
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAssetControl
+     * @name TeamLabAssetControlControl
+     * @request POST:/api/admin/teamlab/runtimes/{runtimeId}/assets/{assetId}/control
+     */
+    teamLabAssetControlControl: (
+      runtimeId: string,
+      assetId: number,
+      data: TeamLabAssetControlCommand,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabQueueTicketResult, any>({
+        path: `/api/admin/teamlab/runtimes/${runtimeId}/assets/${assetId}/control`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAssetControl
+     * @name TeamLabAssetControlGet
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/assets/{assetId}/control/{ticketId}
+     */
+    teamLabAssetControlGet: (
+      runtimeId: string,
+      assetId: number,
+      ticketId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabAssetControlTask, any>({
+        path: `/api/admin/teamlab/runtimes/${runtimeId}/assets/${assetId}/control/${ticketId}`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags TeamLabAssetControl
+     * @name TeamLabAssetControlGet
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/assets/{assetId}/control/{ticketId}
+     */
+    useTeamLabAssetControlGet: (
+      runtimeId: string,
+      assetId: number,
+      ticketId: string,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<TeamLabAssetControlTask, any>(
+        doFetch
+          ? `/api/admin/teamlab/runtimes/${runtimeId}/assets/${assetId}/control/${ticketId}`
+          : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAssetControl
+     * @name TeamLabAssetControlGet
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/assets/{assetId}/control/{ticketId}
+     */
+    mutateTeamLabAssetControlGet: (
+      runtimeId: string,
+      assetId: number,
+      ticketId: string,
+      data?: TeamLabAssetControlTask | Promise<TeamLabAssetControlTask>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<TeamLabAssetControlTask>(
+        `/api/admin/teamlab/runtimes/${runtimeId}/assets/${assetId}/control/${ticketId}`,
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAssetControl
+     * @name TeamLabAssetControlRetry
+     * @request POST:/api/admin/teamlab/runtimes/{runtimeId}/assets/{assetId}/control/{ticketId}/retry
+     */
+    teamLabAssetControlRetry: (
+      runtimeId: string,
+      assetId: number,
+      ticketId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabQueueTicketResult, any>({
+        path: `/api/admin/teamlab/runtimes/${runtimeId}/assets/${assetId}/control/${ticketId}/retry`,
+        method: "POST",
+        format: "json",
+        ...params,
+      }),
+  };
+  teamLabAssetFiles = {
+    /**
+     * No description
+     *
+     * @tags TeamLabAssetFiles
+     * @name TeamLabAssetFilesDownload
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/assets/{assetId}/files/download
+     */
+    teamLabAssetFilesDownload: (
+      runtimeId: string,
+      assetId: number,
+      query?: {
+        /** @format int32 */
+        generation?: number;
+        path?: string;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<Blob, any>({
+        path: `/api/admin/teamlab/runtimes/${runtimeId}/assets/${assetId}/files/download`,
+        method: "GET",
+        query: query,
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags TeamLabAssetFiles
+     * @name TeamLabAssetFilesDownload
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/assets/{assetId}/files/download
+     */
+    useTeamLabAssetFilesDownload: (
+      runtimeId: string,
+      assetId: number,
+      query?: {
+        /** @format int32 */
+        generation?: number;
+        path?: string;
+      },
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<Blob, any>(
+        doFetch
+          ? [
+              `/api/admin/teamlab/runtimes/${runtimeId}/assets/${assetId}/files/download`,
+              query,
+            ]
+          : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAssetFiles
+     * @name TeamLabAssetFilesDownload
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/assets/{assetId}/files/download
+     */
+    mutateTeamLabAssetFilesDownload: (
+      runtimeId: string,
+      assetId: number,
+      query?: {
+        /** @format int32 */
+        generation?: number;
+        path?: string;
+      },
+      data?: Blob | Promise<Blob>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<Blob>(
+        [
+          `/api/admin/teamlab/runtimes/${runtimeId}/assets/${assetId}/files/download`,
+          query,
+        ],
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAssetFiles
+     * @name TeamLabAssetFilesExecute
+     * @request POST:/api/admin/teamlab/runtimes/{runtimeId}/assets/{assetId}/files
+     */
+    teamLabAssetFilesExecute: (
+      runtimeId: string,
+      assetId: number,
+      data: TeamLabAssetFileCommand,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabFileResult, any>({
+        path: `/api/admin/teamlab/runtimes/${runtimeId}/assets/${assetId}/files`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+  };
+  teamLabDeviceHealth = {
+    /**
+     * No description
+     *
+     * @tags TeamLabDeviceHealth
+     * @name TeamLabDeviceHealthRead
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/device-health
+     */
+    teamLabDeviceHealthRead: (runtimeId: string, params: RequestParams = {}) =>
+      this.request<TeamLabDeviceHealthModel[], any>({
+        path: `/api/admin/teamlab/runtimes/${runtimeId}/device-health`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags TeamLabDeviceHealth
+     * @name TeamLabDeviceHealthRead
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/device-health
+     */
+    useTeamLabDeviceHealthRead: (
+      runtimeId: string,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<TeamLabDeviceHealthModel[], any>(
+        doFetch
+          ? `/api/admin/teamlab/runtimes/${runtimeId}/device-health`
+          : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabDeviceHealth
+     * @name TeamLabDeviceHealthRead
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/device-health
+     */
+    mutateTeamLabDeviceHealthRead: (
+      runtimeId: string,
+      data?: TeamLabDeviceHealthModel[] | Promise<TeamLabDeviceHealthModel[]>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<TeamLabDeviceHealthModel[]>(
+        `/api/admin/teamlab/runtimes/${runtimeId}/device-health`,
+        data,
+        options,
+      ),
+  };
+  teamLabRemoteAudit = {
+    /**
+     * No description
+     *
+     * @tags TeamLabRemoteAudit
+     * @name TeamLabRemoteAuditDownload
+     * @request GET:/api/admin/teamlab/remote-sessions/{sessionId}/audit-files/{fileId}/download
+     */
+    teamLabRemoteAuditDownload: (
+      sessionId: string,
+      fileId: number,
+      params: RequestParams = {},
+    ) =>
+      this.request<Blob, any>({
+        path: `/api/admin/teamlab/remote-sessions/${sessionId}/audit-files/${fileId}/download`,
+        method: "GET",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags TeamLabRemoteAudit
+     * @name TeamLabRemoteAuditDownload
+     * @request GET:/api/admin/teamlab/remote-sessions/{sessionId}/audit-files/{fileId}/download
+     */
+    useTeamLabRemoteAuditDownload: (
+      sessionId: string,
+      fileId: number,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<Blob, any>(
+        doFetch
+          ? `/api/admin/teamlab/remote-sessions/${sessionId}/audit-files/${fileId}/download`
+          : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabRemoteAudit
+     * @name TeamLabRemoteAuditDownload
+     * @request GET:/api/admin/teamlab/remote-sessions/{sessionId}/audit-files/{fileId}/download
+     */
+    mutateTeamLabRemoteAuditDownload: (
+      sessionId: string,
+      fileId: number,
+      data?: Blob | Promise<Blob>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<Blob>(
+        `/api/admin/teamlab/remote-sessions/${sessionId}/audit-files/${fileId}/download`,
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabRemoteAudit
+     * @name TeamLabRemoteAuditGenerate
+     * @request POST:/api/admin/teamlab/remote-sessions/{sessionId}/audit-files
+     */
+    teamLabRemoteAuditGenerate: (
+      sessionId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabRemoteAuditPage, any>({
+        path: `/api/admin/teamlab/remote-sessions/${sessionId}/audit-files`,
+        method: "POST",
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabRemoteAudit
+     * @name TeamLabRemoteAuditList
+     * @request GET:/api/admin/teamlab/remote-sessions/{sessionId}/audit-files
+     */
+    teamLabRemoteAuditList: (sessionId: string, params: RequestParams = {}) =>
+      this.request<TeamLabRemoteAuditPage, any>({
+        path: `/api/admin/teamlab/remote-sessions/${sessionId}/audit-files`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags TeamLabRemoteAudit
+     * @name TeamLabRemoteAuditList
+     * @request GET:/api/admin/teamlab/remote-sessions/{sessionId}/audit-files
+     */
+    useTeamLabRemoteAuditList: (
+      sessionId: string,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<TeamLabRemoteAuditPage, any>(
+        doFetch
+          ? `/api/admin/teamlab/remote-sessions/${sessionId}/audit-files`
+          : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabRemoteAudit
+     * @name TeamLabRemoteAuditList
+     * @request GET:/api/admin/teamlab/remote-sessions/{sessionId}/audit-files
+     */
+    mutateTeamLabRemoteAuditList: (
+      sessionId: string,
+      data?: TeamLabRemoteAuditPage | Promise<TeamLabRemoteAuditPage>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<TeamLabRemoteAuditPage>(
+        `/api/admin/teamlab/remote-sessions/${sessionId}/audit-files`,
+        data,
+        options,
+      ),
+  };
+  teamLabRuntimeDifferences = {
+    /**
+     * No description
+     *
+     * @tags TeamLabRuntimeDifferences
+     * @name TeamLabRuntimeDifferencesPreview
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/differences
+     */
+    teamLabRuntimeDifferencesPreview: (
+      runtimeId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<RuntimeDifferencePreview, any>({
+        path: `/api/admin/teamlab/runtimes/${runtimeId}/differences`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags TeamLabRuntimeDifferences
+     * @name TeamLabRuntimeDifferencesPreview
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/differences
+     */
+    useTeamLabRuntimeDifferencesPreview: (
+      runtimeId: string,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<RuntimeDifferencePreview, any>(
+        doFetch ? `/api/admin/teamlab/runtimes/${runtimeId}/differences` : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabRuntimeDifferences
+     * @name TeamLabRuntimeDifferencesPreview
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/differences
+     */
+    mutateTeamLabRuntimeDifferencesPreview: (
+      runtimeId: string,
+      data?: RuntimeDifferencePreview | Promise<RuntimeDifferencePreview>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<RuntimeDifferencePreview>(
+        `/api/admin/teamlab/runtimes/${runtimeId}/differences`,
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabRuntimeDifferences
+     * @name TeamLabRuntimeDifferencesRepair
+     * @request POST:/api/admin/teamlab/runtimes/{runtimeId}/differences/assets/{assetId}/repair
+     */
+    teamLabRuntimeDifferencesRepair: (
+      runtimeId: string,
+      assetId: number,
+      data: TeamLabAssetControlCommand,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabQueueTicketResult, any>({
+        path: `/api/admin/teamlab/runtimes/${runtimeId}/differences/assets/${assetId}/repair`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
         format: "json",
         ...params,
       }),
@@ -7966,6 +11982,56 @@ export class Api<
         format: "json",
         ...params,
       }),
+
+    /**
+     * No description
+     *
+     * @tags Account
+     * @name AccountCapabilities
+     * @summary Get public account capabilities used by authentication pages.
+     * @request GET:/api/account/capabilities
+     */
+    accountCapabilities: (params: RequestParams = {}) =>
+      this.request<AccountCapabilitiesModel, any>({
+        path: `/api/account/capabilities`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags Account
+     * @name AccountCapabilities
+     * @summary Get public account capabilities used by authentication pages.
+     * @request GET:/api/account/capabilities
+     */
+    useAccountCapabilities: (
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<AccountCapabilitiesModel, any>(
+        doFetch ? `/api/account/capabilities` : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags Account
+     * @name AccountCapabilities
+     * @summary Get public account capabilities used by authentication pages.
+     * @request GET:/api/account/capabilities
+     */
+    mutateAccountCapabilities: (
+      data?: AccountCapabilitiesModel | Promise<AccountCapabilitiesModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<AccountCapabilitiesModel>(
+        `/api/account/capabilities`,
+        data,
+        options,
+      ),
 
     /**
      * @description Use this API to change user's email. User permissions required. Email URL: /confirm
@@ -8228,6 +12294,48 @@ export class Api<
         format: "json",
         ...params,
       }),
+
+    /**
+     * No description
+     *
+     * @tags Account
+     * @name AccountSummary
+     * @summary Get the lightweight identity and activity summary used by the account drawer.
+     * @request GET:/api/account/summary
+     */
+    accountSummary: (params: RequestParams = {}) =>
+      this.request<AccountSummaryModel, RequestResponse>({
+        path: `/api/account/summary`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags Account
+     * @name AccountSummary
+     * @summary Get the lightweight identity and activity summary used by the account drawer.
+     * @request GET:/api/account/summary
+     */
+    useAccountSummary: (options?: SWRConfiguration, doFetch: boolean = true) =>
+      useSWR<AccountSummaryModel, RequestResponse>(
+        doFetch ? `/api/account/summary` : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags Account
+     * @name AccountSummary
+     * @summary Get the lightweight identity and activity summary used by the account drawer.
+     * @request GET:/api/account/summary
+     */
+    mutateAccountSummary: (
+      data?: AccountSummaryModel | Promise<AccountSummaryModel>,
+      options?: MutatorOptions,
+    ) => mutate<AccountSummaryModel>(`/api/account/summary`, data, options),
 
     /**
      * @description Use this API to update username and description. User permissions required.
@@ -8539,16 +12647,25 @@ export class Api<
      */
     adminLogs: (
       query?: {
-        /** @default "All" */
-        level?: string | null;
+        Cursor?: string | null;
         /**
          * @format int32
-         * @min 0
-         * @max 1000
-         * @default 50
+         * @min 1
+         * @max 200
          */
-        count?: number;
-        cursor?: string | null;
+        Count?: number;
+        Level?: string | null;
+        /** @format guid */
+        CorrelationId?: string | null;
+        Logger?: string | null;
+        EventCode?: string | null;
+        Keyword?: string | null;
+        /** @format guid */
+        WorkerNodeId?: string | null;
+        /** @format guid */
+        DeploymentTicketId?: string | null;
+        ResourceType?: string | null;
+        ResourceId?: string | null;
       },
       params: RequestParams = {},
     ) =>
@@ -8569,16 +12686,25 @@ export class Api<
      */
     useAdminLogs: (
       query?: {
-        /** @default "All" */
-        level?: string | null;
+        Cursor?: string | null;
         /**
          * @format int32
-         * @min 0
-         * @max 1000
-         * @default 50
+         * @min 1
+         * @max 200
          */
-        count?: number;
-        cursor?: string | null;
+        Count?: number;
+        Level?: string | null;
+        /** @format guid */
+        CorrelationId?: string | null;
+        Logger?: string | null;
+        EventCode?: string | null;
+        Keyword?: string | null;
+        /** @format guid */
+        WorkerNodeId?: string | null;
+        /** @format guid */
+        DeploymentTicketId?: string | null;
+        ResourceType?: string | null;
+        ResourceId?: string | null;
       },
       options?: SWRConfiguration,
       doFetch: boolean = true,
@@ -8598,16 +12724,25 @@ export class Api<
      */
     mutateAdminLogs: (
       query?: {
-        /** @default "All" */
-        level?: string | null;
+        Cursor?: string | null;
         /**
          * @format int32
-         * @min 0
-         * @max 1000
-         * @default 50
+         * @min 1
+         * @max 200
          */
-        count?: number;
-        cursor?: string | null;
+        Count?: number;
+        Level?: string | null;
+        /** @format guid */
+        CorrelationId?: string | null;
+        Logger?: string | null;
+        EventCode?: string | null;
+        Keyword?: string | null;
+        /** @format guid */
+        WorkerNodeId?: string | null;
+        /** @format guid */
+        DeploymentTicketId?: string | null;
+        ResourceType?: string | null;
+        ResourceId?: string | null;
       },
       data?: LogMessagePageModel | Promise<LogMessagePageModel>,
       options?: MutatorOptions,
@@ -10042,6 +14177,135 @@ export class Api<
         ...params,
       }),
   };
+  deploymentQueue = {
+    /**
+     * No description
+     *
+     * @tags DeploymentQueue
+     * @name DeploymentQueueCancel
+     * @request DELETE:/api/v1/deployment-queue/{id}
+     */
+    deploymentQueueCancel: (id: string, params: RequestParams = {}) =>
+      this.request<Blob, any>({
+        path: `/api/v1/deployment-queue/${id}`,
+        method: "DELETE",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags DeploymentQueue
+     * @name DeploymentQueueGetById
+     * @request GET:/api/v1/deployment-queue/{id}
+     */
+    deploymentQueueGetById: (id: string, params: RequestParams = {}) =>
+      this.request<Blob, any>({
+        path: `/api/v1/deployment-queue/${id}`,
+        method: "GET",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags DeploymentQueue
+     * @name DeploymentQueueGetById
+     * @request GET:/api/v1/deployment-queue/{id}
+     */
+    useDeploymentQueueGetById: (
+      id: string,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<Blob, any>(
+        doFetch ? `/api/v1/deployment-queue/${id}` : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags DeploymentQueue
+     * @name DeploymentQueueGetById
+     * @request GET:/api/v1/deployment-queue/{id}
+     */
+    mutateDeploymentQueueGetById: (
+      id: string,
+      data?: Blob | Promise<Blob>,
+      options?: MutatorOptions,
+    ) => mutate<Blob>(`/api/v1/deployment-queue/${id}`, data, options),
+
+    /**
+     * No description
+     *
+     * @tags DeploymentQueue
+     * @name DeploymentQueueList
+     * @request GET:/api/v1/deployment-queue
+     */
+    deploymentQueueList: (
+      query?: {
+        status?: string | null;
+        cursor?: string | null;
+        /**
+         * @format int32
+         * @default 20
+         */
+        pageSize?: number;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<Blob, any>({
+        path: `/api/v1/deployment-queue`,
+        method: "GET",
+        query: query,
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags DeploymentQueue
+     * @name DeploymentQueueList
+     * @request GET:/api/v1/deployment-queue
+     */
+    useDeploymentQueueList: (
+      query?: {
+        status?: string | null;
+        cursor?: string | null;
+        /**
+         * @format int32
+         * @default 20
+         */
+        pageSize?: number;
+      },
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<Blob, any>(
+        doFetch ? [`/api/v1/deployment-queue`, query] : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags DeploymentQueue
+     * @name DeploymentQueueList
+     * @request GET:/api/v1/deployment-queue
+     */
+    mutateDeploymentQueueList: (
+      query?: {
+        status?: string | null;
+        cursor?: string | null;
+        /**
+         * @format int32
+         * @default 20
+         */
+        pageSize?: number;
+      },
+      data?: Blob | Promise<Blob>,
+      options?: MutatorOptions,
+    ) => mutate<Blob>([`/api/v1/deployment-queue`, query], data, options),
+  };
   edit = {
     /**
      * @description Adding a game challenge flag requires administrator privileges
@@ -10902,6 +15166,373 @@ export class Api<
         body: data,
         type: ContentType.Json,
         format: "json",
+        ...params,
+      }),
+  };
+  exercise = {
+    /**
+     * No description
+     *
+     * @tags Exercise
+     * @name ExerciseBackfillPool
+     * @request POST:/api/exercise/pool/backfill
+     */
+    exerciseBackfillPool: (params: RequestParams = {}) =>
+      this.request<any, RequestResponse>({
+        path: `/api/exercise/pool/backfill`,
+        method: "POST",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Exercise
+     * @name ExerciseCreateContainer
+     * @request POST:/api/exercise/{id}/container
+     */
+    exerciseCreateContainer: (id: number, params: RequestParams = {}) =>
+      this.request<any, RequestResponse>({
+        path: `/api/exercise/${id}/container`,
+        method: "POST",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Exercise
+     * @name ExerciseCreateExercise
+     * @request POST:/api/exercise
+     */
+    exerciseCreateExercise: (
+      data: ExerciseCreateModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<any, RequestResponse>({
+        path: `/api/exercise`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Exercise
+     * @name ExerciseDeleteExercise
+     * @request DELETE:/api/exercise/{id}
+     */
+    exerciseDeleteExercise: (id: number, params: RequestParams = {}) =>
+      this.request<any, RequestResponse>({
+        path: `/api/exercise/${id}`,
+        method: "DELETE",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Exercise
+     * @name ExerciseDestroyContainer
+     * @request DELETE:/api/exercise/{id}/container
+     */
+    exerciseDestroyContainer: (id: number, params: RequestParams = {}) =>
+      this.request<any, RequestResponse>({
+        path: `/api/exercise/${id}/container`,
+        method: "DELETE",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Exercise
+     * @name ExerciseExtendContainer
+     * @request POST:/api/exercise/{id}/container/extend
+     */
+    exerciseExtendContainer: (id: number, params: RequestParams = {}) =>
+      this.request<any, RequestResponse>({
+        path: `/api/exercise/${id}/container/extend`,
+        method: "POST",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Exercise
+     * @name ExerciseGetExercise
+     * @request GET:/api/exercise/{id}
+     */
+    exerciseGetExercise: (id: number, params: RequestParams = {}) =>
+      this.request<any, RequestResponse>({
+        path: `/api/exercise/${id}`,
+        method: "GET",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags Exercise
+     * @name ExerciseGetExercise
+     * @request GET:/api/exercise/{id}
+     */
+    useExerciseGetExercise: (
+      id: number,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<any, RequestResponse>(
+        doFetch ? `/api/exercise/${id}` : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags Exercise
+     * @name ExerciseGetExercise
+     * @request GET:/api/exercise/{id}
+     */
+    mutateExerciseGetExercise: (
+      id: number,
+      data?: any | Promise<any>,
+      options?: MutatorOptions,
+    ) => mutate<any>(`/api/exercise/${id}`, data, options),
+
+    /**
+     * No description
+     *
+     * @tags Exercise
+     * @name ExerciseGetExerciseForManagement
+     * @request GET:/api/exercise/{id}/manage
+     */
+    exerciseGetExerciseForManagement: (
+      id: number,
+      params: RequestParams = {},
+    ) =>
+      this.request<any, RequestResponse>({
+        path: `/api/exercise/${id}/manage`,
+        method: "GET",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags Exercise
+     * @name ExerciseGetExerciseForManagement
+     * @request GET:/api/exercise/{id}/manage
+     */
+    useExerciseGetExerciseForManagement: (
+      id: number,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<any, RequestResponse>(
+        doFetch ? `/api/exercise/${id}/manage` : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags Exercise
+     * @name ExerciseGetExerciseForManagement
+     * @request GET:/api/exercise/{id}/manage
+     */
+    mutateExerciseGetExerciseForManagement: (
+      id: number,
+      data?: any | Promise<any>,
+      options?: MutatorOptions,
+    ) => mutate<any>(`/api/exercise/${id}/manage`, data, options),
+
+    /**
+     * No description
+     *
+     * @tags Exercise
+     * @name ExerciseGetExercises
+     * @request GET:/api/exercise
+     */
+    exerciseGetExercises: (
+      query?: {
+        Search?: string | null;
+        Categories?: ChallengeCategory[] | null;
+        Difficulties?: Difficulty[] | null;
+        Tags?: string[] | null;
+        Credit?: boolean | null;
+        Sources?: ExercisePoolSource[] | null;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<any, RequestResponse>({
+        path: `/api/exercise`,
+        method: "GET",
+        query: query,
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags Exercise
+     * @name ExerciseGetExercises
+     * @request GET:/api/exercise
+     */
+    useExerciseGetExercises: (
+      query?: {
+        Search?: string | null;
+        Categories?: ChallengeCategory[] | null;
+        Difficulties?: Difficulty[] | null;
+        Tags?: string[] | null;
+        Credit?: boolean | null;
+        Sources?: ExercisePoolSource[] | null;
+      },
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<any, RequestResponse>(
+        doFetch ? [`/api/exercise`, query] : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags Exercise
+     * @name ExerciseGetExercises
+     * @request GET:/api/exercise
+     */
+    mutateExerciseGetExercises: (
+      query?: {
+        Search?: string | null;
+        Categories?: ChallengeCategory[] | null;
+        Difficulties?: Difficulty[] | null;
+        Tags?: string[] | null;
+        Credit?: boolean | null;
+        Sources?: ExercisePoolSource[] | null;
+      },
+      data?: any | Promise<any>,
+      options?: MutatorOptions,
+    ) => mutate<any>([`/api/exercise`, query], data, options),
+
+    /**
+     * No description
+     *
+     * @tags Exercise
+     * @name ExerciseGetExercisesForManagement
+     * @request GET:/api/exercise/manage
+     */
+    exerciseGetExercisesForManagement: (params: RequestParams = {}) =>
+      this.request<ExerciseInfoModel[], RequestResponse>({
+        path: `/api/exercise/manage`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags Exercise
+     * @name ExerciseGetExercisesForManagement
+     * @request GET:/api/exercise/manage
+     */
+    useExerciseGetExercisesForManagement: (
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<ExerciseInfoModel[], RequestResponse>(
+        doFetch ? `/api/exercise/manage` : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags Exercise
+     * @name ExerciseGetExercisesForManagement
+     * @request GET:/api/exercise/manage
+     */
+    mutateExerciseGetExercisesForManagement: (
+      data?: ExerciseInfoModel[] | Promise<ExerciseInfoModel[]>,
+      options?: MutatorOptions,
+    ) => mutate<ExerciseInfoModel[]>(`/api/exercise/manage`, data, options),
+
+    /**
+     * No description
+     *
+     * @tags Exercise
+     * @name ExerciseImportFromGame
+     * @request POST:/api/exercise/import
+     */
+    exerciseImportFromGame: (
+      data: ExerciseImportFromGameModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<any, RequestResponse>({
+        path: `/api/exercise/import`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Exercise
+     * @name ExerciseImportFromTraining
+     * @request POST:/api/exercise/import/training
+     */
+    exerciseImportFromTraining: (
+      data: ExerciseImportFromTrainingModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<any, RequestResponse>({
+        path: `/api/exercise/import/training`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Exercise
+     * @name ExerciseSubmitFlag
+     * @request POST:/api/exercise/{id}/flag
+     */
+    exerciseSubmitFlag: (
+      id: number,
+      data: FlagSubmitModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<any, RequestResponse>({
+        path: `/api/exercise/${id}/flag`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Exercise
+     * @name ExerciseUpdateExercise
+     * @request PUT:/api/exercise/{id}
+     */
+    exerciseUpdateExercise: (
+      id: number,
+      data: ExerciseCreateModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<any, RequestResponse>({
+        path: `/api/exercise/${id}`,
+        method: "PUT",
+        body: data,
+        type: ContentType.Json,
         ...params,
       }),
   };
@@ -12596,6 +17227,54 @@ export class Api<
      * No description
      *
      * @tags ImageTemplate
+     * @name ImageTemplateGetRemoteAccess
+     * @request GET:/api/v1/image-templates/{id}/remote-access
+     */
+    imageTemplateGetRemoteAccess: (id: number, params: RequestParams = {}) =>
+      this.request<Blob, any>({
+        path: `/api/v1/image-templates/${id}/remote-access`,
+        method: "GET",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags ImageTemplate
+     * @name ImageTemplateGetRemoteAccess
+     * @request GET:/api/v1/image-templates/{id}/remote-access
+     */
+    useImageTemplateGetRemoteAccess: (
+      id: number,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<Blob, any>(
+        doFetch ? `/api/v1/image-templates/${id}/remote-access` : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags ImageTemplate
+     * @name ImageTemplateGetRemoteAccess
+     * @request GET:/api/v1/image-templates/{id}/remote-access
+     */
+    mutateImageTemplateGetRemoteAccess: (
+      id: number,
+      data?: Blob | Promise<Blob>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<Blob>(
+        `/api/v1/image-templates/${id}/remote-access`,
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags ImageTemplate
      * @name ImageTemplateImportFromLocal
      * @summary Import VM image from local filesystem path.
      * @request POST:/api/v1/image-templates/import-local
@@ -12719,6 +17398,26 @@ export class Api<
       this.request<Blob, any>({
         path: `/api/v1/image-templates/register-docker`,
         method: "POST",
+        body: data,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags ImageTemplate
+     * @name ImageTemplateUpdateRemoteAccess
+     * @request PATCH:/api/v1/image-templates/{id}/remote-access
+     */
+    imageTemplateUpdateRemoteAccess: (
+      id: number,
+      data: UpdateImageRemoteAccessModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<Blob, any>({
+        path: `/api/v1/image-templates/${id}/remote-access`,
+        method: "PATCH",
         body: data,
         type: ContentType.Json,
         ...params,
@@ -13069,6 +17768,26 @@ export class Api<
      * No description
      *
      * @tags Internal
+     * @name InternalAcknowledgePortMap
+     * @summary Acknowledge that the public gateway applied the current TCP port map.
+     * @request POST:/api/internal/port-map/ack
+     */
+    internalAcknowledgePortMap: (
+      data: PortMapAckRequest,
+      params: RequestParams = {},
+    ) =>
+      this.request<Blob, any>({
+        path: `/api/internal/port-map/ack`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Internal
      * @name InternalGetPortMap
      * @summary 获取所有活跃容器的端口映射（用于 Nginx stream 配置同步）
      * @request GET:/api/internal/port-map
@@ -13275,6 +17994,190 @@ export class Api<
       data?: Blob | Promise<Blob>,
       options?: MutatorOptions,
     ) => mutate<Blob>(`/api/agent/download`, data, options),
+
+    /**
+     * No description
+     *
+     * @tags Nodes
+     * @name NodesDownloadLinuxEndpointSensor
+     * @request GET:/api/agent/endpoint-sensor/linux-x64/download
+     */
+    nodesDownloadLinuxEndpointSensor: (params: RequestParams = {}) =>
+      this.request<Blob, any>({
+        path: `/api/agent/endpoint-sensor/linux-x64/download`,
+        method: "GET",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags Nodes
+     * @name NodesDownloadLinuxEndpointSensor
+     * @request GET:/api/agent/endpoint-sensor/linux-x64/download
+     */
+    useNodesDownloadLinuxEndpointSensor: (
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<Blob, any>(
+        doFetch ? `/api/agent/endpoint-sensor/linux-x64/download` : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags Nodes
+     * @name NodesDownloadLinuxEndpointSensor
+     * @request GET:/api/agent/endpoint-sensor/linux-x64/download
+     */
+    mutateNodesDownloadLinuxEndpointSensor: (
+      data?: Blob | Promise<Blob>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<Blob>(
+        `/api/agent/endpoint-sensor/linux-x64/download`,
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags Nodes
+     * @name NodesDownloadLinuxGuestSupervisor
+     * @request GET:/api/agent/guest-supervisor/linux-x64/download
+     */
+    nodesDownloadLinuxGuestSupervisor: (params: RequestParams = {}) =>
+      this.request<Blob, any>({
+        path: `/api/agent/guest-supervisor/linux-x64/download`,
+        method: "GET",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags Nodes
+     * @name NodesDownloadLinuxGuestSupervisor
+     * @request GET:/api/agent/guest-supervisor/linux-x64/download
+     */
+    useNodesDownloadLinuxGuestSupervisor: (
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<Blob, any>(
+        doFetch ? `/api/agent/guest-supervisor/linux-x64/download` : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags Nodes
+     * @name NodesDownloadLinuxGuestSupervisor
+     * @request GET:/api/agent/guest-supervisor/linux-x64/download
+     */
+    mutateNodesDownloadLinuxGuestSupervisor: (
+      data?: Blob | Promise<Blob>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<Blob>(
+        `/api/agent/guest-supervisor/linux-x64/download`,
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags Nodes
+     * @name NodesDownloadWindowsEndpointSensor
+     * @request GET:/api/agent/endpoint-sensor/win-x64/download
+     */
+    nodesDownloadWindowsEndpointSensor: (params: RequestParams = {}) =>
+      this.request<Blob, any>({
+        path: `/api/agent/endpoint-sensor/win-x64/download`,
+        method: "GET",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags Nodes
+     * @name NodesDownloadWindowsEndpointSensor
+     * @request GET:/api/agent/endpoint-sensor/win-x64/download
+     */
+    useNodesDownloadWindowsEndpointSensor: (
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<Blob, any>(
+        doFetch ? `/api/agent/endpoint-sensor/win-x64/download` : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags Nodes
+     * @name NodesDownloadWindowsEndpointSensor
+     * @request GET:/api/agent/endpoint-sensor/win-x64/download
+     */
+    mutateNodesDownloadWindowsEndpointSensor: (
+      data?: Blob | Promise<Blob>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<Blob>(
+        `/api/agent/endpoint-sensor/win-x64/download`,
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags Nodes
+     * @name NodesDownloadWindowsGuestSupervisor
+     * @request GET:/api/agent/guest-supervisor/win-x64/download
+     */
+    nodesDownloadWindowsGuestSupervisor: (params: RequestParams = {}) =>
+      this.request<Blob, any>({
+        path: `/api/agent/guest-supervisor/win-x64/download`,
+        method: "GET",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags Nodes
+     * @name NodesDownloadWindowsGuestSupervisor
+     * @request GET:/api/agent/guest-supervisor/win-x64/download
+     */
+    useNodesDownloadWindowsGuestSupervisor: (
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<Blob, any>(
+        doFetch ? `/api/agent/guest-supervisor/win-x64/download` : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags Nodes
+     * @name NodesDownloadWindowsGuestSupervisor
+     * @request GET:/api/agent/guest-supervisor/win-x64/download
+     */
+    mutateNodesDownloadWindowsGuestSupervisor: (
+      data?: Blob | Promise<Blob>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<Blob>(
+        `/api/agent/guest-supervisor/win-x64/download`,
+        data,
+        options,
+      ),
 
     /**
      * No description
@@ -13494,134 +18397,479 @@ export class Api<
         ...params,
       }),
   };
-  deploymentQueue = {
+  operations = {
     /**
      * No description
      *
-     * @tags DeploymentQueue
-     * @name DeploymentQueueCancel
-     * @request DELETE:/api/v1/deployment-queue/{id}
+     * @tags Operations
+     * @name OperationsCorrelation
+     * @request GET:/api/admin/operations/correlations/{correlationId}
      */
-    deploymentQueueCancel: (id: string, params: RequestParams = {}) =>
-      this.request<Blob, any>({
-        path: `/api/v1/deployment-queue/${id}`,
-        method: "DELETE",
-        ...params,
-      }),
-
-    /**
-     * No description
-     *
-     * @tags DeploymentQueue
-     * @name DeploymentQueueGetById
-     * @request GET:/api/v1/deployment-queue/{id}
-     */
-    deploymentQueueGetById: (id: string, params: RequestParams = {}) =>
-      this.request<Blob, any>({
-        path: `/api/v1/deployment-queue/${id}`,
+    operationsCorrelation: (
+      correlationId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<OperationalCorrelationSummaryModel, ProblemDetails>({
+        path: `/api/admin/operations/correlations/${correlationId}`,
         method: "GET",
+        format: "json",
         ...params,
       }),
     /**
      * No description
      *
-     * @tags DeploymentQueue
-     * @name DeploymentQueueGetById
-     * @request GET:/api/v1/deployment-queue/{id}
+     * @tags Operations
+     * @name OperationsCorrelation
+     * @request GET:/api/admin/operations/correlations/{correlationId}
      */
-    useDeploymentQueueGetById: (
-      id: string,
+    useOperationsCorrelation: (
+      correlationId: string,
       options?: SWRConfiguration,
       doFetch: boolean = true,
     ) =>
-      useSWR<Blob, any>(
-        doFetch ? `/api/v1/deployment-queue/${id}` : null,
+      useSWR<OperationalCorrelationSummaryModel, ProblemDetails>(
+        doFetch ? `/api/admin/operations/correlations/${correlationId}` : null,
         options,
       ),
 
     /**
      * No description
      *
-     * @tags DeploymentQueue
-     * @name DeploymentQueueGetById
-     * @request GET:/api/v1/deployment-queue/{id}
+     * @tags Operations
+     * @name OperationsCorrelation
+     * @request GET:/api/admin/operations/correlations/{correlationId}
      */
-    mutateDeploymentQueueGetById: (
-      id: string,
-      data?: Blob | Promise<Blob>,
+    mutateOperationsCorrelation: (
+      correlationId: string,
+      data?:
+        | OperationalCorrelationSummaryModel
+        | Promise<OperationalCorrelationSummaryModel>,
       options?: MutatorOptions,
-    ) => mutate<Blob>(`/api/v1/deployment-queue/${id}`, data, options),
+    ) =>
+      mutate<OperationalCorrelationSummaryModel>(
+        `/api/admin/operations/correlations/${correlationId}`,
+        data,
+        options,
+      ),
 
     /**
      * No description
      *
-     * @tags DeploymentQueue
-     * @name DeploymentQueueList
-     * @request GET:/api/v1/deployment-queue
+     * @tags Operations
+     * @name OperationsEvents
+     * @request GET:/api/admin/operations/events
      */
-    deploymentQueueList: (
+    operationsEvents: (
       query?: {
-        status?: string | null;
-        cursor?: string | null;
+        Cursor?: string | null;
         /**
          * @format int32
-         * @default 20
+         * @min 1
+         * @max 200
          */
-        pageSize?: number;
+        Count?: number;
+        /** @format guid */
+        CorrelationId?: string | null;
+        /** @format uint64 */
+        From?: number | null;
+        /** @format uint64 */
+        To?: number | null;
+        Domain?: string | null;
+        EventCode?: string | null;
+        Outcome?: OperationalEventOutcome | null;
+        ErrorCategory?: OperationalErrorCategory | null;
+        /** @format guid */
+        ActorUserId?: string | null;
+        /** @format guid */
+        OwnerUserId?: string | null;
+        /** @format int32 */
+        OwnerTeamId?: number | null;
+        /** @format int32 */
+        GameId?: number | null;
+        /** @format int32 */
+        CourseId?: number | null;
+        /** @format int32 */
+        ChallengeId?: number | null;
+        /** @format int32 */
+        ImageTemplateId?: number | null;
+        /** @format guid */
+        WorkerNodeId?: string | null;
+        /** @format guid */
+        DeploymentTicketId?: string | null;
+        /** @format int32 */
+        TeamLabRuntimeId?: number | null;
+        /** @format guid */
+        VmInstanceId?: string | null;
+        SubjectType?: string | null;
+        SubjectId?: string | null;
+        ResourceType?: string | null;
+        ResourceId?: string | null;
       },
       params: RequestParams = {},
     ) =>
-      this.request<Blob, any>({
-        path: `/api/v1/deployment-queue`,
+      this.request<OperationalEventViewPageModel, any>({
+        path: `/api/admin/operations/events`,
         method: "GET",
         query: query,
+        format: "json",
         ...params,
       }),
     /**
      * No description
      *
-     * @tags DeploymentQueue
-     * @name DeploymentQueueList
-     * @request GET:/api/v1/deployment-queue
+     * @tags Operations
+     * @name OperationsEvents
+     * @request GET:/api/admin/operations/events
      */
-    useDeploymentQueueList: (
+    useOperationsEvents: (
       query?: {
-        status?: string | null;
-        cursor?: string | null;
+        Cursor?: string | null;
         /**
          * @format int32
-         * @default 20
+         * @min 1
+         * @max 200
          */
-        pageSize?: number;
+        Count?: number;
+        /** @format guid */
+        CorrelationId?: string | null;
+        /** @format uint64 */
+        From?: number | null;
+        /** @format uint64 */
+        To?: number | null;
+        Domain?: string | null;
+        EventCode?: string | null;
+        Outcome?: OperationalEventOutcome | null;
+        ErrorCategory?: OperationalErrorCategory | null;
+        /** @format guid */
+        ActorUserId?: string | null;
+        /** @format guid */
+        OwnerUserId?: string | null;
+        /** @format int32 */
+        OwnerTeamId?: number | null;
+        /** @format int32 */
+        GameId?: number | null;
+        /** @format int32 */
+        CourseId?: number | null;
+        /** @format int32 */
+        ChallengeId?: number | null;
+        /** @format int32 */
+        ImageTemplateId?: number | null;
+        /** @format guid */
+        WorkerNodeId?: string | null;
+        /** @format guid */
+        DeploymentTicketId?: string | null;
+        /** @format int32 */
+        TeamLabRuntimeId?: number | null;
+        /** @format guid */
+        VmInstanceId?: string | null;
+        SubjectType?: string | null;
+        SubjectId?: string | null;
+        ResourceType?: string | null;
+        ResourceId?: string | null;
       },
       options?: SWRConfiguration,
       doFetch: boolean = true,
     ) =>
-      useSWR<Blob, any>(
-        doFetch ? [`/api/v1/deployment-queue`, query] : null,
+      useSWR<OperationalEventViewPageModel, any>(
+        doFetch ? [`/api/admin/operations/events`, query] : null,
         options,
       ),
 
     /**
      * No description
      *
-     * @tags DeploymentQueue
-     * @name DeploymentQueueList
-     * @request GET:/api/v1/deployment-queue
+     * @tags Operations
+     * @name OperationsEvents
+     * @request GET:/api/admin/operations/events
      */
-    mutateDeploymentQueueList: (
+    mutateOperationsEvents: (
       query?: {
-        status?: string | null;
-        cursor?: string | null;
+        Cursor?: string | null;
         /**
          * @format int32
-         * @default 20
+         * @min 1
+         * @max 200
          */
-        pageSize?: number;
+        Count?: number;
+        /** @format guid */
+        CorrelationId?: string | null;
+        /** @format uint64 */
+        From?: number | null;
+        /** @format uint64 */
+        To?: number | null;
+        Domain?: string | null;
+        EventCode?: string | null;
+        Outcome?: OperationalEventOutcome | null;
+        ErrorCategory?: OperationalErrorCategory | null;
+        /** @format guid */
+        ActorUserId?: string | null;
+        /** @format guid */
+        OwnerUserId?: string | null;
+        /** @format int32 */
+        OwnerTeamId?: number | null;
+        /** @format int32 */
+        GameId?: number | null;
+        /** @format int32 */
+        CourseId?: number | null;
+        /** @format int32 */
+        ChallengeId?: number | null;
+        /** @format int32 */
+        ImageTemplateId?: number | null;
+        /** @format guid */
+        WorkerNodeId?: string | null;
+        /** @format guid */
+        DeploymentTicketId?: string | null;
+        /** @format int32 */
+        TeamLabRuntimeId?: number | null;
+        /** @format guid */
+        VmInstanceId?: string | null;
+        SubjectType?: string | null;
+        SubjectId?: string | null;
+        ResourceType?: string | null;
+        ResourceId?: string | null;
       },
-      data?: Blob | Promise<Blob>,
+      data?:
+        | OperationalEventViewPageModel
+        | Promise<OperationalEventViewPageModel>,
       options?: MutatorOptions,
-    ) => mutate<Blob>([`/api/v1/deployment-queue`, query], data, options),
+    ) =>
+      mutate<OperationalEventViewPageModel>(
+        [`/api/admin/operations/events`, query],
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags Operations
+     * @name OperationsGet
+     * @request GET:/api/open/v1/operations/{id}
+     */
+    operationsGet: (id: string, params: RequestParams = {}) =>
+      this.request<ApiOperationModel, ProblemDetails>({
+        path: `/api/open/v1/operations/${id}`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags Operations
+     * @name OperationsGet
+     * @request GET:/api/open/v1/operations/{id}
+     */
+    useOperationsGet: (
+      id: string,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<ApiOperationModel, ProblemDetails>(
+        doFetch ? `/api/open/v1/operations/${id}` : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags Operations
+     * @name OperationsGet
+     * @request GET:/api/open/v1/operations/{id}
+     */
+    mutateOperationsGet: (
+      id: string,
+      data?: ApiOperationModel | Promise<ApiOperationModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<ApiOperationModel>(`/api/open/v1/operations/${id}`, data, options),
+
+    /**
+     * No description
+     *
+     * @tags Operations
+     * @name OperationsRecovery
+     * @request GET:/api/admin/operations/recovery
+     */
+    operationsRecovery: (
+      query?: {
+        Cursor?: string | null;
+        /**
+         * @format int32
+         * @min 1
+         * @max 200
+         */
+        Count?: number;
+        /** @format guid */
+        CorrelationId?: string | null;
+        /** @format uint64 */
+        From?: number | null;
+        /** @format uint64 */
+        To?: number | null;
+        Domain?: string | null;
+        EventCode?: string | null;
+        Outcome?: OperationalEventOutcome | null;
+        ErrorCategory?: OperationalErrorCategory | null;
+        /** @format guid */
+        ActorUserId?: string | null;
+        /** @format guid */
+        OwnerUserId?: string | null;
+        /** @format int32 */
+        OwnerTeamId?: number | null;
+        /** @format int32 */
+        GameId?: number | null;
+        /** @format int32 */
+        CourseId?: number | null;
+        /** @format int32 */
+        ChallengeId?: number | null;
+        /** @format int32 */
+        ImageTemplateId?: number | null;
+        /** @format guid */
+        WorkerNodeId?: string | null;
+        /** @format guid */
+        DeploymentTicketId?: string | null;
+        /** @format int32 */
+        TeamLabRuntimeId?: number | null;
+        /** @format guid */
+        VmInstanceId?: string | null;
+        SubjectType?: string | null;
+        SubjectId?: string | null;
+        ResourceType?: string | null;
+        ResourceId?: string | null;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<OperationalEventViewPageModel, any>({
+        path: `/api/admin/operations/recovery`,
+        method: "GET",
+        query: query,
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags Operations
+     * @name OperationsRecovery
+     * @request GET:/api/admin/operations/recovery
+     */
+    useOperationsRecovery: (
+      query?: {
+        Cursor?: string | null;
+        /**
+         * @format int32
+         * @min 1
+         * @max 200
+         */
+        Count?: number;
+        /** @format guid */
+        CorrelationId?: string | null;
+        /** @format uint64 */
+        From?: number | null;
+        /** @format uint64 */
+        To?: number | null;
+        Domain?: string | null;
+        EventCode?: string | null;
+        Outcome?: OperationalEventOutcome | null;
+        ErrorCategory?: OperationalErrorCategory | null;
+        /** @format guid */
+        ActorUserId?: string | null;
+        /** @format guid */
+        OwnerUserId?: string | null;
+        /** @format int32 */
+        OwnerTeamId?: number | null;
+        /** @format int32 */
+        GameId?: number | null;
+        /** @format int32 */
+        CourseId?: number | null;
+        /** @format int32 */
+        ChallengeId?: number | null;
+        /** @format int32 */
+        ImageTemplateId?: number | null;
+        /** @format guid */
+        WorkerNodeId?: string | null;
+        /** @format guid */
+        DeploymentTicketId?: string | null;
+        /** @format int32 */
+        TeamLabRuntimeId?: number | null;
+        /** @format guid */
+        VmInstanceId?: string | null;
+        SubjectType?: string | null;
+        SubjectId?: string | null;
+        ResourceType?: string | null;
+        ResourceId?: string | null;
+      },
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<OperationalEventViewPageModel, any>(
+        doFetch ? [`/api/admin/operations/recovery`, query] : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags Operations
+     * @name OperationsRecovery
+     * @request GET:/api/admin/operations/recovery
+     */
+    mutateOperationsRecovery: (
+      query?: {
+        Cursor?: string | null;
+        /**
+         * @format int32
+         * @min 1
+         * @max 200
+         */
+        Count?: number;
+        /** @format guid */
+        CorrelationId?: string | null;
+        /** @format uint64 */
+        From?: number | null;
+        /** @format uint64 */
+        To?: number | null;
+        Domain?: string | null;
+        EventCode?: string | null;
+        Outcome?: OperationalEventOutcome | null;
+        ErrorCategory?: OperationalErrorCategory | null;
+        /** @format guid */
+        ActorUserId?: string | null;
+        /** @format guid */
+        OwnerUserId?: string | null;
+        /** @format int32 */
+        OwnerTeamId?: number | null;
+        /** @format int32 */
+        GameId?: number | null;
+        /** @format int32 */
+        CourseId?: number | null;
+        /** @format int32 */
+        ChallengeId?: number | null;
+        /** @format int32 */
+        ImageTemplateId?: number | null;
+        /** @format guid */
+        WorkerNodeId?: string | null;
+        /** @format guid */
+        DeploymentTicketId?: string | null;
+        /** @format int32 */
+        TeamLabRuntimeId?: number | null;
+        /** @format guid */
+        VmInstanceId?: string | null;
+        SubjectType?: string | null;
+        SubjectId?: string | null;
+        ResourceType?: string | null;
+        ResourceId?: string | null;
+      },
+      data?:
+        | OperationalEventViewPageModel
+        | Promise<OperationalEventViewPageModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<OperationalEventViewPageModel>(
+        [`/api/admin/operations/recovery`, query],
+        data,
+        options,
+      ),
   };
   penetrationAdmin = {
     /**
@@ -13684,12 +18932,64 @@ export class Api<
      * No description
      *
      * @tags PenetrationAdmin
+     * @name PenetrationAdminCloseTeamLabAccess
+     * @request POST:/api/admin/pentest/games/{gameId}/teamlab/access/close
+     */
+    penetrationAdminCloseTeamLabAccess: (
+      gameId: number,
+      params: RequestParams = {},
+    ) =>
+      this.request<Blob, any>({
+        path: `/api/admin/pentest/games/${gameId}/teamlab/access/close`,
+        method: "POST",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags PenetrationAdmin
+     * @name PenetrationAdminDeleteTeamLabOperator
+     * @request DELETE:/api/admin/pentest/games/{gameId}/teamlab/operators/{userId}
+     */
+    penetrationAdminDeleteTeamLabOperator: (
+      gameId: number,
+      userId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<Blob, any>({
+        path: `/api/admin/pentest/games/${gameId}/teamlab/operators/${userId}`,
+        method: "DELETE",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags PenetrationAdmin
      * @name PenetrationAdminDeploy
      * @request POST:/api/admin/pentest/games/{gameId}/deploy
      */
     penetrationAdminDeploy: (gameId: number, params: RequestParams = {}) =>
       this.request<Blob, any>({
         path: `/api/admin/pentest/games/${gameId}/deploy`,
+        method: "POST",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags PenetrationAdmin
+     * @name PenetrationAdminDrainTeamLab
+     * @request POST:/api/admin/pentest/games/{gameId}/teamlab/drain
+     */
+    penetrationAdminDrainTeamLab: (
+      gameId: number,
+      params: RequestParams = {},
+    ) =>
+      this.request<Blob, any>({
+        path: `/api/admin/pentest/games/${gameId}/teamlab/drain`,
         method: "POST",
         ...params,
       }),
@@ -13937,6 +19237,287 @@ export class Api<
      * No description
      *
      * @tags PenetrationAdmin
+     * @name PenetrationAdminGetTeamLab
+     * @request GET:/api/admin/pentest/games/{gameId}/teamlab
+     */
+    penetrationAdminGetTeamLab: (gameId: number, params: RequestParams = {}) =>
+      this.request<Blob, any>({
+        path: `/api/admin/pentest/games/${gameId}/teamlab`,
+        method: "GET",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags PenetrationAdmin
+     * @name PenetrationAdminGetTeamLab
+     * @request GET:/api/admin/pentest/games/{gameId}/teamlab
+     */
+    usePenetrationAdminGetTeamLab: (
+      gameId: number,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<Blob, any>(
+        doFetch ? `/api/admin/pentest/games/${gameId}/teamlab` : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags PenetrationAdmin
+     * @name PenetrationAdminGetTeamLab
+     * @request GET:/api/admin/pentest/games/{gameId}/teamlab
+     */
+    mutatePenetrationAdminGetTeamLab: (
+      gameId: number,
+      data?: Blob | Promise<Blob>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<Blob>(`/api/admin/pentest/games/${gameId}/teamlab`, data, options),
+
+    /**
+     * No description
+     *
+     * @tags PenetrationAdmin
+     * @name PenetrationAdminListTeamLabOperators
+     * @request GET:/api/admin/pentest/games/{gameId}/teamlab/operators
+     */
+    penetrationAdminListTeamLabOperators: (
+      gameId: number,
+      params: RequestParams = {},
+    ) =>
+      this.request<Blob, any>({
+        path: `/api/admin/pentest/games/${gameId}/teamlab/operators`,
+        method: "GET",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags PenetrationAdmin
+     * @name PenetrationAdminListTeamLabOperators
+     * @request GET:/api/admin/pentest/games/{gameId}/teamlab/operators
+     */
+    usePenetrationAdminListTeamLabOperators: (
+      gameId: number,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<Blob, any>(
+        doFetch ? `/api/admin/pentest/games/${gameId}/teamlab/operators` : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags PenetrationAdmin
+     * @name PenetrationAdminListTeamLabOperators
+     * @request GET:/api/admin/pentest/games/{gameId}/teamlab/operators
+     */
+    mutatePenetrationAdminListTeamLabOperators: (
+      gameId: number,
+      data?: Blob | Promise<Blob>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<Blob>(
+        `/api/admin/pentest/games/${gameId}/teamlab/operators`,
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags PenetrationAdmin
+     * @name PenetrationAdminListTeamLabReleases
+     * @request GET:/api/admin/pentest/games/{gameId}/teamlab/releases
+     */
+    penetrationAdminListTeamLabReleases: (
+      gameId: number,
+      params: RequestParams = {},
+    ) =>
+      this.request<Blob, any>({
+        path: `/api/admin/pentest/games/${gameId}/teamlab/releases`,
+        method: "GET",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags PenetrationAdmin
+     * @name PenetrationAdminListTeamLabReleases
+     * @request GET:/api/admin/pentest/games/{gameId}/teamlab/releases
+     */
+    usePenetrationAdminListTeamLabReleases: (
+      gameId: number,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<Blob, any>(
+        doFetch ? `/api/admin/pentest/games/${gameId}/teamlab/releases` : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags PenetrationAdmin
+     * @name PenetrationAdminListTeamLabReleases
+     * @request GET:/api/admin/pentest/games/{gameId}/teamlab/releases
+     */
+    mutatePenetrationAdminListTeamLabReleases: (
+      gameId: number,
+      data?: Blob | Promise<Blob>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<Blob>(
+        `/api/admin/pentest/games/${gameId}/teamlab/releases`,
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags PenetrationAdmin
+     * @name PenetrationAdminListTeamLabTargets
+     * @request GET:/api/admin/pentest/games/{gameId}/teamlab/targets
+     */
+    penetrationAdminListTeamLabTargets: (
+      gameId: number,
+      query?: {
+        after?: string | null;
+        /**
+         * @format int32
+         * @min 1
+         * @max 100
+         * @default 30
+         */
+        limit?: number;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<Blob, any>({
+        path: `/api/admin/pentest/games/${gameId}/teamlab/targets`,
+        method: "GET",
+        query: query,
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags PenetrationAdmin
+     * @name PenetrationAdminListTeamLabTargets
+     * @request GET:/api/admin/pentest/games/{gameId}/teamlab/targets
+     */
+    usePenetrationAdminListTeamLabTargets: (
+      gameId: number,
+      query?: {
+        after?: string | null;
+        /**
+         * @format int32
+         * @min 1
+         * @max 100
+         * @default 30
+         */
+        limit?: number;
+      },
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<Blob, any>(
+        doFetch
+          ? [`/api/admin/pentest/games/${gameId}/teamlab/targets`, query]
+          : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags PenetrationAdmin
+     * @name PenetrationAdminListTeamLabTargets
+     * @request GET:/api/admin/pentest/games/{gameId}/teamlab/targets
+     */
+    mutatePenetrationAdminListTeamLabTargets: (
+      gameId: number,
+      query?: {
+        after?: string | null;
+        /**
+         * @format int32
+         * @min 1
+         * @max 100
+         * @default 30
+         */
+        limit?: number;
+      },
+      data?: Blob | Promise<Blob>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<Blob>(
+        [`/api/admin/pentest/games/${gameId}/teamlab/targets`, query],
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags PenetrationAdmin
+     * @name PenetrationAdminOpenTeamLabAccess
+     * @request POST:/api/admin/pentest/games/{gameId}/teamlab/access/open
+     */
+    penetrationAdminOpenTeamLabAccess: (
+      gameId: number,
+      params: RequestParams = {},
+    ) =>
+      this.request<Blob, any>({
+        path: `/api/admin/pentest/games/${gameId}/teamlab/access/open`,
+        method: "POST",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags PenetrationAdmin
+     * @name PenetrationAdminPauseTeamLab
+     * @request POST:/api/admin/pentest/games/{gameId}/teamlab/pause
+     */
+    penetrationAdminPauseTeamLab: (
+      gameId: number,
+      params: RequestParams = {},
+    ) =>
+      this.request<Blob, any>({
+        path: `/api/admin/pentest/games/${gameId}/teamlab/pause`,
+        method: "POST",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags PenetrationAdmin
+     * @name PenetrationAdminPrepareTeamLab
+     * @request POST:/api/admin/pentest/games/{gameId}/teamlab/prepare
+     */
+    penetrationAdminPrepareTeamLab: (
+      gameId: number,
+      params: RequestParams = {},
+    ) =>
+      this.request<Blob, any>({
+        path: `/api/admin/pentest/games/${gameId}/teamlab/prepare`,
+        method: "POST",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags PenetrationAdmin
      * @name PenetrationAdminRebuildTeam
      * @request POST:/api/admin/pentest/games/{gameId}/teams/{teamId}/rebuild
      */
@@ -13963,8 +19544,47 @@ export class Api<
       data: ReplacePenetrationObjectivesModel,
       params: RequestParams = {},
     ) =>
-      this.request<Blob, any>({
+      this.request<PenetrationGameLabBindingModel, RequestResponse>({
         path: `/api/admin/pentest/games/${gameId}/objectives`,
+        method: "PUT",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags PenetrationAdmin
+     * @name PenetrationAdminResumeTeamLab
+     * @request POST:/api/admin/pentest/games/{gameId}/teamlab/resume
+     */
+    penetrationAdminResumeTeamLab: (
+      gameId: number,
+      params: RequestParams = {},
+    ) =>
+      this.request<Blob, any>({
+        path: `/api/admin/pentest/games/${gameId}/teamlab/resume`,
+        method: "POST",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags PenetrationAdmin
+     * @name PenetrationAdminSetTeamLabOperator
+     * @request PUT:/api/admin/pentest/games/{gameId}/teamlab/operators/{userId}
+     */
+    penetrationAdminSetTeamLabOperator: (
+      gameId: number,
+      userId: string,
+      data: TeamLabOperatorGrantWriteModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<Blob, any>({
+        path: `/api/admin/pentest/games/${gameId}/teamlab/operators/${userId}`,
         method: "PUT",
         body: data,
         type: ContentType.Json,
@@ -15054,6 +20674,7 @@ export class Api<
     theoryAdminGetQuestions: (
       query?: {
         keyword?: string | null;
+        tag?: string[] | null;
         /**
          * @format int32
          * @min 0
@@ -15086,6 +20707,7 @@ export class Api<
     useTheoryAdminGetQuestions: (
       query?: {
         keyword?: string | null;
+        tag?: string[] | null;
         /**
          * @format int32
          * @min 0
@@ -15117,6 +20739,7 @@ export class Api<
     mutateTheoryAdminGetQuestions: (
       query?: {
         keyword?: string | null;
+        tag?: string[] | null;
         /**
          * @format int32
          * @min 0
@@ -17427,238 +23050,3802 @@ export class Api<
         ...params,
       }),
   };
-  scopedApiProbe = {
+  users = {
     /**
      * No description
      *
-     * @tags ScopedApiProbe
-     * @name ScopedApiProbeConflictProblem
-     * @request GET:/api/open/v1/test/problems/conflict
+     * @tags Users
+     * @name UsersActivity
+     * @request GET:/api/users/{userId}/activity
      */
-    scopedApiProbeConflictProblem: (params: RequestParams = {}) =>
-      this.request<Blob, any>({
-        path: `/api/open/v1/test/problems/conflict`,
+    usersActivity: (
+      userId: string,
+      query?: {
+        /** @format date */
+        from?: string;
+        /** @format date */
+        to?: string;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<UserActivityPointModel[], RequestResponse>({
+        path: `/api/users/${userId}/activity`,
         method: "GET",
+        query: query,
+        format: "json",
         ...params,
       }),
     /**
      * No description
      *
-     * @tags ScopedApiProbe
-     * @name ScopedApiProbeConflictProblem
-     * @request GET:/api/open/v1/test/problems/conflict
+     * @tags Users
+     * @name UsersActivity
+     * @request GET:/api/users/{userId}/activity
      */
-    useScopedApiProbeConflictProblem: (
+    useUsersActivity: (
+      userId: string,
+      query?: {
+        /** @format date */
+        from?: string;
+        /** @format date */
+        to?: string;
+      },
       options?: SWRConfiguration,
       doFetch: boolean = true,
     ) =>
-      useSWR<Blob, any>(
-        doFetch ? `/api/open/v1/test/problems/conflict` : null,
+      useSWR<UserActivityPointModel[], RequestResponse>(
+        doFetch ? [`/api/users/${userId}/activity`, query] : null,
         options,
       ),
 
     /**
      * No description
      *
-     * @tags ScopedApiProbe
-     * @name ScopedApiProbeConflictProblem
-     * @request GET:/api/open/v1/test/problems/conflict
+     * @tags Users
+     * @name UsersActivity
+     * @request GET:/api/users/{userId}/activity
      */
-    mutateScopedApiProbeConflictProblem: (
-      data?: Blob | Promise<Blob>,
+    mutateUsersActivity: (
+      userId: string,
+      query?: {
+        /** @format date */
+        from?: string;
+        /** @format date */
+        to?: string;
+      },
+      data?: UserActivityPointModel[] | Promise<UserActivityPointModel[]>,
       options?: MutatorOptions,
-    ) => mutate<Blob>(`/api/open/v1/test/problems/conflict`, data, options),
+    ) =>
+      mutate<UserActivityPointModel[]>(
+        [`/api/users/${userId}/activity`, query],
+        data,
+        options,
+      ),
 
     /**
      * No description
      *
-     * @tags ScopedApiProbe
-     * @name ScopedApiProbeExternalWrite
-     * @request POST:/api/open/v1/test/images-write
+     * @tags Users
+     * @name UsersHistory
+     * @request GET:/api/users/{userId}/history
      */
-    scopedApiProbeExternalWrite: (params: RequestParams = {}) =>
-      this.request<Blob, any>({
-        path: `/api/open/v1/test/images-write`,
+    usersHistory: (
+      userId: string,
+      query?: {
+        /** @default "all" */
+        type?: string | null;
+        cursor?: string | null;
+        /**
+         * @format int32
+         * @default 20
+         */
+        count?: number;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<UserProfileHistoryPageModel, RequestResponse>({
+        path: `/api/users/${userId}/history`,
+        method: "GET",
+        query: query,
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags Users
+     * @name UsersHistory
+     * @request GET:/api/users/{userId}/history
+     */
+    useUsersHistory: (
+      userId: string,
+      query?: {
+        /** @default "all" */
+        type?: string | null;
+        cursor?: string | null;
+        /**
+         * @format int32
+         * @default 20
+         */
+        count?: number;
+      },
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<UserProfileHistoryPageModel, RequestResponse>(
+        doFetch ? [`/api/users/${userId}/history`, query] : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags Users
+     * @name UsersHistory
+     * @request GET:/api/users/{userId}/history
+     */
+    mutateUsersHistory: (
+      userId: string,
+      query?: {
+        /** @default "all" */
+        type?: string | null;
+        cursor?: string | null;
+        /**
+         * @format int32
+         * @default 20
+         */
+        count?: number;
+      },
+      data?: UserProfileHistoryPageModel | Promise<UserProfileHistoryPageModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<UserProfileHistoryPageModel>(
+        [`/api/users/${userId}/history`, query],
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags Users
+     * @name UsersOverview
+     * @request GET:/api/users/{userId}/overview
+     */
+    usersOverview: (
+      userId: string,
+      query?: {
+        /** @default "365d" */
+        window?: string;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<UserProfileOverviewModel, void | RequestResponse>({
+        path: `/api/users/${userId}/overview`,
+        method: "GET",
+        query: query,
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags Users
+     * @name UsersOverview
+     * @request GET:/api/users/{userId}/overview
+     */
+    useUsersOverview: (
+      userId: string,
+      query?: {
+        /** @default "365d" */
+        window?: string;
+      },
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<UserProfileOverviewModel, void | RequestResponse>(
+        doFetch ? [`/api/users/${userId}/overview`, query] : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags Users
+     * @name UsersOverview
+     * @request GET:/api/users/{userId}/overview
+     */
+    mutateUsersOverview: (
+      userId: string,
+      query?: {
+        /** @default "365d" */
+        window?: string;
+      },
+      data?: UserProfileOverviewModel | Promise<UserProfileOverviewModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<UserProfileOverviewModel>(
+        [`/api/users/${userId}/overview`, query],
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags Users
+     * @name UsersPrivateOverview
+     * @request GET:/api/users/me/private-overview
+     */
+    usersPrivateOverview: (params: RequestParams = {}) =>
+      this.request<UserPrivateOverviewModel, RequestResponse>({
+        path: `/api/users/me/private-overview`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags Users
+     * @name UsersPrivateOverview
+     * @request GET:/api/users/me/private-overview
+     */
+    useUsersPrivateOverview: (
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<UserPrivateOverviewModel, RequestResponse>(
+        doFetch ? `/api/users/me/private-overview` : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags Users
+     * @name UsersPrivateOverview
+     * @request GET:/api/users/me/private-overview
+     */
+    mutateUsersPrivateOverview: (
+      data?: UserPrivateOverviewModel | Promise<UserPrivateOverviewModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<UserPrivateOverviewModel>(
+        `/api/users/me/private-overview`,
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags Users
+     * @name UsersProfile
+     * @request GET:/api/users/{userId}
+     */
+    usersProfile: (userId: string, params: RequestParams = {}) =>
+      this.request<PublicUserProfileModel, void | RequestResponse>({
+        path: `/api/users/${userId}`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags Users
+     * @name UsersProfile
+     * @request GET:/api/users/{userId}
+     */
+    useUsersProfile: (
+      userId: string,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<PublicUserProfileModel, void | RequestResponse>(
+        doFetch ? `/api/users/${userId}` : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags Users
+     * @name UsersProfile
+     * @request GET:/api/users/{userId}
+     */
+    mutateUsersProfile: (
+      userId: string,
+      data?: PublicUserProfileModel | Promise<PublicUserProfileModel>,
+      options?: MutatorOptions,
+    ) => mutate<PublicUserProfileModel>(`/api/users/${userId}`, data, options),
+  };
+  teamLabConnectors = {
+    /**
+     * @description 为运行时申请连接器租约；独占连接器同一时间只属于一个运行时，重复申请幂等返回
+     *
+     * @tags TeamLab - Connectors
+     * @name OpenTeamLabConnectorsAcquire
+     * @summary 占用现场连接器
+     * @request POST:/api/open/v1/teamlab/connectors/{connectorId}/leases
+     */
+    openTeamLabConnectorsAcquire: (
+      connectorId: string,
+      data: AcquireTeamLabConnectorLeaseModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabConnectorLeaseModel, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/connectors/${connectorId}/leases`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * @description 返回类型、授权范围、容量、健康与当前占用
+     *
+     * @tags TeamLab - Connectors
+     * @name OpenTeamLabConnectorsGet
+     * @summary 获取现场连接器
+     * @request GET:/api/open/v1/teamlab/connectors/{connectorId}
+     */
+    openTeamLabConnectorsGet: (
+      connectorId: string,
+      query?: {
+        /** @format guid */
+        scopeId?: string | null;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabConnectorModel, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/connectors/${connectorId}`,
+        method: "GET",
+        query: query,
+        format: "json",
+        ...params,
+      }),
+    /**
+     * @description 返回类型、授权范围、容量、健康与当前占用
+     *
+     * @tags TeamLab - Connectors
+     * @name OpenTeamLabConnectorsGet
+     * @summary 获取现场连接器
+     * @request GET:/api/open/v1/teamlab/connectors/{connectorId}
+     */
+    useOpenTeamLabConnectorsGet: (
+      connectorId: string,
+      query?: {
+        /** @format guid */
+        scopeId?: string | null;
+      },
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<TeamLabConnectorModel, ExternalApiProblemDetailsModel>(
+        doFetch
+          ? [`/api/open/v1/teamlab/connectors/${connectorId}`, query]
+          : null,
+        options,
+      ),
+
+    /**
+     * @description 返回类型、授权范围、容量、健康与当前占用
+     *
+     * @tags TeamLab - Connectors
+     * @name OpenTeamLabConnectorsGet
+     * @summary 获取现场连接器
+     * @request GET:/api/open/v1/teamlab/connectors/{connectorId}
+     */
+    mutateOpenTeamLabConnectorsGet: (
+      connectorId: string,
+      query?: {
+        /** @format guid */
+        scopeId?: string | null;
+      },
+      data?: TeamLabConnectorModel | Promise<TeamLabConnectorModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<TeamLabConnectorModel>(
+        [`/api/open/v1/teamlab/connectors/${connectorId}`, query],
+        data,
+        options,
+      ),
+
+    /**
+     * @description 列出平台级与已授权 control scope 的连接器及占用状态，不暴露接入地址
+     *
+     * @tags TeamLab - Connectors
+     * @name OpenTeamLabConnectorsList
+     * @summary 列出现场连接器
+     * @request GET:/api/open/v1/teamlab/connectors
+     */
+    openTeamLabConnectorsList: (
+      query?: {
+        /** @format guid */
+        scopeId?: string | null;
+        /**
+         * @format int32
+         * @default 50
+         */
+        limit?: number;
+        after?: string | null;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabConnectorPageModel, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/connectors`,
+        method: "GET",
+        query: query,
+        format: "json",
+        ...params,
+      }),
+    /**
+     * @description 列出平台级与已授权 control scope 的连接器及占用状态，不暴露接入地址
+     *
+     * @tags TeamLab - Connectors
+     * @name OpenTeamLabConnectorsList
+     * @summary 列出现场连接器
+     * @request GET:/api/open/v1/teamlab/connectors
+     */
+    useOpenTeamLabConnectorsList: (
+      query?: {
+        /** @format guid */
+        scopeId?: string | null;
+        /**
+         * @format int32
+         * @default 50
+         */
+        limit?: number;
+        after?: string | null;
+      },
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<TeamLabConnectorPageModel, ExternalApiProblemDetailsModel>(
+        doFetch ? [`/api/open/v1/teamlab/connectors`, query] : null,
+        options,
+      ),
+
+    /**
+     * @description 列出平台级与已授权 control scope 的连接器及占用状态，不暴露接入地址
+     *
+     * @tags TeamLab - Connectors
+     * @name OpenTeamLabConnectorsList
+     * @summary 列出现场连接器
+     * @request GET:/api/open/v1/teamlab/connectors
+     */
+    mutateOpenTeamLabConnectorsList: (
+      query?: {
+        /** @format guid */
+        scopeId?: string | null;
+        /**
+         * @format int32
+         * @default 50
+         */
+        limit?: number;
+        after?: string | null;
+      },
+      data?: TeamLabConnectorPageModel | Promise<TeamLabConnectorPageModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<TeamLabConnectorPageModel>(
+        [`/api/open/v1/teamlab/connectors`, query],
+        data,
+        options,
+      ),
+
+    /**
+     * @description 释放该运行时的活动租约；重复释放幂等返回
+     *
+     * @tags TeamLab - Connectors
+     * @name OpenTeamLabConnectorsRelease
+     * @summary 释放现场连接器
+     * @request POST:/api/open/v1/teamlab/connectors/{connectorId}/leases/release
+     */
+    openTeamLabConnectorsRelease: (
+      connectorId: string,
+      data: ReleaseTeamLabConnectorLeaseModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabConnectorLeaseModel, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/connectors/${connectorId}/leases/release`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+  };
+  teamLabDevicePackages = {
+    /**
+     * @description 返回版本、制品引用、资源需求、参数 schema 与能力声明
+     *
+     * @tags TeamLab - Device packages
+     * @name OpenTeamLabDevicePackagesGet
+     * @summary 获取设备包版本
+     * @request GET:/api/open/v1/teamlab/device-packages/{packageId}
+     */
+    openTeamLabDevicePackagesGet: (
+      packageId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabDevicePackageModel, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/device-packages/${packageId}`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * @description 返回版本、制品引用、资源需求、参数 schema 与能力声明
+     *
+     * @tags TeamLab - Device packages
+     * @name OpenTeamLabDevicePackagesGet
+     * @summary 获取设备包版本
+     * @request GET:/api/open/v1/teamlab/device-packages/{packageId}
+     */
+    useOpenTeamLabDevicePackagesGet: (
+      packageId: string,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<TeamLabDevicePackageModel, ExternalApiProblemDetailsModel>(
+        doFetch ? `/api/open/v1/teamlab/device-packages/${packageId}` : null,
+        options,
+      ),
+
+    /**
+     * @description 返回版本、制品引用、资源需求、参数 schema 与能力声明
+     *
+     * @tags TeamLab - Device packages
+     * @name OpenTeamLabDevicePackagesGet
+     * @summary 获取设备包版本
+     * @request GET:/api/open/v1/teamlab/device-packages/{packageId}
+     */
+    mutateOpenTeamLabDevicePackagesGet: (
+      packageId: string,
+      data?: TeamLabDevicePackageModel | Promise<TeamLabDevicePackageModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<TeamLabDevicePackageModel>(
+        `/api/open/v1/teamlab/device-packages/${packageId}`,
+        data,
+        options,
+      ),
+
+    /**
+     * @description 按名称过滤返回不可变设备包版本，使用稳定 cursor 分页
+     *
+     * @tags TeamLab - Device packages
+     * @name OpenTeamLabDevicePackagesList
+     * @summary 列出设备包
+     * @request GET:/api/open/v1/teamlab/device-packages
+     */
+    openTeamLabDevicePackagesList: (
+      query?: {
+        name?: string | null;
+        /**
+         * @format int32
+         * @default 50
+         */
+        limit?: number;
+        after?: string | null;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        TeamLabDevicePackagePageModel,
+        ExternalApiProblemDetailsModel
+      >({
+        path: `/api/open/v1/teamlab/device-packages`,
+        method: "GET",
+        query: query,
+        format: "json",
+        ...params,
+      }),
+    /**
+     * @description 按名称过滤返回不可变设备包版本，使用稳定 cursor 分页
+     *
+     * @tags TeamLab - Device packages
+     * @name OpenTeamLabDevicePackagesList
+     * @summary 列出设备包
+     * @request GET:/api/open/v1/teamlab/device-packages
+     */
+    useOpenTeamLabDevicePackagesList: (
+      query?: {
+        name?: string | null;
+        /**
+         * @format int32
+         * @default 50
+         */
+        limit?: number;
+        after?: string | null;
+      },
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<TeamLabDevicePackagePageModel, ExternalApiProblemDetailsModel>(
+        doFetch ? [`/api/open/v1/teamlab/device-packages`, query] : null,
+        options,
+      ),
+
+    /**
+     * @description 按名称过滤返回不可变设备包版本，使用稳定 cursor 分页
+     *
+     * @tags TeamLab - Device packages
+     * @name OpenTeamLabDevicePackagesList
+     * @summary 列出设备包
+     * @request GET:/api/open/v1/teamlab/device-packages
+     */
+    mutateOpenTeamLabDevicePackagesList: (
+      query?: {
+        name?: string | null;
+        /**
+         * @format int32
+         * @default 50
+         */
+        limit?: number;
+        after?: string | null;
+      },
+      data?:
+        | TeamLabDevicePackagePageModel
+        | Promise<TeamLabDevicePackagePageModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<TeamLabDevicePackagePageModel>(
+        [`/api/open/v1/teamlab/device-packages`, query],
+        data,
+        options,
+      ),
+  };
+  teamLabImagePreparation = {
+    /**
+     * @description 返回发布版本的就绪投影：planAvailable/preparing/readyToStart/blocked 与按模板统计的节点就绪计数。
+     *
+     * @tags TeamLab - Image Preparation
+     * @name OpenTeamLabImagePreparationsGet
+     * @summary 获取镜像准备状态
+     * @request GET:/api/open/v1/teamlab/preparations/releases/{releaseId}
+     */
+    openTeamLabImagePreparationsGet: (
+      releaseId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        TeamLabReleasePreparationModel,
+        ExternalApiProblemDetailsModel
+      >({
+        path: `/api/open/v1/teamlab/preparations/releases/${releaseId}`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * @description 返回发布版本的就绪投影：planAvailable/preparing/readyToStart/blocked 与按模板统计的节点就绪计数。
+     *
+     * @tags TeamLab - Image Preparation
+     * @name OpenTeamLabImagePreparationsGet
+     * @summary 获取镜像准备状态
+     * @request GET:/api/open/v1/teamlab/preparations/releases/{releaseId}
+     */
+    useOpenTeamLabImagePreparationsGet: (
+      releaseId: string,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<TeamLabReleasePreparationModel, ExternalApiProblemDetailsModel>(
+        doFetch
+          ? `/api/open/v1/teamlab/preparations/releases/${releaseId}`
+          : null,
+        options,
+      ),
+
+    /**
+     * @description 返回发布版本的就绪投影：planAvailable/preparing/readyToStart/blocked 与按模板统计的节点就绪计数。
+     *
+     * @tags TeamLab - Image Preparation
+     * @name OpenTeamLabImagePreparationsGet
+     * @summary 获取镜像准备状态
+     * @request GET:/api/open/v1/teamlab/preparations/releases/{releaseId}
+     */
+    mutateOpenTeamLabImagePreparationsGet: (
+      releaseId: string,
+      data?:
+        | TeamLabReleasePreparationModel
+        | Promise<TeamLabReleasePreparationModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<TeamLabReleasePreparationModel>(
+        `/api/open/v1/teamlab/preparations/releases/${releaseId}`,
+        data,
+        options,
+      ),
+
+    /**
+     * @description 幂等提交发布版本的镜像预分发，适用于发布后或失败后的显式重试。
+     *
+     * @tags TeamLab - Image Preparation
+     * @name OpenTeamLabImagePreparationsQueue
+     * @summary 提交镜像准备
+     * @request POST:/api/open/v1/teamlab/preparations/releases/{releaseId}
+     */
+    openTeamLabImagePreparationsQueue: (
+      releaseId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<ApiOperationModel, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/preparations/releases/${releaseId}`,
+        method: "POST",
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * @description 幂等释放发布版本的镜像预分发引用，停止继续保留准备状态。
+     *
+     * @tags TeamLab - Image Preparation
+     * @name OpenTeamLabImagePreparationsRelease
+     * @summary 释放镜像准备引用
+     * @request DELETE:/api/open/v1/teamlab/preparations/releases/{releaseId}
+     */
+    openTeamLabImagePreparationsRelease: (
+      releaseId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<ApiOperationModel, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/preparations/releases/${releaseId}`,
+        method: "DELETE",
+        format: "json",
+        ...params,
+      }),
+  };
+  teamLabLinkPolicies = {
+    /**
+     * @description 在运行时网段/链路上声明式应用损伤或访问策略；同参数重复应用幂等，不同参数需先恢复
+     *
+     * @tags TeamLab - Link policies
+     * @name OpenTeamLabLinkPoliciesApply
+     * @summary 应用链路策略
+     * @request POST:/api/open/v1/teamlab/link-policies
+     */
+    openTeamLabLinkPoliciesApply: (
+      data: ApplyTeamLabLinkPolicyModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabLinkPolicyModel, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/link-policies`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * @description 默认返回未恢复的策略，可按 active/recovered/failed 过滤
+     *
+     * @tags TeamLab - Link policies
+     * @name OpenTeamLabLinkPoliciesList
+     * @summary 列出运行时链路策略
+     * @request GET:/api/open/v1/teamlab/link-policies
+     */
+    openTeamLabLinkPoliciesList: (
+      query?: {
+        /** @format guid */
+        runtimeId?: string;
+        status?: string | null;
+        /**
+         * @format int32
+         * @default 50
+         */
+        limit?: number;
+        after?: string | null;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabLinkPolicyPageModel, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/link-policies`,
+        method: "GET",
+        query: query,
+        format: "json",
+        ...params,
+      }),
+    /**
+     * @description 默认返回未恢复的策略，可按 active/recovered/failed 过滤
+     *
+     * @tags TeamLab - Link policies
+     * @name OpenTeamLabLinkPoliciesList
+     * @summary 列出运行时链路策略
+     * @request GET:/api/open/v1/teamlab/link-policies
+     */
+    useOpenTeamLabLinkPoliciesList: (
+      query?: {
+        /** @format guid */
+        runtimeId?: string;
+        status?: string | null;
+        /**
+         * @format int32
+         * @default 50
+         */
+        limit?: number;
+        after?: string | null;
+      },
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<TeamLabLinkPolicyPageModel, ExternalApiProblemDetailsModel>(
+        doFetch ? [`/api/open/v1/teamlab/link-policies`, query] : null,
+        options,
+      ),
+
+    /**
+     * @description 默认返回未恢复的策略，可按 active/recovered/failed 过滤
+     *
+     * @tags TeamLab - Link policies
+     * @name OpenTeamLabLinkPoliciesList
+     * @summary 列出运行时链路策略
+     * @request GET:/api/open/v1/teamlab/link-policies
+     */
+    mutateOpenTeamLabLinkPoliciesList: (
+      query?: {
+        /** @format guid */
+        runtimeId?: string;
+        status?: string | null;
+        /**
+         * @format int32
+         * @default 50
+         */
+        limit?: number;
+        after?: string | null;
+      },
+      data?: TeamLabLinkPolicyPageModel | Promise<TeamLabLinkPolicyPageModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<TeamLabLinkPolicyPageModel>(
+        [`/api/open/v1/teamlab/link-policies`, query],
+        data,
+        options,
+      ),
+
+    /**
+     * @description 手工恢复一条活动或失败的链路策略；已恢复的策略幂等返回
+     *
+     * @tags TeamLab - Link policies
+     * @name OpenTeamLabLinkPoliciesRecover
+     * @summary 恢复链路策略
+     * @request POST:/api/open/v1/teamlab/link-policies/{policyId}/recover
+     */
+    openTeamLabLinkPoliciesRecover: (
+      policyId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabLinkPolicyModel, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/link-policies/${policyId}/recover`,
+        method: "POST",
+        format: "json",
+        ...params,
+      }),
+  };
+  teamLabRemoteSessions = {
+    /**
+     * @description 返回运行时全部资产的可用协议与不可用原因。
+     *
+     * @tags TeamLab - Remote sessions
+     * @name OpenTeamLabRemoteSessionsAvailability
+     * @summary 查询远程访问可用性
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/remote-access
+     */
+    openTeamLabRemoteSessionsAvailability: (
+      runtimeId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        OpenTeamLabRemoteAvailabilityModel[],
+        ExternalApiProblemDetailsModel
+      >({
+        path: `/api/open/v1/teamlab/runtimes/${runtimeId}/remote-access`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * @description 返回运行时全部资产的可用协议与不可用原因。
+     *
+     * @tags TeamLab - Remote sessions
+     * @name OpenTeamLabRemoteSessionsAvailability
+     * @summary 查询远程访问可用性
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/remote-access
+     */
+    useOpenTeamLabRemoteSessionsAvailability: (
+      runtimeId: string,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<
+        OpenTeamLabRemoteAvailabilityModel[],
+        ExternalApiProblemDetailsModel
+      >(
+        doFetch
+          ? `/api/open/v1/teamlab/runtimes/${runtimeId}/remote-access`
+          : null,
+        options,
+      ),
+
+    /**
+     * @description 返回运行时全部资产的可用协议与不可用原因。
+     *
+     * @tags TeamLab - Remote sessions
+     * @name OpenTeamLabRemoteSessionsAvailability
+     * @summary 查询远程访问可用性
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/remote-access
+     */
+    mutateOpenTeamLabRemoteSessionsAvailability: (
+      runtimeId: string,
+      data?:
+        | OpenTeamLabRemoteAvailabilityModel[]
+        | Promise<OpenTeamLabRemoteAvailabilityModel[]>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<OpenTeamLabRemoteAvailabilityModel[]>(
+        `/api/open/v1/teamlab/runtimes/${runtimeId}/remote-access`,
+        data,
+        options,
+      ),
+
+    /**
+     * @description 消费 VM 会话连接入口；入口只返回一次，过期需重新创建会话。
+     *
+     * @tags TeamLab - Remote sessions
+     * @name OpenTeamLabRemoteSessionsConnect
+     * @summary 获取一次性远程连接
+     * @request POST:/api/open/v1/teamlab/remote-sessions/{sessionId}/connect
+     */
+    openTeamLabRemoteSessionsConnect: (
+      sessionId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<any, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/remote-sessions/${sessionId}/connect`,
         method: "POST",
         ...params,
       }),
 
     /**
+     * @description 为单个资产创建限时会话；VM 使用 connect，容器使用携带 Bearer 身份的 terminal WebSocket。
+     *
+     * @tags TeamLab - Remote sessions
+     * @name OpenTeamLabRemoteSessionsCreate
+     * @summary 创建远程会话
+     * @request POST:/api/open/v1/teamlab/runtimes/{runtimeId}/assets/{assetId}/remote-sessions
+     */
+    openTeamLabRemoteSessionsCreate: (
+      runtimeId: string,
+      assetId: number,
+      data: OpenCreateTeamLabRemoteSessionModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<ApiOperationModel, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/runtimes/${runtimeId}/assets/${assetId}/remote-sessions`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * @description 主动结束会话并回收转发通道；重复关闭幂等。
+     *
+     * @tags TeamLab - Remote sessions
+     * @name OpenTeamLabRemoteSessionsEnd
+     * @summary 关闭远程会话
+     * @request DELETE:/api/open/v1/teamlab/remote-sessions/{sessionId}
+     */
+    openTeamLabRemoteSessionsEnd: (
+      sessionId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<ApiOperationModel, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/remote-sessions/${sessionId}`,
+        method: "DELETE",
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * @description 返回会话状态、协议、访问原因与时间线。
+     *
+     * @tags TeamLab - Remote sessions
+     * @name OpenTeamLabRemoteSessionsGet
+     * @summary 查询远程会话
+     * @request GET:/api/open/v1/teamlab/remote-sessions/{sessionId}
+     */
+    openTeamLabRemoteSessionsGet: (
+      sessionId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        OpenTeamLabRemoteSessionModel,
+        ExternalApiProblemDetailsModel
+      >({
+        path: `/api/open/v1/teamlab/remote-sessions/${sessionId}`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * @description 返回会话状态、协议、访问原因与时间线。
+     *
+     * @tags TeamLab - Remote sessions
+     * @name OpenTeamLabRemoteSessionsGet
+     * @summary 查询远程会话
+     * @request GET:/api/open/v1/teamlab/remote-sessions/{sessionId}
+     */
+    useOpenTeamLabRemoteSessionsGet: (
+      sessionId: string,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<OpenTeamLabRemoteSessionModel, ExternalApiProblemDetailsModel>(
+        doFetch ? `/api/open/v1/teamlab/remote-sessions/${sessionId}` : null,
+        options,
+      ),
+
+    /**
+     * @description 返回会话状态、协议、访问原因与时间线。
+     *
+     * @tags TeamLab - Remote sessions
+     * @name OpenTeamLabRemoteSessionsGet
+     * @summary 查询远程会话
+     * @request GET:/api/open/v1/teamlab/remote-sessions/{sessionId}
+     */
+    mutateOpenTeamLabRemoteSessionsGet: (
+      sessionId: string,
+      data?:
+        | OpenTeamLabRemoteSessionModel
+        | Promise<OpenTeamLabRemoteSessionModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<OpenTeamLabRemoteSessionModel>(
+        `/api/open/v1/teamlab/remote-sessions/${sessionId}`,
+        data,
+        options,
+      ),
+
+    /**
+     * @description WebSocket：二进制消息为 PTY 字节；文本 JSON 支持 resize、input、signal。Bearer token 必须在 Authorization 请求头中。
+     *
+     * @tags TeamLab - Remote sessions
+     * @name OpenTeamLabRemoteSessionsTerminal
+     * @summary 连接容器终端
+     * @request GET:/api/open/v1/teamlab/remote-sessions/{sessionId}/terminal
+     */
+    openTeamLabRemoteSessionsTerminal: (
+      sessionId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<any, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/remote-sessions/${sessionId}/terminal`,
+        method: "GET",
+        ...params,
+      }),
+    /**
+     * @description WebSocket：二进制消息为 PTY 字节；文本 JSON 支持 resize、input、signal。Bearer token 必须在 Authorization 请求头中。
+     *
+     * @tags TeamLab - Remote sessions
+     * @name OpenTeamLabRemoteSessionsTerminal
+     * @summary 连接容器终端
+     * @request GET:/api/open/v1/teamlab/remote-sessions/{sessionId}/terminal
+     */
+    useOpenTeamLabRemoteSessionsTerminal: (
+      sessionId: string,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<any, ExternalApiProblemDetailsModel>(
+        doFetch
+          ? `/api/open/v1/teamlab/remote-sessions/${sessionId}/terminal`
+          : null,
+        options,
+      ),
+
+    /**
+     * @description WebSocket：二进制消息为 PTY 字节；文本 JSON 支持 resize、input、signal。Bearer token 必须在 Authorization 请求头中。
+     *
+     * @tags TeamLab - Remote sessions
+     * @name OpenTeamLabRemoteSessionsTerminal
+     * @summary 连接容器终端
+     * @request GET:/api/open/v1/teamlab/remote-sessions/{sessionId}/terminal
+     */
+    mutateOpenTeamLabRemoteSessionsTerminal: (
+      sessionId: string,
+      data?: any | Promise<any>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<any>(
+        `/api/open/v1/teamlab/remote-sessions/${sessionId}/terminal`,
+        data,
+        options,
+      ),
+  };
+  teamLabResourcePools = {
+    /**
+     * @description 按节点与模板返回分发状态、阶段与活动用途引用计数
+     *
+     * @tags TeamLab - Resource pools
+     * @name OpenTeamLabResourcePoolsNodeCache
+     * @summary 列出节点制品缓存
+     * @request GET:/api/open/v1/teamlab/resource-pools/node-cache
+     */
+    openTeamLabResourcePoolsNodeCache: (
+      query?: {
+        /**
+         * @format int32
+         * @default 50
+         */
+        limit?: number;
+        after?: string | null;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabNodeCachePageModel, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/resource-pools/node-cache`,
+        method: "GET",
+        query: query,
+        format: "json",
+        ...params,
+      }),
+    /**
+     * @description 按节点与模板返回分发状态、阶段与活动用途引用计数
+     *
+     * @tags TeamLab - Resource pools
+     * @name OpenTeamLabResourcePoolsNodeCache
+     * @summary 列出节点制品缓存
+     * @request GET:/api/open/v1/teamlab/resource-pools/node-cache
+     */
+    useOpenTeamLabResourcePoolsNodeCache: (
+      query?: {
+        /**
+         * @format int32
+         * @default 50
+         */
+        limit?: number;
+        after?: string | null;
+      },
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<TeamLabNodeCachePageModel, ExternalApiProblemDetailsModel>(
+        doFetch
+          ? [`/api/open/v1/teamlab/resource-pools/node-cache`, query]
+          : null,
+        options,
+      ),
+
+    /**
+     * @description 按节点与模板返回分发状态、阶段与活动用途引用计数
+     *
+     * @tags TeamLab - Resource pools
+     * @name OpenTeamLabResourcePoolsNodeCache
+     * @summary 列出节点制品缓存
+     * @request GET:/api/open/v1/teamlab/resource-pools/node-cache
+     */
+    mutateOpenTeamLabResourcePoolsNodeCache: (
+      query?: {
+        /**
+         * @format int32
+         * @default 50
+         */
+        limit?: number;
+        after?: string | null;
+      },
+      data?: TeamLabNodeCachePageModel | Promise<TeamLabNodeCachePageModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<TeamLabNodeCachePageModel>(
+        [`/api/open/v1/teamlab/resource-pools/node-cache`, query],
+        data,
+        options,
+      ),
+
+    /**
+     * @description 返回计算节点与模板的只读容量/状态投影，不暴露执行面地址
+     *
+     * @tags TeamLab - Resource pools
+     * @name OpenTeamLabResourcePoolsSnapshot
+     * @summary 获取资源池快照
+     * @request GET:/api/open/v1/teamlab/resource-pools
+     */
+    openTeamLabResourcePoolsSnapshot: (params: RequestParams = {}) =>
+      this.request<
+        TeamLabResourcePoolSnapshotModel,
+        ExternalApiProblemDetailsModel
+      >({
+        path: `/api/open/v1/teamlab/resource-pools`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * @description 返回计算节点与模板的只读容量/状态投影，不暴露执行面地址
+     *
+     * @tags TeamLab - Resource pools
+     * @name OpenTeamLabResourcePoolsSnapshot
+     * @summary 获取资源池快照
+     * @request GET:/api/open/v1/teamlab/resource-pools
+     */
+    useOpenTeamLabResourcePoolsSnapshot: (
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<TeamLabResourcePoolSnapshotModel, ExternalApiProblemDetailsModel>(
+        doFetch ? `/api/open/v1/teamlab/resource-pools` : null,
+        options,
+      ),
+
+    /**
+     * @description 返回计算节点与模板的只读容量/状态投影，不暴露执行面地址
+     *
+     * @tags TeamLab - Resource pools
+     * @name OpenTeamLabResourcePoolsSnapshot
+     * @summary 获取资源池快照
+     * @request GET:/api/open/v1/teamlab/resource-pools
+     */
+    mutateOpenTeamLabResourcePoolsSnapshot: (
+      data?:
+        | TeamLabResourcePoolSnapshotModel
+        | Promise<TeamLabResourcePoolSnapshotModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<TeamLabResourcePoolSnapshotModel>(
+        `/api/open/v1/teamlab/resource-pools`,
+        data,
+        options,
+      ),
+  };
+  teamLabRollouts = {
+    /**
+     * @description 归档已完全清理的 rollout 并保留只读历史
+     *
+     * @tags TeamLab - Rollouts
+     * @name OpenTeamLabRolloutsArchive
+     * @summary 归档 TeamLab rollout
+     * @request POST:/api/open/v1/teamlab/rollouts/{rolloutId}/archive
+     */
+    openTeamLabRolloutsArchive: (
+      rolloutId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<ApiOperationModel, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/rollouts/${rolloutId}/archive`,
+        method: "POST",
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * @description 关闭玩家访问而不销毁 rollout
+     *
+     * @tags TeamLab - Rollouts
+     * @name OpenTeamLabRolloutsCloseAccess
+     * @summary 关闭 rollout 访问
+     * @request POST:/api/open/v1/teamlab/rollouts/{rolloutId}/close-access
+     */
+    openTeamLabRolloutsCloseAccess: (
+      rolloutId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<ApiOperationModel, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/rollouts/${rolloutId}/close-access`,
+        method: "POST",
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * @description 基于不可变 release 与 target 快照创建外部 rollout
+     *
+     * @tags TeamLab - Rollouts
+     * @name OpenTeamLabRolloutsCreate
+     * @summary 创建 TeamLab rollout
+     * @request POST:/api/open/v1/teamlab/rollouts
+     */
+    openTeamLabRolloutsCreate: (
+      data: CreateTeamLabRolloutModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<ApiOperationModel, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/rollouts`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * @description 关闭访问并按有界批次销毁所有 target runtimes
+     *
+     * @tags TeamLab - Rollouts
+     * @name OpenTeamLabRolloutsDrain
+     * @summary 清理 TeamLab rollout
+     * @request POST:/api/open/v1/teamlab/rollouts/{rolloutId}/drain
+     */
+    openTeamLabRolloutsDrain: (rolloutId: string, params: RequestParams = {}) =>
+      this.request<ApiOperationModel, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/rollouts/${rolloutId}/drain`,
+        method: "POST",
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * @description 返回 rollout 状态、target 数量与生命周期时间戳
+     *
+     * @tags TeamLab - Rollouts
+     * @name OpenTeamLabRolloutsGet
+     * @summary 获取 TeamLab rollout
+     * @request GET:/api/open/v1/teamlab/rollouts/{rolloutId}
+     */
+    openTeamLabRolloutsGet: (rolloutId: string, params: RequestParams = {}) =>
+      this.request<TeamLabRolloutModel, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/rollouts/${rolloutId}`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * @description 返回 rollout 状态、target 数量与生命周期时间戳
+     *
+     * @tags TeamLab - Rollouts
+     * @name OpenTeamLabRolloutsGet
+     * @summary 获取 TeamLab rollout
+     * @request GET:/api/open/v1/teamlab/rollouts/{rolloutId}
+     */
+    useOpenTeamLabRolloutsGet: (
+      rolloutId: string,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<TeamLabRolloutModel, ExternalApiProblemDetailsModel>(
+        doFetch ? `/api/open/v1/teamlab/rollouts/${rolloutId}` : null,
+        options,
+      ),
+
+    /**
+     * @description 返回 rollout 状态、target 数量与生命周期时间戳
+     *
+     * @tags TeamLab - Rollouts
+     * @name OpenTeamLabRolloutsGet
+     * @summary 获取 TeamLab rollout
+     * @request GET:/api/open/v1/teamlab/rollouts/{rolloutId}
+     */
+    mutateOpenTeamLabRolloutsGet: (
+      rolloutId: string,
+      data?: TeamLabRolloutModel | Promise<TeamLabRolloutModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<TeamLabRolloutModel>(
+        `/api/open/v1/teamlab/rollouts/${rolloutId}`,
+        data,
+        options,
+      ),
+
+    /**
+     * @description 列出单个已授权 control scope 内的外部 rollouts
+     *
+     * @tags TeamLab - Rollouts
+     * @name OpenTeamLabRolloutsList
+     * @summary 列出 TeamLab rollouts
+     * @request GET:/api/open/v1/teamlab/rollouts
+     */
+    openTeamLabRolloutsList: (
+      query?: {
+        /** @format guid */
+        scopeId?: string;
+        /**
+         * @format int32
+         * @min 1
+         * @max 100
+         * @default 50
+         */
+        limit?: number;
+        after?: string | null;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabRolloutPageModel, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/rollouts`,
+        method: "GET",
+        query: query,
+        format: "json",
+        ...params,
+      }),
+    /**
+     * @description 列出单个已授权 control scope 内的外部 rollouts
+     *
+     * @tags TeamLab - Rollouts
+     * @name OpenTeamLabRolloutsList
+     * @summary 列出 TeamLab rollouts
+     * @request GET:/api/open/v1/teamlab/rollouts
+     */
+    useOpenTeamLabRolloutsList: (
+      query?: {
+        /** @format guid */
+        scopeId?: string;
+        /**
+         * @format int32
+         * @min 1
+         * @max 100
+         * @default 50
+         */
+        limit?: number;
+        after?: string | null;
+      },
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<TeamLabRolloutPageModel, ExternalApiProblemDetailsModel>(
+        doFetch ? [`/api/open/v1/teamlab/rollouts`, query] : null,
+        options,
+      ),
+
+    /**
+     * @description 列出单个已授权 control scope 内的外部 rollouts
+     *
+     * @tags TeamLab - Rollouts
+     * @name OpenTeamLabRolloutsList
+     * @summary 列出 TeamLab rollouts
+     * @request GET:/api/open/v1/teamlab/rollouts
+     */
+    mutateOpenTeamLabRolloutsList: (
+      query?: {
+        /** @format guid */
+        scopeId?: string;
+        /**
+         * @format int32
+         * @min 1
+         * @max 100
+         * @default 50
+         */
+        limit?: number;
+        after?: string | null;
+      },
+      data?: TeamLabRolloutPageModel | Promise<TeamLabRolloutPageModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<TeamLabRolloutPageModel>(
+        [`/api/open/v1/teamlab/rollouts`, query],
+        data,
+        options,
+      ),
+
+    /**
+     * @description 仅在所有期望 targets 就绪后开放玩家访问
+     *
+     * @tags TeamLab - Rollouts
+     * @name OpenTeamLabRolloutsOpenAccess
+     * @summary 打开 rollout 访问
+     * @request POST:/api/open/v1/teamlab/rollouts/{rolloutId}/open-access
+     */
+    openTeamLabRolloutsOpenAccess: (
+      rolloutId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<ApiOperationModel, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/rollouts/${rolloutId}/open-access`,
+        method: "POST",
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * @description 暂停 rollout 协调，已提交的目标与运行时保持不变
+     *
+     * @tags TeamLab - Rollouts
+     * @name OpenTeamLabRolloutsPause
+     * @summary 暂停 TeamLab rollout
+     * @request POST:/api/open/v1/teamlab/rollouts/{rolloutId}/pause
+     */
+    openTeamLabRolloutsPause: (rolloutId: string, params: RequestParams = {}) =>
+      this.request<ApiOperationModel, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/rollouts/${rolloutId}/pause`,
+        method: "POST",
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * @description 在原节点上挂起该 target 的运行时，保留运行时身份、网络与容量预留
+     *
+     * @tags TeamLab - Rollouts
+     * @name OpenTeamLabRolloutsPauseTarget
+     * @summary 暂停单个 rollout target
+     * @request POST:/api/open/v1/teamlab/rollouts/{rolloutId}/targets/{targetId}/pause
+     */
+    openTeamLabRolloutsPauseTarget: (
+      rolloutId: string,
+      targetId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<ApiOperationModel, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/rollouts/${rolloutId}/targets/${targetId}/pause`,
+        method: "POST",
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * @description 启动 image 准备与 target 供给协调
+     *
+     * @tags TeamLab - Rollouts
+     * @name OpenTeamLabRolloutsPrepare
+     * @summary 准备 TeamLab rollout
+     * @request POST:/api/open/v1/teamlab/rollouts/{rolloutId}/prepare
+     */
+    openTeamLabRolloutsPrepare: (
+      rolloutId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<ApiOperationModel, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/rollouts/${rolloutId}/prepare`,
+        method: "POST",
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * @description 请求显式重建单个失败的 target
+     *
+     * @tags TeamLab - Rollouts
+     * @name OpenTeamLabRolloutsRebuild
+     * @summary 重建失败的 rollout target
+     * @request POST:/api/open/v1/teamlab/rollouts/{rolloutId}/targets/{targetId}/rebuild
+     */
+    openTeamLabRolloutsRebuild: (
+      rolloutId: string,
+      targetId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<ApiOperationModel, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/rollouts/${rolloutId}/targets/${targetId}/rebuild`,
+        method: "POST",
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * @description 替换期望的 target 快照；被移除的 targets 在显式清理前保持不变
+     *
+     * @tags TeamLab - Rollouts
+     * @name OpenTeamLabRolloutsReplaceTargets
+     * @summary 替换 rollout targets
+     * @request PUT:/api/open/v1/teamlab/rollouts/{rolloutId}/targets
+     */
+    openTeamLabRolloutsReplaceTargets: (
+      rolloutId: string,
+      data: ReplaceTeamLabRolloutTargetsModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<ApiOperationModel, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/rollouts/${rolloutId}/targets`,
+        method: "PUT",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * @description 按原发布版本受控清理并重新部署该 target 的运行时
+     *
+     * @tags TeamLab - Rollouts
+     * @name OpenTeamLabRolloutsRestartTarget
+     * @summary 重启单个 rollout target
+     * @request POST:/api/open/v1/teamlab/rollouts/{rolloutId}/targets/{targetId}/restart
+     */
+    openTeamLabRolloutsRestartTarget: (
+      rolloutId: string,
+      targetId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<ApiOperationModel, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/rollouts/${rolloutId}/targets/${targetId}/restart`,
+        method: "POST",
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * @description 从暂停状态恢复 rollout 协调
+     *
+     * @tags TeamLab - Rollouts
+     * @name OpenTeamLabRolloutsResume
+     * @summary 恢复 TeamLab rollout
+     * @request POST:/api/open/v1/teamlab/rollouts/{rolloutId}/resume
+     */
+    openTeamLabRolloutsResume: (
+      rolloutId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<ApiOperationModel, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/rollouts/${rolloutId}/resume`,
+        method: "POST",
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * @description 仅在原始分配节点上恢复该 target 的运行时
+     *
+     * @tags TeamLab - Rollouts
+     * @name OpenTeamLabRolloutsResumeTarget
+     * @summary 恢复单个 rollout target
+     * @request POST:/api/open/v1/teamlab/rollouts/{rolloutId}/targets/{targetId}/resume
+     */
+    openTeamLabRolloutsResumeTarget: (
+      rolloutId: string,
+      targetId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<ApiOperationModel, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/rollouts/${rolloutId}/targets/${targetId}/resume`,
+        method: "POST",
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * @description 使用稳定 cursor 返回 target 状态
+     *
+     * @tags TeamLab - Rollouts
+     * @name OpenTeamLabRolloutsTargets
+     * @summary 列出 rollout targets
+     * @request GET:/api/open/v1/teamlab/rollouts/{rolloutId}/targets
+     */
+    openTeamLabRolloutsTargets: (
+      rolloutId: string,
+      query?: {
+        /**
+         * @format int32
+         * @min 1
+         * @max 100
+         * @default 50
+         */
+        limit?: number;
+        after?: string | null;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        TeamLabRolloutTargetPageModel,
+        ExternalApiProblemDetailsModel
+      >({
+        path: `/api/open/v1/teamlab/rollouts/${rolloutId}/targets`,
+        method: "GET",
+        query: query,
+        format: "json",
+        ...params,
+      }),
+    /**
+     * @description 使用稳定 cursor 返回 target 状态
+     *
+     * @tags TeamLab - Rollouts
+     * @name OpenTeamLabRolloutsTargets
+     * @summary 列出 rollout targets
+     * @request GET:/api/open/v1/teamlab/rollouts/{rolloutId}/targets
+     */
+    useOpenTeamLabRolloutsTargets: (
+      rolloutId: string,
+      query?: {
+        /**
+         * @format int32
+         * @min 1
+         * @max 100
+         * @default 50
+         */
+        limit?: number;
+        after?: string | null;
+      },
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<TeamLabRolloutTargetPageModel, ExternalApiProblemDetailsModel>(
+        doFetch
+          ? [`/api/open/v1/teamlab/rollouts/${rolloutId}/targets`, query]
+          : null,
+        options,
+      ),
+
+    /**
+     * @description 使用稳定 cursor 返回 target 状态
+     *
+     * @tags TeamLab - Rollouts
+     * @name OpenTeamLabRolloutsTargets
+     * @summary 列出 rollout targets
+     * @request GET:/api/open/v1/teamlab/rollouts/{rolloutId}/targets
+     */
+    mutateOpenTeamLabRolloutsTargets: (
+      rolloutId: string,
+      query?: {
+        /**
+         * @format int32
+         * @min 1
+         * @max 100
+         * @default 50
+         */
+        limit?: number;
+        after?: string | null;
+      },
+      data?:
+        | TeamLabRolloutTargetPageModel
+        | Promise<TeamLabRolloutTargetPageModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<TeamLabRolloutTargetPageModel>(
+        [`/api/open/v1/teamlab/rollouts/${rolloutId}/targets`, query],
+        data,
+        options,
+      ),
+  };
+  teamLabRuntimes = {
+    /**
+     * @description 为单个队伍或自动化属主提交已发布拓扑版本的部署任务。
+     *
+     * @tags TeamLab - Runtimes
+     * @name OpenTeamLabRuntimesCreate
+     * @summary 创建运行时
+     * @request POST:/api/open/v1/teamlab/runtimes
+     */
+    openTeamLabRuntimesCreate: (
+      data: CreateTeamLabRuntimeModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<ApiOperationModel, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/runtimes`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * @description 提交创建短时效、单次下载的玩家访问配置。
+     *
+     * @tags TeamLab - Runtimes
+     * @name OpenTeamLabRuntimesCreateAccessGrant
+     * @summary 创建 WireGuard 访问授权
+     * @request POST:/api/open/v1/teamlab/runtimes/{runtimeId}/access-grants
+     */
+    openTeamLabRuntimesCreateAccessGrant: (
+      runtimeId: string,
+      data: TeamLabAccessGrantCreateModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<ApiOperationModel, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/runtimes/${runtimeId}/access-grants`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * @description 提交清理运行时的所有分片、资产、路由、抓包与访问授权。
+     *
+     * @tags TeamLab - Runtimes
+     * @name OpenTeamLabRuntimesDestroy
+     * @summary 销毁运行时
+     * @request DELETE:/api/open/v1/teamlab/runtimes/{runtimeId}
+     */
+    openTeamLabRuntimesDestroy: (
+      runtimeId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<ApiOperationModel, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/runtimes/${runtimeId}`,
+        method: "DELETE",
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * @description 消耗一次性下载 token 并返回 WireGuard 配置文件。
+     *
+     * @tags TeamLab - Runtimes
+     * @name OpenTeamLabRuntimesDownloadAccessConfiguration
+     * @summary 下载访问配置
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/access-grants/{grantId}/download
+     */
+    openTeamLabRuntimesDownloadAccessConfiguration: (
+      runtimeId: string,
+      grantId: string,
+      query?: {
+        token?: string;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<void, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/runtimes/${runtimeId}/access-grants/${grantId}/download`,
+        method: "GET",
+        query: query,
+        ...params,
+      }),
+
+    /**
+     * @description 返回 cursor 分页的生命周期与部署事件，用于排障与审计。
+     *
+     * @tags TeamLab - Runtimes
+     * @name OpenTeamLabRuntimesEvents
+     * @summary 列出运行时事件
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/events
+     */
+    openTeamLabRuntimesEvents: (
+      runtimeId: string,
+      query?: {
+        after?: string | null;
+        /**
+         * @format int32
+         * @min 1
+         * @max 100
+         * @default 50
+         */
+        limit?: number;
+        /** @format int32 */
+        generation?: number | null;
+        stage?: string | null;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        OpenTeamLabRuntimeEventPageModel,
+        ExternalApiProblemDetailsModel
+      >({
+        path: `/api/open/v1/teamlab/runtimes/${runtimeId}/events`,
+        method: "GET",
+        query: query,
+        format: "json",
+        ...params,
+      }),
+    /**
+     * @description 返回 cursor 分页的生命周期与部署事件，用于排障与审计。
+     *
+     * @tags TeamLab - Runtimes
+     * @name OpenTeamLabRuntimesEvents
+     * @summary 列出运行时事件
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/events
+     */
+    useOpenTeamLabRuntimesEvents: (
+      runtimeId: string,
+      query?: {
+        after?: string | null;
+        /**
+         * @format int32
+         * @min 1
+         * @max 100
+         * @default 50
+         */
+        limit?: number;
+        /** @format int32 */
+        generation?: number | null;
+        stage?: string | null;
+      },
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<OpenTeamLabRuntimeEventPageModel, ExternalApiProblemDetailsModel>(
+        doFetch
+          ? [`/api/open/v1/teamlab/runtimes/${runtimeId}/events`, query]
+          : null,
+        options,
+      ),
+
+    /**
+     * @description 返回 cursor 分页的生命周期与部署事件，用于排障与审计。
+     *
+     * @tags TeamLab - Runtimes
+     * @name OpenTeamLabRuntimesEvents
+     * @summary 列出运行时事件
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/events
+     */
+    mutateOpenTeamLabRuntimesEvents: (
+      runtimeId: string,
+      query?: {
+        after?: string | null;
+        /**
+         * @format int32
+         * @min 1
+         * @max 100
+         * @default 50
+         */
+        limit?: number;
+        /** @format int32 */
+        generation?: number | null;
+        stage?: string | null;
+      },
+      data?:
+        | OpenTeamLabRuntimeEventPageModel
+        | Promise<OpenTeamLabRuntimeEventPageModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<OpenTeamLabRuntimeEventPageModel>(
+        [`/api/open/v1/teamlab/runtimes/${runtimeId}/events`, query],
+        data,
+        options,
+      ),
+
+    /**
+     * @description 返回聚合的运行时、分片、网络与资产状态。
+     *
+     * @tags TeamLab - Runtimes
+     * @name OpenTeamLabRuntimesGet
+     * @summary 获取运行时
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}
+     */
+    openTeamLabRuntimesGet: (runtimeId: string, params: RequestParams = {}) =>
+      this.request<OpenTeamLabRuntimeModel, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/runtimes/${runtimeId}`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * @description 返回聚合的运行时、分片、网络与资产状态。
+     *
+     * @tags TeamLab - Runtimes
+     * @name OpenTeamLabRuntimesGet
+     * @summary 获取运行时
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}
+     */
+    useOpenTeamLabRuntimesGet: (
+      runtimeId: string,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<OpenTeamLabRuntimeModel, ExternalApiProblemDetailsModel>(
+        doFetch ? `/api/open/v1/teamlab/runtimes/${runtimeId}` : null,
+        options,
+      ),
+
+    /**
+     * @description 返回聚合的运行时、分片、网络与资产状态。
+     *
+     * @tags TeamLab - Runtimes
+     * @name OpenTeamLabRuntimesGet
+     * @summary 获取运行时
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}
+     */
+    mutateOpenTeamLabRuntimesGet: (
+      runtimeId: string,
+      data?: OpenTeamLabRuntimeModel | Promise<OpenTeamLabRuntimeModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<OpenTeamLabRuntimeModel>(
+        `/api/open/v1/teamlab/runtimes/${runtimeId}`,
+        data,
+        options,
+      ),
+
+    /**
+     * @description 在原节点上挂起工作负载，同时保留运行时身份、网络、磁盘、地址、访问状态与容量预留。
+     *
+     * @tags TeamLab - Runtimes
+     * @name OpenTeamLabRuntimesPause
+     * @summary 暂停运行时
+     * @request POST:/api/open/v1/teamlab/runtimes/{runtimeId}/pause
+     */
+    openTeamLabRuntimesPause: (runtimeId: string, params: RequestParams = {}) =>
+      this.request<ApiOperationModel, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/runtimes/${runtimeId}/pause`,
+        method: "POST",
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * @description 设备/传感器把去敏的协议事件（如点位读写、握手、告警）写入运行时事件流，可用 events?stage=protocol 查询。
+     *
+     * @tags TeamLab - Runtimes
+     * @name OpenTeamLabRuntimesReportProtocolEvent
+     * @summary 上报协议事件
+     * @request POST:/api/open/v1/teamlab/runtimes/{runtimeId}/protocol-events
+     */
+    openTeamLabRuntimesReportProtocolEvent: (
+      runtimeId: string,
+      data: TeamLabProtocolEventReportModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/runtimes/${runtimeId}/protocol-events`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * @description 按运行时的发布版本与可选覆盖配置提交受控清理并重新部署。
+     *
+     * @tags TeamLab - Runtimes
+     * @name OpenTeamLabRuntimesReset
+     * @summary 重置运行时
+     * @request POST:/api/open/v1/teamlab/runtimes/{runtimeId}/reset
+     */
+    openTeamLabRuntimesReset: (
+      runtimeId: string,
+      data: ResetTeamLabRuntimeModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<ApiOperationModel, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/runtimes/${runtimeId}/reset`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * @description 仅在原始分配节点上恢复，不会重新调度或下载镜像；原节点不可用时返回 resume_blocked。
+     *
+     * @tags TeamLab - Runtimes
+     * @name OpenTeamLabRuntimesResume
+     * @summary 恢复运行时
+     * @request POST:/api/open/v1/teamlab/runtimes/{runtimeId}/resume
+     */
+    openTeamLabRuntimesResume: (
+      runtimeId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<ApiOperationModel, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/runtimes/${runtimeId}/resume`,
+        method: "POST",
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * @description 提交撤销并清理现有的运行时访问授权。
+     *
+     * @tags TeamLab - Runtimes
+     * @name OpenTeamLabRuntimesRevokeAccessGrant
+     * @summary 撤销访问授权
+     * @request DELETE:/api/open/v1/teamlab/runtimes/{runtimeId}/access-grants/{grantId}
+     */
+    openTeamLabRuntimesRevokeAccessGrant: (
+      runtimeId: string,
+      grantId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<ApiOperationModel, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/runtimes/${runtimeId}/access-grants/${grantId}`,
+        method: "DELETE",
+        format: "json",
+        ...params,
+      }),
+  };
+  teamLabControlScopes = {
+    /**
+     * @description Archived scopes stay readable and drainable but accept no new writes. Idempotent; only administrator-created tokens may archive.
+     *
+     * @tags TeamLab - Control scopes
+     * @name OpenTeamLabScopesArchive
+     * @summary Archive a TeamLab control scope
+     * @request POST:/api/open/v1/teamlab/scopes/{scopeId}/archive
+     */
+    openTeamLabScopesArchive: (scopeId: string, params: RequestParams = {}) =>
+      this.request<void, any>({
+        path: `/api/open/v1/teamlab/scopes/${scopeId}/archive`,
+        method: "POST",
+        ...params,
+      }),
+
+    /**
+     * @description Creates an external resource boundary. Only API tokens created by administrators may create scopes.
+     *
+     * @tags TeamLab - Control scopes
+     * @name OpenTeamLabScopesCreate
+     * @summary Create a TeamLab control scope
+     * @request POST:/api/open/v1/teamlab/scopes
+     */
+    openTeamLabScopesCreate: (
+      data: CreateTeamLabControlScopeModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabControlScopeModel, any>({
+        path: `/api/open/v1/teamlab/scopes`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * @description Lists only scopes granted to the current token, unless the token carries a wildcard teamlab-scope grant.
+     *
+     * @tags TeamLab - Control scopes
+     * @name OpenTeamLabScopesList
+     * @summary List TeamLab control scopes
+     * @request GET:/api/open/v1/teamlab/scopes
+     */
+    openTeamLabScopesList: (params: RequestParams = {}) =>
+      this.request<TeamLabControlScopeModel[], any>({
+        path: `/api/open/v1/teamlab/scopes`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * @description Lists only scopes granted to the current token, unless the token carries a wildcard teamlab-scope grant.
+     *
+     * @tags TeamLab - Control scopes
+     * @name OpenTeamLabScopesList
+     * @summary List TeamLab control scopes
+     * @request GET:/api/open/v1/teamlab/scopes
+     */
+    useOpenTeamLabScopesList: (
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<TeamLabControlScopeModel[], any>(
+        doFetch ? `/api/open/v1/teamlab/scopes` : null,
+        options,
+      ),
+
+    /**
+     * @description Lists only scopes granted to the current token, unless the token carries a wildcard teamlab-scope grant.
+     *
+     * @tags TeamLab - Control scopes
+     * @name OpenTeamLabScopesList
+     * @summary List TeamLab control scopes
+     * @request GET:/api/open/v1/teamlab/scopes
+     */
+    mutateOpenTeamLabScopesList: (
+      data?: TeamLabControlScopeModel[] | Promise<TeamLabControlScopeModel[]>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<TeamLabControlScopeModel[]>(
+        `/api/open/v1/teamlab/scopes`,
+        data,
+        options,
+      ),
+  };
+  teamLabTopologies = {
+    /**
+     * @description 归档后版本保持可读、既有运行时继续运行，但不能再创建新运行时；重复归档幂等。
+     *
+     * @tags TeamLab - Topologies
+     * @name OpenTeamLabTopologiesArchiveRelease
+     * @summary 归档拓扑版本
+     * @request POST:/api/open/v1/teamlab/topologies/{topologyId}/releases/{releaseId}/archive
+     */
+    openTeamLabTopologiesArchiveRelease: (
+      topologyId: string,
+      releaseId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/topologies/${topologyId}/releases/${releaseId}/archive`,
+        method: "POST",
+        ...params,
+      }),
+
+    /**
+     * @description 返回本平台版本支持的拓扑 schema 与功能能力。
+     *
+     * @tags TeamLab - Topologies
+     * @name OpenTeamLabTopologiesCapabilities
+     * @summary 获取 TeamLab 能力
+     * @request GET:/api/open/v1/teamlab/capabilities
+     */
+    openTeamLabTopologiesCapabilities: (params: RequestParams = {}) =>
+      this.request<TeamLabCapabilitiesModel, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/capabilities`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * @description 返回本平台版本支持的拓扑 schema 与功能能力。
+     *
+     * @tags TeamLab - Topologies
+     * @name OpenTeamLabTopologiesCapabilities
+     * @summary 获取 TeamLab 能力
+     * @request GET:/api/open/v1/teamlab/capabilities
+     */
+    useOpenTeamLabTopologiesCapabilities: (
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<TeamLabCapabilitiesModel, ExternalApiProblemDetailsModel>(
+        doFetch ? `/api/open/v1/teamlab/capabilities` : null,
+        options,
+      ),
+
+    /**
+     * @description 返回本平台版本支持的拓扑 schema 与功能能力。
+     *
+     * @tags TeamLab - Topologies
+     * @name OpenTeamLabTopologiesCapabilities
+     * @summary 获取 TeamLab 能力
+     * @request GET:/api/open/v1/teamlab/capabilities
+     */
+    mutateOpenTeamLabTopologiesCapabilities: (
+      data?: TeamLabCapabilitiesModel | Promise<TeamLabCapabilitiesModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<TeamLabCapabilitiesModel>(
+        `/api/open/v1/teamlab/capabilities`,
+        data,
+        options,
+      ),
+
+    /**
+     * @description 把已有拓扑复制为调用者名下的新草稿，并重新校验镜像、设备包与连接器引用。
+     *
+     * @tags TeamLab - Topologies
+     * @name OpenTeamLabTopologiesClone
+     * @summary 克隆拓扑
+     * @request POST:/api/open/v1/teamlab/topologies/{topologyId}/clone
+     */
+    openTeamLabTopologiesClone: (
+      topologyId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        OpenTeamLabTopologyDetailModel,
+        ExternalApiProblemDetailsModel
+      >({
+        path: `/api/open/v1/teamlab/topologies/${topologyId}/clone`,
+        method: "POST",
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * @description 提交创建可复用的 TeamLab 拓扑草稿。
+     *
+     * @tags TeamLab - Topologies
+     * @name OpenTeamLabTopologiesCreate
+     * @summary 创建拓扑
+     * @request POST:/api/open/v1/teamlab/topologies
+     */
+    openTeamLabTopologiesCreate: (
+      data: OpenCreateTeamLabTopologyModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<ApiOperationModel, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/topologies`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * @description 提交删除不再使用的拓扑。
+     *
+     * @tags TeamLab - Topologies
+     * @name OpenTeamLabTopologiesDelete
+     * @summary 删除拓扑
+     * @request DELETE:/api/open/v1/teamlab/topologies/{topologyId}
+     */
+    openTeamLabTopologiesDelete: (
+      topologyId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<ApiOperationModel, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/topologies/${topologyId}`,
+        method: "DELETE",
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * @description 返回完整的可编辑拓扑定义。
+     *
+     * @tags TeamLab - Topologies
+     * @name OpenTeamLabTopologiesGet
+     * @summary 获取拓扑
+     * @request GET:/api/open/v1/teamlab/topologies/{topologyId}
+     */
+    openTeamLabTopologiesGet: (
+      topologyId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        OpenTeamLabTopologyDetailModel,
+        ExternalApiProblemDetailsModel
+      >({
+        path: `/api/open/v1/teamlab/topologies/${topologyId}`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * @description 返回完整的可编辑拓扑定义。
+     *
+     * @tags TeamLab - Topologies
+     * @name OpenTeamLabTopologiesGet
+     * @summary 获取拓扑
+     * @request GET:/api/open/v1/teamlab/topologies/{topologyId}
+     */
+    useOpenTeamLabTopologiesGet: (
+      topologyId: string,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<OpenTeamLabTopologyDetailModel, ExternalApiProblemDetailsModel>(
+        doFetch ? `/api/open/v1/teamlab/topologies/${topologyId}` : null,
+        options,
+      ),
+
+    /**
+     * @description 返回完整的可编辑拓扑定义。
+     *
+     * @tags TeamLab - Topologies
+     * @name OpenTeamLabTopologiesGet
+     * @summary 获取拓扑
+     * @request GET:/api/open/v1/teamlab/topologies/{topologyId}
+     */
+    mutateOpenTeamLabTopologiesGet: (
+      topologyId: string,
+      data?:
+        | OpenTeamLabTopologyDetailModel
+        | Promise<OpenTeamLabTopologyDetailModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<OpenTeamLabTopologyDetailModel>(
+        `/api/open/v1/teamlab/topologies/${topologyId}`,
+        data,
+        options,
+      ),
+
+    /**
+     * @description 返回一个不可变拓扑版本及其编译后的定义。
+     *
+     * @tags TeamLab - Topologies
+     * @name OpenTeamLabTopologiesGetRelease
+     * @summary 获取拓扑版本
+     * @request GET:/api/open/v1/teamlab/topologies/{topologyId}/releases/{releaseId}
+     */
+    openTeamLabTopologiesGetRelease: (
+      topologyId: string,
+      releaseId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<OpenTeamLabReleaseModel, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/topologies/${topologyId}/releases/${releaseId}`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * @description 返回一个不可变拓扑版本及其编译后的定义。
+     *
+     * @tags TeamLab - Topologies
+     * @name OpenTeamLabTopologiesGetRelease
+     * @summary 获取拓扑版本
+     * @request GET:/api/open/v1/teamlab/topologies/{topologyId}/releases/{releaseId}
+     */
+    useOpenTeamLabTopologiesGetRelease: (
+      topologyId: string,
+      releaseId: string,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<OpenTeamLabReleaseModel, ExternalApiProblemDetailsModel>(
+        doFetch
+          ? `/api/open/v1/teamlab/topologies/${topologyId}/releases/${releaseId}`
+          : null,
+        options,
+      ),
+
+    /**
+     * @description 返回一个不可变拓扑版本及其编译后的定义。
+     *
+     * @tags TeamLab - Topologies
+     * @name OpenTeamLabTopologiesGetRelease
+     * @summary 获取拓扑版本
+     * @request GET:/api/open/v1/teamlab/topologies/{topologyId}/releases/{releaseId}
+     */
+    mutateOpenTeamLabTopologiesGetRelease: (
+      topologyId: string,
+      releaseId: string,
+      data?: OpenTeamLabReleaseModel | Promise<OpenTeamLabReleaseModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<OpenTeamLabReleaseModel>(
+        `/api/open/v1/teamlab/topologies/${topologyId}/releases/${releaseId}`,
+        data,
+        options,
+      ),
+
+    /**
+     * @description 返回当前 API token 属主可见的 cursor 分页拓扑列表。
+     *
+     * @tags TeamLab - Topologies
+     * @name OpenTeamLabTopologiesList
+     * @summary 列出拓扑
+     * @request GET:/api/open/v1/teamlab/topologies
+     */
+    openTeamLabTopologiesList: (
+      query?: {
+        /**
+         * @format int32
+         * @min 1
+         * @max 100
+         * @default 50
+         */
+        limit?: number;
+        after?: string | null;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        OpenTeamLabTopologyPageModel,
+        ExternalApiProblemDetailsModel
+      >({
+        path: `/api/open/v1/teamlab/topologies`,
+        method: "GET",
+        query: query,
+        format: "json",
+        ...params,
+      }),
+    /**
+     * @description 返回当前 API token 属主可见的 cursor 分页拓扑列表。
+     *
+     * @tags TeamLab - Topologies
+     * @name OpenTeamLabTopologiesList
+     * @summary 列出拓扑
+     * @request GET:/api/open/v1/teamlab/topologies
+     */
+    useOpenTeamLabTopologiesList: (
+      query?: {
+        /**
+         * @format int32
+         * @min 1
+         * @max 100
+         * @default 50
+         */
+        limit?: number;
+        after?: string | null;
+      },
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<OpenTeamLabTopologyPageModel, ExternalApiProblemDetailsModel>(
+        doFetch ? [`/api/open/v1/teamlab/topologies`, query] : null,
+        options,
+      ),
+
+    /**
+     * @description 返回当前 API token 属主可见的 cursor 分页拓扑列表。
+     *
+     * @tags TeamLab - Topologies
+     * @name OpenTeamLabTopologiesList
+     * @summary 列出拓扑
+     * @request GET:/api/open/v1/teamlab/topologies
+     */
+    mutateOpenTeamLabTopologiesList: (
+      query?: {
+        /**
+         * @format int32
+         * @min 1
+         * @max 100
+         * @default 50
+         */
+        limit?: number;
+        after?: string | null;
+      },
+      data?:
+        | OpenTeamLabTopologyPageModel
+        | Promise<OpenTeamLabTopologyPageModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<OpenTeamLabTopologyPageModel>(
+        [`/api/open/v1/teamlab/topologies`, query],
+        data,
+        options,
+      ),
+
+    /**
+     * @description 使用 cursor 分页返回拓扑的不可变版本列表。
+     *
+     * @tags TeamLab - Topologies
+     * @name OpenTeamLabTopologiesListReleases
+     * @summary 列出拓扑版本
+     * @request GET:/api/open/v1/teamlab/topologies/{topologyId}/releases
+     */
+    openTeamLabTopologiesListReleases: (
+      topologyId: string,
+      query?: {
+        /**
+         * @format int32
+         * @min 1
+         * @max 100
+         * @default 50
+         */
+        limit?: number;
+        after?: string | null;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<OpenTeamLabReleasePageModel, ExternalApiProblemDetailsModel>(
+        {
+          path: `/api/open/v1/teamlab/topologies/${topologyId}/releases`,
+          method: "GET",
+          query: query,
+          format: "json",
+          ...params,
+        },
+      ),
+    /**
+     * @description 使用 cursor 分页返回拓扑的不可变版本列表。
+     *
+     * @tags TeamLab - Topologies
+     * @name OpenTeamLabTopologiesListReleases
+     * @summary 列出拓扑版本
+     * @request GET:/api/open/v1/teamlab/topologies/{topologyId}/releases
+     */
+    useOpenTeamLabTopologiesListReleases: (
+      topologyId: string,
+      query?: {
+        /**
+         * @format int32
+         * @min 1
+         * @max 100
+         * @default 50
+         */
+        limit?: number;
+        after?: string | null;
+      },
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<OpenTeamLabReleasePageModel, ExternalApiProblemDetailsModel>(
+        doFetch
+          ? [`/api/open/v1/teamlab/topologies/${topologyId}/releases`, query]
+          : null,
+        options,
+      ),
+
+    /**
+     * @description 使用 cursor 分页返回拓扑的不可变版本列表。
+     *
+     * @tags TeamLab - Topologies
+     * @name OpenTeamLabTopologiesListReleases
+     * @summary 列出拓扑版本
+     * @request GET:/api/open/v1/teamlab/topologies/{topologyId}/releases
+     */
+    mutateOpenTeamLabTopologiesListReleases: (
+      topologyId: string,
+      query?: {
+        /**
+         * @format int32
+         * @min 1
+         * @max 100
+         * @default 50
+         */
+        limit?: number;
+        after?: string | null;
+      },
+      data?: OpenTeamLabReleasePageModel | Promise<OpenTeamLabReleasePageModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<OpenTeamLabReleasePageModel>(
+        [`/api/open/v1/teamlab/topologies/${topologyId}/releases`, query],
+        data,
+        options,
+      ),
+
+    /**
+     * @description 在不创建运行时资源的情况下为版本构建部署计划。
+     *
+     * @tags TeamLab - Topologies
+     * @name OpenTeamLabTopologiesPlan
+     * @summary 规划运行时部署
+     * @request POST:/api/open/v1/teamlab/topologies/{topologyId}/releases/{releaseId}/plan
+     */
+    openTeamLabTopologiesPlan: (
+      topologyId: string,
+      releaseId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabPlanModel, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/topologies/${topologyId}/releases/${releaseId}/plan`,
+        method: "POST",
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * @description 校验并提交创建用于运行时部署的不可变拓扑版本。
+     *
+     * @tags TeamLab - Topologies
+     * @name OpenTeamLabTopologiesPublish
+     * @summary 发布拓扑版本
+     * @request POST:/api/open/v1/teamlab/topologies/{topologyId}/releases
+     */
+    openTeamLabTopologiesPublish: (
+      topologyId: string,
+      data: PublishTeamLabTopologyModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<ApiOperationModel, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/topologies/${topologyId}/releases`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * @description 提交替换可编辑的拓扑定义。
+     *
+     * @tags TeamLab - Topologies
+     * @name OpenTeamLabTopologiesUpdate
+     * @summary 更新拓扑
+     * @request PUT:/api/open/v1/teamlab/topologies/{topologyId}
+     */
+    openTeamLabTopologiesUpdate: (
+      topologyId: string,
+      data: OpenUpdateTeamLabTopologyModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<ApiOperationModel, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/topologies/${topologyId}`,
+        method: "PUT",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * @description 在不发布的情况下校验拓扑结构、寻址、连通性、资产与部署约束。
+     *
+     * @tags TeamLab - Topologies
+     * @name OpenTeamLabTopologiesValidate
+     * @summary 校验拓扑
+     * @request POST:/api/open/v1/teamlab/topologies/{topologyId}/validate
+     */
+    openTeamLabTopologiesValidate: (
+      topologyId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        TeamLabValidationResultModel,
+        ExternalApiProblemDetailsModel
+      >({
+        path: `/api/open/v1/teamlab/topologies/${topologyId}/validate`,
+        method: "POST",
+        format: "json",
+        ...params,
+      }),
+  };
+  teamLabTrafficAndCaptures = {
+    /**
+     * @description 流式返回已完成的运行时抓包归档文件。
+     *
+     * @tags TeamLab - Traffic and Captures
+     * @name OpenTeamLabTrafficDownloadCapture
+     * @summary 下载抓包文件
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/captures/{captureId}/download
+     */
+    openTeamLabTrafficDownloadCapture: (
+      runtimeId: string,
+      captureId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/runtimes/${runtimeId}/captures/${captureId}/download`,
+        method: "GET",
+        ...params,
+      }),
+
+    /**
+     * @description 返回抓包范围、限额、进度、产物状态与保留元数据。
+     *
+     * @tags TeamLab - Traffic and Captures
+     * @name OpenTeamLabTrafficGetCapture
+     * @summary 获取抓包状态
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/captures/{captureId}
+     */
+    openTeamLabTrafficGetCapture: (
+      runtimeId: string,
+      captureId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<OpenTeamLabCaptureModel, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/runtimes/${runtimeId}/captures/${captureId}`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * @description 返回抓包范围、限额、进度、产物状态与保留元数据。
+     *
+     * @tags TeamLab - Traffic and Captures
+     * @name OpenTeamLabTrafficGetCapture
+     * @summary 获取抓包状态
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/captures/{captureId}
+     */
+    useOpenTeamLabTrafficGetCapture: (
+      runtimeId: string,
+      captureId: string,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<OpenTeamLabCaptureModel, ExternalApiProblemDetailsModel>(
+        doFetch
+          ? `/api/open/v1/teamlab/runtimes/${runtimeId}/captures/${captureId}`
+          : null,
+        options,
+      ),
+
+    /**
+     * @description 返回抓包范围、限额、进度、产物状态与保留元数据。
+     *
+     * @tags TeamLab - Traffic and Captures
+     * @name OpenTeamLabTrafficGetCapture
+     * @summary 获取抓包状态
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/captures/{captureId}
+     */
+    mutateOpenTeamLabTrafficGetCapture: (
+      runtimeId: string,
+      captureId: string,
+      data?: OpenTeamLabCaptureModel | Promise<OpenTeamLabCaptureModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<OpenTeamLabCaptureModel>(
+        `/api/open/v1/teamlab/runtimes/${runtimeId}/captures/${captureId}`,
+        data,
+        options,
+      ),
+
+    /**
+     * @description 返回由 TeamLab 数据平面采集的 cursor 分页、运行时范围的流量元数据。
+     *
+     * @tags TeamLab - Traffic and Captures
+     * @name OpenTeamLabTrafficGetFlows
+     * @summary 列出流量记录
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/traffic/flows
+     */
+    openTeamLabTrafficGetFlows: (
+      runtimeId: string,
+      query?: {
+        after?: string | null;
+        /**
+         * @format int32
+         * @min 1
+         * @max 100
+         * @default 50
+         */
+        limit?: number;
+        query?: string | null;
+        protocol?: string | null;
+        networkKey?: string | null;
+        /**
+         * @format int32
+         * @min 1
+         * @max 65535
+         */
+        port?: number | null;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabTrafficFlowPageModel, ExternalApiProblemDetailsModel>(
+        {
+          path: `/api/open/v1/teamlab/runtimes/${runtimeId}/traffic/flows`,
+          method: "GET",
+          query: query,
+          format: "json",
+          ...params,
+        },
+      ),
+    /**
+     * @description 返回由 TeamLab 数据平面采集的 cursor 分页、运行时范围的流量元数据。
+     *
+     * @tags TeamLab - Traffic and Captures
+     * @name OpenTeamLabTrafficGetFlows
+     * @summary 列出流量记录
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/traffic/flows
+     */
+    useOpenTeamLabTrafficGetFlows: (
+      runtimeId: string,
+      query?: {
+        after?: string | null;
+        /**
+         * @format int32
+         * @min 1
+         * @max 100
+         * @default 50
+         */
+        limit?: number;
+        query?: string | null;
+        protocol?: string | null;
+        networkKey?: string | null;
+        /**
+         * @format int32
+         * @min 1
+         * @max 65535
+         */
+        port?: number | null;
+      },
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<TeamLabTrafficFlowPageModel, ExternalApiProblemDetailsModel>(
+        doFetch
+          ? [`/api/open/v1/teamlab/runtimes/${runtimeId}/traffic/flows`, query]
+          : null,
+        options,
+      ),
+
+    /**
+     * @description 返回由 TeamLab 数据平面采集的 cursor 分页、运行时范围的流量元数据。
+     *
+     * @tags TeamLab - Traffic and Captures
+     * @name OpenTeamLabTrafficGetFlows
+     * @summary 列出流量记录
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/traffic/flows
+     */
+    mutateOpenTeamLabTrafficGetFlows: (
+      runtimeId: string,
+      query?: {
+        after?: string | null;
+        /**
+         * @format int32
+         * @min 1
+         * @max 100
+         * @default 50
+         */
+        limit?: number;
+        query?: string | null;
+        protocol?: string | null;
+        networkKey?: string | null;
+        /**
+         * @format int32
+         * @min 1
+         * @max 65535
+         */
+        port?: number | null;
+      },
+      data?: TeamLabTrafficFlowPageModel | Promise<TeamLabTrafficFlowPageModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<TeamLabTrafficFlowPageModel>(
+        [`/api/open/v1/teamlab/runtimes/${runtimeId}/traffic/flows`, query],
+        data,
+        options,
+      ),
+
+    /**
+     * @description 返回一条关联流量路径的有序跳点与证据。
+     *
+     * @tags TeamLab - Traffic and Captures
+     * @name OpenTeamLabTrafficGetPath
+     * @summary 获取流量路径
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/traffic/paths/{pathId}
+     */
+    openTeamLabTrafficGetPath: (
+      runtimeId: string,
+      pathId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabTrafficPathModel, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/runtimes/${runtimeId}/traffic/paths/${pathId}`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * @description 返回一条关联流量路径的有序跳点与证据。
+     *
+     * @tags TeamLab - Traffic and Captures
+     * @name OpenTeamLabTrafficGetPath
+     * @summary 获取流量路径
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/traffic/paths/{pathId}
+     */
+    useOpenTeamLabTrafficGetPath: (
+      runtimeId: string,
+      pathId: string,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<TeamLabTrafficPathModel, ExternalApiProblemDetailsModel>(
+        doFetch
+          ? `/api/open/v1/teamlab/runtimes/${runtimeId}/traffic/paths/${pathId}`
+          : null,
+        options,
+      ),
+
+    /**
+     * @description 返回一条关联流量路径的有序跳点与证据。
+     *
+     * @tags TeamLab - Traffic and Captures
+     * @name OpenTeamLabTrafficGetPath
+     * @summary 获取流量路径
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/traffic/paths/{pathId}
+     */
+    mutateOpenTeamLabTrafficGetPath: (
+      runtimeId: string,
+      pathId: string,
+      data?: TeamLabTrafficPathModel | Promise<TeamLabTrafficPathModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<TeamLabTrafficPathModel>(
+        `/api/open/v1/teamlab/runtimes/${runtimeId}/traffic/paths/${pathId}`,
+        data,
+        options,
+      ),
+
+    /**
+     * @description 返回跨参与资产与网段的端到端流量路径关联。
+     *
+     * @tags TeamLab - Traffic and Captures
+     * @name OpenTeamLabTrafficGetPaths
+     * @summary 列出关联流量路径
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/traffic/paths
+     */
+    openTeamLabTrafficGetPaths: (
+      runtimeId: string,
+      query?: {
+        after?: string | null;
+        /**
+         * @format int32
+         * @min 1
+         * @max 100
+         * @default 50
+         */
+        limit?: number;
+        query?: string | null;
+        protocol?: string | null;
+        confidence?: string | null;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabTrafficPathPageModel, ExternalApiProblemDetailsModel>(
+        {
+          path: `/api/open/v1/teamlab/runtimes/${runtimeId}/traffic/paths`,
+          method: "GET",
+          query: query,
+          format: "json",
+          ...params,
+        },
+      ),
+    /**
+     * @description 返回跨参与资产与网段的端到端流量路径关联。
+     *
+     * @tags TeamLab - Traffic and Captures
+     * @name OpenTeamLabTrafficGetPaths
+     * @summary 列出关联流量路径
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/traffic/paths
+     */
+    useOpenTeamLabTrafficGetPaths: (
+      runtimeId: string,
+      query?: {
+        after?: string | null;
+        /**
+         * @format int32
+         * @min 1
+         * @max 100
+         * @default 50
+         */
+        limit?: number;
+        query?: string | null;
+        protocol?: string | null;
+        confidence?: string | null;
+      },
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<TeamLabTrafficPathPageModel, ExternalApiProblemDetailsModel>(
+        doFetch
+          ? [`/api/open/v1/teamlab/runtimes/${runtimeId}/traffic/paths`, query]
+          : null,
+        options,
+      ),
+
+    /**
+     * @description 返回跨参与资产与网段的端到端流量路径关联。
+     *
+     * @tags TeamLab - Traffic and Captures
+     * @name OpenTeamLabTrafficGetPaths
+     * @summary 列出关联流量路径
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/traffic/paths
+     */
+    mutateOpenTeamLabTrafficGetPaths: (
+      runtimeId: string,
+      query?: {
+        after?: string | null;
+        /**
+         * @format int32
+         * @min 1
+         * @max 100
+         * @default 50
+         */
+        limit?: number;
+        query?: string | null;
+        protocol?: string | null;
+        confidence?: string | null;
+      },
+      data?: TeamLabTrafficPathPageModel | Promise<TeamLabTrafficPathPageModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<TeamLabTrafficPathPageModel>(
+        [`/api/open/v1/teamlab/runtimes/${runtimeId}/traffic/paths`, query],
+        data,
+        options,
+      ),
+
+    /**
+     * @description 按创建时间倒序返回该运行时的抓包任务，使用稳定 cursor 分页。
+     *
+     * @tags TeamLab - Traffic and Captures
+     * @name OpenTeamLabTrafficListCaptures
+     * @summary 列出抓包任务
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/captures
+     */
+    openTeamLabTrafficListCaptures: (
+      runtimeId: string,
+      query?: {
+        after?: string | null;
+        /**
+         * @format int32
+         * @min 1
+         * @max 100
+         * @default 50
+         */
+        limit?: number;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<OpenTeamLabCapturePageModel, ExternalApiProblemDetailsModel>(
+        {
+          path: `/api/open/v1/teamlab/runtimes/${runtimeId}/captures`,
+          method: "GET",
+          query: query,
+          format: "json",
+          ...params,
+        },
+      ),
+    /**
+     * @description 按创建时间倒序返回该运行时的抓包任务，使用稳定 cursor 分页。
+     *
+     * @tags TeamLab - Traffic and Captures
+     * @name OpenTeamLabTrafficListCaptures
+     * @summary 列出抓包任务
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/captures
+     */
+    useOpenTeamLabTrafficListCaptures: (
+      runtimeId: string,
+      query?: {
+        after?: string | null;
+        /**
+         * @format int32
+         * @min 1
+         * @max 100
+         * @default 50
+         */
+        limit?: number;
+      },
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<OpenTeamLabCapturePageModel, ExternalApiProblemDetailsModel>(
+        doFetch
+          ? [`/api/open/v1/teamlab/runtimes/${runtimeId}/captures`, query]
+          : null,
+        options,
+      ),
+
+    /**
+     * @description 按创建时间倒序返回该运行时的抓包任务，使用稳定 cursor 分页。
+     *
+     * @tags TeamLab - Traffic and Captures
+     * @name OpenTeamLabTrafficListCaptures
+     * @summary 列出抓包任务
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/captures
+     */
+    mutateOpenTeamLabTrafficListCaptures: (
+      runtimeId: string,
+      query?: {
+        after?: string | null;
+        /**
+         * @format int32
+         * @min 1
+         * @max 100
+         * @default 50
+         */
+        limit?: number;
+      },
+      data?: OpenTeamLabCapturePageModel | Promise<OpenTeamLabCapturePageModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<OpenTeamLabCapturePageModel>(
+        [`/api/open/v1/teamlab/runtimes/${runtimeId}/captures`, query],
+        data,
+        options,
+      ),
+
+    /**
+     * @description 为选定的运行时分片或网段提交有上限的抓包任务。
+     *
+     * @tags TeamLab - Traffic and Captures
+     * @name OpenTeamLabTrafficStartCapture
+     * @summary 开始抓包
+     * @request POST:/api/open/v1/teamlab/runtimes/{runtimeId}/captures
+     */
+    openTeamLabTrafficStartCapture: (
+      runtimeId: string,
+      data: CreateTeamLabCaptureModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<ApiOperationModel, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/runtimes/${runtimeId}/captures`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * @description 提交提前停止并归档正在运行的抓包任务。
+     *
+     * @tags TeamLab - Traffic and Captures
+     * @name OpenTeamLabTrafficStopCapture
+     * @summary 停止抓包
+     * @request POST:/api/open/v1/teamlab/runtimes/{runtimeId}/captures/{captureId}/stop
+     */
+    openTeamLabTrafficStopCapture: (
+      runtimeId: string,
+      captureId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<ApiOperationModel, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/runtimes/${runtimeId}/captures/${captureId}/stop`,
+        method: "POST",
+        format: "json",
+        ...params,
+      }),
+  };
+  teamLabWebhooks = {
+    /**
+     * @description 在指定控制范围内创建 https 端点的事件通知订阅；端点必须可公网解析。
+     *
+     * @tags TeamLab - Webhooks
+     * @name OpenTeamLabWebhooksCreate
+     * @summary 创建 webhook 订阅
+     * @request POST:/api/open/v1/teamlab/webhooks
+     */
+    openTeamLabWebhooksCreate: (
+      data: CreateTeamLabWebhookModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<ApiOperationModel, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/webhooks`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * @description 返回订阅详情与最近投递失败记录；签名密钥永不返回。
+     *
+     * @tags TeamLab - Webhooks
+     * @name OpenTeamLabWebhooksGet
+     * @summary 获取 webhook 订阅
+     * @request GET:/api/open/v1/teamlab/webhooks/{webhookId}
+     */
+    openTeamLabWebhooksGet: (webhookId: string, params: RequestParams = {}) =>
+      this.request<TeamLabWebhookModel, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/webhooks/${webhookId}`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * @description 返回订阅详情与最近投递失败记录；签名密钥永不返回。
+     *
+     * @tags TeamLab - Webhooks
+     * @name OpenTeamLabWebhooksGet
+     * @summary 获取 webhook 订阅
+     * @request GET:/api/open/v1/teamlab/webhooks/{webhookId}
+     */
+    useOpenTeamLabWebhooksGet: (
+      webhookId: string,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<TeamLabWebhookModel, ExternalApiProblemDetailsModel>(
+        doFetch ? `/api/open/v1/teamlab/webhooks/${webhookId}` : null,
+        options,
+      ),
+
+    /**
+     * @description 返回订阅详情与最近投递失败记录；签名密钥永不返回。
+     *
+     * @tags TeamLab - Webhooks
+     * @name OpenTeamLabWebhooksGet
+     * @summary 获取 webhook 订阅
+     * @request GET:/api/open/v1/teamlab/webhooks/{webhookId}
+     */
+    mutateOpenTeamLabWebhooksGet: (
+      webhookId: string,
+      data?: TeamLabWebhookModel | Promise<TeamLabWebhookModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<TeamLabWebhookModel>(
+        `/api/open/v1/teamlab/webhooks/${webhookId}`,
+        data,
+        options,
+      ),
+
+    /**
+     * @description 按控制范围返回 cursor 分页的订阅列表。
+     *
+     * @tags TeamLab - Webhooks
+     * @name OpenTeamLabWebhooksList
+     * @summary 列出 webhook 订阅
+     * @request GET:/api/open/v1/teamlab/webhooks
+     */
+    openTeamLabWebhooksList: (
+      query?: {
+        /** @format guid */
+        scopeId?: string;
+        /**
+         * @format int32
+         * @min 1
+         * @max 100
+         * @default 50
+         */
+        limit?: number;
+        after?: string | null;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabWebhookPageModel, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/webhooks`,
+        method: "GET",
+        query: query,
+        format: "json",
+        ...params,
+      }),
+    /**
+     * @description 按控制范围返回 cursor 分页的订阅列表。
+     *
+     * @tags TeamLab - Webhooks
+     * @name OpenTeamLabWebhooksList
+     * @summary 列出 webhook 订阅
+     * @request GET:/api/open/v1/teamlab/webhooks
+     */
+    useOpenTeamLabWebhooksList: (
+      query?: {
+        /** @format guid */
+        scopeId?: string;
+        /**
+         * @format int32
+         * @min 1
+         * @max 100
+         * @default 50
+         */
+        limit?: number;
+        after?: string | null;
+      },
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<TeamLabWebhookPageModel, ExternalApiProblemDetailsModel>(
+        doFetch ? [`/api/open/v1/teamlab/webhooks`, query] : null,
+        options,
+      ),
+
+    /**
+     * @description 按控制范围返回 cursor 分页的订阅列表。
+     *
+     * @tags TeamLab - Webhooks
+     * @name OpenTeamLabWebhooksList
+     * @summary 列出 webhook 订阅
+     * @request GET:/api/open/v1/teamlab/webhooks
+     */
+    mutateOpenTeamLabWebhooksList: (
+      query?: {
+        /** @format guid */
+        scopeId?: string;
+        /**
+         * @format int32
+         * @min 1
+         * @max 100
+         * @default 50
+         */
+        limit?: number;
+        after?: string | null;
+      },
+      data?: TeamLabWebhookPageModel | Promise<TeamLabWebhookPageModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<TeamLabWebhookPageModel>(
+        [`/api/open/v1/teamlab/webhooks`, query],
+        data,
+        options,
+      ),
+
+    /**
+     * @description 从指定事件 ID 重新投递不可变信封；不推进投递游标，也不会创建新的运行时操作。
+     *
+     * @tags TeamLab - Webhooks
+     * @name OpenTeamLabWebhooksReplay
+     * @summary 重放 webhook 事件
+     * @request POST:/api/open/v1/teamlab/webhooks/{webhookId}/replay
+     */
+    openTeamLabWebhooksReplay: (
+      webhookId: string,
+      query?: {
+        /**
+         * @format int64
+         * @min 1
+         * @max 9223372036854780000
+         */
+        fromEventId?: number | null;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<ApiOperationModel, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/webhooks/${webhookId}/replay`,
+        method: "POST",
+        query: query,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * @description 停止后续投递；已排队投递不会回滚。
+     *
+     * @tags TeamLab - Webhooks
+     * @name OpenTeamLabWebhooksRevoke
+     * @summary 撤销 webhook 订阅
+     * @request DELETE:/api/open/v1/teamlab/webhooks/{webhookId}
+     */
+    openTeamLabWebhooksRevoke: (
+      webhookId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<ApiOperationModel, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/webhooks/${webhookId}`,
+        method: "DELETE",
+        format: "json",
+        ...params,
+      }),
+  };
+  teamsOpenApi = {
+    /**
      * No description
      *
-     * @tags ScopedApiProbe
-     * @name ScopedApiProbeRateLimit
-     * @request GET:/api/open/v1/test/rate-limit
+     * @tags TeamsOpenApi
+     * @name TeamsOpenApiImport
+     * @request POST:/api/open/v1/teams/import
      */
-    scopedApiProbeRateLimit: (params: RequestParams = {}) =>
-      this.request<Blob, any>({
-        path: `/api/open/v1/test/rate-limit`,
+    teamsOpenApiImport: (
+      data: TeamImportBatchModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<ApiOperationModel, any>({
+        path: `/api/open/v1/teams/import`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+  };
+  theoryOpenApi = {
+    /**
+     * No description
+     *
+     * @tags TheoryOpenApi
+     * @name TheoryOpenApiImportPaper
+     * @request PUT:/api/open/v1/theory/games/{gameId}/paper
+     */
+    theoryOpenApiImportPaper: (
+      gameId: number,
+      data: TheoryPaperImportModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<ApiOperationModel, any>({
+        path: `/api/open/v1/theory/games/${gameId}/paper`,
+        method: "PUT",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags TheoryOpenApi
+     * @name TheoryOpenApiImportQuestions
+     * @request POST:/api/open/v1/theory/questions/import
+     */
+    theoryOpenApiImportQuestions: (
+      data: TheoryQuestionImportBatchModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<ApiOperationModel, any>({
+        path: `/api/open/v1/theory/questions/import`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+  };
+  trainingOpenApi = {
+    /**
+     * No description
+     *
+     * @tags TrainingOpenApi
+     * @name TrainingOpenApiImport
+     * @request POST:/api/open/v1/training/courses/import
+     */
+    trainingOpenApiImport: (
+      data: TrainingCourseImportBatchModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<ApiOperationModel, any>({
+        path: `/api/open/v1/training/courses/import`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+  };
+  exerciseOpenApi = {
+    /**
+     * No description
+     *
+     * @tags ExerciseOpenApi
+     * @name ExerciseOpenApiCreate
+     * @request POST:/api/open/v1/exercises
+     */
+    exerciseOpenApiCreate: (
+      data: ExerciseCreateModel2,
+      params: RequestParams = {},
+    ) =>
+      this.request<ApiOperationModel, ProblemDetails>({
+        path: `/api/open/v1/exercises`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags ExerciseOpenApi
+     * @name ExerciseOpenApiDelete
+     * @request DELETE:/api/open/v1/exercises/{exerciseId}
+     */
+    exerciseOpenApiDelete: (exerciseId: number, params: RequestParams = {}) =>
+      this.request<void, ProblemDetails>({
+        path: `/api/open/v1/exercises/${exerciseId}`,
+        method: "DELETE",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags ExerciseOpenApi
+     * @name ExerciseOpenApiGet
+     * @request GET:/api/open/v1/exercises/{exerciseId}
+     */
+    exerciseOpenApiGet: (exerciseId: number, params: RequestParams = {}) =>
+      this.request<ExerciseExternalModel, ProblemDetails>({
+        path: `/api/open/v1/exercises/${exerciseId}`,
         method: "GET",
+        format: "json",
         ...params,
       }),
     /**
      * No description
      *
-     * @tags ScopedApiProbe
-     * @name ScopedApiProbeRateLimit
-     * @request GET:/api/open/v1/test/rate-limit
+     * @tags ExerciseOpenApi
+     * @name ExerciseOpenApiGet
+     * @request GET:/api/open/v1/exercises/{exerciseId}
      */
-    useScopedApiProbeRateLimit: (
+    useExerciseOpenApiGet: (
+      exerciseId: number,
       options?: SWRConfiguration,
       doFetch: boolean = true,
     ) =>
-      useSWR<Blob, any>(
-        doFetch ? `/api/open/v1/test/rate-limit` : null,
+      useSWR<ExerciseExternalModel, ProblemDetails>(
+        doFetch ? `/api/open/v1/exercises/${exerciseId}` : null,
         options,
       ),
 
     /**
      * No description
      *
-     * @tags ScopedApiProbe
-     * @name ScopedApiProbeRateLimit
-     * @request GET:/api/open/v1/test/rate-limit
+     * @tags ExerciseOpenApi
+     * @name ExerciseOpenApiGet
+     * @request GET:/api/open/v1/exercises/{exerciseId}
      */
-    mutateScopedApiProbeRateLimit: (
-      data?: Blob | Promise<Blob>,
+    mutateExerciseOpenApiGet: (
+      exerciseId: number,
+      data?: ExerciseExternalModel | Promise<ExerciseExternalModel>,
       options?: MutatorOptions,
-    ) => mutate<Blob>(`/api/open/v1/test/rate-limit`, data, options),
-
-    /**
-     * No description
-     *
-     * @tags ScopedApiProbe
-     * @name ScopedApiProbeRead
-     * @request GET:/test/scopes/images-read
-     */
-    scopedApiProbeRead: (params: RequestParams = {}) =>
-      this.request<Blob, any>({
-        path: `/test/scopes/images-read`,
-        method: "GET",
-        ...params,
-      }),
-    /**
-     * No description
-     *
-     * @tags ScopedApiProbe
-     * @name ScopedApiProbeRead
-     * @request GET:/test/scopes/images-read
-     */
-    useScopedApiProbeRead: (
-      options?: SWRConfiguration,
-      doFetch: boolean = true,
     ) =>
-      useSWR<Blob, any>(doFetch ? `/test/scopes/images-read` : null, options),
-
-    /**
-     * No description
-     *
-     * @tags ScopedApiProbe
-     * @name ScopedApiProbeRead
-     * @request GET:/test/scopes/images-read
-     */
-    mutateScopedApiProbeRead: (
-      data?: Blob | Promise<Blob>,
-      options?: MutatorOptions,
-    ) => mutate<Blob>(`/test/scopes/images-read`, data, options),
-
-    /**
-     * No description
-     *
-     * @tags ScopedApiProbe
-     * @name ScopedApiProbeResource
-     * @request GET:/test/resources/{resourceId}
-     */
-    scopedApiProbeResource: (resourceId: string, params: RequestParams = {}) =>
-      this.request<Blob, any>({
-        path: `/test/resources/${resourceId}`,
-        method: "GET",
-        ...params,
-      }),
-    /**
-     * No description
-     *
-     * @tags ScopedApiProbe
-     * @name ScopedApiProbeResource
-     * @request GET:/test/resources/{resourceId}
-     */
-    useScopedApiProbeResource: (
-      resourceId: string,
-      options?: SWRConfiguration,
-      doFetch: boolean = true,
-    ) =>
-      useSWR<Blob, any>(
-        doFetch ? `/test/resources/${resourceId}` : null,
+      mutate<ExerciseExternalModel>(
+        `/api/open/v1/exercises/${exerciseId}`,
+        data,
         options,
       ),
 
     /**
      * No description
      *
-     * @tags ScopedApiProbe
-     * @name ScopedApiProbeResource
-     * @request GET:/test/resources/{resourceId}
+     * @tags ExerciseOpenApi
+     * @name ExerciseOpenApiImport
+     * @request POST:/api/open/v1/exercises/import
      */
-    mutateScopedApiProbeResource: (
-      resourceId: string,
-      data?: Blob | Promise<Blob>,
-      options?: MutatorOptions,
-    ) => mutate<Blob>(`/test/resources/${resourceId}`, data, options),
+    exerciseOpenApiImport: (
+      data: ExerciseImportFromExternalModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<ApiOperationModel, any>({
+        path: `/api/open/v1/exercises/import`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
 
     /**
      * No description
      *
-     * @tags ScopedApiProbe
-     * @name ScopedApiProbeUnknown
-     * @request GET:/api/open/v1/test/problems/unknown
+     * @tags ExerciseOpenApi
+     * @name ExerciseOpenApiList
+     * @request GET:/api/open/v1/exercises
      */
-    scopedApiProbeUnknown: (params: RequestParams = {}) =>
-      this.request<Blob, any>({
-        path: `/api/open/v1/test/problems/unknown`,
+    exerciseOpenApiList: (
+      query?: {
+        search?: string | null;
+        category?: string | null;
+        difficulty?: string | null;
+        tags?: string | null;
+        source?: string | null;
+        after?: string | null;
+        /**
+         * @format int32
+         * @min 1
+         * @max 100
+         * @default 50
+         */
+        limit?: number;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<ExerciseExternalPageModel, any>({
+        path: `/api/open/v1/exercises`,
         method: "GET",
+        query: query,
+        format: "json",
         ...params,
       }),
     /**
      * No description
      *
-     * @tags ScopedApiProbe
-     * @name ScopedApiProbeUnknown
-     * @request GET:/api/open/v1/test/problems/unknown
+     * @tags ExerciseOpenApi
+     * @name ExerciseOpenApiList
+     * @request GET:/api/open/v1/exercises
      */
-    useScopedApiProbeUnknown: (
+    useExerciseOpenApiList: (
+      query?: {
+        search?: string | null;
+        category?: string | null;
+        difficulty?: string | null;
+        tags?: string | null;
+        source?: string | null;
+        after?: string | null;
+        /**
+         * @format int32
+         * @min 1
+         * @max 100
+         * @default 50
+         */
+        limit?: number;
+      },
       options?: SWRConfiguration,
       doFetch: boolean = true,
     ) =>
-      useSWR<Blob, any>(
-        doFetch ? `/api/open/v1/test/problems/unknown` : null,
+      useSWR<ExerciseExternalPageModel, any>(
+        doFetch ? [`/api/open/v1/exercises`, query] : null,
         options,
       ),
 
     /**
      * No description
      *
-     * @tags ScopedApiProbe
-     * @name ScopedApiProbeUnknown
-     * @request GET:/api/open/v1/test/problems/unknown
+     * @tags ExerciseOpenApi
+     * @name ExerciseOpenApiList
+     * @request GET:/api/open/v1/exercises
      */
-    mutateScopedApiProbeUnknown: (
-      data?: Blob | Promise<Blob>,
+    mutateExerciseOpenApiList: (
+      query?: {
+        search?: string | null;
+        category?: string | null;
+        difficulty?: string | null;
+        tags?: string | null;
+        source?: string | null;
+        after?: string | null;
+        /**
+         * @format int32
+         * @min 1
+         * @max 100
+         * @default 50
+         */
+        limit?: number;
+      },
+      data?: ExerciseExternalPageModel | Promise<ExerciseExternalPageModel>,
       options?: MutatorOptions,
-    ) => mutate<Blob>(`/api/open/v1/test/problems/unknown`, data, options),
+    ) =>
+      mutate<ExerciseExternalPageModel>(
+        [`/api/open/v1/exercises`, query],
+        data,
+        options,
+      ),
 
     /**
      * No description
      *
-     * @tags ScopedApiProbe
-     * @name ScopedApiProbeValidateModel
-     * @request POST:/api/open/v1/test/model-validation
+     * @tags ExerciseOpenApi
+     * @name ExerciseOpenApiUpdate
+     * @request PUT:/api/open/v1/exercises/{exerciseId}
      */
-    scopedApiProbeValidateModel: (
-      data: RequiredProbeModel,
+    exerciseOpenApiUpdate: (
+      exerciseId: number,
+      data: ExerciseCreateModel2,
+      params: RequestParams = {},
+    ) =>
+      this.request<ApiOperationModel, ProblemDetails>({
+        path: `/api/open/v1/exercises/${exerciseId}`,
+        method: "PUT",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+  };
+  openAwdpServices = {
+    /**
+     * No description
+     *
+     * @tags OpenAwdpServices
+     * @name OpenAwdpServicesDelete
+     * @request DELETE:/api/open/v1/games/{gameId}/awdp-services/{serviceId}
+     */
+    openAwdpServicesDelete: (
+      gameId: number,
+      serviceId: number,
       params: RequestParams = {},
     ) =>
       this.request<Blob, any>({
-        path: `/api/open/v1/test/model-validation`,
+        path: `/api/open/v1/games/${gameId}/awdp-services/${serviceId}`,
+        method: "DELETE",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags OpenAwdpServices
+     * @name OpenAwdpServicesDeleteBatch
+     * @request POST:/api/open/v1/games/{gameId}/awdp-services/batch-delete
+     */
+    openAwdpServicesDeleteBatch: (
+      gameId: number,
+      data: number[],
+      query?: {
+        routeKey?: string | null;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<Blob, any>({
+        path: `/api/open/v1/games/${gameId}/awdp-services/batch-delete`,
+        method: "POST",
+        query: query,
+        body: data,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags OpenAwdpServices
+     * @name OpenAwdpServicesGet
+     * @request GET:/api/open/v1/games/{gameId}/awdp-services/{serviceId}
+     */
+    openAwdpServicesGet: (
+      gameId: number,
+      serviceId: number,
+      params: RequestParams = {},
+    ) =>
+      this.request<Blob, any>({
+        path: `/api/open/v1/games/${gameId}/awdp-services/${serviceId}`,
+        method: "GET",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags OpenAwdpServices
+     * @name OpenAwdpServicesGet
+     * @request GET:/api/open/v1/games/{gameId}/awdp-services/{serviceId}
+     */
+    useOpenAwdpServicesGet: (
+      gameId: number,
+      serviceId: number,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<Blob, any>(
+        doFetch
+          ? `/api/open/v1/games/${gameId}/awdp-services/${serviceId}`
+          : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags OpenAwdpServices
+     * @name OpenAwdpServicesGet
+     * @request GET:/api/open/v1/games/{gameId}/awdp-services/{serviceId}
+     */
+    mutateOpenAwdpServicesGet: (
+      gameId: number,
+      serviceId: number,
+      data?: Blob | Promise<Blob>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<Blob>(
+        `/api/open/v1/games/${gameId}/awdp-services/${serviceId}`,
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags OpenAwdpServices
+     * @name OpenAwdpServicesImportBatch
+     * @request POST:/api/open/v1/games/{gameId}/awdp-services/batch
+     */
+    openAwdpServicesImportBatch: (
+      gameId: number,
+      data: OpenAwdpServiceBatchImportModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<Blob, any>({
+        path: `/api/open/v1/games/${gameId}/awdp-services/batch`,
         method: "POST",
         body: data,
         type: ContentType.Json,
@@ -17668,14 +26855,860 @@ export class Api<
     /**
      * No description
      *
-     * @tags ScopedApiProbe
-     * @name ScopedApiProbeWrite
-     * @request POST:/test/scopes/images-write
+     * @tags OpenAwdpServices
+     * @name OpenAwdpServicesImportOne
+     * @request POST:/api/open/v1/games/{gameId}/awdp-services
      */
-    scopedApiProbeWrite: (params: RequestParams = {}) =>
+    openAwdpServicesImportOne: (
+      gameId: number,
+      data: OpenAwdpServiceImportModel,
+      params: RequestParams = {},
+    ) =>
       this.request<Blob, any>({
-        path: `/test/scopes/images-write`,
+        path: `/api/open/v1/games/${gameId}/awdp-services`,
         method: "POST",
+        body: data,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags OpenAwdpServices
+     * @name OpenAwdpServicesList
+     * @request GET:/api/open/v1/games/{gameId}/awdp-services
+     */
+    openAwdpServicesList: (
+      gameId: number,
+      query?: {
+        /**
+         * @format int32
+         * @min 1
+         * @max 100
+         * @default 50
+         */
+        limit?: number;
+        /** @format int32 */
+        after?: number | null;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<Blob, any>({
+        path: `/api/open/v1/games/${gameId}/awdp-services`,
+        method: "GET",
+        query: query,
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags OpenAwdpServices
+     * @name OpenAwdpServicesList
+     * @request GET:/api/open/v1/games/{gameId}/awdp-services
+     */
+    useOpenAwdpServicesList: (
+      gameId: number,
+      query?: {
+        /**
+         * @format int32
+         * @min 1
+         * @max 100
+         * @default 50
+         */
+        limit?: number;
+        /** @format int32 */
+        after?: number | null;
+      },
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<Blob, any>(
+        doFetch ? [`/api/open/v1/games/${gameId}/awdp-services`, query] : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags OpenAwdpServices
+     * @name OpenAwdpServicesList
+     * @request GET:/api/open/v1/games/{gameId}/awdp-services
+     */
+    mutateOpenAwdpServicesList: (
+      gameId: number,
+      query?: {
+        /**
+         * @format int32
+         * @min 1
+         * @max 100
+         * @default 50
+         */
+        limit?: number;
+        /** @format int32 */
+        after?: number | null;
+      },
+      data?: Blob | Promise<Blob>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<Blob>(
+        [`/api/open/v1/games/${gameId}/awdp-services`, query],
+        data,
+        options,
+      ),
+  };
+  openChallenges = {
+    /**
+     * No description
+     *
+     * @tags OpenChallenges
+     * @name OpenChallengesDelete
+     * @request DELETE:/api/open/v1/games/{gameId}/challenges/{challengeId}
+     */
+    openChallengesDelete: (
+      gameId: number,
+      challengeId: number,
+      params: RequestParams = {},
+    ) =>
+      this.request<ApiOperationModel, any>({
+        path: `/api/open/v1/games/${gameId}/challenges/${challengeId}`,
+        method: "DELETE",
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags OpenChallenges
+     * @name OpenChallengesDeleteBatch
+     * @request POST:/api/open/v1/games/{gameId}/challenges/batch-delete
+     */
+    openChallengesDeleteBatch: (
+      gameId: number,
+      data: OpenChallengeBatchDeleteModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<ApiOperationModel, any>({
+        path: `/api/open/v1/games/${gameId}/challenges/batch-delete`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags OpenChallenges
+     * @name OpenChallengesGet
+     * @request GET:/api/open/v1/games/{gameId}/challenges/{challengeId}
+     */
+    openChallengesGet: (
+      gameId: number,
+      challengeId: number,
+      params: RequestParams = {},
+    ) =>
+      this.request<OpenChallengeModel, ProblemDetails>({
+        path: `/api/open/v1/games/${gameId}/challenges/${challengeId}`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags OpenChallenges
+     * @name OpenChallengesGet
+     * @request GET:/api/open/v1/games/{gameId}/challenges/{challengeId}
+     */
+    useOpenChallengesGet: (
+      gameId: number,
+      challengeId: number,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<OpenChallengeModel, ProblemDetails>(
+        doFetch
+          ? `/api/open/v1/games/${gameId}/challenges/${challengeId}`
+          : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags OpenChallenges
+     * @name OpenChallengesGet
+     * @request GET:/api/open/v1/games/{gameId}/challenges/{challengeId}
+     */
+    mutateOpenChallengesGet: (
+      gameId: number,
+      challengeId: number,
+      data?: OpenChallengeModel | Promise<OpenChallengeModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<OpenChallengeModel>(
+        `/api/open/v1/games/${gameId}/challenges/${challengeId}`,
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags OpenChallenges
+     * @name OpenChallengesImportBatch
+     * @request POST:/api/open/v1/games/{gameId}/challenges/batch
+     */
+    openChallengesImportBatch: (
+      gameId: number,
+      data: OpenChallengeBatchImportModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<ApiOperationModel, any>({
+        path: `/api/open/v1/games/${gameId}/challenges/batch`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags OpenChallenges
+     * @name OpenChallengesImportOne
+     * @request POST:/api/open/v1/games/{gameId}/challenges
+     */
+    openChallengesImportOne: (
+      gameId: number,
+      data: OpenChallengeImportModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<ApiOperationModel, any>({
+        path: `/api/open/v1/games/${gameId}/challenges`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags OpenChallenges
+     * @name OpenChallengesList
+     * @request GET:/api/open/v1/games/{gameId}/challenges
+     */
+    openChallengesList: (
+      gameId: number,
+      query?: {
+        /**
+         * @format int32
+         * @min 1
+         * @max 100
+         * @default 50
+         */
+        limit?: number;
+        after?: string | null;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<OpenChallengePageModel, any>({
+        path: `/api/open/v1/games/${gameId}/challenges`,
+        method: "GET",
+        query: query,
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags OpenChallenges
+     * @name OpenChallengesList
+     * @request GET:/api/open/v1/games/{gameId}/challenges
+     */
+    useOpenChallengesList: (
+      gameId: number,
+      query?: {
+        /**
+         * @format int32
+         * @min 1
+         * @max 100
+         * @default 50
+         */
+        limit?: number;
+        after?: string | null;
+      },
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<OpenChallengePageModel, any>(
+        doFetch ? [`/api/open/v1/games/${gameId}/challenges`, query] : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags OpenChallenges
+     * @name OpenChallengesList
+     * @request GET:/api/open/v1/games/{gameId}/challenges
+     */
+    mutateOpenChallengesList: (
+      gameId: number,
+      query?: {
+        /**
+         * @format int32
+         * @min 1
+         * @max 100
+         * @default 50
+         */
+        limit?: number;
+        after?: string | null;
+      },
+      data?: OpenChallengePageModel | Promise<OpenChallengePageModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<OpenChallengePageModel>(
+        [`/api/open/v1/games/${gameId}/challenges`, query],
+        data,
+        options,
+      ),
+  };
+  openAssets = {
+    /**
+     * No description
+     *
+     * @tags OpenAssets
+     * @name OpenAssetsGet
+     * @request GET:/api/open/v1/assets/{hash}
+     */
+    openAssetsGet: (hash: string, params: RequestParams = {}) =>
+      this.request<AssetDescriptor, ProblemDetails>({
+        path: `/api/open/v1/assets/${hash}`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags OpenAssets
+     * @name OpenAssetsGet
+     * @request GET:/api/open/v1/assets/{hash}
+     */
+    useOpenAssetsGet: (
+      hash: string,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<AssetDescriptor, ProblemDetails>(
+        doFetch ? `/api/open/v1/assets/${hash}` : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags OpenAssets
+     * @name OpenAssetsGet
+     * @request GET:/api/open/v1/assets/{hash}
+     */
+    mutateOpenAssetsGet: (
+      hash: string,
+      data?: AssetDescriptor | Promise<AssetDescriptor>,
+      options?: MutatorOptions,
+    ) => mutate<AssetDescriptor>(`/api/open/v1/assets/${hash}`, data, options),
+
+    /**
+     * No description
+     *
+     * @tags OpenAssets
+     * @name OpenAssetsUpload
+     * @request POST:/api/open/v1/assets
+     */
+    openAssetsUpload: (
+      data: {
+        /** @format binary */
+        file?: File | null;
+        filename?: string | null;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<AssetDescriptor, any>({
+        path: `/api/open/v1/assets`,
+        method: "POST",
+        body: data,
+        type: ContentType.FormData,
+        format: "json",
+        ...params,
+      }),
+  };
+  openBootstrapProfiles = {
+    /**
+     * No description
+     *
+     * @tags OpenBootstrapProfiles
+     * @name OpenBootstrapProfilesCreate
+     * @request POST:/api/open/v1/bootstrap-profiles
+     */
+    openBootstrapProfilesCreate: (
+      data: BootstrapProfileCreateModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<ApiOperationModel, any>({
+        path: `/api/open/v1/bootstrap-profiles`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags OpenBootstrapProfiles
+     * @name OpenBootstrapProfilesDelete
+     * @request DELETE:/api/open/v1/bootstrap-profiles/{profileId}
+     */
+    openBootstrapProfilesDelete: (
+      profileId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<ApiOperationModel, any>({
+        path: `/api/open/v1/bootstrap-profiles/${profileId}`,
+        method: "DELETE",
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags OpenBootstrapProfiles
+     * @name OpenBootstrapProfilesGet
+     * @request GET:/api/open/v1/bootstrap-profiles/{profileId}
+     */
+    openBootstrapProfilesGet: (profileId: string, params: RequestParams = {}) =>
+      this.request<Blob, any>({
+        path: `/api/open/v1/bootstrap-profiles/${profileId}`,
+        method: "GET",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags OpenBootstrapProfiles
+     * @name OpenBootstrapProfilesGet
+     * @request GET:/api/open/v1/bootstrap-profiles/{profileId}
+     */
+    useOpenBootstrapProfilesGet: (
+      profileId: string,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<Blob, any>(
+        doFetch ? `/api/open/v1/bootstrap-profiles/${profileId}` : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags OpenBootstrapProfiles
+     * @name OpenBootstrapProfilesGet
+     * @request GET:/api/open/v1/bootstrap-profiles/{profileId}
+     */
+    mutateOpenBootstrapProfilesGet: (
+      profileId: string,
+      data?: Blob | Promise<Blob>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<Blob>(
+        `/api/open/v1/bootstrap-profiles/${profileId}`,
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags OpenBootstrapProfiles
+     * @name OpenBootstrapProfilesGetVersion
+     * @request GET:/api/open/v1/bootstrap-profiles/{profileId}/versions/{version}
+     */
+    openBootstrapProfilesGetVersion: (
+      profileId: string,
+      version: number,
+      params: RequestParams = {},
+    ) =>
+      this.request<Blob, any>({
+        path: `/api/open/v1/bootstrap-profiles/${profileId}/versions/${version}`,
+        method: "GET",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags OpenBootstrapProfiles
+     * @name OpenBootstrapProfilesGetVersion
+     * @request GET:/api/open/v1/bootstrap-profiles/{profileId}/versions/{version}
+     */
+    useOpenBootstrapProfilesGetVersion: (
+      profileId: string,
+      version: number,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<Blob, any>(
+        doFetch
+          ? `/api/open/v1/bootstrap-profiles/${profileId}/versions/${version}`
+          : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags OpenBootstrapProfiles
+     * @name OpenBootstrapProfilesGetVersion
+     * @request GET:/api/open/v1/bootstrap-profiles/{profileId}/versions/{version}
+     */
+    mutateOpenBootstrapProfilesGetVersion: (
+      profileId: string,
+      version: number,
+      data?: Blob | Promise<Blob>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<Blob>(
+        `/api/open/v1/bootstrap-profiles/${profileId}/versions/${version}`,
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags OpenBootstrapProfiles
+     * @name OpenBootstrapProfilesList
+     * @request GET:/api/open/v1/bootstrap-profiles
+     */
+    openBootstrapProfilesList: (
+      query?: {
+        /**
+         * @format int32
+         * @min 1
+         * @max 100
+         * @default 50
+         */
+        limit?: number;
+        after?: string | null;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<BootstrapProfileCursorPage, any>({
+        path: `/api/open/v1/bootstrap-profiles`,
+        method: "GET",
+        query: query,
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags OpenBootstrapProfiles
+     * @name OpenBootstrapProfilesList
+     * @request GET:/api/open/v1/bootstrap-profiles
+     */
+    useOpenBootstrapProfilesList: (
+      query?: {
+        /**
+         * @format int32
+         * @min 1
+         * @max 100
+         * @default 50
+         */
+        limit?: number;
+        after?: string | null;
+      },
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<BootstrapProfileCursorPage, any>(
+        doFetch ? [`/api/open/v1/bootstrap-profiles`, query] : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags OpenBootstrapProfiles
+     * @name OpenBootstrapProfilesList
+     * @request GET:/api/open/v1/bootstrap-profiles
+     */
+    mutateOpenBootstrapProfilesList: (
+      query?: {
+        /**
+         * @format int32
+         * @min 1
+         * @max 100
+         * @default 50
+         */
+        limit?: number;
+        after?: string | null;
+      },
+      data?: BootstrapProfileCursorPage | Promise<BootstrapProfileCursorPage>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<BootstrapProfileCursorPage>(
+        [`/api/open/v1/bootstrap-profiles`, query],
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags OpenBootstrapProfiles
+     * @name OpenBootstrapProfilesPublishVersion
+     * @request POST:/api/open/v1/bootstrap-profiles/{profileId}/versions
+     */
+    openBootstrapProfilesPublishVersion: (
+      profileId: string,
+      data: {
+        /** @format binary */
+        artifact?: File | null;
+        manifest?: string | null;
+        /** @format int32 */
+        version?: number | null;
+        expectedDigest?: string | null;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<ApiOperationModel, any>({
+        path: `/api/open/v1/bootstrap-profiles/${profileId}/versions`,
+        method: "POST",
+        body: data,
+        type: ContentType.FormData,
+        format: "json",
+        ...params,
+      }),
+  };
+  openImages = {
+    /**
+     * No description
+     *
+     * @tags OpenImages
+     * @name OpenImagesCertifications
+     * @request GET:/api/open/v1/images/{imageTemplateId}/certifications
+     */
+    openImagesCertifications: (
+      imageTemplateId: number,
+      params: RequestParams = {},
+    ) =>
+      this.request<Blob, any>({
+        path: `/api/open/v1/images/${imageTemplateId}/certifications`,
+        method: "GET",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags OpenImages
+     * @name OpenImagesCertifications
+     * @request GET:/api/open/v1/images/{imageTemplateId}/certifications
+     */
+    useOpenImagesCertifications: (
+      imageTemplateId: number,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<Blob, any>(
+        doFetch
+          ? `/api/open/v1/images/${imageTemplateId}/certifications`
+          : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags OpenImages
+     * @name OpenImagesCertifications
+     * @request GET:/api/open/v1/images/{imageTemplateId}/certifications
+     */
+    mutateOpenImagesCertifications: (
+      imageTemplateId: number,
+      data?: Blob | Promise<Blob>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<Blob>(
+        `/api/open/v1/images/${imageTemplateId}/certifications`,
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags OpenImages
+     * @name OpenImagesCertify
+     * @request POST:/api/open/v1/images/{imageTemplateId}/certifications
+     */
+    openImagesCertify: (
+      imageTemplateId: number,
+      data: ImageTemplateCertificationRequest,
+      params: RequestParams = {},
+    ) =>
+      this.request<ApiOperationModel, any>({
+        path: `/api/open/v1/images/${imageTemplateId}/certifications`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags OpenImages
+     * @name OpenImagesDelete
+     * @request DELETE:/api/open/v1/images/{imageTemplateId}
+     */
+    openImagesDelete: (imageTemplateId: number, params: RequestParams = {}) =>
+      this.request<void, ProblemDetails>({
+        path: `/api/open/v1/images/${imageTemplateId}`,
+        method: "DELETE",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags OpenImages
+     * @name OpenImagesGet
+     * @request GET:/api/open/v1/images/{imageTemplateId}
+     */
+    openImagesGet: (imageTemplateId: number, params: RequestParams = {}) =>
+      this.request<OpenImageTemplateModel, ProblemDetails>({
+        path: `/api/open/v1/images/${imageTemplateId}`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags OpenImages
+     * @name OpenImagesGet
+     * @request GET:/api/open/v1/images/{imageTemplateId}
+     */
+    useOpenImagesGet: (
+      imageTemplateId: number,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<OpenImageTemplateModel, ProblemDetails>(
+        doFetch ? `/api/open/v1/images/${imageTemplateId}` : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags OpenImages
+     * @name OpenImagesGet
+     * @request GET:/api/open/v1/images/{imageTemplateId}
+     */
+    mutateOpenImagesGet: (
+      imageTemplateId: number,
+      data?: OpenImageTemplateModel | Promise<OpenImageTemplateModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<OpenImageTemplateModel>(
+        `/api/open/v1/images/${imageTemplateId}`,
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags OpenImages
+     * @name OpenImagesRegisterDockerArchive
+     * @request POST:/api/open/v1/images/docker-archives
+     */
+    openImagesRegisterDockerArchive: (
+      data: {
+        /** @format binary */
+        file?: File | null;
+        name?: string | null;
+        sourceImage?: string | null;
+        osType?: OSType;
+        expectedDigest?: string | null;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<ApiOperationModel, any>({
+        path: `/api/open/v1/images/docker-archives`,
+        method: "POST",
+        body: data,
+        type: ContentType.FormData,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags OpenImages
+     * @name OpenImagesRegisterDockerReference
+     * @request POST:/api/open/v1/images/docker-references
+     */
+    openImagesRegisterDockerReference: (
+      data: DockerImageReferenceImportModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<ApiOperationModel, any>({
+        path: `/api/open/v1/images/docker-references`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags OpenImages
+     * @name OpenImagesRegisterVmQcow2
+     * @request POST:/api/open/v1/images/vm-qcow2
+     */
+    openImagesRegisterVmQcow2: (
+      data: {
+        /** @format binary */
+        file?: File | null;
+        name?: string | null;
+        osType?: OSType;
+        networkMode?: VmNetworkMode;
+        expectedDigest?: string | null;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<ApiOperationModel, any>({
+        path: `/api/open/v1/images/vm-qcow2`,
+        method: "POST",
+        body: data,
+        type: ContentType.FormData,
+        format: "json",
         ...params,
       }),
   };
