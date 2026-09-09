@@ -537,7 +537,7 @@ public sealed partial class TeamLabExecutionPlanExecutor(
                     await RunVmHealthProbeAsync(check, deadline.Token);
                 else if (containerPid is not > 0)
                     throw new InvalidOperationException("Container health checks require a running container process.");
-                else await RunContainerHealthProbeAsync(containerPid.Value, check, deadline.Token);
+                else await WaitForContainerHealthAsync(containerPid.Value, check, deadline.Token);
                 events.Enqueue(Event(plan, asset.AssetKey, "service", "succeeded", null,
                     $"{check.Protocol.ToUpperInvariant()} health check passed."));
             }
@@ -556,6 +556,25 @@ public sealed partial class TeamLabExecutionPlanExecutor(
         return true;
     }
 
+    async Task WaitForContainerHealthAsync(long pid, TeamLabHealthCheckV2 check, CancellationToken token)
+    {
+        Exception? lastFailure = null;
+        while (!token.IsCancellationRequested)
+        {
+            try
+            {
+                await RunContainerHealthProbeAsync(pid, check, token);
+                return;
+            }
+            catch (Exception exception) when (exception is Win32Exception or IOException or InvalidOperationException)
+            {
+                lastFailure = exception;
+                await Task.Delay(TimeSpan.FromMilliseconds(500), token);
+            }
+        }
+        throw new IOException("Container health check did not become ready within the probe window.", lastFailure);
+    }
+
     async Task RunContainerHealthProbeAsync(long pid, TeamLabHealthCheckV2 check, CancellationToken token)
     {
         if (!OperatingSystem.IsLinux())
@@ -564,7 +583,7 @@ public sealed partial class TeamLabExecutionPlanExecutor(
             !check.Protocol.Equals("http", StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException($"Unsupported health check protocol '{check.Protocol}'.");
 
-        var script = BuildHealthProbeScript(check);
+        var agentExecutable = $"/proc/{Environment.ProcessId}/exe";
         using var process = new Process
         {
             StartInfo = new ProcessStartInfo
@@ -579,9 +598,12 @@ public sealed partial class TeamLabExecutionPlanExecutor(
         process.StartInfo.ArgumentList.Add("-t");
         process.StartInfo.ArgumentList.Add(pid.ToString(System.Globalization.CultureInfo.InvariantCulture));
         process.StartInfo.ArgumentList.Add("-n");
-        process.StartInfo.ArgumentList.Add("bash");
-        process.StartInfo.ArgumentList.Add("-c");
-        process.StartInfo.ArgumentList.Add(script);
+        process.StartInfo.ArgumentList.Add(agentExecutable);
+        process.StartInfo.ArgumentList.Add("--teamlab-network-probe");
+        process.StartInfo.ArgumentList.Add(check.Protocol);
+        process.StartInfo.ArgumentList.Add(check.Host);
+        process.StartInfo.ArgumentList.Add(check.Port.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        if (check.Protocol == "http") process.StartInfo.ArgumentList.Add(check.Path ?? "/");
         process.Start();
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(token);
         deadline.CancelAfter(HealthProbeTimeout);

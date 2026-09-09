@@ -97,6 +97,9 @@ public class PublicUdpGatewayProvider(
         var comment = BuildNftComment(mapping);
         return
         [
+            $"{_config.NftBinaryPath} add table {_config.NftTable} 2>/dev/null || true",
+            $"{_config.NftBinaryPath} '{BuildNftBaseChainCommand("prerouting", "prerouting", "dstnat")}' 2>/dev/null || true",
+            $"{_config.NftBinaryPath} '{BuildNftBaseChainCommand("postrouting", "postrouting", "srcnat")}' 2>/dev/null || true",
             BuildNftRemoveCommand(comment),
             $"{_config.NftBinaryPath} add rule {_config.NftTable} prerouting udp dport {mapping.PublicUdpPort} dnat ip to {mapping.WorkerTunnelIp}:{mapping.WorkerWireGuardPort} comment \"{comment}\"",
             $"{_config.NftBinaryPath} add rule {_config.NftTable} postrouting ip daddr {mapping.WorkerTunnelIp} udp dport {mapping.WorkerWireGuardPort} masquerade comment \"{comment}\""
@@ -136,6 +139,9 @@ public class PublicUdpGatewayProvider(
     private string BuildNftRemoveCommand(string comment) =>
         $"{_config.NftBinaryPath} -a list chain {_config.NftTable} prerouting | awk '/comment \"{comment}\"/ {{print $NF}}' | xargs -r -I {{}} {_config.NftBinaryPath} delete rule {_config.NftTable} prerouting handle {{}}; " +
         $"{_config.NftBinaryPath} -a list chain {_config.NftTable} postrouting | awk '/comment \"{comment}\"/ {{print $NF}}' | xargs -r -I {{}} {_config.NftBinaryPath} delete rule {_config.NftTable} postrouting handle {{}}";
+
+    private string BuildNftBaseChainCommand(string name, string hook, string priority) =>
+        $"add chain {_config.NftTable} {name} {{ type nat hook {hook} priority {priority}; policy accept; }}";
 
     private static string BuildNftComment(TeamLabPublicUdpMapping mapping) =>
         $"gzctf-teamlab-{mapping.Id}-{mapping.RuntimeId}-{mapping.PublicUdpPort}";

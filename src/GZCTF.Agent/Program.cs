@@ -13,6 +13,12 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using System.Net;
 
+if (AgentNetworkProbe.IsInvocation(args))
+{
+    Environment.ExitCode = await AgentNetworkProbe.RunAsync(args, CancellationToken.None);
+    return;
+}
+
 var builder = WebApplication.CreateBuilder(args);
 var agentConfig = builder.Configuration.GetSection("Agent").Get<AgentConfig>() ?? new AgentConfig();
 

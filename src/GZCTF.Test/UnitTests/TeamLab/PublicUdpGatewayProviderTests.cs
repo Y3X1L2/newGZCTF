@@ -67,6 +67,32 @@ public class PublicUdpGatewayProviderTests
     }
 
     [Fact]
+    public async Task SyncMapping_BuildsNftablesBaseChainsBeforeMappingRules()
+    {
+        var provider = new PublicUdpGatewayProvider(
+            Options.Create(new PublicUdpGatewayConfig { Enable = false, Provider = "nftables" }),
+            NullLogger<PublicUdpGatewayProvider>.Instance);
+        var mapping = new TeamLabPublicUdpMapping
+        {
+            Id = 7,
+            RuntimeId = 11,
+            PublicUdpPort = 32001,
+            WorkerTunnelIp = "10.250.0.10",
+            WorkerWireGuardPort = 42001
+        };
+
+        var result = await provider.SyncMappingAsync(mapping, CancellationToken.None);
+        var commands = result.Commands;
+
+        Assert.Contains("add table inet gzctf_teamlab", commands[0]);
+        Assert.Contains("add chain inet gzctf_teamlab prerouting { type nat hook prerouting priority dstnat; policy accept; }", commands[1]);
+        Assert.Contains("add chain inet gzctf_teamlab postrouting { type nat hook postrouting priority srcnat; policy accept; }", commands[2]);
+        Assert.Contains("list chain inet gzctf_teamlab prerouting", commands[3]);
+        Assert.Contains("add rule inet gzctf_teamlab prerouting", commands[4]);
+        Assert.Contains("add rule inet gzctf_teamlab postrouting", commands[5]);
+    }
+
+    [Fact]
     public async Task RemoveMapping_BuildsExecutableIptablesDeleteCommands()
     {
         var provider = new PublicUdpGatewayProvider(

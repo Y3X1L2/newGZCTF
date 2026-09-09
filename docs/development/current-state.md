@@ -1,8 +1,25 @@
 # YINYU 当前开发状态
 
-更新时间：2026-09-08
+更新时间：2026-09-10
 
 本文件只记录已经核对过的当前事实、已知缺口和下一任务入口。历史计划、阶段审查和现场流水放在 `docs/archive/implementation-records/`，不得用来判断当前代码或服务器状态。
+
+## 测试环境部署事实（2026-09-09）
+
+- 用户授权对测试服务器 `10.0.7.118` / `10.0.7.125` 部署与清理；生产 10.24 环境未改动。
+- `10.0.7.118` 已原子切换至 `teamlab-full-af20f9bb-20260909`：gitCommit `af20f9bb9eebdf6e3223f405202f22dfd6bd814d`，manifest 1010 文件，archive SHA-256 `220d960b8df909fb9db80c93add2286f6f923e25c02e9c559140cc477a65a7bd`。efbundle 前向应用 9 条迁移（`AddAssetAndChallengeOwnership`、`AddExerciseCreatorTracking` 及 7 条 TeamLab 迁移）。`publish.previous` 保留旧 release `teamlab-capture-restore-fix-20260824-01`。冒烟：主站 active、首页 200、`/api/Config` 200。
+- 部署前数据库备份：`/opt/gzctf/backups/gzctf-pre-af20f9bb-20260909T1129Z.dump`（670,764,978 bytes，2,101 个 catalog 条目，SHA-256 `95c697111dc8e897cc507c5bd6d88b835d88e9bf201c30a411477ee290db16e4`）。`.118` 的 `/opt/gzctf/shared/files` 已建为指向 `/opt/gzctf/persistent/files` 的软链接（本机真实附件存储位置），以满足发布激活脚本前置检查。
+- `.118` 磁盘从 99%（1.5G 可用）恢复至约 87%（16G 可用）：删除 4 个非当前/非回退旧 release、`/var/crash` 转储、home 下 15 个 6-8 月旧 tarball（886M）及 nuget/npm 缓存；对 internal registry 执行 `registry garbage-collect --delete-untagged` 清理无 tag 引用的孤儿 blobs（blobs 曾达 40G）。6 个 `yinyu-pentest-*` 仍带 tag 的镜像保留。
+- `.118` 与 `.125` 的 `gzctf-agent` 此前均因主机缺少 `gzmgt0 / 100.127.0.1/16` 管理网桥以 `SocketException (99)` 崩溃循环（`.118` 重启计数 4065）。已按 `docs/operations/agent-guest-network-recovery.md` 在两台安装 `restore-agent-guest-network.py` 与 `gzctf-agent.service.d/20-guest-network.conf` drop-in，恢复网桥与 `gzctf_guest_mgmt` nft 隔离规则并持久化；重启后两台 agent 均 active/running、NRestarts=0，心跳到 `10.0.7.118:8080` 全部 200。整机重启持久化未经真实重启验证。
+- 上述 `.118` 数据库迁移仅在生产 10.24 副本策略之外、于测试服务器直接前向应用，不构成生产迁移验证；Agent 同步与节点调度实测见下节。
+
+## TeamLab 测试环境运行修复（2026-09-10）
+
+- `.118` 测试主站已切换到 `/opt/gzctf/releases/teamlab-gateway-healthfix-20260910/publish`，`publish.previous` 指向 `teamlab-full-af20f9bb-20260909`。主站与本机 Agent 均 active，`/api/Config` 返回 200；本次没有数据库迁移。
+- `.118` 与 `.125` Agent 已统一为 SHA-256 `738ff2630cf292bf7ce0b88eca4359960171bcbfc8bf43dccefd22b8ee35e72e`。容器健康检查改由 Agent 自身进入容器网络命名空间执行，并在 10 秒启动窗口内重试，不再依赖工作负载镜像包含 bash、curl、nc 或 Python。
+- 公网 UDP 网关同步会在规则写入前确保共享 nftables 表及 `prerouting`、`postrouting` NAT 基础链存在；销毁仅按运行映射注释删除规则，不删除共享链。隔离 nftables 测试覆盖空状态建链、双映射隔离、单映射删除和最终清理。
+- 正式 API 连续完成两次 v5 工控演示场景创建与销毁。运行 `01a086f1-6490-743b-974a-eb6b0848241f` 和 `01a086f3-b1e0-7466-9a6d-f2f333b98bba` 均到达 `ready`，两个资产均为 Running；销毁后运行及资产均为 Destroyed、错误为空。第二次运行中核对 DNAT/SNAT 两条规则存在，销毁后映射规则为 0；节点上对应 runtime 232/233 的容器、network namespace、OVS 资源和状态文件无残留。
+- 网关定向测试 6/6、主站及 Agent Release 构建通过。全量单测 1119/1121；两条既有调度观察点计数断言失败，单独复跑仍失败，未经过本次网关或 Agent 探测代码。该门禁缺口不得记录为全绿。
 
 ## 本地在研补充（尚未合并/发布）
 
