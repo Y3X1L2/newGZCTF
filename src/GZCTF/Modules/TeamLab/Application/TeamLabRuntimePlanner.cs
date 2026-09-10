@@ -343,7 +343,8 @@ public sealed class TeamLabRuntimePlanner(
                     $"资源 '{asset.Key}' 解析到的镜像模板 {resolvedTemplateId} 与已发布 digest 不匹配",
                     409);
         }
-        await ValidateDevicePackagesAsync(definition, cancellationToken);
+        await ValidateDevicePackagesAsync(definition, definition.Assets.ToDictionary(item => item.Key,
+            item => templateDigests[resolvedTemplateIds[item.Key]].ImageHash!), cancellationToken);
         await AcquireConnectorLeasesAsync(runtime, definition, cancellationToken);
         foreach (var network in definition.Networks.OrderBy(item => item.Key, StringComparer.Ordinal))
         {
@@ -482,6 +483,7 @@ public sealed class TeamLabRuntimePlanner(
     /// </summary>
     private async Task ValidateDevicePackagesAsync(
         TeamLabExecutionTopology definition,
+        IReadOnlyDictionary<string, string> imageDigests,
         CancellationToken cancellationToken)
     {
         var packageIds = definition.Assets
@@ -507,6 +509,8 @@ public sealed class TeamLabRuntimePlanner(
                     "device_package_digest_changed",
                     $"资源 '{asset.Key}' 引用的设备包 {packageId} 与已发布 digest 不匹配",
                     409);
+            TeamLabDeviceExecutionCompiler.RequireResources(package, new(asset.CpuUnits, asset.MemoryMiB, asset.StorageMiB));
+            await TeamLabDeviceExecutionCompiler.CompileAsync(package, asset.Kind, imageDigests[asset.Key], asset.DeviceParametersJson, cancellationToken);
         }
     }
 
@@ -526,7 +530,11 @@ public sealed class TeamLabRuntimePlanner(
             .Distinct()
             .ToArray();
         foreach (var connectorId in connectorIds)
+        {
+            if (runtime.ExecutionModel != TeamLabExecutionModel.V2)
+                throw new TeamLabApiContractException("connector_execution_model_unsupported", "专用网卡连接器需要 V2 执行计划。", 422);
             await connectors.AcquireAsync(connectorId, runtime.PublicId, runtime.ControlScopeId, cancellationToken);
+        }
     }
 
     private static IPNetwork? Allocate(string poolCidr, int runtimePrefix, IEnumerable<IPNetwork> unavailable)

@@ -17,6 +17,7 @@ export type TeamLabRuntimeStatus =
   | 'paused'
   | 'destroying'
   | 'destroyed'
+  | 'stopped'
 
 export interface TeamLabAddressPool {
   poolCidr: string

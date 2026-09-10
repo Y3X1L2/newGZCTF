@@ -2,7 +2,7 @@ using GZCTF.Modules.TeamLab.Domain.Runtime;
 
 namespace GZCTF.Modules.TeamLab.Contracts;
 
-public sealed record CreateTeamLabRemoteSessionModel(string Reason);
+public sealed record CreateTeamLabRemoteSessionModel(string Reason, bool VncConsole = false);
 
 public sealed record TeamLabRemoteAccessAvailabilityModel(
     int AssetId,
@@ -26,3 +26,8 @@ public sealed record TeamLabRemoteSessionModel(
     string? EndReason);
 
 public sealed record TeamLabRemoteConnectModel(string Url, DateTimeOffset ExpiresAt);
+
+public sealed record TeamLabRemoteSessionListItem(
+    TeamLabRemoteSessionModel Session, Guid WorkerNodeId, Guid RequestedByUserId);
+
+public sealed record TeamLabRemoteSessionPage(IReadOnlyList<TeamLabRemoteSessionListItem> Items, long? NextCursor);

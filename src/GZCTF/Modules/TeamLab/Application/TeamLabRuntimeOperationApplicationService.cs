@@ -31,6 +31,13 @@ public sealed record TeamLabRuntimeOperationPayload(
     public CreateTeamLabWebhookModel? CreateWebhook { get; init; }
     public Guid? WebhookId { get; init; }
     public long? ReplayFromEventId { get; init; }
+    public int? RemoteAssetId { get; init; }
+    public Guid? RemoteSessionId { get; init; }
+    public string? RemoteReason { get; init; }
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    public bool RemoteVncConsole { get; init; }
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public TeamLabAssetControlPayload? AssetControl { get; init; }
 }
 
 public sealed record TeamLabRuntimeOperationSubmission(
@@ -89,6 +96,32 @@ public sealed class TeamLabRuntimeOperationApplicationService(
     TeamLabRuntimeOperationPayloadProtector protector) : ITeamLabControlPlaneOperationService
 {
     public const string OperationKind = "teamlab.runtime.v1";
+
+    public Task<IdempotencyBeginResult> SubmitRemoteSessionCreateAsync(
+        Guid apiTokenId, Guid actorUserId, string idempotencyKey, Guid runtimeId, Guid controlScopeId,
+        int assetId, string reason, CancellationToken cancellationToken, bool vncConsole = false)
+    {
+        if (assetId <= 0 || string.IsNullOrWhiteSpace(reason) || reason.Trim().Length is < 4 or > 500)
+            throw new TeamLabApiContractException("remote_access_request_invalid", "请选择资源并填写 4-500 个字符的访问原因。", 422);
+        return SubmitAsync(apiTokenId, actorUserId, idempotencyKey,
+            $"POST:/api/open/v1/teamlab/runtimes/{runtimeId:D}/assets/{assetId}/remote-sessions",
+            TeamLabRuntimeOperationKind.RemoteSessionCreate,
+            new TeamLabRuntimeOperationPayload(null, runtimeId, null)
+            {
+                ControlScopeId = controlScopeId, RemoteAssetId = assetId, RemoteReason = reason.Trim(), RemoteVncConsole = vncConsole
+            }, cancellationToken);
+    }
+
+    public Task<IdempotencyBeginResult> SubmitRemoteSessionEndAsync(
+        Guid apiTokenId, Guid actorUserId, string idempotencyKey, Guid runtimeId, Guid controlScopeId,
+        Guid sessionId, CancellationToken cancellationToken) =>
+        SubmitAsync(apiTokenId, actorUserId, idempotencyKey,
+            $"DELETE:/api/open/v1/teamlab/remote-sessions/{sessionId:D}",
+            TeamLabRuntimeOperationKind.RemoteSessionEnd,
+            new TeamLabRuntimeOperationPayload(null, runtimeId, null)
+            {
+                ControlScopeId = controlScopeId, RemoteSessionId = sessionId
+            }, cancellationToken);
 
     public Task<IdempotencyBeginResult> SubmitCreateAsync(
         Guid? apiTokenId,
@@ -573,6 +606,9 @@ public sealed class TeamLabRuntimeOperationApplicationService(
         TeamLabRuntimeOperationKind kind,
         TeamLabRuntimeOperationPayload payload) => kind switch
         {
+            TeamLabRuntimeOperationKind.RemoteSessionCreate => ("teamlab-remote-session", null),
+            TeamLabRuntimeOperationKind.RemoteSessionEnd =>
+                ("teamlab-remote-session", payload.RemoteSessionId?.ToString("D")),
             TeamLabRuntimeOperationKind.TopologyCreate => ("teamlab-topology", null),
             TeamLabRuntimeOperationKind.TopologyUpdate or TeamLabRuntimeOperationKind.TopologyDelete or
                 TeamLabRuntimeOperationKind.TopologyPublish =>

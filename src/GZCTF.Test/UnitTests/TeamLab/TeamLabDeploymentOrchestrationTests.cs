@@ -37,6 +37,153 @@ namespace GZCTF.Test.UnitTests.TeamLab;
 
 public sealed class TeamLabDeploymentOrchestrationTests
 {
+    [Theory]
+    [InlineData(RuntimeOperationKind.Pause, DeploymentQueueTicketStatus.Running, "runtime-pausing")]
+    [InlineData(RuntimeOperationKind.Resume, DeploymentQueueTicketStatus.Running, "runtime-resuming")]
+    [InlineData(RuntimeOperationKind.Pause, DeploymentQueueTicketStatus.Succeeded, "runtime-paused")]
+    [InlineData(RuntimeOperationKind.Resume, DeploymentQueueTicketStatus.Succeeded, "runtime-resumed")]
+    [InlineData(RuntimeOperationKind.Pause, DeploymentQueueTicketStatus.Failed, "runtime-failed")]
+    [InlineData(RuntimeOperationKind.Resume, DeploymentQueueTicketStatus.Cancelled, "runtime-cancelled")]
+    public void LifecycleProgress_DescribesActualTicketOperation(RuntimeOperationKind operation,
+        DeploymentQueueTicketStatus status, string expected) =>
+        Assert.Equal(expected, TeamLabRuntimeOperationHandler.LifecycleTicketStage(operation, status));
+
+    [Fact]
+    public async Task LifecycleQueue_PersistsControlIdentityWithoutCallingAgent()
+    {
+        await using var context = CreateContext();
+        var (runtime, _) = await SeedRuntimeAsync(context, RuntimeAsset("web", TeamLabAssetExecutionStage.GuestReady, "web"));
+        runtime.Status = TeamLabRuntimeStatus.Running;
+        var release = new TeamLabTopologyRelease { Version = 1 };
+        runtime.TopologyReleaseId = release.Id;
+        context.TeamLabTopologyReleases.Add(release);
+        await context.SaveChangesAsync();
+        var queue = new Mock<ITeamLabRuntimeQueue>();
+        queue.Setup(item => item.EnqueueAsync(It.IsAny<TeamLabQueueRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new TeamLabQueueTicketResult(Guid.NewGuid()));
+        var nodes = new Mock<ITeamLabNodeExecutor>(MockBehavior.Strict);
+        await LifecycleOrchestrator(context, nodes.Object, queue.Object).EnqueueLifecycleAsync(
+            runtime.PublicId, true, Guid.NewGuid(), default);
+        queue.Verify(item => item.EnqueueAsync(It.Is<TeamLabQueueRequest>(request =>
+            request.RuntimeId == runtime.Id && request.Generation == runtime.Generation &&
+            request.Operation == RuntimeOperationKind.Pause && request.DockerSlots == 0 && request.VmSlots == 0),
+            It.IsAny<CancellationToken>()), Times.Once);
+        Assert.Equal(TeamLabRuntimeStatus.Running, runtime.Status);
+        nodes.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task QueuedLifecycle_RejectsStaleGenerationBeforeAgentExecution()
+    {
+        await using var context = CreateContext();
+        var (runtime, _) = await SeedRuntimeAsync(context);
+        var nodes = new Mock<ITeamLabNodeExecutor>(MockBehavior.Strict);
+        var result = await LifecycleOrchestrator(context, nodes.Object).ExecuteQueuedLifecycleAsync(runtime.Id, 2, true, default);
+        Assert.False(result.Success);
+        nodes.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task RolloutLifecycle_QueuesProtectedIdentityAndExecutesThroughExistingTicket()
+    {
+        await using var context = CreateContext();
+        var (runtime, _) = await SeedRuntimeAsync(context, RuntimeAsset("web", TeamLabAssetExecutionStage.GuestReady, "web"));
+        runtime.Status = TeamLabRuntimeStatus.Running;
+        var release = new TeamLabTopologyRelease { Version = 1 };
+        runtime.TopologyReleaseId = release.Id;
+        context.TeamLabTopologyReleases.Add(release);
+        var rollout = new TeamLabRollout();
+        context.TeamLabRolloutTargets.Add(new TeamLabRolloutTarget { Rollout = rollout, Runtime = runtime });
+        await context.SaveChangesAsync();
+        TeamLabQueueRequest? submitted = null;
+        var operationId = Guid.NewGuid();
+        var queue = new Mock<ITeamLabRuntimeQueue>();
+        queue.Setup(item => item.EnqueueAsync(It.IsAny<TeamLabQueueRequest>(), It.IsAny<CancellationToken>()))
+            .Callback<TeamLabQueueRequest, CancellationToken>((request, _) => submitted = request)
+            .ReturnsAsync(new TeamLabQueueTicketResult(Guid.NewGuid()));
+        var nodes = new Mock<ITeamLabNodeExecutor>(MockBehavior.Strict);
+        var orchestrator = LifecycleOrchestrator(context, nodes.Object, queue.Object);
+        await orchestrator.EnqueueLifecycleTicketAsync(runtime.PublicId, true, Guid.NewGuid(), operationId, rollout.PublicId, default);
+        Assert.NotNull(submitted);
+        Assert.Equal(operationId, submitted.OperationId);
+        Assert.NotNull(submitted.ProtectedPayload);
+        nodes.VerifyNoOtherCalls();
+        nodes.Setup(item => item.PauseAssetAsync(It.IsAny<Guid>(), It.IsAny<TeamLabAssetKind>(), "web", runtime.Generation,
+            It.IsAny<TeamLabExecutionModel>(), It.IsAny<CancellationToken>())).ReturnsAsync(TeamLabNodeResult.Ok());
+        var result = await orchestrator.ExecuteQueuedLifecycleAsync(runtime.Id, runtime.Generation, true, default, submitted.ProtectedPayload);
+        Assert.True(result.Success);
+        Assert.Equal(TeamLabRuntimeStatus.Paused, runtime.Status);
+    }
+
+    [Fact]
+    public async Task RolloutLifecycle_RejectsUnrelatedRolloutBeforeEnqueue()
+    {
+        await using var context = CreateContext();
+        var (runtime, _) = await SeedRuntimeAsync(context);
+        var rollout = new TeamLabRollout();
+        context.TeamLabRollouts.Add(rollout);
+        await context.SaveChangesAsync();
+        var queue = new Mock<ITeamLabRuntimeQueue>(MockBehavior.Strict);
+        var error = await Assert.ThrowsAsync<TeamLabApiContractException>(() =>
+            LifecycleOrchestrator(context, Mock.Of<ITeamLabNodeExecutor>(), queue.Object)
+                .EnqueueLifecycleTicketAsync(runtime.PublicId, true, Guid.NewGuid(), Guid.NewGuid(), rollout.PublicId, default));
+        Assert.Equal("runtime_rollout_target_invalid", error.Code);
+        queue.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task RolloutLifecycle_RechecksMembershipAtExecution()
+    {
+        await using var context = CreateContext();
+        var (runtime, _) = await SeedRuntimeAsync(context);
+        var rollout = new TeamLabRollout();
+        context.TeamLabRollouts.Add(rollout);
+        await context.SaveChangesAsync();
+        var protector = new TeamLabRuntimeOperationPayloadProtector(new EphemeralDataProtectionProvider());
+        var payload = protector.Protect(new TeamLabRuntimeOperationPayload(null, runtime.PublicId, null) { RolloutId = rollout.PublicId });
+        var nodes = new Mock<ITeamLabNodeExecutor>(MockBehavior.Strict);
+        var error = await Assert.ThrowsAsync<TeamLabApiContractException>(() =>
+            LifecycleOrchestrator(context, nodes.Object, protector: protector)
+                .ExecuteQueuedLifecycleAsync(runtime.Id, runtime.Generation, true, default, payload));
+        Assert.Equal("runtime_rollout_target_invalid", error.Code);
+        nodes.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task QueuedPause_PersistsPartialProgressAndCanRetryFailedAsset()
+    {
+        await using var context = CreateContext();
+        var first = RuntimeAsset("first", TeamLabAssetExecutionStage.GuestReady, "first");
+        var second = RuntimeAsset("second", TeamLabAssetExecutionStage.GuestReady, "second");
+        var (runtime, _) = await SeedRuntimeAsync(context, first, second);
+        runtime.Status = TeamLabRuntimeStatus.Running;
+        first.Status = second.Status = TeamLabRuntimeStatus.Running;
+        var release = new TeamLabTopologyRelease { Version = 1 };
+        runtime.TopologyReleaseId = release.Id;
+        context.TeamLabTopologyReleases.Add(release);
+        await context.SaveChangesAsync();
+        var nodes = new Mock<ITeamLabNodeExecutor>();
+        nodes.Setup(item => item.PauseAssetAsync(It.IsAny<Guid>(), It.IsAny<TeamLabAssetKind>(), "first", 1,
+            It.IsAny<TeamLabExecutionModel>(), It.IsAny<CancellationToken>())).ReturnsAsync(TeamLabNodeResult.Ok());
+        nodes.SetupSequence(item => item.PauseAssetAsync(It.IsAny<Guid>(), It.IsAny<TeamLabAssetKind>(), "second", 1,
+            It.IsAny<TeamLabExecutionModel>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(TeamLabNodeResult.Failed("offline")).ReturnsAsync(TeamLabNodeResult.Ok());
+        var orchestrator = LifecycleOrchestrator(context, nodes.Object);
+        await Assert.ThrowsAsync<TeamLabApiContractException>(() => orchestrator.ExecuteQueuedLifecycleAsync(runtime.Id, 1, true, default));
+        Assert.Equal(TeamLabRuntimeStatus.Paused, (await context.TeamLabRuntimeAssets.AsNoTracking().SingleAsync(item => item.Id == first.Id)).Status);
+        Assert.Equal(TeamLabRuntimeStatus.Failed, runtime.Status);
+        Assert.True((await orchestrator.ExecuteQueuedLifecycleAsync(runtime.Id, 1, true, default)).Success);
+        Assert.Equal(TeamLabRuntimeStatus.Paused, runtime.Status);
+        Assert.All(runtime.Assets, asset => Assert.Equal(TeamLabRuntimeStatus.Paused, asset.Status));
+    }
+
+    private static TeamLabRuntimeOrchestrator LifecycleOrchestrator(AppDbContext context, ITeamLabNodeExecutor nodes,
+        ITeamLabRuntimeQueue? queue = null, TeamLabRuntimeOperationPayloadProtector? protector = null) => new(context, null!, new TeamLabRuntimeProjectionService(context),
+        null!, null!, nodes, null!, null!, null!, null!, null!, new TeamLabRuntimeLifecycleGuard(context),
+        protector ?? new TeamLabRuntimeOperationPayloadProtector(new EphemeralDataProtectionProvider()), queue ?? Mock.Of<ITeamLabRuntimeQueue>(), null!,
+        new TeamLabEventRecorder(context, Mock.Of<IOperationalEventWriter>(), new OperationalCorrelation()),
+        NullLogger<TeamLabRuntimeOrchestrator>.Instance);
+
     private static TeamLabReleaseImagePreparationService Preparation(AppDbContext context) =>
         new(context,
             new Mock<ImageDistributionService>(

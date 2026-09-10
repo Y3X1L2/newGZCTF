@@ -22,6 +22,8 @@ public sealed class TeamLabRuntimeRecoveryPolicy(IOptions<TeamLabNetworkConfig> 
     {
         if (ticket.Generation != runtime.Generation)
             return TeamLabRecoveryDecision.Deny("Recovery ticket generation is stale.");
+        if (runtime.Assets.Any(item => item.Generation == runtime.Generation && item.DesiredPowerState is "stopped" or "paused"))
+            return TeamLabRecoveryDecision.Deny("Explicit asset power intent must not be overwritten by full deployment replay.");
         if (runtime.Status is TeamLabRuntimeStatus.Destroying or TeamLabRuntimeStatus.Destroyed or
             TeamLabRuntimeStatus.CleanupPending)
             return TeamLabRecoveryDecision.Deny("Runtime lifecycle does not allow deployment replay.");

@@ -120,6 +120,18 @@ const captureWire = {
 }
 
 describe('TeamLab runtime contract boundary', () => {
+  it('preserves operation stages and retry eligibility from the backend', () => {
+    const runtime = parseTeamLabRuntime({ ...runtimeWire, currentOperationId: 'operation-a',
+      subStages: [{ id: 'capacity-waiting', status: 'pending', message: '等待容量' }],
+      failure: { code: 'capacity', stage: 'capacity-waiting', retryable: false, detail: '容量不足' },
+    })
+    expect(runtime.currentOperationId).toBe('operation-a')
+    expect(runtime.subStages?.[0].message).toBe('等待容量')
+    expect(runtime.failure?.retryable).toBe(false)
+    expect(() => parseTeamLabRuntime({ ...runtimeWire,
+      failure: { code: 'capacity', stage: 'queued', retryable: 'yes', detail: null },
+    })).toThrow(TeamLabContractError)
+  })
   it('strictly parses runtime placement and semantic enums', () => {
     expect(parseTeamLabRuntime(runtimeWire)).toMatchObject({
       status: 'running',

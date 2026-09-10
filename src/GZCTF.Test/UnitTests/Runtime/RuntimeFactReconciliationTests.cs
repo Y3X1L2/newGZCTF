@@ -28,6 +28,97 @@ namespace GZCTF.Test.UnitTests.Runtime;
 
 public sealed class RuntimeFactReconciliationTests
 {
+    [Theory]
+    [InlineData("stopped", "exited", "matched", null)]
+    [InlineData("running", "exited", "power-drift", "start")]
+    [InlineData("running", "paused", "power-drift", "resume")]
+    [InlineData("paused", "running", "power-drift", "pause")]
+    public async Task DifferencePreviewDoesNotMutatePowerFacts(string desired, string actual, string difference, string? action)
+    {
+        await using var context = CreateContext();
+        var node = SeedNode(context, NodeCapability.Docker, AgentFeatureIds.Docker);
+        var runtime = new TeamLabRuntime { Id = 6100, Status = TeamLabRuntimeStatus.Running };
+        var asset = new TeamLabRuntimeAsset { Runtime = runtime, WorkerNodeId = node.Id, Kind = TeamLabResourceKind.Docker,
+            RuntimeResourceId = "preview-resource", Status = TeamLabRuntimeStatus.Running, DesiredPowerState = desired };
+        context.Add(asset);
+        await context.SaveChangesAsync();
+        var agent = new InventoryAgentClient(new Dictionary<Guid, AgentRuntimeInventoryResponse>
+        {
+            [node.Id] = Inventory(containers: [new AgentRuntimeInventoryResource("preview-resource", "preview-resource", 1, actual, RuntimeId: runtime.Id)])
+        });
+        var result = await CreateService(context, agent).PreviewTeamLabAsync(runtime.Id, default);
+        var item = Assert.Single(result.Items);
+        Assert.Equal(difference, item.Difference);
+        Assert.Equal(action, item.SuggestedAction);
+        Assert.False(context.ChangeTracker.HasChanges());
+        Assert.Empty(await context.OperationalEvents.ToArrayAsync());
+        Assert.Empty(await context.DeploymentQueueTickets.ToArrayAsync());
+    }
+
+    [Fact]
+    public async Task DifferencePreviewRejectsReplacementVmIdentity()
+    {
+        await using var context = CreateContext();
+        var node = SeedNode(context, NodeCapability.Kvm, AgentFeatureIds.Kvm);
+        var runtime = new TeamLabRuntime { Id = 6101, Status = TeamLabRuntimeStatus.Running };
+        context.Add(new TeamLabRuntimeAsset { Runtime = runtime, WorkerNodeId = node.Id, Kind = TeamLabResourceKind.Vm,
+            RuntimeResourceId = "same-domain-name", NativeIdentity = Guid.NewGuid().ToString(), Status = TeamLabRuntimeStatus.Running });
+        await context.SaveChangesAsync();
+        var agent = new InventoryAgentClient(new Dictionary<Guid, AgentRuntimeInventoryResponse>
+        {
+            [node.Id] = Inventory(vms: [new AgentRuntimeInventoryResource(Guid.NewGuid().ToString(), "same-domain-name", 1, "running", RuntimeId: runtime.Id)])
+        });
+        var result = await CreateService(context, agent).PreviewTeamLabAsync(runtime.Id, default);
+        var item = Assert.Single(result.Items);
+        Assert.Equal("identity-conflict", item.Difference);
+        Assert.Null(item.SuggestedAction);
+        Assert.False(context.ChangeTracker.HasChanges());
+    }
+
+    [Theory]
+    [InlineData("stopped", "exited", TeamLabRuntimeStatus.Stopped)]
+    [InlineData("paused", "paused", TeamLabRuntimeStatus.Paused)]
+    public async Task ExplicitAssetPowerIntentIsNotReportedAsMissingOrOrphan(string intent, string state, TeamLabRuntimeStatus status)
+    {
+        await using var context = CreateContext();
+        var node = SeedNode(context, NodeCapability.Docker, AgentFeatureIds.Docker);
+        var runtime = new TeamLabRuntime { Id = 6001, Generation = 1, Status = TeamLabRuntimeStatus.Running };
+        var asset = new TeamLabRuntimeAsset { Runtime = runtime, Generation = 1, WorkerNodeId = node.Id, Kind = TeamLabResourceKind.Docker,
+            RuntimeResourceId = "asset-power-fixture", NativeIdentity = "asset-power-fixture", Status = status, DesiredPowerState = intent };
+        context.TeamLabRuntimeAssets.Add(asset);
+        await context.SaveChangesAsync();
+        var agent = new InventoryAgentClient(new Dictionary<Guid, AgentRuntimeInventoryResponse>
+        {
+            [node.Id] = Inventory(containers: [new AgentRuntimeInventoryResource("asset-power-fixture", "asset-power-fixture", 1, state, RuntimeId: runtime.Id)])
+        });
+        var result = await CreateService(context, agent).ReconcileAsync(Guid.NewGuid(), TimeSpan.FromMinutes(10), default);
+        Assert.Equal(0, result.MissingCount);
+        Assert.Equal(0, result.OrphanCount);
+        Assert.Equal(status, asset.Status);
+        Assert.Equal(TeamLabRuntimeStatus.Running, runtime.Status);
+    }
+
+    [Fact]
+    public async Task InterruptedAssetControlRetainsCheckpointAndQueuesContinuation()
+    {
+        await using var context = CreateContext();
+        var node = SeedNode(context, NodeCapability.Docker, AgentFeatureIds.Docker);
+        var runtime = new TeamLabRuntime { Id = 6002, Status = TeamLabRuntimeStatus.Running };
+        var ticket = DeploymentQueueTicket.Create(DeploymentQueueRequest.TeamLab(runtime.Id, 0, 0) with
+        { Operation = RuntimeOperationKind.AssetControl, ProtectedPayload = "retained-encrypted-step", PayloadHash = new string('a', 64) });
+        ticket.TargetNodeId = node.Id;
+        ticket.Status = DeploymentQueueTicketStatus.Running;
+        ticket.StartedAt = DateTimeOffset.UtcNow.AddMinutes(-30);
+        ticket.ClaimExpiresAt = DateTimeOffset.UtcNow.AddMinutes(-20);
+        context.AddRange(runtime, ticket);
+        await context.SaveChangesAsync();
+        var agent = new InventoryAgentClient(new Dictionary<Guid, AgentRuntimeInventoryResponse> { [node.Id] = Inventory(containers: []) });
+        await CreateService(context, agent).ReconcileAsync(Guid.NewGuid(), TimeSpan.FromMinutes(10), default);
+        Assert.Equal(DeploymentQueueTicketStatus.Scheduled, ticket.Status);
+        Assert.Equal("retained-encrypted-step", ticket.ProtectedPayload);
+        Assert.Equal(TeamLabRuntimeStatus.Running, runtime.Status);
+    }
+
     [Fact]
     public async Task MatchingVmInventory_CompletesStaleCreateAndConfirmsCapacity()
     {

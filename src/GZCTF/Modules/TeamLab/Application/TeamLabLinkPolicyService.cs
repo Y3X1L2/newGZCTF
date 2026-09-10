@@ -52,10 +52,12 @@ public sealed class TeamLabLinkPolicyService(AppDbContext context, ITeamLabLinkP
         var existing = await context.TeamLabLinkPolicies.SingleOrDefaultAsync(
             policy => policy.RuntimeId == runtime.Id && policy.NetworkKey == networkKey &&
                       policy.AssetKey == assetKey && policy.Kind == kind &&
-                      policy.Status == TeamLabLinkPolicyStatus.Active,
+                      policy.Status != TeamLabLinkPolicyStatus.Recovered,
             cancellationToken);
         if (existing is not null)
         {
+            if (existing.Generation != runtime.Generation)
+                throw new TeamLabApiContractException("link_policy_generation_conflict", "旧策略未确认清理，不能覆盖当前代网络。", 409);
             if (existing.ParametersJson != parameters)
                 throw new TeamLabApiContractException(
                     "link_policy_conflict", "同一条链路已有不同参数的活动策略，请先恢复后再应用", 409);
@@ -69,6 +71,7 @@ public sealed class TeamLabLinkPolicyService(AppDbContext context, ITeamLabLinkP
         var policy = new TeamLabLinkPolicy
         {
             RuntimeId = runtime.Id,
+            Generation = runtime.Generation,
             ControlScopeId = runtime.ControlScopeId,
             NetworkKey = networkKey,
             AssetKey = assetKey,
@@ -108,9 +111,18 @@ public sealed class TeamLabLinkPolicyService(AppDbContext context, ITeamLabLinkP
         var runtime = await context.TeamLabRuntimes
             .Include(item => item.Shards)
             .Include(item => item.Assets)
+            .Include(item => item.Networks)
             .SingleOrDefaultAsync(item => item.Id == policy.RuntimeId, cancellationToken)
             ?? throw new TeamLabApiContractException("runtime_not_found", "未找到 TeamLab 运行时", 404);
         if (policy.Status == TeamLabLinkPolicyStatus.Recovered) return ToModel(policy, runtime.PublicId);
+        if (policy.Generation != runtime.Generation)
+        {
+            policy.LastError = "策略缺少当前代执行身份，请按原代执行计划核实清理；不会修改新一代网络。";
+            policy.Status = TeamLabLinkPolicyStatus.Failed;
+            policy.UpdatedAt = DateTimeOffset.UtcNow;
+            await context.SaveChangesAsync(cancellationToken);
+            return ToModel(policy, runtime.PublicId);
+        }
         await RecoverOnNodeAsync(policy, runtime, policy.NetworkKey, policy.AssetKey, cancellationToken);
         await context.SaveChangesAsync(cancellationToken);
         return ToModel(policy, runtime.PublicId);
@@ -181,7 +193,10 @@ public sealed class TeamLabLinkPolicyService(AppDbContext context, ITeamLabLinkP
             : assetKey;
         if (string.IsNullOrWhiteSpace(resolvedAsset))
         {
-            policy.LastError = "运行时没有可用的执行资产，仅收敛控制面状态";
+            policy.LastError = "运行时缺少原执行资产，无法确认链路策略已撤销。";
+            policy.Status = TeamLabLinkPolicyStatus.Failed;
+            policy.UpdatedAt = DateTimeOffset.UtcNow;
+            return;
         }
         else
         {
@@ -193,8 +208,14 @@ public sealed class TeamLabLinkPolicyService(AppDbContext context, ITeamLabLinkP
                 policy.ParametersJson,
                 cancellationToken);
             if (!response.Success)
+            {
                 policy.LastError = Truncate(response.Message, 512);
+                policy.Status = TeamLabLinkPolicyStatus.Failed;
+                policy.UpdatedAt = DateTimeOffset.UtcNow;
+                return;
+            }
         }
+        policy.LastError = null;
         policy.Status = TeamLabLinkPolicyStatus.Recovered;
         policy.RecoveredAt = DateTimeOffset.UtcNow;
         policy.RecoverOrigin = TeamLabLinkPolicyRecoverOrigin.Manual;
@@ -234,43 +255,45 @@ public sealed class TeamLabLinkPolicyService(AppDbContext context, ITeamLabLinkP
     }
 
     /// <summary>Recovers policies whose scheduled recovery time has passed; returns the recovered count.</summary>
-    public Task<int> RecoverDueAsync(int batchLimit, CancellationToken cancellationToken)
+    public async Task<int> RecoverDueAsync(int batchLimit, CancellationToken cancellationToken)
     {
         var now = DateTimeOffset.UtcNow;
-        return context.TeamLabLinkPolicies
-            .Where(policy => policy.Status == TeamLabLinkPolicyStatus.Active &&
+        var policies = await context.TeamLabLinkPolicies
+            .Where(policy => policy.Status != TeamLabLinkPolicyStatus.Recovered &&
+                             (policy.Status != TeamLabLinkPolicyStatus.Failed || policy.UpdatedAt < now.AddMinutes(-1)) &&
                              policy.RecoverAt != null && policy.RecoverAt <= now)
-            .OrderBy(policy => policy.RecoverAt)
-            .Take(batchLimit)
-            .ExecuteUpdateAsync(setters => setters
-                .SetProperty(policy => policy.Status, TeamLabLinkPolicyStatus.Recovered)
-                .SetProperty(policy => policy.RecoveredAt, now)
-                .SetProperty(policy => policy.RecoverOrigin, TeamLabLinkPolicyRecoverOrigin.Scheduled)
-                .SetProperty(policy => policy.RecoverAt, (DateTimeOffset?)null)
-                .SetProperty(policy => policy.UpdatedAt, now), cancellationToken);
+            .OrderBy(policy => policy.UpdatedAt).ThenBy(policy => policy.Id)
+            .Take(Math.Clamp(batchLimit, 1, 200)).ToArrayAsync(cancellationToken);
+        return await RecoverBatchAsync(policies, TeamLabLinkPolicyRecoverOrigin.Scheduled, cancellationToken);
     }
 
     /// <summary>Closes the active policies of destroyed runtimes; returns the closed count.</summary>
     public async Task<int> CloseDestroyedRuntimePoliciesAsync(int batchLimit, CancellationToken cancellationToken)
     {
         var now = DateTimeOffset.UtcNow;
-        var policyIds = await context.TeamLabLinkPolicies
-            .Where(policy => policy.Status == TeamLabLinkPolicyStatus.Active &&
+        var policies = await context.TeamLabLinkPolicies
+            .Where(policy => policy.Status != TeamLabLinkPolicyStatus.Recovered &&
+                             (policy.Status != TeamLabLinkPolicyStatus.Failed || policy.UpdatedAt < now.AddMinutes(-1)) &&
                              context.TeamLabRuntimes.Any(runtime =>
                                  runtime.Id == policy.RuntimeId && runtime.Status == TeamLabRuntimeStatus.Destroyed))
-            .OrderBy(policy => policy.Id)
-            .Take(batchLimit)
-            .Select(policy => policy.Id)
+            .OrderBy(policy => policy.UpdatedAt).ThenBy(policy => policy.Id)
+            .Take(Math.Clamp(batchLimit, 1, 200))
             .ToArrayAsync(cancellationToken);
-        if (policyIds.Length == 0) return 0;
-        return await context.TeamLabLinkPolicies
-            .Where(policy => policyIds.Contains(policy.Id))
-            .ExecuteUpdateAsync(setters => setters
-                .SetProperty(policy => policy.Status, TeamLabLinkPolicyStatus.Recovered)
-                .SetProperty(policy => policy.RecoveredAt, now)
-                .SetProperty(policy => policy.RecoverOrigin, TeamLabLinkPolicyRecoverOrigin.RuntimeDestroyed)
-                .SetProperty(policy => policy.RecoverAt, (DateTimeOffset?)null)
-                .SetProperty(policy => policy.UpdatedAt, now), cancellationToken);
+        return await RecoverBatchAsync(policies, TeamLabLinkPolicyRecoverOrigin.RuntimeDestroyed, cancellationToken);
+    }
+
+    private async Task<int> RecoverBatchAsync(TeamLabLinkPolicy[] policies, TeamLabLinkPolicyRecoverOrigin origin, CancellationToken token)
+    {
+        var recovered = 0;
+        foreach (var policy in policies)
+        {
+            await RecoverAsync(policy.PublicId, token);
+            if (policy.Status != TeamLabLinkPolicyStatus.Recovered) continue;
+            policy.RecoverOrigin = origin;
+            recovered++;
+        }
+        await context.SaveChangesAsync(token);
+        return recovered;
     }
 
     internal static TeamLabLinkPolicyModel ToModel(TeamLabLinkPolicy policy, Guid runtimePublicId) => new(
@@ -399,6 +422,8 @@ internal static class TeamLabLinkPolicyParameters
         }
         _ = RequiredPort(values, "externalPort", "link_policy_parameters_invalid");
         canonical["externalPort"] = values["externalPort"];
+        if (values.ContainsKey("protocol"))
+            canonical["protocol"] = JsonSerializer.SerializeToElement(RequiredEnum(values, "protocol", "link_policy_parameters_invalid", "端口映射协议必须是 tcp 或 udp", ["tcp", "udp"]));
         if (OptionalAddress(values, "internalAddress", "link_policy_parameters_invalid") is not { } internalAddress)
             throw ParametersInvalid("dnat 必须声明 internalAddress");
         canonical["internalAddress"] = JsonSerializer.SerializeToElement(internalAddress);

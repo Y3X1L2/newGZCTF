@@ -9,6 +9,7 @@ import type {
   TeamLabDeviceArtifactKind,
 } from '../api/teamlabResourcesContracts'
 import styles from './TeamLabResourcesPage.module.css'
+import { useConnectorNodes } from './useTeamLabResources'
 
 /**
  * Device packages are produced by the external artifact pipeline; this dialog
@@ -169,11 +170,14 @@ export function ConnectorRegisterDialog({
   const [form, setForm] = useState({
     name: '',
     displayName: '',
-    kind: 'vlan' as TeamLabConnectorKind,
+    kind: 'managed-nic' as TeamLabConnectorKind,
     controlScopeId: '',
     supportsSharedUse: false,
     capacity: '1',
     attachmentReference: '',
+    nodeId: '',
+    interfaceName: '',
+    macAddress: '',
     description: '',
   })
   const [submitting, setSubmitting] = useState(false)
@@ -184,6 +188,7 @@ export function ConnectorRegisterDialog({
   }, [open])
 
   const patch = (changes: Partial<typeof form>) => setForm((current) => ({ ...current, ...changes }))
+  const nodes = useConnectorNodes(open)
 
   const register = async () => {
     if (submitting) return
@@ -199,6 +204,7 @@ export function ConnectorRegisterDialog({
         capacity: Math.max(1, Number(form.capacity) || 1),
         attachmentReference: form.attachmentReference.trim() || null,
         description: form.description.trim() || null,
+        managedNic: { nodeId: form.nodeId, interfaceName: form.interfaceName.trim(), macAddress: form.macAddress.trim() },
       } satisfies RegisterTeamLabConnectorRequest)
       onRegistered()
     } catch (reason) {
@@ -210,7 +216,7 @@ export function ConnectorRegisterDialog({
 
   return (
     <VNextDialog
-      description="登记经管理员授权的真实资源；场景只引用连接器 ID，不保存地址或凭据。"
+      description="将节点上的专用网卡接入资产的主网段。网卡需已启用、接线，且没有主机 IP；设备地址按运行时网段配置。当前仅支持独占接入，同一场景的连接器需位于同一节点。"
       eyebrow="FIELD CONNECTOR"
       footer={
         <>
@@ -242,25 +248,35 @@ export function ConnectorRegisterDialog({
           value={form.kind}
         >
           <option value="managed-nic">受管网卡</option>
-          <option value="vlan">VLAN</option>
-          <option value="segment">网段</option>
-          <option value="serial">串口</option>
-          <option value="usb-gateway">USB 设备网关</option>
-          <option value="dedicated-network">专用外部网络</option>
+          <option disabled value="vlan">VLAN（尚未支持执行）</option>
+          <option disabled value="segment">网段（尚未支持执行）</option>
+          <option disabled value="serial">串口（尚未支持执行）</option>
+          <option disabled value="usb-gateway">USB 设备网关（尚未支持执行）</option>
+          <option disabled value="dedicated-network">专用外部网络（尚未支持执行）</option>
         </select>
         <TextFieldRow id={`${formId}-scope`} label="授权控制范围 ID（留空表示平台级）" value={form.controlScopeId} onChange={(value) => patch({ controlScopeId: value })} />
         <label className={styles.dialogToggle}>
           <input
             checked={form.supportsSharedUse}
+            disabled
             onChange={(event) => patch({ supportsSharedUse: event.currentTarget.checked })}
             type="checkbox"
           />
-          允许共享使用（默认独占）
+          共享使用（专用网卡不支持）
         </label>
         {form.supportsSharedUse ? (
           <TextFieldRow id={`${formId}-capacity`} label="共享容量（1-64）" value={form.capacity} onChange={(value) => patch({ capacity: value })} />
         ) : null}
-        <TextFieldRow id={`${formId}-reference`} label="接入引用（运维内部，可选）" value={form.attachmentReference} onChange={(value) => patch({ attachmentReference: value })} />
+        <div className={styles.dialogField}>
+          <label htmlFor={`${formId}-node`}>所属节点</label>
+          <select id={`${formId}-node`} value={form.nodeId} onChange={(event) => patch({ nodeId: event.currentTarget.value })}>
+            <option value="">请选择节点</option>
+            {nodes.data?.map((node) => <option key={node.id} value={node.id}>{node.name}</option>)}
+          </select>
+        </div>
+        {nodes.error ? <InlineFeedback tone="danger">节点读取失败，请关闭后重试。</InlineFeedback> : null}
+        <TextFieldRow id={`${formId}-interface`} label="专用网卡名称" value={form.interfaceName} onChange={(value) => patch({ interfaceName: value })} placeholder="enp2s0" />
+        <TextFieldRow id={`${formId}-mac`} label="网卡 MAC 地址" value={form.macAddress} onChange={(value) => patch({ macAddress: value })} placeholder="02:00:00:00:00:01" />
         <TextFieldRow id={`${formId}-description`} label="描述（可选）" value={form.description} onChange={(value) => patch({ description: value })} />
         {error ? <InlineFeedback tone="danger">{errorMessage(error, '连接器登记失败。')}</InlineFeedback> : null}
       </div>
@@ -282,7 +298,7 @@ function TextFieldRow({
   placeholder?: string
 }) {
   return (
-    <>
+    <div className={styles.dialogField}>
       <label htmlFor={id}>{label}</label>
       <input
         autoComplete="off"
@@ -291,7 +307,7 @@ function TextFieldRow({
         placeholder={placeholder}
         value={value}
       />
-    </>
+    </div>
   )
 }
 

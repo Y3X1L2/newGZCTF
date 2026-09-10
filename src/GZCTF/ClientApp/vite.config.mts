@@ -27,7 +27,7 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 63000,
       proxy: {
-        '/api': TARGET,
+        '/api': { target: TARGET, ws: true },
         '/swagger': TARGET,
         '/assets': TARGET,
         '/hub': { target: TARGET.replace('http', 'ws'), ws: true },

@@ -8,6 +8,7 @@ export interface TeamLabDevicePackagePort {
 
 export interface TeamLabDevicePackage {
   id: string
+  bindingId?: number
   name: string
   displayName: string
   version: string
@@ -111,6 +112,7 @@ export interface RegisterTeamLabConnectorRequest {
   capacity: number
   attachmentReference?: string | null
   description?: string | null
+  managedNic?: { nodeId: string; interfaceName: string; macAddress: string }
 }
 
 export interface TeamLabNodeCacheEntry {

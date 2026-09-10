@@ -374,7 +374,8 @@ public record TeamLabLinkPolicyApplyRequest(
     int RuntimeId = 0,
     string? RouterNamespace = null,
     string? NetworkCidr = null,
-    string? GatewayIp = null);
+    string? GatewayIp = null,
+    string? NetworkDigest = null);
 
 public record TeamLabLinkPolicyRecoverRequest(
     Guid RuntimePublicId,
@@ -387,7 +388,8 @@ public record TeamLabLinkPolicyRecoverRequest(
     string? RouterNamespace = null,
     string? NetworkCidr = null,
     string? GatewayIp = null,
-    string? ParametersJson = null);
+    string? ParametersJson = null,
+    string? NetworkDigest = null);
 
 public record TeamLabLinkPolicyResponse(
     bool Success,

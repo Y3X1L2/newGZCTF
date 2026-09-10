@@ -1,17 +1,19 @@
 using GZCTF.Models.Data;
 using GZCTF.Models.Internal;
 using GZCTF.Modules.TeamLab.Application;
+using GZCTF.Modules.Audit.Contracts;
+using GZCTF.Modules.Audit.Domain;
 using GZCTF.Repositories.Interface;
 using GZCTF.Services.Container.Manager;
 using Microsoft.EntityFrameworkCore;
 
 namespace GZCTF.Services.Fleet;
 
-public sealed record DeploymentExecutionResult(bool Success, string? ErrorMessage = null)
+public sealed record DeploymentExecutionResult(bool Success, string? ErrorMessage = null, OperationalError? Error = null)
 {
     public static DeploymentExecutionResult Completed() => new(true);
 
-    public static DeploymentExecutionResult Failed(string? errorMessage) => new(false, errorMessage);
+    public static DeploymentExecutionResult Failed(string? errorMessage, OperationalError? error = null) => new(false, errorMessage, error);
 }
 
 public class DeploymentExecutionService
@@ -26,6 +28,7 @@ public class DeploymentExecutionService
     readonly DeploymentExecutionContextAccessor _executionContext;
     readonly FleetVmService? _fleetVmService;
     readonly ITeamLabRuntimeApplicationService? _teamLabRuntime;
+    readonly TeamLabAssetControlService? _assetControls;
     readonly AwdpInstanceService? _awdpInstances;
     readonly ILogger<DeploymentExecutionService> _logger;
 
@@ -41,7 +44,8 @@ public class DeploymentExecutionService
         FleetVmService fleetVmService,
         ITeamLabRuntimeApplicationService teamLabRuntime,
         AwdpInstanceService awdpInstances,
-        ILogger<DeploymentExecutionService> logger)
+        ILogger<DeploymentExecutionService> logger,
+        TeamLabAssetControlService? assetControls = null)
     {
         _context = context;
         _gameInstances = gameInstances;
@@ -53,6 +57,7 @@ public class DeploymentExecutionService
         _executionContext = executionContext;
         _fleetVmService = fleetVmService;
         _teamLabRuntime = teamLabRuntime;
+        _assetControls = assetControls;
         _awdpInstances = awdpInstances;
         _logger = logger;
     }
@@ -291,6 +296,13 @@ public class DeploymentExecutionService
             return DeploymentExecutionResult.Failed("TeamLab control ticket has a stale runtime generation.");
         return ticket.Operation switch
         {
+            RuntimeOperationKind.AssetControl when _assetControls is not null =>
+                await ExecuteAssetControlAsync(ticket, token),
+            RuntimeOperationKind.Pause or RuntimeOperationKind.Resume =>
+                (await _teamLabRuntime.ExecuteQueuedLifecycleAsync(runtimeId, ticket.Generation,
+                    ticket.Operation == RuntimeOperationKind.Pause, token, ticket.ProtectedPayload)).Success
+                    ? DeploymentExecutionResult.Completed()
+                    : DeploymentExecutionResult.Failed("TeamLab lifecycle operation failed."),
             RuntimeOperationKind.Reset => await _teamLabRuntime.ExecuteQueuedResetAsync(
                 runtimeId, ticket.Id, ticket.ProtectedPayload, token) is { } result && result.Success
                 ? DeploymentExecutionResult.Completed()
@@ -309,6 +321,14 @@ public class DeploymentExecutionService
         int runtimeGeneration) => operation == RuntimeOperationKind.Reset
         ? ticketGeneration == runtimeGeneration || ticketGeneration == runtimeGeneration + 1
         : ticketGeneration == runtimeGeneration;
+
+    async Task<DeploymentExecutionResult> ExecuteAssetControlAsync(DeploymentQueueTicket ticket, CancellationToken token)
+    {
+        var result = await _assetControls!.ExecuteAsync(ticket, token);
+        if (result.Success) return DeploymentExecutionResult.Completed();
+        var error = TeamLabAssetControlService.DescribeFailure(result.Message);
+        return DeploymentExecutionResult.Failed(error.Message, error);
+    }
 
     async Task<DeploymentExecutionResult> ExecuteAwdpControlAsync(DeploymentQueueTicket ticket,
         CancellationToken token)

@@ -43,6 +43,17 @@ public class TeamLabController(
         return Ok(await executionPlans.ApplyAsync(request.Plan, token));
     }
 
+    [HttpPost("execution-plan/asset-control")]
+    public async Task<TeamLabAssetControlResult> ControlAsset(TeamLabAssetControlRequest request, CancellationToken token)
+    {
+        await using var permit = await gate.EnterAsync(AgentOperationCategory.Control, token);
+        return await executionPlans.ControlAssetAsync(request, token);
+    }
+
+    [HttpPost("execution-plan/device-probe")]
+    public Task<TeamLabDeviceObservation> ProbeDevice(TeamLabDeviceProbeRequest request, CancellationToken token) =>
+        executionPlans.ProbeDeviceAsync(request, token);
+
     [HttpPost("execution-plan/cleanup")]
     public async Task<IActionResult> CleanupExecutionPlan(
         [FromBody] TeamLabExecutionPlanCleanupRequest? request,

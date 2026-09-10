@@ -213,6 +213,11 @@ public class GuacamoleService
             ["max-connections-per-user"] = "2"
         });
 
+    public static GuacamoleConnectionData BuildVncConnectionData(string name, string host, int port) => new(
+        name, "ROOT", "vnc", new Dictionary<string, string>
+        { ["hostname"] = host, ["port"] = port.ToString(System.Globalization.CultureInfo.InvariantCulture), ["color-depth"] = "24" },
+        new Dictionary<string, string> { ["max-connections"] = "1", ["max-connections-per-user"] = "1" });
+
     public static GuacamoleConnectionData BuildSshConnectionData(
         string connectionName,
         string host,

@@ -10,12 +10,14 @@ public sealed record TeamLabRemoteRelayRequest(
     string NativeIdentity,
     string TargetAddress,
     int TargetPort,
-    DateTimeOffset ExpiresAt);
+    DateTimeOffset ExpiresAt,
+    bool VncConsole = false);
 
 public sealed record TeamLabRemoteRelayResult(int Port, DateTimeOffset ExpiresAt);
 
 public interface ITeamLabRemoteRelayGateway
 {
+    Task<IReadOnlyList<Guid>> InventoryAsync(Guid workerNodeId, CancellationToken cancellationToken);
     Task<TeamLabRemoteRelayResult> CreateAsync(
         Guid workerNodeId,
         TeamLabRemoteRelayRequest request,

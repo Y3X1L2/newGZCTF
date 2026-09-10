@@ -110,7 +110,7 @@ export function HomePage() {
   const account = useCurrentAccount()
   const gameCatalog = useGameCatalog()
   const posts = useHomePosts()
-  const courses = useHomeCourses()
+  const courses = useHomeCourses(account.isAuthenticated)
   const overview = useHomeTrainingOverview(account.isAuthenticated)
 
   useVNextPageTitle()
@@ -339,7 +339,9 @@ export function HomePage() {
 
       <section className={styles.courseSection}>
         <SectionHeading eyebrow="TRAINING" route="/training" routeLabel="全部课程" title="最近课程" />
-        {!courses.data && !courses.error ? (
+        {!account.isAuthenticated ? (
+          <DataState description="课程目录需要登录后查看。" title="登录后查看课程" />
+        ) : !courses.data && !courses.error ? (
           <DataState description="正在读取课程目录。" loading title="课程加载中" />
         ) : courses.error ? (
           <DataState description="课程接口暂时不可用。" title="课程加载失败" />

@@ -93,10 +93,18 @@ public class DeploymentQueueTicket
     }
 
     public static string BuildActiveIdentity(DeploymentQueueRequest request) =>
-        $"{request.Operation}:{BuildSubjectConcurrencyKey(request)}:{Math.Max(1, request.Generation)}";
+        $"{request.Operation}:{BuildSubjectConcurrencyKey(request)}:{Math.Max(1, request.Generation)}" +
+        (request.Operation == RuntimeOperationKind.AssetControl ? $":{request.PayloadHash}" : string.Empty);
 
     public static string BuildSubjectConcurrencyKey(DeploymentQueueRequest request) =>
         request.Identity.SubjectConcurrencyKey;
+
+    public void ReleaseTransientPayload()
+    {
+        // Asset controls retain their encrypted asset binding and acknowledged step cursor
+        // for authorized task queries and explicit continuation after a failed step.
+        if (Operation != RuntimeOperationKind.AssetControl) ProtectedPayload = null;
+    }
 }
 
 public enum DeploymentQueueKind : byte
@@ -127,7 +135,10 @@ public enum RuntimeOperationKind : byte
     Extend = 2,
     Stop = 3,
     Reset = 4,
-    Destroy = 5
+    Destroy = 5,
+    Pause = 6,
+    Resume = 7,
+    AssetControl = 8
 }
 
 public enum DeploymentStage : byte

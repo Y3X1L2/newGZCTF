@@ -41,6 +41,7 @@ export const runtimeStatusLabels: Record<TeamLabRuntimeStatus, string> = {
   paused: '已暂停',
   destroying: '正在销毁',
   destroyed: '已销毁',
+  stopped: '已停止',
 }
 
 export const eventLevelLabels: Record<TeamLabEventLevel, string> = {

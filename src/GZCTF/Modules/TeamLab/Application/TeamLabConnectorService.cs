@@ -50,6 +50,13 @@ public sealed class TeamLabConnectorService(AppDbContext context)
             Description = OptionalText(
                 command.Description, 2048, "connector_description_invalid", "连接器描述超出长度限制")
         };
+        if (command.ManagedNic is { } managedNic)
+        {
+            connector.AttachmentReference = System.Text.Json.JsonSerializer.Serialize(managedNic);
+            var binding = TeamLabConnectorConfiguration.Require(connector);
+            if (!await context.WorkerNodes.AnyAsync(node => node.Id == binding.NodeId, cancellationToken))
+                throw new TeamLabApiContractException("connector_node_not_found", "连接器所属节点不存在。", 422);
+        }
         context.TeamLabConnectors.Add(connector);
         await context.SaveChangesAsync(cancellationToken);
         return ToModel(connector, []);

@@ -23,7 +23,7 @@ public sealed record RuntimeReconciliationSummary(
     int ReplayedCount,
     int RecoveredTicketCount);
 
-public sealed class RuntimeFactReconciliationService(
+public sealed partial class RuntimeFactReconciliationService(
     AppDbContext context,
     AgentClient agentClient,
     FleetCapacityReservationService capacity,
@@ -42,7 +42,9 @@ public sealed class RuntimeFactReconciliationService(
     [
         TeamLabRuntimeStatus.Deploying,
         TeamLabRuntimeStatus.Probing,
-        TeamLabRuntimeStatus.Running
+        TeamLabRuntimeStatus.Running,
+        TeamLabRuntimeStatus.Stopped,
+        TeamLabRuntimeStatus.Paused
     ];
 
     public async Task<RuntimeReconciliationSummary> ReconcileAsync(
@@ -143,7 +145,8 @@ public sealed class RuntimeFactReconciliationService(
 
             fact.BackfillNativeIdentity(actual);
 
-            if (!IsActive(fact.Kind, actual.State))
+            var powerMatches = PowerMatches(fact, actual.State);
+            if (!powerMatches)
             {
                 missing++;
                 if (CorrectExpectedFact(fact, "resource_not_running"))
@@ -221,7 +224,8 @@ public sealed class RuntimeFactReconciliationService(
                            item.TeamLabRuntimeId != null &&
                            (item.Operation == RuntimeOperationKind.Create ||
                             item.Operation == RuntimeOperationKind.Reset ||
-                            item.Operation == RuntimeOperationKind.Destroy) &&
+                            item.Operation == RuntimeOperationKind.Destroy ||
+                            item.Operation == RuntimeOperationKind.AssetControl) &&
                            (item.Status == DeploymentQueueTicketStatus.Pending ||
                             item.Status == DeploymentQueueTicketStatus.Scheduling ||
                             item.Status == DeploymentQueueTicketStatus.Scheduled ||
@@ -342,7 +346,8 @@ public sealed class RuntimeFactReconciliationService(
                 item.PublicId.ToString("D"),
                 item.InterfaceToken,
                 item.DesiredStateDigest)))
-            .Concat(assets.Where(item => item.EndpointObservation != TeamLabEndpointObservationMode.Disabled)
+            .Concat(assets.Where(item => item.EndpointObservation != TeamLabEndpointObservationMode.Disabled &&
+                item.DesiredPowerState is not ("stopped" or "paused"))
                 .Select(item => new ExpectedTeamLabControlFact(
                     item.WorkerNodeId!.Value,
                     item.RuntimeId,
@@ -772,6 +777,10 @@ public sealed class RuntimeFactReconciliationService(
         IReadOnlyDictionary<Guid, NodeInventory> inventories,
         CancellationToken token)
     {
+        if (ticket.Kind == DeploymentQueueKind.TeamLabRuntime && ticket.Operation == RuntimeOperationKind.AssetControl)
+            return ticket.ProtectedPayload is null
+                ? TicketInspection.FailClosed("Asset control checkpoint is missing.", OperationalErrorCodes.RuntimeIdentityConflict)
+                : TicketInspection.SafeReplay("Resume the retained asset-control checkpoint; the executor revalidates plan and resource identity.");
         if (ticket.Kind == DeploymentQueueKind.TeamLabRuntime &&
             ticket.Operation == RuntimeOperationKind.Reset)
             return await InspectTeamLabResetTicketAsync(ticket, token);
@@ -1344,7 +1353,7 @@ public sealed class RuntimeFactReconciliationService(
         ticket.ErrorCode = null;
         ticket.Retryable = false;
         ticket.CompletedAt = DateTimeOffset.UtcNow;
-        ticket.ProtectedPayload = null;
+        ticket.ReleaseTransientPayload();
         events.Append(RuntimeOperationalEvents.Ticket(
             ticket,
             OperationalEventCodes.Recovery.FactConfirmed,
@@ -1463,7 +1472,7 @@ public sealed class RuntimeFactReconciliationService(
         ticket.ErrorMessage = inspection.Message;
         ticket.StageMessage = inspection.Message;
         ticket.CompletedAt = DateTimeOffset.UtcNow;
-        ticket.ProtectedPayload = null;
+        ticket.ReleaseTransientPayload();
         ticket.ErrorCategory = OperationalErrorCategory.Conflict;
         ticket.ErrorCode = inspection.ErrorCode ?? OperationalErrorCodes.RuntimeIdentityConflict;
         ticket.Retryable = false;
@@ -1694,7 +1703,7 @@ public sealed class RuntimeFactReconciliationService(
         public static ExpectedRuntimeFact FromTeamLabAsset(TeamLabRuntimeAsset item) => new(
             item.WorkerNodeId!.Value,
             item.Kind == TeamLabResourceKind.Docker ? RuntimeFactKind.Docker : RuntimeFactKind.Vm,
-            item.Kind == TeamLabResourceKind.Docker ? item.RuntimeResourceId! : string.Empty,
+            item.Kind == TeamLabResourceKind.Docker ? item.RuntimeResourceId! : item.NativeIdentity ?? string.Empty,
             item.Kind == TeamLabResourceKind.Vm ? item.RuntimeResourceId! : string.Empty,
             item.Generation,
             "teamlab-asset",

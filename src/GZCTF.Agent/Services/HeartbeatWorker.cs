@@ -30,13 +30,16 @@ public class HeartbeatWorker : BackgroundService
 
                 var cpuLoad = await GetCpuLoadAsync();
                 var memLoad = GetMemoryLoad();
-                var containers = await docker.GetContainerCountAsync(token);
-                var vms = await kvm.GetVmCountAsync(token);
                 var teamLab = scope.ServiceProvider.GetRequiredService<TeamLabNetworkService>();
                 var teamLabStatus = await teamLab.GetStatusAsync(token);
                 var capabilityService = scope.ServiceProvider.GetRequiredService<AgentCapabilityService>();
                 var manifest = await capabilityService.GetManifestAsync(
                     await capabilityService.GetBinarySha256Async(), token);
+                var containers = await ReadCountAsync(manifest.Features.Contains(AgentFeatureIds.Docker, StringComparer.Ordinal),
+                    docker.GetContainerCountAsync, "Docker", _logger, token);
+                var vms = await ReadCountAsync(teamLabStatus.Capabilities.Kvm &&
+                    teamLabStatus.Capabilities.KvmDevice && teamLabStatus.Capabilities.CpuVirtualization,
+                    kvm.GetVmCountAsync, "KVM", _logger, token);
 
                 var payload = new
                 {
@@ -62,12 +65,27 @@ public class HeartbeatWorker : BackgroundService
                         (int)response.StatusCode, body);
                 }
             }
+            catch (OperationCanceledException) when (token.IsCancellationRequested) { break; }
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Heartbeat failed");
             }
 
             await Task.Delay(TimeSpan.FromSeconds(_config.HeartbeatIntervalSeconds), token);
+        }
+    }
+
+    internal static async Task<int> ReadCountAsync(bool available,
+        Func<CancellationToken, Task<int>> read, string capability, ILogger logger, CancellationToken token)
+    {
+        token.ThrowIfCancellationRequested();
+        if (!available) return 0;
+        try { return await read(token); }
+        catch (Exception exception) when (!token.IsCancellationRequested)
+        {
+            logger.LogWarning("{Capability} inventory collection failed ({ErrorType}); other heartbeat metrics remain available",
+                capability, exception.GetType().Name);
+            return 0;
         }
     }
 

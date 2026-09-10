@@ -139,6 +139,8 @@ public sealed class ImageRemoteAccessService(
 
     private static void Validate(ImageTemplate template, UpdateImageRemoteAccessModel request)
     {
+        if (request.Protocol is not (TeamLabRemoteProtocol.ContainerTerminal or TeamLabRemoteProtocol.Ssh or TeamLabRemoteProtocol.Rdp))
+            throw new InvalidOperationException("VNC 控制台由节点发现，不属于镜像账号配置。");
         if (request.Port is < 1 or > 65535) throw new InvalidOperationException("The remote access port is invalid.");
         if (template.ImageType == ImageType.Docker && request.Protocol != TeamLabRemoteProtocol.ContainerTerminal)
             throw new InvalidOperationException("Docker images only support the platform web terminal.");

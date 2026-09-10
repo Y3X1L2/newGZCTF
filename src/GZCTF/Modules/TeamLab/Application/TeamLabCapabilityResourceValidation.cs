@@ -143,10 +143,10 @@ internal static class TeamLabCapabilityResourceValidation
 
     public static int RequiredPort(Dictionary<string, JsonElement> values, string key, string errorCode)
     {
-        var port = (int)RequiredNumber(values, key, errorCode, "端口必须是 1-65535 的整数");
-        if (port is < 1 or > 65535)
+        var value = RequiredNumber(values, key, errorCode, "端口必须是 1-65535 的整数");
+        if (!double.IsFinite(value) || value is < 1 or > 65535 || value != Math.Floor(value))
             throw new TeamLabApiContractException(errorCode, "端口必须是 1-65535 的整数", 422);
-        return port;
+        return (int)value;
     }
 
     public static string RequiredEnum(Dictionary<string, JsonElement> values, string key, string errorCode, string message, IReadOnlyList<string> allowed)

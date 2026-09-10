@@ -12,6 +12,44 @@ public sealed class TeamLabOvsAttachmentProvider(
 {
     readonly AgentTeamLabConfig config = options.Value;
 
+    public async Task<TeamLabAttachmentResult> ProbeAsync(
+        TeamLabExecutionPlanV2 plan, string interfaceName, string networkKey, string portKey,
+        CancellationToken cancellationToken, string? vmIdentity = null)
+    {
+        if (string.IsNullOrWhiteSpace(config.OvsLocalEndpoint))
+            return TeamLabAttachmentResult.Failed("network", "Local OVS endpoint is not configured.");
+        try
+        {
+            var state = await ovsdb.SelectAsync(config.OvsLocalEndpoint, config.OvsLocalDatabase,
+                [("Bridge", Where("name", config.OvsIntegrationBridgeName)),
+                 ("Interface", Where("name", interfaceName)), ("Port", Where("name", interfaceName))], cancellationToken);
+            // libvirt owns VM TAP rows and stamps vm-id/iface-id instead of Agent ownership tags.
+            var iface = vmIdentity is null
+                ? ExistingUuid(state[1], plan.RuntimePublicId, plan.Generation, networkKey, plan.PlanDigest, "interface")
+                : state[1].Count == 1 && OvsdbJsonCodec.GetMapValue(state[1][0]?["external_ids"], "vm-id") == vmIdentity
+                    ? state[1][0]?["_uuid"]?[1]?.GetValue<string>() : null;
+            var port = vmIdentity is null
+                ? ExistingUuid(state[2], plan.RuntimePublicId, plan.Generation, networkKey, plan.PlanDigest, "port")
+                : state[2].Count == 1 ? state[2][0]?["_uuid"]?[1]?.GetValue<string>() : null;
+            if (iface is null || port is null || state[0].Count != 1 || !BridgeContainsPort(state[0][0] as JsonObject, port) ||
+                !ContainsUuid(state[2][0]?["interfaces"], iface))
+                return TeamLabAttachmentResult.Failed("network", "OVS attachment is missing from the integration bridge.");
+            var row = state[1][0]!;
+            var ofport = row["ofport"];
+            if (ofport is JsonArray set && set.Count == 2 && set[1] is JsonArray values)
+                ofport = values.Count == 1 ? values[0] : null;
+            if (ofport is not JsonValue value || !value.TryGetValue<int>(out var number) || number <= 0 ||
+                OvsdbJsonCodec.GetMapValue(row["external_ids"], "iface-id") != TeamLabOvnNaming.LogicalPortId(plan, networkKey, portKey))
+                return TeamLabAttachmentResult.Failed("network", "OVS interface has no usable datapath port or its logical identity changed.");
+            return new(true, "OVS attachment is present in the datapath.");
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (Exception exception) when (exception is System.Net.Sockets.SocketException or IOException or InvalidOperationException or JsonException or OperationCanceledException)
+        {
+            return TeamLabAttachmentResult.Failed("network", $"OVS attachment probe failed: {Trim(exception.Message)}");
+        }
+    }
+
     public Task<TeamLabAttachmentResult> AttachAsync(
         TeamLabExecutionPlanV2 plan,
         string interfaceName,
@@ -320,9 +358,11 @@ public sealed class TeamLabOvsAttachmentProvider(
         }
     };
 
-    static bool BridgeContainsPort(JsonObject? bridge, string portUuid)
+    static bool BridgeContainsPort(JsonObject? bridge, string portUuid) => ContainsUuid(bridge?["ports"], portUuid);
+
+    static bool ContainsUuid(JsonNode? reference, string portUuid)
     {
-        if (bridge?["ports"] is not JsonArray ports)
+        if (reference is not JsonArray ports)
             return false;
         if (ports.Count == 2 && string.Equals(ports[0]?.GetValue<string>(), "uuid", StringComparison.Ordinal))
             return string.Equals(ports[1]?.GetValue<string>(), portUuid, StringComparison.Ordinal);

@@ -1,4 +1,4 @@
-import { Activity, ArrowLeft, Boxes, FileClock, Network, RotateCcw, Trash2, Wrench } from 'lucide-react'
+import { Activity, ArrowLeft, Boxes, FileClock, Network, RotateCcw, Trash2, Wrench, Pause, Play } from 'lucide-react'
 import { useCallback, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router'
 import { ActionButton, InlineFeedback, VNextConfirmDialog } from '../../../../shared/Interaction'
@@ -10,13 +10,22 @@ import { formatAdminDate } from '../../shared/adminFormat'
 import { teamLabRuntimeApi } from '../api'
 import { TeamLabRuntimeStatusBadge } from '../shared/TeamLabStatusBadge'
 import { CapturePanel } from './CapturePanel'
+import { AssetDiagnosticsPanel } from './AssetDiagnosticsPanel'
+import { AssetFilesPanel } from './AssetFilesPanel'
+import { AssetControlPanel } from './AssetControlPanel'
+import { RuntimeDifferencesPanel } from './RuntimeDifferencesPanel'
+import { DeviceHealthPanel } from './DeviceHealthPanel'
+import { VmDiagnosticsPanel } from './VmDiagnosticsPanel'
 import { RuntimeAccessPanel } from './RuntimeAccessPanel'
 import { RuntimeEventPanel } from './RuntimeEventPanel'
 import { RuntimeLinkPolicyPanel } from './RuntimeLinkPolicyPanel'
 import { RuntimeLogPanel } from './RuntimeLogPanel'
 import { RuntimeRemoteAccessPanel } from './RuntimeRemoteAccessPanel'
+import { RemoteSessionsPanel } from './RemoteSessionsPanel'
 import { RuntimeShardTable } from './RuntimeShardTable'
 import { RuntimeStageTimeline } from './RuntimeStageTimeline'
+import { RuntimeTaskPanel } from './RuntimeTaskPanel'
+import { TaskHistoryPanel } from './TaskHistoryPanel'
 import { RuntimeTopologyView } from './RuntimeTopologyView'
 import styles from './TeamLabRuntimeDetailPage.module.css'
 import { TrafficFlowPanel } from './TrafficFlowPanel'
@@ -36,6 +45,7 @@ export function TeamLabRuntimeDetailPage() {
   const [tab, setTab] = useState<RuntimeTab>(() => searchParams.get('tab') === 'operations' ? 'operations' : 'overview')
   const [resetOpen, setResetOpen] = useState(false)
   const [destroyOpen, setDestroyOpen] = useState(false)
+  const [pauseOpen, setPauseOpen] = useState(false)
   const [acting, setActing] = useState(false)
   const [actionError, setActionError] = useState<unknown>(null)
   const [flowFilters, setFlowFilters] = useState<TrafficFlowFilters>(initialFlowFilters)
@@ -85,20 +95,35 @@ export function TeamLabRuntimeDetailPage() {
     }
   }
 
+  const pauseOrResume = async () => {
+    if (!runtime || acting) return false
+    setActing(true)
+    setActionError(null)
+    try {
+      const next = runtime.status === 'paused' ? await teamLabRuntimeApi.resumeRuntime(runtime.id) : await teamLabRuntimeApi.pauseRuntime(runtime.id)
+      await runtimeState.mutate(next, { revalidate: false })
+      return true
+    } catch (error) {
+      setActionError(error)
+      return false
+    } finally { setActing(false) }
+  }
+
   if (!runtimeId) return <DataState description="运行时标识无效。" title="无法打开运行时" />
   if (runtimeState.isLoading)
     return <DataState description="正在读取运行时、分片和资产投影。" loading title="运行时加载中" />
   if (runtimeState.error || !runtime)
     return <DataState description={errorMessage(runtimeState.error, '运行时加载失败。')} title="无法打开运行时" />
 
-  const canReset = ['running', 'failed', 'paused'].includes(runtime.status)
-  const canDestroy = !['destroying', 'destroyed', 'cleanup-pending'].includes(runtime.status)
+  const queueActive = !!runtime.queueStatus && ['pending', 'scheduling', 'scheduled', 'running'].includes(runtime.queueStatus)
+  const canReset = !runtime.managedRolloutId && !queueActive && ['running', 'failed', 'paused'].includes(runtime.status)
+  const canDestroy = !runtime.managedRolloutId && !['destroying', 'destroyed', 'cleanup-pending'].includes(runtime.status)
   const cleanupPending = runtime.status === 'cleanup-pending'
   return (
     <section className={styles.page}>
-      <Link className={styles.backLink} to={`/admin/teamlab/${topologyId}/runtimes`}>
+      <Link className={styles.backLink} to={searchParams.get('from') === 'runtime-search' ? '/admin/teamlab?view=runtimes' : `/admin/teamlab/${topologyId}/runtimes`}>
         <ArrowLeft size={16} />
-        试运行列表
+        {searchParams.get('from') === 'runtime-search' ? '运行实例检索' : '试运行列表'}
       </Link>
       <header className={styles.pageHeader}>
         <div>
@@ -121,9 +146,10 @@ export function TeamLabRuntimeDetailPage() {
           >
             重置
           </ActionButton>
+          {(['running', 'paused'].includes(runtime.status) || runtime.error === 'runtime_pause_failed') ? <ActionButton disabled={acting || queueActive || !!runtime.managedRolloutId} icon={runtime.status === 'paused' ? <Play size={16} /> : <Pause size={16} />} onClick={() => setPauseOpen(true)} type="button">{runtime.status === 'paused' ? '恢复' : runtime.error === 'runtime_pause_failed' ? '重试暂停' : '暂停'}</ActionButton> : null}
           {cleanupPending ? (
             <ActionButton
-              disabled={acting}
+              disabled={acting || !!runtime.managedRolloutId}
               icon={<RotateCcw size={16} />}
               onClick={() => setDestroyOpen(true)}
               tone="danger"
@@ -144,6 +170,8 @@ export function TeamLabRuntimeDetailPage() {
           )}
         </div>
       </header>
+      {runtime.managedRolloutId ? <InlineFeedback tone="neutral">批量发布托管：{runtime.managedRolloutId}</InlineFeedback> : null}
+      <RuntimeTaskPanel runtime={runtime} onInspect={() => inspectFailure({ generation: runtime.generation, stage: '' })} />
       {actionError ? (
         <InlineFeedback tone="danger">{errorMessage(actionError, '运行时操作失败。')}</InlineFeedback>
       ) : null}
@@ -210,7 +238,7 @@ export function TeamLabRuntimeDetailPage() {
             />
           </>
         ) : null}
-        {tab === 'operations' ? <RuntimeRemoteAccessPanel runtime={runtime} /> : null}
+        {tab === 'operations' ? <><DeviceHealthPanel runtimeId={runtime.id} generation={runtime.generation} /><RuntimeDifferencesPanel key={`${runtime.id}:${runtime.generation}`} runtime={runtime} /><AssetControlPanel runtime={runtime} /><AssetDiagnosticsPanel runtime={runtime} /><AssetFilesPanel runtime={runtime} /><VmDiagnosticsPanel runtime={runtime} /><RuntimeRemoteAccessPanel runtime={runtime} /><RemoteSessionsPanel runtimeId={runtime.id} /></> : null}
         {tab === 'link-policies' ? (
           <RuntimeLinkPolicyPanel
             assets={runtime.assets.map((asset) => ({ key: asset.key, name: asset.name }))}
@@ -220,6 +248,7 @@ export function TeamLabRuntimeDetailPage() {
         ) : null}
         {tab === 'events' ? (
           <div className={styles.stack}>
+            <TaskHistoryPanel key={`${runtime.id}:${runtime.generation}`} runtimeId={runtime.id} generation={runtime.generation} />
             <RuntimeEventPanel
               currentGeneration={runtime.generation}
               error={events.error}
@@ -250,6 +279,7 @@ export function TeamLabRuntimeDetailPage() {
         title="重置运行环境"
         tone="primary"
       />
+      <VNextConfirmDialog open={pauseOpen} onClose={() => setPauseOpen(false)} onConfirm={pauseOrResume} title={runtime.status === 'paused' ? '恢复运行环境' : '暂停运行环境'} confirmLabel="确认" description="保留原节点、网络和磁盘，按当前运行代次操作。" message={runtime.status === 'paused' ? '恢复后请核对服务健康状态。' : '暂停将中断当前业务连接。'} />
       <VNextConfirmDialog
         confirmLabel={cleanupPending ? '继续清理' : '确认销毁'}
         confirmationText={cleanupPending ? undefined : runtime.id.slice(0, 8)}

@@ -1,4 +1,4 @@
-export type TeamLabRemoteProtocol = 'containerTerminal' | 'ssh' | 'rdp'
+export type TeamLabRemoteProtocol = 'containerTerminal' | 'ssh' | 'rdp' | 'vnc'
 export type TeamLabRemoteSessionStatus = 'creating' | 'ready' | 'connected' | 'ending' | 'ended' | 'failed'
 
 export interface TeamLabRemoteAccessAvailability {

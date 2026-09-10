@@ -17,6 +17,7 @@ import {
   parseTeamLabTrafficPathPage,
 } from './teamlabRuntimeParsers'
 import { parseTeamLabLinkPolicy, parseTeamLabLinkPolicyPage } from './teamlabResourcesParsers'
+import { teamLabParsing as parse } from './teamlabParsers'
 import type { ApplyTeamLabLinkPolicyRequest } from './teamlabResourcesContracts'
 
 const root = '/api/admin/teamlab/runtimes'
@@ -164,6 +165,20 @@ export function createTeamLabRuntimeApi(client: RuntimeJsonClient = runtimeJsonC
 
     async listCaptures(runtimeId: string, limit = 20) {
       return parseTeamLabCapturePage(await client.get(`${root}/${runtimeId}/captures`, { limit }))
+    },
+
+    async pauseRuntime(runtimeId: string) {
+      return parseTeamLabRuntime(await client.postJson(`${root}/${runtimeId}/pause`))
+    },
+
+    async resumeRuntime(runtimeId: string) {
+      return parseTeamLabRuntime(await client.postJson(`${root}/${runtimeId}/resume`))
+    },
+
+    async listCaptureHistory(runtimeId: string, after?: string) {
+      const value = await client.get(`${root}/${runtimeId}/captures`, { limit: 50, after })
+      const page = parse.record(value, '抓包历史')
+      return { items: parseTeamLabCapturePage(value), next: parse.nullableString(page.next, '抓包历史.next') }
     },
 
     async startCapture(runtimeId: string, request: CreateTeamLabCaptureRequest) {

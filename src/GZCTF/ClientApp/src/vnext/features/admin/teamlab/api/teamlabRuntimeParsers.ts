@@ -17,6 +17,11 @@ import type {
 import { teamLabParsing as parse } from './teamlabParsers'
 
 const assetKinds = { 0: 'docker', 1: 'vm', Docker: 'docker', Vm: 'vm' } as const
+const queueStatuses = {
+  0: 'pending', 1: 'scheduling', 2: 'scheduled', 3: 'running', 4: 'succeeded', 5: 'failed', 6: 'cancelled',
+  Pending: 'pending', Scheduling: 'scheduling', Scheduled: 'scheduled', Running: 'running',
+  Succeeded: 'succeeded', Failed: 'failed', Cancelled: 'cancelled',
+} as const
 const runtimeStatuses = {
   0: 'pending',
   1: 'planning',
@@ -29,6 +34,7 @@ const runtimeStatuses = {
   8: 'paused',
   9: 'destroying',
   10: 'destroyed',
+  11: 'stopped',
   Pending: 'pending',
   Planning: 'planning',
   Scheduled: 'scheduled',
@@ -40,6 +46,7 @@ const runtimeStatuses = {
   Paused: 'paused',
   Destroying: 'destroying',
   Destroyed: 'destroyed',
+  Stopped: 'stopped',
 } as const
 const eventLevels = {
   0: 'info',
@@ -122,7 +129,19 @@ function assetKind(value: unknown, label: string): TeamLabAssetKind {
 
 export function parseTeamLabRuntime(value: unknown): TeamLabRuntime {
   const item = parse.record(value, 'TeamLab runtime')
+  const failure = item.failure == null ? null : parse.record(item.failure, 'TeamLab runtime.failure')
   return {
+    managedRolloutId: parse.nullableString(item.managedRolloutId, 'TeamLab runtime.managedRolloutId'),
+    currentOperationId: parse.nullableString(item.currentOperationId, 'TeamLab runtime.currentOperationId'),
+    subStages: item.subStages == null ? [] : parse.array(item.subStages, 'TeamLab runtime.subStages', (entry, label) => {
+      const stage = parse.record(entry, label)
+      return { id: parse.string(stage.id, `${label}.id`), status: parse.string(stage.status, `${label}.status`),
+        message: parse.nullableString(stage.message, `${label}.message`) }
+    }),
+    failure: failure ? { code: parse.string(failure.code, 'failure.code'), stage: parse.string(failure.stage, 'failure.stage'),
+      retryable: parse.boolean(failure.retryable, 'failure.retryable'), detail: parse.nullableString(failure.detail, 'failure.detail') } : null,
+    deploymentQueueTicketId: item.deploymentQueueTicketId == null ? null : parse.string(item.deploymentQueueTicketId, 'TeamLab runtime.deploymentQueueTicketId'),
+    queueStatus: item.queueStatus == null ? null : parse.enumValue(item.queueStatus, queueStatuses, 'TeamLab runtime.queueStatus'),
     id: parse.string(item.id, 'TeamLab runtime.id'),
     releaseId: parse.string(item.releaseId, 'TeamLab runtime.releaseId'),
     generation: parse.number(item.generation, 'TeamLab runtime.generation'),

@@ -3,6 +3,19 @@ using GZCTF.Modules.TeamLab.Domain;
 
 namespace GZCTF.Modules.TeamLab.Contracts;
 
+public sealed record TeamLabRuntimeSearchQuery(string? Search = null, TeamLabRuntimeStatus? Status = null,
+    string? Node = null, int? Generation = null, Guid? ReleaseId = null, Guid? CreatedById = null,
+    bool ErrorsOnly = false, string? After = null, int Limit = 20);
+public sealed record TeamLabRuntimeSearchItem(Guid Id, Guid? TopologyId, Guid ReleaseId, string? Reference,
+    int Generation, string Status, Guid? CreatedById, DateTimeOffset CreatedAt, int AssetCount, bool HasError);
+public sealed record TeamLabRuntimeSearchPage(IReadOnlyList<TeamLabRuntimeSearchItem> Items, string? NextCursor);
+
+public sealed record TeamLabRuntimeTaskModel(Guid Id, int Generation, string Operation, string Status,
+    string Stage, Guid? OperationId, DateTimeOffset CreatedAt, DateTimeOffset? StartedAt,
+    DateTimeOffset? CompletedAt, string? ErrorCode, string? BlockedReasonCode, bool Retryable);
+
+public sealed record TeamLabRuntimeTaskPageModel(IReadOnlyList<TeamLabRuntimeTaskModel> Items, string? NextCursor);
+
 public sealed record TeamLabAdminReleaseSummaryModel(
     Guid Id,
     int Version,

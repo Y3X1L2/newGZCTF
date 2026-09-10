@@ -9,7 +9,8 @@ public sealed class AgentCapabilityService(
     TeamLabNetworkService teamLab,
     TeamLabDataPlanePreparationService dataPlane,
     IOptions<AgentConfig> options,
-    IOptions<AgentTeamLabConfig> teamLabOptions)
+    IOptions<AgentTeamLabConfig> teamLabOptions,
+    DockerService docker)
 {
     const int ManifestSchemaVersion = 1;
     readonly AgentConfig _config = options.Value;
@@ -23,8 +24,9 @@ public sealed class AgentCapabilityService(
         var teamLabStatus = await teamLab.GetStatusAsync(token);
         var dataPlaneReadiness = await dataPlane.GetReadinessAsync(_teamLabConfig, token);
         var capabilities = teamLabStatus.Capabilities;
+        var dockerAvailable = capabilities.Docker && await docker.IsAvailableAsync(token);
         var features = new List<string>();
-        if (capabilities.Docker)
+        if (dockerAvailable)
         {
             features.Add(AgentFeatureIds.Docker);
             features.Add(AgentFeatureIds.DockerPull);
@@ -43,7 +45,7 @@ public sealed class AgentCapabilityService(
         {
             features.Add(AgentFeatureIds.TeamLabInfrastructure);
             features.Add(AgentFeatureIds.TeamLabFabricLeasedLinks);
-            if (capabilities.Docker && capabilities.DnsProbe)
+            if (dockerAvailable && capabilities.DnsProbe)
                 features.Add(AgentFeatureIds.TeamLabContainerNetworkFinalize);
             if (HasEndpointSensorArtifacts())
                 features.Add(AgentFeatureIds.TeamLabEndpointSensor);
@@ -58,7 +60,7 @@ public sealed class AgentCapabilityService(
             if (dataPlaneReadiness.Ready &&
                 capabilities.OvsVsctl && capabilities.OvsdbClient && capabilities.OvnController &&
                 capabilities.OvnNorthboundClient && capabilities.OvnSouthboundClient &&
-                (capabilities.Docker || kvm))
+                (dockerAvailable || kvm))
                 features.Add(AgentFeatureIds.TeamLabExecutionPlan);
             if (HasArtifactCacheRoot())
                 features.Add(AgentFeatureIds.TeamLabArtifactCache);
@@ -81,15 +83,15 @@ public sealed class AgentCapabilityService(
         }
         if (features.Contains(AgentFeatureIds.VmPreparedImage))
             features.Add(AgentFeatureIds.VmPreparedImageUpload);
-        if (capabilities.Docker || kvm)
+        if (dockerAvailable || kvm)
             features.Add(AgentFeatureIds.RemoteAccessRelay);
         features.Add(AgentFeatureIds.BootstrapArtifactPull);
 
         var logicalCpu = Math.Max(1, Environment.ProcessorCount);
         var limits = new AgentExecutionLimits(
-            Resolve(_config.ExecutionLimits.DockerCreates, Math.Clamp(logicalCpu, 2, 8), capabilities.Docker),
+            Resolve(_config.ExecutionLimits.DockerCreates, Math.Clamp(logicalCpu, 2, 8), dockerAvailable),
             Resolve(_config.ExecutionLimits.VmCreates, Math.Clamp((logicalCpu + 1) / 2, 1, 4), kvm),
-            Resolve(_config.ExecutionLimits.DockerImageTransfers, 2, capabilities.Docker),
+            Resolve(_config.ExecutionLimits.DockerImageTransfers, 2, dockerAvailable),
             Resolve(_config.ExecutionLimits.VmImageTransfers, 1, kvm),
             Resolve(_config.ExecutionLimits.TeamLabNetworkOperations, 4, teamLabStatus.Available),
             Math.Max(1, _config.ExecutionLimits.ControlOperations ?? 2),

@@ -142,6 +142,30 @@ public sealed class TeamLabRuntimeFoundationTests
             });
     }
 
+    [Fact]
+    public async Task RemoteSessionCommands_ReuseSubmissionStoreAndNormalizeReason()
+    {
+        var store = new CapturingSubmissionStore();
+        var protector = new TeamLabRuntimeOperationPayloadProtector(new EphemeralDataProtectionProvider());
+        var service = new TeamLabRuntimeOperationApplicationService(store, protector);
+        var token = Guid.NewGuid();
+        var actor = Guid.NewGuid();
+        var runtime = Guid.NewGuid();
+        var scope = Guid.NewGuid();
+        var session = Guid.NewGuid();
+        await service.SubmitRemoteSessionCreateAsync(token, actor, "create-1", runtime, scope, 42, " test access ", default);
+        await service.SubmitRemoteSessionCreateAsync(token, actor, "create-1", runtime, scope, 42, "test access", default);
+        await service.SubmitRemoteSessionEndAsync(token, actor, "end-1", runtime, scope, session, default);
+
+        Assert.Equal(store.Submissions[0].RequestHash, store.Submissions[1].RequestHash);
+        var create = protector.Unprotect(store.Submissions[0].Job.ProtectedPayload!);
+        Assert.Equal(42, create.RemoteAssetId);
+        Assert.Equal("test access", create.RemoteReason);
+        Assert.Equal(runtime, create.RuntimeId);
+        Assert.Equal(session, protector.Unprotect(store.Submissions[2].Job.ProtectedPayload!).RemoteSessionId);
+        Assert.All(store.Submissions, item => Assert.Equal(scope, item.ControlScopeId));
+    }
+
     private static Type[] Unwrap(Type type)
     {
         if (type.IsGenericType) return type.GetGenericArguments().SelectMany(Unwrap).ToArray();

@@ -26,7 +26,8 @@ public static class TeamLabExecutionPlanCompiler
         IReadOnlyList<TeamLabNodeAssetCreateRequest> allAssets,
         IReadOnlyList<TeamLabNodeAssetCreateRequest> assets,
         IReadOnlyList<TeamLabNodeObservationPointIntent> observations,
-        IReadOnlyDictionary<int, string> imageDigests)
+        IReadOnlyDictionary<int, string> imageDigests,
+        IReadOnlyDictionary<string, IReadOnlyList<TeamLabConnectorAttachmentV2>>? connectors = null)
     {
         ArgumentNullException.ThrowIfNull(infrastructure);
         ArgumentNullException.ThrowIfNull(assets);
@@ -88,7 +89,8 @@ public static class TeamLabExecutionPlanCompiler
                         .Select(record => new TeamLabDnsRecordV2(record.Hostname, AddressWithoutPrefix(record.IpAddress)))
                         .DistinctBy(record => (record.Hostname, record.IpAddress))
                         .ToArray(),
-                    playerGateway);
+                    playerGateway,
+                    connectors?.GetValueOrDefault(switchIntent.Network.Key));
             })
             .ToArray();
 
@@ -120,14 +122,17 @@ public static class TeamLabExecutionPlanCompiler
                 asset.CpuUnits,
                 asset.MemoryMiB,
                 NetworkAttachments(asset, gateways),
-                health is not null
-                    ? [new TeamLabHealthCheckV2(
+                (health is not null
+                    ? new[] { new TeamLabHealthCheckV2(
                         health.Kind == TeamLabHealthCheckKind.Http ? "http" : "tcp",
                         AddressWithoutPrefix(primary?.IpAddress ?? "127.0.0.1"),
                         health.Port!.Value,
-                        health.Kind == TeamLabHealthCheckKind.Http ? "/" : null)]
-                    : [],
-                asset.ImageReference);
+                        health.Kind == TeamLabHealthCheckKind.Http ? "/" : null) }
+                    : []).Concat(asset.Device is { HealthProtocol: not null, HealthPort: not null } device
+                        ? [new TeamLabHealthCheckV2(device.HealthProtocol, AddressWithoutPrefix(primary?.IpAddress ?? "127.0.0.1"), device.HealthPort.Value, device.HealthPath)]
+                        : []).Distinct().ToArray(),
+                asset.ImageReference,
+                asset.Device);
         }).ToArray();
 
         var observationIntents = observations

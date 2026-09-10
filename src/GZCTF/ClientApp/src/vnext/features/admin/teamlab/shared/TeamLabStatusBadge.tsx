@@ -22,6 +22,7 @@ const runtimeMeta: Record<TeamLabRuntimeStatus, { label: string; tone: AdminStat
   paused: { label: '已暂停', tone: 'neutral' },
   destroying: { label: '清理中', tone: 'warning', pulse: true },
   destroyed: { label: '已销毁', tone: 'neutral' },
+  stopped: { label: '已停止', tone: 'neutral' },
 }
 
 export function teamLabSceneLifecycle(scene: TeamLabAdminSceneSummary): TeamLabSceneLifecycle {

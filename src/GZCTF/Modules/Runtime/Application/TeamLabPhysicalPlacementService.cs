@@ -156,6 +156,18 @@ public sealed class TeamLabPhysicalPlacementService(
             .ThenBy(item => item.Key, StringComparer.Ordinal)
             .ToArray();
         var candidates = ApplyCompletedGenerationCredits(runtime, await snapshots.LoadAsync(token));
+        var connectorIds = generationAssets.Where(asset => asset.ConnectorId != null).Select(asset => asset.ConnectorId!.Value).Distinct().ToArray();
+        if (connectorIds.Length > 0)
+        {
+            var connectors = await context.TeamLabConnectors.AsNoTracking()
+                .Where(connector => connectorIds.Contains(connector.PublicId)).ToArrayAsync(token);
+            if (connectors.Length != connectorIds.Length)
+                return FleetCapacityReservationResult.Failed("connector_unavailable: a registered connector no longer exists.");
+            var nodes = connectors.Select(connector => TeamLabConnectorConfiguration.Require(connector).NodeId).Distinct().ToArray();
+            if (nodes.Length != 1)
+                return FleetCapacityReservationResult.Failed("connector_placement_conflict: dedicated NIC connectors in one runtime must belong to the same node.");
+            candidates = candidates.Where(candidate => candidate.Node.Id == nodes[0]).ToArray();
+        }
         var placementTimer = Stopwatch.StartNew();
         var improvementPasses = 0;
         var assignment = TryReusePreviousGenerationPlacement(runtime, groups, candidates);
@@ -507,7 +519,8 @@ public sealed class TeamLabPhysicalPlacementService(
             PlatformTelemetry.RecordTeamLabInfrastructure("allocated", "fabric-link");
         }
         await context.SaveChangesAsync(token);
-        foreach (var network in generationNetworks)
+        var legacyObservation = runtime.ExecutionModel == GZCTF.TeamLab.Contracts.TeamLabExecutionModel.V1;
+        foreach (var network in generationNetworks.Where(_ => legacyObservation))
         {
             if (runtime.ObservationPoints.Any(item => item.Generation == runtime.Generation &&
                                                       item.Kind == TeamLabObservationPointKind.NetworkBridge &&
@@ -526,7 +539,7 @@ public sealed class TeamLabPhysicalPlacementService(
             });
         }
         foreach (var fragment in runtime.Infrastructure
-                     .Where(item => item.Generation == runtime.Generation)
+                     .Where(item => legacyObservation && item.Generation == runtime.Generation)
                      .Where(item => item.Kind == TeamLabInfrastructureKind.ManagedRouter)
                      .SelectMany(item => item.Fragments))
         {
@@ -546,7 +559,7 @@ public sealed class TeamLabPhysicalPlacementService(
                 InterfaceToken = TeamLabResourceNameFactory.RouterNamespace(runtime.Id, fragment.ShardId)
             });
         }
-        foreach (var fabric in leases)
+        foreach (var fabric in leases.Where(_ => legacyObservation))
         {
             if (runtime.ObservationPoints.Any(item => item.Generation == runtime.Generation &&
                                                       item.Kind == TeamLabObservationPointKind.FabricUplink &&
@@ -566,14 +579,19 @@ public sealed class TeamLabPhysicalPlacementService(
         var networksByKey = generationNetworks.ToDictionary(item => item.TopologyKey, StringComparer.Ordinal);
         foreach (var asset in runtime.Assets.Where(item =>
                      item.Generation == runtime.Generation &&
-                     item.EndpointObservation != TeamLabEndpointObservationMode.Disabled &&
+                     (!legacyObservation || item.EndpointObservation != TeamLabEndpointObservationMode.Disabled) &&
                      item.WorkerNodeId != null && item.ShardId != null))
         {
             var interfaces = JsonSerializer.Deserialize<WorkloadInterfaceIntent[]>(asset.InterfaceSummaryJson) ?? [];
             foreach (var iface in interfaces)
             {
-                var interfaceToken = TeamLabResourceNameFactory.WorkloadHostInterface(
-                    runtime.Id, asset.TopologyKey, iface.Key);
+                // V2 has logical OVN switches, not per-network Linux bridges. Packet observation
+                // uses real host ports and does not require an in-guest process sensor.
+                var interfaceToken = legacyObservation
+                    ? TeamLabResourceNameFactory.WorkloadHostInterface(runtime.Id, asset.TopologyKey, iface.Key)
+                    : asset.Kind == TeamLabResourceKind.Vm
+                        ? GZCTF.TeamLab.Contracts.Execution.TeamLabExecutionIdentityV2.VmTapName(runtime.PublicId, runtime.Generation, asset.TopologyKey, iface.NetworkKey)
+                        : GZCTF.TeamLab.Contracts.Execution.TeamLabExecutionIdentityV2.WorkloadHostInterface(runtime.PublicId, runtime.Generation, asset.TopologyKey, iface.NetworkKey);
                 if (runtime.ObservationPoints.Any(item => item.Generation == runtime.Generation &&
                                                           item.Kind == TeamLabObservationPointKind.WorkloadEndpoint &&
                                                           item.AssetId == asset.Id &&

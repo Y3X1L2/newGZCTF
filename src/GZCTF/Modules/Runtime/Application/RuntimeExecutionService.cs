@@ -261,7 +261,7 @@ public sealed class RuntimeExecutionService(
             ticket.CompletedAt = DateTimeOffset.UtcNow;
             ticket.ClaimOwner = null;
             ticket.ClaimExpiresAt = null;
-            ticket.ProtectedPayload = null;
+            ticket.ReleaseTransientPayload();
             ticket.ErrorCategory = null;
             ticket.ErrorCode = null;
             ticket.Retryable = false;
@@ -285,7 +285,7 @@ public sealed class RuntimeExecutionService(
         }
         else
         {
-            var error = RuntimeOperationalEvents.Failure(ticket, "runtime.execute");
+            var error = result.Error ?? RuntimeOperationalEvents.Failure(ticket, "runtime.execute");
             var failureMessage = ResolveFailureMessage(ticket, result.ErrorMessage);
             await MarkFailedAsync(context, capacity, events, ticket, error, token, failureMessage);
             activity?.SetStatus(ActivityStatusCode.Error, error.Code);
@@ -391,7 +391,7 @@ public sealed class RuntimeExecutionService(
         ticket.CompletedAt = DateTimeOffset.UtcNow;
         ticket.ClaimOwner = null;
         ticket.ClaimExpiresAt = null;
-        ticket.ProtectedPayload = null;
+        ticket.ReleaseTransientPayload();
         events.Append(RuntimeOperationalEvents.Ticket(
             ticket,
             OperationalEventCodes.Runtime.ExecutionFailed,

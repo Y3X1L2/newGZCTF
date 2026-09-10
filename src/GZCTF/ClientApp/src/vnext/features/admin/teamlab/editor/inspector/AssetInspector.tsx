@@ -35,7 +35,7 @@ export function AssetInspector({
       <InspectorSection icon={presentation.icon} title={presentation.label}>
         <TextInput disabled={readOnly} label="资产名称" onChange={(name) => update({ name })} value={node.name} />
         <SelectInput
-          disabled={readOnly}
+          disabled={readOnly || !!node.devicePackageId}
           label="镜像模板"
           onChange={(value) => update({ imageTemplateId: Number(value) })}
           value={String(node.imageTemplateId)}
@@ -44,10 +44,11 @@ export function AssetInspector({
           {!currentAvailable && node.imageTemplateId > 0 ? <option value={node.imageTemplateId}>当前模板 #{node.imageTemplateId}（不可用）</option> : null}
           {compatibleImages.map((option) => <option key={option.id} value={option.id}>{option.name} (#{option.id}){option.remoteAccessProtocol === 'ssh' ? ' - 已配置 SSH 运维' : option.remoteAccessProtocol === 'rdp' ? ' - 已配置 RDP 运维' : ' - 未配置运维接入'}</option>)}
         </SelectInput>
+        {node.devicePackageId ? <p>镜像由设备包确定；解除设备包绑定后可单独更换镜像。</p> : null}
       </InspectorSection>
 
       <ResourceRequirementsEditor onChange={(resources) => update({ resources })} readOnly={readOnly} resources={node.resources} />
-      <CapabilityBindingEditor node={node} onAssetChange={update} readOnly={readOnly} />
+      <CapabilityBindingEditor node={node} imageOptions={compatibleImages} onAssetChange={update} readOnly={readOnly} />
       <NetworkInterfacesEditor document={document} nodeKey={node.key} onDocumentChange={onDocumentChange} readOnly={readOnly} />
       <HealthCheckEditor healthCheck={node.healthCheck} onChange={(healthCheck) => update({ healthCheck })} readOnly={readOnly} />
 

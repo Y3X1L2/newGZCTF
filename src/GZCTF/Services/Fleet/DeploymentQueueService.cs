@@ -201,6 +201,9 @@ public class DeploymentQueueService
             .ToListAsync(token);
         if (subjectTickets.Count > 0)
         {
+            if (request.Operation is RuntimeOperationKind.Pause or RuntimeOperationKind.Resume or RuntimeOperationKind.AssetControl)
+                throw new RuntimeApiContractException("runtime_operation_in_progress",
+                    "此运行时已有未完成任务，请等待完成后再暂停或恢复。", 409);
             if (request.Operation != RuntimeOperationKind.Create &&
                 subjectTickets.Any(ticket => ticket.Status == DeploymentQueueTicketStatus.Running))
             {
@@ -386,7 +389,7 @@ public class DeploymentQueueService
         ticket.CompletedAt = DateTimeOffset.UtcNow;
         ticket.ClaimOwner = null;
         ticket.ClaimExpiresAt = null;
-        ticket.ProtectedPayload = null;
+        ticket.ReleaseTransientPayload();
 
         using var correlationScope = _correlation.Begin(ticket.Id);
         _events.Append(RuntimeOperationalEvents.Ticket(

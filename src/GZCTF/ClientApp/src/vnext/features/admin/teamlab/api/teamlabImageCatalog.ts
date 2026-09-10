@@ -14,6 +14,7 @@ export async function resolveTeamLabVmDeviceTypes(templateIds: readonly number[]
 export interface TeamLabImageOption {
   id: number
   name: string
+  digest?: string | null
   deviceType: 'docker' | VmDeviceType
   remoteAccessProtocol?: 'ssh' | 'rdp' | null
 }
@@ -34,6 +35,7 @@ export async function listTeamLabImageOptions(): Promise<readonly TeamLabImageOp
     .map<TeamLabImageOption>((template) => ({
       id: template.id,
       name: template.name,
+      digest: template.imageHash,
       deviceType:
         template.imageType === ImageType.Docker
           ? 'docker'

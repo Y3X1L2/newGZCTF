@@ -9,7 +9,8 @@ export function useTeamLabRuntime(runtimeId: string) {
     {
       keepPreviousData: true,
       revalidateOnFocus: true,
-      refreshInterval: (latest) => runtimeRefreshInterval(latest?.status),
+      refreshInterval: (latest) => latest?.queueStatus && ['pending', 'scheduling', 'scheduled', 'running'].includes(latest.queueStatus)
+        ? 2500 : runtimeRefreshInterval(latest?.status),
     }
   )
 

@@ -1,4 +1,8 @@
 using System.Text.Json;
+using System.Net;
+using System.Net.Sockets;
+using System.Security.Cryptography;
+using System.Text;
 using GZCTF.Agent.Models;
 using GZCTF.TeamLab.Contracts.Execution;
 using Microsoft.Extensions.Options;
@@ -72,9 +76,9 @@ public sealed class TeamLabLinkPolicyService(
     {
         if (string.IsNullOrWhiteSpace(request.NetworkCidr) || string.IsNullOrWhiteSpace(request.GatewayIp))
             return Fail("validate", "NAT requires the runtime network cidr and gateway ip.", "", "");
-        var (nb, lr, chassis) = await ResolveOvnNatContextAsync(request, token);
-        if (lr is null)
-            return Fail("link_not_found", "No OVN logical router is available for NAT on this WorkerNode.", "", "");
+        var (nb, lr, chassis) = await ResolveOvnNatContextAsync(request.RuntimePublicId, request.Generation, request.NetworkCidr, request.GatewayIp, request.NetworkDigest, token);
+        if (lr is null || chassis is null)
+            return Fail("link_not_found", "Cannot uniquely identify the runtime OVN router and local chassis; no NAT rule was changed.", "", "");
         var commands = BuildNatCommands(
             nb,
             lr,
@@ -82,7 +86,7 @@ public sealed class TeamLabLinkPolicyService(
             request.NetworkCidr,
             request.GatewayIp,
             request.ParametersJson,
-            out var error);
+            out var error, request);
         if (error is not null)
             return Fail("validate", error, lr, "");
 
@@ -101,26 +105,40 @@ public sealed class TeamLabLinkPolicyService(
     /// Resolves the OVN NB db address, the (shared) logical router name and the
     /// local chassis system-id for centralized NAT.
     /// </summary>
-    // Force rebuild 2026-08-19 16:30 - OVN NAT LR discovery via runner
     private async Task<(string Nb, string? Router, string? Chassis)> ResolveOvnNatContextAsync(
-        TeamLabLinkPolicyApplyRequest request,
+        Guid runtimeId, int generation, string? networkCidr, string? gatewayIp, string? networkDigest,
         CancellationToken token)
     {
-        var nb = string.IsNullOrWhiteSpace(_config.OvnNbRemote)
-            ? "tcp:10.250.0.1:6641"
-            : _config.OvnNbRemote;
-        // Try runner-based discovery first; fall back to known shared router for test env
+        var nb = _config.OvnNorthboundEndpoint;
+        if (string.IsNullOrWhiteSpace(nb) || !IPNetwork.TryParse(networkCidr, out var network) || !Ipv4(gatewayIp) ||
+            networkDigest is null || networkDigest.Length != 71 || !networkDigest.StartsWith("sha256:", StringComparison.Ordinal) || networkDigest[7..].Any(character => !Uri.IsHexDigit(character)))
+            return (string.Empty, null, null);
+        var digestCondition = TeamLabNetworkPrimitives.ShellQuote($"external_ids:gzctf-network-digest={networkDigest}");
+        var addressCondition = TeamLabNetworkPrimitives.ShellQuote($"networks{{>=}}{gatewayIp}/{network.PrefixLength}");
+        var (portOk, portOutput) = await runner.RunAsync(
+            $"ovn-nbctl --timeout=15 --db={TeamLabNetworkPrimitives.ShellQuote(nb)} --data=bare --no-heading --columns=_uuid find Logical_Router_Port external_ids:gzctf-runtime={runtimeId:D} external_ids:gzctf-generation={generation} {addressCondition} {digestCondition}", token);
+        var portId = portOk ? UniqueIdentifier(portOutput) : null;
+        if (portId is null) return (nb, null, null);
         var (lrOk, lrOut) = await runner.RunAsync(
-            $"ovn-nbctl --db={TeamLabNetworkPrimitives.ShellQuote(nb)} list Logical_Router 2>/dev/null | awk '/gzctf_router/{{print $3}}' | tr -d '\"' | head -1", token);
-        var lr = lrOk ? lrOut.Trim().Trim('"') : null;
-        if (string.IsNullOrWhiteSpace(lr))
-            lr = "gzctf_router_f17dc657194c17ce91299a0044015035";
+            BuildRouterLookupCommand(nb, runtimeId, generation) + " " + TeamLabNetworkPrimitives.ShellQuote($"ports{{>=}}{portId}") + " " + digestCondition, token);
+        var lr = lrOk ? UniqueIdentifier(lrOut) : null;
+        if (lr is null) return (nb, null, null);
         var (chassisOk, chassisOut) = await runner.RunAsync(
-            "ovs-vsctl get Open_vSwitch . external_ids:system-id 2>/dev/null | tr -d '\"'", token);
-        var chassis = chassisOk ? chassisOut.Trim() : null;
-        if (string.IsNullOrWhiteSpace(chassis))
-            chassis = "1a3f889b-ba41-47af-af21-4a1448e99690";
+            "ovs-vsctl --timeout=15 get Open_vSwitch . external_ids:system-id", token);
+        var chassis = chassisOk ? UniqueIdentifier(chassisOut) : null;
         return (nb, lr, chassis);
+    }
+
+    internal static string BuildRouterLookupCommand(string nb, Guid runtimeId, int generation) =>
+        $"ovn-nbctl --timeout=15 --db={TeamLabNetworkPrimitives.ShellQuote(nb)} --data=bare --no-heading --columns=name find Logical_Router external_ids:gzctf-runtime={runtimeId:D} external_ids:gzctf-generation={generation}";
+
+    internal static string? UniqueIdentifier(string output)
+    {
+        var values = output.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (values.Length != 1) return null;
+        var value = values[0].Trim('"');
+        return value.Length is > 0 and <= 128 && value.All(character => char.IsAsciiLetterOrDigit(character) || character is '-' or '_' or '.')
+            ? value : null;
     }
 
     public async Task<TeamLabLinkPolicyResponse> RecoverAsync(
@@ -137,17 +155,10 @@ public sealed class TeamLabLinkPolicyService(
         string[] commands;
         if (string.Equals(request.Kind, "nat", StringComparison.Ordinal))
         {
-            var nb = string.IsNullOrWhiteSpace(_config.OvnNbRemote)
-                ? "tcp:10.250.0.1:6641"
-                : _config.OvnNbRemote;
-            var (lrOk2, lrOut2) = await runner.RunAsync(
-                $"ovn-nbctl --db={TeamLabNetworkPrimitives.ShellQuote(nb)} list Logical_Router 2>/dev/null | awk '/gzctf_router/{{print $3}}' | tr -d '\"' | head -1", token);
-            var lr = lrOk2 ? lrOut2.Trim().Trim('"') : null;
-            if (string.IsNullOrWhiteSpace(lr))
-                lr = "gzctf_router_f17dc657194c17ce91299a0044015035";
-            if (string.IsNullOrWhiteSpace(lr))
+            var (nb, lr, _) = await ResolveOvnNatContextAsync(request.RuntimePublicId, request.Generation, request.NetworkCidr, request.GatewayIp, request.NetworkDigest, token);
+            if (lr is null)
                 return Fail("link_not_found", "No OVN logical router is available for NAT recovery.", "", "");
-            commands = BuildNatRecoverCommands(nb, lr, request.ParametersJson, request.GatewayIp, out var natError);
+            commands = BuildNatRecoverCommands(nb, lr, request.ParametersJson, request.GatewayIp, out var natError, request.NetworkCidr);
             if (natError is not null)
                 return Fail("validate", natError, lr, "");
         }
@@ -184,7 +195,8 @@ public sealed class TeamLabLinkPolicyService(
         string networkCidr,
         string gatewayIp,
         string parametersJson,
-        out string? error)
+        out string? error,
+        TeamLabLinkPolicyApplyRequest? owner = null)
     {
         error = null;
         var db = TeamLabNetworkPrimitives.ShellQuote(nb);
@@ -202,7 +214,7 @@ public sealed class TeamLabLinkPolicyService(
             return mode switch
             {
                 "snat" => BuildSnatCommands(db, lr, chassisCmd, networkCidr, root, out error),
-                "dnat" => BuildDnatCommands(db, lr, chassisCmd, gatewayIp, root, out error),
+                "dnat" => BuildDnatCommands(db, lr, chassisCmd, gatewayIp, root, out error, owner),
                 _ => throw new InvalidOperationException("invalid mode")
             };
         }
@@ -231,8 +243,13 @@ public sealed class TeamLabLinkPolicyService(
         if (error is not null) return [];
         var commands = new List<string>();
         if (chassisCmd is not null) commands.Add(chassisCmd);
-        commands.Add($"ovn-nbctl --db={db} lr-nat-del {lr} snat {address} 2>/dev/null || true");
-        commands.Add($"ovn-nbctl --db={db} lr-nat-add {lr} snat {address} {networkCidr}");
+        if (!Ipv4(address) || !IPNetwork.TryParse(networkCidr, out var network) || network.BaseAddress.AddressFamily != AddressFamily.InterNetwork)
+        {
+            error = "SNAT requires valid IPv4 addresses.";
+            return [];
+        }
+        commands.Add($"ovn-nbctl --timeout=15 --db={db} --if-exists lr-nat-del {lr} snat {TeamLabNetworkPrimitives.ShellQuote(networkCidr)}");
+        commands.Add($"ovn-nbctl --timeout=15 --db={db} lr-nat-add {lr} snat {TeamLabNetworkPrimitives.ShellQuote(address)} {TeamLabNetworkPrimitives.ShellQuote(networkCidr)}");
         return commands.ToArray();
     }
 
@@ -242,7 +259,8 @@ public sealed class TeamLabLinkPolicyService(
         string? chassisCmd,
         string gatewayIp,
         JsonElement root,
-        out string? error)
+        out string? error,
+        TeamLabLinkPolicyApplyRequest? owner)
     {
         error = null;
         var externalPort = Number(root, "externalPort", out error);
@@ -252,29 +270,36 @@ public sealed class TeamLabLinkPolicyService(
         var internalPort = OptionalNumber(root, "internalPort", externalPort, out error);
         if (error is not null) return [];
         var externalAddress = OptionalString(root, "externalAddress") ?? gatewayIp;
-        var port = Math.Clamp((int)externalPort, 1, 65535);
-        var iport = Math.Clamp((int)internalPort, 1, 65535);
+        var protocol = OptionalString(root, "protocol") ?? "tcp";
+        if (!Ipv4(externalAddress) || !Ipv4(internalAddress) || protocol is not ("tcp" or "udp") ||
+            externalPort is < 1 or > 65535 || externalPort != Math.Floor(externalPort) ||
+            internalPort is < 1 or > 65535 || internalPort != Math.Floor(internalPort))
+        {
+            error = "Port mappings require IPv4 addresses, TCP/UDP and integer ports between 1 and 65535.";
+            return [];
+        }
+        var port = (int)externalPort;
+        var iport = (int)internalPort;
+        var lb = TeamLabNetworkPrimitives.ShellQuote(PortMappingName(lr, externalAddress, port, protocol));
         var commands = new List<string>();
         if (chassisCmd is not null) commands.Add(chassisCmd);
-        commands.Add($"ovn-nbctl --db={db} lr-nat-del {lr} dnat_and_snat {externalAddress} 2>/dev/null || true");
-        if (port == iport)
-        {
-            commands.Add($"ovn-nbctl --db={db} lr-nat-add {lr} dnat_and_snat {externalAddress} {internalAddress}");
-        }
-        else
-        {
-            // Port mapping: EXTERNAL_PORT_RANGE / LOGICAL_PORT_RANGE positional args.
-            commands.Add($"ovn-nbctl --db={db} lr-nat-add {lr} dnat_and_snat {externalAddress} {internalAddress} \"\" \"\" {port} {iport}");
-        }
+        // OVN NAT rows translate addresses; VIP load balancers provide protocol/port translation.
+        var identity = owner is null ? string.Empty : $" -- set Load_Balancer {lb} external_ids:gzctf-runtime={owner.RuntimePublicId:D} external_ids:gzctf-generation={owner.Generation} {TeamLabNetworkPrimitives.ShellQuote($"external_ids:gzctf-network-digest={owner.NetworkDigest}")}";
+        commands.Add($"ovn-nbctl --timeout=15 --db={db} --may-exist lb-add {lb} {TeamLabNetworkPrimitives.ShellQuote($"{externalAddress}:{port}")} {TeamLabNetworkPrimitives.ShellQuote($"{internalAddress}:{iport}")} {protocol} -- --may-exist lr-lb-add {lr} {lb}{identity}");
         return commands.ToArray();
     }
+
+    private static bool Ipv4(string? value) => IPAddress.TryParse(value, out var ip) && ip.AddressFamily == AddressFamily.InterNetwork;
+    private static string PortMappingName(string router, string address, int port, string protocol) =>
+        "gzctf_map_" + Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes($"{router}|{address}|{port}|{protocol}")))[..24];
 
     internal static string[] BuildNatRecoverCommands(
         string nb,
         string router,
         string? parametersJson,
         string? gatewayIp,
-        out string? error)
+        out string? error,
+        string? networkCidr = null)
     {
         error = null;
         var db = TeamLabNetworkPrimitives.ShellQuote(nb);
@@ -287,17 +312,24 @@ public sealed class TeamLabLinkPolicyService(
             if (error is not null) return [];
             if (mode == "snat")
             {
-                var address = RequiredString(root, "translatedAddress", out error);
-                if (error is not null) return [];
-                return [$"ovn-nbctl --db={db} lr-nat-del {lr} snat {address} 2>/dev/null || true"];
+                if (!IPNetwork.TryParse(networkCidr, out _))
+                {
+                    error = "SNAT recovery requires the original network CIDR.";
+                    return [];
+                }
+                return [$"ovn-nbctl --timeout=15 --db={db} --if-exists lr-nat-del {lr} snat {TeamLabNetworkPrimitives.ShellQuote(networkCidr!)}"];
             }
             var externalAddress = OptionalString(root, "externalAddress") ?? gatewayIp;
-            if (string.IsNullOrWhiteSpace(externalAddress))
+            var port = Number(root, "externalPort", out error);
+            var protocol = OptionalString(root, "protocol") ?? "tcp";
+            if (mode != "dnat" || !Ipv4(externalAddress) || error is not null ||
+                port is < 1 or > 65535 || port != Math.Floor(port) || protocol is not ("tcp" or "udp"))
             {
                 error = "NAT recovery requires an external address.";
                 return [];
             }
-            return [$"ovn-nbctl --db={db} lr-nat-del {lr} dnat_and_snat {externalAddress} 2>/dev/null || true"];
+            var lb = TeamLabNetworkPrimitives.ShellQuote(PortMappingName(lr, externalAddress!, (int)port, protocol));
+            return [$"ovn-nbctl --timeout=15 --db={db} --if-exists lr-lb-del {lr} {lb} -- --if-exists lb-del {lb}"];
         }
         catch (JsonException)
         {

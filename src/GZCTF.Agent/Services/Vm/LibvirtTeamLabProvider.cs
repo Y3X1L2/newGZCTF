@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Net;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -77,10 +78,12 @@ public sealed class LibvirtTeamLabProvider(
             if (!await HasExpectedBaseImageAsync(baseImage, asset.ImageDigest, cancellationToken))
                 return LibvirtAssetResult.Failed("artifact", "VM base image does not match the execution-plan digest.");
             var overlay = await CreateOverlayAsync(plan, asset, baseImage, cancellationToken);
-            var domain = native.Define(BuildDomainXml(plan, asset, domainName, overlay));
+            var networkSeed = await CreateNetworkSeedAsync(plan, asset, cancellationToken);
+            var domain = native.Define(BuildDomainXml(plan, asset, domainName, overlay, networkSeed));
             if (domain == 0)
             {
                 DeleteOverlay(overlay);
+                DeleteNetworkSeed(plan, asset);
                 return LibvirtAssetResult.Failed("compute", "libvirt failed to define the VM domain.");
             }
             try
@@ -89,6 +92,7 @@ public sealed class LibvirtTeamLabProvider(
                 {
                     LibvirtNativeInterop.DomainUndefineFlags(domain, UndefineManagedSave | UndefineNvram);
                     DeleteOverlay(overlay);
+                    DeleteNetworkSeed(plan, asset);
                     return LibvirtAssetResult.Failed("compute", "libvirt failed to start the VM domain.");
                 }
                 return new LibvirtAssetResult(true, "running", domainName);
@@ -101,6 +105,38 @@ public sealed class LibvirtTeamLabProvider(
                 plan.RuntimeId, asset.AssetKey);
             return LibvirtAssetResult.Failed("compute", "VM lifecycle operation failed.");
         }
+    }
+
+    public Task<LibvirtAssetResult> ChangePowerAsync(
+        TeamLabExecutionPlanV2 plan, TeamLabAssetExecutionSpecV2 asset, string action,
+        string? expectedNativeIdentity, CancellationToken token)
+    {
+        token.ThrowIfCancellationRequested();
+        var native = GetConnection();
+        var domain = native.Lookup(DomainName(plan, asset));
+        try
+        {
+            if (domain == 0 || !MatchesStableUuid(domain, plan, asset) || !MatchesExecutionPlan(native.GetXml(domain), plan))
+                return Task.FromResult(LibvirtAssetResult.Failed("compute", "VM execution identity changed."));
+            var identity = GetInventory(plan).SingleOrDefault(item => item.AssetKey == asset.AssetKey)?.NativeIdentity;
+            if (expectedNativeIdentity is not null && identity != expectedNativeIdentity)
+                return Task.FromResult(LibvirtAssetResult.Failed("compute", "VM native identity changed."));
+            var state = GetState(domain);
+            var result = action switch
+            {
+                "inspect" => 0,
+                "stop" when state == "shutoff" => 0,
+                "stop" => LibvirtNativeInterop.DomainDestroy(domain),
+                "pause" when state == "paused" => 0,
+                "pause" when state == "running" => LibvirtNativeInterop.DomainSuspend(domain),
+                "resume" when state == "running" => 0,
+                "resume" when state == "paused" => LibvirtNativeInterop.DomainResume(domain),
+                _ => -1
+            };
+            return Task.FromResult(result < 0 ? LibvirtAssetResult.Failed("compute", "VM power operation failed.")
+                : new LibvirtAssetResult(true, GetState(domain), asset.ResourceId));
+        }
+        finally { if (domain != 0) LibvirtNativeInterop.DomainFree(domain); }
     }
 
     public Task<LibvirtAssetResult> PauseAsync(
@@ -176,8 +212,11 @@ public sealed class LibvirtTeamLabProvider(
                 var asset = plan.Assets.FirstOrDefault(item =>
                     item.Kind.Equals("vm", StringComparison.OrdinalIgnoreCase) &&
                     string.Equals(DomainName(plan, item), name, StringComparison.Ordinal));
+                var uuid = new StringBuilder(37);
+                if (LibvirtNativeInterop.DomainGetUuidString(domain, uuid) < 0 || !Guid.TryParse(uuid.ToString(), out _))
+                    throw new InvalidOperationException("libvirt failed to read the VM native identity.");
                 result.Add(new TeamLabExecutionInventoryFactV2(
-                    "vm", asset?.AssetKey ?? $"residual:{name}", name, GetState(domain), plan.Generation));
+                    "vm", asset?.AssetKey ?? $"residual:{name}", name, GetState(domain), plan.Generation, uuid.ToString()));
             }
             finally { LibvirtNativeInterop.DomainFree(domain); }
         }
@@ -208,6 +247,7 @@ public sealed class LibvirtTeamLabProvider(
             }
             var overlay = OverlayPath(plan, asset);
             DeleteOverlay(overlay);
+            DeleteNetworkSeed(plan, asset);
             cancellationToken.ThrowIfCancellationRequested();
             return Task.FromResult(new LibvirtAssetResult(true, "destroyed", domainName));
         }
@@ -350,6 +390,9 @@ public sealed class LibvirtTeamLabProvider(
     string OverlayPath(TeamLabExecutionPlanV2 plan, TeamLabAssetExecutionSpecV2 asset) => Path.Combine(
         RuntimeDirectory(plan), $"{asset.AssetKey}-{PlanDigestHex(plan.PlanDigest)}.qcow2");
 
+    string NetworkSeedDirectory(TeamLabExecutionPlanV2 plan, TeamLabAssetExecutionSpecV2 asset) => Path.Combine(
+        RuntimeDirectory(plan), $"{asset.AssetKey}-{PlanDigestHex(plan.PlanDigest)}-seed");
+
     static string PlanDigestHex(string digest) =>
         digest.StartsWith("sha256:", StringComparison.OrdinalIgnoreCase) ? digest[7..] : digest;
 
@@ -367,7 +410,7 @@ public sealed class LibvirtTeamLabProvider(
             StringComparison.Ordinal);
 
     string BuildDomainXml(TeamLabExecutionPlanV2 plan, TeamLabAssetExecutionSpecV2 asset,
-        string domainName, string overlay)
+        string domainName, string overlay, string? networkSeed)
     {
         var domain = new XElement("domain", new XAttribute("type", "kvm"),
             new XElement("name", domainName),
@@ -377,13 +420,142 @@ public sealed class LibvirtTeamLabProvider(
             new XElement("currentMemory", new XAttribute("unit", "MiB"), Math.Max(256, asset.MemoryMiB)),
             new XElement("vcpu", Math.Clamp(asset.Cpu, 1, 64)),
             new XElement("os", new XElement("type", new XAttribute("arch", "x86_64"), "hvm")),
+            asset.Device is { } device ? new XElement("sysinfo", new XAttribute("type", "fwcfg"),
+                new XElement("entry", new XAttribute("name", "opt/org.gzctf/device-parameters"), device.ParametersJson)) : null,
             new XElement("devices",
+                new XElement("graphics", new XAttribute("type", "vnc"), new XAttribute("autoport", "yes"),
+                    new XAttribute("listen", "127.0.0.1"),
+                    new XElement("listen", new XAttribute("type", "address"), new XAttribute("address", "127.0.0.1"))),
+                new XElement("video", new XElement("model", new XAttribute("type", "vga"))),
                 new XElement("disk", new XAttribute("type", "file"), new XAttribute("device", "disk"),
                     new XElement("driver", new XAttribute("name", "qemu"), new XAttribute("type", "qcow2")),
                     new XElement("source", new XAttribute("file", overlay)),
                     new XElement("target", new XAttribute("dev", "vda"), new XAttribute("bus", "virtio"))),
+                networkSeed is null ? null : new XElement("disk", new XAttribute("type", "file"),
+                    new XAttribute("device", "cdrom"),
+                    new XElement("driver", new XAttribute("name", "qemu"), new XAttribute("type", "raw")),
+                    new XElement("source", new XAttribute("file", networkSeed)),
+                    new XElement("target", new XAttribute("dev", "sda"), new XAttribute("bus", "sata")),
+                    new XElement("readonly")),
+                new XElement("channel", new XAttribute("type", "unix"),
+                    new XElement("target", new XAttribute("type", "virtio"),
+                        new XAttribute("name", "org.qemu.guest_agent.0"))),
                 asset.NetworkAttachments.Select(attachment => NetworkInterface(plan, asset, attachment))));
         return domain.ToString(SaveOptions.DisableFormatting);
+    }
+
+    async Task<string?> CreateNetworkSeedAsync(
+        TeamLabExecutionPlanV2 plan,
+        TeamLabAssetExecutionSpecV2 asset,
+        CancellationToken token)
+    {
+        var config = BuildNoCloudNetworkConfig(plan, asset);
+        if (config is null) return null;
+
+        var root = NetworkSeedDirectory(plan, asset);
+        if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+        Directory.CreateDirectory(root);
+        var metaData = Path.Combine(root, "meta-data");
+        var userData = Path.Combine(root, "user-data");
+        var networkConfig = Path.Combine(root, "network-config");
+        var iso = Path.Combine(root, "seed.iso");
+        await File.WriteAllTextAsync(metaData,
+            $"instance-id: {StableUuid(plan, asset)}\nlocal-hostname: {asset.AssetKey}\n", token);
+        await File.WriteAllTextAsync(userData, "#cloud-config\nmanage_etc_hosts: true\n", token);
+        await File.WriteAllTextAsync(networkConfig, config, token);
+
+        var tool = ResolveExecutable("cloud-localds", "genisoimage", "mkisofs", "xorriso")
+                   ?? throw new InvalidOperationException(
+                       "VM network seed requires cloud-localds, genisoimage, mkisofs, or xorriso.");
+        using var process = new Process
+        {
+            StartInfo = new ProcessStartInfo
+            {
+                FileName = tool,
+                UseShellExecute = false,
+                RedirectStandardError = true,
+                CreateNoWindow = true,
+                WorkingDirectory = root
+            }
+        };
+        var name = Path.GetFileName(tool);
+        var arguments = name == "cloud-localds"
+            ? new[] { $"--network-config={networkConfig}", iso, userData, metaData }
+            : name == "xorriso"
+                ? new[]
+                {
+                    "-as", "mkisofs", "-quiet", "-output", iso, "-volid", "CIDATA", "-joliet", "-rock",
+                    "user-data", "meta-data", "network-config"
+                }
+                : new[]
+                {
+                    "-quiet", "-output", iso, "-volid", "CIDATA", "-joliet", "-rock",
+                    "user-data", "meta-data", "network-config"
+                };
+        foreach (var argument in arguments)
+            process.StartInfo.ArgumentList.Add(argument);
+        process.Start();
+        var error = await process.StandardError.ReadToEndAsync(token);
+        await process.WaitForExitAsync(token);
+        if (process.ExitCode != 0 || !File.Exists(iso) || new FileInfo(iso).Length == 0)
+            throw new InvalidOperationException($"Failed to create VM network seed: {error.Trim()}");
+        return iso;
+    }
+
+    internal static string? ResolveExecutable(params string[] names)
+    {
+        var paths = (Environment.GetEnvironmentVariable("PATH") ?? string.Empty)
+            .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        foreach (var name in names)
+            foreach (var path in paths)
+            {
+                var candidate = Path.Combine(path, name);
+                if (File.Exists(candidate)) return candidate;
+            }
+        return null;
+    }
+
+    internal static string? BuildNoCloudNetworkConfig(
+        TeamLabExecutionPlanV2 plan,
+        TeamLabAssetExecutionSpecV2 asset)
+    {
+        var configured = asset.NetworkAttachments
+            .Select((attachment, index) =>
+            {
+                var network = plan.Networks.SingleOrDefault(item => item.Key == attachment.NetworkKey);
+                var port = network?.Ports.SingleOrDefault(item => item.Key == attachment.PortKey);
+                var prefix = network?.Cidr.Split('/').LastOrDefault();
+                return new { Attachment = attachment, Index = index, Network = network, Port = port, Prefix = prefix };
+            })
+            .Where(item => item.Network is not null && item.Port is not null &&
+                           IPAddress.TryParse(item.Attachment.IpAddress, out _) &&
+                           int.TryParse(item.Prefix, out var prefix) && prefix is >= 1 and <= 32)
+            .ToArray();
+        if (configured.Length == 0) return null;
+
+        var builder = new StringBuilder("version: 2\nethernets:\n");
+        foreach (var item in configured)
+        {
+            builder.AppendLine($"  nic{item.Index}:");
+            builder.AppendLine("    match:");
+            builder.AppendLine($"      macaddress: \"{item.Port!.MacAddress.ToLowerInvariant()}\"");
+            builder.AppendLine($"    set-name: \"{item.Attachment.InterfaceName}\"");
+            builder.AppendLine("    addresses:");
+            builder.AppendLine($"      - {item.Attachment.IpAddress}/{item.Prefix}");
+            if (item.Attachment.Primary && IPAddress.TryParse(item.Attachment.GatewayIp, out _))
+            {
+                builder.AppendLine("    routes:");
+                builder.AppendLine("      - to: default");
+                builder.AppendLine($"        via: {item.Attachment.GatewayIp}");
+            }
+        }
+        return builder.ToString();
+    }
+
+    void DeleteNetworkSeed(TeamLabExecutionPlanV2 plan, TeamLabAssetExecutionSpecV2 asset)
+    {
+        var path = NetworkSeedDirectory(plan, asset);
+        if (Directory.Exists(path)) Directory.Delete(path, recursive: true);
     }
 
     XElement NetworkInterface(TeamLabExecutionPlanV2 plan, TeamLabAssetExecutionSpecV2 asset,

@@ -1,0 +1,15 @@
+#!/bin/busybox sh
+/bin/busybox --install -s /bin
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+mount -t devtmpfs devtmpfs /dev
+insmod /e1000.ko
+if [ -f /load-modules ]; then sh /load-modules; fi
+ip link set lo up
+ip link set eth0 up
+ip addr add 10.83.0.3/24 dev eth0
+mkdir -p /www
+echo hybrid-vm > /www/index.html
+httpd -p 8080 -h /www
+echo HYBRID_GUEST_READY
+while true; do sleep 3600; done

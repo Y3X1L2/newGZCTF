@@ -67,7 +67,7 @@ public sealed class TeamLabReleaseService(
         await TeamLabTopologyApplicationService.ValidateImageTemplatesAsync(context, definition, cancellationToken);
         await TeamLabTopologyApplicationService.ValidateCapabilityResourcesAsync(context, definition, cancellationToken);
         var imageDigests = await LoadImageDigestsAsync(definition, cancellationToken);
-        var devicePackageDigests = await LoadDevicePackageDigestsAsync(definition, cancellationToken);
+        var devicePackageDigests = await LoadDevicePackageDigestsAsync(definition, imageDigests, cancellationToken);
         var canonicalJson = TeamLabReleaseCodec.Encode(topology.SchemaVersion, definition, imageDigests, devicePackageDigests);
 
         var contentHash = TeamLabReleaseCodec.ComputeContentHash(topology.SchemaVersion, canonicalJson);
@@ -114,6 +114,7 @@ public sealed class TeamLabReleaseService(
     /// </summary>
     private async Task<IReadOnlyDictionary<string, string?>> LoadDevicePackageDigestsAsync(
         TeamLabTopologyDefinitionModel definition,
+        IReadOnlyDictionary<string, string> imageDigests,
         CancellationToken cancellationToken)
     {
         var packageIds = definition.Assets
@@ -121,13 +122,21 @@ public sealed class TeamLabReleaseService(
             .Select(item => item.DevicePackageId!.Value)
             .Distinct()
             .ToArray();
-        var digests = await context.TeamLabDevicePackages.AsNoTracking()
+        var packages = await context.TeamLabDevicePackages.AsNoTracking()
             .Where(item => packageIds.Contains(item.Id))
-            .ToDictionaryAsync(item => item.Id, item => item.Digest, cancellationToken);
+            .ToDictionaryAsync(item => item.Id, cancellationToken);
+        foreach (var asset in definition.Assets.Where(item => item.DevicePackageId.HasValue))
+        {
+            if (!packages.TryGetValue(asset.DevicePackageId!.Value, out var package))
+                throw new TeamLabApiContractException("device_package_unavailable", "引用的设备包不可用。", 422);
+            TeamLabDeviceExecutionCompiler.RequireResources(package, asset.Resources);
+            await TeamLabDeviceExecutionCompiler.CompileAsync(package, asset.Kind, imageDigests[asset.Key],
+                asset.DeviceParameters?.GetRawText(), cancellationToken);
+        }
         return definition.Assets.ToDictionary(
             asset => asset.Key,
             asset => asset.DevicePackageId is { } id && id > 0
-                ? digests.GetValueOrDefault(id)
+                ? packages.GetValueOrDefault(id)?.Digest
                   ?? throw new TeamLabApiContractException(
                       "device_package_unavailable", $"资产 '{asset.Key}' 引用的设备包不可用", 422)
                 : null,

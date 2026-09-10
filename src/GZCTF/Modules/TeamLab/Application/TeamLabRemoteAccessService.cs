@@ -22,11 +22,42 @@ public sealed class TeamLabRemoteAccessService(
     GuacamoleRemoteSessionService guacamole,
     TeamLabEventRecorder events,
     IMemoryCache cache,
-    ILogger<TeamLabRemoteAccessService> logger) : ITeamLabRemoteAccessService
+    ILogger<TeamLabRemoteAccessService> logger,
+    TeamLabRuntimeOperationPayloadProtector? operationPayloads = null) : ITeamLabRemoteAccessService
 {
     private const int SessionMinutes = 30;
     private const int MaxActiveSessionsPerOperator = 5;
     private const int MaxActiveSessionsPerNode = 100;
+
+    public async Task<TeamLabRemoteSessionPage> ListAsync(Guid actorId, bool administrator, Guid? runtimeId,
+        Guid? workerNodeId, Guid? requestedByUserId, TeamLabRemoteSessionStatus? status,
+        long? after, int limit, CancellationToken cancellationToken)
+    {
+        if (limit is < 1 or > 100 || after is < 0 || status.HasValue && !Enum.IsDefined(status.Value))
+            throw new TeamLabApiContractException("remote_session_filter_invalid", "会话查询条件无效", 400);
+        var query = context.TeamLabRemoteSessions.AsNoTracking().Include(item => item.Runtime)
+            .Include(item => item.RuntimeAsset).AsQueryable();
+        if (runtimeId.HasValue)
+        {
+            await authorization.RequireAsync(runtimeId.Value, actorId, administrator,
+                TeamLabOperatorPermission.OperateAssets, cancellationToken);
+            query = query.Where(item => item.Runtime.PublicId == runtimeId);
+        }
+        else if (!administrator)
+            query = query.Where(item => item.RequestedByUserId == actorId);
+        if (workerNodeId.HasValue)
+            query = query.Where(item => item.WorkerNodeId == workerNodeId);
+        if (requestedByUserId.HasValue)
+            query = query.Where(item => item.RequestedByUserId == requestedByUserId);
+        if (status.HasValue)
+            query = query.Where(item => item.Status == status);
+        if (after.HasValue)
+            query = query.Where(item => item.Id < after);
+        var rows = await query.OrderByDescending(item => item.Id).Take(limit + 1).ToArrayAsync(cancellationToken);
+        return new TeamLabRemoteSessionPage(rows.Take(limit).Select(item => new TeamLabRemoteSessionListItem(
+            ToModel(item, item.RuntimeAsset.Name, item.Runtime.PublicId), item.WorkerNodeId, item.RequestedByUserId)).ToArray(),
+            rows.Length > limit ? rows[limit - 1].Id : null);
+    }
 
     public async Task<TeamLabRemoteAccessAvailabilityModel> GetAvailabilityAsync(
         Guid runtimeId, int assetId, Guid actorId, bool administrator, CancellationToken cancellationToken)
@@ -66,24 +97,77 @@ public sealed class TeamLabRemoteAccessService(
             asset.SourceTemplateId is { } templateId ? configurations.GetValueOrDefault(templateId) : null)).ToArray();
     }
 
-    public async Task<TeamLabRemoteSessionModel> CreateAsync(
-        Guid runtimeId, int assetId, Guid actorId, bool administrator, string reason, CancellationToken cancellationToken)
+    public Task<TeamLabRemoteSessionModel> CreateAsync(
+        Guid runtimeId, int assetId, Guid actorId, bool administrator, string reason, CancellationToken cancellationToken) =>
+        CreateCoreAsync(runtimeId, assetId, actorId, administrator, reason, null, cancellationToken);
+
+    public Task<TeamLabRemoteSessionModel> CreateConsoleAsync(
+        Guid runtimeId, int assetId, Guid actorId, bool administrator, string reason, CancellationToken cancellationToken) =>
+        CreateCoreAsync(runtimeId, assetId, actorId, administrator, reason, null, cancellationToken, vncConsole: true);
+
+    public Task<TeamLabRemoteSessionModel> CreateForOperationAsync(
+        Guid runtimeId, int assetId, Guid actorId, string reason, Guid operationId, CancellationToken cancellationToken, bool vncConsole = false) =>
+        CreateCoreAsync(runtimeId, assetId, actorId, false, reason, operationId, cancellationToken, vncConsole);
+
+    private async Task<TeamLabRemoteSessionModel> CreateCoreAsync(
+        Guid runtimeId, int assetId, Guid actorId, bool administrator, string reason, Guid? operationId,
+        CancellationToken cancellationToken, bool vncConsole = false)
     {
         if (string.IsNullOrWhiteSpace(reason) || reason.Trim().Length is < 4 or > 500)
             throw new TeamLabApiContractException("remote_access_reason_invalid", "访问原因需为 4-500 个字符", 422);
         await authorization.RequireAsync(runtimeId, actorId, administrator,
             TeamLabOperatorPermission.OperateAssets, cancellationToken);
+        if (operationId is { } stableId)
+        {
+            var existing = await context.TeamLabRemoteSessions.Include(item => item.Runtime).Include(item => item.RuntimeAsset)
+                .SingleOrDefaultAsync(item => item.PublicId == stableId, cancellationToken);
+            if (existing is not null)
+            {
+                if (existing.Runtime.PublicId != runtimeId || existing.RuntimeAssetId != assetId ||
+                    existing.RequestedByUserId != actorId || existing.Reason != reason.Trim() ||
+                    (existing.Protocol == TeamLabRemoteProtocol.Vnc) != vncConsole)
+                    throw new TeamLabApiContractException("idempotency_conflict", "会话创建操作与已有资源不一致。", 409);
+                if (existing.Status is TeamLabRemoteSessionStatus.Ready or TeamLabRemoteSessionStatus.Connected &&
+                    existing.ExpiresAt > DateTimeOffset.UtcNow && existing.Generation == existing.Runtime.Generation &&
+                    CanOpenSession(existing.Protocol, existing.Runtime.Status))
+                    return ToModel(existing, existing.RuntimeAsset.Name, runtimeId);
+                // A crash during external resource creation has an uncertain outcome.
+                // Reclaim the stable identity instead of creating a second session.
+                if (existing.Status is not (TeamLabRemoteSessionStatus.Ended or TeamLabRemoteSessionStatus.Failed))
+                {
+                    existing.Status = TeamLabRemoteSessionStatus.Ending;
+                    existing.EndReason = "creation_interrupted";
+                    await context.SaveChangesAsync(cancellationToken);
+                    await CompleteEndingAsync(existing, "creation_interrupted", actorId, cancellationToken);
+                }
+                throw new TeamLabApiContractException("remote_session_creation_interrupted",
+                    "会话创建已中断或会话已到期，请等待清理完成后使用新的幂等键创建。", 409);
+            }
+        }
         var asset = await FindAssetAsync(runtimeId, assetId, cancellationToken);
-        var availability = await AvailabilityAsync(asset, cancellationToken);
+        var availability = vncConsole
+            ? new TeamLabRemoteAccessAvailabilityModel(asset.Id, asset.Name, TeamLabRemoteProtocol.Vnc,
+                asset.Kind == TeamLabResourceKind.Vm && CanOpenSession(TeamLabRemoteProtocol.Vnc, asset.Runtime.Status), "当前资产不可使用 VNC 控制台。")
+            : await AvailabilityAsync(asset, cancellationToken);
         if (!availability.Available || availability.Protocol is null)
             throw new TeamLabApiContractException("remote_access_unavailable", availability.UnavailableReason ?? "远程访问当前不可用", 409);
         if (asset.WorkerNodeId is null || string.IsNullOrWhiteSpace(asset.RuntimeResourceId) ||
-            (asset.Kind == TeamLabResourceKind.Vm && (string.IsNullOrWhiteSpace(asset.NativeIdentity) || string.IsNullOrWhiteSpace(asset.IpAddress))))
+            (asset.Kind == TeamLabResourceKind.Vm && (string.IsNullOrWhiteSpace(asset.NativeIdentity) || !vncConsole && string.IsNullOrWhiteSpace(asset.IpAddress))))
             throw new TeamLabApiContractException("remote_access_asset_unresolved", "运行时资源缺少稳定的节点、资源标识或地址", 409);
+
+        if (availability.Protocol != TeamLabRemoteProtocol.ContainerTerminal)
+        {
+            try { await guacamole.EnsureAvailableAsync(cancellationToken); }
+            catch (GuacamoleUnavailableException)
+            {
+                throw new TeamLabApiContractException("remote_access.gateway_unavailable", "远程访问网关未配置或暂时不可用，请联系管理员检查 Guacamole。", 503);
+            }
+        }
 
         var runtime = await context.TeamLabRuntimes.SingleAsync(item => item.PublicId == runtimeId, cancellationToken);
         var session = new TeamLabRemoteSession
         {
+            PublicId = operationId ?? Guid.CreateVersion7(),
             RuntimeId = runtime.Id,
             Generation = runtime.Generation,
             RuntimeAssetId = asset.Id,
@@ -107,16 +191,28 @@ public sealed class TeamLabRemoteAccessService(
                 await context.SaveChangesAsync(cancellationToken);
                 return ToModel(session, asset.Name, runtimeId);
             }
-            var configuration = await context.ImageTemplateRemoteAccesses.AsNoTracking()
+            var configuration = vncConsole ? null : (await context.ImageTemplateRemoteAccesses.AsNoTracking()
                 .SingleOrDefaultAsync(item => item.ImageTemplateId == asset.SourceTemplateId, cancellationToken)
-                ?? throw new TeamLabApiContractException("remote_access_configuration_missing", "该镜像未配置远程账号", 409);
+                ?? throw new TeamLabApiContractException("remote_access_configuration_missing", "该镜像未配置远程账号", 409));
             var relay = await relays.CreateAsync(session.WorkerNodeId, new TeamLabRemoteRelayRequest(
                 session.PublicId, runtime.Id, runtime.Generation, asset.RuntimeResourceId!, asset.NativeIdentity!,
-                asset.IpAddress!, configuration.Port, session.ExpiresAt), cancellationToken);
+                asset.IpAddress ?? "127.0.0.1", configuration?.Port ?? 0, session.ExpiresAt, vncConsole), cancellationToken);
             session.RelayId = relay.Port.ToString(System.Globalization.CultureInfo.InvariantCulture);
-            if (session.Protocol is TeamLabRemoteProtocol.Rdp or TeamLabRemoteProtocol.Ssh)
+            await context.SaveChangesAsync(CancellationToken.None);
+            if (session.Protocol == TeamLabRemoteProtocol.Vnc)
             {
-                if (string.IsNullOrWhiteSpace(configuration.Username) || string.IsNullOrWhiteSpace(configuration.ProtectedSecret))
+                var node = await context.WorkerNodes.AsNoTracking().SingleAsync(item => item.Id == session.WorkerNodeId, cancellationToken);
+                session.GuacamoleCreationStarted = true;
+                await context.SaveChangesAsync(cancellationToken);
+                var console = await guacamole.CreateVncAsync(session.PublicId, node.HostAddress, relay.Port, cancellationToken);
+                session.GuacamoleConnectionId = console.ConnectionId;
+                session.GuacamoleUserId = console.UserId;
+                await context.SaveChangesAsync(CancellationToken.None);
+                cache.Set(ConnectUrlKey(session.PublicId), console.ConnectUrl, TimeSpan.FromMinutes(5));
+            }
+            else if (session.Protocol is TeamLabRemoteProtocol.Rdp or TeamLabRemoteProtocol.Ssh)
+            {
+                if (configuration is null || string.IsNullOrWhiteSpace(configuration.Username) || string.IsNullOrWhiteSpace(configuration.ProtectedSecret))
                     throw new TeamLabApiContractException("remote_access_credential_unavailable", "该镜像尚未配置完整的静态运维账号。", 409);
                 var node = await context.WorkerNodes.AsNoTracking().SingleAsync(item => item.Id == session.WorkerNodeId, cancellationToken);
                 var username = configuration.Username;
@@ -130,11 +226,14 @@ public sealed class TeamLabRemoteAccessService(
                     throw new TeamLabApiContractException("remote_access_credential_invalid",
                         "该镜像的运维凭据无法解密，请在镜像模板中重新设置。", 409);
                 }
+                session.GuacamoleCreationStarted = true;
+                await context.SaveChangesAsync(cancellationToken);
                 var guacamoleSession = session.Protocol == TeamLabRemoteProtocol.Rdp
                     ? await guacamole.CreateRdpAsync(session.PublicId, node.HostAddress, relay.Port, username, secret, cancellationToken)
                     : await guacamole.CreateSshAsync(session.PublicId, node.HostAddress, relay.Port, username, secret, cancellationToken);
                 session.GuacamoleConnectionId = guacamoleSession.ConnectionId;
                 session.GuacamoleUserId = guacamoleSession.UserId;
+                await context.SaveChangesAsync(CancellationToken.None);
                 cache.Set(ConnectUrlKey(session.PublicId), guacamoleSession.ConnectUrl, TimeSpan.FromMinutes(5));
             }
             await ActivateSessionAsync(session, runtime, cancellationToken);
@@ -147,11 +246,10 @@ public sealed class TeamLabRemoteAccessService(
         }
         catch
         {
-            await MarkFailedCreationAsync(session, CancellationToken.None);
-            try { await guacamole.DeleteAsync(session.GuacamoleConnectionId, session.GuacamoleUserId, CancellationToken.None); }
-            catch { }
-            try { await relays.DeleteAsync(session.WorkerNodeId, session.PublicId, CancellationToken.None); }
-            catch { }
+            session.Status = TeamLabRemoteSessionStatus.Ending;
+            session.EndReason = "creation_failed";
+            await context.SaveChangesAsync(CancellationToken.None);
+            await CompleteEndingAsync(session, "creation_failed", actorId, CancellationToken.None);
             throw;
         }
     }
@@ -218,7 +316,8 @@ public sealed class TeamLabRemoteAccessService(
             ?? throw new TeamLabApiContractException("remote_session_not_found", "未找到远程访问会话", 404);
         var permission = session.RequestedByUserId == actorId ? TeamLabOperatorPermission.ViewAssets : TeamLabOperatorPermission.OperateAssets;
         await authorization.RequireAsync(session.Runtime.PublicId, actorId, administrator, permission, cancellationToken);
-        if (session.Status is TeamLabRemoteSessionStatus.Ended or TeamLabRemoteSessionStatus.Failed) return;
+        if (session.Status is TeamLabRemoteSessionStatus.Ended or TeamLabRemoteSessionStatus.Failed)
+            return;
         session.Status = TeamLabRemoteSessionStatus.Ending;
         await context.SaveChangesAsync(cancellationToken);
         if (!await CompleteEndingAsync(session, reason, actorId, cancellationToken))
@@ -228,45 +327,76 @@ public sealed class TeamLabRemoteAccessService(
     public async Task ExpireAsync(CancellationToken cancellationToken)
     {
         var now = DateTimeOffset.UtcNow;
-        var sessions = await context.TeamLabRemoteSessions
-            .Where(item => item.Status == TeamLabRemoteSessionStatus.Ending ||
-                           item.ExpiresAt <= now &&
-                           (item.Status == TeamLabRemoteSessionStatus.Creating ||
-                            item.Status == TeamLabRemoteSessionStatus.Ready ||
-                            item.Status == TeamLabRemoteSessionStatus.Connected))
-            .Take(100)
-            .ToArrayAsync(cancellationToken);
-        foreach (var session in sessions) session.Status = TeamLabRemoteSessionStatus.Ending;
-        if (sessions.Length > 0) await context.SaveChangesAsync(cancellationToken);
-        foreach (var session in sessions)
+        await ReconcileSessionsAsync(now, cancellationToken);
+        var upperBound = await context.TeamLabRemoteSessions.MaxAsync(item => (long?)item.Id, cancellationToken) ?? 0;
+        long after = 0;
+        while (after < upperBound)
         {
-            try { await CompleteEndingAsync(session, "expired", Guid.Empty, cancellationToken); }
-            catch { }
+            var sessions = await context.TeamLabRemoteSessions.Include(item => item.Runtime).Include(item => item.RuntimeAsset)
+                .Where(item => item.Id > after && item.Id <= upperBound)
+                .Where(item => item.Status == TeamLabRemoteSessionStatus.Ending ||
+                               item.ExpiresAt <= now &&
+                               (item.Status == TeamLabRemoteSessionStatus.Creating ||
+                                item.Status == TeamLabRemoteSessionStatus.Ready ||
+                                item.Status == TeamLabRemoteSessionStatus.Connected))
+                .OrderBy(item => item.Id).Take(100)
+                .ToArrayAsync(cancellationToken);
+            if (sessions.Length == 0)
+                break;
+            after = sessions[^1].Id;
+            foreach (var session in sessions)
+                session.Status = TeamLabRemoteSessionStatus.Ending;
+            if (sessions.Length > 0)
+                await context.SaveChangesAsync(cancellationToken);
+            foreach (var session in sessions)
+            {
+                try
+                { await CompleteEndingAsync(session, session.EndReason ?? "expired", Guid.Empty, cancellationToken); }
+                catch (Exception) when (!cancellationToken.IsCancellationRequested)
+                {
+                    logger.LogWarning("Remote session {SessionId} cleanup will be retried", session.PublicId);
+                }
+            }
+            if (sessions.Length > 0)
+                await context.SaveChangesAsync(cancellationToken);
         }
-        if (sessions.Length > 0) await context.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task EndRuntimeSessionsAsync(int runtimeId, int generation, string reason, CancellationToken cancellationToken)
+    public Task EndRuntimeSessionsAsync(int runtimeId, int generation, string reason, CancellationToken cancellationToken) =>
+        EndSessionsAsync(runtimeId, generation, null, reason, cancellationToken);
+
+    public Task EndAssetSessionsAsync(int runtimeId, int assetId, int generation, string reason, CancellationToken cancellationToken) =>
+        EndSessionsAsync(runtimeId, generation, assetId, reason, cancellationToken);
+
+    private async Task EndSessionsAsync(int runtimeId, int generation, int? assetId, string reason, CancellationToken cancellationToken)
     {
-        var sessions = await context.TeamLabRemoteSessions
-            .Where(item => item.RuntimeId == runtimeId && item.Generation == generation &&
+        var sessions = await context.TeamLabRemoteSessions.Include(item => item.Runtime).Include(item => item.RuntimeAsset)
+            .Where(item => item.RuntimeId == runtimeId && item.Generation == generation && (assetId == null || item.RuntimeAssetId == assetId) &&
                            (item.Status == TeamLabRemoteSessionStatus.Creating ||
                             item.Status == TeamLabRemoteSessionStatus.Ready ||
                             item.Status == TeamLabRemoteSessionStatus.Connected ||
                             item.Status == TeamLabRemoteSessionStatus.Ending))
             .ToArrayAsync(cancellationToken);
-        foreach (var session in sessions) session.Status = TeamLabRemoteSessionStatus.Ending;
-        if (sessions.Length > 0) await context.SaveChangesAsync(cancellationToken);
+        foreach (var session in sessions)
+            session.Status = TeamLabRemoteSessionStatus.Ending;
+        if (sessions.Length > 0)
+            await context.SaveChangesAsync(cancellationToken);
         foreach (var session in sessions)
         {
-            try { await CompleteEndingAsync(session, reason, Guid.Empty, cancellationToken); } catch { }
+            try
+            { await CompleteEndingAsync(session, reason, Guid.Empty, cancellationToken); }
+            catch (Exception) when (!cancellationToken.IsCancellationRequested)
+            {
+                logger.LogWarning("Remote session {SessionId} cleanup will be retried", session.PublicId);
+            }
         }
-        if (sessions.Length > 0) await context.SaveChangesAsync(cancellationToken);
+        if (sessions.Length > 0)
+            await context.SaveChangesAsync(cancellationToken);
     }
 
     private async Task<TeamLabRuntimeAsset> FindAssetAsync(Guid runtimeId, int assetId, CancellationToken cancellationToken) =>
         await context.TeamLabRuntimeAssets.Include(item => item.Runtime)
-            .SingleOrDefaultAsync(item => item.Id == assetId && item.Runtime.PublicId == runtimeId, cancellationToken)
+            .SingleOrDefaultAsync(item => item.Id == assetId && item.Runtime.PublicId == runtimeId && item.Generation == item.Runtime.Generation, cancellationToken)
         ?? throw new TeamLabApiContractException("runtime_asset_not_found", "未找到运行时资源", 404);
 
     private async Task ReserveSessionAsync(
@@ -275,12 +405,17 @@ public sealed class TeamLabRemoteAccessService(
         CancellationToken cancellationToken)
     {
         await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+        // Share queue admission's transaction lock so a session reservation either commits
+        // before the control ticket, or sees that ticket and refuses the affected asset.
+        await context.Database.ExecuteSqlInterpolatedAsync(
+            $"SELECT pg_advisory_xact_lock(hashtextextended({$"teamlab-runtime:{session.RuntimeId}"}, 0))", cancellationToken);
         await LockSessionCapacityAsync(TeamLabRuntimeCleanupService.RuntimeLockKey(session.RuntimeId), cancellationToken);
         await LockSessionCapacityAsync(OperatorLockKey(session.RequestedByUserId), cancellationToken);
         await LockSessionCapacityAsync(NodeLockKey(session.WorkerNodeId), cancellationToken);
 
         await context.Entry(asset.Runtime).ReloadAsync(cancellationToken);
-        if (asset.Runtime.Status != TeamLabRuntimeStatus.Running)
+        if (session.Generation != asset.Runtime.Generation || !CanOpenSession(session.Protocol, asset.Runtime.Status) ||
+            await HasAssetControlAsync(session.RuntimeId, asset.Id, cancellationToken))
             throw new TeamLabApiContractException("remote_access_runtime_unavailable", "运行时当前不允许建立运维会话", 409);
         await RequireSessionCapacityAsync(asset, session.Protocol, session.RequestedByUserId, cancellationToken);
         context.TeamLabRemoteSessions.Add(session);
@@ -290,7 +425,7 @@ public sealed class TeamLabRemoteAccessService(
             await transaction.CommitAsync(cancellationToken);
         }
         catch (DbUpdateException exception) when (exception.InnerException is PostgresException
-            { SqlState: PostgresErrorCodes.UniqueViolation })
+        { SqlState: PostgresErrorCodes.UniqueViolation })
         {
             throw new TeamLabApiContractException(
                 "remote_access_session_exists",
@@ -302,6 +437,9 @@ public sealed class TeamLabRemoteAccessService(
     private Task LockSessionCapacityAsync(long lockKey, CancellationToken cancellationToken) =>
         context.Database.ExecuteSqlRawAsync(
             "SELECT pg_advisory_xact_lock({0})", [lockKey], cancellationToken);
+
+    private Task<bool> HasAssetControlAsync(int runtimeId, int assetId, CancellationToken token) =>
+        TeamLabAssetControlGuard.IsActiveAsync(context, operationPayloads, runtimeId, assetId, token);
 
     private async Task RequireSessionCapacityAsync(TeamLabRuntimeAsset asset, TeamLabRemoteProtocol protocol,
         Guid actorId, CancellationToken cancellationToken)
@@ -330,6 +468,48 @@ public sealed class TeamLabRemoteAccessService(
         return BitConverter.ToInt64(bytes, 0) ^ BitConverter.ToInt64(bytes, 8) ^ 0x544C524E00000000L;
     }
 
+    private async Task ReconcileSessionsAsync(DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        var grace = now.AddSeconds(-30);
+        var upperBound = await context.TeamLabRemoteSessions.MaxAsync(item => (long?)item.Id, cancellationToken) ?? 0;
+        long after = 0;
+        while (after < upperBound)
+        {
+            var candidates = await context.TeamLabRemoteSessions.Include(item => item.Runtime).Include(item => item.RuntimeAsset)
+                .Where(item => item.Id > after && item.Id <= upperBound && item.ExpiresAt > now &&
+                    (item.Status == TeamLabRemoteSessionStatus.Connected && item.ConnectedAt < grace ||
+                     item.Status == TeamLabRemoteSessionStatus.Ready && item.Protocol != TeamLabRemoteProtocol.ContainerTerminal))
+                .OrderBy(item => item.Id).Take(500).ToArrayAsync(cancellationToken);
+            if (candidates.Length == 0)
+                break;
+            after = candidates[^1].Id;
+            foreach (var node in candidates.GroupBy(item => item.WorkerNodeId))
+            {
+                IReadOnlyList<Guid> inventory;
+                try
+                { inventory = await relays.InventoryAsync(node.Key, cancellationToken); }
+                catch (Exception) when (!cancellationToken.IsCancellationRequested)
+                {
+                    logger.LogWarning("Remote session inventory is unavailable on node {NodeId}", node.Key);
+                    continue;
+                }
+                var active = inventory.ToHashSet();
+                foreach (var session in node.Where(item => !active.Contains(item.PublicId)))
+                {
+                    session.Status = TeamLabRemoteSessionStatus.Ending;
+                    session.EndReason = "agent_session_lost";
+                    await context.SaveChangesAsync(cancellationToken);
+                    try
+                    { await CompleteEndingAsync(session, "agent_session_lost", Guid.Empty, cancellationToken); }
+                    catch (Exception) when (!cancellationToken.IsCancellationRequested)
+                    {
+                        logger.LogWarning("Remote session {SessionId} cleanup will be retried", session.PublicId);
+                    }
+                }
+            }
+        }
+    }
+
     private async Task ActivateSessionAsync(
         TeamLabRemoteSession session,
         TeamLabRuntime runtime,
@@ -339,7 +519,8 @@ public sealed class TeamLabRemoteAccessService(
         await LockSessionCapacityAsync(TeamLabRuntimeCleanupService.RuntimeLockKey(runtime.Id), cancellationToken);
         await context.Entry(session).ReloadAsync(cancellationToken);
         await context.Entry(runtime).ReloadAsync(cancellationToken);
-        if (session.Status != TeamLabRemoteSessionStatus.Creating || runtime.Status != TeamLabRuntimeStatus.Running)
+        if (session.Status != TeamLabRemoteSessionStatus.Creating || session.Generation != runtime.Generation || !CanOpenSession(session.Protocol, runtime.Status) ||
+            await HasAssetControlAsync(runtime.Id, session.RuntimeAssetId, cancellationToken))
             throw new TeamLabApiContractException(
                 "remote_access_runtime_unavailable",
                 "运行时正在停止或已停止，无法建立运维会话",
@@ -349,17 +530,6 @@ public sealed class TeamLabRemoteAccessService(
         await transaction.CommitAsync(cancellationToken);
     }
 
-    private async Task MarkFailedCreationAsync(TeamLabRemoteSession session, CancellationToken cancellationToken)
-    {
-        await context.Entry(session).ReloadAsync(cancellationToken);
-        if (session.Status != TeamLabRemoteSessionStatus.Creating)
-            return;
-        session.Status = TeamLabRemoteSessionStatus.Failed;
-        session.EndedAt = DateTimeOffset.UtcNow;
-        session.EndReason = "relay_create_failed";
-        await context.SaveChangesAsync(cancellationToken);
-    }
-
     private async Task<bool> ConnectSessionAsync(TeamLabRemoteSession session, CancellationToken cancellationToken)
     {
         await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
@@ -367,7 +537,8 @@ public sealed class TeamLabRemoteAccessService(
         await context.Entry(session).ReloadAsync(cancellationToken);
         await context.Entry(session.Runtime).ReloadAsync(cancellationToken);
         if (session.Status != TeamLabRemoteSessionStatus.Ready || session.ExpiresAt <= DateTimeOffset.UtcNow ||
-            session.Runtime.Status != TeamLabRuntimeStatus.Running)
+            session.Generation != session.Runtime.Generation || !CanOpenSession(session.Protocol, session.Runtime.Status) ||
+            await HasAssetControlAsync(session.RuntimeId, session.RuntimeAssetId, cancellationToken))
             return false;
         session.ConnectedAt ??= DateTimeOffset.UtcNow;
         session.Status = TeamLabRemoteSessionStatus.Connected;
@@ -386,13 +557,17 @@ public sealed class TeamLabRemoteAccessService(
             else
                 await relays.DeleteAsync(session.WorkerNodeId, session.PublicId, cancellationToken);
         }
-        catch (Exception exception)
+        catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
         {
             cleanupFailed = true;
             logger.LogWarning(exception, "移除远程会话 {SessionId} 的 TeamLab 中继失败", session.PublicId);
         }
-        try { await guacamole.DeleteAsync(session.GuacamoleConnectionId, session.GuacamoleUserId, cancellationToken); }
-        catch (Exception exception)
+        try
+        {
+            if (session.GuacamoleCreationStarted || session.GuacamoleConnectionId is not null || session.GuacamoleUserId is not null)
+                await guacamole.DeleteSessionAsync(session.PublicId, session.GuacamoleConnectionId, session.GuacamoleUserId, cancellationToken);
+        }
+        catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
         {
             cleanupFailed = true;
             logger.LogWarning(exception, "移除远程会话 {SessionId} 的 Guacamole 资源失败", session.PublicId);
@@ -432,8 +607,10 @@ public sealed class TeamLabRemoteAccessService(
         TeamLabRuntimeAsset asset,
         ImageTemplateRemoteAccess? configuration)
     {
-        if (asset.Status != TeamLabRuntimeStatus.Running) return new(asset.Id, asset.Name, null, false, "资源未在运行");
-        if (asset.Kind == TeamLabResourceKind.Docker) return new(asset.Id, asset.Name, TeamLabRemoteProtocol.ContainerTerminal, true, null);
+        if (asset.Status != TeamLabRuntimeStatus.Running)
+            return new(asset.Id, asset.Name, null, false, "资源未在运行");
+        if (asset.Kind == TeamLabResourceKind.Docker)
+            return new(asset.Id, asset.Name, TeamLabRemoteProtocol.ContainerTerminal, true, null);
         if (asset.Kind != TeamLabResourceKind.Vm || asset.SourceTemplateId is null)
             return new(asset.Id, asset.Name, null, false, "该资源不支持远程操作");
         if (configuration is null || !configuration.Enabled)
@@ -448,6 +625,10 @@ public sealed class TeamLabRemoteAccessService(
         session.Reason, session.CreatedAt, session.ExpiresAt, session.ConnectedAt, session.EndedAt, session.EndReason);
 
     private static string ConnectUrlKey(Guid sessionId) => "teamlab:remote-connect:" + sessionId.ToString("N");
+
+    internal static bool CanOpenSession(TeamLabRemoteProtocol protocol, TeamLabRuntimeStatus status) =>
+        status == TeamLabRuntimeStatus.Running || protocol == TeamLabRemoteProtocol.Vnc &&
+        status is TeamLabRuntimeStatus.Deploying or TeamLabRuntimeStatus.Probing or TeamLabRuntimeStatus.Paused or TeamLabRuntimeStatus.Failed;
 
     private static IReadOnlyDictionary<string, object?> RemoteDetail(TeamLabRemoteSession session, TeamLabRuntimeAsset asset, Guid actorId) =>
         new Dictionary<string, object?>

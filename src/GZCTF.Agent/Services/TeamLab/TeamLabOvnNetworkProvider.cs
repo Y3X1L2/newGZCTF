@@ -16,6 +16,28 @@ public sealed class TeamLabOvnNetworkProvider(
 {
     readonly AgentTeamLabConfig config = options.Value;
 
+    public async Task<TeamLabOvnApplyResult> ProbeAsync(
+        TeamLabExecutionPlanV2 plan, CancellationToken cancellationToken)
+    {
+        if (!plan.IsValid(out var error))
+            return TeamLabOvnApplyResult.Failed("validation", error!);
+        if (plan.Networks.Count == 0)
+            return new(true, false, "network", "No network intent was requested.");
+        if (string.IsNullOrWhiteSpace(config.OvnNorthboundEndpoint))
+            return TeamLabOvnApplyResult.Failed("network", "OVN Northbound endpoint is not configured.");
+        try
+        {
+            return await AllResourcesPresentAsync(plan, cancellationToken)
+                ? new(true, true, "network", "Network intent is present.")
+                : TeamLabOvnApplyResult.Failed("network", "OVN network intent is missing or incomplete.");
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (Exception exception) when (exception is SocketException or IOException or InvalidOperationException or JsonException or OperationCanceledException)
+        {
+            return TeamLabOvnApplyResult.Failed("network", $"OVN network probe failed: {Trim(exception.Message)}");
+        }
+    }
+
     public async Task<TeamLabOvnApplyResult> ApplyAsync(
         TeamLabExecutionPlanV2 plan,
         CancellationToken cancellationToken)
@@ -148,6 +170,13 @@ public sealed class TeamLabOvnNetworkProvider(
             operations.Add(MutateNetwork(plan, network, switchUuid, control));
             foreach (var port in network.Ports)
                 operations.Add(MutatePort(plan, network, port));
+            foreach (var connector in network.Connectors ?? [])
+            {
+                var operation = MutatePort(plan, network, new(connector.PortKey, connector.PortKey, connector.MacAddress, null));
+                operation["row"]!["addresses"] = Set(["unknown"]);
+                operation["row"]!.AsObject().Remove("dhcpv4_options");
+                operations.Add(operation);
+            }
             if (network.PlayerGateway is { } gateway)
                 operations.Add(MutatePlayerGatewayPort(plan, network, gateway));
             if (RouterFor(network, control) is { } router)
@@ -185,6 +214,7 @@ public sealed class TeamLabOvnNetworkProvider(
             ClearReferences("Logical_Router", "ports", plan),
             ClearReferences("Logical_Router", "static_routes", plan),
             ClearReferences("Logical_Router", "policies", plan),
+            ClearReferences("Logical_Router", "load_balancer", plan),
             ClearReferences("Logical_Switch", "ports", plan),
             ClearReferences("Logical_Switch", "acls", plan),
             ClearReferences("Logical_Switch", "dns_records", plan),
@@ -197,6 +227,7 @@ public sealed class TeamLabOvnNetworkProvider(
 
     static readonly string[] RemoveTableOrder =
     [
+        "Load_Balancer",
         "Logical_Router_Policy",
         "Logical_Router_Static_Route",
         "Logical_Router_Port",
@@ -235,6 +266,7 @@ public sealed class TeamLabOvnNetworkProvider(
         {
             AddExpected(expected, "Logical_Switch", 1);
             AddExpected(expected, "Logical_Switch_Port", network.Ports.Count +
+                (network.Connectors?.Count ?? 0) +
                 (network.PlayerGateway is null ? 0 : 1) +
                 (RouterFor(network, control) is null ? 0 : 1));
             if (network.DhcpLeases is { Count: > 0 }) AddExpected(expected, "DHCP_Options", 1);
@@ -283,6 +315,7 @@ public sealed class TeamLabOvnNetworkProvider(
         {
             ["name"] = TeamLabOvnNaming.LogicalNetworkName(plan, network.Key),
             ["ports"] = References(network.Ports.Select(port => StableUuid(plan, "port", $"{network.Key}:{port.Key}"))
+                .Concat((network.Connectors ?? []).Select(connector => StableUuid(plan, "port", $"{network.Key}:{connector.PortKey}")))
                 .Concat(network.PlayerGateway is { } gateway
                     ? [PlayerGatewayUuid(plan, network, gateway)]
                     : [])
@@ -315,7 +348,9 @@ public sealed class TeamLabOvnNetworkProvider(
                 ("gzctf-network-key", network.Key),
                 ("gzctf-network-digest", plan.NetworkDigest))
         };
-        if (network.DhcpLeases is { Count: > 0 })
+        if (network.DhcpLeases is { } leases && leases.Any(lease =>
+                string.Equals(lease.MacAddress, port.MacAddress, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(lease.IpAddress, port.IpAddress, StringComparison.OrdinalIgnoreCase)))
             row["dhcpv4_options"] = NamedUuid(DhcpUuid(plan, network));
         return new JsonObject
         {

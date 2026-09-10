@@ -1,0 +1,12 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "unitId": { "type": "integer", "title": "从站地址", "minimum": 1, "maximum": 247, "default": 1 },
+    "port": { "type": "integer", "title": "Modbus TCP 端口", "const": 1502, "default": 1502 },
+    "holdingRegisters": {
+      "type": "array", "title": "保持寄存器初始值（地址从 0 开始）", "minItems": 1, "maxItems": 128,
+      "items": { "type": "integer", "minimum": 0, "maximum": 65535 }
+    }
+  }
+}
