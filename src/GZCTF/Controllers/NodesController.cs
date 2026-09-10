@@ -161,6 +161,8 @@ public class NodesController : ControllerBase
             n.TeamLabTunnelConfigVersion,
             n.AgentVersion,
             n.AgentBinarySha256,
+            n.AgentUpdateState,
+            n.AgentUpdateLastError,
             n.CapabilityManifestSchemaVersion,
             n.CapabilityHash,
             n.CapabilityObservedAt,
@@ -215,6 +217,8 @@ public class NodesController : ControllerBase
             node.TeamLabTunnelConfigVersion,
             node.AgentVersion,
             node.AgentBinarySha256,
+            node.AgentUpdateState,
+            node.AgentUpdateLastError,
             node.CapabilityManifestSchemaVersion,
             node.CapabilityHash,
             node.CapabilityObservedAt,
@@ -672,9 +676,19 @@ public class NodesController : ControllerBase
         if (node is null) return NotFound();
 
         var service = HttpContext.RequestServices.GetRequiredService<NodeTunnelService>();
-        var result = request.DryRun
-            ? await service.EnableDryRunAsync(node, token)
-            : await service.MarkHealthyAsync(node, request.TunnelIp ?? string.Empty, token);
+        TeamLabNodeEnableResult result;
+        if (request.DryRun)
+        {
+            result = await service.EnableDryRunAsync(node, token);
+        }
+        else
+        {
+            var requestBaseUrl = $"{Request.Scheme}://{Request.Host}{Request.PathBase}";
+            var serverUrl = NodeDeployService.ResolveAgentSyncServerUrl(
+                HttpContext.RequestServices.GetRequiredService<IConfiguration>(), requestBaseUrl);
+            result = await service.EnableAsync(
+                node, request.TunnelIp ?? string.Empty, serverUrl, _correlation.Ensure(), token);
+        }
 
         _logger.SystemLog(
             $"Worker node TeamLab network {(request.DryRun ? "checked" : "enabled")}: node={node.Name}, id={node.Id}, success={result.Success}, message={result.Message}.",
@@ -692,7 +706,7 @@ public class NodesController : ControllerBase
         if (!await _context.WorkerNodes.AnyAsync(node => node.Id == id, token))
             return NotFound();
         var requestBaseUrl = $"{Request.Scheme}://{Request.Host}{Request.PathBase}";
-        var serverUrl = NodeDeployService.ResolveServerUrl(
+        var serverUrl = NodeDeployService.ResolveAgentSyncServerUrl(
             HttpContext.RequestServices.GetRequiredService<IConfiguration>(),
             requestBaseUrl);
         var result = await HttpContext.RequestServices.GetRequiredService<AgentFleetUpdateCoordinator>()

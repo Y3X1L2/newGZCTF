@@ -127,6 +127,8 @@ describe('nodeAdminApi', () => {
     teamLabTunnelConfigVersion: 27,
     agentVersion: '1.0.0.0',
     agentBinarySha256: '191cd4fe85efe9c9357597ca15e07d7f2128f962d2f3d83e4d1422a1e7b68866',
+    agentUpdateState: 0,
+    agentUpdateLastError: null,
     capabilityManifestSchemaVersion: 1,
     capabilityHash: '545b0397cda0c390b61b3fb6d4cc09f01bb4dd52b14516f7fbddcd96b7a44c77',
     capabilityObservedAt: 1_784_664_963_517,

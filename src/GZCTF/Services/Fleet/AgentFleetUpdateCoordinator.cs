@@ -143,7 +143,7 @@ public sealed class AgentFleetUpdateCoordinator(
         }
     }
 
-    public async Task RecoverPendingAsync(CancellationToken cancellationToken)
+    public async Task RecoverPendingAsync(CancellationToken cancellationToken, bool coordinatorRestarted = false)
     {
         var now = DateTimeOffset.UtcNow;
         var pending = await context.WorkerNodes.Where(item =>
@@ -158,7 +158,9 @@ public sealed class AgentFleetUpdateCoordinator(
             // heartbeat projection. A restarted coordinator cannot reconstruct that request
             // safely, so it keeps the node cordoned rather than letting current capabilities
             // approve their own update.
-            if (node.AgentUpdateStartedAt < now - TimeSpan.FromMinutes(10))
+            if (coordinatorRestarted ||
+                !node.AgentUpdateStartedAt.HasValue ||
+                node.AgentUpdateStartedAt < now - TimeSpan.FromMinutes(10))
             {
                 node.AgentUpdateState = AgentUpdateState.Failed;
                 node.IsSchedulable = false;
@@ -215,9 +217,9 @@ public sealed class AgentFleetUpdateCoordinator(
 
     internal static bool FabricReady(WorkerNode node, bool required = true) =>
         !required ||
-        string.IsNullOrWhiteSpace(node.TeamLabTunnelIp) ||
-        node.TeamLabTunnelStatus == TeamLabTunnelStatus.Healthy &&
-        node.TeamLabFabricStatus == TeamLabFabricStatus.Healthy;
+        node.TeamLabFabricStatus == TeamLabFabricStatus.Healthy &&
+        !string.IsNullOrWhiteSpace(node.TeamLabFabricIp) &&
+        string.Equals(node.TeamLabFabricIp, node.TeamLabTunnelIp, StringComparison.Ordinal);
 
     private async Task BeginUpdateAsync(WorkerNode node, bool priorSchedulable, string expectedSha,
         CancellationToken cancellationToken)
@@ -411,6 +413,21 @@ public sealed class AgentFleetUpdateRecoveryWorker(
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        try
+        {
+            await using var startupScope = scopeFactory.CreateAsyncScope();
+            await startupScope.ServiceProvider.GetRequiredService<AgentFleetUpdateCoordinator>()
+                .RecoverPendingAsync(stoppingToken, coordinatorRestarted: true);
+        }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        {
+            return;
+        }
+        catch (Exception exception)
+        {
+            logger.LogWarning(exception, "Agent fleet update startup recovery failed");
+        }
+
         using var timer = new PeriodicTimer(TimeSpan.FromSeconds(15));
         while (await timer.WaitForNextTickAsync(stoppingToken))
         {

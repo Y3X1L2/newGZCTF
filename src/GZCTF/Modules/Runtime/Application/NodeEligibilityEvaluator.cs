@@ -29,6 +29,8 @@ public sealed class NodeEligibilityEvaluator(IOptions<RuntimeSchedulingOptions> 
         var node = snapshot.Node;
         if (node.GetEffectiveStatus(DateTimeOffset.UtcNow) != NodeStatus.Online)
             return "node_offline";
+        if (node.AgentUpdateState == AgentUpdateState.Failed)
+            return "node_agent_update_failed";
         if (node.AgentUpdateState != AgentUpdateState.Stable)
             return "node_agent_update_in_progress";
         if (!node.IsSchedulable)

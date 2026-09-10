@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Net;
+using System.Net.NetworkInformation;
 using System.Security.Cryptography;
 using System.Runtime.InteropServices;
 using System.Text.Json;
@@ -258,7 +260,8 @@ public class AgentMaintenanceService(
             teamLab = new JsonObject();
             root["TeamLab"] = teamLab;
         }
-        var changed = ApplyTeamLabDataPlaneConfig(teamLab, desired);
+        var changed = ApplyTeamLabDataPlaneConfig(
+            teamLab, desired, ResolveFabricInterfaceName(desired.ChassisEncapIp));
         if (!changed) return false;
 
         var temporary = CreateSiblingTemporaryPath(AgentConfigPath);
@@ -279,13 +282,27 @@ public class AgentMaintenanceService(
         }
     }
 
-    internal static bool ApplyTeamLabDataPlaneConfig(JsonObject teamLab, TeamLabDataPlaneSyncConfig desired) =>
+    internal static bool ApplyTeamLabDataPlaneConfig(
+        JsonObject teamLab,
+        TeamLabDataPlaneSyncConfig desired,
+        string? fabricInterfaceName = null) =>
         Set(teamLab, "Enable", desired.Enabled) |
         Set(teamLab, "ExecutionModel", desired.ExecutionModel.ToString()) |
         Set(teamLab, "OvnNorthboundEndpoint", desired.NorthboundEndpoint) |
         Set(teamLab, "OvnSouthboundEndpoint", desired.SouthboundEndpoint) |
+        (!string.IsNullOrWhiteSpace(fabricInterfaceName) &&
+         Set(teamLab, "FabricInterfaceName", fabricInterfaceName)) |
         Set(teamLab, "OvsIntegrationBridgeName", desired.IntegrationBridgeName) |
         Set(teamLab, "ManagedDhcpLeaseSeconds", Math.Clamp(desired.ManagedDhcpLeaseSeconds, 60, 86_400));
+
+    private static string? ResolveFabricInterfaceName(string? address)
+    {
+        if (!IPAddress.TryParse(address, out var expected)) return null;
+        return NetworkInterface.GetAllNetworkInterfaces()
+            .FirstOrDefault(item => item.GetIPProperties().UnicastAddresses
+                .Any(candidate => candidate.Address.Equals(expected)))
+            ?.Name;
+    }
 
     private static bool Set(JsonObject target, string name, string? value)
     {

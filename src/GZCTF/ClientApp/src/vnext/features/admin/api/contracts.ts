@@ -104,6 +104,8 @@ export interface NodeSummary {
   teamLabTunnelConfigVersion: number
   agentVersion: string | null
   agentBinarySha256: string | null
+  agentUpdateState: number
+  agentUpdateLastError: string | null
   capabilityManifestSchemaVersion: number
   capabilityHash: string | null
   capabilityObservedAt: number | null

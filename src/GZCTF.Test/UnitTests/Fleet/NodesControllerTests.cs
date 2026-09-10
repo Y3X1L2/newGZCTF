@@ -140,6 +140,20 @@ public class NodesControllerTests
     }
 
     [Fact]
+    public void ResolveAgentSyncServerUrl_PrefersExplicitInternalUrl()
+    {
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Agent:ServerInternalUrl"] = "http://10.24.0.27:8080/",
+                ["Agent:ServerPublicUrl"] = "http://106.52.207.52:42755"
+            })
+            .Build();
+
+        Assert.Equal("http://10.24.0.27:8080", NodeDeployService.ResolveAgentSyncServerUrl(config));
+    }
+
+    [Fact]
     public void ResolveServerUrl_IgnoresBlankAgentPublicUrl()
     {
         var config = new ConfigurationBuilder()
@@ -924,6 +938,37 @@ public class NodesControllerTests
 
         Assert.Equal(AgentUpdateState.AwaitingHeartbeat, node.AgentUpdateState);
         Assert.False(node.IsSchedulable);
+    }
+
+    [Fact]
+    public async Task AgentFleetUpdateRecovery_FailsInterruptedUpdateImmediatelyAfterCoordinatorRestart()
+    {
+        await using var context = CreateContext();
+        var node = new WorkerNode
+        {
+            Id = Guid.NewGuid(),
+            Name = "interrupted-agent",
+            HostAddress = "10.24.0.30",
+            AuthToken = "node-token",
+            AgentUpdateState = AgentUpdateState.Syncing,
+            AgentUpdateStartedAt = DateTimeOffset.UtcNow,
+            AgentUpdateWasSchedulable = true,
+            IsSchedulable = false
+        };
+        context.WorkerNodes.Add(node);
+        await context.SaveChangesAsync();
+        var coordinator = new AgentFleetUpdateCoordinator(
+            context,
+            new RecordingAgentClient(),
+            new EfOperationalEventWriter(context, NullLogger<EfOperationalEventWriter>.Instance),
+            NullLogger<AgentFleetUpdateCoordinator>.Instance,
+            Options.Create(new TeamLabNetworkConfig()));
+
+        await coordinator.RecoverPendingAsync(CancellationToken.None, coordinatorRestarted: true);
+
+        Assert.Equal(AgentUpdateState.Failed, node.AgentUpdateState);
+        Assert.False(node.IsSchedulable);
+        Assert.NotNull(node.AgentUpdateCompletedAt);
     }
 
     static AgentCapabilityManifest CreateManifest(bool includeKvm, bool includeManagedVm = false)

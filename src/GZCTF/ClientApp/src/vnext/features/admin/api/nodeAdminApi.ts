@@ -78,6 +78,8 @@ function isNodeSummary(value: unknown): value is NodeSummary {
     isNumber(value.teamLabTunnelConfigVersion) &&
     isNullableString(value.agentVersion) &&
     isNullableString(value.agentBinarySha256) &&
+    isNumber(value.agentUpdateState) &&
+    isNullableString(value.agentUpdateLastError) &&
     isNumber(value.capabilityManifestSchemaVersion) &&
     isNullableString(value.capabilityHash) &&
     isNullableNumber(value.capabilityObservedAt) &&

@@ -11,10 +11,40 @@ public sealed record TeamLabNodeEnableResult(bool Success, string Message, strin
 
 public class NodeTunnelService(
     AgentClient agentClient,
+    AgentFleetUpdateCoordinator fleetUpdates,
     AppDbContext context,
     IOperationalEventWriter events,
     ILogger<NodeTunnelService> logger)
 {
+    public async Task<TeamLabNodeEnableResult> EnableAsync(
+        WorkerNode node,
+        string tunnelIp,
+        string serverUrl,
+        Guid correlationId,
+        CancellationToken token)
+    {
+        var normalizedTunnelIp = tunnelIp.Trim();
+        if (string.IsNullOrWhiteSpace(normalizedTunnelIp))
+            return new TeamLabNodeEnableResult(false, "Tunnel IP is required before enabling TeamLab scheduling.", []);
+        if (!IsValidIpv4Address(normalizedTunnelIp))
+            return new TeamLabNodeEnableResult(false, "Tunnel IP must be a valid IPv4 address.", []);
+
+        node.TeamLabNetworkEnabled = true;
+        node.TeamLabTunnelIp = normalizedTunnelIp;
+        node.TeamLabTunnelStatus = TeamLabTunnelStatus.Probing;
+        node.TeamLabFabricStatus = TeamLabFabricStatus.Probing;
+        node.TeamLabTunnelLastError = null;
+        await context.SaveChangesAsync(token);
+
+        var update = await fleetUpdates.SyncAsync(node.Id, serverUrl, correlationId, token);
+        if (!update.Success)
+            return new TeamLabNodeEnableResult(false,
+                $"Agent synchronization failed before TeamLab Fabric became ready: {update.Message}", []);
+
+        await context.Entry(node).ReloadAsync(token);
+        return await MarkHealthyAsync(node, normalizedTunnelIp, token);
+    }
+
     public async Task<TeamLabNodeProbeResult> ProbeNodeAsync(WorkerNode node, CancellationToken token)
     {
         var status = await agentClient.GetTeamLabStatusAsync(node.Id, token);
@@ -119,9 +149,19 @@ public class NodeTunnelService(
             return;
         }
 
-        node.TeamLabNetworkEnabled = false;
         node.TeamLabTunnelStatus = TeamLabTunnelStatus.Probing;
-        node.TeamLabTunnelLastError =
-            "Network components are detected. Configure a tunnel IP before enabling TeamLab scheduling.";
+        node.TeamLabTunnelLastError = string.IsNullOrWhiteSpace(node.TeamLabTunnelIp)
+            ? "Network components are detected. Configure a tunnel IP before enabling TeamLab scheduling."
+            : node.TeamLabFabricStatus switch
+            {
+                TeamLabFabricStatus.Disabled =>
+                    "The tunnel IP is saved, but the TeamLab Fabric data plane is disabled. Enable TeamLab to apply the node configuration.",
+                TeamLabFabricStatus.Probing =>
+                    "The TeamLab Fabric data plane is starting. Wait for the next node heartbeat.",
+                TeamLabFabricStatus.Error =>
+                    "The TeamLab Fabric data plane failed its health check. Review the node Agent error and synchronize it again.",
+                _ =>
+                    "The tunnel IP is saved, but the TeamLab Fabric address has not been reported by the node Agent."
+            };
     }
 }

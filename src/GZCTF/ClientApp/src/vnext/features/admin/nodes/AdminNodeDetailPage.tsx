@@ -37,6 +37,8 @@ function actionMessage(value: Record<string, unknown>) {
   return '操作请求已提交。'
 }
 
+const agentUpdateLabels = ['正常', '暂停调度', '正在同步', '等待心跳', '验证组网', '同步失败'] as const
+
 function Facts({ children }: { children: React.ReactNode }) {
   return <dl className={styles.facts}>{children}</dl>
 }
@@ -162,6 +164,25 @@ export function AdminNodeDetailPage() {
       await refresh()
     } catch (probeError) {
       setFeedback({ tone: 'danger', message: errorMessage(probeError, 'TeamLab 网络检测失败。') })
+    } finally {
+      setWorking(null)
+    }
+  }
+
+  const enableTeamLab = async () => {
+    if (!node || working || !node.teamLabTunnelIp) return
+    setWorking('teamlab-enable')
+    setFeedback(null)
+    try {
+      const result = await nodeAdminApi.enableTeamLab(node.id, {
+        dryRun: false,
+        tunnelIp: node.teamLabTunnelIp,
+      })
+      setFeedback({ tone: 'success', message: actionMessage(result) })
+      await refresh()
+    } catch (enableError) {
+      setFeedback({ tone: 'danger', message: errorMessage(enableError, 'TeamLab 组网启用失败。') })
+      await refresh()
     } finally {
       setWorking(null)
     }
@@ -315,11 +336,15 @@ export function AdminNodeDetailPage() {
             </header>
             <Facts>
               <Fact label="Agent 版本" value={node.agentVersion || '未上报'} />
+              <Fact label="同步状态" value={agentUpdateLabels[node.agentUpdateState] || '未知'} />
               <Fact label="能力清单版本" value={node.capabilityManifestSchemaVersion || '—'} />
               <Fact label="最后心跳" value={formatHeartbeat(node.lastHeartbeat)} />
               <Fact label="能力上报" value={formatHeartbeat(node.capabilityObservedAt)} />
               <Fact label="配置版本" value={node.teamLabTunnelConfigVersion || '—'} />
             </Facts>
+            {node.agentUpdateLastError ? (
+              <InlineFeedback tone="danger">{node.agentUpdateLastError}</InlineFeedback>
+            ) : null}
             <div className={styles.panelActions}>
               <ActionButton
                 disabled={Boolean(working) || node.isLocal}
@@ -357,6 +382,18 @@ export function AdminNodeDetailPage() {
               <InlineFeedback tone="danger">{node.teamLabTunnelLastError}</InlineFeedback>
             ) : null}
             <div className={styles.panelActions}>
+              <ActionButton
+                disabled={Boolean(working) || !node.teamLabTunnelIp}
+                icon={<Network size={16} />}
+                onClick={() => void enableTeamLab()}
+                type="button"
+              >
+                {working === 'teamlab-enable'
+                  ? '正在启用'
+                  : node.teamLabNetworkEnabled
+                    ? '重新应用组网配置'
+                    : '启用组网'}
+              </ActionButton>
               <ActionButton
                 disabled={Boolean(working)}
                 icon={<Network size={16} />}

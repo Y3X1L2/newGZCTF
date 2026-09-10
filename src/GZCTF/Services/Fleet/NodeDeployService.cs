@@ -224,6 +224,14 @@ public class NodeDeployService
         return "http://localhost:8080";
     }
 
+    internal static string ResolveAgentSyncServerUrl(IConfiguration config, string? requestBaseUrl = null)
+    {
+        var internalUrl = config["Agent:ServerInternalUrl"];
+        return !string.IsNullOrWhiteSpace(internalUrl)
+            ? internalUrl.TrimEnd('/')
+            : ResolveServerUrl(config, requestBaseUrl);
+    }
+
     internal static bool IsRoutableServerUrl(string url)
     {
         if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))

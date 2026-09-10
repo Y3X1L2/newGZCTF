@@ -803,6 +803,27 @@ public sealed class RuntimeControlPlaneTests
     }
 
     [Fact]
+    public void NodeEligibility_DistinguishesFailedAgentUpdateFromActiveUpdate()
+    {
+        var node = new WorkerNode
+        {
+            Status = NodeStatus.Online,
+            IsSchedulable = false,
+            AgentUpdateState = AgentUpdateState.Failed,
+            LastHeartbeat = DateTimeOffset.UtcNow
+        };
+        var snapshot = new NodeCapacitySnapshot(node, 0, 0, 0, 0, 0, 0);
+        var eligibility = new NodeEligibilityEvaluator(Options.Create(new RuntimeSchedulingOptions()));
+
+        Assert.Equal("node_agent_update_failed",
+            eligibility.GetReason(snapshot, NodeCapability.None, 0, 0, requireTeamLab: false));
+
+        node.AgentUpdateState = AgentUpdateState.Syncing;
+        Assert.Equal("node_agent_update_in_progress",
+            eligibility.GetReason(snapshot, NodeCapability.None, 0, 0, requireTeamLab: false));
+    }
+
+    [Fact]
     public async Task TeamLabScheduling_MinimizesManagedRouterCrossNodeEdges()
     {
         await using var context = CreateContext();

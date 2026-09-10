@@ -154,6 +154,23 @@ public class WorkerNodeTests
     }
 
     [Fact]
+    public void ApplyTeamLabDryRunProbe_ExplainsDisabledFabricWhenTunnelIpIsAlreadySaved()
+    {
+        var node = new WorkerNode
+        {
+            TeamLabNetworkEnabled = false,
+            TeamLabTunnelIp = "10.24.0.27",
+            TeamLabFabricStatus = TeamLabFabricStatus.Disabled
+        };
+
+        NodeTunnelService.ApplyDryRunProbeResult(node);
+
+        Assert.False(node.TeamLabNetworkEnabled);
+        Assert.Equal(TeamLabTunnelStatus.Probing, node.TeamLabTunnelStatus);
+        Assert.Contains("Fabric data plane is disabled", node.TeamLabTunnelLastError);
+    }
+
+    [Fact]
     public async Task LocalNodeMetricsSampler_ReturnsNormalizedRatios()
     {
         var (cpuLoad, memoryLoad) = await LocalNodeMetricsService.SystemMetricsSampler.SampleAsync(CancellationToken.None);
