@@ -20,6 +20,10 @@ if (AgentNetworkProbe.IsInvocation(args))
 }
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Configuration
+    .AddJsonFile("/etc/gzctf-agent/appsettings.json", optional: true, reloadOnChange: false)
+    .AddEnvironmentVariables()
+    .AddCommandLine(args);
 var agentConfig = builder.Configuration.GetSection("Agent").Get<AgentConfig>() ?? new AgentConfig();
 
 builder.WebHost.ConfigureKestrel(kestrel =>
