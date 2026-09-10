@@ -8,7 +8,7 @@
 
 后续增量：`TeamLabManagedNicProvider` 已实际接入本测试，模拟外部设备不再直接调用通用 OVS attachment 作为连接器替身。专用网卡的 prepare/probe/attach/detach、另一 runtime 抢占拒绝及解绑保留网卡均通过，`hybrid-connector.trx` 为 1/1（19 秒）；与 Modbus 联合回归为 `hybrid-modbus-final.trx`，2/2（29 秒）。后续主站节点约束、网络计划与前端登记已实现，尚未完成真实主站端到端。前端完整门禁 324/324；后端相关测试 475/475。下文原始 31 秒结果仍是第一阶段证据，不代表全部后续功能。
 
-**网络 provider 专项 VERIFIED；完整 H03 尚未签收。**
+**网络 provider 专项与测试服务器主站全链路均 VERIFIED。**
 
 `TeamLabHybridDatapathTests.RealOvnTrafficIsolationFailureRecoveryAndExactCleanup` 在 2026-09-08 通过，1/1，31 秒。夹具使用真实 OVN NB/SB、ovn-northd、ovn-controller、OVS userspace datapath 和 QEMU TCG Linux 来宾，应用与拆除逻辑网络、OVS 端口调用当前 Agent provider。客户端和模拟外部设备使用隔离的 Linux network namespace；不是物理设备，也不是主站创建的独立 Docker 业务资产。VM 使用测试 initramfs 和网卡，没有伪造网络响应。
 
@@ -43,12 +43,34 @@ dotnet test src/GZCTF.Integration.Test/GZCTF.Integration.Test.csproj -c Release 
 
 首次构建需下载 Linux 内核、QEMU 和 OVN 软件包；后续按夹具内容摘要缓存。测试从真实探测等待就绪，失败有界退出并回收夹具。
 
-## 尚未完成的完整 H03 链路
+## 测试服务器主站全链路（2026-09-10）
 
-1. H01 连接器 prepare/attach/probe/detach/inventory 接入主站和原 DeploymentQueueTicket，目前登记/租约不能代表接通。
-2. 通过主站发布并创建真实 Docker＋libvirt VM＋连接器绑定场景；本专项直接调用网络 provider，未经过主站授权、计划编译和调度。
-3. 主站/Agent/节点故障恢复以及 runtime/shard 父状态恢复；本次只验证 OVN controller 重启。
-4. 平台抓包 API、下载、流量页面与销毁对账的同一混合场景完整链路；本次抓包使用夹具 tcpdump。
-5. 实际物理设备及多 Worker 跨节点验证。本地 namespace 模拟只能验证网络行为，不能替代硬件签收。
+测试环境为主站 `10.0.7.118`、执行节点 `10.0.7.125`。验收通过正式管理员 API、
+统一 `DeploymentQueueTicket`、H01 受管网卡连接器和 Agent 执行，不直接调用 provider。
+拓扑 `H03 虚实混合现场设备验收环境` 保留发布版本和已销毁运行历史；模拟现场端点在
+验收结束后删除。服务器账号、平台凭据和 Cookie 均未写入仓库。
 
-本轮未提交、推送、合并或部署。不要将此报告、旧 BIOS VNC 测试或以前的全量门禁合并解释为“全部商业能力闭环”。
+| 检查 | 服务器实证 | 结果 |
+| --- | --- | --- |
+| 主站编排 | 失败的 generation 2 通过正式 reset 收敛为 generation 3 `ready`；破坏恢复后 generation 4 再次 `ready` | 通过 |
+| Docker + VM + 现场端点 | PLC `10.96.1.10`、libvirt VM `10.96.1.20`、模拟端点 `10.96.1.50` 真实互通 | 通过 |
+| Modbus TCP | 现场端点读取 unit 7、holding register 0-3，响应值为 `12/34/56/78` | 通过 |
+| VM 网络配置 | Agent 创建 380,928 字节 CIDATA；VM 回报计划 MAC、`10.96.1.20/24`，SSH banner 可达 | 通过 |
+| 双向混合互通 | PLC 访问现场 HTTP 返回 200；VM 经 QGA ping 现场端点 2/2、0% 丢包 | 通过 |
+| 逻辑隔离 | 现场端点和 PLC 均不能访问 `isolated` 网段的 `10.97.0.10` | 通过 |
+| 平台抓包 | `field` 两观测点捕获 3,090 + 20,692 字节；下载 tar 可解析，两段 PCAP SHA-256 与平台一致 | 通过 |
+| 连接器断链恢复 | 删除 `h03fld0` OVS port 后 Modbus 超时；正式 reset 自动以新代次重新挂接并恢复 | 通过 |
+| OVN 恢复 | 重启 `ovn-controller` 后服务 active，首轮 Modbus 探测成功 | 通过 |
+| 独占租约 | 同一发布创建第二运行返回 HTTP 409、`connector_occupied` | 通过 |
+| 销毁对账 | 资产/分片/运行均 `destroyed`；容器、域、qcow2/seed、运行 OVS 接口均无残留 | 通过 |
+
+本次发现并修复 libvirt VM 的真实缺口：原实现只创建 qcow2 overlay 和 TAP，来宾系统
+不会获得执行计划中的静态地址。Agent 现在按计划生成 NoCloud `meta-data`、`user-data`
+和 `network-config`，使用节点现有的 `cloud-localds`、`genisoimage`、`mkisofs` 或
+`xorriso` 生成 CIDATA，并挂载 QEMU Guest Agent channel；销毁同步删除 seed 文件。
+`TeamLabVmArtifactSafetyTests` 4/4 通过。
+
+边界：本轮使用 network namespace 模拟现场设备，验证的是与物理网卡相同的二层接入、
+协议和故障行为，不替代特定 PLC 型号、驱动、时序和电气层的硬件认证。抓包在销毁前已
+下载验签；运行销毁后抓包接口返回 404，符合随运行回收的当前生命周期，证据摘要保留在
+本文。测试服务器不是生产环境，未改动生产节点。

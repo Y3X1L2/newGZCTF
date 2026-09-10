@@ -20,6 +20,9 @@
 - 公网 UDP 网关同步会在规则写入前确保共享 nftables 表及 `prerouting`、`postrouting` NAT 基础链存在；销毁仅按运行映射注释删除规则，不删除共享链。隔离 nftables 测试覆盖空状态建链、双映射隔离、单映射删除和最终清理。
 - 正式 API 连续完成两次 v5 工控演示场景创建与销毁。运行 `01a086f1-6490-743b-974a-eb6b0848241f` 和 `01a086f3-b1e0-7466-9a6d-f2f333b98bba` 均到达 `ready`，两个资产均为 Running；销毁后运行及资产均为 Destroyed、错误为空。第二次运行中核对 DNAT/SNAT 两条规则存在，销毁后映射规则为 0；节点上对应 runtime 232/233 的容器、network namespace、OVS 资源和状态文件无残留。
 - 网关定向测试 6/6、主站及 Agent Release 构建通过。全量单测 1119/1121；两条既有调度观察点计数断言失败，单独复跑仍失败，未经过本次网关或 Agent 探测代码。该门禁缺口不得记录为全绿。
+- H03 测试服务器全链路已通过：运行 `01a0870a-6bc4-7c7e-8bc4-fb5300ea2986` 经正式队列在 `.125` 创建 Docker PLC、隔离 SCADA、libvirt VM 和 H01 受管网卡连接器。现场 namespace 端点读取 Modbus TCP 寄存器 `12/34/56/78`；PLC、VM 与现场端点双向互通，`field` 与 `isolated` 保持隔离。平台抓包得到 23,782 字节、两段 PCAP，下载归档内摘要与平台一致。
+- H03 验收补齐 libvirt VM NoCloud CIDATA 静态网络配置和 QEMU Guest Agent channel；VM 回报计划 MAC 和 `10.96.1.20/24`，ICMP、SSH banner 与反向 QGA ping 均通过。删除连接器 OVS port 后协议链路超时，正式 reset 在 generation 4 自动恢复；`ovn-controller` 重启后链路保持可用；第二运行被 `connector_occupied` 明确拒绝。
+- H03 最终通过正式 API 销毁：运行、分片和资产均为 Destroyed，容器、libvirt 域、qcow2/seed 文件及运行 OVS 接口无残留；专建的模拟 namespace/veth 已删除，Agent 与 OVN Controller 保持 active。拓扑、发布、设备包和已销毁运行历史保留供平台查看。抓包在销毁前已下载验签，销毁后抓包接口为 404，不表述为长期留存附件。详见 `docs/development/handoffs/2026-09-08-h03-hybrid-datapath.md`。
 
 ## 本地在研补充（尚未合并/发布）
 
