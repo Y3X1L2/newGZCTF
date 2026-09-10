@@ -1,9 +1,9 @@
 # YINYU 当前开发状态
 
-文档整理日期：2026-09-09
-最近一次生产核验：2026-09-08 09:49 UTC（北京时间 17:49）
+文档整理日期：2026-09-10
+最近一次生产核验：2026-09-10 05:51 UTC（北京时间 13:51）
 
-本文件仅保留最新已知基线、功能边界、未解决事项和接手入口。生产信息是上述核验时点的记录，不能代替下一次操作前的现场检查；本次文档整理没有重新连接服务器。长期协作规则见 [AGENTS.md](../../AGENTS.md)。
+本文件仅保留最新已知基线、功能边界、未解决事项和接手入口。生产信息是上述核验时点的现场记录，不能代替下一次操作前的重新检查。长期协作规则见 [AGENTS.md](../../AGENTS.md)。
 
 ## 1. 基线
 
@@ -11,20 +11,21 @@
 | --- | --- |
 | 仓库 / 开发分支 | `https://github.com/Y3X1L2/newGZCTF.git` / `main`；开发从最新 `origin/main` 创建任务分支 |
 | 固定发布标签 | `stable-20260908` → `ab2bd54b7e16d454e3a8f54960c4bb4689047c4a`；已推送 annotated tag，不移动标签 |
-| 主站发布 | `10.24.0.27` 的主站及本机 Agent 使用 `/opt/gzctf/releases/pr9-converged-ab2bd54b7e16d454e3a8f54960c4bb4689047c4a-20260908/publish`；994 个 manifest 文件长度/摘要匹配 |
+| 主站发布 | `10.24.0.27` 的主站及本机 Agent 使用 `/opt/gzctf/releases/teamlab-production-a8438f676a747876312ed5e5b3475270efb27f91-20260910/publish`；提交 `a8438f676a747876312ed5e5b3475270efb27f91`，999 个 manifest 文件长度/摘要匹配 |
 | 持久化附件 | `/opt/gzctf/publish/files` → `/opt/gzctf/shared/files` |
-| 数据库 | 134 条迁移历史，head `20260816192540_TeamLabCapabilityClosure`；当前发布无新增迁移 |
-| 应用回退 | `/opt/gzctf/publish.previous` → `/opt/gzctf/releases/practice-validation-9eef8ac12c626672081e81fadbde39946e7d2237/publish` |
-| 备份 | `/opt/gzctf/backups/pr9-rollout-pre-ab2bd54b-20260908T080802Z`；预备与最终数据库备份均实际恢复验证，最终数据库/附件备份摘要复核通过 |
-| 执行节点 | 最近核验三节点均 Online/Stable/schedulable，Fabric Disabled；Agent 摘要前缀：`.27` `d93cf212...`、`.30` `3747f353...`、`.31` `2f12bca5...`，远端版本未完全统一 |
+| 数据库 | 140 条迁移历史，head `20260908111521_TeamLabDeviceObservation`；6 条 TeamLab 前向迁移已先在新鲜生产备份副本验证，再应用到生产 |
+| 应用回退 | `/opt/gzctf/publish.previous` → `/opt/gzctf/releases/pr9-converged-ab2bd54b7e16d454e3a8f54960c4bb4689047c4a-20260908/publish` |
+| 备份 | `/opt/gzctf/backups/teamlab-a8438f6-pre-20260910T033757Z`；数据库 custom dump 与共享文件归档均非空、摘要已记录，dump catalog 可读并完成隔离恢复/迁移验证 |
+| 执行节点 | 最近核验三节点均 Online/Stable/schedulable；Agent 摘要前缀：`.27` `76c8273e...`、`.30` `3747f353...`、`.31` `2f12bca5...`，本轮仅同步 `.27` 本机 Agent |
 | 健康状态 | 指标端口 `3001/healthz` 为 HTTP 200 / Degraded；业务端口 `8080/healthz` 按契约返回 404；降级原因见未解决事项 |
 | 技术栈 | .NET 10、ASP.NET Core、EF Core、PostgreSQL、Redis、React 19、TypeScript、Vite、pnpm |
 
 版本关系以实时 `git fetch origin --prune`、`git status` 和 `git log` 为准。需要复现该次生产源码时使用固定标签；`main` 后续是否仅有文档变化，应重新比较，不能长期假定。发布包摘要、回退边界和验收依据集中在 [稳定基线说明](handoffs/2026-09-08-stable-baseline.md)。
 
-当前 TeamLab 生产候选来自 `codex/teamlab-full-stable-v2-20260909`，功能提交截至
-`bb9b609a252ed00bf9c9dc0ef49453d3db9505da`，随后以独立生产发布分支同步最新
-`origin/main`。最终发布 SHA、生产备份与切换结果必须以本次维护窗口完成后的记录为准。
+当前 TeamLab 生产版本来自 `codex/teamlab-production-rollout-20260910`，发布提交
+`a8438f676a747876312ed5e5b3475270efb27f91` 已推送。该提交正常合并功能基线
+`b8e2baffe0505fad952efb47eab889a297c9b837` 与当时最新 `origin/main`
+`e10097ef8dcc98b76ea3477ebc5d6c1b5d19af65`；尚未合并回 `main`。
 
 ## 2. 当前功能边界
 
@@ -71,6 +72,7 @@
 - 固定发布提交已通过完整 CI、隔离真实 Docker 生命周期及附件引用保护验证；测试数量和运行编号见 [候选交接](handoffs/2026-09-07-pr9-runtime-convergence.md)，不作为未来提交已通过验证的依据。
 - 生产发布完成两份数据库备份恢复、制品/进程核验、关键 API 和共享附件核验；用户接手完成业务测试并删除临时题，随后只读确认对应题目、实例和容器记录不存在。详见 [生产发布交接](handoffs/2026-09-08-pr9-production-rollout.md)。
 - 2026-09-10 在测试主站 `10.0.7.118` 与执行节点 `10.0.7.125` 完成 H03 主站队列全链路：Docker PLC、libvirt VM、受管网卡连接器和 namespace 模拟现场端点互通，`field` 与 `isolated` 隔离，平台抓包 23,782 字节；端口断开、正式 reset、`ovn-controller` 重启、连接器独占和最终无残留销毁均通过。VM 已使用 NoCloud CIDATA 获得计划静态地址并通过 SSH/QGA 验证。该结果不替代真实现场网卡、具体 PLC 型号或多 Worker 跨宿主认证。
+- 2026-09-10 将提交 `a8438f676a747876312ed5e5b3475270efb27f91` 发布到生产主站与本机 Agent。生产备份副本完成 134 → 140 条迁移验证，既有业务表计数保持一致；发布后 999 个 manifest 文件摘要一致，首页、配置 API、认证边界、指标健康端点和已知附件下载通过，三节点在线可调度，稳定后日志无新增错误。完整证据见 [本次生产发布交接](handoffs/2026-09-10-teamlab-production-rollout.md)。
 - 已修复缺陷、旧版本切换、测试过程、旧计数和会话流水移出当前状态；需追溯时查看 [环境核验历史](../archive/implementation-records/2026-09-08-environment-verification-history.md)。归档不参与当前执行决策。
 
 ## 6. 文档入口
