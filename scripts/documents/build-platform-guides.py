@@ -19,8 +19,8 @@ from docx.shared import Cm, Pt, RGBColor
 ROOT = Path(__file__).resolve().parents[2]
 GUIDES = ROOT / "docs" / "user-guides"
 OUTPUTS = {
-    "platform-product-overview.md": "隐喻平台产品说明V0.1.docx",
-    "platform-user-manual.md": "隐喻平台使用手册V0.1.docx",
+    "platform-product-overview.md": "隐喻平台产品说明V0.2.docx",
+    "platform-user-manual.md": "隐喻平台使用手册V0.2.docx",
 }
 
 
@@ -29,7 +29,26 @@ def font(style, name, size, bold=False, color="000000"):
     style.font.size = Pt(size)
     style.font.bold = bold
     style.font.color.rgb = RGBColor.from_string(color)
-    style.element.get_or_add_rPr().rFonts.set(qn("w:eastAsia"), name)
+    rpr = style.element.get_or_add_rPr()
+    fonts = rpr.rFonts
+    for attribute in list(fonts.attrib):
+        if "theme" in attribute.lower():
+            del fonts.attrib[attribute]
+    for script in ("ascii", "hAnsi", "eastAsia", "cs"):
+        fonts.set(qn("w:" + script), name)
+    fonts.set(qn("w:hint"), "eastAsia")
+    for tag, value in (("bCs", "1" if bold else "0"), ("szCs", str(int(size * 2)))):
+        element = rpr.find(qn("w:" + tag))
+        if element is None:
+            element = OxmlElement("w:" + tag)
+            rpr.append(element)
+        element.set(qn("w:val"), value)
+    language = rpr.find(qn("w:lang"))
+    if language is None:
+        language = OxmlElement("w:lang")
+        rpr.append(language)
+    language.set(qn("w:val"), "zh-CN")
+    language.set(qn("w:eastAsia"), "zh-CN")
 
 
 def rich(paragraph, text):
@@ -81,8 +100,7 @@ def table(document, lines):
                 shade = OxmlElement("w:shd")
                 shade.set(qn("w:fill"), "E8EFF5")
                 cell._tc.get_or_add_tcPr().append(shade)
-                for run in p.runs:
-                    run.bold = True
+                p.style = document.styles["Guide Table Header"]
     gap = document.add_paragraph()
     gap.paragraph_format.space_after = Pt(4)
     gap.paragraph_format.line_spacing = Pt(1)
@@ -97,23 +115,27 @@ def build(source, output):
     section.left_margin, section.right_margin = Cm(2.3), Cm(2.3)
     section.footer_distance = Cm(0.8)
     normal = document.styles["Normal"]
-    font(normal, "微软雅黑", 12)
+    font(normal, "SimSun", 12)
     normal.paragraph_format.line_spacing = Pt(18)
     normal.paragraph_format.space_after = Pt(5)
     normal.paragraph_format.widow_control = True
-    for name, size in (("Title", 24), ("Heading 1", 17), ("Heading 2", 13)):
+    for name, size in (("Title", 22), ("Heading 1", 16), ("Heading 2", 13)):
         style = document.styles[name]
-        font(style, "微软雅黑", size, True)
+        font(style, "SimHei", size)
+        link = style.element.find(qn("w:link"))
+        if link is not None:
+            style.element.remove(link)
         style.paragraph_format.space_before = Pt(10 if name != "Title" else 0)
         style.paragraph_format.space_after = Pt(8)
         style.paragraph_format.keep_with_next = True
     for style in document.styles:
         for border in style.element.findall(".//" + qn("w:pBdr")):
             border.getparent().remove(border)
-    for name, size, color in (("Guide Shot", 10.5, "4B5563"), ("Guide Table", 11, "000000")):
+    for name, size, color in (("Guide Shot", 10.5, "4B5563"), ("Guide Table", 11, "000000"),
+                              ("Guide Shot Title", 11, "000000"), ("Guide Table Header", 11, "000000")):
         style = document.styles.add_style(name, 1)
         style.base_style = normal
-        font(style, "微软雅黑", size, color=color)
+        font(style, "SimHei" if name in ("Guide Shot Title", "Guide Table Header") else "SimSun", size, color=color)
         style.paragraph_format.space_after = Pt(3)
         style.paragraph_format.line_spacing = Pt(15.5 if name == "Guide Shot" else 16.5)
     footer = section.footer.paragraphs[0]
@@ -138,10 +160,10 @@ def build(source, output):
             continue
         elif line.startswith("::: screenshot "):
             in_shot = True
-            p = document.add_paragraph()
+            p = document.add_paragraph(style="Guide Shot Title")
             p.paragraph_format.space_before = Pt(8)
             p.paragraph_format.keep_with_next = True
-            p.add_run("待补截图 " + line[len("::: screenshot "):]).bold = True
+            p.add_run("待补截图 " + line[len("::: screenshot "):])
         elif line == ":::":
             in_shot = False
         elif in_shot:
