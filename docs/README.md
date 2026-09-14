@@ -44,6 +44,7 @@
 | --- | --- |
 | 平台产品说明 | [文字稿](user-guides/platform-product-overview.md)、[Word 文档 V0.2](user-guides/隐喻平台产品说明V0.2.docx)，含 5 处截图说明 |
 | 平台使用手册 | [文字稿](user-guides/platform-user-manual.md)、[Word 文档 V0.2](user-guides/隐喻平台使用手册V0.2.docx)，含 26 处截图说明 |
+| Markdown 补图版 | [产品说明](user-guides/markdown-edit/01-产品说明.md)、[使用手册](user-guides/markdown-edit/02-使用手册.md)，可直接粘贴图片或使用编号图片链接 |
 | Open API 调用 | [`commercialization/open-api-v1-guide.md`](commercialization/open-api-v1-guide.md) |
 | OpenAPI 快照 | [`commercialization/openapi/open-v1.json`](commercialization/openapi/open-v1.json) |
 | TeamLab API 基础契约 | [`commercialization/teamlab-api-foundation-contract.md`](commercialization/teamlab-api-foundation-contract.md) |
