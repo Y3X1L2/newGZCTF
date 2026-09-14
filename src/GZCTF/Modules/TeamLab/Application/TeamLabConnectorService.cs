@@ -36,41 +36,29 @@ public sealed class TeamLabConnectorService(AppDbContext context, ITeamLabConnec
         RegisterTeamLabConnectorModel command,
         CancellationToken cancellationToken)
     {
-        var name = Slug(command.Name, 96, "connector_name_invalid", "连接器名称无效");
-        var displayName = Text(command.DisplayName, 1, 128, "connector_display_name_invalid", "连接器显示名称无效");
-        if (!TeamLabCapabilityResourceContractMapper.TryParseConnectorKind(command.Kind, out var kind))
-            throw new TeamLabApiContractException("connector_kind_invalid", "连接器类型无效", 422);
-        if (command.SupportsSharedUse && command.Capacity is < 1 or > 64)
-            throw new TeamLabApiContractException("connector_capacity_invalid", "共享连接器容量必须是 1-64", 422);
-        var capacity = command.SupportsSharedUse ? command.Capacity : 1;
-
-        if (await context.TeamLabConnectors.AnyAsync(item => item.Name == name, cancellationToken))
-            throw new TeamLabApiContractException("connector_name_conflict", "连接器名称已存在", 409);
-        if (command.ControlScopeId is { } scopeId && !await context.TeamLabControlScopes
-                .AnyAsync(scope => scope.Id == scopeId, cancellationToken))
-            throw new TeamLabApiContractException("scope_not_found", "未找到 TeamLab 控制范围", 404);
-
-        var connector = new TeamLabConnector
-        {
-            Name = name,
-            DisplayName = displayName,
-            Kind = kind,
-            ControlScopeId = command.ControlScopeId,
-            SupportsSharedUse = command.SupportsSharedUse,
-            Capacity = capacity,
-            AttachmentReference = OptionalText(
-                command.AttachmentReference, 512, "connector_attachment_reference_invalid", "连接器接入引用超出长度限制"),
-            Description = OptionalText(
-                command.Description, 2048, "connector_description_invalid", "连接器描述超出长度限制")
-        };
-        if (command.ManagedNic is { } managedNic)
-        {
-            connector.AttachmentReference = System.Text.Json.JsonSerializer.Serialize(managedNic);
-            var binding = TeamLabConnectorConfiguration.Require(connector);
-            if (!await context.WorkerNodes.AnyAsync(node => node.Id == binding.NodeId, cancellationToken))
-                throw new TeamLabApiContractException("connector_node_not_found", "连接器所属节点不存在。", 422);
-        }
+        var connector = new TeamLabConnector();
+        await ApplyAsync(connector, command, cancellationToken);
         context.TeamLabConnectors.Add(connector);
+        await context.SaveChangesAsync(cancellationToken);
+        return ToModel(connector, []);
+    }
+
+    public async Task<TeamLabConnectorModel> UpdateAsync(
+        Guid connectorId,
+        Guid? expectedControlScopeId,
+        RegisterTeamLabConnectorModel command,
+        CancellationToken cancellationToken)
+    {
+        var connector = await context.TeamLabConnectors
+            .SingleOrDefaultAsync(item => item.PublicId == connectorId && !item.IsArchived &&
+                                          item.ControlScopeId == expectedControlScopeId, cancellationToken)
+            ?? throw new TeamLabApiContractException("connector_not_found", "未找到连接器", 404);
+        if (await context.TeamLabConnectorLeases.AnyAsync(
+                lease => lease.ConnectorId == connector.Id && lease.ReleasedAt == null, cancellationToken))
+            throw new TeamLabApiContractException("connector_leased", "连接器仍被运行时占用，无法修改", 409);
+
+        await ApplyAsync(connector, command, cancellationToken);
+        connector.UpdatedAt = DateTimeOffset.UtcNow;
         await context.SaveChangesAsync(cancellationToken);
         return ToModel(connector, []);
     }
@@ -318,6 +306,44 @@ public sealed class TeamLabConnectorService(AppDbContext context, ITeamLabConnec
         value.Replace(":", string.Empty, StringComparison.Ordinal)
             .Replace("-", string.Empty, StringComparison.Ordinal)
             .ToLowerInvariant();
+
+    private async Task ApplyAsync(
+        TeamLabConnector connector,
+        RegisterTeamLabConnectorModel command,
+        CancellationToken cancellationToken)
+    {
+        var name = Slug(command.Name, 96, "connector_name_invalid", "连接器名称无效");
+        var displayName = Text(command.DisplayName, 1, 128, "connector_display_name_invalid", "连接器显示名称无效");
+        if (!TeamLabCapabilityResourceContractMapper.TryParseConnectorKind(command.Kind, out var kind))
+            throw new TeamLabApiContractException("connector_kind_invalid", "连接器类型无效", 422);
+        if (command.SupportsSharedUse && command.Capacity is < 1 or > 64)
+            throw new TeamLabApiContractException("connector_capacity_invalid", "共享连接器容量必须是 1-64", 422);
+        var capacity = command.SupportsSharedUse ? command.Capacity : 1;
+
+        if (await context.TeamLabConnectors.AnyAsync(
+                item => item.Id != connector.Id && item.Name == name, cancellationToken))
+            throw new TeamLabApiContractException("connector_name_conflict", "连接器名称已存在", 409);
+        if (command.ControlScopeId is { } scopeId && !await context.TeamLabControlScopes
+                .AnyAsync(scope => scope.Id == scopeId && !scope.IsArchived, cancellationToken))
+            throw new TeamLabApiContractException("scope_not_found", "未找到 TeamLab 控制范围", 404);
+
+        connector.Name = name;
+        connector.DisplayName = displayName;
+        connector.Kind = kind;
+        connector.ControlScopeId = command.ControlScopeId;
+        connector.SupportsSharedUse = command.SupportsSharedUse;
+        connector.Capacity = capacity;
+        connector.AttachmentReference = OptionalText(
+            command.AttachmentReference, 512, "connector_attachment_reference_invalid", "连接器接入引用超出长度限制");
+        connector.Description = OptionalText(
+            command.Description, 2048, "connector_description_invalid", "连接器描述超出长度限制");
+        if (command.ManagedNic is not { } managedNic) return;
+
+        connector.AttachmentReference = System.Text.Json.JsonSerializer.Serialize(managedNic);
+        var binding = TeamLabConnectorConfiguration.Require(connector);
+        if (!await context.WorkerNodes.AnyAsync(node => node.Id == binding.NodeId, cancellationToken))
+            throw new TeamLabApiContractException("connector_node_not_found", "连接器所属节点不存在。", 422);
+    }
 
     private sealed record LiveConnectorHealth(TeamLabConnectorHealth Health, DateTimeOffset ObservedAt);
 

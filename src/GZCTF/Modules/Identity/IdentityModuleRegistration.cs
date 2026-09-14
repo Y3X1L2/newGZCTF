@@ -51,6 +51,7 @@ public static class IdentityModuleRegistration
             AddScopePolicy(options, ApiTokenScopes.TeamLabCaptureWrite);
             AddScopePolicy(options, ApiTokenScopes.TeamLabResourcePoolsRead);
             AddScopePolicy(options, ApiTokenScopes.TeamLabDevicePackagesRead);
+            AddScopePolicy(options, ApiTokenScopes.TeamLabDevicePackagesWrite);
             AddScopePolicy(options, ApiTokenScopes.TeamLabConnectorsRead);
             AddScopePolicy(options, ApiTokenScopes.TeamLabConnectorsWrite);
             AddScopePolicy(options, ApiTokenScopes.TeamLabLinkPoliciesRead);

@@ -22,49 +22,23 @@ public sealed class TeamLabDevicePackageService(AppDbContext context)
         RegisterTeamLabDevicePackageModel command,
         CancellationToken cancellationToken)
     {
-        var name = Slug(command.Name, 96, "device_package_name_invalid", "设备包名称无效");
-        var displayName = Text(command.DisplayName, 1, 128, "device_package_display_name_invalid", "设备包显示名称无效");
-        var version = Version(command.Version, "device_package_version_invalid", "设备包版本号无效");
-        if (!TeamLabCapabilityResourceContractMapper.TryParseArtifactKind(command.ArtifactKind, out var artifactKind))
-            throw new TeamLabApiContractException("device_package_artifact_kind_invalid", "设备包制品类型无效", 422);
-        var reference = Text(command.ArtifactReference, 1, 512, "device_package_artifact_reference_invalid", "设备包制品引用无效");
-        if (reference.Any(char.IsWhiteSpace))
-            throw new TeamLabApiContractException("device_package_artifact_reference_invalid", "设备包制品引用不能包含空白字符", 422);
-        var digest = Digest(command.Digest);
-        var assetKinds = ParseAssetKinds(command.SupportedAssetKinds);
-        var ports = ParsePorts(command.Ports);
-        var parameters = ParameterSchema(command.ParameterSchema);
-        await TeamLabDeviceExecutionCompiler.ReadSchemaAsync(parameters, cancellationToken);
-        var health = HealthDeclaration(command.HealthDeclaration);
-        var eventTypes = StringListJson(
-            command.ProtocolEventTypes, 32, "device_package_protocol_event_types_invalid", "设备包协议事件类型无效");
-        if (command.CpuMillis < 0 || command.MemoryMib < 0 || command.StorageGib < 0)
-            throw new TeamLabApiContractException("device_package_resources_invalid", "设备包资源需求不能为负数", 422);
-
-        if (await context.TeamLabDevicePackages.AnyAsync(
-                item => item.Name == name && item.Version == version, cancellationToken))
-            throw new TeamLabApiContractException("device_package_version_conflict", "该设备包版本已存在", 409);
-
-        var package = new TeamLabDevicePackage
-        {
-            Name = name,
-            DisplayName = displayName,
-            Version = version,
-            ArtifactKind = artifactKind,
-            ArtifactReference = reference,
-            Digest = digest.Length == 0 ? null : digest,
-            Description = OptionalText(
-                command.Description, 2048, "device_package_description_invalid", "设备包描述超出长度限制"),
-            SupportedAssetKindsJson = JsonSerializer.Serialize(assetKinds),
-            CpuMillis = command.CpuMillis,
-            MemoryMib = command.MemoryMib,
-            StorageGib = command.StorageGib,
-            PortsJson = JsonSerializer.Serialize(ports),
-            ParameterSchemaJson = parameters,
-            HealthDeclarationJson = health,
-            ProtocolEventTypesJson = eventTypes
-        };
+        var package = new TeamLabDevicePackage();
+        await ApplyAsync(package, command, cancellationToken);
         context.TeamLabDevicePackages.Add(package);
+        await context.SaveChangesAsync(cancellationToken);
+        return ToModel(package);
+    }
+
+    public async Task<TeamLabDevicePackageModel> UpdateAsync(
+        Guid publicId,
+        RegisterTeamLabDevicePackageModel command,
+        CancellationToken cancellationToken)
+    {
+        var package = await context.TeamLabDevicePackages
+            .SingleOrDefaultAsync(item => item.PublicId == publicId && !item.IsArchived, cancellationToken)
+            ?? throw new TeamLabApiContractException("device_package_not_found", "未找到设备包", 404);
+        await ApplyAsync(package, command, cancellationToken);
+        package.UpdatedAt = DateTimeOffset.UtcNow;
         await context.SaveChangesAsync(cancellationToken);
         return ToModel(package);
     }
@@ -147,6 +121,51 @@ public sealed class TeamLabDevicePackageService(AppDbContext context)
         package.CreatedAt,
         package.UpdatedAt,
         package.Id);
+
+    private async Task ApplyAsync(
+        TeamLabDevicePackage package,
+        RegisterTeamLabDevicePackageModel command,
+        CancellationToken cancellationToken)
+    {
+        var name = Slug(command.Name, 96, "device_package_name_invalid", "设备包名称无效");
+        var displayName = Text(command.DisplayName, 1, 128, "device_package_display_name_invalid", "设备包显示名称无效");
+        var version = Version(command.Version, "device_package_version_invalid", "设备包版本号无效");
+        if (!TeamLabCapabilityResourceContractMapper.TryParseArtifactKind(command.ArtifactKind, out var artifactKind))
+            throw new TeamLabApiContractException("device_package_artifact_kind_invalid", "设备包制品类型无效", 422);
+        var reference = Text(command.ArtifactReference, 1, 512, "device_package_artifact_reference_invalid", "设备包制品引用无效");
+        if (reference.Any(char.IsWhiteSpace))
+            throw new TeamLabApiContractException("device_package_artifact_reference_invalid", "设备包制品引用不能包含空白字符", 422);
+        var digest = Digest(command.Digest);
+        var assetKinds = ParseAssetKinds(command.SupportedAssetKinds);
+        var ports = ParsePorts(command.Ports);
+        var parameters = ParameterSchema(command.ParameterSchema);
+        await TeamLabDeviceExecutionCompiler.ReadSchemaAsync(parameters, cancellationToken);
+        var health = HealthDeclaration(command.HealthDeclaration);
+        var eventTypes = StringListJson(
+            command.ProtocolEventTypes, 32, "device_package_protocol_event_types_invalid", "设备包协议事件类型无效");
+        if (command.CpuMillis < 0 || command.MemoryMib < 0 || command.StorageGib < 0)
+            throw new TeamLabApiContractException("device_package_resources_invalid", "设备包资源需求不能为负数", 422);
+        if (await context.TeamLabDevicePackages.AnyAsync(
+                item => item.Id != package.Id && item.Name == name && item.Version == version, cancellationToken))
+            throw new TeamLabApiContractException("device_package_version_conflict", "该设备包版本已存在", 409);
+
+        package.Name = name;
+        package.DisplayName = displayName;
+        package.Version = version;
+        package.ArtifactKind = artifactKind;
+        package.ArtifactReference = reference;
+        package.Digest = digest.Length == 0 ? null : digest;
+        package.Description = OptionalText(
+            command.Description, 2048, "device_package_description_invalid", "设备包描述超出长度限制");
+        package.SupportedAssetKindsJson = JsonSerializer.Serialize(assetKinds);
+        package.CpuMillis = command.CpuMillis;
+        package.MemoryMib = command.MemoryMib;
+        package.StorageGib = command.StorageGib;
+        package.PortsJson = JsonSerializer.Serialize(ports);
+        package.ParameterSchemaJson = parameters;
+        package.HealthDeclarationJson = health;
+        package.ProtocolEventTypesJson = eventTypes;
+    }
 
     private static IReadOnlyList<string> ParseAssetKinds(IReadOnlyList<string>? kinds)
     {

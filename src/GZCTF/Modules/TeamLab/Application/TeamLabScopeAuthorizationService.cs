@@ -80,6 +80,32 @@ public sealed class TeamLabScopeAuthorizationService(AppDbContext context)
         return await RequireResourceScopeAsync(scopeId, apiTokenId, administrator, writable, cancellationToken);
     }
 
+    public async Task<Guid?> RequireConnectorScopeAsync(
+        Guid connectorId,
+        Guid? apiTokenId,
+        bool administrator,
+        bool writable,
+        CancellationToken cancellationToken)
+    {
+        var connector = await context.TeamLabConnectors.AsNoTracking()
+            .Where(item => item.PublicId == connectorId)
+            .Select(item => new ConnectorScope(item.ControlScopeId))
+            .SingleOrDefaultAsync(cancellationToken)
+            ?? throw new TeamLabApiContractException("connector_not_found", "未找到连接器", 404);
+        if (connector.ControlScopeId is not { } scopeId)
+        {
+            if (!administrator)
+                throw new TeamLabApiContractException("connector_not_found", "未找到连接器", 404);
+            return null;
+        }
+
+        if (writable)
+            await RequireWritableAsync(scopeId, apiTokenId, administrator, cancellationToken);
+        else
+            await RequireReadableAsync(scopeId, apiTokenId, administrator, cancellationToken);
+        return scopeId;
+    }
+
     public async Task<Guid> RequireRolloutScopeAsync(
         Guid rolloutId,
         Guid? apiTokenId,
@@ -162,4 +188,6 @@ public sealed class TeamLabScopeAuthorizationService(AppDbContext context)
 
     private static TeamLabApiContractException NotFound() =>
         new("scope_not_found", "未找到 TeamLab 控制范围。", 404);
+
+    private sealed record ConnectorScope(Guid? ControlScopeId);
 }
