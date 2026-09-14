@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { compileTopologyDocument, topologyExecutionSummary } from './topologyCompiler'
+import { compileTopologyDocument } from './topologyCompiler'
 import type { TopologyDocument, TopologyNode } from './topologyDocument'
 
 const position = (x: number, y: number) => ({ x, y, width: null, height: null, collapsed: false })
@@ -173,27 +173,5 @@ describe('compileTopologyDocument', () => {
       ])
     )
     expect(first.editor.infrastructure['router-edge']).toEqual(position(250, 90))
-  })
-
-  it('excludes editor-only metadata from the execution summary', () => {
-    const source = document()
-    const layoutOnly = structuredClone(source)
-    for (const node of Object.values(layoutOnly.nodes)) {
-      node.position = { ...node.position, x: node.position.x + 120, y: node.position.y + 80 }
-    }
-    layoutOnly.networkLayouts = {
-      ...layoutOnly.networkLayouts,
-      edge: { x: 10, y: 20, width: 800, height: 600, collapsed: true },
-    }
-    ;(layoutOnly.nodes.portal as TopologyNode & { color: string }).color = 'blue'
-    ;(layoutOnly as TopologyDocument & { readAt: number }).readAt = Date.now()
-
-    expect(topologyExecutionSummary(layoutOnly)).toBe(topologyExecutionSummary(source))
-
-    const executionChange = structuredClone(source)
-    const portal = executionChange.nodes.portal
-    if (portal.type !== 'docker') throw new Error('portal fixture must be a Docker asset')
-    portal.resources.memoryMiB += 512
-    expect(topologyExecutionSummary(executionChange)).not.toBe(topologyExecutionSummary(source))
   })
 })

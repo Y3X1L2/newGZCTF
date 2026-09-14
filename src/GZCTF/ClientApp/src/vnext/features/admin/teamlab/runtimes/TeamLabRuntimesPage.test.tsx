@@ -4,6 +4,7 @@ import { SWRConfig } from 'swr'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { teamLabAdminApi, type TeamLabTopologyDetail } from '../api'
 import { useTeamLabScene } from '../shared/TeamLabSceneShell'
+import { TeamLabRuntimeStatusBadge } from '../shared/TeamLabStatusBadge'
 import { TeamLabRuntimesPage } from './TeamLabRuntimesPage'
 
 vi.mock('../shared/TeamLabSceneShell', () => ({ useTeamLabScene: vi.fn() }))
@@ -61,7 +62,7 @@ describe('TeamLabRuntimesPage', () => {
 
     const row = await screen.findByRole('row', { name: /runtime-ready/ })
     expect(row).toHaveTextContent('已开放')
-    const status = within(row).getByText('运行就绪').closest('span')
+    const status = within(row).getByText('环境运行中').closest('span')
     expect(status).not.toHaveAttribute('data-pulse')
     expect(status?.querySelector('svg')).not.toBeNull()
     fireEvent.click(row)
@@ -76,5 +77,22 @@ describe('TeamLabRuntimesPage', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: '下一页' }))
     await waitFor(() => expect(list).toHaveBeenCalledWith(scene.id, 'cursor-next', 30))
+  })
+
+  it.each([
+    ['pending', '等待中'],
+    ['planning', '规划中'],
+    ['scheduled', '已排队'],
+    ['deploying', '部署中'],
+    ['probing', '探测中'],
+    ['destroying', '销毁中'],
+  ] as const)('animates the %s runtime status', (status, label) => {
+    render(<TeamLabRuntimeStatusBadge status={status} />)
+    expect(screen.getByText(label).closest('span')).toHaveAttribute('data-pulse', 'true')
+  })
+
+  it('does not animate cleanup-pending', () => {
+    render(<TeamLabRuntimeStatusBadge status="cleanup-pending" />)
+    expect(screen.getByText('待清理').closest('span')).not.toHaveAttribute('data-pulse')
   })
 })

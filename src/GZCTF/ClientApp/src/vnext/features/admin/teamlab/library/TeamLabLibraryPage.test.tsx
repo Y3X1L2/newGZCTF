@@ -98,6 +98,36 @@ describe('TeamLabLibraryPage', () => {
     expect(within(row).getByText('规划中')).toBeInTheDocument()
   })
 
+  it.each([
+    ['cleanup-pending', '待清理'],
+    ['destroying', '销毁中'],
+  ] as const)('keeps the published lifecycle while the latest trial is %s', (status, runtimeLabel) => {
+    vi.mocked(useTeamLabCatalog).mockReturnValue(catalog({
+      page: {
+        items: [{
+          ...scene,
+          latestTrialRuntime: {
+            id: '019f0000-0000-7000-8000-000000000010',
+            releaseId: scene.latestRelease!.id,
+            status,
+            stage: status,
+            openForAccess: false,
+            createdAt: scene.updatedAt,
+            updatedAt: null,
+            error: null,
+          },
+        }],
+        nextCursor: null,
+      },
+    }))
+    render(<MemoryRouter><TeamLabLibraryPage /></MemoryRouter>)
+
+    const row = screen.getByRole('row', { name: /企业域演练/ })
+    expect(within(row).getByText('已发布')).toBeInTheDocument()
+    expect(within(row).getByText(runtimeLabel)).toBeInTheDocument()
+    expect(within(row).queryByText('试运行中')).not.toBeInTheDocument()
+  })
+
   it('renders an explicit empty state without inventing local rows', () => {
     vi.mocked(useTeamLabCatalog).mockReturnValue(catalog({ page: { items: [], nextCursor: null } }))
     render(<MemoryRouter><TeamLabLibraryPage /></MemoryRouter>)

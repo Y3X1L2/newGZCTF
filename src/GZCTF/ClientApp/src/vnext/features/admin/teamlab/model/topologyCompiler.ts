@@ -191,17 +191,3 @@ export function compileTopologyDocument(document: TopologyDocument): CreateTeamL
     editor: compileEditor(document),
   }
 }
-
-const nonExecutionDocumentFields = new Set([
-  'color', 'createdAt', 'editor', 'lastReadAt', 'networkLayouts',
-  'position', 'readAt', 'readTime', 'updatedAt',
-])
-
-export function topologyExecutionSummary(document: TopologyDocument): string {
-  try {
-    const { editor: _, ...execution } = compileTopologyDocument(document)
-    return JSON.stringify(execution)
-  } catch {
-    return JSON.stringify(document, (key, value) => nonExecutionDocumentFields.has(key) ? undefined : value)
-  }
-}

@@ -14,7 +14,6 @@ import {
   type TeamLabValidationIssue,
   type TeamLabValidationResult,
 } from '../api'
-import { topologyExecutionSummary } from '../model/topologyCompiler'
 import { mapDocumentToUpdateRequest, mapTopologyDetailToDocument, type VmDeviceType } from '../model/topologyMapper'
 import type { TopologyDocument } from '../model/topologyDocument'
 import { useTeamLabScene } from '../shared/TeamLabSceneShell'
@@ -63,9 +62,6 @@ function TeamLabDesignSession({
   const [publishing, setPublishing] = useState(false)
   const [operationError, setOperationError] = useState<unknown>(null)
   const [focusTarget, setFocusTarget] = useState<TeamLabEditorFocusTarget | null>(null)
-  const initialExecutionSummary = useMemo(() => topologyExecutionSummary(initialDocument), [initialDocument])
-  const draftExecutionSummary = useMemo(() => topologyExecutionSummary(draft), [draft])
-
   const save = useCallback(
     (document: TopologyDocument, revision: number) =>
       teamLabAdminApi.updateTopology(scene.id, mapDocumentToUpdateRequest(document, revision)),
@@ -117,8 +113,7 @@ function TeamLabDesignSession({
     () => [...(releases ?? [])].sort((left, right) => right.version - left.version)[0] ?? null,
     [releases]
   )
-  const hasUnpublishedChanges =
-    draftExecutionSummary !== initialExecutionSummary || latestRelease?.sourceRevision !== savedRevision
+  const hasUnpublishedChanges = latestRelease?.sourceRevision !== savedRevision
   const publicationState = releasesError
     ? 'loading'
     : !releases

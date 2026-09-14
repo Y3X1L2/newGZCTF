@@ -33,16 +33,16 @@ const sceneMeta: Record<TeamLabSceneLifecycle, StatusMeta> = {
 }
 
 const runtimeMeta: Record<TeamLabRuntimeStatus, StatusMeta> = {
-  pending: { icon: Clock3, label: '等待中', tone: 'neutral' },
+  pending: { icon: Clock3, label: '等待中', tone: 'neutral', pulse: true },
   planning: { icon: LoaderCircle, label: '规划中', tone: 'info', pulse: true },
-  scheduled: { icon: Clock3, label: '已排队', tone: 'info' },
+  scheduled: { icon: Clock3, label: '已排队', tone: 'info', pulse: true },
   deploying: { icon: LoaderCircle, label: '部署中', tone: 'info', pulse: true },
   probing: { icon: LoaderCircle, label: '探测中', tone: 'info', pulse: true },
-  running: { icon: CheckCircle2, label: '运行就绪', tone: 'success' },
+  running: { icon: CheckCircle2, label: '环境运行中', tone: 'success' },
   failed: { icon: CircleX, label: '失败', tone: 'danger' },
   'cleanup-pending': { icon: Clock3, label: '待清理', tone: 'warning' },
   paused: { icon: CirclePause, label: '已暂停', tone: 'neutral' },
-  destroying: { icon: LoaderCircle, label: '清理中', tone: 'warning', pulse: true },
+  destroying: { icon: LoaderCircle, label: '销毁中', tone: 'warning', pulse: true },
   destroyed: { icon: Trash2, label: '已销毁', tone: 'neutral' },
   stopped: { icon: Power, label: '已停止', tone: 'neutral' },
 }
@@ -80,5 +80,5 @@ export function TeamLabReadinessStatusBadge({ ready }: { ready: boolean }) {
 
 function isTrialInProgress(status: TeamLabRuntimeStatus) {
   return status === 'pending' || status === 'planning' || status === 'scheduled' || status === 'deploying' ||
-    status === 'probing' || status === 'cleanup-pending' || status === 'destroying'
+    status === 'probing'
 }
