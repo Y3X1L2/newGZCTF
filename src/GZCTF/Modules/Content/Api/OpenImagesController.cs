@@ -24,6 +24,42 @@ public sealed class OpenImagesController(
     ImageTemplateCertificationService certifications,
     IAuthorizationService authorization) : ControllerBase
 {
+    [HttpGet]
+    [Authorize(Policy = "scope:" + ApiTokenScopes.ImagesRead)]
+    [ProducesResponseType(typeof(OpenImageTemplatePageModel), StatusCodes.Status200OK)]
+    public async Task<OpenImageTemplatePageModel> List(
+        [FromQuery] OSType? osType = null,
+        [FromQuery] ImageType? imageType = null,
+        [FromQuery] ImageStatus? status = null,
+        [FromQuery, MaxLength(256)] string? search = null,
+        [FromQuery, Range(1, 100)] int limit = 50,
+        [FromQuery] string? after = null,
+        CancellationToken cancellationToken = default)
+    {
+        var (_, actorUserId) = GetActor();
+        int? afterId = null;
+        if (after is not null)
+        {
+            if (!int.TryParse(after, out var parsedAfter) || parsedAfter <= 0)
+                throw new ImageImportContractException("invalid_cursor", "The image cursor is invalid.", 400);
+            afterId = parsedAfter;
+        }
+
+        var page = await catalog.ListDetailsAsync(
+            actorUserId,
+            User.IsInRole(nameof(Role.Admin)),
+            osType,
+            imageType,
+            status,
+            search,
+            limit,
+            afterId,
+            cancellationToken);
+        return new OpenImageTemplatePageModel(
+            page.Items.Select(OpenImageTemplateModel.FromDetails).ToArray(),
+            page.NextId?.ToString());
+    }
+
     [HttpPost("docker-references")]
     [Authorize(Policy = "scope:" + ApiTokenScopes.ImagesWrite)]
     [ProducesResponseType(typeof(ApiOperationModel), StatusCodes.Status202Accepted)]
@@ -239,15 +275,13 @@ public sealed class OpenImagesController(
 
     private async Task<bool> CanAccessTemplateAsync(ImageTemplateDetails template, Guid actorUserId)
     {
-        if (template.CreatedById == actorUserId)
+        if (template.CreatedById is null || template.CreatedById == actorUserId || User.IsInRole(nameof(Role.Admin)))
             return true;
-        if (!User.HasClaim(claim => claim.Type == ApiTokenClaimTypes.Resource))
-            return false;
 
         var result = await authorization.AuthorizeAsync(
             User,
             null,
-            new ApiResourceRequirement("image", template.Name));
+            new ApiResourceRequirement("image", template.Name, RequireExplicitGrant: true));
         return result.Succeeded;
     }
 
