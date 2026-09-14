@@ -58,7 +58,6 @@ public sealed class TeamLabTopologyAsset
     public TeamLabHealthCheckKind? HealthCheckKind { get; set; }
     public int? HealthCheckPort { get; set; }
     public int OrderIndex { get; set; }
-    public TeamLabEndpointObservationMode EndpointObservation { get; set; }
     public TeamLabTopology Topology { get; set; } = null!;
     public List<TeamLabTopologyInterface> Interfaces { get; set; } = [];
 }

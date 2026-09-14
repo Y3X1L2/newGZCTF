@@ -358,7 +358,6 @@ Scope: teamlab.topologies:write
     "port": 80
   },
   "orderIndex": 0,
-  "endpointObservation": 2,
   "devicePackageId": null,
   "deviceParameters": null,
   "connectorId": null
@@ -384,7 +383,6 @@ Scope: teamlab.topologies:write
 | `healthCheck.kind` | int | 否 | 健康检查类型，`0`=TCP，`1`=HTTP |
 | `healthCheck.port` | int | 否 | 健康检查端口 |
 | `orderIndex` | int | 否 | 排序 |
-| `endpointObservation` | int | 否 | `0`=Disabled，`1`=Optional，`2`=Required |
 | `devicePackageId` | int | 否 | 设备包 ID（虚实结合） |
 | `deviceParameters` | object | 否 | 设备包参数，JSON 对象 |
 | `connectorId` | guid | 否 | 关联现场连接器 |
@@ -444,8 +442,7 @@ Scope: teamlab.topologies:write
 ```json
 {
   "flowMetadataEnabled": true,
-  "onDemandPcapEnabled": true,
-  "endpointObservation": 1
+  "onDemandPcapEnabled": true
 }
 ```
 
@@ -453,7 +450,6 @@ Scope: teamlab.topologies:write
 | --- | --- | --- | --- |
 | `flowMetadataEnabled` | bool | 否 | 是否采集流量元数据，默认 true |
 | `onDemandPcapEnabled` | bool | 否 | 是否允许按需抓包，默认 true |
-| `endpointObservation` | int | 否 | 端点观测模式，`0`=Disabled，`1`=Optional，`2`=Required |
 
 #### 编辑器布局对象 `editor`
 
@@ -1660,7 +1656,7 @@ Scope: teamlab.traffic:read
 | `limit` | int | 否 | 1-100，默认 50 |
 | `query` | string | 否 | 关键字搜索 |
 | `protocol` | string | 否 | 协议过滤 |
-| `confidence` | string | 否 | `packet-exact`、`process-correlated`、`temporally-related` |
+| `confidence` | string | 否 | `packet-exact` |
 
 响应：
 
@@ -2069,7 +2065,7 @@ deploy, reset, destroy, ready, pause, resume,
 cleanup, fabric, bootstrap, network, route, probe,
 infrastructure, access, remote-access,
 capture, capture-expiry, capture-upload, capture-download,
-observation, sensor-authentication, operation
+observation, operation
 ```
 
 传入白名单之外的值会返回 `422 webhook_event_type_invalid`。若目标环境的测试文档/线上 OpenAPI 出现点分事件名（如 `runtime.ready`），说明该部署包含归一化兼容层；实际对接以该环境 OpenAPI 描述为准。
@@ -2403,7 +2399,7 @@ curl -s -X POST "$BASE/teamlab/topologies" \
     "assets": [
       { "key": "plc", "name": "PLC", "kind": 0, "imageTemplateId": 116, "resources": { "cpuUnits": 1, "memoryMiB": 256, "storageMiB": 256 },
         "interfaces": [ { "key": "plc-eth0", "networkKey": "net-entry", "hostOffset": 10, "primary": true, "orderIndex": 0 } ],
-        "exposePort": 502, "endpointObservation": 2 },
+        "exposePort": 502 },
       { "key": "scada", "name": "SCADA", "kind": 0, "imageTemplateId": 117, "resources": { "cpuUnits": 1, "memoryMiB": 256, "storageMiB": 256 },
         "interfaces": [ { "key": "scada-eth0", "networkKey": "net-core", "hostOffset": 20, "primary": true, "orderIndex": 0 } ] }
     ],
@@ -2550,9 +2546,6 @@ HTTP JSON 中未标注字符串的枚举使用数字值。以下汇总本文用�
 |  | 1 | ManagedRouter |
 | `TeamLabConnectionDirection` | 0 | FromTo |
 |  | 1 | Bidirectional |
-| `TeamLabEndpointObservationMode` | 0 | Disabled |
-|  | 1 | Optional |
-|  | 2 | Required |
 | `TeamLabExecutionModel` | 0 | V1 |
 |  | 1 | V2 |
 
@@ -2592,12 +2585,9 @@ HTTP JSON 中未标注字符串的枚举使用数字值。以下汇总本文用�
 |  | 2 | FabricUplink |
 |  | 3 | WorkloadEndpoint |
 | `TeamLabTrafficEvidenceKind` | 0 | Packet |
-|  | 1 | EndpointProcess |
 | `TeamLabPathConfidence` | 0 | PacketExact |
-|  | 1 | ProcessCorrelated |
-|  | 2 | TemporallyRelated |
 
-> 注意：`confidence` 查询参数使用字符串 `packet-exact`、`process-correlated`、`temporally-related`；响应里 `confidence` 字段同样是字符串。
+> 注意：`confidence` 查询参数和响应字段均使用字符串 `packet-exact`。
 
 ### 15.4 远程会话（字符串序列化）
 

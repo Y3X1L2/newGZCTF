@@ -64,7 +64,6 @@ public sealed class VmGuestControlConfig
 {
     public bool Enabled { get; set; } = true;
     public bool Required { get; set; } = true;
-    public bool EndpointSensorChannel { get; set; }
     public VmInitOsType? OsType { get; set; }
 }
 

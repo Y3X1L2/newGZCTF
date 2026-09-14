@@ -31,7 +31,7 @@ public static class TeamLabTopologyV1Normalizer
                 null,
                 connection.ViaAssetKey,
                 TeamLabConnectionDirection.Bidirectional)).ToArray(),
-            new TeamLabExecutionObservationPolicy(true, true, TeamLabEndpointObservationMode.Disabled));
+            new TeamLabExecutionObservationPolicy(true, true));
     }
 
     internal static TeamLabExecutionNetwork ToExecution(TeamLabTopologyNetworkModel network) =>
@@ -52,7 +52,6 @@ public static class TeamLabTopologyV1Normalizer
             asset.HealthCheck?.Kind,
             asset.HealthCheck?.Port,
             asset.OrderIndex,
-            asset.EndpointObservation,
             null,
             asset.DevicePackageId,
             asset.DeviceParameters is { } parameters ? JsonSerializer.Serialize(parameters) : null,

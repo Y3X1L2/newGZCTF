@@ -64,7 +64,7 @@ public sealed class AgentFleetUpdateCoordinator(
                 cancellationToken);
             var result = await agent.SyncAgentAsync(node.Id,
             CreateSyncRequest(serverUrl, expectedSha, node, targetDataPlane,
-                    includeManagedArtifacts: false, includeNodeConfiguration: false), cancellationToken);
+                    includeNodeConfiguration: false), cancellationToken);
             if (!result.Success)
                 return await FailAsync(node, correlationId, result.Message, cancellationToken,
                     CreateSyncFailure(result.Message, node));
@@ -96,7 +96,7 @@ public sealed class AgentFleetUpdateCoordinator(
                 cancellationToken);
             result = await agent.SyncAgentAsync(node.Id,
             CreateSyncRequest(serverUrl, expectedSha, node, targetDataPlane,
-                    includeManagedArtifacts: true, includeNodeConfiguration: true), cancellationToken);
+                    includeNodeConfiguration: true), cancellationToken);
             if (!result.Success)
                 return await FailAsync(node, correlationId, result.Message, cancellationToken,
                     CreateSyncFailure(result.Message, node));
@@ -289,24 +289,10 @@ public sealed class AgentFleetUpdateCoordinator(
     }
 
     private AgentSyncRequest CreateSyncRequest(string serverUrl, string expectedSha, WorkerNode node,
-        TeamLabDataPlaneSyncConfig targetDataPlane, bool includeManagedArtifacts, bool includeNodeConfiguration) =>
+        TeamLabDataPlaneSyncConfig targetDataPlane, bool includeNodeConfiguration) =>
         new(
             DownloadUrl: $"{serverUrl.TrimEnd('/')}/api/agent/download",
             ExpectedSha256: expectedSha,
-            LinuxSensorDownloadUrl: includeManagedArtifacts
-                ? $"{serverUrl.TrimEnd('/')}/api/agent/endpoint-sensor/linux-x64/download"
-                : null,
-            LinuxSensorSha256: includeManagedArtifacts
-                ? NodeDeployService.ComputeBundledArtifactSha256(
-                    "agent", "endpoint-sensor", "linux-x64", "gzctf-endpoint-sensor")
-                : null,
-            WindowsSensorDownloadUrl: includeManagedArtifacts
-                ? $"{serverUrl.TrimEnd('/')}/api/agent/endpoint-sensor/win-x64/download"
-                : null,
-            WindowsSensorSha256: includeManagedArtifacts
-                ? NodeDeployService.ComputeBundledArtifactSha256(
-                    "agent", "endpoint-sensor", "win-x64", "gzctf-endpoint-sensor.exe")
-                : null,
             VmControlPlane: includeNodeConfiguration
                 ? new AgentVmControlPlaneSyncConfig(
                     node.TeamLabNetworkEnabled && node.Capabilities.HasFlag(NodeCapability.Kvm))

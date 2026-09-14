@@ -132,6 +132,5 @@ public sealed class TeamLabTrafficStreamTests : IAsyncLifetime
         "sha256:" + new string('b', 64),
         "sha256:" + new string('a', 64),
         "Packet",
-        null,
         "observed");
 }

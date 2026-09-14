@@ -157,7 +157,7 @@ public static class TeamLabReleaseCodec
             execution.Assets.Select(asset => new TeamLabTopologyAssetV2Model(
                 asset.Key, asset.Name, asset.Kind, asset.ImageTemplateId,
                 new TeamLabAssetResourceModel(asset.CpuUnits, asset.MemoryMiB, asset.StorageMiB),
-                asset.Interfaces.Select(ToContract).ToArray(), asset.EndpointObservation, asset.ExposePort,
+                asset.Interfaces.Select(ToContract).ToArray(), asset.ExposePort,
                 asset.HealthCheckKind is { } kind && asset.HealthCheckPort is { } port
                     ? new TeamLabHealthCheckModel(kind, port)
                     : null,
@@ -168,7 +168,7 @@ public static class TeamLabReleaseCodec
                 connection.Key, connection.FromNetworkKey, connection.ToNetworkKey, connection.ViaNodeKey,
                 connection.ViaAssetKey, connection.Direction)).ToArray(),
             new TeamLabObservationPolicyModel(execution.Observation.FlowMetadataEnabled,
-                execution.Observation.OnDemandPcapEnabled, execution.Observation.EndpointObservation));
+                execution.Observation.OnDemandPcapEnabled));
     }
 
     private static TeamLabTopologyDefinitionModel FromV1(TeamLabTopologyDefinitionV1Model definition) => Normalize(new(
@@ -185,7 +185,7 @@ public static class TeamLabReleaseCodec
         definition.Networks,
         definition.Assets.Select(asset => new TeamLabTopologyAssetModel(
             asset.Key, asset.Name, asset.Kind, asset.ImageTemplateId, asset.Resources, asset.Interfaces,
-            asset.ExposePort, asset.HealthCheck, asset.OrderIndex, asset.EndpointObservation,
+            asset.ExposePort, asset.HealthCheck, asset.OrderIndex,
             asset.DevicePackageId, asset.DeviceParameters, asset.ConnectorId)).ToArray(),
         definition.Connections.Select(connection => new TeamLabTopologyConnectionModel(
             connection.Key, connection.FromNetworkKey, connection.ToNetworkKey, connection.ViaAssetKey,

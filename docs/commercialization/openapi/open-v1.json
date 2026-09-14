@@ -14336,9 +14336,6 @@
             "type": "integer",
             "format": "int32"
           },
-          "endpointObservation": {
-            "$ref": "#/components/schemas/TeamLabEndpointObservationMode"
-          },
           "devicePackageId": {
             "type": "integer",
             "format": "int32",
@@ -14418,20 +14415,6 @@
         "enum": [
           0,
           1
-        ]
-      },
-      "TeamLabEndpointObservationMode": {
-        "type": "integer",
-        "description": "",
-        "x-enumNames": [
-          "Disabled",
-          "Optional",
-          "Required"
-        ],
-        "enum": [
-          0,
-          1,
-          2
         ]
       },
       "TeamLabTopologyConnectionModel": {
@@ -14575,9 +14558,6 @@
           },
           "onDemandPcapEnabled": {
             "type": "boolean"
-          },
-          "endpointObservation": {
-            "$ref": "#/components/schemas/TeamLabEndpointObservationMode"
           }
         }
       },
@@ -15185,14 +15165,10 @@
         "type": "integer",
         "description": "",
         "x-enumNames": [
-          "PacketExact",
-          "ProcessCorrelated",
-          "TemporallyRelated"
+          "PacketExact"
         ],
         "enum": [
-          0,
-          1,
-          2
+          0
         ]
       },
       "TeamLabTrafficPathModel": {
@@ -15304,12 +15280,10 @@
         "type": "integer",
         "description": "",
         "x-enumNames": [
-          "Packet",
-          "EndpointProcess"
+          "Packet"
         ],
         "enum": [
-          0,
-          1
+          0
         ]
       },
       "TeamLabObservationPointKind": {

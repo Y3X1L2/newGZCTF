@@ -19,13 +19,6 @@ namespace GZCTF.Migrations
                 nullable: true);
 
             migrationBuilder.AddColumn<byte>(
-                name: "EndpointObservation",
-                table: "TeamLabRuntimeAssets",
-                type: "smallint",
-                nullable: false,
-                defaultValue: (byte)0);
-
-            migrationBuilder.AddColumn<byte>(
                 name: "ExecutionStage",
                 table: "TeamLabRuntimeAssets",
                 type: "smallint",
@@ -58,10 +51,6 @@ namespace GZCTF.Migrations
         {
             migrationBuilder.DropColumn(
                 name: "BootstrapDigest",
-                table: "TeamLabRuntimeAssets");
-
-            migrationBuilder.DropColumn(
-                name: "EndpointObservation",
                 table: "TeamLabRuntimeAssets");
 
             migrationBuilder.DropColumn(

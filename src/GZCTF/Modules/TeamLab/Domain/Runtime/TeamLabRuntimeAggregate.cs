@@ -136,7 +136,6 @@ public class TeamLabRuntimeAsset
     [MaxLength(96)] public string? SftpHostKeySha256 { get; set; }
     public Guid? AgentOperationId { get; set; }
     public long AgentSignalSequence { get; set; }
-    public TeamLabEndpointObservationMode EndpointObservation { get; set; }
     [MaxLength(128)] public string? ImageDigest { get; set; }
     public int? DevicePackageId { get; set; }
     [MaxLength(2048)] public string? DevicePackageParametersJson { get; set; }

@@ -6,9 +6,7 @@ import { CapabilityBindingEditor } from './CapabilityBindingEditor'
 import { HealthCheckEditor } from './HealthCheckEditor'
 import { InspectorSection, SelectInput, TextInput } from './InspectorFields'
 import { NetworkInterfacesEditor } from './NetworkInterfacesEditor'
-import { ObservationEditor } from './ObservationEditor'
 import { ResourceRequirementsEditor } from './ResourceRequirementsEditor'
-import styles from './TeamLabInspector.module.css'
 import type { InspectorDocumentProps } from './inspectorTypes'
 
 const typePresentation = {
@@ -76,18 +74,6 @@ export function AssetInspector({
         onChange={(healthCheck) => update({ healthCheck })}
         readOnly={readOnly}
       />
-
-      <details className={styles.advancedSection}>
-        <summary>
-          <strong>高级选项</strong>
-          <small>资产端点观测（默认关闭）</small>
-        </summary>
-        <ObservationEditor
-          endpointMode={node.endpointObservation}
-          onEndpointModeChange={(endpointObservation) => update({ endpointObservation })}
-          readOnly={readOnly}
-        />
-      </details>
     </>
   )
 }

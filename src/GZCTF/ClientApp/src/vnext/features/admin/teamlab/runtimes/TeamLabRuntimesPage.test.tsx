@@ -19,7 +19,7 @@ const scene: TeamLabTopologyDetail = {
     infrastructure: [],
     assets: [],
     connections: [],
-    observation: { flowMetadataEnabled: true, onDemandPcapEnabled: true, endpointObservation: 'optional' },
+    observation: { flowMetadataEnabled: true, onDemandPcapEnabled: true },
   },
   editor: { networks: {}, assets: {}, infrastructure: {} },
   createdAt: 1_784_832_000_000,

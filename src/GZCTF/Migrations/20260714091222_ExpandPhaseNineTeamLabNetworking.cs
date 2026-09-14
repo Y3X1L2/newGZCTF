@@ -43,13 +43,6 @@ namespace GZCTF.Migrations
                 type: "jsonb",
                 nullable: true);
 
-            migrationBuilder.AddColumn<byte>(
-                name: "EndpointObservation",
-                table: "TeamLabTopologyAssets",
-                type: "smallint",
-                nullable: false,
-                defaultValue: (byte)0);
-
             migrationBuilder.AddColumn<bool>(
                 name: "Stateless",
                 table: "TeamLabTopologyAssets",
@@ -528,10 +521,6 @@ namespace GZCTF.Migrations
 
             migrationBuilder.DropColumn(
                 name: "BootstrapJson",
-                table: "TeamLabTopologyAssets");
-
-            migrationBuilder.DropColumn(
-                name: "EndpointObservation",
                 table: "TeamLabTopologyAssets");
 
             migrationBuilder.DropColumn(

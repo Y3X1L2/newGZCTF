@@ -57,6 +57,5 @@ export function createTopologyNode(
     exposePort: null,
     healthCheck: null,
     orderIndex,
-    endpointObservation: 'disabled',
   }
 }

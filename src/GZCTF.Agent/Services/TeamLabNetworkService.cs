@@ -23,7 +23,6 @@ public partial class TeamLabNetworkService(
     TeamLabFirewallService firewallService,
     ObservationPointRegistry observationRegistry,
     ObservationBatchSpool observationSpool,
-    EndpointSensorChannelService endpointSensors,
     TeamLabPcapService pcapService,
     VmBootstrapService bootstrapService,
     TeamLabRuntimeGenerationStore generationStore,
@@ -353,7 +352,6 @@ public partial class TeamLabNetworkService(
                 }
             }
         }
-        resources.AddRange(endpointSensors.SnapshotInventory());
         resources.AddRange(await pcapService.SnapshotInventoryAsync(token));
         resources.AddRange(await bootstrapService.SnapshotInventoryAsync(token));
         return resources;
@@ -1031,8 +1029,6 @@ public partial class TeamLabNetworkService(
         {
             await pcapService.CleanupGenerationAsync(request.RuntimeId, request.Generation, token);
             await bootstrapService.CleanupGenerationAsync(request.RuntimeId, request.Generation, token);
-            foreach (var assetKey in request.SensorAssetKeys.Distinct(StringComparer.Ordinal))
-                endpointSensors.Remove(request.RuntimeId, request.Generation, assetKey);
             await observationRegistry.RemoveAsync(request.RuntimeId, request.Generation);
             observationSpool.Remove(request.RuntimeId, request.Generation);
             if (ownsSharedResources)

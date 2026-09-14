@@ -104,8 +104,6 @@ public class AgentClient
             ?? throw InvalidAgentResponse(nodeId, "teamlab.diagnostics", "Agent 未返回诊断结果。");
     }
     private static readonly TimeSpan TeamLabRequestTimeout = TimeSpan.FromSeconds(60);
-    private static readonly TimeSpan EndpointSensorStartTimeout = TimeSpan.FromMinutes(2);
-
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IConfiguration _config;
@@ -551,27 +549,6 @@ public class AgentClient
         CancellationToken token) =>
         await PostTeamLabAsync<TeamLabObservationBatchRequest, TeamLabObservationBatchResponse>(
             nodeId, "/api/teamlab/observations/read", request, token);
-
-    public virtual async Task<TeamLabEndpointSensorResponse?> RegisterTeamLabEndpointSensorAsync(
-        Guid nodeId,
-        TeamLabEndpointSensorRegistrationRequest request,
-        CancellationToken token) =>
-        await PostTeamLabAsync<TeamLabEndpointSensorRegistrationRequest, TeamLabEndpointSensorResponse>(
-            nodeId, "/api/teamlab/sensors/register", request, token);
-
-    public virtual async Task<TeamLabEndpointSensorResponse?> RemoveTeamLabEndpointSensorAsync(
-        Guid nodeId,
-        TeamLabEndpointSensorRemoveRequest request,
-        CancellationToken token) =>
-        await PostTeamLabAsync<TeamLabEndpointSensorRemoveRequest, TeamLabEndpointSensorResponse>(
-            nodeId, "/api/teamlab/sensors/remove", request, token);
-
-    public virtual async Task<TeamLabEndpointSensorResponse?> StartTeamLabEndpointSensorAsync(
-        Guid nodeId,
-        TeamLabEndpointSensorStartRequest request,
-        CancellationToken token) =>
-        await PostTeamLabAsync<TeamLabEndpointSensorStartRequest, TeamLabEndpointSensorResponse>(
-            nodeId, "/api/teamlab/sensors/start", request, token, EndpointSensorStartTimeout);
 
     public virtual async Task<AgentSyncResponse> SyncAgentAsync(Guid nodeId, AgentSyncRequest request,
         CancellationToken token)
@@ -1867,7 +1844,6 @@ public sealed class AgentVmGuestControlConfig
 {
     public bool Enabled { get; set; } = true;
     public bool Required { get; set; } = true;
-    public bool EndpointSensorChannel { get; set; }
     public OSType? OsType { get; set; }
 }
 
@@ -1992,10 +1968,6 @@ public class AgentVmIpResponse
 public record AgentSyncRequest(
     string DownloadUrl,
     string? ExpectedSha256 = null,
-    string? LinuxSensorDownloadUrl = null,
-    string? LinuxSensorSha256 = null,
-    string? WindowsSensorDownloadUrl = null,
-    string? WindowsSensorSha256 = null,
     AgentVmControlPlaneSyncConfig? VmControlPlane = null,
     TeamLabDataPlaneSyncConfig? TeamLabDataPlane = null,
     bool Restart = true);
@@ -2231,7 +2203,6 @@ public record TeamLabCleanupRequest(
     int Generation,
     string RouterNamespace,
     string[] ResourceNames,
-    string[] SensorAssetKeys,
     string[] FabricRemoteCidrs,
     bool DryRun = true);
 
@@ -2419,8 +2390,7 @@ public record TeamLabLinkPolicyResponse(
 
 public enum TeamLabObservationEvidenceKind : byte
 {
-    Packet = 0,
-    EndpointProcess = 1
+    Packet = 0
 }
 
 public record TeamLabObservationBatchRequest(
@@ -2446,7 +2416,6 @@ public record TeamLabObservationRecord(
     string? PacketFingerprint,
     string FlowFingerprint,
     TeamLabObservationEvidenceKind EvidenceKind,
-    string? ProcessIdentityHash = null,
     string Direction = "observed",
     DateTimeOffset? FirstSeenAt = null,
     DateTimeOffset? LastSeenAt = null,
@@ -2460,9 +2429,7 @@ public record TeamLabObservationHealth(
     int ActiveFlowCount,
     long DroppedCount,
     long ParserFailureCount,
-    long SensorRejectedCount,
     long SpoolBytes,
-    string? LastSensorErrorCode,
     string? LastError);
 
 public record TeamLabObservationBatchResponse(
@@ -2473,37 +2440,3 @@ public record TeamLabObservationBatchResponse(
     long PersistedThroughSequence,
     TeamLabObservationRecord[] Records,
     TeamLabObservationHealth Health);
-
-public enum TeamLabEndpointSensorChannelMode : byte
-{
-    Vm = 0,
-    Docker = 1
-}
-
-public record TeamLabEndpointSensorRegistrationRequest(
-    int RuntimeId,
-    string RuntimePublicId,
-    int Generation,
-    string AssetKey,
-    string RuntimeResourceId,
-    int SensorVersion,
-    string HmacKeyBase64,
-    TeamLabEndpointSensorChannelMode Mode);
-
-public record TeamLabEndpointSensorRemoveRequest(
-    int RuntimeId,
-    int Generation,
-    string AssetKey);
-
-public record TeamLabEndpointSensorStartRequest(
-    int RuntimeId,
-    int Generation,
-    string AssetKey,
-    string RuntimeResourceId,
-    TeamLabEndpointSensorChannelMode Mode,
-    OSType? OsType = null);
-
-public record TeamLabEndpointSensorResponse(
-    bool Success,
-    string Message,
-    string? ChannelEndpoint = null);

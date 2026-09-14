@@ -6,8 +6,7 @@ namespace GZCTF.Modules.TeamLab.Domain;
 
 public enum TeamLabTrafficEvidenceKind : byte
 {
-    Packet = 0,
-    EndpointProcess = 1
+    Packet = 0
 }
 
 public sealed class TeamLabTrafficObservation
@@ -29,7 +28,6 @@ public sealed class TeamLabTrafficObservation
     public int PacketLength { get; set; }
     public byte[]? PacketFingerprint { get; set; }
     public byte[] FlowFingerprint { get; set; } = [];
-    public byte[]? ProcessIdentityHash { get; set; }
     public TeamLabTrafficEvidenceKind EvidenceKind { get; set; }
     public TeamLabRuntime Runtime { get; set; } = null!;
     public TeamLabObservationPoint ObservationPoint { get; set; } = null!;
@@ -44,8 +42,6 @@ public sealed class TeamLabObservationCursor
     public Guid WorkerNodeId { get; set; }
     public long LastSequence { get; set; }
     public long DroppedCount { get; set; }
-    public long SensorRejectedCount { get; set; }
-    [MaxLength(64)] public string? LastSensorErrorCode { get; set; }
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
     public TeamLabRuntime Runtime { get; set; } = null!;
     public WorkerNode WorkerNode { get; set; } = null!;

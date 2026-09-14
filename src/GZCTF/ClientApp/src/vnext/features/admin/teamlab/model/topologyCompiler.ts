@@ -168,7 +168,6 @@ export function compileTopologyDocument(document: TopologyDocument): CreateTeamL
       exposePort: node.exposePort,
       healthCheck: node.healthCheck ? { ...node.healthCheck } : null,
       orderIndex: node.orderIndex,
-      endpointObservation: node.endpointObservation,
       devicePackageId: node.devicePackageId ?? null,
       deviceParameters: parseDeviceParameters(node.deviceParameters, node.key),
       connectorId: node.connectorId ?? null,

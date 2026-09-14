@@ -65,8 +65,6 @@ public sealed class TeamLabTopologyAssetEntityConfiguration : IEntityTypeConfigu
         builder.Property(item => item.Key).HasMaxLength(63);
         builder.Property(item => item.Name).HasMaxLength(128);
         builder.Property(item => item.Kind).HasConversion<byte>();
-        builder.Property(item => item.EndpointObservation).HasConversion<byte>()
-            .HasDefaultValue(TeamLabEndpointObservationMode.Disabled);
         builder.Property(item => item.HealthCheckKind).HasConversion<byte?>();
         builder.Property(item => item.DevicePackageParametersJson).HasMaxLength(2048);
         builder.HasIndex(item => new { item.TopologyId, item.Key }).IsUnique();

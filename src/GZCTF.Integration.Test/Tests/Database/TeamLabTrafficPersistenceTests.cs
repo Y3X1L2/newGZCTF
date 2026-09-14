@@ -197,7 +197,6 @@ public sealed class TeamLabTrafficPersistenceTests : IAsyncLifetime
             packetFingerprint,
             flowFingerprint,
             "Packet",
-            null,
             "observed"));
 
     private AppDbContext CreateContext()

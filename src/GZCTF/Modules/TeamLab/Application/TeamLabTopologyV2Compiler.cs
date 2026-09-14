@@ -46,7 +46,6 @@ public static class TeamLabTopologyV2Compiler
                 connection.Direction ?? TeamLabConnectionDirection.Bidirectional)).ToArray(),
             new TeamLabExecutionObservationPolicy(
                 observation.FlowMetadataEnabled,
-                observation.OnDemandPcapEnabled,
-                observation.EndpointObservation));
+                observation.OnDemandPcapEnabled));
     }
 }

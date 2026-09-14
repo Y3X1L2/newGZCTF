@@ -651,7 +651,6 @@ public sealed class TeamLabTopologyApplicationService(
                         ? new TeamLabHealthCheckModel(kind, port)
                         : null,
                     item.OrderIndex,
-                    item.EndpointObservation,
                     item.DevicePackageId,
                     ParseDeviceParameters(item.DevicePackageParametersJson),
                     item.ConnectorId)).ToArray(),
@@ -837,8 +836,7 @@ public sealed class TeamLabTopologyApplicationService(
                 ExposePort = model.ExposePort,
                 HealthCheckKind = model.HealthCheck?.Kind,
                 HealthCheckPort = model.HealthCheck?.Port,
-                OrderIndex = model.OrderIndex,
-                EndpointObservation = model.EndpointObservation
+                OrderIndex = model.OrderIndex
             };
             foreach (var iface in model.Interfaces)
             {

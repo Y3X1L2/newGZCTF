@@ -17,7 +17,6 @@ namespace GZCTF.Agent.Controllers;
 public class TeamLabController(
     TeamLabNetworkService service,
     TeamLabPacketObserver observer,
-    EndpointSensorChannelService sensors,
     TeamLabPcapService pcap,
     TeamLabContainerNetworkFinalizeService containerNetworkFinalize,
     AgentRuntimeSignalJournal runtimeSignals,
@@ -216,20 +215,6 @@ public class TeamLabController(
                 request.RuntimeId, request.Generation, request.AcknowledgeThroughSequence, token);
         return Ok(observer.Read(request));
     }
-
-    [HttpPost("sensors/register")]
-    public IActionResult RegisterSensor([FromBody] TeamLabEndpointSensorRegistrationRequest request) =>
-        Ok(sensors.Register(request));
-
-    [HttpPost("sensors/remove")]
-    public IActionResult RemoveSensor([FromBody] TeamLabEndpointSensorRemoveRequest request) =>
-        Ok(sensors.Remove(request.RuntimeId, request.Generation, request.AssetKey));
-
-    [HttpPost("sensors/start")]
-    public async Task<IActionResult> StartSensor(
-        [FromBody] TeamLabEndpointSensorStartRequest request,
-        CancellationToken token) =>
-        Ok(await sensors.StartAsync(request, token));
 
     [HttpPost("link-policy/apply")]
     public async Task<IActionResult> ApplyLinkPolicy(

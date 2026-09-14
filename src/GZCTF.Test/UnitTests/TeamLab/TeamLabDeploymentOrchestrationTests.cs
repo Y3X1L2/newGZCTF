@@ -679,7 +679,7 @@ public sealed class TeamLabDeploymentOrchestrationTests
         [],
         assets,
         [],
-        new TeamLabExecutionObservationPolicy(true, true, TeamLabEndpointObservationMode.Disabled));
+        new TeamLabExecutionObservationPolicy(true, true));
 
     private static TeamLabExecutionAsset Asset(string key, TeamLabHealthCheckKind? healthCheckKind = null) => new(
         key,
@@ -693,8 +693,7 @@ public sealed class TeamLabDeploymentOrchestrationTests
         null,
         healthCheckKind,
         healthCheckKind is null ? null : 8080,
-        0,
-        TeamLabEndpointObservationMode.Disabled);
+        0);
 
     private static TeamLabRuntimeAsset RuntimeAsset(
         string key,

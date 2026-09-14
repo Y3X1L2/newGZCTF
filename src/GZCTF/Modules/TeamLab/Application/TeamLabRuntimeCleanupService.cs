@@ -477,8 +477,6 @@ public sealed class TeamLabRuntimeCleanupService(
                 .Where(item => !string.IsNullOrWhiteSpace(item))
                 .Distinct(StringComparer.Ordinal)
                 .ToArray(),
-            assets.Where(item => item.EndpointObservation != TeamLabEndpointObservationMode.Disabled)
-                .Select(item => item.TopologyKey).ToArray(),
             runtime.Networks
                 .Where(item => item.Generation == runtime.Generation && item.ShardId != shard.Id)
                 .Select(item => item.Cidr)

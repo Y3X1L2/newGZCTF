@@ -132,7 +132,6 @@ schema v2 在既有 network/asset 基础上增加：
 - 显式 `managed-switch` 与 `managed-router` 基础设施节点；
 - 带方向的 L3 connection，不引入端口级 ACL；
 - digest-pinned Bootstrap Profile 引用、参数和 secret 参数声明；
-- `disabled`、`preferred`、`required` endpoint observation 模式；
 - stateless 标记，仅用于满足全部受控恢复条件后的自动重建。
 
 平台生成稳定 placement group、runtime infrastructure、fragment、observation point 和 desired-state digest。调用方不能提交 WorkerNode、bridge、namespace、Fabric 地址、宿主命令或任意脚本文本。
@@ -279,7 +278,7 @@ GET    /runtimes/{runtimeId}/captures/{captureId}/download
 ```
 
 - flow 返回聚合后的五元组、方向、字节数、包数、firstSeen、lastSeen、shard public ID 和 network topology key。
-- path 返回按时间排序的 observation hops；`PacketExact` 只来自相同包指纹，`TemporallyRelated` 来自同一受信 endpoint process identity 的时间关联，不能伪装成包级确定性。
+- path 返回按时间排序的 observation hops；`PacketExact` 只来自相同包指纹。
 - capture 请求必须指定 scope、maxSeconds、maxBytes 和 expiresInSeconds，服务端应用更严格上限。
 - capture scope 支持 runtime、network、asset 和已派生 path。一个 capture job 在每个必要 WorkerNode/observation point 上创建独立 segment。
 - Agent 使用短期、绑定 capture/segment/node/大小/SHA-256 的上传授权流式写入 BlobStorage；摘要或大小不匹配时对象必须删除。
@@ -336,8 +335,7 @@ GET    /runtimes/{runtimeId}/captures/{captureId}/download
     "trafficFlows": true,
     "trafficPaths": true,
     "onDemandPcap": true,
-    "bootstrapProfiles": true,
-    "endpointObservation": true
+    "bootstrapProfiles": true
   },
   "limits": {
     "networksPerTopology": 32,

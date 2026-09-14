@@ -60,17 +60,11 @@ const eventLevels = {
 } as const
 const pathConfidences = {
   0: 'packet-exact',
-  1: 'process-correlated',
-  2: 'temporally-related',
   PacketExact: 'packet-exact',
-  ProcessCorrelated: 'process-correlated',
-  TemporallyRelated: 'temporally-related',
 } as const
 const evidenceKinds = {
   0: 'packet',
-  1: 'endpoint-process',
   Packet: 'packet',
-  EndpointProcess: 'endpoint-process',
 } as const
 const observationPointKinds = {
   0: 'network-bridge',

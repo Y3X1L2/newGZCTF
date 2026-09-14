@@ -285,14 +285,6 @@ public sealed class TeamLabShardDeploymentService(
             }
         }
 
-        // Runtime overlays currently travel on the legacy injection path. V2 plans carry immutable
-        // execution facts only, so a user secret can never be delivered by the V2 Agent. Fail
-        // loudly instead of silently falling back to V1.
-        var unsupportedSecret = TeamLabExecutionModelPolicy.FindUnsupportedSecretKey(overlays.Values);
-        if (unsupportedSecret is not null)
-            throw new TeamLabRuntimeExecutionException(
-                $"V2 执行模型不支持运行时密钥覆盖，资产密钥 '{unsupportedSecret}' 无法投递。");
-
         foreach (var asset in runtimeAssets)
             if (asset.SourceTemplateId is not { } templateId ||
                 !templates.TryGetValue(templateId, out var template) ||
@@ -716,7 +708,6 @@ public sealed class TeamLabShardDeploymentService(
                 topologyAsset.HealthCheckKind is { } healthKind
                     ? new TeamLabNodeHealthIntent(healthKind, topologyAsset.HealthCheckPort)
                     : null,
-                topologyAsset.EndpointObservation,
                 TeamLabResourceNameFactory.RouterNamespace(runtime.Id, shard.Id),
                 asset.AgentOperationId,
                 topologyAsset.Kind == TeamLabAssetKind.Vm ? template.VmRuntimeMode : null,

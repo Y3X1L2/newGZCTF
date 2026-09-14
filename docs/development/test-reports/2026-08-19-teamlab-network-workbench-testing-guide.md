@@ -437,7 +437,7 @@ curl -s http://10.0.7.118:8080/api/open/v1/teamlab/capabilities \
 
 返回里能看到平台支持的能力（例如支持哪些资产类型、协议模拟/观测点是否开）。这一步通了，说明认证没问题。
 
-> ⚠️ **枚举字段取值**：下面示例里的 `kind` / `direction` / `endpointObservation` 等，实际取值以在线接口文档 `/api-docs` 的 **description 列** 为准（枚举一般显示为数字 + 英文名，如 `AssetKind` 只有 `Docker(0)` / `Vm(1)`，具体是 Docker 还是 Linux/Windows VM 由**镜像模板**决定；观测模式是 `Disabled(0)/Optional(1)/Required(2)`；路由方向是 `FromTo(0)/Bidirectional(1)`）。示例用文字便于阅读，提交前如果报枚举不识别，就用数字或看 `/api-docs` 里的精确枚举名。
+> ⚠️ **枚举字段取值**：下面示例里的 `kind` / `direction` 等，实际取值以在线接口文档 `/api-docs` 的 **description 列** 为准（枚举一般显示为数字 + 英文名，如 `AssetKind` 只有 `Docker(0)` / `Vm(1)`，具体是 Docker 还是 Linux/Windows VM 由**镜像模板**决定；路由方向是 `FromTo(0)/Bidirectional(1)`）。示例用文字便于阅读，提交前如果报枚举不识别，就用数字或看 `/api-docs` 里的精确枚举名。
 
 ### 4.13.2 建一个场景（拓扑）
 
@@ -458,7 +458,7 @@ curl -s -X POST http://10.0.7.118:8080/api/open/v1/teamlab/topologies \
     "assets": [
       { "key": "plc",  "name": "PLC",  "kind": "docker", "imageTemplateId": 116, "resources": { "cpuUnits": 1, "memoryMiB": 256, "storageMiB": 256 },
         "interfaces": [ { "key": "plc-eth0", "networkKey": "net-entry", "hostOffset": 10, "primary": true, "orderIndex": 0 } ],
-        "exposePort": 502, "endpointObservation": 2 },
+        "exposePort": 502 },
       { "key": "scada", "name": "SCADA", "kind": "docker", "imageTemplateId": 117, "resources": { "cpuUnits": 1, "memoryMiB": 256, "storageMiB": 256 },
         "interfaces": [ { "key": "scada-eth0", "networkKey": "net-core", "hostOffset": 20, "primary": true, "orderIndex": 0 } ] }
     ],

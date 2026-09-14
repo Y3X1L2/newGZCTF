@@ -57,8 +57,6 @@ export const eventLevelLabels: Record<TeamLabEventLevel, string> = {
 
 export const pathConfidenceLabels: Record<TeamLabPathConfidence, string> = {
   'packet-exact': '报文精确',
-  'process-correlated': '进程关联',
-  'temporally-related': '时间关联',
 }
 
 export const captureStatusLabels: Record<TeamLabCaptureStatus, string> = {

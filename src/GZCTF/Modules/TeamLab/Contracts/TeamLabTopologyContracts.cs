@@ -33,7 +33,6 @@ public sealed record TeamLabTopologyAssetModel(
     int? ExposePort = null,
     TeamLabHealthCheckModel? HealthCheck = null,
     int OrderIndex = 0,
-    TeamLabEndpointObservationMode EndpointObservation = TeamLabEndpointObservationMode.Disabled,
     int? DevicePackageId = null,
     JsonElement? DeviceParameters = null,
     Guid? ConnectorId = null);

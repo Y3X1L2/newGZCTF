@@ -142,12 +142,7 @@ public sealed class TeamLabPhysicalPlacementService(
                 var assets = generationAssets.Where(item => item.PlacementGroupKey == key).ToArray();
                 var resources = assets.Aggregate(WorkloadResourceVector.Zero, (sum, asset) =>
                     sum + RequiredResource(resourcesByAsset, asset.TopologyKey));
-                return new PlacementGroup(key, group.Any(item => item.IsEntry),
-                    resources,
-                    assets.Any(item => item.Kind == TeamLabResourceKind.Docker &&
-                                      item.EndpointObservation == TeamLabEndpointObservationMode.Required),
-                    assets.Any(item => item.Kind == TeamLabResourceKind.Vm &&
-                                      item.EndpointObservation != TeamLabEndpointObservationMode.Disabled));
+                return new PlacementGroup(key, group.Any(item => item.IsEntry), resources);
             })
             .OrderByDescending(item => item.IsEntry)
             .ThenByDescending(item => edges.Where(edge => edge.Touches(item.Key)).Sum(edge => edge.Weight))
@@ -579,7 +574,6 @@ public sealed class TeamLabPhysicalPlacementService(
         var networksByKey = generationNetworks.ToDictionary(item => item.TopologyKey, StringComparer.Ordinal);
         foreach (var asset in runtime.Assets.Where(item =>
                      item.Generation == runtime.Generation &&
-                     (!legacyObservation || item.EndpointObservation != TeamLabEndpointObservationMode.Disabled) &&
                      item.WorkerNodeId != null && item.ShardId != null))
         {
             var interfaces = JsonSerializer.Deserialize<WorkloadInterfaceIntent[]>(asset.InterfaceSummaryJson) ?? [];
@@ -955,23 +949,13 @@ public sealed class TeamLabPhysicalPlacementService(
     {
         var features = new List<string>();
         if (group.IsEntry) features.Add(AgentFeatureIds.WireGuard);
-        if (group.DockerEndpointSensorRequired) features.Add(AgentFeatureIds.TeamLabEndpointSensor);
-        if (group.ManagedVmRequired)
-        {
-            features.Add(AgentFeatureIds.VmGuestManagement);
-            features.Add(AgentFeatureIds.VmConfigDriveV2);
-            features.Add(AgentFeatureIds.VmPreparedImage);
-            features.Add(AgentFeatureIds.RuntimeSignals);
-        }
         return features.Count == 0 ? null : features;
     }
 
     sealed record PlacementGroup(
         string Key,
         bool IsEntry,
-        WorkloadResourceVector Resources,
-        bool DockerEndpointSensorRequired,
-        bool ManagedVmRequired)
+        WorkloadResourceVector Resources)
     {
         public int DockerSlots => Resources.DockerSlots;
         public int VmSlots => Resources.VmSlots;

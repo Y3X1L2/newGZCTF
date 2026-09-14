@@ -1283,9 +1283,6 @@ public partial class AppDbContext(DbContextOptions<AppDbContext> options) :
             entity.Property(e => e.ExecutionStage)
                 .HasConversion<byte>();
 
-            entity.Property(e => e.EndpointObservation)
-                .HasConversion<byte>();
-
             entity.HasIndex(e => new { e.RuntimeId, e.Generation, e.Kind, e.TopologyKey });
             entity.HasIndex(e => e.DevicePackageId);
             entity.HasIndex(e => e.AgentOperationId)

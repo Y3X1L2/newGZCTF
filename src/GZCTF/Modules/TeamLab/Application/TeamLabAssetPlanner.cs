@@ -106,8 +106,7 @@ public static class TeamLabAssetPlanner
         }, new JsonSerializerOptions(JsonSerializerDefaults.Web));
         var infrastructureFragments = shards.Sum(shard => shard.InfrastructureKeys?.Count ?? 0);
         var observationPointEstimate = networks.Length + infrastructureFragments + shards.Length +
-                                       definition.Assets.Count(item =>
-                                           item.EndpointObservation != TeamLabEndpointObservationMode.Disabled);
+                                       definition.Assets.Count;
         return new TeamLabPlanModel(
             topologyId,
             releaseId,

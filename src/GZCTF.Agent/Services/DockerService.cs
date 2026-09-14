@@ -113,7 +113,6 @@ public class DockerService
                     ? fabricManagementNetwork ? primaryNetwork : "none"
                     : primaryNetwork,
                 DNS = dnsServers.Length > 0 ? dnsServers : null,
-                Binds = request.BindMounts.Select(BuildBindMount).ToList(),
             },
             ExposedPorts = request.PublishPort ? new Dictionary<string, EmptyStruct> { [portSpec] = new() } : null,
             NetworkingConfig = !isolatedHostNetwork &&
@@ -1462,19 +1461,6 @@ public class DockerService
         }
 
         return attachments;
-    }
-
-    private static string BuildBindMount(ContainerBindMount mount)
-    {
-        var source = Path.GetFullPath(mount.Source);
-        var destination = Path.GetFullPath(mount.Destination);
-        var sourceAllowed = source.StartsWith("/run/gzctf-sensor/", StringComparison.Ordinal) ||
-                            source.StartsWith("/opt/gzctf/endpoint-sensor/", StringComparison.Ordinal);
-        var destinationAllowed = destination.StartsWith("/run/gzctf/", StringComparison.Ordinal) ||
-                                 destination.StartsWith("/opt/gzctf/", StringComparison.Ordinal);
-        if (!sourceAllowed || !destinationAllowed || source.Contains(':') || destination.Contains(':'))
-            throw new InvalidOperationException("Container bind mount is outside the managed sensor paths.");
-        return $"{source}:{destination}:{(mount.ReadOnly ? "ro" : "rw")}";
     }
 
     public static string BuildContainerName(CreateContainerRequest request)

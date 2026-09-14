@@ -47,11 +47,10 @@ function topologyDetail() {
           exposePort: 80,
           healthCheck: { kind: 1, port: 80 },
           orderIndex: 0,
-          endpointObservation: 1,
         },
       ],
       connections: [],
-      observation: { flowMetadataEnabled: true, onDemandPcapEnabled: true, endpointObservation: 1 },
+      observation: { flowMetadataEnabled: true, onDemandPcapEnabled: true },
     },
     editor: {
       networks: { edge: { x: 10, y: 20, width: null, height: null, collapsed: false } },
@@ -68,7 +67,7 @@ describe('TeamLab admin contract boundary', () => {
     const parsed = parseTeamLabTopologyDetail(topologyDetail())
 
     expect(parsed.definition.infrastructure[0]?.kind).toBe('managed-switch')
-    expect(parsed.definition.assets[0]).toMatchObject({ kind: 'docker', endpointObservation: 'optional' })
+    expect(parsed.definition.assets[0]).toMatchObject({ kind: 'docker' })
     expect(parsed.definition.assets[0]?.healthCheck?.kind).toBe('http')
   })
 
@@ -88,8 +87,8 @@ describe('TeamLab admin contract boundary', () => {
       expect.objectContaining({
         schemaVersion: 2,
         infrastructure: [expect.objectContaining({ kind: 0 })],
-        assets: [expect.objectContaining({ kind: 0, endpointObservation: 1, healthCheck: { kind: 1, port: 80 } })],
-        observation: expect.objectContaining({ endpointObservation: 1 }),
+        assets: [expect.objectContaining({ kind: 0, healthCheck: { kind: 1, port: 80 } })],
+        observation: expect.objectContaining({ flowMetadataEnabled: true, onDemandPcapEnabled: true }),
       })
     )
   })

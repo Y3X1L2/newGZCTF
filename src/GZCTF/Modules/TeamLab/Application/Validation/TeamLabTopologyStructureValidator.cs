@@ -26,7 +26,6 @@ internal sealed partial class TeamLabTopologyStructureValidator(TeamLabAddressPo
         var infrastructure = definition.Infrastructure ?? [];
         if (schemaVersion == 1 &&
             (infrastructure.Count > 0 || definition.Observation is not null ||
-             definition.Assets.Any(asset => asset.EndpointObservation != TeamLabEndpointObservationMode.Disabled) ||
              definition.Connections.Any(connection => connection.ViaNodeKey is not null || connection.Direction is not null)))
         {
             Add(issues, "topology_schema_mismatch", "schemaVersion",

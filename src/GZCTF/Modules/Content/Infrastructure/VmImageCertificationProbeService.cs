@@ -166,7 +166,6 @@ public sealed class VmImageCertificationProbeService(
                 {
                     Enabled = true,
                     Required = true,
-                    EndpointSensorChannel = false,
                     OsType = template.OSType
                 },
                 ManagementInterface = new AgentVmManagementInterfaceConfig

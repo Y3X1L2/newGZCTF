@@ -8,7 +8,6 @@ import type {
   TeamLabCapabilities,
   TeamLabConnectionDirection,
   TeamLabEditorItem,
-  TeamLabEndpointObservationMode,
   TeamLabHealthCheckKind,
   TeamLabInfrastructureKind,
   TeamLabObservationPolicy,
@@ -38,14 +37,6 @@ const infrastructureKinds = {
   ManagedRouter: 'managed-router',
 } as const
 const directions = { 0: 'from-to', 1: 'bidirectional', FromTo: 'from-to', Bidirectional: 'bidirectional' } as const
-const observationModes = {
-  0: 'disabled',
-  1: 'optional',
-  2: 'required',
-  Disabled: 'disabled',
-  Optional: 'optional',
-  Required: 'required',
-} as const
 const healthKinds = { 0: 'tcp', 1: 'http', Tcp: 'tcp', Http: 'http' } as const
 const imageTypes = {
   0: 'docker',
@@ -188,7 +179,6 @@ function parseAsset(value: unknown, label: string): TeamLabTopologyAsset {
         }
       : null,
     orderIndex: number(item.orderIndex ?? 0, `${label}.orderIndex`),
-    endpointObservation: enumValue(item.endpointObservation ?? 0, observationModes, `${label}.endpointObservation`),
     devicePackageId: nullableNumber(item.devicePackageId, `${label}.devicePackageId`),
     deviceParameters: item.deviceParameters ?? null,
     connectorId: nullableString(item.connectorId, `${label}.connectorId`),
@@ -220,13 +210,12 @@ function parseConnection(value: unknown, label: string): TeamLabTopologyConnecti
 
 function parseObservation(value: unknown, label: string): TeamLabObservationPolicy {
   if (value === null || value === undefined) {
-    return { flowMetadataEnabled: true, onDemandPcapEnabled: true, endpointObservation: 'optional' }
+    return { flowMetadataEnabled: true, onDemandPcapEnabled: true }
   }
   const item = record(value, label)
   return {
     flowMetadataEnabled: boolean(item.flowMetadataEnabled ?? true, `${label}.flowMetadataEnabled`),
     onDemandPcapEnabled: boolean(item.onDemandPcapEnabled ?? true, `${label}.onDemandPcapEnabled`),
-    endpointObservation: enumValue(item.endpointObservation ?? 1, observationModes, `${label}.endpointObservation`),
   }
 }
 
@@ -520,7 +509,6 @@ export function parseTeamLabReleaseReadiness(value: unknown): TeamLabAdminReleas
 const assetKindWire: Record<TeamLabAssetKind, number> = { docker: 0, vm: 1 }
 const infrastructureKindWire: Record<TeamLabInfrastructureKind, number> = { 'managed-switch': 0, 'managed-router': 1 }
 const directionWire: Record<TeamLabConnectionDirection, number> = { 'from-to': 0, bidirectional: 1 }
-const observationWire: Record<TeamLabEndpointObservationMode, number> = { disabled: 0, optional: 1, required: 2 }
 const healthWire: Record<TeamLabHealthCheckKind, number> = { tcp: 0, http: 1 }
 
 export function serializeTeamLabWriteRequest(request: CreateTeamLabTopologyRequest | UpdateTeamLabTopologyRequest) {
@@ -531,12 +519,8 @@ export function serializeTeamLabWriteRequest(request: CreateTeamLabTopologyReque
       ...item,
       kind: assetKindWire[item.kind],
       healthCheck: item.healthCheck ? { ...item.healthCheck, kind: healthWire[item.healthCheck.kind] } : null,
-      endpointObservation: observationWire[item.endpointObservation],
     })),
     connections: request.connections.map((item) => ({ ...item, direction: directionWire[item.direction] })),
-    observation: {
-      ...request.observation,
-      endpointObservation: observationWire[request.observation.endpointObservation],
-    },
+    observation: { ...request.observation },
   }
 }

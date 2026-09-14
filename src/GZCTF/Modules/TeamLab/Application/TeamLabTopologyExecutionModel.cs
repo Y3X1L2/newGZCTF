@@ -47,7 +47,6 @@ public sealed record TeamLabExecutionAsset(
     TeamLabHealthCheckKind? HealthCheckKind,
     int? HealthCheckPort,
     int DisplayOrder,
-    TeamLabEndpointObservationMode EndpointObservation,
     string? ImageDigest = null,
     int? DevicePackageId = null,
     string? DeviceParametersJson = null,
@@ -67,8 +66,7 @@ public sealed record TeamLabExecutionConnection(
 
 public sealed record TeamLabExecutionObservationPolicy(
     bool FlowMetadataEnabled,
-    bool OnDemandPcapEnabled,
-    TeamLabEndpointObservationMode EndpointObservation);
+    bool OnDemandPcapEnabled);
 
 internal sealed record TeamLabRuntimeInfrastructureInterfaceIntent(
     string Key,

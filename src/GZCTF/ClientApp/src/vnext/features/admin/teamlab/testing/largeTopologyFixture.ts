@@ -28,7 +28,6 @@ function asset(index: number, networkIndex: number): TopologyAssetNode {
     exposePort: type === 'docker' ? 8080 : null,
     healthCheck: type === 'docker' ? { kind: 'tcp', port: 8080 } : null,
     orderIndex: index,
-    endpointObservation: 'optional',
   }
 }
 
@@ -121,7 +120,6 @@ export function createLargeTopologyFixture(): TopologyDocument {
     observation: {
       flowMetadataEnabled: true,
       onDemandPcapEnabled: true,
-      endpointObservation: 'optional',
     },
     networkLayouts: {},
   }

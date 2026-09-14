@@ -326,7 +326,6 @@ public sealed class RedisTeamLabTrafficIngestor(
         new("packetLength", envelope.PacketLength),
         new("packetFingerprint", envelope.PacketFingerprint ?? string.Empty),
         new("flowFingerprint", envelope.FlowFingerprint),
-        new("processIdentityHash", envelope.ProcessIdentityHash ?? string.Empty),
         new("evidenceKind", envelope.EvidenceKind),
         new("direction", envelope.Direction),
         new("packets", envelope.Packets),
@@ -381,9 +380,6 @@ public sealed class RedisTeamLabTrafficIngestor(
                 ? packetFingerprint
                 : null,
             Required("flowFingerprint"),
-            values.GetValueOrDefault("processIdentityHash") is { Length: > 0 } processIdentityHash
-                ? processIdentityHash
-                : null,
             Required("evidenceKind"),
             Required("direction"),
             RequiredLong("packets"),

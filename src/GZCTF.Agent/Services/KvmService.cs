@@ -286,9 +286,6 @@ public class KvmService
                 mediaArguments.Add(
                     $"--disk path={ShellEscape(configDrive.IsoPath)},device=cdrom,readonly=on");
             }
-            if (request.GuestControl.EndpointSensorChannel)
-                mediaArguments.Add(await CreateEndpointSensorInjectionIsoAsync(request, token));
-
             var domainArguments = VmDomainBuilder.BuildVirtInstallArguments(
                 request, vmPath, string.Join(' ', mediaArguments));
             await RunCommandAsync($"virt-install {domainArguments}", token);
@@ -1096,34 +1093,6 @@ public class KvmService
                 ("network-config", Path.Combine(dir, "network-config"))
             ],
             token);
-    }
-
-    private async Task<string> CreateEndpointSensorInjectionIsoAsync(
-        CreateVmRequest request,
-        CancellationToken token)
-    {
-        var osType = request.GuestControl.OsType
-                     ?? throw new InvalidOperationException("Endpoint sensor injection requires a VM OS type.");
-        var sourcePath = osType == VmInitOsType.Windows
-            ? EndpointSensorChannelService.WindowsSensorPath
-            : EndpointSensorChannelService.LinuxSensorPath;
-        var fileName = osType == VmInitOsType.Windows
-            ? EndpointSensorChannelService.WindowsSensorFileName
-            : EndpointSensorChannelService.LinuxSensorFileName;
-        if (!File.Exists(sourcePath))
-            throw new InvalidOperationException($"Endpoint sensor artifact is unavailable for {osType}.");
-
-        var root = Path.Combine(GetRuntimeInjectionDirectory(request.VmName), "endpoint-sensor");
-        if (Directory.Exists(root))
-            Directory.Delete(root, recursive: true);
-        Directory.CreateDirectory(root);
-        var isoPath = Path.Combine(root, "endpoint-sensor.iso");
-        await CreateIsoAsync(
-            isoPath,
-            EndpointSensorChannelService.InjectionVolumeLabel,
-            [(fileName, sourcePath)],
-            token);
-        return $"--disk path={ShellEscape(isoPath)},device=cdrom,readonly=on";
     }
 
     private async Task CreateIsoAsync(

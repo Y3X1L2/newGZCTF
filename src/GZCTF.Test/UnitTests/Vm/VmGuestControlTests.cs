@@ -103,8 +103,7 @@ public sealed class VmGuestControlTests
             GuestControl = new VmGuestControlConfig
             {
                 Enabled = true,
-                Required = true,
-                EndpointSensorChannel = true
+                Required = true
             }
         };
 
@@ -116,7 +115,6 @@ public sealed class VmGuestControlTests
         Assert.Contains("--cpu host-passthrough", first);
         Assert.Contains("--rng /dev/urandom", first);
         Assert.Contains("org.qemu.guest_agent.0", first);
-        Assert.Contains("org.gzctf.sensor.0", first);
     }
 
     [Fact]

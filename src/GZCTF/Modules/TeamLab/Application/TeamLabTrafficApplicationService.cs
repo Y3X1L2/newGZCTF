@@ -406,7 +406,7 @@ public sealed class TeamLabTrafficApplicationService(
             .Include(item => item.Segments)
             .ThenInclude(item => item.ObservationPoint.Network)
             .Include(item => item.Segments)
-            .ThenInclude(item => item.ObservationPoint.InfrastructureFragment).ThenInclude(item => item.Infrastructure)
+            .ThenInclude(item => item.ObservationPoint.InfrastructureFragment).ThenInclude(item => item!.Infrastructure)
             .Include(item => item.Segments)
             .ThenInclude(item => item.ObservationPoint.Asset)
             .Where(item => item.RuntimeId == runtime.Id);
@@ -724,7 +724,6 @@ public sealed class TeamLabTrafficApplicationService(
             : await ingestor.EnqueueAsync(envelopes, cancellationToken);
 
         var previousDropped = cursor.DroppedCount;
-        var previousRejected = cursor.SensorRejectedCount;
         // The Agent may discard only data already accepted by the durable Redis stream.
         // An unavailable stream deliberately leaves the cursor unchanged so its local spool
         // can retry after the control plane has recovered.
@@ -734,8 +733,6 @@ public sealed class TeamLabTrafficApplicationService(
             ? Math.Max(cursor.LastSequence, prepared.NextSequence)
             : cursor.LastSequence;
         cursor.DroppedCount = Math.Max(cursor.DroppedCount, result.DroppedCount) + enqueue.DroppedCount;
-        cursor.SensorRejectedCount = Math.Max(cursor.SensorRejectedCount, result.Health.SensorRejectedCount);
-        cursor.LastSensorErrorCode = result.Health.LastSensorErrorCode;
         cursor.UpdatedAt = now;
         foreach (var point in points)
         {
@@ -761,33 +758,6 @@ public sealed class TeamLabTrafficApplicationService(
                 workerNodeId: source.WorkerNodeId,
                 detail: ObservationDetail(runtime, "dropped", droppedDelta));
             PlatformTelemetry.RecordTeamLabObservation("dropped", "mixed", droppedDelta);
-        }
-        var rejectedDelta = cursor.SensorRejectedCount - previousRejected;
-        if (rejectedDelta > 0)
-        {
-            eventRecorder.Record(
-                runtime,
-                "sensor-authentication",
-                TeamLabEventLevel.Warning,
-                OperationalEventCodes.TeamLab.SensorAuthenticationDegraded,
-                OperationalEventOutcome.Observed,
-                "Endpoint sensor events were rejected by authentication or replay validation.",
-                new OperationalError(
-                    OperationalErrorCategory.Authorization,
-                    OperationalErrorCodes.SensorAuthenticationFailed,
-                    "终端传感器事件校验拒绝了一条或多条记录",
-                    false,
-                    WorkerNodeId: source.WorkerNodeId,
-                    Operation: "teamlab.sensor.verify"),
-                source.WorkerNodeId,
-                new Dictionary<string, object?>
-                {
-                    ["generation"] = runtime.Generation,
-                    ["stage"] = "sensor-authentication",
-                    ["rejectedCount"] = rejectedDelta,
-                    ["errorCode"] = cursor.LastSensorErrorCode
-                });
-            PlatformTelemetry.RecordTeamLabObservation("rejected", "endpoint-process", rejectedDelta);
         }
         if (hadError && string.IsNullOrWhiteSpace(result.Health.LastError))
         {

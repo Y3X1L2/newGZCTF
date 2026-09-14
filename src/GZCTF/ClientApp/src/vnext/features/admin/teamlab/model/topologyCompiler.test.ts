@@ -13,7 +13,6 @@ const asset = (key: string, type: 'docker' | 'linux-vm' | 'windows-vm', orderInd
   exposePort: null,
   healthCheck: null,
   orderIndex,
-  endpointObservation: 'optional',
 })
 
 function document(): TopologyDocument {
@@ -153,7 +152,7 @@ function document(): TopologyDocument {
         direction: 'from-to',
       },
     },
-    observation: { flowMetadataEnabled: true, onDemandPcapEnabled: true, endpointObservation: 'required' },
+    observation: { flowMetadataEnabled: true, onDemandPcapEnabled: true },
     networkLayouts: {},
   }
 }

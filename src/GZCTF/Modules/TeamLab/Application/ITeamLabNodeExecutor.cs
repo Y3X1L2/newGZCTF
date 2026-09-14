@@ -133,7 +133,6 @@ public sealed record TeamLabNodeAssetCreateRequest(
     IReadOnlyDictionary<string, string> Secrets,
     IReadOnlyList<TeamLabNodeInterfaceIntent> Interfaces,
     TeamLabNodeHealthIntent? Health = null,
-    TeamLabEndpointObservationMode EndpointObservation = TeamLabEndpointObservationMode.Disabled,
     string RouterNamespace = "",
     Guid? OperationId = null,
     VmRuntimeMode? VmRuntimeMode = null,
@@ -191,7 +190,6 @@ public sealed record TeamLabNodeCleanupRequest(
     IReadOnlyList<string> ResourceNames,
     IReadOnlyList<string> ContainerIds,
     IReadOnlyList<string> VmNames,
-    IReadOnlyList<string> SensorAssetKeys,
     IReadOnlyList<string> FabricRemoteCidrs);
 
 public sealed record TeamLabNodeProbeRequest(
@@ -244,7 +242,6 @@ public sealed record TeamLabNodeObservationRecord(
     string? PacketFingerprint,
     string FlowFingerprint,
     string EvidenceKind,
-    string? ProcessIdentityHash,
     string Direction,
     DateTimeOffset? FirstSeenAt = null,
     DateTimeOffset? LastSeenAt = null,
@@ -267,13 +264,11 @@ public sealed record TeamLabNodeObservationHealth(
     int ActiveFlowCount,
     long DroppedCount,
     long ParserFailureCount,
-    long SensorRejectedCount,
     long SpoolBytes,
-    string? LastSensorErrorCode,
     string? LastError)
 {
     public static readonly TeamLabNodeObservationHealth Unavailable =
-        new(false, 0, 0, 0, 0, 0, 0, 0, null, "Observation health is unavailable.");
+        new(false, 0, 0, 0, 0, 0, 0, "Observation health is unavailable.");
 }
 
 public sealed record TeamLabNodeCaptureStartRequest(

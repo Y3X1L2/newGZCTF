@@ -49,9 +49,6 @@ public static partial class VmDomainBuilder
         {
             "--channel unix,target.type=virtio,target.name=org.qemu.guest_agent.0"
         };
-        if (config.EndpointSensorChannel)
-            arguments.Add(
-                $"--channel unix,path={ShellEscape(EndpointSensorChannelService.VmSocketPath(request.VmName, request.Generation))},mode=bind,target.type=virtio,target.name=org.gzctf.sensor.0");
         return string.Join(' ', arguments);
     }
 

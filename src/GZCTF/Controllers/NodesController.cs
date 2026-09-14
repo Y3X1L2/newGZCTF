@@ -867,20 +867,6 @@ public class NodesController : ControllerBase
         return File(System.IO.File.OpenRead(path), "application/octet-stream", "gzctf-agent");
     }
 
-    [HttpGet("/api/agent/endpoint-sensor/linux-x64/download")]
-    [AllowAnonymous]
-    public IActionResult DownloadLinuxEndpointSensor() =>
-        DownloadBundledAgentArtifact(
-            ["endpoint-sensor", "linux-x64", "gzctf-endpoint-sensor"],
-            "gzctf-endpoint-sensor");
-
-    [HttpGet("/api/agent/endpoint-sensor/win-x64/download")]
-    [AllowAnonymous]
-    public IActionResult DownloadWindowsEndpointSensor() =>
-        DownloadBundledAgentArtifact(
-            ["endpoint-sensor", "win-x64", "gzctf-endpoint-sensor.exe"],
-            "gzctf-endpoint-sensor.exe");
-
     [HttpGet("/api/agent/guest-supervisor/linux-x64/download")]
     [AllowAnonymous]
     public IActionResult DownloadLinuxGuestSupervisor() =>

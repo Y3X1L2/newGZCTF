@@ -1,8 +1,8 @@
 import type { TeamLabAssetKind, TeamLabRuntimeStatus } from './teamlabContracts'
 
 export type TeamLabEventLevel = 'info' | 'success' | 'warning' | 'error'
-export type TeamLabPathConfidence = 'packet-exact' | 'process-correlated' | 'temporally-related'
-export type TeamLabTrafficEvidenceKind = 'packet' | 'endpoint-process'
+export type TeamLabPathConfidence = 'packet-exact'
+export type TeamLabTrafficEvidenceKind = 'packet'
 export type TeamLabObservationPointKind =
   | 'network-bridge'
   | 'router-fragment'

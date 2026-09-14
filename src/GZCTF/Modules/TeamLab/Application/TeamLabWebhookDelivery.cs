@@ -24,7 +24,7 @@ public static class TeamLabWebhookDelivery
         "cleanup", "fabric", "bootstrap", "network", "route", "probe",
         "infrastructure", "access", "remote-access",
         "capture", "capture-expiry", "capture-upload", "capture-download",
-        "observation", "sensor-authentication", "operation"
+        "observation", "operation"
     };
 
     /// <summary>Rejects unknown event types with a stable 422 so a subscription can never silently die.</summary>

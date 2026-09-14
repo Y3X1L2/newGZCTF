@@ -113,7 +113,6 @@ function mapAsset(
     exposePort: asset.exposePort,
     healthCheck: asset.healthCheck ? { ...asset.healthCheck } : null,
     orderIndex: asset.orderIndex,
-    endpointObservation: asset.endpointObservation,
     devicePackageId: asset.devicePackageId ?? null,
     deviceParameters: deviceParametersText(asset.deviceParameters),
     connectorId: asset.connectorId ?? null,

@@ -213,33 +213,6 @@
     </ItemGroup>
   </Target>
 
-  <Target Name="PublishEndpointSensor" AfterTargets="ComputeFilesToPublish">
-    <PropertyGroup>
-      <EndpointSensorLinuxDir>$(BaseIntermediateOutputPath)endpoint-sensor/linux-x64/</EndpointSensorLinuxDir>
-      <EndpointSensorWindowsDir>$(BaseIntermediateOutputPath)endpoint-sensor/win-x64/</EndpointSensorWindowsDir>
-    </PropertyGroup>
-
-    <Exec
-      Command="dotnet publish &quot;$(MSBuildThisFileDirectory)../GZCTF.EndpointSensor/GZCTF.EndpointSensor.csproj&quot; -c $(Configuration) -r linux-x64 --self-contained true -p:PublishSingleFile=true -p:PublishTrimmed=true -p:DebugType=None -p:DebugSymbols=false -o &quot;$(EndpointSensorLinuxDir)&quot;" />
-    <Exec
-      Command="dotnet publish &quot;$(MSBuildThisFileDirectory)../GZCTF.EndpointSensor/GZCTF.EndpointSensor.csproj&quot; -c $(Configuration) -r win-x64 --self-contained true -p:PublishSingleFile=true -p:PublishTrimmed=true -p:DebugType=None -p:DebugSymbols=false -o &quot;$(EndpointSensorWindowsDir)&quot;" />
-
-    <ItemGroup>
-      <EndpointSensorLinux Include="$(EndpointSensorLinuxDir)GZCTF.EndpointSensor" />
-      <EndpointSensorWindows Include="$(EndpointSensorWindowsDir)GZCTF.EndpointSensor.exe" />
-      <ResolvedFileToPublish Include="@(EndpointSensorLinux->'%(FullPath)')" Exclude="@(ResolvedFileToPublish)">
-        <RelativePath>agent/endpoint-sensor/linux-x64/gzctf-endpoint-sensor</RelativePath>
-        <CopyToPublishDirectory>Always</CopyToPublishDirectory>
-        <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
-      </ResolvedFileToPublish>
-      <ResolvedFileToPublish Include="@(EndpointSensorWindows->'%(FullPath)')" Exclude="@(ResolvedFileToPublish)">
-        <RelativePath>agent/endpoint-sensor/win-x64/gzctf-endpoint-sensor.exe</RelativePath>
-        <CopyToPublishDirectory>Always</CopyToPublishDirectory>
-        <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
-      </ResolvedFileToPublish>
-    </ItemGroup>
-  </Target>
-
   <Target Name="PublishGuestSupervisor" AfterTargets="ComputeFilesToPublish">
     <PropertyGroup>
       <GuestSupervisorLinuxDir>$(BaseIntermediateOutputPath)guest-supervisor/linux-x64/</GuestSupervisorLinuxDir>

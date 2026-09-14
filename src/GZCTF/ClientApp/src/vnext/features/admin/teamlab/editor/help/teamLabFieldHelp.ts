@@ -17,12 +17,6 @@ export const teamLabFieldHelp: Readonly<Record<string, TeamLabFieldHelp>> = {
     description:
       '作用：确定资产内网卡的识别顺序，例如第一张网卡对应 eth0。何时使用：资产接入多个网段且启动配置依赖网卡顺序时。如何操作：从 0 开始排序，并保留一张主网卡。结果：主网卡获得默认网关，其余网卡只保留本网段通信。',
   },
-  endpointObservation: {
-    key: 'endpointObservation',
-    title: '端点观测（高级）',
-    description:
-      '作用：决定是否采集该资产参与通信时的流量信息。默认禁用；仅在需要定位跨资产通信路径时选“可选”，必须留存观测证据时选“必需”。必需模式在观测能力不可用时会阻断发布。',
-  },
   healthChecks: {
     key: 'healthChecks',
     title: '健康检查',

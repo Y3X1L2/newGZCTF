@@ -11,7 +11,6 @@ function createDocument(): TopologyDocument {
     observation: {
       flowMetadataEnabled: true,
       onDemandPcapEnabled: true,
-      endpointObservation: 'optional',
     },
     networkLayouts: {},
     nodes: {
@@ -55,7 +54,6 @@ function createDocument(): TopologyDocument {
         exposePort: 8080,
         healthCheck: { kind: 'http', port: 8080 },
         orderIndex: 2,
-        endpointObservation: 'required',
       },
       database: {
         type: 'linux-vm',
@@ -67,7 +65,6 @@ function createDocument(): TopologyDocument {
         exposePort: null,
         healthCheck: { kind: 'tcp', port: 5432 },
         orderIndex: 3,
-        endpointObservation: 'optional',
       },
     },
     connections: {
@@ -166,31 +163,8 @@ describe('TeamLabInspector', () => {
     expect(asset).toMatchObject({
       imageTemplateId: 42,
       healthCheck: { kind: 'http', port: 8080 },
-      endpointObservation: 'required',
     })
     expect(screen.queryByRole('textbox', { name: /secret/i })).not.toBeInTheDocument()
-  })
-
-  it('keeps asset endpoint observation in a collapsed advanced section', () => {
-    const onDocumentChange = vi.fn()
-    render(
-      <TeamLabInspector
-        document={createDocument()}
-        onDocumentChange={onDocumentChange}
-        selection={selection(['app'])}
-      />
-    )
-
-    const advanced = screen.getByText('高级选项').closest('details')
-    expect(advanced).not.toHaveAttribute('open')
-    fireEvent.click(screen.getByText('高级选项'))
-    expect(advanced).toHaveAttribute('open')
-    const endpointMode = advanced?.querySelector('select')
-    expect(endpointMode).not.toBeNull()
-    fireEvent.change(endpointMode!, { target: { value: 'disabled' } })
-    expect((onDocumentChange.mock.calls[0][0] as TopologyDocument).nodes.app).toMatchObject({
-      endpointObservation: 'disabled',
-    })
   })
 
   it('updates membership and route connections', () => {

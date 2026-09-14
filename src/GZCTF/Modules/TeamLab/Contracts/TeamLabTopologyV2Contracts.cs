@@ -12,8 +12,7 @@ public sealed record TeamLabTopologyInfrastructureModel(
 
 public sealed record TeamLabObservationPolicyModel(
     bool FlowMetadataEnabled = true,
-    bool OnDemandPcapEnabled = true,
-    TeamLabEndpointObservationMode EndpointObservation = TeamLabEndpointObservationMode.Optional);
+    bool OnDemandPcapEnabled = true);
 
 internal sealed record TeamLabTopologyAssetV2Model(
     string Key,
@@ -22,7 +21,6 @@ internal sealed record TeamLabTopologyAssetV2Model(
     int ImageTemplateId,
     TeamLabAssetResourceModel Resources,
     IReadOnlyList<TeamLabTopologyInterfaceModel> Interfaces,
-    TeamLabEndpointObservationMode EndpointObservation,
     int? ExposePort,
     TeamLabHealthCheckModel? HealthCheck,
     int OrderIndex,

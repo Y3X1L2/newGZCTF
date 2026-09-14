@@ -138,33 +138,11 @@ namespace GZCTF.Migrations
                 name: "WorkerNodeId",
                 table: "TeamLabTrafficCaptureJobs");
 
-            migrationBuilder.AddColumn<string>(
-                name: "LastSensorErrorCode",
-                table: "TeamLabObservationCursors",
-                type: "character varying(64)",
-                maxLength: 64,
-                nullable: true);
-
-            migrationBuilder.AddColumn<long>(
-                name: "SensorRejectedCount",
-                table: "TeamLabObservationCursors",
-                type: "bigint",
-                nullable: false,
-                defaultValue: 0L);
-
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropColumn(
-                name: "LastSensorErrorCode",
-                table: "TeamLabObservationCursors");
-
-            migrationBuilder.DropColumn(
-                name: "SensorRejectedCount",
-                table: "TeamLabObservationCursors");
-
             migrationBuilder.AddColumn<string>(
                 name: "FilePath",
                 table: "TeamLabTrafficCaptureJobs",

@@ -3,8 +3,6 @@ using System.Text;
 using GZCTF.GuestControl.Contracts;
 using GZCTF.GuestSupervisor.Enrollment;
 using GZCTF.GuestSupervisor.Lifecycle;
-using GZCTF.GuestTelemetry.Contracts;
-using GZCTF.GuestTelemetry.Platform;
 
 namespace GZCTF.GuestSupervisor;
 
@@ -84,13 +82,9 @@ public sealed class GuestSupervisorWorker(
         current = await AdvanceIfAsync(current,
             GuestLifecycleStage.ServiceHealthReady, GuestLifecycleStage.ObservationReady, stoppingToken);
 
-        IConnectionProvider provider = OperatingSystem.IsWindows()
-            ? new WindowsConnectionProvider()
-            : new LinuxConnectionProvider();
-        var connections = await provider.ReadAsync(stoppingToken);
         logger.LogInformation(
-            "Guest Supervisor ready: Runtime={RuntimeId}, Generation={Generation}, Asset={AssetKey}, Connections={ConnectionCount}",
-            current.Identity.RuntimeId, current.Identity.Generation, current.Identity.AssetKey, connections.Count);
+            "Guest Supervisor ready: Runtime={RuntimeId}, Generation={Generation}, Asset={AssetKey}",
+            current.Identity.RuntimeId, current.Identity.Generation, current.Identity.AssetKey);
         await Task.Delay(Timeout.InfiniteTimeSpan, stoppingToken);
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)

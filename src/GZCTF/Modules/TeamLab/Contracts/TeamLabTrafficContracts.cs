@@ -15,8 +15,6 @@ public static class TeamLabPathConfidenceFilter
         confidence = value.Trim() switch
         {
             "packet-exact" => TeamLabPathConfidence.PacketExact,
-            "process-correlated" => TeamLabPathConfidence.ProcessCorrelated,
-            "temporally-related" => TeamLabPathConfidence.TemporallyRelated,
             _ => null
         };
         return confidence is not null;

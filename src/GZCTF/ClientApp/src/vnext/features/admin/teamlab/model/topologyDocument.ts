@@ -1,7 +1,6 @@
 import type {
   TeamLabAssetResources,
   TeamLabConnectionDirection,
-  TeamLabEndpointObservationMode,
   TeamLabHealthCheck,
   TeamLabObservationPolicy,
 } from '../api/teamlabContracts'
@@ -44,7 +43,6 @@ interface TopologyAssetNodeBase {
   exposePort: number | null
   healthCheck: TeamLabHealthCheck | null
   orderIndex: number
-  endpointObservation: TeamLabEndpointObservationMode
   /** Device package binding for industrial emulation / protocol simulation assets. */
   devicePackageId?: number | null
   /** Raw author parameter JSON for the bound device package. */
@@ -117,7 +115,6 @@ export const createEmptyTopologyDocument = (name: string): TopologyDocument => (
   observation: {
     flowMetadataEnabled: true,
     onDemandPcapEnabled: true,
-    endpointObservation: 'optional',
   },
 })
 

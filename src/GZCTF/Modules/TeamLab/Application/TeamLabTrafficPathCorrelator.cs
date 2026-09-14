@@ -17,7 +17,6 @@ public sealed class TeamLabTrafficPathCorrelator(
 {
     private const int BatchSize = 500;
     private static readonly TimeSpan PacketWindow = TimeSpan.FromSeconds(5);
-    private static readonly TimeSpan ProcessWindow = TimeSpan.FromSeconds(10);
 
     internal async Task<int> CorrelatePendingAsync(CancellationToken cancellationToken)
     {
@@ -101,11 +100,6 @@ public sealed class TeamLabTrafficPathCorrelator(
             .Select(item => item.PacketFingerprint!)
             .Distinct(ByteArrayComparer.Instance)
             .ToArray();
-        var processHashes = pending
-            .Where(item => item.ProcessIdentityHash is { Length: > 0 })
-            .Select(item => item.ProcessIdentityHash!)
-            .Distinct(ByteArrayComparer.Instance)
-            .ToArray();
         var earliest = pending.Min(item => item.ObservedAt);
         var latest = pending.Max(item => item.ObservedAt);
 
@@ -120,21 +114,7 @@ public sealed class TeamLabTrafficPathCorrelator(
                 .OrderBy(item => item.ObservedAt)
                 .ThenBy(item => item.Id)
                 .ToArrayAsync(cancellationToken);
-        var processCandidates = processHashes.Length == 0
-            ? []
-            : await context.TeamLabTrafficObservations.AsNoTracking()
-                .Where(item => item.RuntimeId == source.RuntimeId && item.Generation == source.Generation &&
-                               item.ProcessIdentityHash != null &&
-                               processHashes.Contains(item.ProcessIdentityHash) &&
-                               item.ObservedAt >= earliest - ProcessWindow &&
-                               item.ObservedAt <= latest + ProcessWindow)
-                .OrderBy(item => item.ObservedAt)
-                .ThenBy(item => item.Id)
-                .ToArrayAsync(cancellationToken);
-
-        var paths = BuildPacketPaths(source, packetCandidates)
-            .Concat(BuildTemporalProcessPaths(source, processCandidates))
-            .ToArray();
+        var paths = BuildPacketPaths(source, packetCandidates).ToArray();
         if (paths.Length > 0)
         {
             var fingerprints = paths.Select(item => item.EvidenceFingerprint).ToArray();
@@ -173,9 +153,7 @@ public sealed class TeamLabTrafficPathCorrelator(
                         ["generation"] = source.Generation,
                         ["stage"] = "traffic-path",
                         ["pathCount"] = created,
-                        ["packetExactCount"] = pathEntries.Count(item => item.Confidence == TeamLabPathConfidence.PacketExact),
-                        ["processCorrelatedCount"] = pathEntries.Count(item => item.Confidence == TeamLabPathConfidence.ProcessCorrelated),
-                        ["temporalCount"] = pathEntries.Count(item => item.Confidence == TeamLabPathConfidence.TemporallyRelated)
+                        ["packetExactCount"] = pathEntries.Count(item => item.Confidence == TeamLabPathConfidence.PacketExact)
                     });
             foreach (var group in pathEntries.GroupBy(item => item.Confidence))
                 PlatformTelemetry.RecordTeamLabObservation(
@@ -194,12 +172,6 @@ public sealed class TeamLabTrafficPathCorrelator(
         int generation,
         IReadOnlyCollection<TeamLabTrafficObservation> observations) =>
         BuildPacketPaths(new CorrelationSource(runtimeId, generation), observations).ToArray();
-
-    internal static IReadOnlyList<TeamLabTrafficPath> BuildTemporalProcessPaths(
-        int runtimeId,
-        int generation,
-        IReadOnlyCollection<TeamLabTrafficObservation> observations) =>
-        BuildTemporalProcessPaths(new CorrelationSource(runtimeId, generation), observations).ToArray();
 
     internal static long NextScanCursor(
         IReadOnlyCollection<TeamLabTrafficObservation> observations,
@@ -220,57 +192,6 @@ public sealed class TeamLabTrafficPathCorrelator(
             yield return CreatePath(source, TeamLabPathConfidence.PacketExact, ordered);
         }
     }
-
-    private static IEnumerable<TeamLabTrafficPath> BuildTemporalProcessPaths(
-        CorrelationSource source,
-        IReadOnlyCollection<TeamLabTrafficObservation> observations)
-    {
-        foreach (var group in observations
-                     .Where(item => item.ProcessIdentityHash is { Length: > 0 })
-                     .GroupBy(item => item.ProcessIdentityHash!, ByteArrayComparer.Instance))
-        {
-            var ordered = group.OrderBy(item => item.ObservedAt).ThenBy(item => item.Id)
-                .GroupBy(item => item.FlowFingerprint, ByteArrayComparer.Instance)
-                .Select(item => item.First())
-                .OrderBy(item => item.ObservedAt)
-                .ThenBy(item => item.Id)
-                .ToArray();
-            if (ordered.Length < 2 || ordered[^1].ObservedAt - ordered[0].ObservedAt > ProcessWindow)
-                continue;
-            var confidence = HasDirectedProcessTransition(ordered)
-                ? TeamLabPathConfidence.ProcessCorrelated
-                : TeamLabPathConfidence.TemporallyRelated;
-            yield return CreatePath(source, confidence, ordered);
-        }
-    }
-
-    private static bool HasDirectedProcessTransition(IReadOnlyList<TeamLabTrafficObservation> observations)
-    {
-        var accepted = false;
-        foreach (var observation in observations)
-        {
-            if (IsInboundProcessEvent(observation.Direction))
-            {
-                accepted = true;
-                continue;
-            }
-            if (accepted && IsOutboundProcessEvent(observation.Direction))
-                return true;
-        }
-        return false;
-    }
-
-    private static bool IsInboundProcessEvent(string value) =>
-        value.Equals("accept", StringComparison.OrdinalIgnoreCase) ||
-        value.Equals("accepted", StringComparison.OrdinalIgnoreCase) ||
-        value.Equals("inbound", StringComparison.OrdinalIgnoreCase) ||
-        value.Equals("received", StringComparison.OrdinalIgnoreCase);
-
-    private static bool IsOutboundProcessEvent(string value) =>
-        value.Equals("connect", StringComparison.OrdinalIgnoreCase) ||
-        value.Equals("connected", StringComparison.OrdinalIgnoreCase) ||
-        value.Equals("outbound", StringComparison.OrdinalIgnoreCase) ||
-        value.Equals("opened", StringComparison.OrdinalIgnoreCase);
 
     private static TeamLabTrafficPath CreatePath(
         CorrelationSource source,

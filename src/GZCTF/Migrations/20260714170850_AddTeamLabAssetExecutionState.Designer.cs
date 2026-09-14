@@ -5350,9 +5350,6 @@ namespace GZCTF.Migrations
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)");
 
-                    b.Property<byte>("EndpointObservation")
-                        .HasColumnType("smallint");
-
                     b.Property<byte>("ExecutionStage")
                         .HasColumnType("smallint");
 
@@ -6142,11 +6139,6 @@ namespace GZCTF.Migrations
 
                     b.Property<int>("CpuUnits")
                         .HasColumnType("integer");
-
-                    b.Property<byte>("EndpointObservation")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("smallint")
-                        .HasDefaultValue((byte)0);
 
                     b.Property<string>("EnvironmentJson")
                         .IsRequired()

@@ -239,7 +239,6 @@ normal heartbeat、status poll 和成功的普通 Agent call 只进入 span/metr
 | `teamlab.observation.degraded` | Blocked |
 | `teamlab.observation.dropped` | Observed |
 | `teamlab.observation.recovered` | Recovered |
-| `teamlab.sensor.authentication_degraded` | Observed |
 | `teamlab.traffic.path_derived` | Observed |
 | `teamlab.recovery.rebuild_allowed` | Recovered |
 | `teamlab.recovery.rebuild_blocked` | Blocked |
@@ -287,7 +286,7 @@ Generic mutation code:
 - `imageType`、`digestPrefix`、`sizeBytes`；
 - `routeCount`、`assetCount`、`shardCount`、`infrastructureCount`、`leaseCount`；
 - `captureScope`、`captureSegmentCount`、`captureWorkerCount`、`pathCount`；
-- `packetExactCount`、`processCorrelatedCount`、`temporalCount`、`rejectedCount`、`rebootCount`；
+- `packetExactCount`、`rejectedCount`、`rebootCount`；
 - `assetKind`、`infrastructureKind`、`evidenceKind`、`errorCode`；
 - `decision`、`reasonCode`。
 

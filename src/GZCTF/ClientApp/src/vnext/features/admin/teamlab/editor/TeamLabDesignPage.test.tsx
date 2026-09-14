@@ -74,14 +74,17 @@ describe('TeamLabDesignPage', () => {
     expect(screen.getByText(/布局将自动保存/)).toBeInTheDocument()
   })
 
-  it('disables endpoint observation on a newly added standard asset', async () => {
+  it('adds a standard asset with its default resource profile', async () => {
     const onChange = vi.fn()
     render(<TeamLabDesignPage initialDocument={createEmptyTopologyDocument('Demo')} onDocumentChange={onChange} />)
 
     fireEvent.click(screen.getByRole('button', { name: /Docker：轻量容器服务/ }))
 
     await waitFor(() => expect(onChange).toHaveBeenCalledTimes(1))
-    expect(Object.values(onChange.mock.calls[0][0].nodes)[0]).toMatchObject({ endpointObservation: 'disabled' })
+    expect(Object.values(onChange.mock.calls[0][0].nodes)[0]).toMatchObject({
+      type: 'docker',
+      resources: { cpuUnits: 1, memoryMiB: 512, storageMiB: 1024 },
+    })
   })
 
 })

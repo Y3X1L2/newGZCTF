@@ -503,13 +503,11 @@ try:
             elif asset["key"] == "linux-service":
                 if args.linux_template_id is not None:
                     asset["imageTemplateId"] = args.linux_template_id
-                    asset["endpointObservation"] = 1
                 if args.swap_vm_networks:
                     asset["interfaces"][0]["networkKey"] = "ad"
                     asset["interfaces"][0]["hostOffset"] = 20
                 if args.opaque_linux:
                     asset["bootstrap"] = None
-                    asset["endpointObservation"] = 0
             elif asset["key"] == "ad-dc":
                 if args.windows_template_id is not None:
                     asset["imageTemplateId"] = args.windows_template_id
@@ -529,11 +527,9 @@ try:
                             "netbios_name": args.ad_netbios_name,
                         },
                     }
-                    asset["endpointObservation"] = 1
                     asset["bakeAtPublish"] = True
                 if args.opaque_windows:
                     asset["bootstrap"] = None
-                    asset["endpointObservation"] = 0
                     asset["bakeAtPublish"] = False
 
         ad_asset = next((asset for asset in definition["assets"] if asset["key"] == "ad-dc"), None)

@@ -76,7 +76,6 @@ builder.Services.AddSingleton<ObservationBatchSpool>();
 builder.Services.AddHostedService(serviceProvider => serviceProvider.GetRequiredService<ObservationBatchSpool>());
 builder.Services.AddSingleton<TeamLabPacketObserver>();
 builder.Services.AddHostedService(serviceProvider => serviceProvider.GetRequiredService<TeamLabPacketObserver>());
-builder.Services.AddSingleton<EndpointSensorChannelService>();
 builder.Services.AddSingleton<PcapSegmentUploader>();
 builder.Services.AddSingleton<TeamLabPcapService>();
 builder.Services.AddSingleton<TeamLabRuntimeGenerationStore>();

@@ -555,12 +555,6 @@ export enum TeamLabConnectionDirection {
   Bidirectional = 1,
 }
 
-export enum TeamLabEndpointObservationMode {
-  Disabled = 0,
-  Optional = 1,
-  Required = 2,
-}
-
 export enum TeamLabHealthCheckKind {
   Tcp = 0,
   Http = 1,
@@ -597,13 +591,10 @@ export enum TeamLabObservationPointKind {
 
 export enum TeamLabTrafficEvidenceKind {
   Packet = 0,
-  EndpointProcess = 1,
 }
 
 export enum TeamLabPathConfidence {
   PacketExact = 0,
-  ProcessCorrelated = 1,
-  TemporallyRelated = 2,
 }
 
 export enum TeamLabEventLevel {
@@ -1561,7 +1552,6 @@ export interface TeamLabTopologyAssetModel {
   healthCheck?: TeamLabHealthCheckModel | null;
   /** @format int32 */
   orderIndex?: number;
-  endpointObservation?: TeamLabEndpointObservationMode;
   /** @format int32 */
   devicePackageId?: number | null;
   deviceParameters?: any;
@@ -1620,7 +1610,6 @@ export interface TeamLabTopologyDependencyModel {
 export interface TeamLabObservationPolicyModel {
   flowMetadataEnabled?: boolean;
   onDemandPcapEnabled?: boolean;
-  endpointObservation?: TeamLabEndpointObservationMode;
 }
 
 export interface TeamLabTopologyEditorModel {
@@ -17999,52 +17988,6 @@ export class Api<
      * No description
      *
      * @tags Nodes
-     * @name NodesDownloadLinuxEndpointSensor
-     * @request GET:/api/agent/endpoint-sensor/linux-x64/download
-     */
-    nodesDownloadLinuxEndpointSensor: (params: RequestParams = {}) =>
-      this.request<Blob, any>({
-        path: `/api/agent/endpoint-sensor/linux-x64/download`,
-        method: "GET",
-        ...params,
-      }),
-    /**
-     * No description
-     *
-     * @tags Nodes
-     * @name NodesDownloadLinuxEndpointSensor
-     * @request GET:/api/agent/endpoint-sensor/linux-x64/download
-     */
-    useNodesDownloadLinuxEndpointSensor: (
-      options?: SWRConfiguration,
-      doFetch: boolean = true,
-    ) =>
-      useSWR<Blob, any>(
-        doFetch ? `/api/agent/endpoint-sensor/linux-x64/download` : null,
-        options,
-      ),
-
-    /**
-     * No description
-     *
-     * @tags Nodes
-     * @name NodesDownloadLinuxEndpointSensor
-     * @request GET:/api/agent/endpoint-sensor/linux-x64/download
-     */
-    mutateNodesDownloadLinuxEndpointSensor: (
-      data?: Blob | Promise<Blob>,
-      options?: MutatorOptions,
-    ) =>
-      mutate<Blob>(
-        `/api/agent/endpoint-sensor/linux-x64/download`,
-        data,
-        options,
-      ),
-
-    /**
-     * No description
-     *
-     * @tags Nodes
      * @name NodesDownloadLinuxGuestSupervisor
      * @request GET:/api/agent/guest-supervisor/linux-x64/download
      */
@@ -18083,52 +18026,6 @@ export class Api<
     ) =>
       mutate<Blob>(
         `/api/agent/guest-supervisor/linux-x64/download`,
-        data,
-        options,
-      ),
-
-    /**
-     * No description
-     *
-     * @tags Nodes
-     * @name NodesDownloadWindowsEndpointSensor
-     * @request GET:/api/agent/endpoint-sensor/win-x64/download
-     */
-    nodesDownloadWindowsEndpointSensor: (params: RequestParams = {}) =>
-      this.request<Blob, any>({
-        path: `/api/agent/endpoint-sensor/win-x64/download`,
-        method: "GET",
-        ...params,
-      }),
-    /**
-     * No description
-     *
-     * @tags Nodes
-     * @name NodesDownloadWindowsEndpointSensor
-     * @request GET:/api/agent/endpoint-sensor/win-x64/download
-     */
-    useNodesDownloadWindowsEndpointSensor: (
-      options?: SWRConfiguration,
-      doFetch: boolean = true,
-    ) =>
-      useSWR<Blob, any>(
-        doFetch ? `/api/agent/endpoint-sensor/win-x64/download` : null,
-        options,
-      ),
-
-    /**
-     * No description
-     *
-     * @tags Nodes
-     * @name NodesDownloadWindowsEndpointSensor
-     * @request GET:/api/agent/endpoint-sensor/win-x64/download
-     */
-    mutateNodesDownloadWindowsEndpointSensor: (
-      data?: Blob | Promise<Blob>,
-      options?: MutatorOptions,
-    ) =>
-      mutate<Blob>(
-        `/api/agent/endpoint-sensor/win-x64/download`,
         data,
         options,
       ),

@@ -31,6 +31,8 @@
 
 ## 本地在研补充（尚未合并/发布）
 
+2026-09-14 TeamLab 旧端点采集链已在独立任务分支中完整删除，覆盖拓扑/API、运行时、Agent、来宾组件、持久化、前端与发布链；packet flow、网络/工作负载 observation point 和 asset-scope PCAP 保留，工作负载 observation point 由已放置资产自动创建。Release 编译、相关后端单测 156/156、前端相关测试 31/31 和 TypeScript 严格检查通过；尚未合并、推送或部署，真实基础设施未在本轮重新验收。
+
 2026-09-14 TeamLab 产品化改造位于独立工作树 `D:\newgz\newGZCTF-teamlab-product-usability`、分支 `codex/teamlab-product-usability`，基线为 `origin/main 4bef377`，尚未提交、推送或部署。改动已闭环链路策略多资产执行与失败恢复、A07 服务开放、A04 文件运维、运行及会话表达、设备模板结构化登记、现场网卡选择与按需状态读取、协议事件基础校验。后端相关定向测试 76/76、前端相关定向测试 16/16 通过；完整前端测试首次 319/327，其余 8 项测试夹具修正后相关 14/14 通过；后端 Release 构建和前端生产制品构建通过。真实公网入口、VM SFTP、容器文件通道及现场网卡没有在本轮重新部署实测，不能记录为已发布能力。详细记录见 `docs/development/handoffs/2026-09-13-teamlab-product-usability.md`。
 
 首批远端分支已推送：`codex/teamlab-foundation-v1-20260908` 指向 `98d9d839fa5f72a863c4775cc0e680b354c3d9d7`，已通过远端引用回读核对。仅包含第一笔提交及其历史，未包含工作区未提交的前端和验收改动；未合并 main，未部署生产，未发送 QQ 消息。

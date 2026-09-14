@@ -25,14 +25,13 @@ const asset = (key: string) => ({
   exposePort: null,
   healthCheck: null,
   orderIndex: 0,
-  endpointObservation: 'disabled' as const,
 })
 
 function document(): TopologyDocument {
   return {
     schemaVersion: 2,
     name: 'Commands',
-    observation: { flowMetadataEnabled: true, onDemandPcapEnabled: true, endpointObservation: 'optional' },
+    observation: { flowMetadataEnabled: true, onDemandPcapEnabled: true },
     networkLayouts: {},
     nodes: {
       sw1: {

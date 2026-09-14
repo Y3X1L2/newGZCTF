@@ -5,9 +5,7 @@ namespace GZCTF.Modules.TeamLab.Domain;
 
 public enum TeamLabPathConfidence : byte
 {
-    PacketExact = 0,
-    ProcessCorrelated = 1,
-    TemporallyRelated = 2
+    PacketExact = 0
 }
 
 public sealed class TeamLabTrafficPath

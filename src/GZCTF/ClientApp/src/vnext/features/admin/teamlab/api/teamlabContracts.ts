@@ -1,7 +1,6 @@
 export type TeamLabAssetKind = 'docker' | 'vm'
 export type TeamLabInfrastructureKind = 'managed-switch' | 'managed-router'
 export type TeamLabConnectionDirection = 'from-to' | 'bidirectional'
-export type TeamLabEndpointObservationMode = 'disabled' | 'optional' | 'required'
 export type TeamLabHealthCheckKind = 'tcp' | 'http'
 export type TeamLabImageType = 'docker' | 'qcow2' | 'ova' | 'vmdk'
 export type TeamLabRuntimeStatus =
@@ -60,7 +59,6 @@ export interface TeamLabTopologyAsset {
   exposePort: number | null
   healthCheck: TeamLabHealthCheck | null
   orderIndex: number
-  endpointObservation: TeamLabEndpointObservationMode
   devicePackageId?: number | null
   deviceParameters?: unknown
   connectorId?: string | null
@@ -86,7 +84,6 @@ export interface TeamLabTopologyConnection {
 export interface TeamLabObservationPolicy {
   flowMetadataEnabled: boolean
   onDemandPcapEnabled: boolean
-  endpointObservation: TeamLabEndpointObservationMode
 }
 
 export interface TeamLabTopologyDefinition {
