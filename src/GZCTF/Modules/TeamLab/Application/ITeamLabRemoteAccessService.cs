@@ -10,6 +10,9 @@ public interface ITeamLabRemoteAccessService
     Task<TeamLabRemoteSessionPage> ListAsync(Guid actorId, bool administrator, Guid? runtimeId,
         string? query, TeamLabRemoteProtocol? protocol, bool abnormalOnly, TeamLabRemoteSessionStatus? status,
         long? after, int limit, CancellationToken cancellationToken);
+    Task<OpenTeamLabRemoteSessionPageModel> ListApiAsync(Guid apiTokenId, bool hasWildcardScopeGrant,
+        Guid? runtimeId, string? query, TeamLabRemoteProtocol? protocol, bool abnormalOnly,
+        TeamLabRemoteSessionStatus? status, long? after, int limit, CancellationToken cancellationToken);
     Task<TeamLabRemoteAccessAvailabilityModel> GetAvailabilityAsync(Guid runtimeId, int assetId, Guid actorId, bool administrator, CancellationToken cancellationToken);
     Task<IReadOnlyList<TeamLabRemoteAccessAvailabilityModel>> GetAvailabilityBatchAsync(Guid runtimeId, Guid actorId, bool administrator, CancellationToken cancellationToken);
     Task<IReadOnlyList<TeamLabRemoteAccessAvailabilityModel>> GetAvailabilityBatchApiAsync(Guid runtimeId, Guid apiTokenId, CancellationToken cancellationToken);

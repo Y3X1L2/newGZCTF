@@ -821,6 +821,103 @@
             "GzctfApiToken": []
           }
         ]
+      },
+      "post": {
+        "tags": [
+          "TeamLab - Connectors"
+        ],
+        "summary": "登记现场连接器",
+        "description": "登记平台级或当前 token 获授权 control scope 内的现场连接器",
+        "operationId": "OpenTeamLabConnectors_Register",
+        "requestBody": {
+          "x-name": "model",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenRegisterTeamLabConnectorModel"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "400": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamLabConnectorModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
       }
     },
     "/api/open/v1/teamlab/connectors/{connectorId}": {
@@ -923,6 +1020,408 @@
                 }
               }
             }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "TeamLab - Connectors"
+        ],
+        "summary": "修改现场连接器",
+        "description": "替换连接器登记信息；有活动租约时拒绝修改",
+        "operationId": "OpenTeamLabConnectors_Update",
+        "parameters": [
+          {
+            "name": "connectorId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          }
+        ],
+        "requestBody": {
+          "x-name": "model",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenUpdateTeamLabConnectorModel"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 2
+        },
+        "responses": {
+          "400": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamLabConnectorModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/teamlab/connectors/nodes/{nodeId}/interfaces": {
+      "get": {
+        "tags": [
+          "TeamLab - Connectors"
+        ],
+        "summary": "列出连接器节点网卡",
+        "description": "按需读取受管节点当前网卡，用于登记受管网卡连接器",
+        "operationId": "OpenTeamLabConnectors_ListNodeInterfaces",
+        "parameters": [
+          {
+            "name": "nodeId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TeamLabHostInterface"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/teamlab/connectors/{connectorId}/health": {
+      "get": {
+        "tags": [
+          "TeamLab - Connectors"
+        ],
+        "summary": "查询现场连接器健康",
+        "description": "按需探测受管网卡并返回当前健康状态和观测时间",
+        "operationId": "OpenTeamLabConnectors_Health",
+        "parameters": [
+          {
+            "name": "connectorId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenTeamLabConnectorHealthModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/teamlab/connectors/{connectorId}/archive": {
+      "post": {
+        "tags": [
+          "TeamLab - Connectors"
+        ],
+        "summary": "归档现场连接器",
+        "description": "无活动租约时归档连接器；归档后不再出现在公开目录",
+        "operationId": "OpenTeamLabConnectors_Archive",
+        "parameters": [
+          {
+            "name": "connectorId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": ""
           }
         },
         "security": [
@@ -1269,6 +1768,103 @@
             "GzctfApiToken": []
           }
         ]
+      },
+      "post": {
+        "tags": [
+          "TeamLab - Device packages"
+        ],
+        "summary": "登记设备模板",
+        "description": "登记由外部流水线制作的设备模板及其制品、资源和能力声明",
+        "operationId": "OpenTeamLabDevicePackages_Register",
+        "requestBody": {
+          "x-name": "model",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenRegisterTeamLabDevicePackageModel"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "400": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamLabDevicePackageModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
       }
     },
     "/api/open/v1/teamlab/device-packages/{packageId}": {
@@ -1361,6 +1957,405 @@
                 }
               }
             }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "TeamLab - Device packages"
+        ],
+        "summary": "修改设备模板",
+        "description": "替换设备模板登记信息；名称与版本组合仍保持唯一",
+        "operationId": "OpenTeamLabDevicePackages_Update",
+        "parameters": [
+          {
+            "name": "packageId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          }
+        ],
+        "requestBody": {
+          "x-name": "model",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenUpdateTeamLabDevicePackageModel"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 2
+        },
+        "responses": {
+          "400": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamLabDevicePackageModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/teamlab/device-packages/{packageId}/enable": {
+      "post": {
+        "tags": [
+          "TeamLab - Device packages"
+        ],
+        "summary": "启用设备模板",
+        "description": "允许新发布和运行使用该设备模板",
+        "operationId": "OpenTeamLabDevicePackages_Enable",
+        "parameters": [
+          {
+            "name": "packageId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamLabDevicePackageModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/teamlab/device-packages/{packageId}/disable": {
+      "post": {
+        "tags": [
+          "TeamLab - Device packages"
+        ],
+        "summary": "停用设备模板",
+        "description": "阻止新发布和运行使用该设备模板，既有引用保持可追溯",
+        "operationId": "OpenTeamLabDevicePackages_Disable",
+        "parameters": [
+          {
+            "name": "packageId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamLabDevicePackageModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/teamlab/device-packages/{packageId}/archive": {
+      "post": {
+        "tags": [
+          "TeamLab - Device packages"
+        ],
+        "summary": "归档设备模板",
+        "description": "归档并停用设备模板；归档后不再出现在公开目录",
+        "operationId": "OpenTeamLabDevicePackages_Archive",
+        "parameters": [
+          {
+            "name": "packageId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": ""
           }
         },
         "security": [
@@ -2232,6 +3227,179 @@
                 "schema": {
                   "type": "string",
                   "format": "binary"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/teamlab/remote-sessions": {
+      "get": {
+        "tags": [
+          "TeamLab - Remote sessions"
+        ],
+        "summary": "列出远程会话",
+        "description": "按当前 token 获授权的控制范围查询会话，可按运行时、关键词、协议和状态筛选。",
+        "operationId": "OpenTeamLabRemoteSessions_List",
+        "parameters": [
+          {
+            "name": "runtimeId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "guid",
+              "nullable": true
+            },
+            "x-position": 1
+          },
+          {
+            "name": "query",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "nullable": true
+            },
+            "x-position": 2
+          },
+          {
+            "name": "protocol",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "nullable": true,
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/TeamLabRemoteProtocol"
+                    }
+                  ]
+                }
+              ]
+            },
+            "x-position": 3
+          },
+          {
+            "name": "abnormalOnly",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "x-position": 4
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "nullable": true,
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/TeamLabRemoteSessionStatus"
+                    }
+                  ]
+                }
+              ]
+            },
+            "x-position": 5
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "nullable": true
+            },
+            "x-position": 6
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 50,
+              "maximum": 100.0,
+              "minimum": 1.0
+            },
+            "x-position": 7
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenTeamLabRemoteSessionPageModel"
                 }
               }
             }
@@ -7003,6 +8171,167 @@
         ]
       }
     },
+    "/api/open/v1/teamlab/runtimes/{runtimeId}/device-health": {
+      "get": {
+        "tags": [
+          "TeamLab - Runtime status"
+        ],
+        "summary": "查询设备健康",
+        "description": "返回当前代设备模板资产的健康检查结果和下一次检查时间。",
+        "operationId": "OpenTeamLabRuntimeStatus_DeviceHealth",
+        "parameters": [
+          {
+            "name": "runtimeId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/OpenTeamLabDeviceHealthModel"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/teamlab/runtimes/{runtimeId}/status-check": {
+      "get": {
+        "tags": [
+          "TeamLab - Runtime status"
+        ],
+        "summary": "检查运行状态",
+        "description": "对比当前代资产与节点现场状态；修复时使用返回的 suggestedAction 调用单资产控制接口。",
+        "operationId": "OpenTeamLabRuntimeStatus_StatusCheck",
+        "parameters": [
+          {
+            "name": "runtimeId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenTeamLabRuntimeStatusCheckModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
     "/api/open/v1/teamlab/scopes": {
       "get": {
         "tags": [
@@ -11730,6 +13059,115 @@
         ]
       }
     },
+    "/api/open/v1/images": {
+      "get": {
+        "tags": [
+          "OpenImages"
+        ],
+        "operationId": "OpenImages_List",
+        "parameters": [
+          {
+            "name": "osType",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "nullable": true,
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/OSType"
+                    }
+                  ]
+                }
+              ]
+            },
+            "x-position": 1
+          },
+          {
+            "name": "imageType",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "nullable": true,
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ImageType"
+                    }
+                  ]
+                }
+              ]
+            },
+            "x-position": 2
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "nullable": true,
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ImageStatus"
+                    }
+                  ]
+                }
+              ]
+            },
+            "x-position": 3
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 256,
+              "nullable": true
+            },
+            "x-position": 4
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 50,
+              "maximum": 100.0,
+              "minimum": 1.0
+            },
+            "x-position": 5
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "nullable": true
+            },
+            "x-position": 6
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenImageTemplatePageModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
     "/api/open/v1/images/docker-references": {
       "post": {
         "tags": [
@@ -12460,6 +13898,147 @@
           }
         }
       },
+      "TeamLabHostInterface": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "macAddress": {
+            "type": "string"
+          },
+          "linkUp": {
+            "type": "boolean"
+          },
+          "addresses": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "OpenRegisterTeamLabConnectorModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "controlScopeId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "supportsSharedUse": {
+            "type": "boolean"
+          },
+          "capacity": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "attachmentReference": {
+            "type": "string",
+            "nullable": true
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "managedNic": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/TeamLabManagedNicModel"
+              }
+            ]
+          }
+        }
+      },
+      "TeamLabManagedNicModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "nodeId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "interfaceName": {
+            "type": "string"
+          },
+          "macAddress": {
+            "type": "string"
+          }
+        }
+      },
+      "OpenUpdateTeamLabConnectorModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "controlScopeId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "supportsSharedUse": {
+            "type": "boolean"
+          },
+          "capacity": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "attachmentReference": {
+            "type": "string",
+            "nullable": true
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "managedNic": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/TeamLabManagedNicModel"
+              }
+            ]
+          }
+        }
+      },
+      "OpenTeamLabConnectorHealthModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "connectorId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "health": {
+            "type": "string"
+          },
+          "observedAt": {
+            "type": "integer",
+            "format": "uint64",
+            "nullable": true
+          }
+        }
+      },
       "AcquireTeamLabConnectorLeaseModel": {
         "type": "object",
         "additionalProperties": false,
@@ -12596,6 +14175,142 @@
           },
           "protocol": {
             "type": "string"
+          }
+        }
+      },
+      "OpenRegisterTeamLabDevicePackageModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "artifactKind": {
+            "type": "string"
+          },
+          "artifactReference": {
+            "type": "string"
+          },
+          "digest": {
+            "type": "string",
+            "nullable": true
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "supportedAssetKinds": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "type": "string"
+            }
+          },
+          "cpuMillis": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "memoryMib": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "storageGib": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "ports": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/TeamLabDevicePackagePortModel"
+            }
+          },
+          "parameterSchema": {
+            "nullable": true
+          },
+          "healthDeclaration": {
+            "nullable": true
+          },
+          "protocolEventTypes": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "OpenUpdateTeamLabDevicePackageModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "artifactKind": {
+            "type": "string"
+          },
+          "artifactReference": {
+            "type": "string"
+          },
+          "digest": {
+            "type": "string",
+            "nullable": true
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "supportedAssetKinds": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "type": "string"
+            }
+          },
+          "cpuMillis": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "memoryMib": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "storageGib": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "ports": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/TeamLabDevicePackagePortModel"
+            }
+          },
+          "parameterSchema": {
+            "nullable": true
+          },
+          "healthDeclaration": {
+            "nullable": true
+          },
+          "protocolEventTypes": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "type": "string"
+            }
           }
         }
       },
@@ -12935,59 +14650,20 @@
           }
         }
       },
-      "OpenTeamLabRemoteAvailabilityModel": {
+      "OpenTeamLabRemoteSessionPageModel": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "assetId": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OpenTeamLabRemoteSessionModel"
+            }
+          },
+          "nextCursor": {
             "type": "integer",
-            "format": "int32"
-          },
-          "assetName": {
-            "type": "string"
-          },
-          "protocol": {
-            "nullable": true,
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/TeamLabRemoteProtocol"
-              }
-            ]
-          },
-          "available": {
-            "type": "boolean"
-          },
-          "unavailableReason": {
-            "type": "string",
+            "format": "int64",
             "nullable": true
-          }
-        }
-      },
-      "TeamLabRemoteProtocol": {
-        "type": "integer",
-        "description": "",
-        "x-enumNames": [
-          "ContainerTerminal",
-          "Ssh",
-          "Rdp",
-          "Vnc"
-        ],
-        "enum": [
-          1,
-          2,
-          3,
-          4
-        ]
-      },
-      "OpenCreateTeamLabRemoteSessionModel": {
-        "type": "object",
-        "additionalProperties": false,
-        "properties": {
-          "reason": {
-            "type": "string"
-          },
-          "vncConsole": {
-            "type": "boolean"
           }
         }
       },
@@ -13043,6 +14719,22 @@
           }
         }
       },
+      "TeamLabRemoteProtocol": {
+        "type": "integer",
+        "description": "",
+        "x-enumNames": [
+          "ContainerTerminal",
+          "Ssh",
+          "Rdp",
+          "Vnc"
+        ],
+        "enum": [
+          1,
+          2,
+          3,
+          4
+        ]
+      },
       "TeamLabRemoteSessionStatus": {
         "type": "integer",
         "description": "",
@@ -13062,6 +14754,46 @@
           5,
           6
         ]
+      },
+      "OpenTeamLabRemoteAvailabilityModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "assetId": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "assetName": {
+            "type": "string"
+          },
+          "protocol": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/TeamLabRemoteProtocol"
+              }
+            ]
+          },
+          "available": {
+            "type": "boolean"
+          },
+          "unavailableReason": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "OpenCreateTeamLabRemoteSessionModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "type": "string"
+          },
+          "vncConsole": {
+            "type": "boolean"
+          }
+        }
       },
       "TeamLabResourcePoolSnapshotModel": {
         "type": "object",
@@ -13531,6 +15263,148 @@
             "items": {
               "$ref": "#/components/schemas/TeamLabRolloutTargetInputModel"
             }
+          }
+        }
+      },
+      "OpenTeamLabServiceAccessModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "runtimeId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "generation": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "assetId": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "assetName": {
+            "type": "string"
+          },
+          "networkKey": {
+            "type": "string"
+          },
+          "protocol": {
+            "type": "string"
+          },
+          "internalPort": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "publicPort": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "endpoint": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "integer",
+            "format": "uint64"
+          },
+          "revokedAt": {
+            "type": "integer",
+            "format": "uint64",
+            "nullable": true
+          }
+        }
+      },
+      "OpenCreateTeamLabServiceAccessModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "protocol": {
+            "type": "string"
+          },
+          "internalPort": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "publicPort": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "networkKey": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "OpenTeamLabAssetControlCapabilityModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "allowed": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "OpenTeamLabAssetControlTicketModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "ticketId": {
+            "type": "string",
+            "format": "guid"
+          }
+        }
+      },
+      "OpenTeamLabAssetControlCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "generation": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "action": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "confirmed": {
+            "type": "boolean"
+          }
+        }
+      },
+      "OpenTeamLabAssetControlTaskModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "status": {
+            "type": "string"
+          },
+          "stage": {
+            "type": "string",
+            "nullable": true
+          },
+          "errorCode": {
+            "type": "string",
+            "nullable": true
+          },
+          "retryable": {
+            "type": "boolean"
           }
         }
       },
@@ -14070,6 +15944,102 @@
           "configurationConsumedAt": {
             "type": "integer",
             "format": "uint64",
+            "nullable": true
+          }
+        }
+      },
+      "OpenTeamLabDeviceHealthModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "assetId": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "assetName": {
+            "type": "string"
+          },
+          "generation": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "status": {
+            "type": "string"
+          },
+          "observedAt": {
+            "type": "integer",
+            "format": "uint64",
+            "nullable": true
+          },
+          "errorCode": {
+            "type": "string",
+            "nullable": true
+          },
+          "protocolCounters": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          "nextProbeAt": {
+            "type": "integer",
+            "format": "uint64",
+            "nullable": true
+          }
+        }
+      },
+      "OpenTeamLabRuntimeStatusCheckModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "generation": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "observedAt": {
+            "type": "integer",
+            "format": "uint64"
+          },
+          "operationInProgress": {
+            "type": "boolean"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OpenTeamLabRuntimeDifferenceModel"
+            }
+          }
+        }
+      },
+      "OpenTeamLabRuntimeDifferenceModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "assetId": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "resourceKind": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "expectedState": {
+            "type": "string"
+          },
+          "actualState": {
+            "type": "string",
+            "nullable": true
+          },
+          "difference": {
+            "type": "string"
+          },
+          "suggestedAction": {
+            "type": "string",
             "nullable": true
           }
         }
@@ -17749,57 +19719,21 @@
           2
         ]
       },
-      "DockerImageReferenceImportModel": {
+      "OpenImageTemplatePageModel": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "name",
-          "registryUrl"
-        ],
         "properties": {
-          "name": {
-            "type": "string",
-            "maxLength": 256,
-            "minLength": 1
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OpenImageTemplateModel"
+            }
           },
-          "registryUrl": {
+          "nextCursor": {
             "type": "string",
-            "maxLength": 512,
-            "minLength": 1
-          },
-          "osType": {
-            "$ref": "#/components/schemas/OSType"
-          },
-          "expectedDigest": {
-            "type": "string",
-            "maxLength": 128,
             "nullable": true
           }
         }
-      },
-      "OSType": {
-        "type": "integer",
-        "description": "",
-        "x-enumNames": [
-          "Linux",
-          "Windows"
-        ],
-        "enum": [
-          0,
-          1
-        ]
-      },
-      "VmNetworkMode": {
-        "type": "integer",
-        "description": "",
-        "x-enumNames": [
-          "Dhcp",
-          "Preconfigured"
-        ],
-        "enum": [
-          0,
-          1
-        ]
       },
       "OpenImageTemplateModel": {
         "type": "object",
@@ -17855,6 +19789,18 @@
             "format": "uint64"
           }
         }
+      },
+      "OSType": {
+        "type": "integer",
+        "description": "",
+        "x-enumNames": [
+          "Linux",
+          "Windows"
+        ],
+        "enum": [
+          0,
+          1
+        ]
       },
       "ImageType": {
         "type": "integer",
@@ -17917,6 +19863,46 @@
           0,
           1
         ]
+      },
+      "VmNetworkMode": {
+        "type": "integer",
+        "description": "",
+        "x-enumNames": [
+          "Dhcp",
+          "Preconfigured"
+        ],
+        "enum": [
+          0,
+          1
+        ]
+      },
+      "DockerImageReferenceImportModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "registryUrl"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 1
+          },
+          "registryUrl": {
+            "type": "string",
+            "maxLength": 512,
+            "minLength": 1
+          },
+          "osType": {
+            "$ref": "#/components/schemas/OSType"
+          },
+          "expectedDigest": {
+            "type": "string",
+            "maxLength": 128,
+            "nullable": true
+          }
+        }
       },
       "ImageTemplateCertificationRequest": {
         "type": "object",
@@ -17999,6 +19985,9 @@
     {
       "name": "TeamLab - Runtimes",
       "description": "Create, inspect, reset, destroy, and access deployed TeamLab environments."
+    },
+    {
+      "name": "TeamLab - Runtime status"
     },
     {
       "name": "TeamLab - Control scopes"

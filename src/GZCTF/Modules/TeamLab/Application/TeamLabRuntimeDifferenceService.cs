@@ -7,11 +7,33 @@ using Microsoft.EntityFrameworkCore;
 namespace GZCTF.Modules.TeamLab.Application;
 
 public sealed class TeamLabRuntimeDifferenceService(AppDbContext context, TeamLabAuthorizationService authorization,
-    RuntimeFactReconciliationService reconciliation, TeamLabAssetControlService controls)
+    TeamLabScopeAuthorizationService scopeAuthorization, RuntimeFactReconciliationService reconciliation,
+    TeamLabAssetControlService controls)
 {
     public async Task<RuntimeDifferencePreview> PreviewAsync(Guid runtimeId, Guid actorId, bool administrator, CancellationToken token)
     {
         await authorization.RequirePermissionAsync(runtimeId, actorId, administrator, TeamLabRuntimePermission.StateRead, token);
+        return await PreviewCoreAsync(runtimeId,
+            assetId => controls.AvailabilityAsync(runtimeId, assetId, actorId, administrator, token), token);
+    }
+
+    public async Task<RuntimeDifferencePreview> PreviewApiAsync(
+        Guid runtimeId,
+        Guid apiTokenId,
+        bool hasWildcardScopeGrant,
+        CancellationToken token)
+    {
+        await scopeAuthorization.RequireRuntimeScopeAsync(
+            runtimeId, apiTokenId, hasWildcardScopeGrant, writable: false, token);
+        return await PreviewCoreAsync(runtimeId,
+            assetId => controls.AvailabilityForApiAsync(runtimeId, assetId, apiTokenId, token), token);
+    }
+
+    private async Task<RuntimeDifferencePreview> PreviewCoreAsync(
+        Guid runtimeId,
+        Func<int, Task<TeamLabAssetControlAvailability>> availability,
+        CancellationToken token)
+    {
         var id = await context.TeamLabRuntimes.AsNoTracking().Where(item => item.PublicId == runtimeId)
             .Select(item => item.Id).SingleAsync(token);
         var preview = await reconciliation.PreviewTeamLabAsync(id, token);
@@ -19,7 +41,7 @@ public sealed class TeamLabRuntimeDifferenceService(AppDbContext context, TeamLa
         foreach (var item in preview.Items)
         {
             var allowed = item.SuggestedAction is not null && item.AssetId is { } assetId &&
-                (await controls.AvailabilityAsync(runtimeId, assetId, actorId, administrator, token)).Allowed;
+                (await availability(assetId)).Allowed;
             items.Add(allowed ? item : item with { SuggestedAction = null });
         }
         return preview with { Items = items };

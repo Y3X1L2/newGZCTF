@@ -305,8 +305,25 @@ GET    /runtimes/{runtimeId}
 POST   /runtimes/{runtimeId}/reset
 DELETE /runtimes/{runtimeId}
 GET    /runtimes/{runtimeId}/events
+GET    /runtimes/{runtimeId}/device-health
+GET    /runtimes/{runtimeId}/status-check
 POST   /runtimes/{runtimeId}/access-grants
 GET    /runtimes/{runtimeId}/access-grants
+GET    /runtimes/{runtimeId}/service-access
+POST   /runtimes/{runtimeId}/assets/{assetId}/service-access
+DELETE /runtimes/{runtimeId}/service-access/{accessId}
+GET    /runtimes/{runtimeId}/assets/{assetId}/control
+POST   /runtimes/{runtimeId}/assets/{assetId}/control
+GET    /runtimes/{runtimeId}/assets/{assetId}/control/{ticketId}
+GET    /remote-sessions
+POST   /runtimes/{runtimeId}/assets/{assetId}/remote-sessions
+GET    /remote-sessions/{sessionId}
+DELETE /remote-sessions/{sessionId}
+POST   /remote-sessions/{sessionId}/connect
+GET    /remote-sessions/{sessionId}/terminal
+POST   /remote-sessions/{sessionId}/audit
+GET    /remote-sessions/{sessionId}/audit
+GET    /remote-sessions/{sessionId}/audit/evidence/{evidenceId}/download
 GET    /runtimes/{runtimeId}/traffic/flows
 GET    /runtimes/{runtimeId}/traffic/paths
 GET    /runtimes/{runtimeId}/traffic/paths/{pathId}
@@ -317,6 +334,11 @@ GET    /runtimes/{runtimeId}/captures/{captureId}/download
 ```
 
 所有写接口使用 Idempotency-Key；异步接口返回 operation。
+
+`status-check` 只返回调用方能理解的资产状态差异，不暴露 WorkerNode、宿主资源名或
+Agent 地址。返回的 `suggestedAction` 直接用于现有单资产控制接口，不建立第二套修复任务。
+远程会话列表按 token 的 `teamlab-scope` 资源授权过滤，用于在调用方遗失会话 ID 后继续
+查询、关闭和取得操作审计。
 
 ## 12. Capabilities
 

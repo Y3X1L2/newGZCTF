@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using GZCTF.Models;
 using GZCTF.Modules.Runtime.Application;
+using GZCTF.Modules.Runtime.Contracts;
 using GZCTF.Modules.TeamLab.Application;
 using GZCTF.Modules.TeamLab.Application.Rollouts;
 using GZCTF.Modules.TeamLab.Contracts;
@@ -19,6 +20,26 @@ namespace GZCTF.Test.UnitTests.TeamLab;
 
 public sealed class TeamLabAdminContractTests
 {
+    [Fact]
+    public void OpenRuntimeStatusCheck_DoesNotExposeWorkerIdentity()
+    {
+        var preview = new RuntimeDifferencePreview(
+            3,
+            DateTimeOffset.UtcNow,
+            false,
+            [new RuntimeResourceDifference(
+                17, Guid.CreateVersion7(), "docker", "PLC", "running", "exited", "power-drift", "start")]);
+
+        var result = preview.ToOpen();
+
+        var item = Assert.Single(result.Items);
+        Assert.Equal(17, item.AssetId);
+        Assert.Equal("power-drift", item.Difference);
+        Assert.Equal("start", item.SuggestedAction);
+        Assert.DoesNotContain(result.GetType().GetProperties(), property => property.Name == "WorkerNodeId");
+        Assert.DoesNotContain(item.GetType().GetProperties(), property => property.Name == "WorkerNodeId");
+    }
+
     [Fact]
     public async Task AdminDraft_CanPersistIncompleteTopology_WhileStrictCreateRejectsIt()
     {

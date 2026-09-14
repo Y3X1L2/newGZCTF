@@ -29,6 +29,26 @@ public sealed class OpenTeamLabRemoteSessionsController(
     TeamLabScopeAuthorizationService scopeAuthorization,
     TeamLabRuntimeOperationApplicationService operations) : ControllerBase
 {
+    [HttpGet("remote-sessions")]
+    [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabRemoteSessionsRead)]
+    [OpenApiOperation("列出远程会话", "按当前 token 获授权的控制范围查询会话，可按运行时、关键词、协议和状态筛选。")]
+    [ProducesResponseType(typeof(OpenTeamLabRemoteSessionPageModel), StatusCodes.Status200OK)]
+    public async Task<OpenTeamLabRemoteSessionPageModel> List(
+        [FromQuery] Guid? runtimeId = null,
+        [FromQuery] string? query = null,
+        [FromQuery] TeamLabRemoteProtocol? protocol = null,
+        [FromQuery] bool abnormalOnly = false,
+        [FromQuery] TeamLabRemoteSessionStatus? status = null,
+        [FromQuery] long? after = null,
+        [FromQuery, Range(1, 100)] int limit = 50,
+        CancellationToken cancellationToken = default)
+    {
+        var actor = Actor();
+        Response.Headers.CacheControl = "no-store";
+        return await remoteAccess.ListApiAsync(actor.TokenId, IsAdministrator(), runtimeId, query,
+            protocol, abnormalOnly, status, after, limit, cancellationToken);
+    }
+
     [HttpGet("runtimes/{runtimeId:guid}/remote-access")]
     [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabRemoteSessionsRead)]
     [OpenApiOperation("查询远程访问可用性", "返回运行时全部资产的可用协议与不可用原因。")]
@@ -129,4 +149,8 @@ public sealed class OpenTeamLabRemoteSessionsController(
             return (tokenId, userId);
         throw new TeamLabApiContractException("authentication_required", "需要身份验证。", 401);
     }
+
+    private bool IsAdministrator() => User.FindAll(ApiTokenClaimTypes.Resource).Any(claim =>
+        ApiTokenResourceClaim.TryParse(claim.Value, out var type, out var id) &&
+        type == "teamlab-scope" && id == "*");
 }

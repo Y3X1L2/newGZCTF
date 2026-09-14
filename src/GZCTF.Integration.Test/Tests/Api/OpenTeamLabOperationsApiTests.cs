@@ -244,6 +244,42 @@ public sealed class OpenTeamLabOperationsApiTests(GZCTFApplicationFactory factor
     }
 
     [Fact]
+    public async Task RuntimeStatusAndSessionDiscovery_StayInsideGrantedScope()
+    {
+        await using var host = CreateHost(new InMemoryAssetFileGateway());
+        using var client = host.CreateClient();
+        var fixture = await SeedAsync(host.Services);
+        var allowed = await IssueTokenAsync(host.Services, fixture.ScopeId,
+            [ApiTokenScopes.TeamLabRuntimesRead, ApiTokenScopes.TeamLabRemoteSessionsRead]);
+        var foreign = await IssueTokenAsync(host.Services, fixture.ForeignScopeId,
+            [ApiTokenScopes.TeamLabRuntimesRead, ApiTokenScopes.TeamLabRemoteSessionsRead]);
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", allowed.PlainTextToken);
+        var sessions = await client.GetFromJsonAsync<OpenTeamLabRemoteSessionPageModel>(
+            $"/api/open/v1/teamlab/remote-sessions?runtimeId={fixture.RuntimeId:D}&query=Web",
+            ApiJsonOptions);
+        Assert.NotNull(sessions);
+        Assert.Equal(fixture.SessionId, Assert.Single(sessions.Items).Id);
+
+        var health = await client.GetFromJsonAsync<IReadOnlyList<OpenTeamLabDeviceHealthModel>>(
+            $"/api/open/v1/teamlab/runtimes/{fixture.RuntimeId:D}/device-health",
+            ApiJsonOptions);
+        Assert.NotNull(health);
+        Assert.Empty(health);
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", foreign.PlainTextToken);
+        using (var hiddenSessions = await client.GetAsync(
+                   $"/api/open/v1/teamlab/remote-sessions?runtimeId={fixture.RuntimeId:D}"))
+            await AssertProblemAsync(hiddenSessions, HttpStatusCode.NotFound, "scope_not_found");
+        using (var hiddenHealth = await client.GetAsync(
+                   $"/api/open/v1/teamlab/runtimes/{fixture.RuntimeId:D}/device-health"))
+            await AssertProblemAsync(hiddenHealth, HttpStatusCode.NotFound, "scope_not_found");
+        using (var hiddenStatus = await client.GetAsync(
+                   $"/api/open/v1/teamlab/runtimes/{fixture.RuntimeId:D}/status-check"))
+            await AssertProblemAsync(hiddenStatus, HttpStatusCode.NotFound, "scope_not_found");
+    }
+
+    [Fact]
     public async Task ServiceAccess_UsesRuntimeScopesForAutomaticAndManualMappings()
     {
         await using var host = CreateHost(new InMemoryAssetFileGateway());

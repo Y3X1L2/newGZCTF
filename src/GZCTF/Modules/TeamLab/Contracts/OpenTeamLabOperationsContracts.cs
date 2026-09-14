@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
+using GZCTF.Modules.Runtime.Contracts;
 using GZCTF.TeamLab.Contracts;
 using Microsoft.AspNetCore.Mvc;
 
@@ -96,6 +97,31 @@ public sealed record OpenTeamLabAssetControlTaskModel(
     string? ErrorCode,
     bool Retryable);
 
+public sealed record OpenTeamLabDeviceHealthModel(
+    int AssetId,
+    string AssetName,
+    int Generation,
+    string Status,
+    DateTimeOffset? ObservedAt,
+    string? ErrorCode,
+    IReadOnlyDictionary<string, long>? ProtocolCounters,
+    DateTimeOffset? NextProbeAt);
+
+public sealed record OpenTeamLabRuntimeStatusCheckModel(
+    int Generation,
+    DateTimeOffset ObservedAt,
+    bool OperationInProgress,
+    IReadOnlyList<OpenTeamLabRuntimeDifferenceModel> Items);
+
+public sealed record OpenTeamLabRuntimeDifferenceModel(
+    int? AssetId,
+    string ResourceKind,
+    string Name,
+    string ExpectedState,
+    string? ActualState,
+    string Difference,
+    string? SuggestedAction);
+
 public static class OpenTeamLabOperationsMapping
 {
     public static CreateTeamLabServiceAccessModel ToInternal(this OpenCreateTeamLabServiceAccessModel model) =>
@@ -114,6 +140,17 @@ public static class OpenTeamLabOperationsMapping
 
     public static OpenTeamLabAssetControlTaskModel ToOpen(this TeamLabAssetControlTask model) =>
         new(model.Id, model.Status, model.Stage, model.ErrorCode, model.CanRetry);
+
+    public static OpenTeamLabDeviceHealthModel ToOpen(this TeamLabDeviceHealthModel model) =>
+        new(model.AssetId, model.Name, model.Generation, model.Observation?.Status ?? "pending",
+            model.Observation?.ObservedAt, model.Observation?.ErrorCode,
+            model.Observation?.ProtocolCounters, model.NextProbeAt);
+
+    public static OpenTeamLabRuntimeStatusCheckModel ToOpen(this RuntimeDifferencePreview model) =>
+        new(model.Generation, model.ObservedAt, model.OperationInProgress,
+            model.Items.Select(item => new OpenTeamLabRuntimeDifferenceModel(
+                item.AssetId, item.ResourceKind, item.Name, item.ExpectedState, item.ActualState,
+                item.Difference, item.SuggestedAction)).ToArray());
 
     public static OpenTeamLabAssetFileListModel ToOpenFileList(this TeamLabFileResult result) =>
         new((result.Entries ?? [])

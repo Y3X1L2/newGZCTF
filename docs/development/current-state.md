@@ -5,9 +5,9 @@
 
 本文件仅保留最新已知基线、功能边界、未解决事项和接手入口。生产信息是上述核验时点的记录，不能代替下一次操作前的现场检查；本次文档整理没有重新连接服务器。长期协作规则见 [AGENTS.md](../../AGENTS.md)。
 
-## 后续规划（2026-09-14，尚未实施）
+## TeamLab API 底座在研状态（2026-09-14）
 
-已编写 [TeamLab API 完善、产品修正与独立运行计划](teamlab-api-product-separation-plan.md)，包含全项目 API 流程审查、本地真实与模拟验证、并发性能定位、TeamLab 独立产品及平台 API 接入路线。本次已完成第一轮 P0 API 静态源码审查并把发现作为草案写入计划，未启动测试或修改部署。计划位于 `codex/teamlab-foundation-plan`；前一轮产品化源码仍保留在 `D:\newgz\newGZCTF-teamlab-product-usability`，不得把该计划视为功能已完成。
+TeamLab API 代码阶段位于 `codex/teamlab-api-product-integration`，基线为 `origin/main 4bef377`，尚未推送或部署。当前候选已补齐远程会话范围查询、运行时设备健康查询和运行状态检查三个 Open API，并沿用 `teamlab-scope` 授权、现有资产控制入口和独立 Open DTO，不向外暴露 Worker 或操作者内部标识。主站、单元测试项目和集成测试项目编译通过，OpenAPI 快照契约检查通过；本阶段没有启动 Docker 流程、并发压测、生产部署或独立产品拆分。后续工作仍以 [TeamLab API 完善、产品修正与独立运行计划](teamlab-api-product-separation-plan.md) 为准，不能把尚未执行的真实环境验证记录为已完成。
 
 ## 测试环境部署事实（2026-09-09）
 

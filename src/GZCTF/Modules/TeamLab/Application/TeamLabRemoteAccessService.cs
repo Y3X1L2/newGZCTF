@@ -34,9 +34,7 @@ public sealed class TeamLabRemoteAccessService(
         string? search, TeamLabRemoteProtocol? protocol, bool abnormalOnly, TeamLabRemoteSessionStatus? status,
         long? after, int limit, CancellationToken cancellationToken)
     {
-        if (limit is < 1 or > 100 || after is < 0 || status.HasValue && !Enum.IsDefined(status.Value) ||
-            protocol.HasValue && !Enum.IsDefined(protocol.Value) || search?.Length > 128)
-            throw new TeamLabApiContractException("remote_session_filter_invalid", "会话查询条件无效", 400);
+        ValidateListFilters(search, protocol, status, after, limit);
         var sessions = context.TeamLabRemoteSessions.AsNoTracking().Include(item => item.Runtime)
             .Include(item => item.RuntimeAsset).Include(item => item.WorkerNode)
             .Include(item => item.RequestedBy).AsQueryable();
@@ -48,6 +46,74 @@ public sealed class TeamLabRemoteAccessService(
         }
         else if (!administrator)
             sessions = sessions.Where(item => item.RequestedByUserId == actorId);
+        sessions = ApplyListFilters(sessions, search, protocol, abnormalOnly, status, after);
+        var rows = await sessions.OrderByDescending(item => item.Id).Take(limit + 1).ToArrayAsync(cancellationToken);
+        return new TeamLabRemoteSessionPage(rows.Take(limit).Select(item => new TeamLabRemoteSessionListItem(
+            ToModel(item, item.RuntimeAsset.Name, item.Runtime.PublicId), item.WorkerNodeId, item.WorkerNode.Name,
+            item.RequestedByUserId, string.IsNullOrWhiteSpace(item.RequestedBy.RealName) ? item.RequestedBy.UserName ?? "未知用户" : item.RequestedBy.RealName)).ToArray(),
+            rows.Length > limit ? rows[limit - 1].Id : null);
+    }
+
+    public async Task<OpenTeamLabRemoteSessionPageModel> ListApiAsync(
+        Guid apiTokenId,
+        bool hasWildcardScopeGrant,
+        Guid? runtimeId,
+        string? search,
+        TeamLabRemoteProtocol? protocol,
+        bool abnormalOnly,
+        TeamLabRemoteSessionStatus? status,
+        long? after,
+        int limit,
+        CancellationToken cancellationToken)
+    {
+        ValidateListFilters(search, protocol, status, after, limit);
+        var sessions = context.TeamLabRemoteSessions.AsNoTracking()
+            .Include(item => item.Runtime)
+            .Include(item => item.RuntimeAsset)
+            .Include(item => item.WorkerNode)
+            .Include(item => item.RequestedBy)
+            .AsQueryable();
+        if (runtimeId is { } requestedRuntime)
+        {
+            await scopeAuthorization.RequireRuntimeScopeAsync(
+                requestedRuntime, apiTokenId, hasWildcardScopeGrant, writable: false, cancellationToken);
+            sessions = sessions.Where(item => item.Runtime.PublicId == requestedRuntime);
+        }
+        else
+        {
+            var scopeIds = (await scopeAuthorization.ListReadableScopesAsync(
+                apiTokenId, hasWildcardScopeGrant, cancellationToken)).ToArray();
+            sessions = sessions.Where(item => item.Runtime.ControlScopeId.HasValue &&
+                                               scopeIds.Contains(item.Runtime.ControlScopeId.Value));
+        }
+
+        sessions = ApplyListFilters(sessions, search, protocol, abnormalOnly, status, after);
+        var rows = await sessions.OrderByDescending(item => item.Id).Take(limit + 1).ToArrayAsync(cancellationToken);
+        return new OpenTeamLabRemoteSessionPageModel(
+            rows.Take(limit).Select(item => ToModel(item, item.RuntimeAsset.Name, item.Runtime.PublicId).ToOpen()).ToArray(),
+            rows.Length > limit ? rows[limit - 1].Id : null);
+    }
+
+    private static void ValidateListFilters(
+        string? search,
+        TeamLabRemoteProtocol? protocol,
+        TeamLabRemoteSessionStatus? status,
+        long? after,
+        int limit)
+    {
+        if (limit is < 1 or > 100 || after is < 0 || status.HasValue && !Enum.IsDefined(status.Value) ||
+            protocol.HasValue && !Enum.IsDefined(protocol.Value) || search?.Length > 128)
+            throw new TeamLabApiContractException("remote_session_filter_invalid", "会话查询条件无效", 400);
+    }
+
+    private static IQueryable<TeamLabRemoteSession> ApplyListFilters(
+        IQueryable<TeamLabRemoteSession> sessions,
+        string? search,
+        TeamLabRemoteProtocol? protocol,
+        bool abnormalOnly,
+        TeamLabRemoteSessionStatus? status,
+        long? after)
+    {
         var keyword = search?.Trim().ToLowerInvariant();
         if (!string.IsNullOrWhiteSpace(keyword))
         {
@@ -67,11 +133,7 @@ public sealed class TeamLabRemoteAccessService(
             sessions = sessions.Where(item => item.Status == status);
         if (after.HasValue)
             sessions = sessions.Where(item => item.Id < after);
-        var rows = await sessions.OrderByDescending(item => item.Id).Take(limit + 1).ToArrayAsync(cancellationToken);
-        return new TeamLabRemoteSessionPage(rows.Take(limit).Select(item => new TeamLabRemoteSessionListItem(
-            ToModel(item, item.RuntimeAsset.Name, item.Runtime.PublicId), item.WorkerNodeId, item.WorkerNode.Name,
-            item.RequestedByUserId, string.IsNullOrWhiteSpace(item.RequestedBy.RealName) ? item.RequestedBy.UserName ?? "未知用户" : item.RequestedBy.RealName)).ToArray(),
-            rows.Length > limit ? rows[limit - 1].Id : null);
+        return sessions;
     }
 
     public async Task MarkInterruptedAsync(CancellationToken cancellationToken)

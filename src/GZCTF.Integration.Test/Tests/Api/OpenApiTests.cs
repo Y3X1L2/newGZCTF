@@ -237,6 +237,7 @@ public class OpenApiTests(GZCTFApplicationFactory factory, ITestOutputHelper out
         var paths = document.RootElement.GetProperty("paths");
         var create = paths.GetProperty("/api/open/v1/teamlab/runtimes/{runtimeId}/assets/{assetId}/remote-sessions").GetProperty("post");
         var close = paths.GetProperty("/api/open/v1/teamlab/remote-sessions/{sessionId}").GetProperty("delete");
+        Assert.True(paths.GetProperty("/api/open/v1/teamlab/remote-sessions").TryGetProperty("get", out _));
         foreach (var operation in new[] { create, close })
         {
             Assert.True(operation.GetProperty("responses").TryGetProperty("202", out _));
@@ -245,6 +246,7 @@ public class OpenApiTests(GZCTFApplicationFactory factory, ITestOutputHelper out
         }
         var schemas = document.RootElement.GetProperty("components").GetProperty("schemas");
         Assert.True(schemas.TryGetProperty("OpenTeamLabRemoteSessionModel", out _));
+        Assert.True(schemas.TryGetProperty("OpenTeamLabRemoteSessionPageModel", out _));
         Assert.False(schemas.TryGetProperty("TeamLabRemoteSessionModel", out _));
         Assert.True(schemas.TryGetProperty("OpenCreateTeamLabRemoteSessionModel", out _));
     }
@@ -274,6 +276,10 @@ public class OpenApiTests(GZCTFApplicationFactory factory, ITestOutputHelper out
         var taskPath = "/api/open/v1/teamlab/runtimes/{runtimeId}/assets/{assetId}/control/{ticketId}";
         Assert.True(paths.GetProperty(taskPath).TryGetProperty("get", out _));
         Assert.False(paths.TryGetProperty(taskPath + "/retry", out _));
+        Assert.True(paths.GetProperty("/api/open/v1/teamlab/runtimes/{runtimeId}/device-health")
+            .TryGetProperty("get", out _));
+        Assert.True(paths.GetProperty("/api/open/v1/teamlab/runtimes/{runtimeId}/status-check")
+            .TryGetProperty("get", out _));
 
         var schemas = document.RootElement.GetProperty("components").GetProperty("schemas");
         string[] publicSchemas =

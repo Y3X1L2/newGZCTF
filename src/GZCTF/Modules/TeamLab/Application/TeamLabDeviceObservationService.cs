@@ -1,6 +1,7 @@
 using System.Text.Json;
 using GZCTF.Modules.Audit.Contracts;
 using GZCTF.Modules.Audit.Domain;
+using GZCTF.Modules.TeamLab.Contracts;
 using GZCTF.Modules.TeamLab.Domain.Runtime;
 using GZCTF.TeamLab.Contracts.Execution;
 using Microsoft.EntityFrameworkCore;
@@ -12,14 +13,29 @@ public interface ITeamLabDeviceObserver
     Task<TeamLabDeviceObservation?> ProbeAsync(Guid nodeId, TeamLabDeviceProbeRequest request, CancellationToken token);
 }
 
-public sealed record TeamLabDeviceHealthModel(int AssetId, string Name, int Generation, TeamLabDeviceObservation? Observation, DateTimeOffset? NextProbeAt);
-
 public sealed class TeamLabDeviceObservationService(AppDbContext context, ITeamLabDeviceObserver observer,
-    TeamLabEventRecorder events, TeamLabAuthorizationService authorization)
+    TeamLabEventRecorder events, TeamLabAuthorizationService authorization,
+    TeamLabScopeAuthorizationService scopeAuthorization)
 {
     public async Task<IReadOnlyList<TeamLabDeviceHealthModel>> ReadAsync(Guid runtimeId, Guid actorId, bool administrator, CancellationToken token)
     {
         await authorization.RequirePermissionAsync(runtimeId, actorId, administrator, TeamLabRuntimePermission.StateRead, token);
+        return await ReadCoreAsync(runtimeId, token);
+    }
+
+    public async Task<IReadOnlyList<TeamLabDeviceHealthModel>> ReadApiAsync(
+        Guid runtimeId,
+        Guid apiTokenId,
+        bool hasWildcardScopeGrant,
+        CancellationToken token)
+    {
+        await scopeAuthorization.RequireRuntimeScopeAsync(
+            runtimeId, apiTokenId, hasWildcardScopeGrant, writable: false, token);
+        return await ReadCoreAsync(runtimeId, token);
+    }
+
+    private async Task<IReadOnlyList<TeamLabDeviceHealthModel>> ReadCoreAsync(Guid runtimeId, CancellationToken token)
+    {
         var assets = await context.TeamLabRuntimeAssets.AsNoTracking().Include(asset => asset.Runtime).Where(asset => asset.Runtime.PublicId == runtimeId &&
             asset.Generation == asset.Runtime.Generation && asset.DevicePackageId != null).OrderBy(asset => asset.Id).ToArrayAsync(token);
         return assets.Select(asset =>

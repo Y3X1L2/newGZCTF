@@ -12,6 +12,10 @@ public sealed record OpenTeamLabRemoteSessionModel(
     string Reason, DateTimeOffset CreatedAt, DateTimeOffset ExpiresAt,
     DateTimeOffset? ConnectedAt, DateTimeOffset? EndedAt, string? EndReason);
 
+public sealed record OpenTeamLabRemoteSessionPageModel(
+    IReadOnlyList<OpenTeamLabRemoteSessionModel> Items,
+    long? NextCursor);
+
 public sealed record OpenTeamLabRemoteAvailabilityModel(
     int AssetId, string AssetName, TeamLabRemoteProtocol? Protocol, bool Available, string? UnavailableReason);
 
