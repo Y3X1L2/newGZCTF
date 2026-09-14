@@ -77,25 +77,13 @@ public sealed class TeamLabTopologyV2Tests
     }
 
     [Fact]
-    public void Validate_AcceptsManagedRouterAndRejectsDependencyCycle()
+    public void Validate_RejectsStartupDependenciesThatExecutionPlanCannotHonor()
     {
         var source = CreateManagedDefinition();
-        var valid = new TeamLabTopologyValidator().Validate(source, 2);
-        var cyclic = source with
-        {
-            Dependencies =
-            [
-                new TeamLabTopologyDependencyModel(
-                    "core-api", "entry-web", TeamLabDependencyCondition.ServiceReady),
-                new TeamLabTopologyDependencyModel(
-                    "entry-web", "core-api", TeamLabDependencyCondition.ServiceReady)
-            ]
-        };
+        var invalid = new TeamLabTopologyValidator().Validate(source, 2);
 
-        var invalid = new TeamLabTopologyValidator().Validate(cyclic, 2);
-
-        Assert.True(valid.Valid, string.Join("; ", valid.Issues.Select(item => item.Message)));
-        Assert.Contains(invalid.Issues, item => item.Code == "dependency_cycle");
+        Assert.False(invalid.Valid);
+        Assert.Contains(invalid.Issues, item => item.Code == "startup_dependencies_not_supported");
     }
 
     [Fact]

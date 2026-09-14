@@ -267,7 +267,8 @@ public sealed class TeamLabTopologyApplicationService(
                 $"拓扑修订号为 {current.Revision}，不是 {model.Revision}",
                 409);
 
-        var editorJson = SerializeEditor(NormalizeEditor(model.Editor, definition));
+        var editorJson = SerializeEditor(NormalizeEditor(
+            model.Editor ?? DeserializeEditor(current.EditorMetadataJson), definition));
         if (current.SchemaVersion == model.SchemaVersion && SameDefinition(model.SchemaVersion, ToDefinition(current), definition))
         {
             var editorUpdate = new TeamLabTopology { Id = current.Id, Revision = model.Revision };
@@ -888,13 +889,18 @@ public sealed class TeamLabTopologyApplicationService(
         var infrastructureKeys = (definition.Infrastructure ?? [])
             .Select(item => item.Key)
             .ToHashSet(StringComparer.Ordinal);
+        var networks = NormalizeEditorItems(editor?.Networks, networkKeys);
+        CompleteNetworkLayout(networks, definition);
+        var assets = NormalizeEditorItems(editor?.Assets, assetKeys);
+        var infrastructure = NormalizeEditorItems(editor?.Infrastructure, infrastructureKeys);
+        CompleteNodeLayout(networks, assets, infrastructure, definition);
         return new TeamLabTopologyEditorModel(
-            NormalizeEditorItems(editor?.Networks, networkKeys),
-            NormalizeEditorItems(editor?.Assets, assetKeys),
-            NormalizeEditorItems(editor?.Infrastructure, infrastructureKeys));
+            networks,
+            assets,
+            infrastructure);
     }
 
-    private static IReadOnlyDictionary<string, TeamLabEditorItemModel> NormalizeEditorItems(
+    private static Dictionary<string, TeamLabEditorItemModel> NormalizeEditorItems(
         IReadOnlyDictionary<string, TeamLabEditorItemModel>? items,
         IReadOnlySet<string> allowedKeys) =>
         (items ?? new Dictionary<string, TeamLabEditorItemModel>())
@@ -909,6 +915,107 @@ public sealed class TeamLabTopologyApplicationService(
                 Height = NormalizeDimension(pair.Value.Height)
             },
             StringComparer.Ordinal);
+
+    private static void CompleteNetworkLayout(
+        IDictionary<string, TeamLabEditorItemModel> layouts,
+        TeamLabTopologyDefinitionModel definition)
+    {
+        var missing = definition.Networks
+            .Where(item => !layouts.ContainsKey(item.Key))
+            .OrderBy(item => item.OrderIndex)
+            .ThenBy(item => item.Key, StringComparer.Ordinal)
+            .ToArray();
+        if (missing.Length == 0) return;
+
+        const double width = 560;
+        const double gapX = 80;
+        const double gapY = 80;
+        var originY = layouts.Count == 0
+            ? 0
+            : layouts.Values.Max(item => item.Y + (item.Height ?? 360)) + gapY;
+        var rowY = originY;
+        for (var index = 0; index < missing.Length; index += 2)
+        {
+            var row = missing.Skip(index).Take(2).ToArray();
+            var heights = row.Select(network => NetworkHeight(definition, network.Key)).ToArray();
+            for (var column = 0; column < row.Length; column++)
+                layouts[row[column].Key] = new TeamLabEditorItemModel(
+                    column * (width + gapX), rowY, width, heights[column]);
+            rowY += heights.Max() + gapY;
+        }
+    }
+
+    private static double NetworkHeight(TeamLabTopologyDefinitionModel definition, string networkKey)
+    {
+        var assetCount = definition.Assets.Count(item =>
+            string.Equals(PrimaryNetwork(item.Interfaces), networkKey, StringComparison.Ordinal));
+        var routerCount = (definition.Infrastructure ?? []).Count(item =>
+            item.Kind != TeamLabInfrastructureKind.ManagedSwitch &&
+            string.Equals(PrimaryNetwork(item.Interfaces), networkKey, StringComparison.Ordinal));
+        return Math.Max(360, 180 + Math.Ceiling((assetCount + routerCount) / 2d) * 140);
+    }
+
+    private static void CompleteNodeLayout(
+        IReadOnlyDictionary<string, TeamLabEditorItemModel> networkLayouts,
+        IDictionary<string, TeamLabEditorItemModel> assetLayouts,
+        IDictionary<string, TeamLabEditorItemModel> infrastructureLayouts,
+        TeamLabTopologyDefinitionModel definition)
+    {
+        foreach (var network in definition.Networks.OrderBy(item => item.OrderIndex).ThenBy(item => item.Key, StringComparer.Ordinal))
+        {
+            if (!networkLayouts.TryGetValue(network.Key, out var region)) continue;
+            var switches = (definition.Infrastructure ?? [])
+                .Where(item => item.Kind == TeamLabInfrastructureKind.ManagedSwitch &&
+                               string.Equals(item.NetworkKey, network.Key, StringComparison.Ordinal))
+                .OrderBy(item => item.Key, StringComparer.Ordinal)
+                .ToArray();
+            for (var index = 0; index < switches.Length; index++)
+                infrastructureLayouts.TryAdd(switches[index].Key,
+                    new TeamLabEditorItemModel(region.X + 190 + index * 40, region.Y + 52));
+
+            var members = (definition.Infrastructure ?? [])
+                .Where(item => item.Kind != TeamLabInfrastructureKind.ManagedSwitch &&
+                               string.Equals(PrimaryNetwork(item.Interfaces), network.Key, StringComparison.Ordinal))
+                .Select(item => (item.Key, Infrastructure: true, item.Name))
+                .Concat(definition.Assets
+                    .Where(item => string.Equals(PrimaryNetwork(item.Interfaces), network.Key, StringComparison.Ordinal))
+                    .Select(item => (item.Key, Infrastructure: false, item.Name)))
+                .OrderBy(item => item.Name, StringComparer.Ordinal)
+                .ThenBy(item => item.Key, StringComparer.Ordinal)
+                .ToArray();
+            for (var index = 0; index < members.Length; index++)
+            {
+                var position = new TeamLabEditorItemModel(
+                    region.X + 50 + index % 2 * 250,
+                    region.Y + 150 + index / 2 * 140);
+                if (members[index].Infrastructure)
+                    infrastructureLayouts.TryAdd(members[index].Key, position);
+                else
+                    assetLayouts.TryAdd(members[index].Key, position);
+            }
+        }
+
+        var fallbackY = networkLayouts.Count == 0
+            ? 0
+            : networkLayouts.Values.Max(item => item.Y + (item.Height ?? 360)) + 80;
+        CompleteUnattachedLayout(
+            definition.Assets.Select(item => item.Key), assetLayouts, fallbackY);
+        CompleteUnattachedLayout(
+            (definition.Infrastructure ?? []).Select(item => item.Key), infrastructureLayouts, fallbackY + 160);
+    }
+
+    private static void CompleteUnattachedLayout(
+        IEnumerable<string> keys,
+        IDictionary<string, TeamLabEditorItemModel> layouts,
+        double y)
+    {
+        var missing = keys.Where(key => !layouts.ContainsKey(key)).Order(StringComparer.Ordinal).ToArray();
+        for (var index = 0; index < missing.Length; index++)
+            layouts[missing[index]] = new TeamLabEditorItemModel(index % 4 * 230, y + index / 4 * 130);
+    }
+
+    private static string? PrimaryNetwork(IReadOnlyList<TeamLabTopologyInterfaceModel> interfaces) =>
+        interfaces.FirstOrDefault(item => item.Primary)?.NetworkKey ?? interfaces.FirstOrDefault()?.NetworkKey;
 
     private static double? NormalizeDimension(double? value) =>
         value is { } number && IsFinite(number) ? Math.Clamp(number, 80, 4000) : null;

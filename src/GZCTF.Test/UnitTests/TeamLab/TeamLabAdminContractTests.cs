@@ -45,6 +45,90 @@ public sealed class TeamLabAdminContractTests
     }
 
     [Fact]
+    public async Task DraftWithoutEditor_GetsStableLayout_AndUpdateWithoutEditorKeepsIt()
+    {
+        await using var context = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
+        var service = new TeamLabTopologyApplicationService(
+            context, new TeamLabTopologyValidator(), null!, new TeamLabControlScopeService(context),
+            new NodeCapacitySnapshotService(context));
+        var owner = Guid.CreateVersion7();
+        var networks = new[]
+        {
+            new TeamLabTopologyNetworkModel(
+                "entry", "入口网", new TeamLabAddressPoolModel("10.40.0.0/16", 24), true, 0),
+            new TeamLabTopologyNetworkModel(
+                "office", "办公网", new TeamLabAddressPoolModel("10.41.0.0/16", 24), false, 1)
+        };
+        var assets = new[]
+        {
+            Asset("web", "Web", "entry", 1, 10),
+            Asset("api", "API", "entry", 2, 11),
+            Asset("client", "Client", "office", 3, 12)
+        };
+        var create = new CreateTeamLabTopologyModel("Layout", networks, assets, []);
+
+        var created = await service.CreateDraftAsync(create, owner, CancellationToken.None);
+
+        Assert.Equal(2, created.Editor.Networks.Count);
+        Assert.Equal(3, created.Editor.Assets.Count);
+        Assert.Equal(2, created.Editor.Networks.Values.Select(item => (item.X, item.Y)).Distinct().Count());
+        Assert.Equal(3, created.Editor.Assets.Values.Select(item => (item.X, item.Y)).Distinct().Count());
+        var initialLayout = JsonSerializer.Serialize(created.Editor);
+        context.ChangeTracker.Clear();
+
+        var updated = await service.UpdateDraftAsync(
+            created.Id,
+            new UpdateTeamLabTopologyModel(created.Revision, "Layout", networks, assets, []),
+            owner,
+            false,
+            CancellationToken.None);
+
+        Assert.Equal(created.Revision, updated.Revision);
+        Assert.Equal(initialLayout, JsonSerializer.Serialize(updated.Editor));
+    }
+
+    [Fact]
+    public async Task EditorLayout_PreservesExplicitZeroCoordinates()
+    {
+        await using var context = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
+        var service = new TeamLabTopologyApplicationService(
+            context, new TeamLabTopologyValidator(), null!, new TeamLabControlScopeService(context),
+            new NodeCapacitySnapshotService(context));
+        var owner = Guid.CreateVersion7();
+        var network = new TeamLabTopologyNetworkModel(
+            "entry", "入口网", new TeamLabAddressPoolModel("10.42.0.0/16", 24), true);
+        var asset = Asset("web", "Web", "entry", 1, 10);
+        var editor = new TeamLabTopologyEditorModel(
+            new Dictionary<string, TeamLabEditorItemModel> { ["entry"] = new(0, 0, 560, 360) },
+            new Dictionary<string, TeamLabEditorItemModel> { ["web"] = new(0, 0) });
+
+        var created = await service.CreateDraftAsync(
+            new CreateTeamLabTopologyModel("Zero", [network], [asset], [], editor),
+            owner,
+            CancellationToken.None);
+
+        Assert.Equal(0, created.Editor.Networks["entry"].X);
+        Assert.Equal(0, created.Editor.Networks["entry"].Y);
+        Assert.Equal(0, created.Editor.Assets["web"].X);
+        Assert.Equal(0, created.Editor.Assets["web"].Y);
+    }
+
+    private static TeamLabTopologyAssetModel Asset(
+        string key,
+        string name,
+        string network,
+        int imageTemplateId,
+        int hostOffset) => new(
+        key,
+        name,
+        TeamLabAssetKind.Docker,
+        imageTemplateId,
+        new TeamLabAssetResourceModel(10, 256, 512),
+        [new TeamLabTopologyInterfaceModel("eth0", network, hostOffset, true)]);
+
+    [Fact]
     public void EditorMetadata_RoundTripsInfrastructurePositions()
     {
         var model = new TeamLabTopologyEditorModel(
