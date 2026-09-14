@@ -74,6 +74,7 @@
 
 ## 6. 交接与状态维护
 
+- 联赛开发讨论稿：[Markdown](development/league-development-requirements-v0.1.md)、[Word](development/联赛开发需求与分工稿V0.1.docx)，包含首期双队联赛需求、任务分工、阶段安排和待定事项；AI 作为独立模块规划。
 - 2026-09-14 联赛会议准备：[`领导诉求与今晚交付方案`](development/league-leadership-delivery-20260914.md)，说明今晚要交哪些材料、联赛任务如何分工、会上要决定什么，并附通话、V1.2 规则和源码依据。正式材料与联赛功能仍需后续制作、开发。
 - 当前事实只写入 [`development/current-state.md`](development/current-state.md)。
 - 新 AI 或新成员接手项目先阅读 [`development/current-handoff.md`](development/current-handoff.md)。
