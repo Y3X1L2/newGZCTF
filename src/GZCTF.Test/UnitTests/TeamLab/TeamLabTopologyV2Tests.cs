@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Text.Json;
 using GZCTF.Modules.TeamLab.Application;
 using GZCTF.Modules.TeamLab.Contracts;
 using GZCTF.Modules.TeamLab.Domain;
@@ -10,7 +11,7 @@ namespace GZCTF.Test.UnitTests.TeamLab;
 public sealed class TeamLabTopologyV2Tests
 {
     [Fact]
-    public void ReleaseCodec_V2CanonicalizesManagedInfrastructureAndDependencies()
+    public void ReleaseCodec_V2CanonicalizesManagedInfrastructure()
     {
         var source = CreateManagedDefinition();
         var reordered = source with
@@ -18,8 +19,7 @@ public sealed class TeamLabTopologyV2Tests
             Networks = source.Networks.Reverse().ToArray(),
             Infrastructure = source.Infrastructure!.Reverse().ToArray(),
             Assets = source.Assets.Reverse().ToArray(),
-            Connections = source.Connections.Reverse().ToArray(),
-            Dependencies = source.Dependencies!.Reverse().ToArray()
+            Connections = source.Connections.Reverse().ToArray()
         };
 
         var first = TeamLabReleaseCodec.Encode(2, source);
@@ -34,12 +34,12 @@ public sealed class TeamLabTopologyV2Tests
         Assert.Equal(
             TeamLabConnectionDirection.FromTo,
             execution.Connections.Single(item => item.Key == "entry-core").Direction);
-        Assert.Single(execution.Dependencies);
+        Assert.DoesNotContain("dependencies", first, StringComparison.OrdinalIgnoreCase);
         Assert.True(execution.Observation.FlowMetadataEnabled);
     }
 
     [Fact]
-    public void OpenContract_PreservesV2InfrastructureDependenciesAndObservation()
+    public void OpenContract_PreservesV2InfrastructureAndObservation_WithoutDependencyInput()
     {
         var definition = CreateManagedDefinition();
         var request = new OpenCreateTeamLabTopologyModel(
@@ -49,7 +49,6 @@ public sealed class TeamLabTopologyV2Tests
             definition.Connections,
             null,
             definition.Infrastructure,
-            definition.Dependencies,
             definition.Observation,
             SchemaVersion: 2);
 
@@ -57,8 +56,8 @@ public sealed class TeamLabTopologyV2Tests
 
         Assert.Equal(2, mapped.SchemaVersion);
         Assert.Equal(definition.Infrastructure, mapped.Infrastructure);
-        Assert.Equal(definition.Dependencies, mapped.Dependencies);
         Assert.Equal(definition.Observation, mapped.Observation);
+        Assert.DoesNotContain("dependencies", JsonSerializer.Serialize(request), StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -77,13 +76,12 @@ public sealed class TeamLabTopologyV2Tests
     }
 
     [Fact]
-    public void Validate_RejectsStartupDependenciesThatExecutionPlanCannotHonor()
+    public void Validate_AcceptsManagedRouterTopology()
     {
         var source = CreateManagedDefinition();
-        var invalid = new TeamLabTopologyValidator().Validate(source, 2);
+        var result = new TeamLabTopologyValidator().Validate(source, 2);
 
-        Assert.False(invalid.Valid);
-        Assert.Contains(invalid.Issues, item => item.Code == "startup_dependencies_not_supported");
+        Assert.True(result.Valid, string.Join("; ", result.Issues.Select(item => item.Message)));
     }
 
     [Fact]
@@ -183,11 +181,6 @@ public sealed class TeamLabTopologyV2Tests
                     new TeamLabTopologyInterfaceModel("core-if", "core", 1, false),
                     new TeamLabTopologyInterfaceModel("data-if", "data", 1, false)
                 ])
-        ],
-        Dependencies:
-        [
-            new TeamLabTopologyDependencyModel(
-                "core-api", "entry-web", TeamLabDependencyCondition.ServiceReady)
         ],
         Observation: new TeamLabObservationPolicyModel());
 

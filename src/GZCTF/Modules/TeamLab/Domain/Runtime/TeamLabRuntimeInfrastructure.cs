@@ -61,24 +61,3 @@ public sealed class TeamLabFabricLinkLease
     public TeamLabRuntimeShard Shard { get; set; } = null!;
     public WorkerNode WorkerNode { get; set; } = null!;
 }
-
-public enum TeamLabDependencyStateStatus : byte
-{
-    Pending = 0,
-    Satisfied = 1,
-    Failed = 2
-}
-
-public sealed class TeamLabRuntimeDependencyState
-{
-    [Key] public long Id { get; set; }
-    public int RuntimeId { get; set; }
-    public int Generation { get; set; } = 1;
-    [MaxLength(63)] public string AssetKey { get; set; } = string.Empty;
-    [MaxLength(63)] public string DependsOnKey { get; set; } = string.Empty;
-    public TeamLabDependencyCondition Condition { get; set; }
-    public TeamLabDependencyStateStatus Status { get; set; } = TeamLabDependencyStateStatus.Pending;
-    public DateTimeOffset? SatisfiedAt { get; set; }
-    [MaxLength(1024)] public string? LastError { get; set; }
-    public TeamLabRuntime Runtime { get; set; } = null!;
-}

@@ -14,7 +14,6 @@ public sealed class TeamLabTopologyEntityConfiguration : IEntityTypeConfiguratio
         builder.Property(item => item.Name).HasMaxLength(128);
         builder.Property(item => item.EditorMetadataJson).HasColumnType("jsonb");
         builder.Property(item => item.InfrastructureJson).HasColumnType("jsonb").HasDefaultValueSql("'[]'::jsonb");
-        builder.Property(item => item.DependenciesJson).HasColumnType("jsonb").HasDefaultValueSql("'[]'::jsonb");
         builder.Property(item => item.ObservationJson).HasColumnType("jsonb").HasDefaultValueSql("'{}'::jsonb");
         builder.HasIndex(item => item.PublicId).IsUnique();
         builder.HasIndex(item => item.OwnerUserId);

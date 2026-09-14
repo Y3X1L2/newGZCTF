@@ -12,14 +12,6 @@ public enum TeamLabConnectionDirection : byte
     Bidirectional = 1
 }
 
-public enum TeamLabDependencyCondition : byte
-{
-    NetworkReady = 0,
-    GuestReady = 1,
-    ServiceReady = 2,
-    BootstrapCompleted = 3
-}
-
 public enum TeamLabEndpointObservationMode : byte
 {
     Disabled = 0,

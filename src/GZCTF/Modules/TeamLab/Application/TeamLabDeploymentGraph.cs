@@ -15,12 +15,12 @@ public sealed record TeamLabDeploymentNode(string AssetKey, TeamLabDeploymentNod
     public string Key => $"{AssetKey}:{Kind.ToString().ToLowerInvariant()}";
 }
 
-public sealed class TeamLabDependencyGraph
+public sealed class TeamLabDeploymentGraph
 {
     private readonly IReadOnlyDictionary<string, TeamLabDeploymentNode> _nodes;
     private readonly IReadOnlyDictionary<string, IReadOnlySet<string>> _prerequisites;
 
-    private TeamLabDependencyGraph(
+    private TeamLabDeploymentGraph(
         IReadOnlyDictionary<string, TeamLabDeploymentNode> nodes,
         IReadOnlyDictionary<string, IReadOnlySet<string>> prerequisites)
     {
@@ -30,7 +30,7 @@ public sealed class TeamLabDependencyGraph
 
     public int Count => _nodes.Count;
 
-    public static TeamLabDependencyGraph Compile(TeamLabExecutionTopology topology)
+    public static TeamLabDeploymentGraph Compile(TeamLabExecutionTopology topology)
     {
         var nodes = new Dictionary<string, TeamLabDeploymentNode>(StringComparer.Ordinal);
         var prerequisites = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
@@ -51,31 +51,7 @@ public sealed class TeamLabDependencyGraph
                         : TeamLabDeploymentNodeKind.Create));
         }
 
-        foreach (var dependency in topology.Dependencies)
-        {
-            if (dependency.Condition == TeamLabDependencyCondition.NetworkReady)
-                continue;
-            var dependencyAsset = topology.Assets.Single(asset => asset.Key == dependency.DependsOnKey);
-            var requiredKind = dependency.Condition switch
-            {
-                TeamLabDependencyCondition.GuestReady => dependencyAsset.Kind == TeamLabAssetKind.Vm
-                    ? TeamLabDeploymentNodeKind.GuestReady
-                    : TeamLabDeploymentNodeKind.Create,
-                TeamLabDependencyCondition.BootstrapCompleted => dependencyAsset.Kind == TeamLabAssetKind.Vm
-                    ? TeamLabDeploymentNodeKind.GuestReady
-                    : TeamLabDeploymentNodeKind.Create,
-                TeamLabDependencyCondition.ServiceReady => dependencyAsset.HealthCheckKind is not null
-                    ? TeamLabDeploymentNodeKind.Health
-                    : dependencyAsset.Kind == TeamLabAssetKind.Vm
-                        ? TeamLabDeploymentNodeKind.GuestReady
-                        : TeamLabDeploymentNodeKind.Create,
-                _ => throw new ArgumentOutOfRangeException(nameof(dependency.Condition))
-            };
-            Require(Key(dependency.AssetKey, TeamLabDeploymentNodeKind.Create),
-                Key(dependency.DependsOnKey, requiredKind));
-        }
-
-        return new TeamLabDependencyGraph(
+        return new TeamLabDeploymentGraph(
             nodes,
             prerequisites.ToDictionary(
                 item => item.Key,
@@ -91,7 +67,7 @@ public sealed class TeamLabDependencyGraph
         void Require(string node, string prerequisite)
         {
             if (!prerequisites.TryGetValue(node, out var values) || !nodes.ContainsKey(prerequisite))
-                throw new InvalidOperationException("TeamLab dependency graph references an unknown deployment node.");
+                throw new InvalidOperationException("TeamLab deployment graph references an unknown node.");
             values.Add(prerequisite);
         }
     }

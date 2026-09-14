@@ -31,7 +31,6 @@ public static class TeamLabTopologyV1Normalizer
                 null,
                 connection.ViaAssetKey,
                 TeamLabConnectionDirection.Bidirectional)).ToArray(),
-            BuildLegacyDependencies(assets),
             new TeamLabExecutionObservationPolicy(true, true, TeamLabEndpointObservationMode.Disabled));
     }
 
@@ -70,29 +69,4 @@ public static class TeamLabTopologyV1Normalizer
         return $"switch-{networkKey[..43]}-{suffix}";
     }
 
-    private static IReadOnlyList<TeamLabExecutionDependency> BuildLegacyDependencies(
-        IReadOnlyList<TeamLabExecutionAsset> assets)
-    {
-        var groups = assets.GroupBy(asset => asset.DisplayOrder)
-            .OrderBy(group => group.Key)
-            .Select(group => group.OrderBy(asset => asset.Key, StringComparer.Ordinal).ToArray())
-            .ToArray();
-        var dependencies = new List<TeamLabExecutionDependency>();
-        for (var index = 1; index < groups.Length; index++)
-        {
-            foreach (var asset in groups[index])
-            foreach (var dependency in groups[index - 1])
-            {
-                dependencies.Add(new TeamLabExecutionDependency(
-                    asset.Key,
-                    dependency.Key,
-                    dependency.HealthCheckKind is null
-                        ? dependency.Kind == TeamLabAssetKind.Vm
-                            ? TeamLabDependencyCondition.GuestReady
-                            : TeamLabDependencyCondition.NetworkReady
-                        : TeamLabDependencyCondition.ServiceReady));
-            }
-        }
-        return dependencies;
-    }
 }

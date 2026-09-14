@@ -52,7 +52,6 @@ public sealed record TeamLabTopologyDefinitionModel(
     IReadOnlyList<TeamLabTopologyAssetModel> Assets,
     IReadOnlyList<TeamLabTopologyConnectionModel> Connections,
     IReadOnlyList<TeamLabTopologyInfrastructureModel>? Infrastructure = null,
-    IReadOnlyList<TeamLabTopologyDependencyModel>? Dependencies = null,
     TeamLabObservationPolicyModel? Observation = null);
 
 public sealed record TeamLabEditorItemModel(
@@ -74,7 +73,6 @@ public sealed record CreateTeamLabTopologyModel(
     IReadOnlyList<TeamLabTopologyConnectionModel> Connections,
     TeamLabTopologyEditorModel? Editor = null,
     IReadOnlyList<TeamLabTopologyInfrastructureModel>? Infrastructure = null,
-    IReadOnlyList<TeamLabTopologyDependencyModel>? Dependencies = null,
     TeamLabObservationPolicyModel? Observation = null,
     int SchemaVersion = 2,
     Guid? ControlScopeId = null);
@@ -87,7 +85,6 @@ public sealed record UpdateTeamLabTopologyModel(
     IReadOnlyList<TeamLabTopologyConnectionModel> Connections,
     TeamLabTopologyEditorModel? Editor = null,
     IReadOnlyList<TeamLabTopologyInfrastructureModel>? Infrastructure = null,
-    IReadOnlyList<TeamLabTopologyDependencyModel>? Dependencies = null,
     TeamLabObservationPolicyModel? Observation = null,
     int SchemaVersion = 2);
 

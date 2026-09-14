@@ -853,7 +853,6 @@ public sealed class TeamLabRuntimeOrchestrator(
         .Include(item => item.Networks).ThenInclude(item => item.NetworkLease)
         .Include(item => item.Assets)
         .Include(item => item.Infrastructure).ThenInclude(item => item.Fragments)
-        .Include(item => item.DependencyStates)
         .Include(item => item.ObservationPoints)
         .Include(item => item.FabricLinkLeases)
         .Include(item => item.AccessGrants)

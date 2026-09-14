@@ -1,5 +1,3 @@
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 using GZCTF.Models;
 using GZCTF.Models.Data;
@@ -137,9 +135,6 @@ public sealed class TeamLabShardDeploymentService(
                 ["shardCount"] = currentShards.Length
             });
         await context.SaveChangesAsync(cancellationToken);
-        MarkDependenciesSatisfied(runtime, null, TeamLabDependencyCondition.NetworkReady);
-        await context.SaveChangesAsync(cancellationToken);
-
         if (runtime.ExecutionModel == TeamLabExecutionModel.V2)
         {
             await CompleteV2ReadinessAsync(runtime, runtimeAssets, cancellationToken);
@@ -162,8 +157,8 @@ public sealed class TeamLabShardDeploymentService(
             .ToDictionary(pair => pair.First.TopologyKey,
                 pair => new AssetWork(pair.First, pair.Second),
                 StringComparer.Ordinal);
-        var graph = TeamLabDependencyGraph.Compile(definition);
-        var completed = TeamLabDependencyGraph.RestoreCompletedNodes(runtimeAssets);
+        var graph = TeamLabDeploymentGraph.Compile(definition);
+        var completed = TeamLabDeploymentGraph.RestoreCompletedNodes(runtimeAssets);
         var scheduled = new HashSet<string>(StringComparer.Ordinal);
         while (completed.Count < graph.Count)
         {
@@ -175,15 +170,11 @@ public sealed class TeamLabShardDeploymentService(
             var tasks = batch.Select(async node =>
             {
                 var item = work[node.AssetKey];
-                var request = item.Request with
-                {
-                    DependencyReadyToken = BuildDependencyReadyToken(runtime, node.AssetKey)
-                };
                 return await ExecuteNodeAsync(
                     runtime,
                     node,
                     item.Asset,
-                    request,
+                    item.Request,
                     legacyPreparedImages,
                     cancellationToken);
             }).ToArray();
@@ -204,7 +195,6 @@ public sealed class TeamLabShardDeploymentService(
                 result.Asset.Status = TeamLabRuntimeStatus.Failed;
                 result.Asset.LastError = Trim(result.Message);
                 result.Asset.ExecutionUpdatedAt = DateTimeOffset.UtcNow;
-                MarkDependenciesFailed(runtime, result.Asset.TopologyKey, result.Message);
                 RecordAssetEvent(runtime, result, success: false);
             }
             await context.SaveChangesAsync(cancellationToken);
@@ -241,8 +231,6 @@ public sealed class TeamLabShardDeploymentService(
             asset.Status = TeamLabRuntimeStatus.Running;
             asset.LastError = null;
             asset.ExecutionUpdatedAt = DateTimeOffset.UtcNow;
-            MarkDependenciesSatisfied(runtime, asset.TopologyKey, TeamLabDependencyCondition.GuestReady);
-            MarkDependenciesSatisfied(runtime, asset.TopologyKey, TeamLabDependencyCondition.ServiceReady);
         }
         runtime.Status = TeamLabRuntimeStatus.Probing;
         runtime.UpdatedAt = DateTimeOffset.UtcNow;
@@ -728,7 +716,6 @@ public sealed class TeamLabShardDeploymentService(
                 topologyAsset.HealthCheckKind is { } healthKind
                     ? new TeamLabNodeHealthIntent(healthKind, topologyAsset.HealthCheckPort)
                     : null,
-                null,
                 topologyAsset.EndpointObservation,
                 TeamLabResourceNameFactory.RouterNamespace(runtime.Id, shard.Id),
                 asset.AgentOperationId,
@@ -808,21 +795,15 @@ public sealed class TeamLabShardDeploymentService(
                 {
                     result.Asset.ExecutionStage = TeamLabAssetExecutionStage.GuestReady;
                     result.Asset.Status = TeamLabRuntimeStatus.Probing;
-                    MarkDependenciesSatisfied(
-                        runtime, result.Asset.TopologyKey, TeamLabDependencyCondition.GuestReady);
                 }
                 break;
             case TeamLabDeploymentNodeKind.GuestReady:
                 result.Asset.ExecutionStage = TeamLabAssetExecutionStage.GuestReady;
                 result.Asset.Status = TeamLabRuntimeStatus.Probing;
-                MarkDependenciesSatisfied(
-                    runtime, result.Asset.TopologyKey, TeamLabDependencyCondition.GuestReady);
                 break;
             case TeamLabDeploymentNodeKind.Health:
                 result.Asset.ExecutionStage = TeamLabAssetExecutionStage.ServiceReady;
                 result.Asset.Status = TeamLabRuntimeStatus.Running;
-                MarkDependenciesSatisfied(
-                    runtime, result.Asset.TopologyKey, TeamLabDependencyCondition.ServiceReady);
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(result.Node.Kind));
@@ -848,49 +829,6 @@ public sealed class TeamLabShardDeploymentService(
         if (kinds.Length > 1)
             message = $"Executing {batch.Count} ready DAG nodes across {string.Join(", ", kinds.Select(item => item.ToString().ToLowerInvariant()))} stages.";
         await stageMachine.SetAsync(stage, message, cancellationToken);
-    }
-
-    private static void MarkDependenciesSatisfied(
-        TeamLabRuntime runtime,
-        string? dependsOnKey,
-        TeamLabDependencyCondition condition)
-    {
-        foreach (var state in runtime.DependencyStates.Where(item =>
-                     item.Generation == runtime.Generation && item.Condition == condition &&
-                     (condition == TeamLabDependencyCondition.NetworkReady || item.DependsOnKey == dependsOnKey)))
-        {
-            state.Status = TeamLabDependencyStateStatus.Satisfied;
-            state.SatisfiedAt = DateTimeOffset.UtcNow;
-            state.LastError = null;
-        }
-    }
-
-    private static void MarkDependenciesFailed(
-        TeamLabRuntime runtime,
-        string dependsOnKey,
-        string message)
-    {
-        foreach (var state in runtime.DependencyStates.Where(item =>
-                     item.Generation == runtime.Generation && item.DependsOnKey == dependsOnKey &&
-                     item.Status == TeamLabDependencyStateStatus.Pending))
-        {
-            state.Status = TeamLabDependencyStateStatus.Failed;
-            state.LastError = Trim(message);
-        }
-    }
-
-    private static string? BuildDependencyReadyToken(TeamLabRuntime runtime, string assetKey)
-    {
-        var facts = runtime.DependencyStates.Where(item =>
-                item.Generation == runtime.Generation && item.AssetKey == assetKey &&
-                item.Status == TeamLabDependencyStateStatus.Satisfied)
-            .OrderBy(item => item.DependsOnKey, StringComparer.Ordinal)
-            .ThenBy(item => item.Condition)
-            .Select(item => new { item.DependsOnKey, item.Condition, item.SatisfiedAt })
-            .ToArray();
-        return facts.Length == 0
-            ? null
-            : $"sha256:{Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(facts)))}";
     }
 
     private void RecordAssetEvent(TeamLabRuntime runtime, NodeExecution result, bool success)

@@ -238,7 +238,7 @@ public sealed class TeamLabDeploymentOrchestrationTests
                     Asset("a-fail"),
                     Asset("m-success"),
                     Asset("z-fail")
-                ], []),
+                ]),
                 new Dictionary<string, TeamLabRuntimeOverlayModel>(), CancellationToken.None));
 
         Assert.Contains("create failed", exception.Message, StringComparison.Ordinal);
@@ -506,29 +506,18 @@ public sealed class TeamLabDeploymentOrchestrationTests
     }
 
     [Fact]
-    public void DependencyGraph_UnlocksIndependentAssetsAndExactDependencyCondition()
+    public void DeploymentGraph_StartsAssetsIndependently()
     {
         var topology = Topology(
-            [Asset("entry", TeamLabHealthCheckKind.Http), Asset("dependent"), Asset("independent")],
-            [new TeamLabExecutionDependency(
-                "dependent", "entry", TeamLabDependencyCondition.ServiceReady)]);
-        var graph = TeamLabDependencyGraph.Compile(topology);
+            [Asset("entry", TeamLabHealthCheckKind.Http), Asset("dependent"), Asset("independent")]);
+        var graph = TeamLabDeploymentGraph.Compile(topology);
         var completed = new HashSet<string>(StringComparer.Ordinal);
         var scheduled = new HashSet<string>(StringComparer.Ordinal);
 
         Assert.True(graph.TryTakeReadyBatch(completed, scheduled, out var initial));
         Assert.Equal(
-            ["entry:create", "independent:create"],
+            ["dependent:create", "entry:create", "independent:create"],
             initial.Select(item => item.Key).ToArray());
-
-        completed.Add("entry:create");
-        completed.Add("independent:create");
-        Assert.True(graph.TryTakeReadyBatch(completed, scheduled, out var health));
-        Assert.DoesNotContain(health, item => item.Key == "dependent:create");
-
-        completed.Add("entry:health");
-        Assert.True(graph.TryTakeReadyBatch(completed, scheduled, out var unlocked));
-        Assert.Contains(unlocked, item => item.Key == "dependent:create");
     }
 
     private static ITeamLabCaptureCleanup CaptureCleanup()
@@ -550,9 +539,9 @@ public sealed class TeamLabDeploymentOrchestrationTests
     }
 
     [Fact]
-    public void DependencyGraph_RestoresOnlyDurableCompletedStages()
+    public void DeploymentGraph_RestoresOnlyDurableCompletedStages()
     {
-        var completed = TeamLabDependencyGraph.RestoreCompletedNodes(
+        var completed = TeamLabDeploymentGraph.RestoreCompletedNodes(
         [
             RuntimeAsset("ready", TeamLabAssetExecutionStage.ServiceReady, "container-ready"),
             RuntimeAsset("guest", TeamLabAssetExecutionStage.GuestReady, "vm-guest"),
@@ -569,12 +558,11 @@ public sealed class TeamLabDeploymentOrchestrationTests
     }
 
     [Fact]
-    public void DependencyGraph_SeparatesVmDomainCreationFromGuestReadiness()
+    public void DeploymentGraph_SeparatesVmDomainCreationFromGuestReadiness()
     {
         var topology = Topology(
-            [Asset("vm") with { Kind = TeamLabAssetKind.Vm }, Asset("container")],
-            []);
-        var graph = TeamLabDependencyGraph.Compile(topology);
+            [Asset("vm") with { Kind = TeamLabAssetKind.Vm }, Asset("container")]);
+        var graph = TeamLabDeploymentGraph.Compile(topology);
         var completed = new HashSet<string>(StringComparer.Ordinal);
         var scheduled = new HashSet<string>(StringComparer.Ordinal);
 
@@ -587,7 +575,7 @@ public sealed class TeamLabDeploymentOrchestrationTests
 
         var vm = RuntimeAsset("vm", TeamLabAssetExecutionStage.Pending, "tl-vm");
         vm.Kind = TeamLabResourceKind.Vm;
-        var restored = TeamLabDependencyGraph.RestoreCompletedNodes([vm]);
+        var restored = TeamLabDeploymentGraph.RestoreCompletedNodes([vm]);
         Assert.Contains("vm:create", restored);
         Assert.DoesNotContain("vm:guestready", restored);
     }
@@ -684,15 +672,13 @@ public sealed class TeamLabDeploymentOrchestrationTests
     }
 
     private static TeamLabExecutionTopology Topology(
-        IReadOnlyList<TeamLabExecutionAsset> assets,
-        IReadOnlyList<TeamLabExecutionDependency> dependencies) => new(
+        IReadOnlyList<TeamLabExecutionAsset> assets) => new(
         2,
         "deployment-dag",
         [],
         [],
         assets,
         [],
-        dependencies,
         new TeamLabExecutionObservationPolicy(true, true, TeamLabEndpointObservationMode.Disabled));
 
     private static TeamLabExecutionAsset Asset(string key, TeamLabHealthCheckKind? healthCheckKind = null) => new(

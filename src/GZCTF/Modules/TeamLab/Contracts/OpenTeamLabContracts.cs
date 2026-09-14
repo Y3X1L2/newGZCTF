@@ -11,7 +11,6 @@ public sealed record OpenCreateTeamLabTopologyModel(
     IReadOnlyList<TeamLabTopologyConnectionModel> Connections,
     TeamLabTopologyEditorModel? Editor = null,
     IReadOnlyList<TeamLabTopologyInfrastructureModel>? Infrastructure = null,
-    IReadOnlyList<TeamLabTopologyDependencyModel>? Dependencies = null,
     TeamLabObservationPolicyModel? Observation = null,
     int SchemaVersion = 2,
     Guid? ControlScopeId = null);
@@ -24,7 +23,6 @@ public sealed record OpenUpdateTeamLabTopologyModel(
     IReadOnlyList<TeamLabTopologyConnectionModel> Connections,
     TeamLabTopologyEditorModel? Editor = null,
     IReadOnlyList<TeamLabTopologyInfrastructureModel>? Infrastructure = null,
-    IReadOnlyList<TeamLabTopologyDependencyModel>? Dependencies = null,
     TeamLabObservationPolicyModel? Observation = null,
     int SchemaVersion = 2);
 
@@ -143,7 +141,6 @@ public static class OpenTeamLabContractMapper
     public static CreateTeamLabTopologyModel ToInternal(this OpenCreateTeamLabTopologyModel model) =>
         new(model.Name, model.Networks, model.Assets, model.Connections, model.Editor,
             Infrastructure: model.Infrastructure,
-            Dependencies: model.Dependencies,
             Observation: model.Observation,
             SchemaVersion: model.SchemaVersion,
             ControlScopeId: model.ControlScopeId);
@@ -151,7 +148,6 @@ public static class OpenTeamLabContractMapper
     public static UpdateTeamLabTopologyModel ToInternal(this OpenUpdateTeamLabTopologyModel model) =>
         new(model.Revision, model.Name, model.Networks, model.Assets, model.Connections, model.Editor,
             Infrastructure: model.Infrastructure,
-            Dependencies: model.Dependencies,
             Observation: model.Observation,
             SchemaVersion: model.SchemaVersion);
 

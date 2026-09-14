@@ -177,7 +177,6 @@ public partial class AppDbContext(DbContextOptions<AppDbContext> options) :
     public DbSet<TeamLabRuntimeInfrastructureFragment> TeamLabRuntimeInfrastructureFragments => Set<TeamLabRuntimeInfrastructureFragment>();
     public DbSet<TeamLabExecutionPlanSnapshot> TeamLabExecutionPlanSnapshots => Set<TeamLabExecutionPlanSnapshot>();
     public DbSet<TeamLabFabricLinkLease> TeamLabFabricLinkLeases => Set<TeamLabFabricLinkLease>();
-    public DbSet<TeamLabRuntimeDependencyState> TeamLabRuntimeDependencyStates => Set<TeamLabRuntimeDependencyState>();
     public DbSet<TeamLabObservationPoint> TeamLabObservationPoints => Set<TeamLabObservationPoint>();
     public DbSet<TeamLabObservationCursor> TeamLabObservationCursors => Set<TeamLabObservationCursor>();
     public DbSet<TeamLabTrafficObservation> TeamLabTrafficObservations => Set<TeamLabTrafficObservation>();

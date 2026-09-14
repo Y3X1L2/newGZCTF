@@ -9,7 +9,6 @@ public sealed record TeamLabExecutionTopology(
     IReadOnlyList<TeamLabExecutionInfrastructure> Infrastructure,
     IReadOnlyList<TeamLabExecutionAsset> Assets,
     IReadOnlyList<TeamLabExecutionConnection> Connections,
-    IReadOnlyList<TeamLabExecutionDependency> Dependencies,
     TeamLabExecutionObservationPolicy Observation);
 
 public sealed record TeamLabExecutionNetwork(
@@ -65,11 +64,6 @@ public sealed record TeamLabExecutionConnection(
     string? ViaNodeKey,
     string? ViaAssetKey,
     TeamLabConnectionDirection Direction);
-
-public sealed record TeamLabExecutionDependency(
-    string AssetKey,
-    string DependsOnKey,
-    TeamLabDependencyCondition Condition);
 
 public sealed record TeamLabExecutionObservationPolicy(
     bool FlowMetadataEnabled,

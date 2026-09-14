@@ -93,7 +93,7 @@ public sealed class TeamLabTopologyApplicationService(
     {
         var definition = TeamLabReleaseCodec.Normalize(new TeamLabTopologyDefinitionModel(
             model.Name, model.Networks, model.Assets, model.Connections,
-            model.Infrastructure, model.Dependencies, model.Observation));
+            model.Infrastructure, model.Observation));
         if (requireValid)
             await RequireValidAsync(definition, model.SchemaVersion, cancellationToken);
         var topology = BuildTopology(definition, model.SchemaVersion, actorUserId);
@@ -129,7 +129,6 @@ public sealed class TeamLabTopologyApplicationService(
                 definition.Connections,
                 DeserializeEditor(source.EditorMetadataJson),
                 definition.Infrastructure,
-                definition.Dependencies,
                 definition.Observation,
                 source.SchemaVersion,
                 source.ControlScopeId),
@@ -257,7 +256,7 @@ public sealed class TeamLabTopologyApplicationService(
     {
         var definition = TeamLabReleaseCodec.Normalize(new TeamLabTopologyDefinitionModel(
             model.Name, model.Networks, model.Assets, model.Connections,
-            model.Infrastructure, model.Dependencies, model.Observation));
+            model.Infrastructure, model.Observation));
         if (requireValid)
             await RequireValidAsync(definition, model.SchemaVersion, cancellationToken);
         var current = await RequireTopologyAsync(topologyId, actorUserId, includeAll, cancellationToken);
@@ -304,7 +303,6 @@ public sealed class TeamLabTopologyApplicationService(
                 .SetProperty(item => item.SchemaVersion, model.SchemaVersion)
                 .SetProperty(item => item.EditorMetadataJson, editorJson)
                 .SetProperty(item => item.InfrastructureJson, Serialize(definition.Infrastructure ?? []))
-                .SetProperty(item => item.DependenciesJson, Serialize(definition.Dependencies ?? []))
                 .SetProperty(item => item.ObservationJson, Serialize(definition.Observation ?? new TeamLabObservationPolicyModel()))
                 .SetProperty(item => item.Revision, item => item.Revision + 1)
                 .SetProperty(item => item.LastMutationOperationId, operationId)
@@ -662,7 +660,6 @@ public sealed class TeamLabTopologyApplicationService(
                     item.Key, item.FromNetworkKey, item.ToNetworkKey, item.ViaAssetKey,
                     item.ViaNodeKey, item.Direction)).ToArray(),
             DeserializeList<TeamLabTopologyInfrastructureModel>(topology.InfrastructureJson),
-            DeserializeList<TeamLabTopologyDependencyModel>(topology.DependenciesJson),
             Deserialize<TeamLabObservationPolicyModel>(topology.ObservationJson));
 
     private async Task RequireValidAsync(
@@ -872,7 +869,6 @@ public sealed class TeamLabTopologyApplicationService(
             });
         }
         topology.InfrastructureJson = Serialize(definition.Infrastructure ?? []);
-        topology.DependenciesJson = Serialize(definition.Dependencies ?? []);
         topology.ObservationJson = Serialize(definition.Observation ?? new TeamLabObservationPolicyModel());
     }
 

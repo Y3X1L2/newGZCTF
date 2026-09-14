@@ -133,7 +133,6 @@ public sealed record TeamLabNodeAssetCreateRequest(
     IReadOnlyDictionary<string, string> Secrets,
     IReadOnlyList<TeamLabNodeInterfaceIntent> Interfaces,
     TeamLabNodeHealthIntent? Health = null,
-    string? DependencyReadyToken = null,
     TeamLabEndpointObservationMode EndpointObservation = TeamLabEndpointObservationMode.Disabled,
     string RouterNamespace = "",
     Guid? OperationId = null,

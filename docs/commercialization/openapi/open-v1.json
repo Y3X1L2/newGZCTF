@@ -12081,13 +12081,6 @@
               "$ref": "#/components/schemas/TeamLabTopologyInfrastructureModel"
             }
           },
-          "dependencies": {
-            "type": "array",
-            "nullable": true,
-            "items": {
-              "$ref": "#/components/schemas/TeamLabTopologyDependencyModel"
-            }
-          },
           "observation": {
             "nullable": true,
             "oneOf": [
@@ -12415,37 +12408,6 @@
           1
         ]
       },
-      "TeamLabTopologyDependencyModel": {
-        "type": "object",
-        "additionalProperties": false,
-        "properties": {
-          "assetKey": {
-            "type": "string"
-          },
-          "dependsOnKey": {
-            "type": "string"
-          },
-          "condition": {
-            "$ref": "#/components/schemas/TeamLabDependencyCondition"
-          }
-        }
-      },
-      "TeamLabDependencyCondition": {
-        "type": "integer",
-        "description": "",
-        "x-enumNames": [
-          "NetworkReady",
-          "GuestReady",
-          "ServiceReady",
-          "BootstrapCompleted"
-        ],
-        "enum": [
-          0,
-          1,
-          2,
-          3
-        ]
-      },
       "TeamLabObservationPolicyModel": {
         "type": "object",
         "additionalProperties": false,
@@ -12580,13 +12542,6 @@
               "$ref": "#/components/schemas/TeamLabTopologyInfrastructureModel"
             }
           },
-          "dependencies": {
-            "type": "array",
-            "nullable": true,
-            "items": {
-              "$ref": "#/components/schemas/TeamLabTopologyDependencyModel"
-            }
-          },
           "observation": {
             "nullable": true,
             "oneOf": [
@@ -12639,13 +12594,6 @@
             "nullable": true,
             "items": {
               "$ref": "#/components/schemas/TeamLabTopologyInfrastructureModel"
-            }
-          },
-          "dependencies": {
-            "type": "array",
-            "nullable": true,
-            "items": {
-              "$ref": "#/components/schemas/TeamLabTopologyDependencyModel"
             }
           },
           "observation": {

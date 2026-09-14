@@ -35,7 +35,6 @@ public class TeamLabRuntime
     public List<TeamLabRuntimeAsset> Assets { get; set; } = [];
     public List<TeamLabRuntimeInfrastructure> Infrastructure { get; set; } = [];
     public List<TeamLabExecutionPlanSnapshot> ExecutionPlanSnapshots { get; set; } = [];
-    public List<TeamLabRuntimeDependencyState> DependencyStates { get; set; } = [];
     public List<TeamLabObservationPoint> ObservationPoints { get; set; } = [];
     public List<TeamLabObservationCursor> ObservationCursors { get; set; } = [];
     public List<TeamLabFabricLinkLease> FabricLinkLeases { get; set; } = [];

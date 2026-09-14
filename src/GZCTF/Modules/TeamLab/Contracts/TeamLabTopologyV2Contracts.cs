@@ -10,11 +10,6 @@ public sealed record TeamLabTopologyInfrastructureModel(
     IReadOnlyList<TeamLabTopologyInterfaceModel> Interfaces,
     string? NetworkKey = null);
 
-public sealed record TeamLabTopologyDependencyModel(
-    string AssetKey,
-    string DependsOnKey,
-    TeamLabDependencyCondition Condition);
-
 public sealed record TeamLabObservationPolicyModel(
     bool FlowMetadataEnabled = true,
     bool OnDemandPcapEnabled = true,
@@ -51,5 +46,4 @@ internal sealed record TeamLabTopologyDefinitionV2Model(
     IReadOnlyList<TeamLabTopologyInfrastructureModel> Infrastructure,
     IReadOnlyList<TeamLabTopologyAssetV2Model> Assets,
     IReadOnlyList<TeamLabTopologyConnectionV2Model> Connections,
-    IReadOnlyList<TeamLabTopologyDependencyModel> Dependencies,
     TeamLabObservationPolicyModel Observation);

@@ -24,12 +24,8 @@ internal sealed partial class TeamLabTopologyStructureValidator(TeamLabAddressPo
                 $"A topology must contain between 1 and {TeamLabTopologyValidator.MaxAssets} assets.");
 
         var infrastructure = definition.Infrastructure ?? [];
-        var dependencies = definition.Dependencies ?? [];
-        if (dependencies.Count > 0)
-            Add(issues, "startup_dependencies_not_supported", "dependencies",
-                "当前执行模型不支持启动依赖，请删除依赖连接后再发布。");
         if (schemaVersion == 1 &&
-            (infrastructure.Count > 0 || dependencies.Count > 0 || definition.Observation is not null ||
+            (infrastructure.Count > 0 || definition.Observation is not null ||
              definition.Assets.Any(asset => asset.EndpointObservation != TeamLabEndpointObservationMode.Disabled) ||
              definition.Connections.Any(connection => connection.ViaNodeKey is not null || connection.Direction is not null)))
         {

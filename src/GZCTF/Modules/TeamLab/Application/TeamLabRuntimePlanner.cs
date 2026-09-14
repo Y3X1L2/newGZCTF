@@ -241,7 +241,6 @@ public sealed class TeamLabRuntimePlanner(
             .Include(item => item.Networks)
             .Include(item => item.Assets)
             .Include(item => item.Infrastructure)
-            .Include(item => item.DependencyStates)
             .Include(item => item.SecretEnvelopes)
             .Include(item => item.Events)
             .SingleOrDefaultAsync(item => item.PublicId == runtimePublicId, cancellationToken)
@@ -435,17 +434,6 @@ public sealed class TeamLabRuntimePlanner(
                     new TeamLabRuntimeInfrastructureConnectionIntent(
                         item.FromNetworkKey, item.ToNetworkKey, item.Direction)).ToArray()),
                 Status = TeamLabRuntimeStatus.Pending
-            });
-        }
-        foreach (var dependency in definition.Dependencies)
-        {
-            runtime.DependencyStates.Add(new TeamLabRuntimeDependencyState
-            {
-                RuntimeId = runtime.Id,
-                Generation = runtime.Generation,
-                AssetKey = dependency.AssetKey,
-                DependsOnKey = dependency.DependsOnKey,
-                Condition = dependency.Condition
             });
         }
         if (runtime.ExecutionModel == TeamLabExecutionModel.V2)
