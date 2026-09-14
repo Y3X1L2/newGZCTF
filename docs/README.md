@@ -71,6 +71,7 @@
 
 ## 6. 交接与状态维护
 
+- 2026-09-14 联赛会议准备：[`领导诉求与今晚交付方案`](development/league-leadership-delivery-20260914.md)，说明今晚要交哪些材料、联赛任务如何分工、会上要决定什么，并附通话、V1.2 规则和源码依据。正式材料与联赛功能仍需后续制作、开发。
 - 当前事实只写入 [`development/current-state.md`](development/current-state.md)。
 - 新 AI 或新成员接手项目先阅读 [`development/current-handoff.md`](development/current-handoff.md)。
 - 并行开发和 AI 会话规范见 [`development/ai-development-playbook.md`](development/ai-development-playbook.md)。
