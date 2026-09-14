@@ -14,7 +14,7 @@ const runtime: TeamLabRuntime = {
   id: 'runtime-a', releaseId: 'release-a', generation: 3, status: 'running', stage: 'runtime-ready',
   openForAccess: true, shards: [], networks: [], createdAt: 0, updatedAt: null, error: null,
   assets: [1, 2].map(id => ({ id, key: `web-${id}`, name: `Web ${id}`, kind: 'docker', runtimeResourceId: `container-${id}`,
-    primaryIp: null, status: 'running', error: null })),
+    networkKeys: [], primaryIp: null, status: 'running', error: null })),
 }
 describe('AssetFilesPanel', () => {
   beforeEach(() => { execute.mockReset() })
@@ -38,7 +38,7 @@ describe('AssetFilesPanel', () => {
     expect(execute).toHaveBeenCalledTimes(1)
     fireEvent.click(screen.getByRole('button', { name: '确认操作' }))
     await screen.findByText('此目录为空')
-    expect(execute).toHaveBeenCalledWith('runtime-a', 1, 3, 'delete', '/data.txt', undefined, true)
+    expect(execute).toHaveBeenCalledWith('runtime-a', 1, 3, 'delete', '/data.txt', undefined, true, undefined, false)
   })
   it('shows a request error without claiming an empty directory', async () => {
     execute.mockRejectedValue(new Error('路径不可读取'))

@@ -90,6 +90,7 @@ public sealed class TeamLabRuntimeProjectionService(AppDbContext context)
                     item.TopologyKey,
                     item.Name,
                     item.Kind == TeamLabResourceKind.Docker ? TeamLabAssetKind.Docker : TeamLabAssetKind.Vm,
+                    TeamLabLinkPolicyService.AssetNetworkKeys(item).Order(StringComparer.Ordinal).ToArray(),
                     item.RuntimeResourceId,
                     item.IpAddress,
                     EffectiveAssetStatus(runtime.Status, item),

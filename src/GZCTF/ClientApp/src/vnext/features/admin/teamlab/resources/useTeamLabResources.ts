@@ -8,6 +8,11 @@ export function useConnectorNodes(enabled: boolean) {
   return useSWR(enabled ? 'vnext:teamlab:connector-nodes' : null, () => nodeAdminApi.list())
 }
 
+export function useConnectorInterfaces(nodeId: string, enabled: boolean) {
+  return useSWR(enabled && nodeId ? ['vnext:teamlab:connector-interfaces', nodeId] : null,
+    () => teamLabResourcesApi.listNodeInterfaces(nodeId))
+}
+
 const pageSize = 30
 
 /** Device package catalog keyed by name search, mirroring the scene-library hook shape. */

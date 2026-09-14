@@ -176,6 +176,7 @@ export function parseTeamLabRuntime(value: unknown): TeamLabRuntime {
         key: parse.string(asset.key, `${label}.key`),
         name: parse.string(asset.name, `${label}.name`),
         kind: assetKind(asset.kind, `${label}.kind`),
+        networkKeys: parse.array(asset.networkKeys, `${label}.networkKeys`, parse.string),
         runtimeResourceId: parse.nullableString(asset.runtimeResourceId, `${label}.runtimeResourceId`),
         primaryIp: parse.nullableString(asset.primaryIp, `${label}.primaryIp`),
         status: runtimeStatus(asset.status, `${label}.status`),

@@ -10,6 +10,7 @@ vi.mock('./useTeamLabResources', () => ({
   useConnectorRegistry: vi.fn(),
   useNodeArtifactCache: vi.fn(),
   useConnectorNodes: vi.fn(() => ({ data: [], error: undefined })),
+  useConnectorInterfaces: vi.fn(() => ({ data: [], error: undefined, isLoading: false })),
 }))
 
 const devicePackage: TeamLabDevicePackage = {
@@ -143,7 +144,7 @@ describe('TeamLabResourcesPage', () => {
     expect(row).toHaveTextContent('1.2.0')
     expect(row).toHaveTextContent('OCI 镜像')
     expect(row).toHaveTextContent('启用')
-    expect(screen.getByRole('button', { name: '登记设备包' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '登记设备模板' })).toBeInTheDocument()
   })
 
   it('switches to the connector tab and exposes occupancy without endpoints', () => {
@@ -152,7 +153,7 @@ describe('TeamLabResourcesPage', () => {
 
     const row = screen.getByRole('row', { name: /现场 VLAN 1/ })
     expect(row).toHaveTextContent('1 / 1')
-    expect(row).toHaveTextContent('健康')
+    expect(row).toHaveTextContent('已连接')
     expect(screen.queryByText('10.0.7.125')).not.toBeInTheDocument()
   })
 
@@ -169,7 +170,7 @@ describe('TeamLabResourcesPage', () => {
     )
     render(<TeamLabResourcesPage />)
 
-    expect(screen.getByText('暂无设备包')).toBeInTheDocument()
+    expect(screen.getByText('暂无设备模板')).toBeInTheDocument()
   })
 
   it('updates the open detail after disabling and enabling a package', async () => {
@@ -191,7 +192,7 @@ describe('TeamLabResourcesPage', () => {
     render(<TeamLabResourcesPage />)
     fireEvent.click(screen.getByRole('row', { name: /PLC 模拟器/ }))
     fireEvent.click(screen.getByRole('button', { name: '归档' }))
-    const dialog = screen.getByRole('dialog', { name: '归档设备包' })
+    const dialog = screen.getByRole('dialog', { name: '归档设备模板' })
     fireEvent.click(within(dialog).getByRole('button', { name: '归档' }))
     await within(dialog).findByText('资源仍被引用')
     expect(dialog).toBeInTheDocument()

@@ -1,16 +1,20 @@
 namespace GZCTF.TeamLab.Contracts;
 
 public sealed record TeamLabFileEntry(string Name, string Kind, long Size);
+public sealed record TeamLabHostInterface(string Name, string MacAddress, bool LinkUp, IReadOnlyList<string> Addresses);
+public sealed record TeamLabServiceForwardRequest(
+    Guid AccessId, int RuntimeId, int Generation, string Protocol, int ListenPort,
+    string TargetAddress, int TargetPort);
 public sealed record TeamLabFileResult(IReadOnlyList<TeamLabFileEntry>? Entries = null, byte[]? Content = null, string? HostKeySha256 = null);
 public sealed record TeamLabVmFileRequest(string DomainName, int Generation, Guid NativeId, string GuestAddress,
     int Port, string Username, string Credential, string Operation, string Path, byte[]? Content = null,
-    bool Overwrite = false, string? HostKeySha256 = null)
+    bool Overwrite = false, string? HostKeySha256 = null, string? DestinationPath = null, bool Recursive = false)
 {
     public override string ToString() => "VM SFTP request (credentials omitted)";
 }
 public sealed record TeamLabContainerFileRequest(
     int RuntimeId, int Generation, string ContainerId, string Operation, string Path,
-    byte[]? Content = null, bool Overwrite = false);
+    byte[]? Content = null, bool Overwrite = false, string? DestinationPath = null, bool Recursive = false);
 
 public static class TeamLabFileLimits
 {

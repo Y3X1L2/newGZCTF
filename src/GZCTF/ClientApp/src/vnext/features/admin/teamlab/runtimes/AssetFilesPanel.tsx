@@ -1,9 +1,10 @@
-import { ArrowUp, Download, Folder, RefreshCw, Trash2, Upload } from 'lucide-react'
+import { ArrowUp, Download, Folder, FolderPlus, Pencil, RefreshCw, Trash2, Upload } from 'lucide-react'
 import { useId, useRef, useState } from 'react'
-import { ActionButton, InlineFeedback, VNextConfirmDialog } from '../../../../shared/Interaction'
+import { ActionButton, InlineFeedback, VNextConfirmDialog, VNextDialog } from '../../../../shared/Interaction'
 import { DataState } from '../../../../shared/Primitives'
 import { errorMessage } from '../../../../shared/errors'
 import type { TeamLabRuntime } from '../api'
+import type { AssetFileEntry } from '../api/teamlabAssetFilesApi'
 import { useAssetFiles } from './useAssetFiles'
 import styles from './RuntimePanels.module.css'
 
@@ -27,9 +28,13 @@ export function AssetFilesPanel({ runtime }: { runtime: TeamLabRuntime }) {
 function AssetFileWorkspace({ runtime, assetId }: { runtime: TeamLabRuntime; assetId: number }) {
   const files = useAssetFiles(runtime.id, runtime.generation, assetId)
   const input = useRef<HTMLInputElement>(null)
-  const [pendingDelete, setPendingDelete] = useState<string | null>(null)
+  const [pendingDelete, setPendingDelete] = useState<AssetFileEntry | null>(null)
   const [pendingUpload, setPendingUpload] = useState<File | null>(null)
   const [resetIdentity, setResetIdentity] = useState(false)
+  const [createFolder, setCreateFolder] = useState(false)
+  const [folderName, setFolderName] = useState('')
+  const [moveTarget, setMoveTarget] = useState<AssetFileEntry | null>(null)
+  const [destinationPath, setDestinationPath] = useState('')
   const unavailable = files.busy || !['running', 'failed'].includes(runtime.status)
   return <>
     <form className={styles.fileToolbar} onSubmit={event => { event.preventDefault(); void files.browse(files.draftPath) }}>
@@ -39,6 +44,8 @@ function AssetFileWorkspace({ runtime, assetId }: { runtime: TeamLabRuntime; ass
         onClick={() => void files.browse(files.path.slice(0, files.path.lastIndexOf('/')) || '/')}>上级目录</ActionButton>
       <ActionButton icon={<Upload size={16} />} disabled={unavailable || !files.entries} type="button"
         onClick={() => input.current?.click()}>上传文件</ActionButton>
+      <ActionButton icon={<FolderPlus size={16} />} disabled={unavailable || !files.entries} type="button"
+        onClick={() => { setFolderName(''); setCreateFolder(true) }}>新建文件夹</ActionButton>
       {runtime.assets.find(item => item.id === assetId)?.kind === 'vm' ? <ActionButton disabled={unavailable} type="button"
         onClick={() => setResetIdentity(true)}>重新登记 SSH 身份</ActionButton> : null}
       <input ref={input} hidden type="file" aria-label="上传文件" onChange={event => {
@@ -60,13 +67,15 @@ function AssetFileWorkspace({ runtime, assetId }: { runtime: TeamLabRuntime; ass
             <td>{entry.kind === 'directory' ? '目录' : entry.kind === 'file' ? '文件' : '受限项'}</td><td>{entry.kind === 'file' ? entry.size : '-'}</td>
             <td>{entry.kind === 'file' ? <ActionButton icon={<Download size={16} />} type="button" disabled={unavailable}
               onClick={() => void files.download(entry.name)}>下载</ActionButton> : null}
+              {entry.kind !== 'restricted' ? <ActionButton icon={<Pencil size={16} />} type="button" disabled={unavailable}
+                onClick={() => { setMoveTarget(entry); setDestinationPath(files.childPath(entry.name)) }}>重命名或移动</ActionButton> : null}
               {entry.kind !== 'restricted' ? <ActionButton icon={<Trash2 size={16} />} type="button" tone="danger" disabled={unavailable}
-                onClick={() => setPendingDelete(entry.name)}>删除</ActionButton> : null}</td>
+                onClick={() => setPendingDelete(entry)}>删除</ActionButton> : null}</td>
           </tr>)}</tbody></table></div>}
-    <VNextConfirmDialog open={pendingDelete !== null} onClose={() => setPendingDelete(null)} title="删除文件或空目录"
-      description={`删除 ${pendingDelete ?? ''}，此操作不可撤销；非空目录不会递归删除。`} confirmLabel="确认删除" tone="danger"
-      message="仅删除选中的文件或空目录。"
-      onConfirm={async () => pendingDelete !== null && await files.remove(pendingDelete)} />
+    <VNextConfirmDialog open={pendingDelete !== null} onClose={() => setPendingDelete(null)} title="删除文件或目录"
+      description={`删除 ${pendingDelete?.name ?? ''}，此操作不可撤销。`} confirmLabel="确认删除" tone="danger"
+      message={pendingDelete?.kind === 'directory' ? '目录内的文件和子目录将一并删除。' : '仅删除选中的文件。'}
+      onConfirm={async () => pendingDelete !== null && await files.remove(pendingDelete.name, pendingDelete.kind === 'directory')} />
     <VNextConfirmDialog open={pendingUpload !== null} onClose={() => setPendingUpload(null)} title="覆盖同名文件"
       description={`覆盖 ${pendingUpload?.name ?? ''} 的现有内容，此操作不可撤销。`} confirmLabel="确认覆盖" tone="danger"
       message="新内容上传成功后才替换旧文件。"
@@ -75,5 +84,17 @@ function AssetFileWorkspace({ runtime, assetId }: { runtime: TeamLabRuntime; ass
       description="适用于刚重装虚拟机或更新 SSH 密钥的情况，需要资产生命周期管理权限。"
       message="请确认连接目标仍是当前虚拟机。此操作不会重建虚拟机或修改磁盘内容。" confirmLabel="确认重新登记"
       onConfirm={files.resetIdentity} />
+    <VNextDialog open={createFolder} onClose={() => !files.busy && setCreateFolder(false)} title="新建文件夹"
+      description={`在 ${files.path} 中创建文件夹。`} eyebrow="FILES"
+      footer={<><ActionButton onClick={() => setCreateFolder(false)} type="button">取消</ActionButton>
+        <ActionButton disabled={files.busy || !folderName.trim()} onClick={() => void files.mkdir(folderName.trim()).then(ok => ok && setCreateFolder(false))} tone="primary" type="button">创建</ActionButton></>}>
+      <label className={styles.fileAssetSelector}>文件夹名称<input autoFocus maxLength={128} onChange={event => setFolderName(event.target.value)} value={folderName} /></label>
+    </VNextDialog>
+    <VNextDialog open={moveTarget !== null} onClose={() => !files.busy && setMoveTarget(null)} title="重命名或移动"
+      description="填写完整目标路径；只修改名称时保留当前目录。" eyebrow="FILES"
+      footer={<><ActionButton onClick={() => setMoveTarget(null)} type="button">取消</ActionButton>
+        <ActionButton disabled={files.busy || !destinationPath.trim()} onClick={() => moveTarget && void files.move(moveTarget.name, destinationPath.trim()).then(ok => ok && setMoveTarget(null))} tone="primary" type="button">确认</ActionButton></>}>
+      <label className={styles.fileAssetSelector}>目标路径<input autoFocus maxLength={1024} onChange={event => setDestinationPath(event.target.value)} value={destinationPath} /></label>
+    </VNextDialog>
   </>
 }

@@ -49,6 +49,7 @@ export interface TeamLabRuntimeAsset {
   key: string
   name: string
   kind: TeamLabAssetKind
+  networkKeys: readonly string[]
   runtimeResourceId: string | null
   primaryIp: string | null
   status: TeamLabRuntimeStatus

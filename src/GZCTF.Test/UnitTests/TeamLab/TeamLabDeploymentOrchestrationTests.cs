@@ -294,6 +294,7 @@ public sealed class TeamLabDeploymentOrchestrationTests
             Mock.Of<IPublicUdpGatewayProvider>(),
             eventRecorder,
             RemoteAccess(),
+            ServiceAccessCleanup(),
             Preparation(context));
 
         var result = await cleanup.CleanupAsync(runtime, CancellationToken.None);
@@ -353,6 +354,7 @@ public sealed class TeamLabDeploymentOrchestrationTests
             Mock.Of<IPublicUdpGatewayProvider>(),
             eventRecorder,
             RemoteAccess(),
+            ServiceAccessCleanup(),
             Preparation(context));
 
         var result = await cleanup.CleanupAsync(runtime, CancellationToken.None);
@@ -399,6 +401,7 @@ public sealed class TeamLabDeploymentOrchestrationTests
             Mock.Of<IPublicUdpGatewayProvider>(),
             eventRecorder,
             RemoteAccess(),
+            ServiceAccessCleanup(),
             Preparation(context));
 
         var result = await cleanup.CleanupAsync(runtime, CancellationToken.None);
@@ -446,6 +449,7 @@ public sealed class TeamLabDeploymentOrchestrationTests
             Mock.Of<IPublicUdpGatewayProvider>(),
             eventRecorder,
             RemoteAccess(),
+            ServiceAccessCleanup(),
             Preparation(context));
 
         var result = await cleanup.CleanupAsync(runtime, CancellationToken.None);
@@ -490,6 +494,7 @@ public sealed class TeamLabDeploymentOrchestrationTests
             Mock.Of<IPublicUdpGatewayProvider>(),
             eventRecorder,
             RemoteAccess(),
+            ServiceAccessCleanup(),
             Preparation(context));
 
         var result = await cleanup.CleanupAsync(runtime, markDestroyedOnSuccess: true, CancellationToken.None);
@@ -531,6 +536,15 @@ public sealed class TeamLabDeploymentOrchestrationTests
         var cleanup = new Mock<ITeamLabCaptureCleanup>();
         cleanup.Setup(item => item.ExpireGenerationAsync(
                 It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+        return cleanup.Object;
+    }
+
+    private static ITeamLabServiceAccessCleanup ServiceAccessCleanup()
+    {
+        var cleanup = new Mock<ITeamLabServiceAccessCleanup>();
+        cleanup.Setup(item => item.CleanupRuntimeAsync(
+                It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([]);
         return cleanup.Object;
     }

@@ -6516,6 +6516,81 @@ namespace GZCTF.Migrations
                     b.ToTable("TeamLabRuntimeShards");
                 });
 
+            modelBuilder.Entity("GZCTF.Modules.TeamLab.Domain.Runtime.TeamLabServiceAccess", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Generation")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("InternalPort")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<string>("NetworkKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid>("PortLeaseId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Protocol")
+                        .IsRequired()
+                        .HasMaxLength(8)
+                        .HasColumnType("character varying(8)");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("PublicPort")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("RuntimeAssetId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("RuntimeId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<Guid>("WorkerNodeId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique();
+
+                    b.HasIndex("PublicPort")
+                        .IsUnique()
+                        .HasFilter("\"RevokedAt\" IS NULL");
+
+                    b.HasIndex("RuntimeAssetId");
+
+                    b.HasIndex("WorkerNodeId");
+
+                    b.HasIndex("RuntimeId", "Generation", "RuntimeAssetId");
+
+                    b.ToTable("TeamLabServiceAccesses");
+                });
+
             modelBuilder.Entity("GZCTF.Modules.TeamLab.Domain.Runtime.TeamLabTrafficFlow", b =>
                 {
                     b.Property<DateTimeOffset>("CapturedAt")
@@ -10576,6 +10651,33 @@ namespace GZCTF.Migrations
                     b.Navigation("WorkerNode");
                 });
 
+            modelBuilder.Entity("GZCTF.Modules.TeamLab.Domain.Runtime.TeamLabServiceAccess", b =>
+                {
+                    b.HasOne("GZCTF.Modules.TeamLab.Domain.Runtime.TeamLabRuntimeAsset", "RuntimeAsset")
+                        .WithMany()
+                        .HasForeignKey("RuntimeAssetId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("GZCTF.Modules.TeamLab.Domain.Runtime.TeamLabRuntime", "Runtime")
+                        .WithMany("ServiceAccesses")
+                        .HasForeignKey("RuntimeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("GZCTF.Models.Data.WorkerNode", "WorkerNode")
+                        .WithMany()
+                        .HasForeignKey("WorkerNodeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Runtime");
+
+                    b.Navigation("RuntimeAsset");
+
+                    b.Navigation("WorkerNode");
+                });
+
             modelBuilder.Entity("GZCTF.Modules.TeamLab.Domain.Runtime.TeamLabTrafficFlow", b =>
                 {
                     b.HasOne("GZCTF.Modules.TeamLab.Domain.Runtime.TeamLabRuntimeNetwork", "Network")
@@ -11314,6 +11416,8 @@ namespace GZCTF.Migrations
                     b.Navigation("PublicUdpMapping");
 
                     b.Navigation("SecretEnvelopes");
+
+                    b.Navigation("ServiceAccesses");
 
                     b.Navigation("Shards");
 

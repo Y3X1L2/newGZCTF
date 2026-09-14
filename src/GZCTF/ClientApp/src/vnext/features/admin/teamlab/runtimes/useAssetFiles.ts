@@ -36,9 +36,19 @@ export function useAssetFiles(runtimeId: string, generation: number, assetId: nu
     }),
     browse: (target: string) => run(() => read(target)),
     download: (name: string) => run(async () => { await executeAssetFile(runtimeId, assetId, generation, 'download', childPath(name)) }),
-    remove: (name: string) => run(async () => {
-      await executeAssetFile(runtimeId, assetId, generation, 'delete', childPath(name), undefined, true)
+    remove: (name: string, recursive = false) => run(async () => {
+      await executeAssetFile(runtimeId, assetId, generation, 'delete', childPath(name), undefined, true, undefined, recursive)
       setNotice('删除已完成。')
+      await read(path)
+    }),
+    mkdir: (name: string) => run(async () => {
+      await executeAssetFile(runtimeId, assetId, generation, 'mkdir', childPath(name))
+      setNotice('文件夹已创建。')
+      await read(path)
+    }),
+    move: (name: string, destinationPath: string) => run(async () => {
+      await executeAssetFile(runtimeId, assetId, generation, 'move', childPath(name), undefined, false, destinationPath)
+      setNotice('移动已完成。')
       await read(path)
     }),
     upload: (file: File, overwrite: boolean) => run(async () => {

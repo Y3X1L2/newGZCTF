@@ -84,6 +84,29 @@ public sealed class TeamLabAssetFileTests
         gateway.VerifyNoOtherCalls();
     }
 
+    [Theory]
+    [InlineData("mkdir", "/data/archive", null, false, false)]
+    [InlineData("move", "/data/a.txt", "/data/archive/a.txt", false, false)]
+    [InlineData("delete", "/data/archive", null, true, true)]
+    public async Task DirectoryOperationsReachAgentWithStructuredFields(
+        string operation, string path, string? destinationPath, bool recursive, bool confirmed)
+    {
+        await using var db = Context();
+        var asset = await Seed(db);
+        var gateway = new Mock<ITeamLabAssetFileGateway>(MockBehavior.Strict);
+        gateway.Setup(item => item.ExecuteAsync(asset.WorkerNodeId!.Value,
+            It.Is<TeamLabContainerFileRequest>(request => request.Operation == operation && request.Path == path &&
+                request.DestinationPath == destinationPath && request.Recursive == recursive),
+            It.IsAny<CancellationToken>())).ReturnsAsync(new TeamLabFileResult());
+
+        await Service(db, gateway.Object).ExecuteAsync(asset.Runtime.PublicId, asset.Id,
+            asset.Runtime.CreatedById!.Value, false,
+            new TeamLabAssetFileCommand(3, operation, path, Confirmed: confirmed,
+                DestinationPath: destinationPath, Recursive: recursive), default);
+
+        gateway.VerifyAll();
+    }
+
     [Fact]
     public async Task VmIdentityIsPinnedBeforeFileAccessAndCanBeExplicitlyRenewed()
     {

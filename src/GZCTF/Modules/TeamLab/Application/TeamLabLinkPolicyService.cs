@@ -42,8 +42,12 @@ public sealed class TeamLabLinkPolicyService(AppDbContext context, ITeamLabLinkP
         if (!string.IsNullOrWhiteSpace(command.AssetKey))
         {
             assetKey = Slug(command.AssetKey, 64, "link_policy_asset_invalid", "链路策略资产标识无效");
-            if (!runtime.Assets.Any(asset => asset.Generation == runtime.Generation && asset.TopologyKey == assetKey))
+            var asset = runtime.Assets.SingleOrDefault(item =>
+                item.Generation == runtime.Generation && item.TopologyKey == assetKey);
+            if (asset is null)
                 throw new TeamLabApiContractException("link_policy_asset_unknown", "链路策略资产不属于该运行时", 422);
+            if (!AssetNetworkKeys(asset).Contains(networkKey))
+                throw new TeamLabApiContractException("link_policy_asset_network_mismatch", "所选资产未连接目标网段", 422);
         }
         var parameters = TeamLabLinkPolicyParameters.Validate(kind, command.Parameters);
         if (command.RecoverAt is { } recoverAt && recoverAt <= DateTimeOffset.UtcNow)
@@ -79,26 +83,8 @@ public sealed class TeamLabLinkPolicyService(AppDbContext context, ITeamLabLinkP
             ParametersJson = parameters,
             RecoverAt = command.RecoverAt
         };
-        context.TeamLabLinkPolicies.Add(policy);
-        try
-        {
-            await context.SaveChangesAsync(cancellationToken);
-        }
-        catch (DbUpdateException)
-        {
-            // A concurrent apply won the unique active-policy slot with
-            // identical semantics; converge to the winner instead of failing.
-            var winner = await context.TeamLabLinkPolicies.AsNoTracking().SingleOrDefaultAsync(
-                candidate => candidate.RuntimeId == runtime.Id && candidate.NetworkKey == networkKey &&
-                             candidate.AssetKey == assetKey && candidate.Kind == kind &&
-                             candidate.Status == TeamLabLinkPolicyStatus.Active,
-                cancellationToken);
-            if (winner is null || winner.ParametersJson != parameters)
-                throw new TeamLabApiContractException(
-                    "link_policy_conflict", "同一条链路已有不同参数的活动策略，请先恢复后再应用", 409);
-            return ToModel(winner, runtime.PublicId);
-        }
         await ApplyOnNodeAsync(policy, runtime, networkKey, assetKey, kind, parameters, cancellationToken);
+        context.TeamLabLinkPolicies.Add(policy);
         await context.SaveChangesAsync(cancellationToken);
         return ToModel(policy, runtime.PublicId);
     }
@@ -143,38 +129,40 @@ public sealed class TeamLabLinkPolicyService(AppDbContext context, ITeamLabLinkP
         string parameters,
         CancellationToken cancellationToken)
     {
-        var resolvedAsset = string.IsNullOrWhiteSpace(assetKey)
-            ? runtime.Assets
-                .Where(item => item.Generation == runtime.Generation)
-                .OrderBy(item => item.Id)
-                .Select(item => item.TopologyKey)
-                .FirstOrDefault()
-            : assetKey;
-        if (string.IsNullOrWhiteSpace(resolvedAsset))
+        var targets = ResolveTargets(runtime, networkKey, assetKey, kind);
+        if (targets.Length == 0)
         {
             policy.Status = TeamLabLinkPolicyStatus.Failed;
-            policy.LastError = "运行时没有可用的执行资产";
+            policy.LastError = "目标网段没有可用的执行资产";
             return;
         }
 
-        var response = await dispatcher.ApplyAsync(
-            runtime,
-            networkKey,
-            resolvedAsset,
-            TeamLabCapabilityResourceContractMapper.LinkPolicyKindName(kind),
-            parameters,
-            cancellationToken);
-        if (response.Success)
+        var applied = new List<string>();
+        foreach (var target in targets)
         {
-            policy.Status = TeamLabLinkPolicyStatus.Active;
-            policy.AppliedAt = DateTimeOffset.UtcNow;
-            policy.LastError = null;
-        }
-        else
-        {
+            var response = await dispatcher.ApplyAsync(
+                runtime, networkKey, target,
+                TeamLabCapabilityResourceContractMapper.LinkPolicyKindName(kind),
+                parameters, cancellationToken);
+            if (response.Success)
+            {
+                applied.Add(target);
+                continue;
+            }
+
+            foreach (var completed in applied)
+                await dispatcher.RecoverAsync(
+                    runtime, networkKey, completed,
+                    TeamLabCapabilityResourceContractMapper.LinkPolicyKindName(kind),
+                    parameters, cancellationToken);
             policy.Status = TeamLabLinkPolicyStatus.Failed;
             policy.LastError = Truncate(response.Message, 512);
+            return;
         }
+
+        policy.Status = TeamLabLinkPolicyStatus.Active;
+        policy.AppliedAt = DateTimeOffset.UtcNow;
+        policy.LastError = null;
     }
 
     private async Task RecoverOnNodeAsync(
@@ -184,29 +172,21 @@ public sealed class TeamLabLinkPolicyService(AppDbContext context, ITeamLabLinkP
         string? assetKey,
         CancellationToken cancellationToken)
     {
-        var resolvedAsset = string.IsNullOrWhiteSpace(assetKey)
-            ? runtime.Assets
-                .Where(item => item.Generation == runtime.Generation)
-                .OrderBy(item => item.Id)
-                .Select(item => item.TopologyKey)
-                .FirstOrDefault()
-            : assetKey;
-        if (string.IsNullOrWhiteSpace(resolvedAsset))
+        var targets = ResolveTargets(runtime, networkKey, assetKey, policy.Kind);
+        if (targets.Length == 0)
         {
             policy.LastError = "运行时缺少原执行资产，无法确认链路策略已撤销。";
             policy.Status = TeamLabLinkPolicyStatus.Failed;
             policy.UpdatedAt = DateTimeOffset.UtcNow;
             return;
         }
-        else
+
+        foreach (var target in targets)
         {
             var response = await dispatcher.RecoverAsync(
-                runtime,
-                networkKey,
-                resolvedAsset,
+                runtime, networkKey, target,
                 TeamLabCapabilityResourceContractMapper.LinkPolicyKindName(policy.Kind),
-                policy.ParametersJson,
-                cancellationToken);
+                policy.ParametersJson, cancellationToken);
             if (!response.Success)
             {
                 policy.LastError = Truncate(response.Message, 512);
@@ -222,6 +202,36 @@ public sealed class TeamLabLinkPolicyService(AppDbContext context, ITeamLabLinkP
         policy.RecoverAt = null;
         policy.UpdatedAt = DateTimeOffset.UtcNow;
     }
+
+    private static string[] ResolveTargets(
+        Domain.Runtime.TeamLabRuntime runtime,
+        string networkKey,
+        string? assetKey,
+        TeamLabLinkPolicyKind kind)
+    {
+        var targets = runtime.Assets
+            .Where(item => item.Generation == runtime.Generation &&
+                           (assetKey is null || item.TopologyKey == assetKey) &&
+                           AssetNetworkKeys(item).Contains(networkKey))
+            .OrderBy(item => item.Id)
+            .Select(item => item.TopologyKey)
+            .ToArray();
+        return kind == TeamLabLinkPolicyKind.Nat ? targets.Take(1).ToArray() : targets;
+    }
+
+    internal static IReadOnlySet<string> AssetNetworkKeys(TeamLabRuntimeAsset asset)
+    {
+        var keys = new HashSet<string>(StringComparer.Ordinal);
+        if (!string.IsNullOrWhiteSpace(asset.NetworkKey)) keys.Add(asset.NetworkKey);
+        var interfaces = JsonSerializer.Deserialize<RuntimeInterfaceNetwork[]>(
+            asset.InterfaceSummaryJson,
+            new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? [];
+        foreach (var item in interfaces)
+            if (!string.IsNullOrWhiteSpace(item.NetworkKey)) keys.Add(item.NetworkKey);
+        return keys;
+    }
+
+    private sealed record RuntimeInterfaceNetwork(string NetworkKey);
 
     public async Task<TeamLabLinkPolicyPageModel> ListByRuntimeAsync(
         Guid runtimeId,

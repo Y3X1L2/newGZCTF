@@ -67,7 +67,7 @@ function parseDeviceParameters(text: string | null | undefined, assetKey: string
   try {
     return JSON.parse(trimmed)
   } catch {
-    throw new TopologyCompileError(`资产 '${assetKey}' 的设备包参数不是合法 JSON。`)
+    throw new TopologyCompileError(`资产 '${assetKey}' 的设备模板参数不是合法 JSON。`)
   }
 }
 

@@ -41,6 +41,7 @@ public class TeamLabRuntime
     public List<TeamLabFabricLinkLease> FabricLinkLeases { get; set; } = [];
     public List<TeamLabVpnPeerRuntime> VpnPeers { get; set; } = [];
     public List<TeamLabAccessGrant> AccessGrants { get; set; } = [];
+    public List<TeamLabServiceAccess> ServiceAccesses { get; set; } = [];
     public List<TeamLabRuntimeSecretEnvelope> SecretEnvelopes { get; set; } = [];
     public TeamLabPublicUdpMapping? PublicUdpMapping { get; set; }
     public List<TeamLabEvent> Events { get; set; } = [];

@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using GZCTF.Models.Data;
 
 namespace GZCTF.Modules.TeamLab.Domain.Runtime;
 
@@ -72,4 +73,26 @@ public class TeamLabPublicUdpMapping
     public bool IsSynced { get; set; }
     [MaxLength(1024)] public string? LastSyncError { get; set; }
     public TeamLabRuntime Runtime { get; set; } = null!;
+}
+
+public class TeamLabServiceAccess
+{
+    [Key] public int Id { get; set; }
+    public Guid PublicId { get; set; } = Guid.CreateVersion7();
+    public int RuntimeId { get; set; }
+    public int Generation { get; set; }
+    public int RuntimeAssetId { get; set; }
+    public Guid WorkerNodeId { get; set; }
+    [MaxLength(64)] public string NetworkKey { get; set; } = string.Empty;
+    [MaxLength(8)] public string Protocol { get; set; } = "tcp";
+    public int InternalPort { get; set; }
+    public int PublicPort { get; set; }
+    public Guid PortLeaseId { get; set; }
+    [MaxLength(16)] public string Status { get; set; } = "pending";
+    [MaxLength(1024)] public string? LastError { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset? RevokedAt { get; set; }
+    public TeamLabRuntime Runtime { get; set; } = null!;
+    public TeamLabRuntimeAsset RuntimeAsset { get; set; } = null!;
+    public WorkerNode WorkerNode { get; set; } = null!;
 }

@@ -22,9 +22,9 @@ export const connectorKindLabels: Record<TeamLabConnectorKind, string> = {
 }
 
 export const connectorHealthLabels: Record<TeamLabConnectorHealth, { label: string; tone: Tone }> = {
-  unknown: { label: '未知', tone: 'neutral' },
-  healthy: { label: '健康', tone: 'success' },
-  degraded: { label: '降级', tone: 'warning' },
+  unknown: { label: '未读取', tone: 'neutral' },
+  healthy: { label: '已连接', tone: 'success' },
+  degraded: { label: '未连接', tone: 'warning' },
   unreachable: { label: '不可达', tone: 'danger' },
 }
 

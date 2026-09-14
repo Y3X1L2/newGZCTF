@@ -44,7 +44,7 @@ export function AssetInspector({
           {!currentAvailable && node.imageTemplateId > 0 ? <option value={node.imageTemplateId}>当前模板 #{node.imageTemplateId}（不可用）</option> : null}
           {compatibleImages.map((option) => <option key={option.id} value={option.id}>{option.name} (#{option.id}){option.remoteAccessProtocol === 'ssh' ? ' - 已配置 SSH 运维' : option.remoteAccessProtocol === 'rdp' ? ' - 已配置 RDP 运维' : ' - 未配置运维接入'}</option>)}
         </SelectInput>
-        {node.devicePackageId ? <p>镜像由设备包确定；解除设备包绑定后可单独更换镜像。</p> : null}
+        {node.devicePackageId ? <p>镜像由设备模板确定；解除模板绑定后可单独更换镜像。</p> : null}
       </InspectorSection>
 
       <ResourceRequirementsEditor onChange={(resources) => update({ resources })} readOnly={readOnly} resources={node.resources} />

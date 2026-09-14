@@ -19,6 +19,29 @@ namespace GZCTF.Services.Fleet;
 
 public class AgentClient
 {
+    public virtual async Task<IReadOnlyList<TeamLabHostInterface>> GetTeamLabHostInterfacesAsync(Guid nodeId, CancellationToken token)
+    {
+        var node = await GetNodeAsync(nodeId, token) ?? throw NodeNotFound(nodeId, "teamlab.interfaces");
+        using var client = BuildClient(node);
+        return await client.GetFromJsonAsync<TeamLabHostInterface[]>("/api/teamlab/interfaces", token)
+            ?? [];
+    }
+    public virtual async Task ApplyTeamLabServiceAccessAsync(Guid nodeId, TeamLabServiceForwardRequest request, CancellationToken token)
+    {
+        var node = await GetNodeAsync(nodeId, token) ?? throw NodeNotFound(nodeId, "teamlab.service-access");
+        using var client = BuildClient(node);
+        using var response = await client.PostAsJsonAsync("/api/teamlab/service-access/apply", request, token);
+        if (!response.IsSuccessStatusCode)
+            throw await CreateAgentExceptionAsync(response, "teamlab.service-access", nodeId, "服务开放失败。", token);
+    }
+    public virtual async Task RemoveTeamLabServiceAccessAsync(Guid nodeId, TeamLabServiceForwardRequest request, CancellationToken token)
+    {
+        var node = await GetNodeAsync(nodeId, token) ?? throw NodeNotFound(nodeId, "teamlab.service-access");
+        using var client = BuildClient(node);
+        using var response = await client.PostAsJsonAsync("/api/teamlab/service-access/remove", request, token);
+        if (!response.IsSuccessStatusCode)
+            throw await CreateAgentExceptionAsync(response, "teamlab.service-access", nodeId, "撤销服务开放失败。", token);
+    }
     public virtual async Task<TeamLabFileResult> ManageTeamLabVmFilesAsync(Guid nodeId, TeamLabVmFileRequest request, CancellationToken token)
     {
         var node = await GetNodeAsync(nodeId, token) ?? throw NodeNotFound(nodeId, "teamlab.files");

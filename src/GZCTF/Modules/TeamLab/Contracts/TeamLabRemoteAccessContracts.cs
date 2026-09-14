@@ -28,6 +28,7 @@ public sealed record TeamLabRemoteSessionModel(
 public sealed record TeamLabRemoteConnectModel(string Url, DateTimeOffset ExpiresAt);
 
 public sealed record TeamLabRemoteSessionListItem(
-    TeamLabRemoteSessionModel Session, Guid WorkerNodeId, Guid RequestedByUserId);
+    TeamLabRemoteSessionModel Session, Guid WorkerNodeId, string WorkerNodeName,
+    Guid RequestedByUserId, string RequestedByName);
 
 public sealed record TeamLabRemoteSessionPage(IReadOnlyList<TeamLabRemoteSessionListItem> Items, long? NextCursor);

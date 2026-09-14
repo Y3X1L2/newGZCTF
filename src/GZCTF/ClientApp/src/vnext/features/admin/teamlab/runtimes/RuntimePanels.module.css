@@ -788,6 +788,49 @@
   margin-block: var(--yn-space-3);
 }
 
+.serviceAccessForm {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--yn-space-3);
+  align-items: end;
+  margin-bottom: var(--yn-space-4);
+}
+
+.serviceAccessForm label {
+  display: grid;
+  gap: var(--yn-space-2);
+  min-width: 0;
+  color: var(--yn-color-text-secondary);
+  font-size: var(--yn-font-sm);
+  font-weight: 650;
+}
+
+.serviceAccessForm input,
+.serviceAccessForm select {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  padding: var(--yn-space-2) var(--yn-space-3);
+  color: var(--yn-color-text);
+  background: var(--yn-color-surface);
+  border: 1px solid var(--yn-color-border);
+  border-radius: 4px;
+  font: inherit;
+}
+
+.serviceAccessForm .serviceAccessToggle {
+  display: flex;
+  align-items: center;
+  min-height: 40px;
+  flex-direction: row;
+}
+
+.serviceAccessToggle input {
+  width: 18px;
+  min-height: 18px;
+}
+
 .fileToolbar label {
   display: grid;
   gap: var(--yn-space-2);

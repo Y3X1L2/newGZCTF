@@ -29,7 +29,7 @@ public sealed class EfOperationalEventWriter(
         "rebootCount", "assetKind", "assetKey", "infrastructureKind", "evidenceKind",
         "placementElapsedMs", "placementGroupCount", "placementEdgeCount", "placementImprovementPasses",
         "stateless", "result", "count", "reason", "errorCode", "remoteSessionId",
-        "assetId", "protocol", "actorUserId", "auditFileId", "filePath", "ticketId",
+        "assetId", "protocol", "actorUserId", "auditFileId", "filePath", "destinationPath", "ticketId",
         "tail", "truncated", "logsAvailable",
         "protocolEventType", "protocolEventSource", "protocolEventOccurredAt",
         "protocolEventParameterCount", "protocolEventParameters"

@@ -11,7 +11,7 @@ vi.mock('./ContainerTerminal', () => ({
 const runtime: TeamLabRuntime = {
   id: 'runtime', releaseId: 'release', generation: 1, status: 'running', stage: 'runtime-ready',
   openForAccess: true, shards: [], networks: [], createdAt: 1, updatedAt: 1, error: null,
-  assets: [{ id: 1, key: 'web', name: 'Web', kind: 'docker', runtimeResourceId: 'container', primaryIp: null, status: 'running', error: null }],
+  assets: [{ id: 1, key: 'web', name: 'Web', kind: 'docker', networkKeys: [], runtimeResourceId: 'container', primaryIp: null, status: 'running', error: null }],
 }
 const availability = { assetId: 1, assetName: 'Web', protocol: 'containerTerminal' as const, available: true, unavailableReason: null }
 const session: TeamLabRemoteSession = {

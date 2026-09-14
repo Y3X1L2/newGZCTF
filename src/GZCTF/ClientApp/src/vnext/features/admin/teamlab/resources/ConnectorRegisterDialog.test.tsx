@@ -5,6 +5,7 @@ import { ConnectorRegisterDialog } from './capabilityRegisterDialogs'
 
 vi.mock('./useTeamLabResources', () => ({
   useConnectorNodes: () => ({ data: [{ id: '01900000-0000-7000-8000-000000000083', name: '实验节点' }] }),
+  useConnectorInterfaces: () => ({ data: [], error: undefined, isLoading: false }),
 }))
 
 it('registers a dedicated NIC with the selected node and does not offer unsupported providers', async () => {
@@ -14,6 +15,7 @@ it('registers a dedicated NIC with the selected node and does not offer unsuppor
   fireEvent.change(screen.getByLabelText('名称（唯一标识）'), { target: { value: 'lab-nic' } })
   fireEvent.change(screen.getByLabelText('显示名称'), { target: { value: '实验专用网卡' } })
   fireEvent.change(screen.getByLabelText('所属节点'), { target: { value: '01900000-0000-7000-8000-000000000083' } })
+  fireEvent.click(screen.getByLabelText('手工填写'))
   fireEvent.change(screen.getByLabelText('专用网卡名称'), { target: { value: 'enp2s0' } })
   fireEvent.change(screen.getByLabelText('网卡 MAC 地址'), { target: { value: '02:00:00:00:00:83' } })
   expect(screen.getByRole('option', { name: '串口（尚未支持执行）' })).toBeDisabled()

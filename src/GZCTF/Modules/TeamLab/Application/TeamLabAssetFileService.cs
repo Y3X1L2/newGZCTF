@@ -20,11 +20,12 @@ public sealed class TeamLabAssetFileService(AppDbContext context, TeamLabAuthori
     public async Task<TeamLabFileResult> ExecuteAsync(Guid runtimeId, int assetId, Guid actorId, bool administrator,
         TeamLabAssetFileCommand command, CancellationToken token)
     {
-        if (!TeamLabFileLimits.IsValidPath(command.Path) || command.Operation is not ("list" or "download" or "upload" or "delete" or "reset-ssh-identity") ||
+        if (!TeamLabFileLimits.IsValidPath(command.Path) || command.Operation is not ("list" or "download" or "upload" or "delete" or "mkdir" or "move" or "reset-ssh-identity") ||
+            command.Operation == "move" && !TeamLabFileLimits.IsValidPath(command.DestinationPath) ||
             command.Content is { Length: > TeamLabFileLimits.MaxBytes } || command.Operation == "upload" && command.Content is null)
             throw new TeamLabApiContractException("files.invalid_request", "路径、操作或文件大小无效；单文件上限为 8 MiB。", 422);
         if ((command.Operation is "delete" or "reset-ssh-identity" || command.Overwrite) && !command.Confirmed)
-            throw new TeamLabApiContractException("files.confirmation_required", "删除或覆盖文件需要明确确认。", 422);
+            throw new TeamLabApiContractException("files.confirmation_required", "删除、覆盖或替换文件需要明确确认。", 422);
         var permission = command.Operation == "reset-ssh-identity" ? TeamLabRuntimePermission.LifecycleManage : TeamLabRuntimePermission.RemoteSessionOperate;
         await authorization.RequirePermissionAsync(runtimeId, actorId, administrator, permission, token);
         await using var lease = await leases.AcquireAsync($"teamlab:asset-files:{runtimeId:D}:{assetId}", TimeSpan.FromSeconds(5), TimeSpan.FromMinutes(2), token);
@@ -47,7 +48,8 @@ public sealed class TeamLabAssetFileService(AppDbContext context, TeamLabAuthori
         TeamLabFileResult result;
         if (asset.Kind == TeamLabResourceKind.Docker)
             result = await gateway.ExecuteAsync(asset.WorkerNodeId.Value, new(asset.RuntimeId, command.Generation,
-                asset.RuntimeResourceId, command.Operation, command.Path, command.Content, command.Overwrite), token);
+                asset.RuntimeResourceId, command.Operation, command.Path, command.Content, command.Overwrite,
+                command.DestinationPath, command.Recursive), token);
         else
         {
             var configuration = await context.ImageTemplateRemoteAccesses.AsNoTracking().SingleOrDefaultAsync(item => item.ImageTemplateId == asset.SourceTemplateId, token);
@@ -56,7 +58,8 @@ public sealed class TeamLabAssetFileService(AppDbContext context, TeamLabAuthori
                 throw new TeamLabApiContractException("files.ssh_configuration_missing", "VM 文件管理需要镜像已配置 SSH 运维账号，并已取得虚拟机执行身份和地址。", 409);
             var request = new TeamLabVmFileRequest(asset.RuntimeResourceId, command.Generation, identity, asset.IpAddress,
                 configuration.Port, configuration.Username, imageAccess.RevealSecret(configuration), command.Operation,
-                command.Path, command.Content, command.Overwrite, asset.SftpHostKeySha256);
+                command.Path, command.Content, command.Overwrite, asset.SftpHostKeySha256,
+                command.DestinationPath, command.Recursive);
             if (asset.SftpHostKeySha256 is null || command.Operation == "reset-ssh-identity")
             {
                 var probe = await gateway.ExecuteVmAsync(asset.WorkerNodeId.Value, request with { Operation = "probe", Content = null, HostKeySha256 = null }, token);
@@ -79,7 +82,8 @@ public sealed class TeamLabAssetFileService(AppDbContext context, TeamLabAuthori
             {
                 ["assetId"] = assetId, ["actorUserId"] = actorId, ["generation"] = command.Generation,
                 ["operation"] = command.Operation,
-                ["filePath"] = command.Path
+                ["filePath"] = command.Path,
+                ["destinationPath"] = command.DestinationPath
             });
         await context.SaveChangesAsync(token);
         return result;

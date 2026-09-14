@@ -7,7 +7,7 @@ const { read } = vi.hoisted(() => ({ read: vi.fn() }))
 vi.mock('./useVmDiagnostics', () => ({ useVmDiagnostics: read }))
 const runtime: TeamLabRuntime = { id: 'runtime-a', releaseId: 'release-a', generation: 3, status: 'running',
   stage: 'ready', openForAccess: true, shards: [], networks: [], createdAt: 0, updatedAt: null, error: null,
-  assets: [{ id: 1, key: 'vm', name: 'VM', kind: 'vm', status: 'running', runtimeResourceId: 'vm-a', primaryIp: null, error: null }] }
+  assets: [{ id: 1, key: 'vm', name: 'VM', kind: 'vm', networkKeys: [], status: 'running', runtimeResourceId: 'vm-a', primaryIp: null, error: null }] }
 
 describe('VmDiagnosticsPanel', () => {
   it('shows actual power state and refreshes without inventing guest health or logs', () => {

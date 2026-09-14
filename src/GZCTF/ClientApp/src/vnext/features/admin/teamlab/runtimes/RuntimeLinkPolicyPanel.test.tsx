@@ -53,7 +53,7 @@ describe('RuntimeLinkPolicyPanel', () => {
     render(
       <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
         <RuntimeLinkPolicyPanel
-          assets={[{ key: 'plc-1', name: 'PLC' }]}
+          assets={[{ key: 'plc-1', name: 'PLC', networkKeys: ['office'] }]}
           networks={[{ key: 'office', name: '办公网' }]}
           runtimeId={runtimeId}
         />

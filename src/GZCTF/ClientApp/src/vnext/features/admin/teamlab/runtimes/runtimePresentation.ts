@@ -14,10 +14,14 @@ export function isRuntimeTerminal(status: TeamLabRuntimeStatus | undefined) {
   return status ? terminalRuntimeStatuses.has(status) : false
 }
 
+export function isRuntimeTransitioning(status: TeamLabRuntimeStatus | undefined) {
+  return status ? ['pending', 'planning', 'scheduled', 'deploying', 'probing', 'cleanup-pending', 'destroying'].includes(status) : false
+}
+
 export function runtimeRefreshInterval(status: TeamLabRuntimeStatus | undefined) {
   if (!status) return 0
   if (isRuntimeTerminal(status)) return 0
-  return status === 'running' ? 8_000 : 2_500
+  return isRuntimeTransitioning(status) ? 2_500 : status === 'running' ? 15_000 : 0
 }
 
 export const runtimeStageOrder: readonly TeamLabRuntimeStatus[] = [
@@ -35,7 +39,7 @@ export const runtimeStatusLabels: Record<TeamLabRuntimeStatus, string> = {
   scheduled: '资源已预留',
   deploying: '部署资产',
   probing: '连通性探测',
-  running: '运行就绪',
+  running: '部署完成，环境运行中',
   failed: '执行失败',
   'cleanup-pending': '等待清理',
   paused: '已暂停',

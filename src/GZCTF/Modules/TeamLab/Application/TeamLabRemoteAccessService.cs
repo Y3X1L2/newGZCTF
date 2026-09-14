@@ -30,33 +30,65 @@ public sealed class TeamLabRemoteAccessService(
     private const int MaxActiveSessionsPerNode = 100;
 
     public async Task<TeamLabRemoteSessionPage> ListAsync(Guid actorId, bool administrator, Guid? runtimeId,
-        Guid? workerNodeId, Guid? requestedByUserId, TeamLabRemoteSessionStatus? status,
+        string? search, TeamLabRemoteProtocol? protocol, bool abnormalOnly, TeamLabRemoteSessionStatus? status,
         long? after, int limit, CancellationToken cancellationToken)
     {
-        if (limit is < 1 or > 100 || after is < 0 || status.HasValue && !Enum.IsDefined(status.Value))
+        if (limit is < 1 or > 100 || after is < 0 || status.HasValue && !Enum.IsDefined(status.Value) ||
+            protocol.HasValue && !Enum.IsDefined(protocol.Value) || search?.Length > 128)
             throw new TeamLabApiContractException("remote_session_filter_invalid", "会话查询条件无效", 400);
-        var query = context.TeamLabRemoteSessions.AsNoTracking().Include(item => item.Runtime)
-            .Include(item => item.RuntimeAsset).AsQueryable();
+        var sessions = context.TeamLabRemoteSessions.AsNoTracking().Include(item => item.Runtime)
+            .Include(item => item.RuntimeAsset).Include(item => item.WorkerNode)
+            .Include(item => item.RequestedBy).AsQueryable();
         if (runtimeId.HasValue)
         {
             await authorization.RequireAsync(runtimeId.Value, actorId, administrator,
                 TeamLabOperatorPermission.OperateAssets, cancellationToken);
-            query = query.Where(item => item.Runtime.PublicId == runtimeId);
+            sessions = sessions.Where(item => item.Runtime.PublicId == runtimeId);
         }
         else if (!administrator)
-            query = query.Where(item => item.RequestedByUserId == actorId);
-        if (workerNodeId.HasValue)
-            query = query.Where(item => item.WorkerNodeId == workerNodeId);
-        if (requestedByUserId.HasValue)
-            query = query.Where(item => item.RequestedByUserId == requestedByUserId);
+            sessions = sessions.Where(item => item.RequestedByUserId == actorId);
+        var keyword = search?.Trim().ToLowerInvariant();
+        if (!string.IsNullOrWhiteSpace(keyword))
+        {
+            var sessionId = Guid.TryParse(keyword, out var parsedSessionId) ? parsedSessionId : (Guid?)null;
+            sessions = sessions.Where(item => item.RuntimeAsset.Name.ToLower().Contains(keyword) ||
+                item.RuntimeAsset.TopologyKey.ToLower().Contains(keyword) ||
+                item.WorkerNode.Name.ToLower().Contains(keyword) ||
+                (item.RequestedBy.UserName != null && item.RequestedBy.UserName.ToLower().Contains(keyword)) ||
+                (item.RequestedBy.RealName != null && item.RequestedBy.RealName.ToLower().Contains(keyword)) ||
+                sessionId.HasValue && item.PublicId == sessionId.Value);
+        }
+        if (protocol.HasValue)
+            sessions = sessions.Where(item => item.Protocol == protocol);
+        if (abnormalOnly)
+            sessions = sessions.Where(item => item.Status == TeamLabRemoteSessionStatus.Failed);
         if (status.HasValue)
-            query = query.Where(item => item.Status == status);
+            sessions = sessions.Where(item => item.Status == status);
         if (after.HasValue)
-            query = query.Where(item => item.Id < after);
-        var rows = await query.OrderByDescending(item => item.Id).Take(limit + 1).ToArrayAsync(cancellationToken);
+            sessions = sessions.Where(item => item.Id < after);
+        var rows = await sessions.OrderByDescending(item => item.Id).Take(limit + 1).ToArrayAsync(cancellationToken);
         return new TeamLabRemoteSessionPage(rows.Take(limit).Select(item => new TeamLabRemoteSessionListItem(
-            ToModel(item, item.RuntimeAsset.Name, item.Runtime.PublicId), item.WorkerNodeId, item.RequestedByUserId)).ToArray(),
+            ToModel(item, item.RuntimeAsset.Name, item.Runtime.PublicId), item.WorkerNodeId, item.WorkerNode.Name,
+            item.RequestedByUserId, string.IsNullOrWhiteSpace(item.RequestedBy.RealName) ? item.RequestedBy.UserName ?? "未知用户" : item.RequestedBy.RealName)).ToArray(),
             rows.Length > limit ? rows[limit - 1].Id : null);
+    }
+
+    public async Task MarkInterruptedAsync(CancellationToken cancellationToken)
+    {
+        var sessions = await context.TeamLabRemoteSessions
+            .Where(item => item.Status == TeamLabRemoteSessionStatus.Creating ||
+                           item.Status == TeamLabRemoteSessionStatus.Ready ||
+                           item.Status == TeamLabRemoteSessionStatus.Connected ||
+                           item.Status == TeamLabRemoteSessionStatus.Ending)
+            .ToArrayAsync(cancellationToken);
+        var now = DateTimeOffset.UtcNow;
+        foreach (var session in sessions)
+        {
+            session.Status = TeamLabRemoteSessionStatus.Failed;
+            session.EndedAt = now;
+            session.EndReason = "service_restarted";
+        }
+        await context.SaveChangesAsync(cancellationToken);
     }
 
     public async Task<TeamLabRemoteAccessAvailabilityModel> GetAvailabilityAsync(

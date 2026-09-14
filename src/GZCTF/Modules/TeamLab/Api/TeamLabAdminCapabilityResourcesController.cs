@@ -40,6 +40,11 @@ public sealed class TeamLabAdminCapabilityResourcesController(
         [FromQuery] string? after = null) =>
         connectors.ListAsync(scopeId, after, limit, HttpContext.RequestAborted);
 
+    [HttpGet("connector-nodes/{nodeId:guid}/interfaces")]
+    public Task<IReadOnlyList<GZCTF.TeamLab.Contracts.TeamLabHostInterface>> ListNodeInterfaces(
+        Guid nodeId, CancellationToken cancellationToken) =>
+        connectors.GetNodeInterfacesAsync(nodeId, cancellationToken);
+
     [HttpGet("resource-pools")]
     [ProducesResponseType(typeof(TeamLabResourcePoolSnapshotModel), StatusCodes.Status200OK)]
     public Task<TeamLabResourcePoolSnapshotModel> ResourcePoolSnapshot() =>

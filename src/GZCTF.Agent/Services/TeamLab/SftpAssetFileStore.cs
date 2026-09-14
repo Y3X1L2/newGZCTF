@@ -15,7 +15,8 @@ internal static class SftpAssetFileStore
     {
         if (!TeamLabFileLimits.IsValidPath(request.Path) || request.Port is < 1 or > 65535 ||
             string.IsNullOrWhiteSpace(request.Username) || request.Credential.Length is 0 or > 8192 ||
-            request.Operation is not ("probe" or "list" or "download" or "upload" or "delete") ||
+            request.Operation is not ("probe" or "list" or "download" or "upload" or "delete" or "mkdir" or "move") ||
+            request.Operation == "move" && !TeamLabFileLimits.IsValidPath(request.DestinationPath) ||
             request.Content is { Length: > TeamLabFileLimits.MaxBytes })
             throw Failure("files.invalid_request", "SFTP 请求无效。");
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(token);
@@ -54,9 +55,25 @@ internal static class SftpAssetFileStore
             }
             if (path == "/") throw Failure("files.invalid_path", "不能修改文件系统根目录。");
             var exists = await client.ExistsAsync(path, token);
-            if (!exists && request.Operation is "download" or "delete") throw Failure("files.not_found", "未找到文件或目录。");
+            if (!exists && request.Operation is "download" or "delete" or "move") throw Failure("files.not_found", "未找到文件或目录。");
             var attributes = exists ? await client.GetAttributesAsync(path, token) : null;
             if (attributes?.IsSymbolicLink == true) throw Failure("files.restricted", "文件操作不跟随符号链接。");
+            if (request.Operation == "mkdir")
+            {
+                if (exists) throw Failure("files.destination_exists", "目标目录已存在。");
+                await client.CreateDirectoryAsync(path, token);
+                return new(HostKeySha256: fingerprint);
+            }
+            if (request.Operation == "move")
+            {
+                var destination = request.DestinationPath!.TrimEnd('/');
+                if (destination.Length == 0) throw Failure("files.invalid_path", "不能替换文件系统根目录。");
+                if (await client.ExistsAsync(destination, token) && !request.Overwrite)
+                    throw Failure("files.destination_exists", "目标名称已存在。");
+                if (request.Overwrite) client.RenameFile(path, destination, isPosix: true);
+                else await client.RenameFileAsync(path, destination, token);
+                return new(HostKeySha256: fingerprint);
+            }
             if (request.Operation == "download")
             {
                 if (attributes is not { IsRegularFile: true } || attributes.Size > TeamLabFileLimits.MaxBytes)
@@ -74,7 +91,8 @@ internal static class SftpAssetFileStore
             }
             if (request.Operation == "delete")
             {
-                if (attributes?.IsDirectory == true) await client.DeleteDirectoryAsync(path, token);
+                if (attributes?.IsDirectory == true && request.Recursive) await DeleteTreeAsync(client, path, token);
+                else if (attributes?.IsDirectory == true) await client.DeleteDirectoryAsync(path, token);
                 else if (attributes?.IsRegularFile == true) await client.DeleteFileAsync(path, token);
                 else throw Failure("files.unavailable", "只能删除普通文件或空目录。");
                 return new(HostKeySha256: fingerprint);
@@ -132,6 +150,20 @@ internal static class SftpAssetFileStore
         catch (SftpPathNotFoundException) { throw Failure("files.not_found", "未找到文件或目录。"); }
         catch (SftpPermissionDeniedException) { throw Failure("files.permission_denied", "SSH 账号没有操作此路径的权限。"); }
         catch (SshException) { throw Failure("files.sftp_failed", "SFTP 操作失败，请检查目录权限、目标文件和虚拟机 SSH 服务。"); }
+    }
+
+    static async Task DeleteTreeAsync(SftpClient client, string path, CancellationToken token)
+    {
+        await foreach (var entry in client.ListDirectoryAsync(path, token))
+        {
+            if (entry.Name is "." or "..") continue;
+            if (entry.IsSymbolicLink) throw Failure("files.restricted", "递归删除不处理符号链接。");
+            var child = path.TrimEnd('/') + "/" + entry.Name;
+            if (entry.IsDirectory) await DeleteTreeAsync(client, child, token);
+            else if (entry.IsRegularFile) await client.DeleteFileAsync(child, token);
+            else throw Failure("files.restricted", "递归删除不处理特殊文件。");
+        }
+        await client.DeleteDirectoryAsync(path, token);
     }
 
     static async Task CleanupStagingAsync(SftpClient client, string parent, CancellationToken token)

@@ -43,6 +43,7 @@ public sealed record TeamLabRuntimeAssetProjectionModel(
     string Key,
     string Name,
     TeamLabAssetKind Kind,
+    IReadOnlyList<string> NetworkKeys,
     string? RuntimeResourceId,
     string? PrimaryIp,
     TeamLabRuntimeStatus Status,

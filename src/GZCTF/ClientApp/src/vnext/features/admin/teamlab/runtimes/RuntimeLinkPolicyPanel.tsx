@@ -15,16 +15,9 @@ import {
 import { useRuntimeLinkPolicies, type TeamLabLinkPolicyStatusFilter } from './useRuntimeLinkPolicies'
 import styles from './RuntimePanels.module.css'
 
-const policyParameterTemplates: Record<TeamLabLinkPolicyKind, string> = {
-  latency: '{"delayMillis": 100}',
-  jitter: '{"jitterMillis": 20}',
-  'packet-loss': '{"lossPercent": 5}',
-  duplication: '{"duplicatePercent": 2}',
-  'bandwidth-limit': '{"rateMbps": 10}',
-  'link-break': '{}',
-  'access-rule': '{"direction": "inbound", "action": "deny", "protocol": "tcp", "sourceCidr": "10.0.0.0/8"}',
-  nat: '{"mode": "snat", "translatedAddress": "172.16.0.9"}',
-}
+const linkPolicyKinds: readonly Exclude<TeamLabLinkPolicyKind, 'nat'>[] = [
+  'latency', 'jitter', 'packet-loss', 'duplication', 'bandwidth-limit', 'link-break', 'access-rule',
+]
 
 const statusTones = { active: 'info', recovered: 'success', failed: 'danger' } as const
 
@@ -34,7 +27,7 @@ export function RuntimeLinkPolicyPanel({
   runtimeId,
 }: {
   networks: readonly { key: string; name: string }[]
-  assets: readonly { key: string; name: string }[]
+  assets: readonly { key: string; name: string; networkKeys: readonly string[] }[]
   runtimeId: string
 }) {
   const [status, setStatus] = useState<TeamLabLinkPolicyStatusFilter>('active')
@@ -69,7 +62,7 @@ export function RuntimeLinkPolicyPanel({
         </ActionButton>
       </header>
       <p className={styles.panelHint}>
-        策略作用于运行时网段或单个资产：时延、丢包、限速、断链等损伤可设定时自动恢复，访问控制与 NAT 由执行面下发。
+        策略可作用于整个网段，也可限定到该网段中的一个资产。NAT 和公网端口请在资产的“服务开放”中配置。
       </p>
       <FilterToolbar>
         <ToolbarGroup>
@@ -165,7 +158,7 @@ function ApplyLinkPolicyDialog({
   open,
   runtimeId,
 }: {
-  assets: readonly { key: string; name: string }[]
+  assets: readonly { key: string; name: string; networkKeys: readonly string[] }[]
   networks: readonly { key: string; name: string }[]
   onClose: () => void
   onApplied: () => void
@@ -173,10 +166,18 @@ function ApplyLinkPolicyDialog({
   runtimeId: string
 }) {
   const formId = useId()
-  const [kind, setKind] = useState<TeamLabLinkPolicyKind>('latency')
+  const [kind, setKind] = useState<Exclude<TeamLabLinkPolicyKind, 'nat'>>('latency')
   const [networkKey, setNetworkKey] = useState(networks[0]?.key ?? '')
   const [assetKey, setAssetKey] = useState('')
-  const [parameters, setParameters] = useState(policyParameterTemplates.latency)
+  const [value, setValue] = useState('100')
+  const [burst, setBurst] = useState('')
+  const [direction, setDirection] = useState('inbound')
+  const [action, setAction] = useState('deny')
+  const [protocol, setProtocol] = useState('tcp')
+  const [sourceCidr, setSourceCidr] = useState('')
+  const [destinationCidr, setDestinationCidr] = useState('')
+  const [sourcePort, setSourcePort] = useState('')
+  const [destinationPort, setDestinationPort] = useState('')
   const [recoverMinutes, setRecoverMinutes] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<unknown>(null)
@@ -186,21 +187,28 @@ function ApplyLinkPolicyDialog({
     setSubmitting(true)
     setError(null)
     try {
-      let parsedParameters: unknown = undefined
-      const trimmed = parameters.trim()
-      if (trimmed) {
-        parsedParameters = JSON.parse(trimmed)
-        if (typeof parsedParameters !== 'object' || parsedParameters === null || Array.isArray(parsedParameters)) {
-          throw new Error('策略参数必须是 JSON 对象')
-        }
-      }
+      const number = Number(value)
+      const optionalNumber = (input: string) => input ? Number(input) : undefined
+      const parameters = kind === 'latency' ? { delayMillis: number }
+        : kind === 'jitter' ? { jitterMillis: number }
+        : kind === 'packet-loss' ? { lossPercent: number }
+        : kind === 'duplication' ? { duplicatePercent: number }
+        : kind === 'bandwidth-limit' ? { rateMbps: number, burstKilobytes: optionalNumber(burst) }
+        : kind === 'access-rule' ? {
+            direction, action, protocol,
+            sourceCidr: sourceCidr || undefined,
+            destinationCidr: destinationCidr || undefined,
+            sourcePort: optionalNumber(sourcePort),
+            destinationPort: optionalNumber(destinationPort),
+          }
+        : {}
       const minutes = Number(recoverMinutes)
       await teamLabRuntimeApi.applyLinkPolicy(runtimeId, {
         runtimeId,
         networkKey,
         assetKey: assetKey || null,
         kind,
-        parameters: parsedParameters,
+        parameters,
         recoverAt:
           Number.isFinite(minutes) && minutes > 0
             ? new Date(Date.now() + minutes * 60_000).toISOString()
@@ -238,13 +246,13 @@ function ApplyLinkPolicyDialog({
           aria-label="策略类型"
           id={`${formId}-kind`}
           onChange={(event) => {
-            const next = event.currentTarget.value as TeamLabLinkPolicyKind
+            const next = event.currentTarget.value as Exclude<TeamLabLinkPolicyKind, 'nat'>
             setKind(next)
-            setParameters(policyParameterTemplates[next])
+            setValue(next === 'latency' ? '100' : next === 'jitter' ? '20' : next === 'bandwidth-limit' ? '10' : '5')
           }}
           value={kind}
         >
-          {(Object.keys(linkPolicyKindLabels) as TeamLabLinkPolicyKind[]).map((key) => (
+          {linkPolicyKinds.map((key) => (
             <option key={key} value={key}>
               {linkPolicyKindLabels[key]}
             </option>
@@ -254,7 +262,10 @@ function ApplyLinkPolicyDialog({
         <select
           aria-label="目标网段"
           id={`${formId}-network`}
-          onChange={(event) => setNetworkKey(event.currentTarget.value)}
+          onChange={(event) => {
+            setNetworkKey(event.currentTarget.value)
+            setAssetKey('')
+          }}
           value={networkKey}
         >
           {networks.map((network) => (
@@ -271,19 +282,33 @@ function ApplyLinkPolicyDialog({
           value={assetKey}
         >
           <option value="">整个网段</option>
-          {assets.map((asset) => (
+          {assets.filter((asset) => asset.networkKeys.includes(networkKey)).map((asset) => (
             <option key={asset.key} value={asset.key}>
               {asset.name} ({asset.key})
             </option>
           ))}
         </select>
-        <label htmlFor={`${formId}-parameters`}>策略参数（JSON）</label>
-        <textarea
-          aria-label="策略参数"
-          id={`${formId}-parameters`}
-          onChange={(event) => setParameters(event.currentTarget.value)}
-          rows={4}
-          value={parameters}
+        <PolicyFields
+          action={action}
+          burst={burst}
+          destinationCidr={destinationCidr}
+          destinationPort={destinationPort}
+          direction={direction}
+          formId={formId}
+          kind={kind}
+          protocol={protocol}
+          setAction={setAction}
+          setBurst={setBurst}
+          setDestinationCidr={setDestinationCidr}
+          setDestinationPort={setDestinationPort}
+          setDirection={setDirection}
+          setProtocol={setProtocol}
+          setSourceCidr={setSourceCidr}
+          setSourcePort={setSourcePort}
+          setValue={setValue}
+          sourceCidr={sourceCidr}
+          sourcePort={sourcePort}
+          value={value}
         />
         <label htmlFor={`${formId}-recover`}>定时恢复（分钟，可选）</label>
         <input
@@ -299,4 +324,58 @@ function ApplyLinkPolicyDialog({
       </div>
     </VNextDialog>
   )
+}
+
+type SetValue = (value: string) => void
+
+function PolicyFields({
+  action, burst, destinationCidr, destinationPort, direction, formId, kind, protocol,
+  setAction, setBurst, setDestinationCidr, setDestinationPort, setDirection, setProtocol,
+  setSourceCidr, setSourcePort, setValue, sourceCidr, sourcePort, value,
+}: {
+  action: string; burst: string; destinationCidr: string; destinationPort: string; direction: string
+  formId: string; kind: Exclude<TeamLabLinkPolicyKind, 'nat'>; protocol: string
+  setAction: SetValue; setBurst: SetValue; setDestinationCidr: SetValue; setDestinationPort: SetValue
+  setDirection: SetValue; setProtocol: SetValue; setSourceCidr: SetValue; setSourcePort: SetValue
+  setValue: SetValue; sourceCidr: string; sourcePort: string; value: string
+}) {
+  if (kind === 'link-break') return <p className={styles.panelHint}>应用后该链路会立即中断，恢复策略后重新连通。</p>
+  if (kind === 'access-rule') return <>
+    <label htmlFor={`${formId}-direction`}>方向</label>
+    <select id={`${formId}-direction`} onChange={(event) => setDirection(event.currentTarget.value)} value={direction}>
+      <option value="inbound">进入资产</option><option value="outbound">离开资产</option><option value="both">双向</option>
+    </select>
+    <label htmlFor={`${formId}-action`}>处理</label>
+    <select id={`${formId}-action`} onChange={(event) => setAction(event.currentTarget.value)} value={action}>
+      <option value="deny">阻断</option><option value="allow">允许</option>
+    </select>
+    <label htmlFor={`${formId}-protocol`}>协议</label>
+    <select id={`${formId}-protocol`} onChange={(event) => setProtocol(event.currentTarget.value)} value={protocol}>
+      <option value="any">全部</option><option value="tcp">TCP</option><option value="udp">UDP</option><option value="icmp">ICMP</option>
+    </select>
+    <label htmlFor={`${formId}-source-cidr`}>来源地址（可选）</label>
+    <input id={`${formId}-source-cidr`} onChange={(event) => setSourceCidr(event.currentTarget.value)} placeholder="例如 10.10.0.0/24" value={sourceCidr} />
+    <label htmlFor={`${formId}-destination-cidr`}>目标地址（可选）</label>
+    <input id={`${formId}-destination-cidr`} onChange={(event) => setDestinationCidr(event.currentTarget.value)} placeholder="例如 10.20.0.10/32" value={destinationCidr} />
+    {protocol === 'tcp' || protocol === 'udp' ? <>
+      <label htmlFor={`${formId}-source-port`}>来源端口（可选）</label>
+      <input id={`${formId}-source-port`} max={65535} min={1} onChange={(event) => setSourcePort(event.currentTarget.value)} type="number" value={sourcePort} />
+      <label htmlFor={`${formId}-destination-port`}>目标端口（可选）</label>
+      <input id={`${formId}-destination-port`} max={65535} min={1} onChange={(event) => setDestinationPort(event.currentTarget.value)} type="number" value={destinationPort} />
+    </> : null}
+  </>
+
+  const field = kind === 'latency' ? ['时延', '毫秒', 1, 10000]
+    : kind === 'jitter' ? ['抖动', '毫秒', 0, 5000]
+    : kind === 'packet-loss' ? ['丢包率', '%', 0, 100]
+    : kind === 'duplication' ? ['重复率', '%', 0, 100]
+    : ['带宽', 'Mbps', 0.1, 100000]
+  return <>
+    <label htmlFor={`${formId}-value`}>{field[0]}（{field[1]}）</label>
+    <input id={`${formId}-value`} max={field[3]} min={field[2]} onChange={(event) => setValue(event.currentTarget.value)} required step="any" type="number" value={value} />
+    {kind === 'bandwidth-limit' ? <>
+      <label htmlFor={`${formId}-burst`}>突发容量（KiB，可选）</label>
+      <input id={`${formId}-burst`} min={0} onChange={(event) => setBurst(event.currentTarget.value)} type="number" value={burst} />
+    </> : null}
+  </>
 }

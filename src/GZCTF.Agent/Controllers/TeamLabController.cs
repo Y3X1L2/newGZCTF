@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using GZCTF.TeamLab.Contracts;
 using GZCTF.TeamLab.Contracts.Execution;
+using System.Net.NetworkInformation;
 
 namespace GZCTF.Agent.Controllers;
 
@@ -26,10 +27,28 @@ public class TeamLabController(
     AgentOperationGate gate,
     TeamLabExecutionPlanExecutor executionPlans,
     TeamLabLinkPolicyService linkPolicies,
+    TeamLabServiceAccessService serviceAccess,
     IOptions<AgentTeamLabConfig> teamLabOptions) : ControllerBase
 {
     [HttpGet("status")]
     public async Task<IActionResult> Status(CancellationToken token) => Ok(await service.GetStatusAsync(token));
+
+    [HttpGet("interfaces")]
+    public IReadOnlyList<TeamLabHostInterface> Interfaces() => NetworkInterface.GetAllNetworkInterfaces()
+        .Where(item => item.NetworkInterfaceType is NetworkInterfaceType.Ethernet or NetworkInterfaceType.Wireless80211 &&
+                       !item.Name.StartsWith("veth", StringComparison.Ordinal) &&
+                       !item.Name.StartsWith("br-", StringComparison.Ordinal) &&
+                       !item.Name.StartsWith("virbr", StringComparison.Ordinal) &&
+                       !item.Name.StartsWith("docker", StringComparison.Ordinal) &&
+                       !item.Name.StartsWith("gz", StringComparison.Ordinal))
+        .OrderBy(item => item.Name, StringComparer.Ordinal)
+        .Select(item => new TeamLabHostInterface(
+            item.Name,
+            item.GetPhysicalAddress().ToString().Chunk(2).Select(chars => new string(chars)).Aggregate(string.Empty,
+                (current, part) => current.Length == 0 ? part : current + ":" + part).ToLowerInvariant(),
+            item.OperationalStatus == OperationalStatus.Up,
+            item.GetIPProperties().UnicastAddresses.Select(address => address.Address.ToString()).ToArray()))
+        .ToArray();
 
     [HttpPost("execution-plan/apply")]
     public async Task<IActionResult> ApplyExecutionPlan(
@@ -228,6 +247,22 @@ public class TeamLabController(
     {
         await using var permit = await gate.EnterAsync(AgentOperationCategory.TeamLabNetwork, token);
         return Ok(await linkPolicies.RecoverAsync(request, token));
+    }
+
+    [HttpPost("service-access/apply")]
+    public async Task<IActionResult> ApplyServiceAccess(TeamLabServiceForwardRequest request, CancellationToken token)
+    {
+        await using var permit = await gate.EnterAsync(AgentOperationCategory.TeamLabNetwork, token);
+        await serviceAccess.ApplyAsync(request, token);
+        return Ok();
+    }
+
+    [HttpPost("service-access/remove")]
+    public async Task<IActionResult> RemoveServiceAccess(TeamLabServiceForwardRequest request, CancellationToken token)
+    {
+        await using var permit = await gate.EnterAsync(AgentOperationCategory.Control, token);
+        await serviceAccess.RemoveAsync(request, token);
+        return Ok();
     }
 
     private async Task<TeamLabAssetLifecycleResponse> ChangeAssetLifecycleAsync(

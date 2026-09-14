@@ -5,7 +5,8 @@ import { downloadFileUrl } from '@Utils/downloadFileUrl'
 export interface AssetFileEntry { name: string; kind: string; size: number }
 export const assetFileLimit = 8 * 1024 * 1024
 export async function executeAssetFile(runtimeId: string, assetId: number, generation: number,
-  operation: 'list' | 'upload' | 'download' | 'delete' | 'reset-ssh-identity', path: string, file?: File, confirmed = false) {
+  operation: 'list' | 'upload' | 'download' | 'delete' | 'mkdir' | 'move' | 'reset-ssh-identity', path: string,
+  file?: File, confirmed = false, destinationPath?: string, recursive = false) {
   if (operation === 'download') {
     const query = new URLSearchParams({ generation: String(generation), path })
     downloadFileUrl(`/api/admin/teamlab/runtimes/${encodeURIComponent(runtimeId)}/assets/${assetId}/files/download?${query}`, path.split('/').at(-1) || 'download')
@@ -22,7 +23,7 @@ export async function executeAssetFile(runtimeId: string, assetId: number, gener
   }
   const result = parse.record(await runtimeJsonClient.postJson(
     `/api/admin/teamlab/runtimes/${encodeURIComponent(runtimeId)}/assets/${assetId}/files`,
-    { generation, operation, path, content, overwrite: operation === 'upload' && confirmed, confirmed }
+    { generation, operation, path, content, overwrite: operation === 'upload' && confirmed, confirmed, destinationPath, recursive }
   ), '资产文件')
   return result.entries == null ? [] : parse.array(result.entries, '目录', (value, label): AssetFileEntry => {
     const entry = parse.record(value, label)
