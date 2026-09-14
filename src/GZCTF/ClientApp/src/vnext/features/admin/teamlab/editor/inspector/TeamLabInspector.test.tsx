@@ -178,7 +178,29 @@ describe('TeamLabInspector', () => {
     expect(screen.queryByRole('textbox', { name: /secret/i })).not.toBeInTheDocument()
   })
 
-  it('updates membership, route and dependency connections with dedicated editors', () => {
+  it('keeps asset endpoint observation in a collapsed advanced section', () => {
+    const onDocumentChange = vi.fn()
+    render(
+      <TeamLabInspector
+        document={createDocument()}
+        onDocumentChange={onDocumentChange}
+        selection={selection(['app'])}
+      />
+    )
+
+    const advanced = screen.getByText('高级选项').closest('details')
+    expect(advanced).not.toHaveAttribute('open')
+    fireEvent.click(screen.getByText('高级选项'))
+    expect(advanced).toHaveAttribute('open')
+    const endpointMode = advanced?.querySelector('select')
+    expect(endpointMode).not.toBeNull()
+    fireEvent.change(endpointMode!, { target: { value: 'disabled' } })
+    expect((onDocumentChange.mock.calls[0][0] as TopologyDocument).nodes.app).toMatchObject({
+      endpointObservation: 'disabled',
+    })
+  })
+
+  it('updates membership and route connections without presenting legacy dependencies', () => {
     const membershipChange = vi.fn()
     const membershipView = render(
       <TeamLabInspector
@@ -217,10 +239,9 @@ describe('TeamLabInspector', () => {
         selection={selection([], ['dependency'])}
       />
     )
-    fireEvent.change(screen.getByLabelText('就绪条件'), { target: { value: 'guest-ready' } })
-    expect((dependencyChange.mock.calls[0][0] as TopologyDocument).connections.dependency).toMatchObject({
-      condition: 'guest-ready',
-    })
+    expect(screen.queryByText(/启动依赖/)).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('就绪条件')).not.toBeInTheDocument()
+    expect(dependencyChange).not.toHaveBeenCalled()
   })
 
   it('edits document observation with no selection and summarizes multiple selections', () => {

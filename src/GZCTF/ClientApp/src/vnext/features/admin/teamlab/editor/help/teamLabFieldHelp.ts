@@ -19,9 +19,9 @@ export const teamLabFieldHelp: Readonly<Record<string, TeamLabFieldHelp>> = {
   },
   endpointObservation: {
     key: 'endpointObservation',
-    title: '端点观测',
+    title: '端点观测（高级）',
     description:
-      '作用：决定是否采集该资产参与通信时的流量信息。何时使用：需要在运行后定位跨资产通信路径时。如何操作：普通资产选“可选”；必须留存观测证据的资产选“必需”；无需观测时选“禁用”。结果：必需模式在观测能力不可用时会阻断发布。',
+      '作用：决定是否采集该资产参与通信时的流量信息。默认禁用；仅在需要定位跨资产通信路径时选“可选”，必须留存观测证据时选“必需”。必需模式在观测能力不可用时会阻断发布。',
   },
   healthChecks: {
     key: 'healthChecks',

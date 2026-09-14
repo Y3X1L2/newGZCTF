@@ -16,18 +16,29 @@
 
 /* An intra-network membership link is structural context: quiet and thin. */
 .membership {
-  stroke: color-mix(in srgb, var(--yn-color-brand) 45%, var(--yn-color-border-strong));
+  stroke: color-mix(in srgb, var(--network-accent, var(--yn-color-brand)) 58%, var(--yn-color-border-strong));
+}
+
+.membership[data-color-slot='brand'] {
+  --network-accent: var(--yn-color-brand);
+}
+
+.membership[data-color-slot='info'] {
+  --network-accent: var(--yn-color-info);
+}
+
+.membership[data-color-slot='success'] {
+  --network-accent: var(--yn-color-success);
+}
+
+.membership[data-color-slot='warning'] {
+  --network-accent: var(--yn-color-warning);
 }
 
 /* A route between networks carries the topology's meaning: strongest weight. */
 .route {
   stroke: var(--yn-color-brand-strong);
   stroke-width: 2.25;
-}
-
-.dependency {
-  stroke: var(--yn-color-warning);
-  stroke-dasharray: 6 5;
 }
 
 .traffic {

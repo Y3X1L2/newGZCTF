@@ -18,8 +18,8 @@ describe('canvas commands', () => {
     const router = Object.values(document.nodes).find((node) => node.type === 'router')
     if (!left || !right || !router) throw new Error('Fixture is incomplete.')
 
-    document = connectCanvasNodes(document, router.key, left.key, 'network')
-    document = connectCanvasNodes(document, router.key, right.key, 'network')
+    document = connectCanvasNodes(document, router.key, left.key)
+    document = connectCanvasNodes(document, router.key, right.key)
 
     expect(Object.values(document.connections).filter((connection) => connection.type === 'membership')).toHaveLength(2)
     expect(Object.values(document.connections).filter((connection) => connection.type === 'route')).toHaveLength(1)
@@ -30,6 +30,6 @@ describe('canvas commands', () => {
     document = addTopologyNode(document, createTopologyNode(document, 'docker', { x: 0, y: 0 })).document
     document = addTopologyNode(document, createTopologyNode(document, 'linux-vm', { x: 200, y: 0 })).document
     const keys = Object.keys(document.nodes)
-    expect(() => connectCanvasNodes(document, keys[0], keys[1], 'network')).toThrow('交换机')
+    expect(() => connectCanvasNodes(document, keys[0], keys[1])).toThrow('交换机')
   })
 })

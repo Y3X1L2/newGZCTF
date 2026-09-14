@@ -30,13 +30,12 @@ import type { TeamLabFlowEdge } from '../edges/edgeTypes'
 import { buildTopologyGraph, type TopologyGraph } from '../layout/topologyGraph'
 import { teamLabNodeTypes } from '../nodes'
 import type { TeamLabFlowNode } from '../nodes/nodeTypes'
+import { teamLabPaletteMime } from '../palette/NodePalette'
 import {
   networkRegionNodeId,
   type TeamLabRegionActions,
   type TeamLabRegionFlowNode,
 } from '../regions/NetworkRegionNode'
-import { teamLabPaletteMime } from '../palette/NodePalette'
-import type { CanvasConnectionMode } from '../state/canvasCommands'
 import styles from './TeamLabCanvas.module.css'
 import { TeamLabCanvasToolbar } from './TeamLabCanvasToolbar'
 import { TeamLabMiniMap } from './TeamLabMiniMap'
@@ -291,9 +290,10 @@ function selectionSignature(nodeKeys: readonly string[], connectionKeys: readonl
 }
 
 function flowEdges(document: TopologyDocument): TeamLabFlowEdge[] {
-  return Object.values(document.connections).map((connection) => {
+  const edges: TeamLabFlowEdge[] = []
+  for (const connection of Object.values(document.connections)) {
     if (connection.type === 'membership') {
-      return {
+      edges.push({
         id: connection.key,
         source: connection.nodeKey,
         target: connection.switchKey,
@@ -302,11 +302,17 @@ function flowEdges(document: TopologyDocument): TeamLabFlowEdge[] {
         zIndex: edgeLayer(false),
         // A membership link inside one region needs no label: it would repeat the
         // region title on every device. Only the primary NIC is worth marking.
-        data: { connection, label: connection.primary ? '主网卡' : '', tone: 'membership' },
-      }
+        data: {
+          connection,
+          label: connection.primary ? '主网卡' : '',
+          tone: 'membership',
+          networkKey: switchOf(document, connection.switchKey)?.networkKey ?? connection.switchKey,
+        },
+      })
+      continue
     }
     if (connection.type === 'route') {
-      return {
+      edges.push({
         id: connection.key,
         source: connection.fromSwitchKey,
         target: connection.toSwitchKey,
@@ -315,26 +321,20 @@ function flowEdges(document: TopologyDocument): TeamLabFlowEdge[] {
         zIndex: edgeLayer(false),
         markerStart: connection.direction === 'bidirectional' ? { type: MarkerType.ArrowClosed } : undefined,
         markerEnd: { type: MarkerType.ArrowClosed },
-        data: { connection, label: connection.direction === 'bidirectional' ? '双向路由' : '单向路由', tone: 'route' },
-      }
+        data: {
+          connection,
+          label: connection.direction === 'bidirectional' ? '双向路由' : '单向路由',
+          tone: 'route',
+        },
+      })
     }
-    return {
-      id: connection.key,
-      source: connection.dependsOnKey,
-      target: connection.assetKey,
-      type: 'dependency',
-      selected: false,
-      zIndex: edgeLayer(false),
-      markerEnd: { type: MarkerType.ArrowClosed },
-      data: { connection, label: connection.condition, tone: 'dependency' },
-    }
-  })
+  }
+  return edges
 }
 
 interface TeamLabCanvasProps {
   document: TopologyDocument
   selection: TopologySelection
-  connectionMode: CanvasConnectionMode
   readOnly: boolean
   canUndo: boolean
   canRedo: boolean
@@ -460,16 +460,13 @@ function TeamLabCanvasInner(props: TeamLabCanvasProps) {
     return () => window.cancelAnimationFrame(firstFrame)
   }, [flow, props.focusMode, props.leftPanelOpen, props.rightPanelOpen])
 
-  const onNodesChange = useCallback(
-    (changes: NodeChange<FlowNode>[]) => {
-      // Region containers are not topology items, but their selection changes must
-      // still be acknowledged in React Flow's controlled node state. Dropping them
-      // leaves React Flow's internal selection different from `nodes`, which causes
-      // marquee selection to continuously attempt the same synchronization.
-      if (changes.length) setNodes((current) => applyNodeChanges(changes, current))
-    },
-    []
-  )
+  const onNodesChange = useCallback((changes: NodeChange<FlowNode>[]) => {
+    // Region containers are not topology items, but their selection changes must
+    // still be acknowledged in React Flow's controlled node state. Dropping them
+    // leaves React Flow's internal selection different from `nodes`, which causes
+    // marquee selection to continuously attempt the same synchronization.
+    if (changes.length) setNodes((current) => applyNodeChanges(changes, current))
+  }, [])
   const onEdgesChange = useCallback(
     (changes: EdgeChange<TeamLabFlowEdge>[]) => setEdges((current) => applyEdgeChanges(changes, current)),
     []
@@ -482,10 +479,13 @@ function TeamLabCanvasInner(props: TeamLabCanvasProps) {
     },
     [props.onConnectNodes]
   )
-  const onNodeClick = useCallback<NodeMouseHandler<FlowNode>>((_event, node) => {
-    if (node.type !== 'region') return
-    props.onNetworkRegionSelect(node.data.networkKey)
-  }, [props.onNetworkRegionSelect])
+  const onNodeClick = useCallback<NodeMouseHandler<FlowNode>>(
+    (_event, node) => {
+      if (node.type !== 'region') return
+      props.onNetworkRegionSelect(node.data.networkKey)
+    },
+    [props.onNetworkRegionSelect]
+  )
   const onPaneClick = useCallback(() => props.onNetworkRegionSelect(null), [props.onNetworkRegionSelect])
   const onNodeDragStart = useCallback<OnNodeDrag<FlowNode>>(
     (_event, node) => {
@@ -503,24 +503,21 @@ function TeamLabCanvasInner(props: TeamLabCanvasProps) {
     },
     [graph, props.document]
   )
-  const onNodeDrag = useCallback<OnNodeDrag<FlowNode>>(
-    (_event, node) => {
-      if (node.type !== 'region') return
-      const snapshot = regionDragSnapshots.current.get(node.id)
-      if (!snapshot) return
-      const delta = {
-        x: node.position.x - snapshot.regionPosition.x,
-        y: node.position.y - snapshot.regionPosition.y,
-      }
-      setNodes((current) =>
-        current.map((candidate) => {
-          const origin = snapshot.memberPositions.get(candidate.id)
-          return origin ? { ...candidate, position: { x: origin.x + delta.x, y: origin.y + delta.y } } : candidate
-        })
-      )
-    },
-    []
-  )
+  const onNodeDrag = useCallback<OnNodeDrag<FlowNode>>((_event, node) => {
+    if (node.type !== 'region') return
+    const snapshot = regionDragSnapshots.current.get(node.id)
+    if (!snapshot) return
+    const delta = {
+      x: node.position.x - snapshot.regionPosition.x,
+      y: node.position.y - snapshot.regionPosition.y,
+    }
+    setNodes((current) =>
+      current.map((candidate) => {
+        const origin = snapshot.memberPositions.get(candidate.id)
+        return origin ? { ...candidate, position: { x: origin.x + delta.x, y: origin.y + delta.y } } : candidate
+      })
+    )
+  }, [])
   const onNodeDragStop = useCallback<OnNodeDrag<FlowNode>>(
     (_event, _node, draggedNodes) => {
       const positions = new Map<string, { x: number; y: number }>()
@@ -545,7 +542,8 @@ function TeamLabCanvasInner(props: TeamLabCanvasProps) {
     },
     [graph, props.document, props.onMoveNodes, props.onMoveRegion]
   )
-  const onNodeDoubleClick = useCallback<NodeMouseHandler<FlowNode>>((_event, node) => {
+  const onNodeDoubleClick = useCallback<NodeMouseHandler<FlowNode>>(
+    (_event, node) => {
       if (node.type !== 'region') return
       const memberKeys = graph.membersByNetwork.get(node.data.networkKey) ?? []
       if (memberKeys.length === 0) return
@@ -569,11 +567,7 @@ function TeamLabCanvasInner(props: TeamLabCanvasProps) {
   )
 
   return (
-    <div
-      className={`${styles.canvas} ${detailLevelClass[detailLevel]}`.trimEnd()}
-      data-connection-mode={props.connectionMode}
-      data-detail-level={detailLevel}
-    >
+    <div className={`${styles.canvas} ${detailLevelClass[detailLevel]}`.trimEnd()} data-detail-level={detailLevel}>
       <ReactFlow<FlowNode, TeamLabFlowEdge>
         deleteKeyCode={null}
         edges={edges}

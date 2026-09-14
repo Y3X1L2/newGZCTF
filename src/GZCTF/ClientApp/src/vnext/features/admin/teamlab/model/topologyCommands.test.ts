@@ -12,12 +12,7 @@ import {
   updateTopologyConnection,
 } from './topologyCommands'
 import type { TopologyDocument } from './topologyDocument'
-import {
-  MIN_REGION_HEIGHT,
-  MIN_REGION_WIDTH,
-  REGION_HEADER_HEIGHT,
-  REGION_PADDING_X,
-} from './topologyGeometry'
+import { MIN_REGION_HEIGHT, MIN_REGION_WIDTH, REGION_HEADER_HEIGHT, REGION_PADDING_X } from './topologyGeometry'
 
 const position = { x: 0, y: 0, width: null, height: null, collapsed: false }
 const asset = (key: string) => ({
@@ -131,6 +126,13 @@ describe('topology commands', () => {
 
     const pastedAgain = pasteTopologyFragment(pasted, fragment).document
     expect(pastedAgain.nodes['sw1-copy-2']).toMatchObject({ networkKey: 'net1-copy-2' })
+  })
+
+  it('does not copy legacy dependency relationships into a new fragment', () => {
+    const source = document()
+    const fragment = copyTopologyFragment(source, new Set(['a', 'b']))
+
+    expect(fragment.connections).toEqual([])
   })
 
   it('deletes all dangling memberships, routes and dependencies atomically', () => {

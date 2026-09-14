@@ -5,12 +5,13 @@ import type { TopologyConnection } from '../../model/topologyDocument'
  * Visual weight of a link. Resolved at projection time from the connection kind
  * so an edge component never re-inspects the domain model to pick a style.
  */
-export type TeamLabEdgeTone = 'membership' | 'route' | 'dependency' | 'traffic'
+export type TeamLabEdgeTone = 'membership' | 'route' | 'traffic'
 
 export interface TeamLabEdgeData extends Record<string, unknown> {
   connection: TopologyConnection | null
   label: string
   tone?: TeamLabEdgeTone
+  networkKey?: string
 }
 
-export type TeamLabFlowEdge = Edge<TeamLabEdgeData, 'network' | 'dependency' | 'traffic'>
+export type TeamLabFlowEdge = Edge<TeamLabEdgeData, 'network' | 'traffic'>

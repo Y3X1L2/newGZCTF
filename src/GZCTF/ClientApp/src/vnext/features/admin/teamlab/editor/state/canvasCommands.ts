@@ -1,7 +1,5 @@
 import { connectTopology } from '../../model/topologyCommands'
-import { isTopologyAsset, type TopologyDocument } from '../../model/topologyDocument'
-
-export type CanvasConnectionMode = 'network' | 'dependency'
+import type { TopologyDocument } from '../../model/topologyDocument'
 
 function connectRouterNetworks(document: TopologyDocument, routerKey: string) {
   const switchKeys = Object.values(document.connections)
@@ -31,24 +29,10 @@ function connectRouterNetworks(document: TopologyDocument, routerKey: string) {
   return current
 }
 
-export function connectCanvasNodes(
-  document: TopologyDocument,
-  sourceKey: string,
-  targetKey: string,
-  mode: CanvasConnectionMode
-) {
+export function connectCanvasNodes(document: TopologyDocument, sourceKey: string, targetKey: string) {
   const source = document.nodes[sourceKey]
   const target = document.nodes[targetKey]
   if (!source || !target) throw new Error('连接端点不存在。')
-
-  if (mode === 'dependency') {
-    if (!isTopologyAsset(source) || !isTopologyAsset(target)) throw new Error('启动依赖只能连接两个计算资产。')
-    return connectTopology(document, {
-      type: 'dependency',
-      assetKey: target.key,
-      dependsOnKey: source.key,
-    }).document
-  }
 
   const networkSwitch = source.type === 'switch' ? source : target.type === 'switch' ? target : null
   const endpoint = source.type === 'switch' ? target : source

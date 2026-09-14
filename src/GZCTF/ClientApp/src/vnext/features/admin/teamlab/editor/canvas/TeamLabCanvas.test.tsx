@@ -32,7 +32,6 @@ describe('TeamLabCanvas', () => {
       <TeamLabCanvas
         canRedo={false}
         canUndo={false}
-        connectionMode="network"
         document={createEmptyTopologyDocument('Canvas')}
         focusMode={false}
         layoutRequest={0}
@@ -77,7 +76,6 @@ describe('TeamLabCanvas', () => {
     const props = {
       canRedo: false,
       canUndo: false,
-      connectionMode: 'network' as const,
       document: {
         ...withSwitch,
         nodes: { ...withSwitch.nodes, [assetNode.key]: assetNode },
@@ -116,13 +114,11 @@ describe('TeamLabCanvas', () => {
     expect(assetFlow?.height).toBe(ASSET_NODE_HEIGHT)
   })
 
-
   it('defaults to canvas panning and exposes an explicit box-selection tool', () => {
     render(
       <TeamLabCanvas
         canRedo={false}
         canUndo={false}
-        connectionMode="network"
         document={createEmptyTopologyDocument('Canvas')}
         focusMode={false}
         layoutRequest={0}
@@ -182,7 +178,6 @@ describe('TeamLabCanvas', () => {
     const props = {
       canRedo: false,
       canUndo: false,
-      connectionMode: 'network' as const,
       document,
       focusMode: false,
       layoutRequest: 0,
@@ -261,7 +256,6 @@ describe('TeamLabCanvas', () => {
       <TeamLabCanvas
         canRedo={false}
         canUndo={false}
-        connectionMode="network"
         document={document}
         focusMode={false}
         layoutRequest={0}
@@ -289,30 +283,42 @@ describe('TeamLabCanvas', () => {
     )
 
     const initial = capturedFlowProps.current!
-    const region = (initial.nodes as Array<{ id: string; position: { x: number; y: number } }>).find((node) => node.id.startsWith('region:'))!
-    const initialAsset = (initial.nodes as Array<{ id: string; position: { x: number; y: number } }>).find((node) => node.id === assetNode.key)!
+    const region = (initial.nodes as Array<{ id: string; position: { x: number; y: number } }>).find((node) =>
+      node.id.startsWith('region:')
+    )!
+    const initialAsset = (initial.nodes as Array<{ id: string; position: { x: number; y: number } }>).find(
+      (node) => node.id === assetNode.key
+    )!
     await act(async () => {
       ;(initial.onNodesChange as (changes: unknown[]) => void)([{ type: 'select', id: region.id, selected: true }])
       ;(initial.onNodeDragStart as (event: unknown, node: unknown) => void)({}, region)
-      ;(initial.onNodeDrag as (event: unknown, node: unknown) => void)({}, { ...region, position: { x: region.position.x + 96, y: region.position.y + 64 } })
+      ;(initial.onNodeDrag as (event: unknown, node: unknown) => void)(
+        {},
+        { ...region, position: { x: region.position.x + 96, y: region.position.y + 64 } }
+      )
     })
 
     await waitFor(() => {
-      const nodes = capturedFlowProps.current?.nodes as Array<{ id: string; position: { x: number; y: number }; selected?: boolean }>
+      const nodes = capturedFlowProps.current?.nodes as Array<{
+        id: string
+        position: { x: number; y: number }
+        selected?: boolean
+      }>
       // A region keeps React Flow's internal selection acknowledgement so marquee
       // selection cannot enter a controlled-state feedback loop. It is still
       // excluded from the domain selection reported to the editor.
       expect(nodes.find((node) => node.id === region.id)?.selected).toBe(true)
-      expect(nodes.find((node) => node.id === assetNode.key)?.position).toEqual({ x: initialAsset.position.x + 96, y: initialAsset.position.y + 64 })
+      expect(nodes.find((node) => node.id === assetNode.key)?.position).toEqual({
+        x: initialAsset.position.x + 96,
+        y: initialAsset.position.y + 64,
+      })
     })
     expect(onSelectionChange).not.toHaveBeenCalled()
 
     await act(async () => {
       const onNodesChange = capturedFlowProps.current?.onNodesChange
       expect(onNodesChange).toBeTypeOf('function')
-      ;(onNodesChange as (changes: unknown[]) => void)([
-        { type: 'select', id: assetNode.key, selected: true },
-      ])
+      ;(onNodesChange as (changes: unknown[]) => void)([{ type: 'select', id: assetNode.key, selected: true }])
     })
     await waitFor(() => expect(onSelectionChange).toHaveBeenCalledWith([assetNode.key], []))
   })

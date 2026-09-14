@@ -1,5 +1,5 @@
-import type { TeamLabConnectionDirection, TeamLabDependencyCondition } from '../api/teamlabContracts'
-import { isTopologyAsset, type TopologyConnection, type TopologyDocument, type TopologyNode, type TopologyPosition } from './topologyDocument'
+import type { TeamLabConnectionDirection } from '../api/teamlabContracts'
+import type { TopologyConnection, TopologyDocument, TopologyNode, TopologyPosition } from './topologyDocument'
 import {
   REGION_HEADER_HEIGHT,
   REGION_PADDING_BOTTOM,
@@ -8,7 +8,7 @@ import {
   nodeSize,
   regionSizeForMembers,
 } from './topologyGeometry'
-import { buildKeyRemap, dependencyConnectionKey, nextTopologyKey, topologyKeys } from './topologyKeys'
+import { buildKeyRemap, nextTopologyKey, topologyKeys } from './topologyKeys'
 import type { TopologySelection } from './topologySelection'
 
 export interface TopologyCommandResult<T = void> {
@@ -38,13 +38,6 @@ export type TopologyConnectRequest =
       toSwitchKey: string
       viaNodeKey: string
       direction?: TeamLabConnectionDirection
-      key?: string
-    }
-  | {
-      type: 'dependency'
-      assetKey: string
-      dependsOnKey: string
-      condition?: TeamLabDependencyCondition
       key?: string
     }
 
@@ -115,7 +108,8 @@ export function bulkMoveTopologyNodes(
 /** All nodes visually owned by a network region: its switch plus every asset member. */
 export function networkMembersOf(document: TopologyDocument, networkKey: string): string[] {
   const switches = Object.values(document.nodes).filter(
-    (item): item is Extract<TopologyNode, { type: 'switch' }> => item.type === 'switch' && item.networkKey === networkKey
+    (item): item is Extract<TopologyNode, { type: 'switch' }> =>
+      item.type === 'switch' && item.networkKey === networkKey
   )
   const switchKeys = new Set(switches.map((item) => item.key))
   const members = new Set<string>(switchKeys)
@@ -218,7 +212,10 @@ export function resizeNetworkRegion(
  * A concrete size is written rather than `null` so the canvas, the persisted
  * record and the auto-layout output all describe the same box.
  */
-export function fitNetworkRegionToMembers(document: TopologyDocument, networkKey: string): TopologyCommandResult<string> {
+export function fitNetworkRegionToMembers(
+  document: TopologyDocument,
+  networkKey: string
+): TopologyCommandResult<string> {
   const current = document.networkLayouts[networkKey] ?? derivedRegionLayout(document, networkKey)
   const memberHeights = networkMembersOf(document, networkKey)
     .filter((key) => document.nodes[key]?.type !== 'switch')
@@ -287,7 +284,7 @@ export function connectTopology(document: TopologyDocument, request: TopologyCon
       primary,
       orderIndex: request.orderIndex ?? existing.length,
     }
-  } else if (request.type === 'route') {
+  } else {
     const from = node(document, request.fromSwitchKey)
     const to = node(document, request.toSwitchKey)
     const via = node(document, request.viaNodeKey)
@@ -312,21 +309,6 @@ export function connectTopology(document: TopologyDocument, request: TopologyCon
       toSwitchKey: to.key,
       viaNodeKey: via.key,
       direction: request.direction ?? 'bidirectional',
-    }
-  } else {
-    const asset = node(document, request.assetKey)
-    const dependency = node(document, request.dependsOnKey)
-    if (!isTopologyAsset(asset) || !isTopologyAsset(dependency) || asset.key === dependency.key) {
-      throw new Error('A dependency must connect two different assets.')
-    }
-    const condition = request.condition ?? 'network-ready'
-    const key = request.key ?? nextTopologyKey(dependencyConnectionKey(asset.key, dependency.key, condition), occupied)
-    connection = {
-      type: 'dependency',
-      key,
-      assetKey: asset.key,
-      dependsOnKey: dependency.key,
-      condition,
     }
   }
 
@@ -373,14 +355,14 @@ function connectionIsInternal(connection: TopologyConnection, selected: Readonly
       selected.has(connection.viaNodeKey)
     )
   }
-  return selected.has(connection.assetKey) && selected.has(connection.dependsOnKey)
+  return false
 }
 
 export function copyTopologyFragment(document: TopologyDocument, nodeKeys: ReadonlySet<string>): TopologyFragment {
   return {
     nodes: [...nodeKeys].sort().map((key) => node(document, key)),
     connections: Object.values(document.connections)
-      .filter((connection) => connectionIsInternal(connection, nodeKeys))
+      .filter((connection) => connection.type !== 'dependency' && connectionIsInternal(connection, nodeKeys))
       .sort((left, right) => left.key.localeCompare(right.key)),
   }
 }
@@ -390,6 +372,7 @@ export function pasteTopologyFragment(
   fragment: TopologyFragment,
   offset = { x: 32, y: 32 }
 ) {
+  const editableConnections = fragment.connections.filter((connection) => connection.type !== 'dependency')
   const occupied = topologyKeys(document)
   const nodeRemap = buildKeyRemap(
     fragment.nodes.map((item) => item.key),
@@ -406,7 +389,7 @@ export function pasteTopologyFragment(
   )
   for (const value of networkRemap.values()) occupied.add(value)
   const connectionRemap = buildKeyRemap(
-    fragment.connections.map((item) => item.key),
+    editableConnections.map((item) => item.key),
     '-copy',
     occupied
   )
@@ -423,7 +406,7 @@ export function pasteTopologyFragment(
   }
 
   const connections = { ...document.connections }
-  for (const source of fragment.connections) {
+  for (const source of editableConnections) {
     const key = connectionRemap.get(source.key)!
     if (source.type === 'membership') {
       connections[key] = {
@@ -439,13 +422,6 @@ export function pasteTopologyFragment(
         fromSwitchKey: nodeRemap.get(source.fromSwitchKey)!,
         toSwitchKey: nodeRemap.get(source.toSwitchKey)!,
         viaNodeKey: nodeRemap.get(source.viaNodeKey)!,
-      }
-    } else {
-      connections[key] = {
-        ...source,
-        key,
-        assetKey: nodeRemap.get(source.assetKey)!,
-        dependsOnKey: nodeRemap.get(source.dependsOnKey)!,
       }
     }
   }
