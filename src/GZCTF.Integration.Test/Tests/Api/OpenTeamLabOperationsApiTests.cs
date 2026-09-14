@@ -2,10 +2,12 @@ using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Security.Cryptography;
 using System.Text.Json;
 using GZCTF.Integration.Test.Base;
 using GZCTF.Models;
 using GZCTF.Models.Data;
+using GZCTF.Models.Internal;
 using GZCTF.Modules.Audit.Contracts;
 using GZCTF.Modules.Audit.Domain;
 using GZCTF.Modules.Identity.Application;
@@ -13,7 +15,10 @@ using GZCTF.Modules.TeamLab.Application;
 using GZCTF.Modules.TeamLab.Contracts;
 using GZCTF.Modules.TeamLab.Domain;
 using GZCTF.Modules.TeamLab.Domain.Runtime;
+using GZCTF.Services.Fleet;
+using GZCTF.Services.TeamLab;
 using GZCTF.TeamLab.Contracts;
+using GZCTF.TeamLab.Contracts.Execution;
 using GZCTF.Utils;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
@@ -238,6 +243,119 @@ public sealed class OpenTeamLabOperationsApiTests(GZCTFApplicationFactory factor
                 .SingleAsync());
     }
 
+    [Fact]
+    public async Task ServiceAccess_UsesRuntimeScopesForAutomaticAndManualMappings()
+    {
+        await using var host = CreateHost(new InMemoryAssetFileGateway());
+        using var client = host.CreateClient();
+        var fixture = await SeedAsync(host.Services);
+        var allowed = await IssueTokenAsync(host.Services, fixture.ScopeId,
+            [ApiTokenScopes.TeamLabRuntimesRead, ApiTokenScopes.TeamLabRuntimesWrite]);
+        var readOnly = await IssueTokenAsync(host.Services, fixture.ScopeId,
+            [ApiTokenScopes.TeamLabRuntimesRead]);
+        var foreign = await IssueTokenAsync(host.Services, fixture.ForeignScopeId,
+            [ApiTokenScopes.TeamLabRuntimesRead, ApiTokenScopes.TeamLabRuntimesWrite]);
+        var runtimePath = $"/api/open/v1/teamlab/runtimes/{fixture.RuntimeId:D}";
+        var createPath = $"{runtimePath}/assets/{fixture.AssetId}/service-access";
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", readOnly.PlainTextToken);
+        using (var denied = await client.PostAsJsonAsync(createPath,
+                   new OpenCreateTeamLabServiceAccessModel("tcp", 8080)))
+            Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", allowed.PlainTextToken);
+        using var automaticResponse = await client.PostAsJsonAsync(createPath,
+            new OpenCreateTeamLabServiceAccessModel("tcp", 8080));
+        Assert.Equal(HttpStatusCode.Created, automaticResponse.StatusCode);
+        var automatic = await automaticResponse.Content.ReadFromJsonAsync<OpenTeamLabServiceAccessModel>(ApiJsonOptions);
+        Assert.NotNull(automatic);
+        Assert.Equal(32010, automatic.PublicPort);
+        Assert.Equal("gateway.example:32010", automatic.Endpoint);
+
+        using var manualResponse = await client.PostAsJsonAsync(createPath,
+            new OpenCreateTeamLabServiceAccessModel("udp", 502, 32123, "office"));
+        Assert.Equal(HttpStatusCode.Created, manualResponse.StatusCode);
+        var manual = await manualResponse.Content.ReadFromJsonAsync<OpenTeamLabServiceAccessModel>(ApiJsonOptions);
+        Assert.NotNull(manual);
+        Assert.Equal(32123, manual.PublicPort);
+
+        var mappings = await client.GetFromJsonAsync<OpenTeamLabServiceAccessModel[]>(
+            $"{runtimePath}/service-access", ApiJsonOptions);
+        Assert.NotNull(mappings);
+        Assert.Equal(2, mappings.Length);
+        Assert.DoesNotContain("10.250.0.10", await automaticResponse.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+
+        using (var revoked = await client.DeleteAsync($"{runtimePath}/service-access/{automatic.Id:D}"))
+        {
+            Assert.Equal(HttpStatusCode.OK, revoked.StatusCode);
+            var result = await revoked.Content.ReadFromJsonAsync<OpenTeamLabServiceAccessModel>(ApiJsonOptions);
+            Assert.Equal("revoked", result?.Status);
+        }
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", foreign.PlainTextToken);
+        using (var hidden = await client.GetAsync($"{runtimePath}/service-access"))
+            await AssertProblemAsync(hidden, HttpStatusCode.NotFound, "scope_not_found");
+    }
+
+    [Fact]
+    public async Task AssetControl_UsesScopedTokenAcrossRuntimeOwnerAndReturnsOriginalTicket()
+    {
+        await using var host = CreateHost(new InMemoryAssetFileGateway());
+        using var client = host.CreateClient();
+        var fixture = await SeedAsync(host.Services);
+        var allowed = await IssueTokenAsync(host.Services, fixture.ScopeId,
+            [ApiTokenScopes.TeamLabRuntimesRead, ApiTokenScopes.TeamLabRuntimesWrite]);
+        var foreign = await IssueTokenAsync(host.Services, fixture.ForeignScopeId,
+            [ApiTokenScopes.TeamLabRuntimesRead, ApiTokenScopes.TeamLabRuntimesWrite]);
+        Assert.NotEqual(fixture.OwnerUserId, allowed.ActorUserId);
+        var controlPath = $"/api/open/v1/teamlab/runtimes/{fixture.RuntimeId:D}/assets/{fixture.AssetId}/control";
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", allowed.PlainTextToken);
+
+        var capability = await client.GetFromJsonAsync<OpenTeamLabAssetControlCapabilityModel>(controlPath, ApiJsonOptions);
+        Assert.NotNull(capability);
+        Assert.True(capability.Allowed, capability.Reason);
+
+        var command = new OpenTeamLabAssetControlCommand(1, "stop", "external lifecycle control", true);
+        using var firstRequest = new HttpRequestMessage(HttpMethod.Post, controlPath)
+        {
+            Content = JsonContent.Create(command)
+        };
+        firstRequest.Headers.Add("Idempotency-Key", "asset-control-http-001");
+        using var firstResponse = await client.SendAsync(firstRequest);
+        Assert.Equal(HttpStatusCode.Accepted, firstResponse.StatusCode);
+        var first = await firstResponse.Content.ReadFromJsonAsync<OpenTeamLabAssetControlTicketModel>(ApiJsonOptions);
+        Assert.NotNull(first);
+
+        using var replayRequest = new HttpRequestMessage(HttpMethod.Post, controlPath)
+        {
+            Content = JsonContent.Create(command)
+        };
+        replayRequest.Headers.Add("Idempotency-Key", "asset-control-http-001");
+        using var replayResponse = await client.SendAsync(replayRequest);
+        Assert.Equal(HttpStatusCode.Accepted, replayResponse.StatusCode);
+        var replay = await replayResponse.Content.ReadFromJsonAsync<OpenTeamLabAssetControlTicketModel>(ApiJsonOptions);
+        Assert.Equal(first.TicketId, replay?.TicketId);
+
+        var taskPath = $"{controlPath}/{first.TicketId:D}";
+        var task = await client.GetFromJsonAsync<OpenTeamLabAssetControlTaskModel>(taskPath, ApiJsonOptions);
+        Assert.NotNull(task);
+        Assert.Equal(first.TicketId, task.Id);
+
+        using var conflictRequest = new HttpRequestMessage(HttpMethod.Post, controlPath)
+        {
+            Content = JsonContent.Create(command with { Action = "restart" })
+        };
+        conflictRequest.Headers.Add("Idempotency-Key", "asset-control-http-001");
+        using (var conflict = await client.SendAsync(conflictRequest))
+            await AssertProblemAsync(conflict, HttpStatusCode.Conflict, "idempotency_conflict");
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", foreign.PlainTextToken);
+        using (var hidden = await client.GetAsync(taskPath))
+            await AssertProblemAsync(hidden, HttpStatusCode.NotFound, "scope_not_found");
+        using (var noRetryEndpoint = await client.PostAsync($"{taskPath}/retry", null))
+            Assert.Equal(HttpStatusCode.NotFound, noRetryEndpoint.StatusCode);
+    }
+
     private WebApplicationFactory<Program> CreateHost(InMemoryAssetFileGateway gateway) =>
         factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
         {
@@ -245,6 +363,15 @@ public sealed class OpenTeamLabOperationsApiTests(GZCTFApplicationFactory factor
             services.AddSingleton<ITeamLabAssetFileGateway>(gateway);
             services.RemoveAll<ITeamLabRemoteRelayGateway>();
             services.AddSingleton<ITeamLabRemoteRelayGateway, NoOpRemoteRelayGateway>();
+            services.RemoveAll<ITeamLabServiceAccessGateway>();
+            services.AddSingleton<ITeamLabServiceAccessGateway, NoOpServiceAccessGateway>();
+            services.RemoveAll<IPublicUdpGatewayProvider>();
+            services.AddSingleton<IPublicUdpGatewayProvider, NoOpPublicGateway>();
+            services.RemoveAll<IPortAllocationService>();
+            services.AddSingleton<IPortAllocationService, InMemoryPortAllocationService>();
+            services.RemoveAll<ITeamLabAssetControlGateway>();
+            services.AddSingleton<ITeamLabAssetControlGateway, NoOpAssetControlGateway>();
+            services.PostConfigure<PublicUdpGatewayConfig>(options => options.PublicEndpoint = "gateway.example");
         }));
 
     private static async Task WaitForOperationAsync(IServiceProvider services, Guid operationId)
@@ -285,7 +412,8 @@ public sealed class OpenTeamLabOperationsApiTests(GZCTFApplicationFactory factor
             Name = $"open-ops-{suffix}",
             HostAddress = "127.0.0.1",
             AuthToken = "integration-fixture",
-            Status = NodeStatus.Online
+            Status = NodeStatus.Online,
+            TeamLabTunnelIp = "10.250.0.10"
         };
         var topology = new TeamLabTopology
         {
@@ -313,15 +441,26 @@ public sealed class OpenTeamLabOperationsApiTests(GZCTFApplicationFactory factor
             Status = TeamLabRuntimeStatus.Running,
             CreateRequestHash = $"open-ops-{suffix}"
         };
+        var shard = new TeamLabRuntimeShard
+        {
+            Runtime = runtime,
+            Generation = 1,
+            WorkerNode = node,
+            WorkerNodeId = node.Id,
+            Status = TeamLabRuntimeStatus.Running
+        };
         var asset = new TeamLabRuntimeAsset
         {
             Runtime = runtime,
+            Shard = shard,
             Generation = 1,
             WorkerNode = node,
             Kind = TeamLabResourceKind.Docker,
             TopologyKey = "web",
             Name = "Web",
             RuntimeResourceId = $"container-{suffix}",
+            NetworkKey = "office",
+            IpAddress = "10.96.0.10",
             Status = TeamLabRuntimeStatus.Running
         };
         var session = new TeamLabRemoteSession
@@ -347,8 +486,29 @@ public sealed class OpenTeamLabOperationsApiTests(GZCTFApplicationFactory factor
         context.TeamLabTopologies.Add(topology);
         context.TeamLabTopologyReleases.Add(release);
         context.TeamLabRuntimes.Add(runtime);
+        context.TeamLabRuntimeShards.Add(shard);
         context.TeamLabRuntimeAssets.Add(asset);
         context.TeamLabRemoteSessions.Add(session);
+        await context.SaveChangesAsync();
+        var plan = new TeamLabExecutionPlanV2(
+            runtime.Id, runtime.PublicId, 1, "shard", string.Empty,
+            "sha256:" + new string('a', 64), false, [],
+            [new("web", "docker", "web", "sha256:" + new string('a', 64), null, 1, 1, 128, [], [])], []);
+        plan = plan with
+        {
+            PlanDigest = "sha256:" + Convert.ToHexStringLower(
+                SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(plan)))
+        };
+        Assert.True(plan.IsValid(out var planError), planError);
+        context.TeamLabExecutionPlanSnapshots.Add(new TeamLabExecutionPlanSnapshot
+        {
+            Runtime = runtime,
+            Shard = shard,
+            Generation = 1,
+            WorkerNodeId = node.Id,
+            PlanDigest = plan.PlanDigest,
+            PlanJson = JsonSerializer.Serialize(plan)
+        });
         await context.SaveChangesAsync();
         return new Fixture(
             controlScope.Id,
@@ -449,6 +609,66 @@ public sealed class OpenTeamLabOperationsApiTests(GZCTFApplicationFactory factor
             System.Net.WebSockets.WebSocket socket,
             CancellationToken cancellationToken) =>
             Task.CompletedTask;
+    }
+
+    private sealed class NoOpServiceAccessGateway : ITeamLabServiceAccessGateway
+    {
+        public Task ApplyAsync(Guid nodeId, TeamLabServiceForwardRequest request, CancellationToken token) =>
+            Task.CompletedTask;
+
+        public Task RemoveAsync(Guid nodeId, TeamLabServiceForwardRequest request, CancellationToken token) =>
+            Task.CompletedTask;
+    }
+
+    private sealed class NoOpPublicGateway : IPublicUdpGatewayProvider
+    {
+        public Task<PublicUdpGatewaySyncResult> SyncMappingAsync(TeamLabPublicUdpMapping mapping, CancellationToken token) =>
+            Task.FromResult(new PublicUdpGatewaySyncResult(true, "ok", []));
+
+        public Task<PublicUdpGatewaySyncResult> RemoveMappingAsync(TeamLabPublicUdpMapping mapping, CancellationToken token) =>
+            Task.FromResult(new PublicUdpGatewaySyncResult(true, "ok", []));
+
+        public Task<PublicUdpGatewaySyncResult> SyncServiceAsync(PublicServiceGatewayMapping mapping, CancellationToken token) =>
+            Task.FromResult(new PublicUdpGatewaySyncResult(true, "ok", []));
+
+        public Task<PublicUdpGatewaySyncResult> RemoveServiceAsync(PublicServiceGatewayMapping mapping, CancellationToken token) =>
+            Task.FromResult(new PublicUdpGatewaySyncResult(true, "ok", []));
+    }
+
+    private sealed class InMemoryPortAllocationService : IPortAllocationService
+    {
+        private int next = 32010;
+        public bool IsRedisBacked => false;
+        public PortAllocationRange CurrentRange => new(32010, 32999, "test", false);
+
+        public Task<PortLease?> AllocatePortAsync(Guid containerId, CancellationToken token = default) =>
+            Task.FromResult<PortLease?>(new(next++, containerId, DateTimeOffset.UtcNow.AddMinutes(5)));
+
+        public Task<bool> ReleasePortAsync(int port, Guid leaseId, CancellationToken token = default) =>
+            Task.FromResult(true);
+
+        public Task<bool> ReserveExistingPortAsync(int port, Guid leaseId, CancellationToken token = default) =>
+            Task.FromResult(true);
+    }
+
+    private sealed class NoOpAssetControlGateway : ITeamLabAssetControlGateway
+    {
+        public Task<TeamLabAssetControlResult> ExecuteAsync(
+            Guid nodeId,
+            TeamLabAssetControlRequest request,
+            CancellationToken token)
+        {
+            var state = request.Action switch
+            {
+                "stop" => "exited",
+                "pause" => "paused",
+                "remove" => null,
+                _ => "running"
+            };
+            var fact = state is null ? null : new TeamLabExecutionInventoryFactV2(
+                "docker", request.AssetKey, request.ExpectedResourceId ?? "recreated", state, request.Plan.Generation);
+            return Task.FromResult(new TeamLabAssetControlResult(true, null, fact));
+        }
     }
 
     private sealed class InMemoryAssetFileGateway : ITeamLabAssetFileGateway

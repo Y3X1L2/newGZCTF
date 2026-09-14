@@ -5,4 +5,5 @@ public sealed record TeamLabAssetControlTask(Guid Id, string Status, string? Sta
 public sealed record TeamLabAssetControlAvailability(bool Allowed, string? Reason);
 
 public sealed record TeamLabAssetControlPayload(int AssetId, TeamLabAssetControlCommand Command,
-    string? ResourceId, string? NativeIdentity, int Phase = 0, Guid WorkerNodeId = default);
+    string? ResourceId, string? NativeIdentity, int Phase = 0, Guid WorkerNodeId = default,
+    Guid? ApiTokenId = null);

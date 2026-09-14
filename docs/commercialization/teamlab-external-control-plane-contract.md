@@ -97,10 +97,17 @@ Rollout 只描述一批部署目标。单个目标失败不会删除其他已就
 - `GET .../{runtimeId}/access-grants`
 - `GET .../{runtimeId}/access-grants/{grantId}/download`
 - `DELETE .../{runtimeId}/access-grants/{grantId}`
+- `GET .../{runtimeId}/service-access`
+- `POST .../{runtimeId}/assets/{assetId}/service-access`
+- `DELETE .../{runtimeId}/service-access/{accessId}`
+- `GET|POST .../{runtimeId}/assets/{assetId}/control`
+- `GET .../{runtimeId}/assets/{assetId}/control/{ticketId}`
 
 Runtime 投影包含当前 operation、队列票据、队列状态、阶段、generation、scope、发布版本、分片/资产状态和恢复动作。暂停保留原节点、地址、网络和磁盘；恢复不会重新调度或重新下载镜像。
 
 运行时列表按当前 token 的 `teamlab-scope` grant 隔离，支持 `controlScopeId`、精确 `externalReference`、`status` 和 cursor 分页。授权列表只返回当前代仍未撤销的元数据，绝不返回私钥、配置正文、一次性 token 或下载 URL。丢失 runtime/operation ID 时，调用方分别通过运行时列表和 `GET /api/open/v1/operations` 找回。
+
+服务映射支持自动分配或指定公网端口，并可查询和撤销。单资产控制支持 `start`、`stop`、`restart`、`rebuild`、`pause` 和 `resume`；提交命令返回现有 `DeploymentQueueTicket` 的 `ticketId`，随后通过状态接口查询原票据。
 
 ### 流量与抓包
 

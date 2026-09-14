@@ -23,12 +23,46 @@ public interface ITeamLabServiceAccessCleanup
 
 public sealed class TeamLabServiceAccessService(
     AppDbContext context,
+    TeamLabScopeAuthorizationService scopeAuthorization,
     IPortAllocationService ports,
     IPublicUdpGatewayProvider publicGateway,
     ITeamLabServiceAccessGateway nodeGateway,
     IOptions<PublicUdpGatewayConfig> options) : ITeamLabServiceAccessCleanup
 {
     private readonly PublicUdpGatewayConfig gateway = options.Value;
+
+    public async Task<TeamLabServiceAccessModel> CreateForApiAsync(
+        Guid runtimeId,
+        int assetId,
+        Guid apiTokenId,
+        CreateTeamLabServiceAccessModel command,
+        CancellationToken token)
+    {
+        await scopeAuthorization.RequireRuntimeScopeAsync(
+            runtimeId, apiTokenId, administrator: false, writable: true, token);
+        return await CreateAsync(runtimeId, assetId, command, token);
+    }
+
+    public async Task<IReadOnlyList<TeamLabServiceAccessModel>> ListForApiAsync(
+        Guid runtimeId,
+        Guid apiTokenId,
+        CancellationToken token)
+    {
+        await scopeAuthorization.RequireRuntimeScopeAsync(
+            runtimeId, apiTokenId, administrator: false, writable: false, token);
+        return await ListAsync(runtimeId, token);
+    }
+
+    public async Task<TeamLabServiceAccessModel> RemoveForApiAsync(
+        Guid runtimeId,
+        Guid accessId,
+        Guid apiTokenId,
+        CancellationToken token)
+    {
+        await scopeAuthorization.RequireRuntimeScopeAsync(
+            runtimeId, apiTokenId, administrator: false, writable: true, token);
+        return await RemoveAsync(runtimeId, accessId, token);
+    }
 
     public async Task<TeamLabServiceAccessModel> CreateAsync(
         Guid runtimeId, int assetId, CreateTeamLabServiceAccessModel command, CancellationToken token)

@@ -250,6 +250,54 @@ public class OpenApiTests(GZCTFApplicationFactory factory, ITestOutputHelper out
     }
 
     [Fact]
+    public async Task OpenV1_RuntimeOperationsUseDedicatedContractsAndExistingQueueTickets()
+    {
+        using var document = JsonDocument.Parse(await _client.GetStringAsync(OpenV1DocumentPath));
+        var paths = document.RootElement.GetProperty("paths");
+
+        Assert.True(paths.GetProperty("/api/open/v1/teamlab/runtimes/{runtimeId}/service-access")
+            .TryGetProperty("get", out _));
+        Assert.True(paths.GetProperty("/api/open/v1/teamlab/runtimes/{runtimeId}/assets/{assetId}/service-access")
+            .TryGetProperty("post", out _));
+        Assert.True(paths.GetProperty("/api/open/v1/teamlab/runtimes/{runtimeId}/service-access/{accessId}")
+            .TryGetProperty("delete", out _));
+
+        var controlPath = "/api/open/v1/teamlab/runtimes/{runtimeId}/assets/{assetId}/control";
+        Assert.True(paths.GetProperty(controlPath).TryGetProperty("get", out _));
+        var control = paths.GetProperty(controlPath).GetProperty("post");
+        Assert.True(control.GetProperty("responses").TryGetProperty("202", out _));
+        Assert.Contains(control.GetProperty("parameters").EnumerateArray(), parameter =>
+            parameter.GetProperty("name").GetString() == "Idempotency-Key" &&
+            parameter.GetProperty("in").GetString() == "header" &&
+            parameter.GetProperty("required").GetBoolean());
+
+        var taskPath = "/api/open/v1/teamlab/runtimes/{runtimeId}/assets/{assetId}/control/{ticketId}";
+        Assert.True(paths.GetProperty(taskPath).TryGetProperty("get", out _));
+        Assert.False(paths.TryGetProperty(taskPath + "/retry", out _));
+
+        var schemas = document.RootElement.GetProperty("components").GetProperty("schemas");
+        string[] publicSchemas =
+        [
+            "OpenCreateTeamLabServiceAccessModel",
+            "OpenTeamLabServiceAccessModel",
+            "OpenTeamLabAssetControlCommand",
+            "OpenTeamLabAssetControlCapabilityModel",
+            "OpenTeamLabAssetControlTicketModel",
+            "OpenTeamLabAssetControlTaskModel"
+        ];
+        Assert.All(publicSchemas, schema => Assert.True(schemas.TryGetProperty(schema, out _),
+            $"OpenAPI must publish the dedicated {schema} contract."));
+
+        var serialized = string.Join('\n', publicSchemas.Select(schema => schemas.GetProperty(schema).GetRawText()));
+        Assert.DoesNotContain("lastError", serialized, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("workerNodeId", serialized, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("resourceId", serialized, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("nativeIdentity", serialized, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("apiTokenId", serialized, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("protectedPayload", serialized, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task OpenV1_TeamLabSchemasPreserveEditorAndHideSensitiveRuntimeState()
     {
         var content = await _client.GetStringAsync(OpenV1DocumentPath);

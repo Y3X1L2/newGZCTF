@@ -13,6 +13,7 @@ using GZCTF.Modules.Audit.Infrastructure;
 using Microsoft.Extensions.Logging.Abstractions;
 using GZCTF.Modules.TeamLab.Application;
 using GZCTF.Modules.TeamLab.Contracts;
+using GZCTF.Modules.TeamLab.Domain;
 using GZCTF.Modules.TeamLab.Domain.Runtime;
 using GZCTF.TeamLab.Contracts.Execution;
 using Microsoft.AspNetCore.DataProtection;
@@ -78,6 +79,70 @@ public sealed class TeamLabAssetControlTests
     }
 
     [Fact]
+    public async Task ScopedApiTokenCanControlRuntimeOwnedByAnotherUserAndReusesOriginalTicket()
+    {
+        await using var fixture = await Fixture.Create("stop");
+        var tokenActor = new UserInfo { UserName = "scoped-api", Role = Role.Teacher };
+        var tokenId = Guid.NewGuid();
+        var controlScope = fixture.Asset.Runtime.ControlScope!;
+        fixture.Db.Users.Add(tokenActor);
+        fixture.Db.ApiTokenResourceGrants.Add(new GZCTF.Modules.Identity.Domain.ApiTokenResourceGrant
+        {
+            TokenId = tokenId,
+            ResourceType = "teamlab-scope",
+            ResourceId = controlScope.Id.ToString("D")
+        });
+        await fixture.Db.SaveChangesAsync();
+        TeamLabQueueRequest? queued = null;
+        var ticketId = Guid.CreateVersion7();
+        fixture.Queue.Setup(item => item.EnqueueAsync(It.IsAny<TeamLabQueueRequest>(), It.IsAny<CancellationToken>()))
+            .Callback<TeamLabQueueRequest, CancellationToken>((request, _) => queued = request)
+            .ReturnsAsync(new TeamLabQueueTicketResult(ticketId));
+        var command = new TeamLabAssetControlCommand(3, "stop", "scoped api operation", true);
+
+        var submitted = await fixture.Service.EnqueueForApiAsync(
+            fixture.Asset.Runtime.PublicId, fixture.Asset.Id, tokenActor.Id, tokenId,
+            "asset-control-001", command, default);
+
+        Assert.Equal(ticketId, submitted.TicketId);
+        Assert.NotNull(queued);
+        Assert.Equal(tokenActor.Id, queued.OwnerUserId);
+        var protectedPayload = fixture.Protector.Unprotect(queued.ProtectedPayload!);
+        Assert.Equal(tokenId, protectedPayload.AssetControl!.ApiTokenId);
+        Assert.Equal(controlScope.Id, protectedPayload.ControlScopeId);
+        var ticket = new DeploymentQueueTicket
+        {
+            Id = ticketId,
+            Kind = DeploymentQueueKind.TeamLabRuntime,
+            Operation = RuntimeOperationKind.AssetControl,
+            Status = DeploymentQueueTicketStatus.Running,
+            Generation = queued.Generation,
+            TeamLabRuntimeId = queued.RuntimeId,
+            OwnerUserId = queued.OwnerUserId,
+            TargetNodeId = queued.TargetNodeId,
+            ProtectedPayload = queued.ProtectedPayload,
+            PayloadHash = queued.PayloadHash
+        };
+        fixture.Db.DeploymentQueueTickets.Add(ticket);
+        await fixture.Db.SaveChangesAsync();
+
+        var replay = await fixture.Service.EnqueueForApiAsync(
+            fixture.Asset.Runtime.PublicId, fixture.Asset.Id, tokenActor.Id, tokenId,
+            "asset-control-001", command, default);
+        Assert.Equal(ticketId, replay.TicketId);
+        fixture.Queue.Verify(item => item.EnqueueAsync(It.IsAny<TeamLabQueueRequest>(), It.IsAny<CancellationToken>()), Times.Once);
+
+        await Assert.ThrowsAsync<GZCTF.Modules.Audit.Application.IdempotencyConflictException>(() =>
+            fixture.Service.EnqueueForApiAsync(
+                fixture.Asset.Runtime.PublicId, fixture.Asset.Id, tokenActor.Id, tokenId,
+                "asset-control-001", command with { Action = "restart" }, default));
+
+        fixture.Gateway.Setup(item => item.ExecuteAsync(It.IsAny<Guid>(), It.IsAny<TeamLabAssetControlRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new TeamLabAssetControlResult(true, null, fixture.Fact("exited")));
+        Assert.True((await fixture.Service.ExecuteAsync(ticket, default)).Success);
+    }
+
+    [Fact]
     public async Task ReboundAssetAndStaleGenerationAreRejectedBeforeAgentExecution()
     {
         await using var fixture = await Fixture.Create("stop");
@@ -109,6 +174,7 @@ public sealed class TeamLabAssetControlTests
         public DeploymentQueueTicket Ticket { get; private set; } = null!;
         public TeamLabRuntimeOperationPayloadProtector Protector { get; } = new(new EphemeralDataProtectionProvider());
         public Mock<ITeamLabAssetControlGateway> Gateway { get; } = new(MockBehavior.Strict);
+        public Mock<ITeamLabRuntimeQueue> Queue { get; } = new(MockBehavior.Strict);
         public TeamLabAssetControlService Service { get; private set; } = null!;
         public TeamLabExecutionInventoryFactV2 Fact(string state) => new("docker", "web", "old-web", state, 3);
 
@@ -117,7 +183,17 @@ public sealed class TeamLabAssetControlTests
             var fixture = new Fixture();
             var db = fixture.Db;
             var actor = new UserInfo { UserName = "fixture", Role = Role.Admin };
-            var runtime = new TeamLabRuntime { Generation = 3, Status = TeamLabRuntimeStatus.Running, CreatedById = actor.Id };
+            var runtime = new TeamLabRuntime
+            {
+                Generation = 3,
+                Status = TeamLabRuntimeStatus.Running,
+                CreatedById = actor.Id,
+                ControlScope = new TeamLabControlScope
+                {
+                    Key = $"asset-control-{Guid.NewGuid():N}",
+                    DisplayName = "Asset control"
+                }
+            };
             var shard = new TeamLabRuntimeShard { Runtime = runtime, Generation = 3, WorkerNodeId = Guid.NewGuid() };
             fixture.Asset = new TeamLabRuntimeAsset { Runtime = runtime, Shard = shard, WorkerNodeId = shard.WorkerNodeId,
                 Generation = 3, Kind = TeamLabResourceKind.Docker, TopologyKey = "web", Name = "Web", RuntimeResourceId = "old-web", Status = TeamLabRuntimeStatus.Running };
@@ -138,7 +214,8 @@ public sealed class TeamLabAssetControlTests
                 ProtectedPayload = fixture.Protector.Protect(new(null, runtime.PublicId, null) { AssetControl = new(fixture.Asset.Id, new(3, action, "test asset operation", true), "old-web", null, WorkerNodeId: shard.WorkerNodeId) }) };
             db.DeploymentQueueTickets.Add(fixture.Ticket);
             await db.SaveChangesAsync();
-            fixture.Service = new(db, new TeamLabAuthorizationService(db, [], []), new TeamLabRuntimeLifecycleGuard(db), Mock.Of<ITeamLabRuntimeQueue>(), fixture.Protector,
+            fixture.Service = new(db, new TeamLabAuthorizationService(db, [], []), new TeamLabScopeAuthorizationService(db),
+                new TeamLabRuntimeLifecycleGuard(db), fixture.Queue.Object, fixture.Protector,
                 fixture.Gateway.Object, Mock.Of<ITeamLabRemoteAccessService>(), new TeamLabEventRecorder(db,
                     new EfOperationalEventWriter(db, NullLogger<EfOperationalEventWriter>.Instance), new OperationalCorrelation()), new LocalDevelopmentLeaseProvider());
             return fixture;

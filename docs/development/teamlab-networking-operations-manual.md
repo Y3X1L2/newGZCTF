@@ -2665,6 +2665,14 @@ VM 文件管理使用镜像模板中已启用的 SSH 运维账号，支持密码
 - `GET .../control/{ticketId}`：真实任务状态、阶段、错误码和重试资格。
 - `POST .../control/{ticketId}/retry`：仅对可重试失败继续未完成阶段，返回新票据关联。
 
+开放 API 使用同一应用服务和原 `DeploymentQueueTicket`，但仅发布以下路由：
+
+- `GET /api/open/v1/teamlab/runtimes/{runtimeId}/assets/{assetId}/control`：按 token 的 `teamlab-scope` 查询能力。
+- `POST /api/open/v1/teamlab/runtimes/{runtimeId}/assets/{assetId}/control`：必须携带 `Idempotency-Key`，返回 202 和原票据 `ticketId`。
+- `GET /api/open/v1/teamlab/runtimes/{runtimeId}/assets/{assetId}/control/{ticketId}`：查询原票据状态。
+
+开放 API 不发布单资产 retry 路由；管理员接口的 retry 能力不是对外契约。
+
 停止保留容器可写层和 VM 磁盘；暂停保留执行现场；重建替换目标资产资源及可写层，其他资产和场景网络不重建。VM 停止/重启会强制断电，确认框明确提示未保存数据风险。目标资产远程会话先结束，文件传输与生命周期协调执行。后台对账尊重停止/暂停意图；不要用全量 apply 自动拉起主动停止的资产。
 
 任务完成表示该资产执行动作和实际电源状态达到目标，不代替真实来宾业务健康或完整跨节点组网验收。
