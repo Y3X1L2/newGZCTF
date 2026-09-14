@@ -45,9 +45,18 @@ public sealed class TeamLabRemoteAuditService(AppDbContext context, IBlobStorage
         return new(state, policy.RetentionDays, files);
     }
 
-    public async Task GenerateAsync(Guid sessionId, Guid actorId, bool administrator, CancellationToken token)
+    public Task GenerateAsync(Guid sessionId, Guid actorId, bool administrator, CancellationToken token) =>
+        GenerateAuthorizedAsync(sessionId, BusinessAuthorization(actorId, administrator), token);
+
+    public Task GenerateApiAsync(Guid sessionId, Guid apiTokenId, CancellationToken token) =>
+        GenerateAuthorizedAsync(sessionId, ScopeAuthorization(apiTokenId, writable: true), token);
+
+    private async Task GenerateAuthorizedAsync(
+        Guid sessionId,
+        Func<TeamLabRemoteSession, CancellationToken, Task> authorize,
+        CancellationToken token)
     {
-        await RequireAsync(sessionId, BusinessAuthorization(actorId, administrator), token);
+        await RequireAsync(sessionId, authorize, token);
         await using var lease = await leases.AcquireAsync("teamlab:remote-audit", TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(30), token);
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(token, lease.LeaseLost);
         var session = await context.TeamLabRemoteSessions.AsNoTracking().Include(item => item.Runtime)
@@ -226,14 +235,16 @@ public sealed class TeamLabRemoteAuditService(AppDbContext context, IBlobStorage
                 : TeamLabRuntimePermission.MetadataRead,
             token);
 
-    private Func<TeamLabRemoteSession, CancellationToken, Task> ScopeAuthorization(Guid apiTokenId) =>
+    private Func<TeamLabRemoteSession, CancellationToken, Task> ScopeAuthorization(
+        Guid apiTokenId,
+        bool writable = false) =>
         async (session, token) =>
         {
             await scopeAuthorization.RequireRuntimeScopeAsync(
                 session.Runtime.PublicId,
                 apiTokenId,
                 administrator: false,
-                writable: false,
+                writable,
                 token);
         };
 }

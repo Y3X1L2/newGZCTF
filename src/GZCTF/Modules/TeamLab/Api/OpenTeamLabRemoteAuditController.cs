@@ -22,6 +22,20 @@ namespace GZCTF.Modules.TeamLab.Api;
 [ProducesResponseType(typeof(ExternalApiProblemDetailsModel), StatusCodes.Status409Conflict, "application/problem+json")]
 public sealed class OpenTeamLabRemoteAuditController(TeamLabRemoteAuditService audit) : ControllerBase
 {
+    [HttpPost]
+    [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabRemoteSessionsWrite)]
+    [OpenApiOperation("生成远程会话操作审计", "为已结束并完成清理的会话生成或确认生命周期审计证据。")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> Generate(
+        Guid sessionId,
+        CancellationToken cancellationToken)
+    {
+        var actor = Actor();
+        await audit.GenerateApiAsync(sessionId, actor.TokenId, cancellationToken);
+        Response.Headers.CacheControl = "no-store";
+        return NoContent();
+    }
+
     [HttpGet]
     [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabRemoteSessionsRead)]
     [OpenApiOperation("查询远程会话操作审计", "返回会话生命周期证据的就绪状态、保留期限和摘要。")]

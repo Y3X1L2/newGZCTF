@@ -111,20 +111,21 @@ public sealed class OpenTeamLabOperationsApiTests(GZCTFApplicationFactory factor
         var allowed = await IssueTokenAsync(
             host.Services,
             fixture.ScopeId,
-            [ApiTokenScopes.TeamLabRemoteSessionsRead]);
+            [ApiTokenScopes.TeamLabRemoteSessionsRead, ApiTokenScopes.TeamLabRemoteSessionsWrite]);
         var foreign = await IssueTokenAsync(
             host.Services,
             fixture.ForeignScopeId,
-            [ApiTokenScopes.TeamLabRemoteSessionsRead]);
+            [ApiTokenScopes.TeamLabRemoteSessionsRead, ApiTokenScopes.TeamLabRemoteSessionsWrite]);
 
-        await using (var generationScope = host.Services.CreateAsyncScope())
-        {
-            var audit = generationScope.ServiceProvider.GetRequiredService<TeamLabRemoteAuditService>();
-            await audit.GenerateAsync(fixture.SessionId, fixture.OwnerUserId, administrator: false, CancellationToken.None);
-        }
+        var basePath = $"/api/open/v1/teamlab/remote-sessions/{fixture.SessionId:D}/audit";
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", foreign.PlainTextToken);
+        using (var response = await client.PostAsync(basePath, null))
+            await AssertProblemAsync(response, HttpStatusCode.NotFound, "scope_not_found");
 
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", allowed.PlainTextToken);
-        var basePath = $"/api/open/v1/teamlab/remote-sessions/{fixture.SessionId:D}/audit";
+        using (var response = await client.PostAsync(basePath, null))
+            Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+
         var summary = await client.GetFromJsonAsync<OpenTeamLabRemoteAuditSummaryModel>(basePath, ApiJsonOptions);
         Assert.NotNull(summary);
         Assert.Equal("ready", summary.State);
