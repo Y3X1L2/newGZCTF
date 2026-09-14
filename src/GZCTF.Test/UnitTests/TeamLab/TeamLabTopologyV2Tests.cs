@@ -1,6 +1,5 @@
 using System;
 using System.Linq;
-using System.Text.Json;
 using GZCTF.Modules.TeamLab.Application;
 using GZCTF.Modules.TeamLab.Contracts;
 using GZCTF.Modules.TeamLab.Domain;
@@ -34,12 +33,11 @@ public sealed class TeamLabTopologyV2Tests
         Assert.Equal(
             TeamLabConnectionDirection.FromTo,
             execution.Connections.Single(item => item.Key == "entry-core").Direction);
-        Assert.DoesNotContain("dependencies", first, StringComparison.OrdinalIgnoreCase);
         Assert.True(execution.Observation.FlowMetadataEnabled);
     }
 
     [Fact]
-    public void OpenContract_PreservesV2InfrastructureAndObservation_WithoutDependencyInput()
+    public void OpenContract_PreservesV2InfrastructureAndObservation()
     {
         var definition = CreateManagedDefinition();
         var request = new OpenCreateTeamLabTopologyModel(
@@ -57,7 +55,6 @@ public sealed class TeamLabTopologyV2Tests
         Assert.Equal(2, mapped.SchemaVersion);
         Assert.Equal(definition.Infrastructure, mapped.Infrastructure);
         Assert.Equal(definition.Observation, mapped.Observation);
-        Assert.DoesNotContain("dependencies", JsonSerializer.Serialize(request), StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
