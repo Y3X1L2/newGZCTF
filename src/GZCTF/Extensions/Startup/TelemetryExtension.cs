@@ -15,6 +15,15 @@ namespace GZCTF.Extensions.Startup;
 public static class TelemetryExtension
 {
     internal static TelemetryConfig? TelemetryConfig;
+    internal static readonly string[] ConfiguredMeterNames =
+    [
+        DataGovernanceMetrics.MeterName,
+        RedisTelemetry.MeterName,
+        PlatformTelemetry.RuntimeMeterName,
+        PlatformTelemetry.AgentClientMeterName,
+        PlatformTelemetry.OperationsMeterName,
+        PlatformTelemetry.TeamLabMeterName
+    ];
 
     extension(WebApplicationBuilder builder)
     {
@@ -47,11 +56,7 @@ public static class TelemetryExtension
                 metrics.AddNpgsqlInstrumentation();
                 metrics.AddAWSInstrumentation();
                 metrics.AddMeter("Microsoft.Extensions.Diagnostics.HealthChecks");
-                metrics.AddMeter(DataGovernanceMetrics.MeterName);
-                metrics.AddMeter(RedisTelemetry.MeterName);
-                metrics.AddMeter(PlatformTelemetry.RuntimeMeterName);
-                metrics.AddMeter(PlatformTelemetry.AgentClientMeterName);
-                metrics.AddMeter(PlatformTelemetry.OperationsMeterName);
+                metrics.AddMeter(ConfiguredMeterNames);
 
                 if (TelemetryConfig is { Prometheus.Enable: true })
                     metrics.AddPrometheusExporter(options =>
