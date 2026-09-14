@@ -1041,6 +1041,16 @@ Scope: teamlab.topologies:write
 
 ## 7. 运行时与访问授权
 
+### 7.0 找回可管理的运行时
+
+```http
+GET /api/open/v1/teamlab/runtimes?controlScopeId={scopeId}&externalReference={reference}&status={status}&limit=50&after=<cursor>
+Authorization: Bearer <token>
+Scope: teamlab.runtimes:read
+```
+
+列表只返回当前 token 通过 `teamlab-scope` grant 可读的运行时。同一用户创建的其他 token 不会扩大可见范围。`controlScopeId`、`externalReference`（精确匹配）和数字枚举 `status` 均为可选筛选；`limit` 为 1-100，默认 50。按 `createdAt`、`id` 倒序稳定分页，`nextCursor` 为空时没有下一页。
+
 ### 7.1 创建运行时
 
 ```http
@@ -1260,6 +1270,16 @@ Scope: teamlab.runtimes:write
 ```
 
 只支持 `WireGuard`。响应 `202 Accepted` + operation；操作完成后取得授权 `grantId`。
+
+#### 列出仍可管理的访问授权
+
+```http
+GET /api/open/v1/teamlab/runtimes/{runtimeId}/access-grants
+Authorization: Bearer <token>
+Scope: teamlab.runtimes:read
+```
+
+服务先校验 runtime 的控制范围授权，只返回当前 generation 中尚未撤销的授权元数据。响应不包含客户端/服务端私钥、配置正文、下载 token、token hash、受保护字段或一次性下载 URL。
 
 ### 7.7 下载访问配置
 
@@ -2146,6 +2166,16 @@ Scope: teamlab.topologies:write
 响应 `202 Accepted` + operation。重放不推进投递游标，不创建新的业务操作。
 
 ### 11.4 查询异步操作
+
+找回当前 token 发起的操作：
+
+```http
+GET /api/open/v1/operations?status={status}&kind={kind}&limit=50&after=<cursor>
+Authorization: Bearer <token>
+Scope: operations:read
+```
+
+`status` 使用数字枚举，`kind` 精确匹配；两者均可选。列表按 `createdAt`、`id` 倒序稳定分页，只返回当前 token 发起的 operation，不因 token 创建者相同或拥有其他资源授权而混入别的 token 历史。
 
 ```http
 GET /api/open/v1/operations/{operationId}

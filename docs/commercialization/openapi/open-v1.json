@@ -4822,6 +4822,150 @@
       }
     },
     "/api/open/v1/teamlab/runtimes": {
+      "get": {
+        "tags": [
+          "TeamLab - Runtimes"
+        ],
+        "summary": "列出运行时",
+        "description": "按当前 token 的 TeamLab 控制范围授权返回可继续管理的运行时。",
+        "operationId": "OpenTeamLabRuntimes_List",
+        "parameters": [
+          {
+            "name": "controlScopeId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "guid",
+              "nullable": true
+            },
+            "x-position": 1
+          },
+          {
+            "name": "externalReference",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "nullable": true
+            },
+            "x-position": 2
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "nullable": true,
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/TeamLabRuntimeStatus"
+                    }
+                  ]
+                }
+              ]
+            },
+            "x-position": 3
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 50,
+              "maximum": 100.0,
+              "minimum": 1.0
+            },
+            "x-position": 4
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "nullable": true
+            },
+            "x-position": 5
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenTeamLabRuntimePageModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      },
       "post": {
         "tags": [
           "TeamLab - Runtimes"
@@ -5829,6 +5973,106 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiOperationModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      },
+      "get": {
+        "tags": [
+          "TeamLab - Runtimes"
+        ],
+        "summary": "列出访问授权",
+        "description": "返回当前代仍可管理的访问授权元数据，不返回私钥、配置正文或一次性下载凭据。",
+        "operationId": "OpenTeamLabRuntimes_ListAccessGrants",
+        "parameters": [
+          {
+            "name": "runtimeId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/OpenTeamLabAccessGrantMetadataModel"
+                  }
                 }
               }
             }
@@ -11176,6 +11420,80 @@
         ]
       }
     },
+    "/api/open/v1/operations": {
+      "get": {
+        "tags": [
+          "Operations"
+        ],
+        "operationId": "Operations_List",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "nullable": true,
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiOperationStatus"
+                    }
+                  ]
+                }
+              ]
+            },
+            "x-position": 1
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "nullable": true
+            },
+            "x-position": 2
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 50,
+              "maximum": 100.0,
+              "minimum": 1.0
+            },
+            "x-position": 3
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "nullable": true
+            },
+            "x-position": 4
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiOperationPageModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
     "/api/open/v1/operations/{id}": {
       "get": {
         "tags": [
@@ -12527,6 +12845,81 @@
           }
         }
       },
+      "OpenTeamLabRuntimePageModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OpenTeamLabRuntimeSummaryModel"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "OpenTeamLabRuntimeSummaryModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "releaseId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "controlScopeId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "externalReference": {
+            "type": "string",
+            "nullable": true
+          },
+          "generation": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "executionModel": {
+            "$ref": "#/components/schemas/TeamLabExecutionModel"
+          },
+          "status": {
+            "$ref": "#/components/schemas/TeamLabRuntimeStatus"
+          },
+          "stage": {
+            "type": "string"
+          },
+          "openForAccess": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "integer",
+            "format": "uint64"
+          },
+          "updatedAt": {
+            "type": "integer",
+            "format": "uint64",
+            "nullable": true
+          }
+        }
+      },
+      "TeamLabExecutionModel": {
+        "type": "integer",
+        "description": "",
+        "x-enumNames": [
+          "V1",
+          "V2"
+        ],
+        "enum": [
+          0,
+          1
+        ]
+      },
       "CreateTeamLabRuntimeModel": {
         "type": "object",
         "additionalProperties": false,
@@ -12694,18 +13087,6 @@
             }
           }
         }
-      },
-      "TeamLabExecutionModel": {
-        "type": "integer",
-        "description": "",
-        "x-enumNames": [
-          "V1",
-          "V2"
-        ],
-        "enum": [
-          0,
-          1
-        ]
       },
       "OpenTeamLabRuntimeShardModel": {
         "type": "object",
@@ -12953,6 +13334,54 @@
         "properties": {
           "type": {
             "type": "string"
+          }
+        }
+      },
+      "OpenTeamLabAccessGrantMetadataModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "generation": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "type": {
+            "type": "string"
+          },
+          "clientAddress": {
+            "type": "string"
+          },
+          "endpoint": {
+            "type": "string"
+          },
+          "allowedIps": {
+            "type": "string"
+          },
+          "dns": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "integer",
+            "format": "uint64"
+          },
+          "appliedAt": {
+            "type": "integer",
+            "format": "uint64",
+            "nullable": true
+          },
+          "expiresAt": {
+            "type": "integer",
+            "format": "uint64",
+            "nullable": true
+          },
+          "configurationConsumedAt": {
+            "type": "integer",
+            "format": "uint64",
+            "nullable": true
           }
         }
       },
@@ -16842,6 +17271,22 @@
           },
           "probeKind": {
             "type": "string"
+          }
+        }
+      },
+      "ApiOperationPageModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiOperationModel"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true
           }
         }
       }

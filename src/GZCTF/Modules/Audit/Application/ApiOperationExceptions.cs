@@ -20,6 +20,9 @@ public sealed class ApiOperationAlreadyExistsException : Exception;
 public sealed class ApiOperationNotFoundException()
     : ApiContractException("operation_not_found", "The operation was not found.", 404);
 
+public sealed class ApiOperationQueryException(string code, string message)
+    : ApiContractException(code, message, 400);
+
 public class ApiOperationTerminalException(string code, string message) : Exception(message)
 {
     public string Code { get; } = code;

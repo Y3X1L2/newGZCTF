@@ -35,6 +35,8 @@ curl https://platform.example/api/open/v1/operations/$OPERATION_ID \
   -H "Authorization: Bearer $GZCTF_TOKEN"
 ```
 
+如果调用方丢失 operation ID，可用 `GET /api/open/v1/operations?status={status}&kind={kind}&limit=50&after={cursor}` 找回当前 token 发起的操作。列表不会返回同一用户其他 token 的操作。
+
 终态为 `Succeeded`、`Failed` 或 `Cancelled`。调用方应展示 `stage`、进度和
 `errorCode/errorDetail`，不要通过更换幂等键盲目重试未知状态的写操作。
 
@@ -325,6 +327,8 @@ Runtime 可拆分为多个 shard。一个逻辑网段归属一个 Worker，跨�
 写操作返回 operation。创建成功后可查询 runtime 聚合状态、创建一次性 WireGuard
 访问授权、读取流量与有序 path、按需启动 PCAP。销毁后授权立即失效，平台清理所有
 shard、路由、capture 和镜像运行引用。
+
+`GET /teamlab/runtimes` 支持按 `controlScopeId`、精确 `externalReference`、数字状态和 cursor 分页找回当前 token 可管理的 runtime。`GET /teamlab/runtimes/{id}/access-grants` 只返回当前代未撤销的授权元数据，不返回私钥、配置正文、一次性 token 或下载 URL。
 
 ## 8. 自动化建议
 

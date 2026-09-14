@@ -113,6 +113,36 @@ public sealed record OpenTeamLabRuntimeModel(
     int? ReleaseVersion = null,
     IReadOnlyList<string>? RecoveryActions = null);
 
+public sealed record OpenTeamLabRuntimeSummaryModel(
+    Guid Id,
+    Guid ReleaseId,
+    Guid ControlScopeId,
+    string? ExternalReference,
+    int Generation,
+    TeamLabExecutionModel ExecutionModel,
+    TeamLabRuntimeStatus Status,
+    string Stage,
+    bool OpenForAccess,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset? UpdatedAt);
+
+public sealed record OpenTeamLabRuntimePageModel(
+    IReadOnlyList<OpenTeamLabRuntimeSummaryModel> Items,
+    string? NextCursor);
+
+public sealed record OpenTeamLabAccessGrantMetadataModel(
+    Guid Id,
+    int Generation,
+    string Type,
+    string ClientAddress,
+    string Endpoint,
+    string AllowedIps,
+    string Dns,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset? AppliedAt,
+    DateTimeOffset? ExpiresAt,
+    DateTimeOffset? ConfigurationConsumedAt);
+
 public sealed record OpenTeamLabRuntimeEventPageModel(
     IReadOnlyList<TeamLabRuntimeEventModel> Items,
     string? NextCursor);

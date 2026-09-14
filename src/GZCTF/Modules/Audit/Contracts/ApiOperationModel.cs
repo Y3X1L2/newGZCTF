@@ -41,3 +41,7 @@ public sealed record ApiOperationModel(
         operation.UpdatedAt,
         operation.CompletedAt);
 }
+
+public sealed record ApiOperationPageModel(
+    IReadOnlyList<ApiOperationModel> Items,
+    string? NextCursor);

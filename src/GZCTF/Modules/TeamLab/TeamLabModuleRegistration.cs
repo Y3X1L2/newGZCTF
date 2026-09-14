@@ -43,6 +43,7 @@ public static class TeamLabModuleRegistration
         services.AddScoped<TeamLabFabricLinkAllocator>();
         services.AddScoped<TeamLabEventRecorder>();
         services.AddScoped<TeamLabRuntimeProjectionService>();
+        services.AddScoped<TeamLabOpenDiscoveryService>();
         services.AddScoped<TeamLabAdminQueryService>();
         services.AddScoped<ITeamLabUsageProjectionProvider, TeamLabEmptyUsageProjectionProvider>();
         services.AddScoped<TeamLabAuthorizationService>();

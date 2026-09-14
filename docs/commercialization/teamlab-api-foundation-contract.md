@@ -262,6 +262,7 @@ DELETE /runtimes/{runtimeId}/access-grants/{grantId}
 
 - 首版 grant type 为 WireGuard。
 - 创建响应可以返回一次性配置下载 URL，URL 短时有效且只能使用一次。
+- 授权列表只返回当前 generation 中仍未撤销的授权元数据，不返回私钥、配置正文、一次性下载 token、受保护字段或下载 URL。
 - 私钥不在普通 runtime query 中返回。
 - runtime reset/destroy 自动撤销全部 grant。
 - Penetration 选手入口由 Penetration adapter 创建 grant，并执行比赛参与权限检查。
@@ -301,11 +302,13 @@ GET    /topologies/{topologyId}/releases
 GET    /topologies/{topologyId}/releases/{releaseId}
 POST   /topologies/{topologyId}/releases/{releaseId}/plan
 POST   /runtimes
+GET    /runtimes
 GET    /runtimes/{runtimeId}
 POST   /runtimes/{runtimeId}/reset
 DELETE /runtimes/{runtimeId}
 GET    /runtimes/{runtimeId}/events
 POST   /runtimes/{runtimeId}/access-grants
+GET    /runtimes/{runtimeId}/access-grants
 GET    /runtimes/{runtimeId}/traffic/flows
 GET    /runtimes/{runtimeId}/traffic/paths
 GET    /runtimes/{runtimeId}/traffic/paths/{pathId}

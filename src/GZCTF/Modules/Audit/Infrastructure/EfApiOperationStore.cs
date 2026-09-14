@@ -38,6 +38,31 @@ public sealed class EfApiOperationStore(AppDbContext context) : IApiOperationSto
         context.ApiOperations.AsNoTracking().SingleOrDefaultAsync(
             operation => operation.Id == id, cancellationToken);
 
+    public async Task<IReadOnlyList<ApiOperation>> ListForTokenAsync(
+        Guid apiTokenId,
+        ApiOperationStatus? status,
+        string? kind,
+        DateTimeOffset? beforeCreatedAt,
+        Guid? beforeId,
+        int count,
+        CancellationToken cancellationToken)
+    {
+        var query = context.ApiOperations.AsNoTracking()
+            .Where(operation => operation.ApiTokenId == apiTokenId);
+        if (status is { } requestedStatus)
+            query = query.Where(operation => operation.Status == requestedStatus);
+        if (kind is not null)
+            query = query.Where(operation => operation.Kind == kind);
+        if (beforeCreatedAt is { } createdAt && beforeId is { } id)
+            query = query.Where(operation => operation.CreatedAt < createdAt ||
+                operation.CreatedAt == createdAt && operation.Id.CompareTo(id) < 0);
+        return await query
+            .OrderByDescending(operation => operation.CreatedAt)
+            .ThenByDescending(operation => operation.Id)
+            .Take(count)
+            .ToArrayAsync(cancellationToken);
+    }
+
     public async Task<IReadOnlyList<ApiOperation>> ClaimAsync(
         string leaseOwner,
         TimeSpan leaseDuration,

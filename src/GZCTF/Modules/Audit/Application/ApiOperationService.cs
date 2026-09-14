@@ -1,9 +1,43 @@
 using GZCTF.Modules.Audit.Domain;
+using GZCTF.Infrastructure.Persistence.Queries;
 
 namespace GZCTF.Modules.Audit.Application;
 
 public sealed class ApiOperationService(IApiOperationStore store)
 {
+    public async Task<ApiOperationPageResult> ListForTokenAsync(
+        Guid apiTokenId,
+        ApiOperationStatus? status,
+        string? kind,
+        string? after,
+        int limit,
+        CancellationToken cancellationToken)
+    {
+        if (apiTokenId == Guid.Empty || limit is < 1 or > 100 ||
+            status.HasValue && !Enum.IsDefined(status.Value))
+            throw new ApiOperationQueryException(
+                "operation_filter_invalid", "The operation filter is invalid.");
+        var normalizedKind = string.IsNullOrWhiteSpace(kind) ? null : kind.Trim();
+        if (normalizedKind?.Length > 128)
+            throw new ApiOperationQueryException(
+                "operation_filter_invalid", "The operation kind filter is invalid.");
+
+        var cursor = DecodeCursor(after);
+        var rows = await store.ListForTokenAsync(
+            apiTokenId,
+            status,
+            normalizedKind,
+            cursor?.Time,
+            cursor?.Id,
+            limit + 1,
+            cancellationToken);
+        var items = rows.Take(limit).ToArray();
+        var nextCursor = rows.Count > limit
+            ? new GuidTimeCursor(items[^1].CreatedAt, items[^1].Id).Encode()
+            : null;
+        return new ApiOperationPageResult(items, nextCursor);
+    }
+
     public async Task<ApiOperation?> GetAccessibleAsync(
         Guid id,
         Guid apiTokenId,
@@ -86,4 +120,22 @@ public sealed class ApiOperationService(IApiOperationStore store)
         CancellationToken cancellationToken) =>
         store.RetryOrFailAsync(
             id, leaseOwner, maxAttempts, errorCode, errorDetail, retryDelay, cancellationToken);
+
+    private static GuidTimeCursor? DecodeCursor(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        try
+        {
+            return GuidTimeCursor.Decode(value);
+        }
+        catch (InvalidTimeCursorException)
+        {
+            throw new ApiOperationQueryException(
+                "operation_cursor_invalid", "The operation cursor is invalid.");
+        }
+    }
 }
+
+public sealed record ApiOperationPageResult(
+    IReadOnlyList<ApiOperation> Items,
+    string? NextCursor);
