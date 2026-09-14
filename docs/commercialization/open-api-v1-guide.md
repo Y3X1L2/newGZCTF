@@ -317,7 +317,7 @@ Flag 模板）”条件的题会被禁用或跳过。
 | 流量与路径 | `/teamlab/runtimes/{id}/traffic` | `teamlab.traffic:read` |
 | PCAP | `/teamlab/runtimes/{id}/captures` | `teamlab.capture:read/write` |
 
-Topology v2 只表达逻辑资产、交换机、路由器、网段、连接、依赖、Bootstrap 和观测
+Topology v2 只表达逻辑资产、交换机、路由器、网段、连接、Bootstrap 和观测
 意图，不接受 WorkerNode ID、bridge、namespace、Fabric IP 或宿主机命令。
 
 Runtime 可拆分为多个 shard。一个逻辑网段归属一个 Worker，跨节点通过 L3 Fabric

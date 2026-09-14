@@ -131,7 +131,6 @@ schema v2 在既有 network/asset 基础上增加：
 
 - 显式 `managed-switch` 与 `managed-router` 基础设施节点；
 - 带方向的 L3 connection，不引入端口级 ACL；
-- asset dependency DAG，条件为 network-ready、guest-ready、bootstrap-completed、service-ready；
 - digest-pinned Bootstrap Profile 引用、参数和 secret 参数声明；
 - `disabled`、`preferred`、`required` endpoint observation 模式；
 - stateless 标记，仅用于满足全部受控恢复条件后的自动重建。

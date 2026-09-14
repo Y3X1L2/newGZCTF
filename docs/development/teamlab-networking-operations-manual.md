@@ -301,7 +301,6 @@ Scope: teamlab.topologies:write
 | `connections` | array | 是 | 网段/路由连接列表 |
 | `editor` | object | 否 | 画布布局（坐标、尺寸、折叠） |
 | `infrastructure` | array | 否 | 交换机/路由器基础设施节点 |
-| `dependencies` | array | 否 | 资产启动依赖 |
 | `observation` | object | 否 | 观测策略 |
 | `controlScopeId` | guid | 创建时可选 | 归属控制范围；管理员可用 |
 
@@ -440,22 +439,6 @@ Scope: teamlab.topologies:write
 | `networkKey` | string | 否 | 所属网段（交换机通常必填） |
 | `interfaces[]` | array | 是 | 网卡列表，结构与资产网卡相同 |
 
-#### 依赖对象 `dependencies[]`
-
-```json
-{
-  "assetKey": "scada",
-  "dependsOnKey": "plc",
-  "condition": 1
-}
-```
-
-| 字段 | 类型 | 必填 | 说明 |
-| --- | --- | --- | --- |
-| `assetKey` | string | 是 | 后启动资产 |
-| `dependsOnKey` | string | 是 | 先决资产 |
-| `condition` | int | 是 | `0`=NetworkReady，`1`=GuestReady，`2`=ServiceReady，`3`=BootstrapCompleted |
-
 #### 观测策略对象 `observation`
 
 ```json
@@ -567,7 +550,6 @@ Scope: teamlab.topologies:read
     "assets": [],
     "connections": [],
     "infrastructure": [],
-    "dependencies": [],
     "observation": null
   },
   "editor": {
@@ -2568,10 +2550,6 @@ HTTP JSON 中未标注字符串的枚举使用数字值。以下汇总本文用�
 |  | 1 | ManagedRouter |
 | `TeamLabConnectionDirection` | 0 | FromTo |
 |  | 1 | Bidirectional |
-| `TeamLabDependencyCondition` | 0 | NetworkReady |
-|  | 1 | GuestReady |
-|  | 2 | ServiceReady |
-|  | 3 | BootstrapCompleted |
 | `TeamLabEndpointObservationMode` | 0 | Disabled |
 |  | 1 | Optional |
 |  | 2 | Required |
