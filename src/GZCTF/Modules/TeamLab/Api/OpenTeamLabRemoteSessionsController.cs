@@ -37,9 +37,8 @@ public sealed class OpenTeamLabRemoteSessionsController(
         Guid runtimeId,
         CancellationToken cancellationToken)
     {
-        await RequireRuntimeScopeAsync(runtimeId, writable: false, cancellationToken);
         var actor = Actor();
-        return (await remoteAccess.GetAvailabilityBatchAsync(runtimeId, actor.UserId, administrator: false, cancellationToken))
+        return (await remoteAccess.GetAvailabilityBatchApiAsync(runtimeId, actor.TokenId, cancellationToken))
             .Select(item => item.ToOpen()).ToArray();
     }
 
@@ -69,8 +68,7 @@ public sealed class OpenTeamLabRemoteSessionsController(
     public async Task<OpenTeamLabRemoteSessionModel> Get(Guid sessionId, CancellationToken cancellationToken)
     {
         var actor = Actor();
-        var session = await remoteAccess.GetAsync(sessionId, actor.UserId, administrator: false, cancellationToken);
-        await RequireRuntimeScopeAsync(session.RuntimeId, writable: false, cancellationToken);
+        var session = await remoteAccess.GetApiAsync(sessionId, actor.TokenId, writable: false, cancellationToken);
         return session.ToOpen();
     }
 
@@ -82,8 +80,8 @@ public sealed class OpenTeamLabRemoteSessionsController(
         [FromHeader(Name = "Idempotency-Key"), Required] string idempotencyKey, CancellationToken cancellationToken)
     {
         var actor = Actor();
-        var session = await remoteAccess.GetAsync(sessionId, actor.UserId, false, cancellationToken);
-        var scopeId = await RequireRuntimeScopeAsync(session.RuntimeId, true, cancellationToken);
+        var session = await remoteAccess.GetApiAsync(sessionId, actor.TokenId, writable: true, cancellationToken);
+        var scopeId = await RequireRuntimeScopeAsync(session.RuntimeId, writable: true, cancellationToken);
         var result = await operations.SubmitRemoteSessionEndAsync(actor.TokenId, actor.UserId,
             idempotencyKey, session.RuntimeId, scopeId, sessionId, cancellationToken);
         var operation = ApiOperationModel.FromEntity(result.Operation);
@@ -95,10 +93,9 @@ public sealed class OpenTeamLabRemoteSessionsController(
     [OpenApiOperation("获取一次性远程连接", "消费 VM 会话连接入口；入口只返回一次，过期需重新创建会话。")]
     public async Task<OpenTeamLabRemoteConnectModel> Connect(Guid sessionId, CancellationToken cancellationToken)
     {
-        await RequireSessionScopeAsync(sessionId, cancellationToken);
         var actor = Actor();
         Response.Headers.CacheControl = "no-store";
-        var result = await remoteAccess.ConnectAsync(sessionId, actor.UserId, false, cancellationToken);
+        var result = await remoteAccess.ConnectApiAsync(sessionId, actor.UserId, actor.TokenId, cancellationToken);
         return new(result.Url, result.ExpiresAt);
     }
 
@@ -107,29 +104,22 @@ public sealed class OpenTeamLabRemoteSessionsController(
     [OpenApiOperation("连接容器终端", "WebSocket：二进制消息为 PTY 字节；文本 JSON 支持 resize、input、signal。Bearer token 必须在 Authorization 请求头中。")]
     public async Task Terminal(Guid sessionId, CancellationToken cancellationToken)
     {
-        await RequireSessionScopeAsync(sessionId, cancellationToken);
+        var actor = Actor();
+        await remoteAccess.GetApiAsync(sessionId, actor.TokenId, writable: true, cancellationToken);
         if (!HttpContext.WebSockets.IsWebSocketRequest)
         {
             Response.StatusCode = StatusCodes.Status426UpgradeRequired;
             return;
         }
-        var actor = Actor();
         using var socket = await HttpContext.WebSockets.AcceptWebSocketAsync();
-        await remoteAccess.ProxyTerminalAsync(sessionId, actor.UserId, false, socket, cancellationToken);
-    }
-
-    private async Task RequireSessionScopeAsync(Guid sessionId, CancellationToken cancellationToken)
-    {
-        var actor = Actor();
-        var session = await remoteAccess.GetAsync(sessionId, actor.UserId, false, cancellationToken);
-        await RequireRuntimeScopeAsync(session.RuntimeId, writable: true, cancellationToken);
+        await remoteAccess.ProxyTerminalApiAsync(sessionId, actor.UserId, actor.TokenId, socket, cancellationToken);
     }
 
     private async Task<Guid> RequireRuntimeScopeAsync(Guid runtimeId, bool writable, CancellationToken cancellationToken)
     {
         var actor = Actor();
         return await scopeAuthorization.RequireRuntimeScopeAsync(
-            runtimeId, actor.TokenId, IsAdministrator(), writable, cancellationToken);
+            runtimeId, actor.TokenId, administrator: false, writable, cancellationToken);
     }
 
     private (Guid TokenId, Guid UserId) Actor()
@@ -139,8 +129,4 @@ public sealed class OpenTeamLabRemoteSessionsController(
             return (tokenId, userId);
         throw new TeamLabApiContractException("authentication_required", "需要身份验证。", 401);
     }
-
-    private bool IsAdministrator() => User.FindAll(ApiTokenClaimTypes.Resource).Any(claim =>
-        ApiTokenResourceClaim.TryParse(claim.Value, out var type, out var id) &&
-        type == "teamlab-scope" && id == "*");
 }

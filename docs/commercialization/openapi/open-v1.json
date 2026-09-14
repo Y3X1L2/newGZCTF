@@ -7,6 +7,704 @@
     "version": "v1"
   },
   "paths": {
+    "/api/open/v1/teamlab/runtimes/{runtimeId}/assets/{assetId}/files": {
+      "get": {
+        "tags": [
+          "TeamLab - Asset files"
+        ],
+        "summary": "列出资产文件",
+        "description": "列出授权运行时当前代资产中指定目录的直接子项。",
+        "operationId": "OpenTeamLabAssetFiles_List",
+        "parameters": [
+          {
+            "name": "runtimeId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "assetId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "x-position": 2
+          },
+          {
+            "name": "generation",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "maximum": 2147483647.0,
+              "minimum": 1.0
+            },
+            "x-position": 3
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 1024,
+              "minLength": 1
+            },
+            "x-position": 4
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenTeamLabAssetFileListModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "TeamLab - Asset files"
+        ],
+        "summary": "删除资产文件",
+        "description": "删除授权运行时当前代资产中的文件或目录，必须显式确认。",
+        "operationId": "OpenTeamLabAssetFiles_Delete",
+        "parameters": [
+          {
+            "name": "runtimeId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "assetId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "x-position": 2
+          },
+          {
+            "name": "generation",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "maximum": 2147483647.0,
+              "minimum": 1.0
+            },
+            "x-position": 3
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 1024,
+              "minLength": 1
+            },
+            "x-position": 4
+          },
+          {
+            "name": "recursive",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            },
+            "x-position": 5
+          },
+          {
+            "name": "confirmed",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            },
+            "x-position": 6
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/teamlab/runtimes/{runtimeId}/assets/{assetId}/files/download": {
+      "get": {
+        "tags": [
+          "TeamLab - Asset files"
+        ],
+        "summary": "下载资产文件",
+        "description": "以二进制流下载授权运行时当前代资产中的单个文件。",
+        "operationId": "OpenTeamLabAssetFiles_Download",
+        "parameters": [
+          {
+            "name": "runtimeId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "assetId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "x-position": 2
+          },
+          {
+            "name": "generation",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "maximum": 2147483647.0,
+              "minimum": 1.0
+            },
+            "x-position": 3
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 1024,
+              "minLength": 1
+            },
+            "x-position": 4
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/teamlab/runtimes/{runtimeId}/assets/{assetId}/files/upload": {
+      "post": {
+        "tags": [
+          "TeamLab - Asset files"
+        ],
+        "summary": "上传资产文件",
+        "description": "以 multipart 二进制流上传单个文件；覆盖已有文件时必须显式确认。",
+        "operationId": "OpenTeamLabAssetFiles_Upload",
+        "parameters": [
+          {
+            "name": "runtimeId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "assetId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "x-position": 2
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "generation": {
+                    "type": "integer",
+                    "format": "int32"
+                  },
+                  "path": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "nullable": true
+                  },
+                  "overwrite": {
+                    "type": "boolean"
+                  },
+                  "confirmed": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "401": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/teamlab/runtimes/{runtimeId}/assets/{assetId}/files/directories": {
+      "post": {
+        "tags": [
+          "TeamLab - Asset files"
+        ],
+        "summary": "创建资产目录",
+        "description": "在授权运行时当前代资产中创建目录。",
+        "operationId": "OpenTeamLabAssetFiles_CreateDirectory",
+        "parameters": [
+          {
+            "name": "runtimeId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "assetId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "x-position": 2
+          }
+        ],
+        "requestBody": {
+          "x-name": "model",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenCreateTeamLabAssetDirectoryModel"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 3
+        },
+        "responses": {
+          "401": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/teamlab/runtimes/{runtimeId}/assets/{assetId}/files/move": {
+      "post": {
+        "tags": [
+          "TeamLab - Asset files"
+        ],
+        "summary": "移动资产文件",
+        "description": "在同一授权资产内移动或重命名文件；覆盖目标时必须显式确认。",
+        "operationId": "OpenTeamLabAssetFiles_Move",
+        "parameters": [
+          {
+            "name": "runtimeId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "assetId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "x-position": 2
+          }
+        ],
+        "requestBody": {
+          "x-name": "model",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenMoveTeamLabAssetFileModel"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 3
+        },
+        "responses": {
+          "401": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
     "/api/open/v1/teamlab/connectors": {
       "get": {
         "tags": [
@@ -1295,6 +1993,175 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/TeamLabLinkPolicyModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/teamlab/remote-sessions/{sessionId}/audit": {
+      "get": {
+        "tags": [
+          "TeamLab - Remote session audit"
+        ],
+        "summary": "查询远程会话操作审计",
+        "description": "返回会话生命周期证据的就绪状态、保留期限和摘要。",
+        "operationId": "OpenTeamLabRemoteAudit_Summary",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenTeamLabRemoteAuditSummaryModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/teamlab/remote-sessions/{sessionId}/audit/evidence/{evidenceId}/download": {
+      "get": {
+        "tags": [
+          "TeamLab - Remote session audit"
+        ],
+        "summary": "下载远程会话操作审计证据",
+        "description": "下载已完成完整性校验的会话生命周期 JSON 证据。",
+        "operationId": "OpenTeamLabRemoteAudit_DownloadEvidence",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "evidenceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "x-position": 2
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
                 }
               }
             }
@@ -10339,6 +11206,69 @@
           }
         }
       },
+      "OpenTeamLabAssetFileListModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OpenTeamLabAssetFileEntryModel"
+            }
+          }
+        }
+      },
+      "OpenTeamLabAssetFileEntryModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "OpenCreateTeamLabAssetDirectoryModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "generation": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "path": {
+            "type": "string"
+          }
+        }
+      },
+      "OpenMoveTeamLabAssetFileModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "generation": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "sourcePath": {
+            "type": "string"
+          },
+          "destinationPath": {
+            "type": "string"
+          },
+          "overwrite": {
+            "type": "boolean"
+          },
+          "confirmed": {
+            "type": "boolean"
+          }
+        }
+      },
       "TeamLabConnectorPageModel": {
         "type": "object",
         "additionalProperties": false,
@@ -10883,6 +11813,51 @@
           }
         }
       },
+      "OpenTeamLabRemoteAuditSummaryModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "state": {
+            "type": "string"
+          },
+          "retentionDays": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OpenTeamLabRemoteAuditEvidenceModel"
+            }
+          }
+        }
+      },
+      "OpenTeamLabRemoteAuditEvidenceModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "sha256": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "integer",
+            "format": "uint64"
+          },
+          "expiresAt": {
+            "type": "integer",
+            "format": "uint64",
+            "nullable": true
+          }
+        }
+      },
       "OpenTeamLabRemoteAvailabilityModel": {
         "type": "object",
         "additionalProperties": false,
@@ -10930,14 +11905,9 @@
       "OpenCreateTeamLabRemoteSessionModel": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "reason"
-        ],
         "properties": {
           "reason": {
-            "type": "string",
-            "maxLength": 500,
-            "minLength": 4
+            "type": "string"
           },
           "vncConsole": {
             "type": "boolean"
@@ -15817,6 +16787,9 @@
   },
   "tags": [
     {
+      "name": "TeamLab - Asset files"
+    },
+    {
       "name": "TeamLab - Connectors"
     },
     {
@@ -15828,6 +16801,9 @@
     },
     {
       "name": "TeamLab - Link policies"
+    },
+    {
+      "name": "TeamLab - Remote session audit"
     },
     {
       "name": "TeamLab - Remote sessions"

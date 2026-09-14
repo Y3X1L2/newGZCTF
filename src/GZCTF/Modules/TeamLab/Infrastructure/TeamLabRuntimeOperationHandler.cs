@@ -252,6 +252,7 @@ public sealed class TeamLabRuntimeOperationHandler(
             .Where(item => item.Id == actorUserId)
             .Select(item => item.Role >= Role.Admin)
             .SingleOrDefaultAsync(cancellationToken);
+        var scopeAdministrator = operation.ApiTokenId is null && isAdministrator;
         var payload = ReadPayload(job);
 
         if (IsExternalCommand(job.Kind))
@@ -261,7 +262,7 @@ public sealed class TeamLabRuntimeOperationHandler(
             if (scopeId is not { } resolvedScope)
                 throw new ApiOperationTerminalException("teamlab_scope_missing", "TeamLab 控制范围缺失。");
             await scopeAuthorization.RequireWritableAsync(
-                resolvedScope, operation.ApiTokenId, isAdministrator, cancellationToken);
+                resolvedScope, operation.ApiTokenId, scopeAdministrator, cancellationToken);
         }
 
         switch (job.Kind)
@@ -270,25 +271,27 @@ public sealed class TeamLabRuntimeOperationHandler(
             case TeamLabRuntimeOperationKind.RemoteSessionEnd:
             {
                 var runtimeId = payload.RuntimeId ?? throw MissingPayload("运行时 ID");
-                await RequireRuntimeScopeAsync(runtimeId, payload, operation, isAdministrator, true, cancellationToken);
+                await RequireRuntimeScopeAsync(runtimeId, payload, operation, scopeAdministrator, true, cancellationToken);
                 TeamLabRemoteSessionModel result;
                 if (job.Kind == TeamLabRuntimeOperationKind.RemoteSessionCreate)
-                    result = await remoteAccess.CreateForOperationAsync(runtimeId,
+                    result = await remoteAccess.CreateForApiOperationAsync(runtimeId,
                         payload.RemoteAssetId ?? throw MissingPayload("资产 ID"), actorUserId,
+                        operation.ApiTokenId ?? throw MissingPayload("API token"),
                         payload.RemoteReason ?? throw MissingPayload("访问原因"), operation.Id, cancellationToken, payload.RemoteVncConsole);
                 else
                 {
                     var sessionId = payload.RemoteSessionId ?? throw MissingPayload("会话 ID");
-                    var session = await remoteAccess.GetAsync(sessionId, actorUserId, false, cancellationToken);
+                    var apiTokenId = operation.ApiTokenId ?? throw MissingPayload("API token");
+                    var session = await remoteAccess.GetApiAsync(sessionId, apiTokenId, writable: true, cancellationToken);
                     if (session.RuntimeId != runtimeId)
                         throw new ApiOperationTerminalException("teamlab_scope_mismatch", "会话不属于请求的运行时。");
-                    try { await remoteAccess.EndAsync(sessionId, actorUserId, false, "api-close", cancellationToken); }
+                    try { await remoteAccess.EndApiAsync(sessionId, actorUserId, apiTokenId, "api-close", cancellationToken); }
                     catch (TeamLabApiContractException exception) when (exception.Code == "remote_session_cleanup_pending")
                     {
                         throw new ApiOperationDeferredException("remote-session-cleaning", exception.Code,
                             "远程会话正在等待基础设施清理。", TimeSpan.FromSeconds(30));
                     }
-                    result = await remoteAccess.GetAsync(sessionId, actorUserId, false, cancellationToken);
+                    result = await remoteAccess.GetApiAsync(sessionId, apiTokenId, writable: true, cancellationToken);
                 }
                 await operations.UpdateProgressAsync(operation.Id, leaseOwner,
                     job.Kind == TeamLabRuntimeOperationKind.RemoteSessionCreate ? "remote-session-ready" : "remote-session-ended",
@@ -351,7 +354,7 @@ public sealed class TeamLabRuntimeOperationHandler(
                 if (!string.Equals(payload.CreateAccessGrant?.Type, "WireGuard", StringComparison.OrdinalIgnoreCase))
                     throw new ApiOperationTerminalException(
                         "topology_invalid", "仅支持 WireGuard 访问授权。");
-                await RequireRuntimeScopeAsync(runtimeId, payload, operation, isAdministrator, true, cancellationToken);
+                await RequireRuntimeScopeAsync(runtimeId, payload, operation, scopeAdministrator, true, cancellationToken);
                 var result = await access.CreateForOperationAsync(runtimeId, operation.Id, cancellationToken);
                 job.RuntimePublicId = runtimeId;
                 await operations.UpdateProgressAsync(operation.Id, leaseOwner, "access-grant-created", 1, 1,
@@ -363,7 +366,7 @@ public sealed class TeamLabRuntimeOperationHandler(
             {
                 var runtimeId = payload.RuntimeId ?? throw MissingPayload("运行时 ID");
                 var grantId = payload.AccessGrantId ?? throw MissingPayload("访问授权 ID");
-                await RequireRuntimeScopeAsync(runtimeId, payload, operation, isAdministrator, true, cancellationToken);
+                await RequireRuntimeScopeAsync(runtimeId, payload, operation, scopeAdministrator, true, cancellationToken);
                 await access.RevokeAsync(runtimeId, grantId, cancellationToken);
                 job.RuntimePublicId = runtimeId;
                 await operations.UpdateProgressAsync(operation.Id, leaseOwner, "access-grant-revoked", 1, 1,
@@ -374,7 +377,7 @@ public sealed class TeamLabRuntimeOperationHandler(
             case TeamLabRuntimeOperationKind.CaptureStart:
             {
                 var runtimeId = payload.RuntimeId ?? throw MissingPayload("运行时 ID");
-                await RequireRuntimeScopeAsync(runtimeId, payload, operation, isAdministrator, true, cancellationToken);
+                await RequireRuntimeScopeAsync(runtimeId, payload, operation, scopeAdministrator, true, cancellationToken);
                 var result = await traffic.StartCaptureForOperationAsync(
                     runtimeId,
                     payload.CreateCapture ?? throw MissingPayload("抓包请求"),
@@ -390,7 +393,7 @@ public sealed class TeamLabRuntimeOperationHandler(
             {
                 var runtimeId = payload.RuntimeId ?? throw MissingPayload("运行时 ID");
                 var captureId = payload.CaptureId ?? throw MissingPayload("抓包 ID");
-                await RequireRuntimeScopeAsync(runtimeId, payload, operation, isAdministrator, true, cancellationToken);
+                await RequireRuntimeScopeAsync(runtimeId, payload, operation, scopeAdministrator, true, cancellationToken);
                 var result = await traffic.StopCaptureAsync(runtimeId, captureId, cancellationToken);
                 job.RuntimePublicId = runtimeId;
                 await operations.UpdateProgressAsync(operation.Id, leaseOwner, "capture-stopped", 1, 1,

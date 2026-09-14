@@ -4,7 +4,7 @@ using GZCTF.Modules.TeamLab.Domain.Runtime;
 namespace GZCTF.Modules.TeamLab.Contracts;
 
 public sealed record OpenCreateTeamLabRemoteSessionModel(
-    [property: Required, StringLength(500, MinimumLength = 4)] string Reason, bool VncConsole = false);
+    [param: Required, StringLength(500, MinimumLength = 4)] string Reason, bool VncConsole = false);
 
 public sealed record OpenTeamLabRemoteSessionModel(
     Guid Id, Guid RuntimeId, int AssetId, string AssetName,

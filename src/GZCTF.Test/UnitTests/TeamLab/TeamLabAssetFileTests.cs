@@ -147,7 +147,7 @@ public sealed class TeamLabAssetFileTests
 
     static AppDbContext Context() => new(new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
     static TeamLabAssetFileService Service(AppDbContext db, ITeamLabAssetFileGateway gateway, IDataProtectionProvider? protection = null) =>
-        new(db, new TeamLabAuthorizationService(db, [], []), gateway,
+        new(db, new TeamLabAuthorizationService(db, [], []), new TeamLabScopeAuthorizationService(db), gateway,
             new TeamLabEventRecorder(db, new EfOperationalEventWriter(db, NullLogger<EfOperationalEventWriter>.Instance), new OperationalCorrelation()),
             new ImageRemoteAccessService(db, protection ?? new EphemeralDataProtectionProvider()), new LocalDevelopmentLeaseProvider(),
             new TeamLabRuntimeOperationPayloadProtector(new EphemeralDataProtectionProvider()));

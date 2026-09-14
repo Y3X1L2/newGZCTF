@@ -14,11 +14,39 @@ public interface ITeamLabAssetFileGateway
 }
 
 public sealed class TeamLabAssetFileService(AppDbContext context, TeamLabAuthorizationService authorization,
-    ITeamLabAssetFileGateway gateway, TeamLabEventRecorder events, ImageRemoteAccessService imageAccess,
+    TeamLabScopeAuthorizationService scopeAuthorization, ITeamLabAssetFileGateway gateway,
+    TeamLabEventRecorder events, ImageRemoteAccessService imageAccess,
     IDistributedLeaseProvider leases, TeamLabRuntimeOperationPayloadProtector operationPayloads)
 {
-    public async Task<TeamLabFileResult> ExecuteAsync(Guid runtimeId, int assetId, Guid actorId, bool administrator,
-        TeamLabAssetFileCommand command, CancellationToken token)
+    public Task<TeamLabFileResult> ExecuteAsync(Guid runtimeId, int assetId, Guid actorId, bool administrator,
+        TeamLabAssetFileCommand command, CancellationToken token) =>
+        ExecuteCoreAsync(runtimeId, assetId, actorId, command,
+            cancellationToken => authorization.RequirePermissionAsync(
+                runtimeId,
+                actorId,
+                administrator,
+                command.Operation == "reset-ssh-identity"
+                    ? TeamLabRuntimePermission.LifecycleManage
+                    : TeamLabRuntimePermission.RemoteSessionOperate,
+                cancellationToken),
+            token);
+
+    public Task<TeamLabFileResult> ExecuteApiAsync(Guid runtimeId, int assetId, Guid apiTokenId, Guid actorId,
+        TeamLabAssetFileCommand command, CancellationToken token) =>
+        ExecuteCoreAsync(runtimeId, assetId, actorId, command,
+            async cancellationToken =>
+            {
+                await scopeAuthorization.RequireRuntimeScopeAsync(
+                    runtimeId,
+                    apiTokenId,
+                    administrator: false,
+                    writable: command.Operation is not ("list" or "download"),
+                    cancellationToken);
+            },
+            token);
+
+    private async Task<TeamLabFileResult> ExecuteCoreAsync(Guid runtimeId, int assetId, Guid actorId,
+        TeamLabAssetFileCommand command, Func<CancellationToken, Task> authorize, CancellationToken token)
     {
         if (!TeamLabFileLimits.IsValidPath(command.Path) || command.Operation is not ("list" or "download" or "upload" or "delete" or "mkdir" or "move" or "reset-ssh-identity") ||
             command.Operation == "move" && !TeamLabFileLimits.IsValidPath(command.DestinationPath) ||
@@ -26,8 +54,7 @@ public sealed class TeamLabAssetFileService(AppDbContext context, TeamLabAuthori
             throw new TeamLabApiContractException("files.invalid_request", "路径、操作或文件大小无效；单文件上限为 8 MiB。", 422);
         if ((command.Operation is "delete" or "reset-ssh-identity" || command.Overwrite) && !command.Confirmed)
             throw new TeamLabApiContractException("files.confirmation_required", "删除、覆盖或替换文件需要明确确认。", 422);
-        var permission = command.Operation == "reset-ssh-identity" ? TeamLabRuntimePermission.LifecycleManage : TeamLabRuntimePermission.RemoteSessionOperate;
-        await authorization.RequirePermissionAsync(runtimeId, actorId, administrator, permission, token);
+        await authorize(token);
         await using var lease = await leases.AcquireAsync($"teamlab:asset-files:{runtimeId:D}:{assetId}", TimeSpan.FromSeconds(5), TimeSpan.FromMinutes(2), token);
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(token, lease.LeaseLost);
         token = linked.Token;
@@ -75,7 +102,7 @@ public sealed class TeamLabAssetFileService(AppDbContext context, TeamLabAuthori
         if (!await context.TeamLabRuntimeAssets.AnyAsync(item => item.Id == assetId && item.Generation == command.Generation &&
                 item.Runtime.Generation == command.Generation && item.RuntimeResourceId == asset.RuntimeResourceId && item.WorkerNodeId == asset.WorkerNodeId, token))
             throw new TeamLabApiContractException("files.stale_generation", "操作期间资产绑定已变化，请刷新后核对结果。", 409);
-        await authorization.RequirePermissionAsync(runtimeId, actorId, administrator, permission, token);
+        await authorize(token);
         events.Record(asset.Runtime, "asset-files", TeamLabEventLevel.Info,
             OperationalEventCodes.TeamLab.AssetFilesAccessed, OperationalEventOutcome.Succeeded,
             "资产文件操作完成", workerNodeId: asset.WorkerNodeId, detail: new Dictionary<string, object?>
