@@ -39,7 +39,3 @@ export function buildKeyRemap(keys: readonly string[], preferredSuffix: string, 
   }
   return remap
 }
-
-export function dependencyConnectionKey(assetKey: string, dependsOnKey: string, condition: string) {
-  return normalizeTopologyKey(`dependency-${assetKey}-${dependsOnKey}-${condition}`)
-}

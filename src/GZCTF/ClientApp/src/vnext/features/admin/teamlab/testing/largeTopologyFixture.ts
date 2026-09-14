@@ -64,15 +64,6 @@ export function createLargeTopologyFixture(): TopologyDocument {
         primary: true,
         orderIndex: 0,
       }
-      if (offset > 0) {
-        connections[`dependency-${assetIndex.toString().padStart(3, '0')}`] = {
-          type: 'dependency',
-          key: `dependency-${assetIndex.toString().padStart(3, '0')}`,
-          assetKey: current.key,
-          dependsOnKey: `asset-${(assetIndex - 1).toString().padStart(3, '0')}`,
-          condition: 'service-ready',
-        }
-      }
       if (offset === 3 && networkIndex < 31) {
         connections[`nic-${assetIndex.toString().padStart(3, '0')}-secondary`] = {
           type: 'membership',

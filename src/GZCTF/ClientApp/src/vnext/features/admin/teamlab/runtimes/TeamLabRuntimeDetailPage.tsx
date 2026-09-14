@@ -8,7 +8,7 @@ import { useVNextPageTitle } from '../../../../shared/useVNextPageTitle'
 import { MetricItem, MetricStrip, RefreshIndicator } from '../../shared/AdminWorkbench'
 import { formatAdminDate } from '../../shared/adminFormat'
 import { teamLabRuntimeApi } from '../api'
-import { TeamLabRuntimeStatusBadge } from '../shared/TeamLabStatusBadge'
+import { TeamLabAccessStatusBadge, TeamLabRuntimeStatusBadge } from '../shared/TeamLabStatusBadge'
 import { CapturePanel } from './CapturePanel'
 import { AssetDiagnosticsPanel } from './AssetDiagnosticsPanel'
 import { AssetFilesPanel } from './AssetFilesPanel'
@@ -195,7 +195,7 @@ export function TeamLabRuntimeDetailPage() {
         <MetricItem
           detail={formatAdminDate(runtime.updatedAt ?? runtime.createdAt)}
           label="选手入口"
-          value={runtime.openForAccess ? '已开放' : '未开放'}
+          value={<TeamLabAccessStatusBadge open={runtime.openForAccess} />}
           tone={runtime.openForAccess ? 'success' : 'neutral'}
         />
       </MetricStrip>

@@ -1,7 +1,6 @@
 import type {
   TeamLabAssetResources,
   TeamLabConnectionDirection,
-  TeamLabDependencyCondition,
   TeamLabEndpointObservationMode,
   TeamLabHealthCheck,
   TeamLabObservationPolicy,
@@ -90,15 +89,7 @@ export interface TopologyRouteConnection {
   direction: TeamLabConnectionDirection
 }
 
-export interface TopologyDependencyConnection {
-  type: 'dependency'
-  key: string
-  assetKey: string
-  dependsOnKey: string
-  condition: TeamLabDependencyCondition
-}
-
-export type TopologyConnection = TopologyMembershipConnection | TopologyRouteConnection | TopologyDependencyConnection
+export type TopologyConnection = TopologyMembershipConnection | TopologyRouteConnection
 
 export interface TopologyDocument {
   schemaVersion: 2

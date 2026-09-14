@@ -7,7 +7,6 @@ import type {
   TeamLabAssetKind,
   TeamLabCapabilities,
   TeamLabConnectionDirection,
-  TeamLabDependencyCondition,
   TeamLabEditorItem,
   TeamLabEndpointObservationMode,
   TeamLabHealthCheckKind,
@@ -18,7 +17,6 @@ import type {
   TeamLabTopologyAsset,
   TeamLabTopologyConnection,
   TeamLabTopologyDefinition,
-  TeamLabTopologyDependency,
   TeamLabTopologyDetail,
   TeamLabTopologyEditor,
   TeamLabTopologyInfrastructure,
@@ -40,16 +38,6 @@ const infrastructureKinds = {
   ManagedRouter: 'managed-router',
 } as const
 const directions = { 0: 'from-to', 1: 'bidirectional', FromTo: 'from-to', Bidirectional: 'bidirectional' } as const
-const dependencyConditions = {
-  0: 'network-ready',
-  1: 'guest-ready',
-  2: 'service-ready',
-  3: 'guest-ready',
-  NetworkReady: 'network-ready',
-  GuestReady: 'guest-ready',
-  ServiceReady: 'service-ready',
-  BootstrapCompleted: 'guest-ready',
-} as const
 const observationModes = {
   0: 'disabled',
   1: 'optional',
@@ -230,15 +218,6 @@ function parseConnection(value: unknown, label: string): TeamLabTopologyConnecti
   }
 }
 
-function parseDependency(value: unknown, label: string): TeamLabTopologyDependency {
-  const item = record(value, label)
-  return {
-    assetKey: string(item.assetKey, `${label}.assetKey`),
-    dependsOnKey: string(item.dependsOnKey, `${label}.dependsOnKey`),
-    condition: enumValue(item.condition, dependencyConditions, `${label}.condition`),
-  }
-}
-
 function parseObservation(value: unknown, label: string): TeamLabObservationPolicy {
   if (value === null || value === undefined) {
     return { flowMetadataEnabled: true, onDemandPcapEnabled: true, endpointObservation: 'optional' }
@@ -262,7 +241,6 @@ export function parseTeamLabDefinition(
     infrastructure: optionalArray(item.infrastructure, `${label}.infrastructure`, parseInfrastructure),
     assets: array(item.assets, `${label}.assets`, parseAsset),
     connections: array(item.connections, `${label}.connections`, parseConnection),
-    dependencies: optionalArray(item.dependencies, `${label}.dependencies`, parseDependency),
     observation: parseObservation(item.observation, `${label}.observation`),
   }
 }
@@ -542,11 +520,6 @@ export function parseTeamLabReleaseReadiness(value: unknown): TeamLabAdminReleas
 const assetKindWire: Record<TeamLabAssetKind, number> = { docker: 0, vm: 1 }
 const infrastructureKindWire: Record<TeamLabInfrastructureKind, number> = { 'managed-switch': 0, 'managed-router': 1 }
 const directionWire: Record<TeamLabConnectionDirection, number> = { 'from-to': 0, bidirectional: 1 }
-const dependencyWire: Record<TeamLabDependencyCondition, number> = {
-  'network-ready': 0,
-  'guest-ready': 1,
-  'service-ready': 2,
-}
 const observationWire: Record<TeamLabEndpointObservationMode, number> = { disabled: 0, optional: 1, required: 2 }
 const healthWire: Record<TeamLabHealthCheckKind, number> = { tcp: 0, http: 1 }
 
@@ -561,7 +534,6 @@ export function serializeTeamLabWriteRequest(request: CreateTeamLabTopologyReque
       endpointObservation: observationWire[item.endpointObservation],
     })),
     connections: request.connections.map((item) => ({ ...item, direction: directionWire[item.direction] })),
-    dependencies: request.dependencies.map((item) => ({ ...item, condition: dependencyWire[item.condition] })),
     observation: {
       ...request.observation,
       endpointObservation: observationWire[request.observation.endpointObservation],

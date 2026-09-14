@@ -87,7 +87,6 @@ function detail(): TeamLabTopologyDetail {
           direction: 'from-to',
         },
       ],
-      dependencies: [{ assetKey: 'web', dependsOnKey: 'dc', condition: 'service-ready' }],
       observation: { flowMetadataEnabled: true, onDemandPcapEnabled: false, endpointObservation: 'required' },
     },
     editor: {
@@ -202,7 +201,6 @@ describe('topology API round trip', () => {
     const source = detail()
     source.schemaVersion = 1
     source.definition.infrastructure = []
-    source.definition.dependencies = []
     source.definition.observation = {
       flowMetadataEnabled: true,
       onDemandPcapEnabled: true,

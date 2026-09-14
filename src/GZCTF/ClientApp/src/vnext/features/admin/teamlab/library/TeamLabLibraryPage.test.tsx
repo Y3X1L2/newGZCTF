@@ -65,8 +65,37 @@ describe('TeamLabLibraryPage', () => {
 
     expect(screen.getByRole('heading', { name: '组网场景库' })).toBeInTheDocument()
     const row = screen.getByRole('row', { name: /企业域演练/ })
-    expect(row).toHaveTextContent('3 网段 · 8 资产 · 2 设施')
+    expect(row).toHaveTextContent('3 网段 · 8 资产')
+    expect(row).not.toHaveTextContent('设施')
     expect(within(row).getByText('已发布')).toBeInTheDocument()
+  })
+
+  it('makes an active trial explicit in the scene status', () => {
+    vi.mocked(useTeamLabCatalog).mockReturnValue(catalog({
+      page: {
+        items: [{
+          ...scene,
+          latestTrialRuntime: {
+            id: '019f0000-0000-7000-8000-000000000010',
+            releaseId: scene.latestRelease!.id,
+            status: 'planning',
+            stage: 'planning',
+            openForAccess: false,
+            createdAt: scene.updatedAt,
+            updatedAt: null,
+            error: null,
+          },
+        }],
+        nextCursor: null,
+      },
+    }))
+    render(<MemoryRouter><TeamLabLibraryPage /></MemoryRouter>)
+
+    const row = screen.getByRole('row', { name: /企业域演练/ })
+    const sceneStatus = within(row).getByText('试运行中').closest('span')
+    expect(sceneStatus).toHaveAttribute('data-pulse', 'true')
+    expect(sceneStatus?.querySelector('svg')).not.toBeNull()
+    expect(within(row).getByText('规划中')).toBeInTheDocument()
   })
 
   it('renders an explicit empty state without inventing local rows', () => {

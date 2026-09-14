@@ -88,13 +88,6 @@ function createDocument(): TopologyDocument {
         viaNodeKey: 'router',
         direction: 'from-to',
       },
-      dependency: {
-        type: 'dependency',
-        key: 'dependency',
-        assetKey: 'app',
-        dependsOnKey: 'database',
-        condition: 'service-ready',
-      },
     },
   }
 }
@@ -200,7 +193,7 @@ describe('TeamLabInspector', () => {
     })
   })
 
-  it('updates membership and route connections without presenting legacy dependencies', () => {
+  it('updates membership and route connections', () => {
     const membershipChange = vi.fn()
     const membershipView = render(
       <TeamLabInspector
@@ -230,18 +223,6 @@ describe('TeamLabInspector', () => {
       direction: 'bidirectional',
     })
     routeView.unmount()
-
-    const dependencyChange = vi.fn()
-    render(
-      <TeamLabInspector
-        document={createDocument()}
-        onDocumentChange={dependencyChange}
-        selection={selection([], ['dependency'])}
-      />
-    )
-    expect(screen.queryByText(/启动依赖/)).not.toBeInTheDocument()
-    expect(screen.queryByLabelText('就绪条件')).not.toBeInTheDocument()
-    expect(dependencyChange).not.toHaveBeenCalled()
   })
 
   it('edits document observation with no selection and summarizes multiple selections', () => {

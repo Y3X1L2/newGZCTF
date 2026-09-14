@@ -326,12 +326,7 @@ export function disconnectTopology(document: TopologyDocument, connectionKey: st
 
 function referencesNode(connection: TopologyConnection, deleted: ReadonlySet<string>) {
   if (connection.type === 'membership') return deleted.has(connection.nodeKey) || deleted.has(connection.switchKey)
-  if (connection.type === 'route') {
-    return (
-      deleted.has(connection.fromSwitchKey) || deleted.has(connection.toSwitchKey) || deleted.has(connection.viaNodeKey)
-    )
-  }
-  return deleted.has(connection.assetKey) || deleted.has(connection.dependsOnKey)
+  return deleted.has(connection.fromSwitchKey) || deleted.has(connection.toSwitchKey) || deleted.has(connection.viaNodeKey)
 }
 
 export function deleteTopologyItems(document: TopologyDocument, selection: TopologySelection) {
@@ -362,7 +357,7 @@ export function copyTopologyFragment(document: TopologyDocument, nodeKeys: Reado
   return {
     nodes: [...nodeKeys].sort().map((key) => node(document, key)),
     connections: Object.values(document.connections)
-      .filter((connection) => connection.type !== 'dependency' && connectionIsInternal(connection, nodeKeys))
+      .filter((connection) => connectionIsInternal(connection, nodeKeys))
       .sort((left, right) => left.key.localeCompare(right.key)),
   }
 }
@@ -372,7 +367,6 @@ export function pasteTopologyFragment(
   fragment: TopologyFragment,
   offset = { x: 32, y: 32 }
 ) {
-  const editableConnections = fragment.connections.filter((connection) => connection.type !== 'dependency')
   const occupied = topologyKeys(document)
   const nodeRemap = buildKeyRemap(
     fragment.nodes.map((item) => item.key),
@@ -389,7 +383,7 @@ export function pasteTopologyFragment(
   )
   for (const value of networkRemap.values()) occupied.add(value)
   const connectionRemap = buildKeyRemap(
-    editableConnections.map((item) => item.key),
+    fragment.connections.map((item) => item.key),
     '-copy',
     occupied
   )
@@ -406,7 +400,7 @@ export function pasteTopologyFragment(
   }
 
   const connections = { ...document.connections }
-  for (const source of editableConnections) {
+  for (const source of fragment.connections) {
     const key = connectionRemap.get(source.key)!
     if (source.type === 'membership') {
       connections[key] = {

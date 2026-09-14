@@ -101,9 +101,7 @@ export function TeamLabDesignPage({
   const lastNotified = useRef(initialDocument)
   const compact = useCompactEditor()
   const effectiveReadOnly = readOnly || compact
-  const visibleConnectionCount = Object.values(document.connections).filter(
-    (connection) => connection.type !== 'dependency'
-  ).length
+  const visibleConnectionCount = Object.keys(document.connections).length
 
   useEffect(() => {
     documentRef.current = document
@@ -207,9 +205,7 @@ export function TeamLabDesignPage({
     if (effectiveReadOnly) return
     select(
       Object.keys(documentRef.current.nodes),
-      Object.values(documentRef.current.connections)
-        .filter((connection) => connection.type !== 'dependency')
-        .map((connection) => connection.key)
+      Object.keys(documentRef.current.connections)
     )
   }, [effectiveReadOnly, select])
   const deleteSelection = useCallback(() => {

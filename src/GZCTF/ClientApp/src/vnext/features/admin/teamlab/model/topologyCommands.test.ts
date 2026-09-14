@@ -99,13 +99,6 @@ function document(): TopologyDocument {
         viaNodeKey: 'router',
         direction: 'bidirectional',
       },
-      dependency: {
-        type: 'dependency',
-        key: 'dependency',
-        assetKey: 'b',
-        dependsOnKey: 'a',
-        condition: 'network-ready',
-      },
     },
   }
 }
@@ -121,21 +114,14 @@ describe('topology commands', () => {
     expect(copiedNodes).toHaveLength(2)
     expect(copiedConnections).toHaveLength(1)
     expect(copiedConnections[0]).toMatchObject({ type: 'membership', nodeKey: 'a-copy', switchKey: 'sw1-copy' })
-    expect(copiedConnections.some((item) => item.type === 'dependency' || item.type === 'route')).toBe(false)
+    expect(copiedConnections.some((item) => item.type === 'route')).toBe(false)
     expect(pasted.nodes['sw1-copy']).toMatchObject({ networkKey: 'net1-copy' })
 
     const pastedAgain = pasteTopologyFragment(pasted, fragment).document
     expect(pastedAgain.nodes['sw1-copy-2']).toMatchObject({ networkKey: 'net1-copy-2' })
   })
 
-  it('does not copy legacy dependency relationships into a new fragment', () => {
-    const source = document()
-    const fragment = copyTopologyFragment(source, new Set(['a', 'b']))
-
-    expect(fragment.connections).toEqual([])
-  })
-
-  it('deletes all dangling memberships, routes and dependencies atomically', () => {
+  it('deletes all dangling memberships and routes atomically', () => {
     const source = document()
     const changed = deleteTopologyItems(source, { nodeKeys: new Set(['sw1', 'a']), connectionKeys: new Set() })
 

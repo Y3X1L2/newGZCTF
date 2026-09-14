@@ -84,9 +84,4 @@ describe('TeamLabDesignPage', () => {
     expect(Object.values(onChange.mock.calls[0][0].nodes)[0]).toMatchObject({ endpointObservation: 'disabled' })
   })
 
-  it('does not expose creation of unsupported startup dependencies', () => {
-    render(<TeamLabDesignPage initialDocument={createEmptyTopologyDocument('Demo')} />)
-
-    expect(screen.queryByRole('button', { name: '启动依赖' })).not.toBeInTheDocument()
-  })
 })

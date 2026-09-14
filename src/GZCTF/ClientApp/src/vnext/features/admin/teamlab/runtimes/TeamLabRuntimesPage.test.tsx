@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { SWRConfig } from 'swr'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -18,7 +18,6 @@ const scene: TeamLabTopologyDetail = {
     infrastructure: [],
     assets: [],
     connections: [],
-    dependencies: [],
     observation: { flowMetadataEnabled: true, onDemandPcapEnabled: true, endpointObservation: 'optional' },
   },
   editor: { networks: {}, assets: {}, infrastructure: {} },
@@ -62,6 +61,9 @@ describe('TeamLabRuntimesPage', () => {
 
     const row = await screen.findByRole('row', { name: /runtime-ready/ })
     expect(row).toHaveTextContent('已开放')
+    const status = within(row).getByText('运行就绪').closest('span')
+    expect(status).not.toHaveAttribute('data-pulse')
+    expect(status?.querySelector('svg')).not.toBeNull()
     fireEvent.click(row)
     expect(await screen.findByText('运行详情已打开')).toBeInTheDocument()
   })

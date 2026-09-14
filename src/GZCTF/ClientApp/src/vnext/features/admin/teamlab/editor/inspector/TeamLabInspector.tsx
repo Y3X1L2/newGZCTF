@@ -27,7 +27,7 @@ function SelectionSummary({ document, selection }: { document: TopologyDocument;
   const nodes = [...selection.nodeKeys].map((key) => document.nodes[key]).filter((node) => node !== undefined)
   const connections = [...selection.connectionKeys]
     .map((key) => document.connections[key])
-    .filter((connection) => connection !== undefined && connection.type !== 'dependency')
+    .filter((connection) => connection !== undefined)
   return (
     <div className={styles.summaryContent}>
       <dl className={styles.summaryGrid}>
@@ -76,7 +76,7 @@ export function TeamLabInspector({
   const nodes = [...selection.nodeKeys].map((key) => document.nodes[key]).filter((node) => node !== undefined)
   const connections = [...selection.connectionKeys]
     .map((key) => document.connections[key])
-    .filter((connection) => connection !== undefined && connection.type !== 'dependency')
+    .filter((connection) => connection !== undefined)
   const selectedCount = nodes.length + connections.length
 
   let content

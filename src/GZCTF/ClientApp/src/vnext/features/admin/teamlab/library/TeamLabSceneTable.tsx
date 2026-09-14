@@ -36,7 +36,7 @@ export const TeamLabSceneTable = memo(function TeamLabSceneTable({
         id: 'resources',
         header: '拓扑规模',
         width: 'medium',
-        render: (scene) => `${scene.networkCount} 网段 · ${scene.assetCount} 资产 · ${scene.infrastructureCount} 设施`,
+        render: (scene) => `${scene.networkCount} 网段 · ${scene.assetCount} 资产`,
       },
       {
         id: 'owner',

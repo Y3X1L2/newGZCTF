@@ -16,7 +16,7 @@ vi.mock('../shared/TeamLabSceneShell', () => ({
       id: '019f0000-0000-7000-8000-000000000001',
       revision: 4,
       schemaVersion: 2,
-      definition: { name: '企业域演练', networks: [], assets: [], infrastructure: [], connections: [], dependencies: [], observation: { flowMetadataEnabled: true, onDemandPcapEnabled: true, endpointObservation: 'optional' } },
+      definition: { name: '企业域演练', networks: [], assets: [], infrastructure: [], connections: [], observation: { flowMetadataEnabled: true, onDemandPcapEnabled: true, endpointObservation: 'optional' } },
       editor: { networks: {}, assets: {}, infrastructure: {} },
       createdAt: 1,
       updatedAt: 2,

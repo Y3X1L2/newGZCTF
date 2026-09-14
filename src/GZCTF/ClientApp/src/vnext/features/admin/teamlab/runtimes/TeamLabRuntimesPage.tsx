@@ -10,7 +10,7 @@ import { formatAdminDate } from '../../shared/adminFormat'
 import { useAdminCursorState } from '../../shared/useAdminCursorState'
 import { teamLabAdminApi, teamLabAdminKeys, teamLabRuntimeApi, type TeamLabAdminRuntimeSummary } from '../api'
 import { useTeamLabScene } from '../shared/TeamLabSceneShell'
-import { TeamLabRuntimeStatusBadge } from '../shared/TeamLabStatusBadge'
+import { TeamLabAccessStatusBadge, TeamLabRuntimeStatusBadge } from '../shared/TeamLabStatusBadge'
 import { isRuntimeTerminal, isRuntimeTransitioning } from './runtimePresentation'
 import styles from './TeamLabRuntimesPage.module.css'
 
@@ -40,7 +40,7 @@ export function TeamLabRuntimesPage() {
       render: (runtime) => <span className={styles.identity}><strong>{runtime.stage}</strong><code>{runtime.id}</code></span>,
     },
     { id: 'status', header: '状态', width: 'compact', render: (runtime) => <TeamLabRuntimeStatusBadge status={runtime.status} /> },
-    { id: 'access', header: '选手入口', render: (runtime) => runtime.openForAccess ? '已开放' : '未开放' },
+    { id: 'access', header: '选手入口', render: (runtime) => <TeamLabAccessStatusBadge open={runtime.openForAccess} /> },
     { id: 'release', header: '发布版本', visibility: 'desktop', render: (runtime) => <code>{runtime.releaseId}</code> },
     { id: 'updated', header: '最后更新', visibility: 'desktop', render: (runtime) => formatAdminDate(runtime.updatedAt ?? runtime.createdAt) },
     {

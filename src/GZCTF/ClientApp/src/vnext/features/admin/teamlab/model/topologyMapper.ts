@@ -24,7 +24,7 @@ import {
   type TopologyNode,
   type TopologyPosition,
 } from './topologyDocument'
-import { dependencyConnectionKey, nextTopologyKey } from './topologyKeys'
+import { nextTopologyKey } from './topologyKeys'
 
 export type VmDeviceType = 'linux-vm' | 'windows-vm'
 export type VmDeviceTypeResolver = (asset: TeamLabTopologyAsset) => VmDeviceType
@@ -236,13 +236,6 @@ export function mapTopologyDetailToDocument(
       direction: route.direction,
     }
     occupied.add(route.key)
-  }
-
-  for (const dependency of detail.definition.dependencies) {
-    const preferred = dependencyConnectionKey(dependency.assetKey, dependency.dependsOnKey, dependency.condition)
-    const key = nextTopologyKey(preferred, occupied)
-    occupied.add(key)
-    connections[key] = { type: 'dependency', key, ...dependency }
   }
 
   return {

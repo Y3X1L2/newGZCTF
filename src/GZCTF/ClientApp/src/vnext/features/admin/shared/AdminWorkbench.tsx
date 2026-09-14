@@ -74,16 +74,18 @@ export function ToolbarGroup({ children, grow = false }: { children: ReactNode; 
 
 export function StatusBadge({
   children,
+  icon,
   tone = 'neutral',
   pulse = false,
 }: {
   children: ReactNode
+  icon?: ReactNode
   tone?: AdminStatusTone
   pulse?: boolean
 }) {
   return (
-    <span className={styles.statusBadge} data-pulse={pulse || undefined} data-tone={tone}>
-      <i aria-hidden="true" />
+    <span className={styles.statusBadge} data-icon={Boolean(icon) || undefined} data-pulse={pulse || undefined} data-tone={tone}>
+      <i aria-hidden="true">{icon}</i>
       {children}
     </span>
   )

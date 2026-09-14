@@ -51,7 +51,6 @@ function topologyDetail() {
         },
       ],
       connections: [],
-      dependencies: [],
       observation: { flowMetadataEnabled: true, onDemandPcapEnabled: true, endpointObservation: 1 },
     },
     editor: {
