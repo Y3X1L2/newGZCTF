@@ -17,10 +17,10 @@
 | PostgreSQL | 用户/权限、赛事、课程、题目、答卷/提交、资产元数据、节点、队列、运行状态、审计和观测数据 | `src/GZCTF/Models/AppDbContext.cs`、`src/GZCTF/Extensions/Startup/DatabaseExtension.cs` | 事务、索引、迁移、聚合、保留与恢复 |
 | PostgreSQL JSONB / 文本 | TeamLab 草稿配置、不可变 release、执行计划、部分操作结果；另有序列化列表和加密 payload | `Modules/TeamLab/Infrastructure/Persistence/`、`AppDbContext.cs` 中 converter | 区分结构化查询字段与版本快照，约束大小/版本；不把所有领域信息塞进 JSON |
 | Redis | 缓存、协调/租约、流量及节点高频数据缓冲 | `Modules/Runtime/Infrastructure/RedisNodeLiveStateStore.cs`、`NodeMetricPersistenceWorker.cs` | 保持可重放、确认与幂等，业务事实最终进入 PostgreSQL |
-| disk / S3 / MinIO | 附件等二进制对象；数据库 `Files` 保存 hash、位置、大小及元数据 | `Storage/StorageProviderFactory.cs`、`Storage/LocalBlobStorage.cs`、`Storage/S3BlobStorage.cs`、`Repositories/BlobRepository.cs` | 引用保护、共享文件目录、失败补偿和孤儿对象回收 |
+| disk / S3 / MinIO | 附件等二进制对象；数据库 `Files` 保存 hash、文件名、大小等元数据，存储子目录由 hash 计算 | `Storage/StorageProviderFactory.cs`、`Storage/LocalBlobStorage.cs`、`Storage/S3BlobStorage.cs`、`Repositories/BlobRepository.cs` | 引用保护、共享文件目录、失败补偿和孤儿对象回收 |
 | Registry / 镜像主存储 / WorkerNode | Docker 层、VM 模板、实例磁盘、抓包与远程操作审计文件等执行面文件 | `Storage/ImageStorage.cs`、TeamLab capture/remote-session 路径、Agent | 按各自资源生命周期统计；不随数据库表清理直接删文件 |
 
-上表源文件省略的共同前缀为 `src/GZCTF/`。本地/S3 是代码支持的 provider，不代表本次确认了现网配置。
+上表源文件省略的共同前缀为 `src/GZCTF/`。本地/S3 是代码支持的 provider，不代表本次确认了现网配置。`LocalFile.Location` 标记为 `[NotMapped]`，不是 `Files` 的数据库列；它由 hash 前四位组成两级子目录，实际根目录由存储配置决定。
 
 数据库主要使用关系表、外键和索引；并非整个产品存成一个 JSON 大对象。`Files` 按内容 SHA-256 查重，题目克隆的附件元数据可以引用同一对象，所以业务快照数量和二进制份数不能画等号。TeamLab release/执行计划保留独立快照是恢复和确定性清理的需要，不能为节省几行元数据改成读取随时会变的草稿。
 
