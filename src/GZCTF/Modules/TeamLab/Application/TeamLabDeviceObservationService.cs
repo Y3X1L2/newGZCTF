@@ -1,6 +1,7 @@
 using System.Text.Json;
 using GZCTF.Modules.Audit.Contracts;
 using GZCTF.Modules.Audit.Domain;
+using GZCTF.Modules.TeamLab.Contracts;
 using GZCTF.Modules.TeamLab.Domain.Runtime;
 using GZCTF.TeamLab.Contracts.Execution;
 using Microsoft.EntityFrameworkCore;
@@ -12,14 +13,30 @@ public interface ITeamLabDeviceObserver
     Task<TeamLabDeviceObservation?> ProbeAsync(Guid nodeId, TeamLabDeviceProbeRequest request, CancellationToken token);
 }
 
-public sealed record TeamLabDeviceHealthModel(int AssetId, string Name, int Generation, TeamLabDeviceObservation? Observation, DateTimeOffset? NextProbeAt);
-
 public sealed class TeamLabDeviceObservationService(AppDbContext context, ITeamLabDeviceObserver observer,
-    TeamLabEventRecorder events, TeamLabAuthorizationService authorization)
+    TeamLabEventRecorder events, TeamLabAuthorizationService authorization,
+    TeamLabScopeAuthorizationService scopeAuthorization,
+    IServiceScopeFactory? scopeFactory = null)
 {
     public async Task<IReadOnlyList<TeamLabDeviceHealthModel>> ReadAsync(Guid runtimeId, Guid actorId, bool administrator, CancellationToken token)
     {
         await authorization.RequirePermissionAsync(runtimeId, actorId, administrator, TeamLabRuntimePermission.StateRead, token);
+        return await ReadCoreAsync(runtimeId, token);
+    }
+
+    public async Task<IReadOnlyList<TeamLabDeviceHealthModel>> ReadApiAsync(
+        Guid runtimeId,
+        Guid apiTokenId,
+        bool hasWildcardScopeGrant,
+        CancellationToken token)
+    {
+        await scopeAuthorization.RequireRuntimeScopeAsync(
+            runtimeId, apiTokenId, hasWildcardScopeGrant, writable: false, token);
+        return await ReadCoreAsync(runtimeId, token);
+    }
+
+    private async Task<IReadOnlyList<TeamLabDeviceHealthModel>> ReadCoreAsync(Guid runtimeId, CancellationToken token)
+    {
         var assets = await context.TeamLabRuntimeAssets.AsNoTracking().Include(asset => asset.Runtime).Where(asset => asset.Runtime.PublicId == runtimeId &&
             asset.Generation == asset.Runtime.Generation && asset.DevicePackageId != null).OrderBy(asset => asset.Id).ToArrayAsync(token);
         return assets.Select(asset =>
@@ -34,18 +51,50 @@ public sealed class TeamLabDeviceObservationService(AppDbContext context, ITeamL
     public async Task ScanAsync(CancellationToken token)
     {
         var now = DateTimeOffset.UtcNow;
-        var ids = await context.TeamLabRuntimeAssets.AsNoTracking().Where(asset => asset.DevicePackageId != null &&
+        var candidates = await context.TeamLabRuntimeAssets.AsNoTracking().Where(asset => asset.DevicePackageId != null &&
             asset.Generation == asset.Runtime.Generation && (asset.Runtime.Status == TeamLabRuntimeStatus.Running || asset.Runtime.Status == TeamLabRuntimeStatus.Failed) &&
             (asset.DeviceNextProbeAt == null || asset.DeviceNextProbeAt <= now))
-            .OrderBy(asset => asset.DeviceNextProbeAt).ThenBy(asset => asset.Id).Take(20).Select(asset => asset.Id).ToArrayAsync(token);
-        foreach (var id in ids) await ObserveAsync(id, token);
+            .OrderBy(asset => asset.DeviceNextProbeAt).ThenBy(asset => asset.Id).Take(256)
+            .Select(asset => new { asset.Id, asset.WorkerNodeId }).ToArrayAsync(token);
+        if (candidates.Length == 0) return;
+        if (scopeFactory is null)
+        {
+            foreach (var id in candidates.Select(item => item.Id)) await ObserveAsync(id, token);
+            return;
+        }
+        var nodeGroups = candidates.GroupBy(item => item.WorkerNodeId).ToArray();
+        await Parallel.ForEachAsync(nodeGroups, new ParallelOptions
+        {
+            MaxDegreeOfParallelism = Math.Min(16, nodeGroups.Length),
+            CancellationToken = token
+        }, async (group, cancellationToken) =>
+        {
+            await using var scope = scopeFactory.CreateAsyncScope();
+            var service = scope.ServiceProvider.GetRequiredService<TeamLabDeviceObservationService>();
+            await service.ObserveManyAsync(group.Select(item => item.Id), cancellationToken);
+        });
     }
 
     internal async Task ObserveAsync(int assetId, CancellationToken token)
     {
+        if (await ObserveCoreAsync(assetId, token))
+            await context.SaveChangesAsync(token);
+    }
+
+    private async Task ObserveManyAsync(IEnumerable<int> assetIds, CancellationToken token)
+    {
+        var changed = false;
+        foreach (var assetId in assetIds)
+            changed |= await ObserveCoreAsync(assetId, token);
+        if (changed)
+            await context.SaveChangesAsync(token);
+    }
+
+    private async Task<bool> ObserveCoreAsync(int assetId, CancellationToken token)
+    {
         var asset = await context.TeamLabRuntimeAssets.Include(item => item.Runtime).SingleAsync(item => item.Id == assetId, token);
         var runtime = asset.Runtime;
-        if (asset.Generation != runtime.Generation || runtime.Status is not (TeamLabRuntimeStatus.Running or TeamLabRuntimeStatus.Failed)) return;
+        if (asset.Generation != runtime.Generation || runtime.Status is not (TeamLabRuntimeStatus.Running or TeamLabRuntimeStatus.Failed)) return false;
         var snapshot = await context.TeamLabExecutionPlanSnapshots.AsNoTracking().SingleOrDefaultAsync(item =>
             item.RuntimeId == runtime.Id && item.Generation == asset.Generation && item.ShardId == asset.ShardId, token);
         TeamLabExecutionPlanV2? plan = null;
@@ -77,7 +126,7 @@ public sealed class TeamLabDeviceObservationService(AppDbContext context, ITeamL
         await context.Entry(runtime).ReloadAsync(token);
         if (asset.Generation != generation || runtime.Generation != generation ||
             (asset.RuntimeResourceId, asset.NativeIdentity, asset.WorkerNodeId) != identity ||
-            runtime.Status is not (TeamLabRuntimeStatus.Running or TeamLabRuntimeStatus.Failed)) return;
+            runtime.Status is not (TeamLabRuntimeStatus.Running or TeamLabRuntimeStatus.Failed)) return false;
         if (asset.DesiredPowerState is "stopped" or "paused") observation = new("stopped", DateTimeOffset.UtcNow);
         var previous = Decode(asset.DeviceObservationJson);
         if (previous is not null && previous.BootId == observation.BootId && observation.ProtocolCounters is { } current &&
@@ -101,7 +150,7 @@ public sealed class TeamLabDeviceObservationService(AppDbContext context, ITeamL
             observation = observation with { BootId = previous.BootId, ProtocolCounters = previous.ProtocolCounters };
         asset.DeviceObservationJson = JsonSerializer.Serialize(observation);
         asset.DeviceNextProbeAt = DateTimeOffset.UtcNow.AddSeconds(Math.Clamp(interval, 1, 3600));
-        await context.SaveChangesAsync(token);
+        return true;
     }
 
     static TeamLabDeviceObservation? Decode(string? json)

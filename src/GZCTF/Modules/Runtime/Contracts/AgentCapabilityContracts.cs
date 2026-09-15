@@ -15,7 +15,6 @@ public static class AgentFeatureIds
     public const string VmQga = "runtime.vm.qga.v1";
     public const string VmWindowsBootstrap = "runtime.vm.windows-bootstrap.v1";
     public const string TeamLabObservation = "teamlab.observation.v2";
-    public const string TeamLabEndpointSensor = "teamlab.endpoint-sensor.v2";
     public const string TeamLabPcapObjectStorage = "teamlab.pcap-object-storage.v1";
     public const string BootstrapArtifactPull = "bootstrap.artifact.pull.v1";
     public const string RuntimeInventory = "runtime.inventory.v1";

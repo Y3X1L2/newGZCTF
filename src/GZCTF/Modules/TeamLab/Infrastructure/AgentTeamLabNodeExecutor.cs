@@ -182,29 +182,17 @@ public sealed class AgentTeamLabNodeExecutor(
         if (template is null || template.Status != ImageStatus.Ready)
             return TeamLabNodeAssetCreateResult.Failed($"Image template {request.ImageTemplateId} is not ready.");
 
-        TeamLabEndpointSensorResponse? sensor = null;
         try
         {
-            sensor = request.Kind == TeamLabAssetKind.Docker
-                ? await RegisterEndpointSensorAsync(workerNodeId, request, cancellationToken)
-                : null;
-            if (request.EndpointObservation == TeamLabEndpointObservationMode.Required && sensor is not { Success: true })
-                return TeamLabNodeAssetCreateResult.Failed(
-                    sensor?.Message ?? "Required endpoint sensor channel could not be registered.");
-            var result = request.Kind == TeamLabAssetKind.Docker
-                ? await CreateContainerAsync(workerNodeId, request, template, sensor?.ChannelEndpoint, cancellationToken)
+            return request.Kind == TeamLabAssetKind.Docker
+                ? await CreateContainerAsync(workerNodeId, request, template, cancellationToken)
                 : await CreateVmAsync(db, workerNodeId, request, template, cancellationToken);
-            if (!result.Success && sensor is { Success: true })
-                await RemoveEndpointSensorAsync(workerNodeId, request, cancellationToken);
-            return result;
         }
         catch (Exception exception) when (exception is AgentClientException or HttpRequestException or TaskCanceledException or InvalidOperationException)
         {
             logger.LogWarning(exception,
                 "TeamLab 资源创建失败: runtime={RuntimeId}, generation={Generation}, asset={AssetKey}, node={NodeId}",
                 request.RuntimeId, request.Generation, request.AssetKey, workerNodeId);
-            if (sensor is { Success: true })
-                await RemoveEndpointSensorAsync(workerNodeId, request, CancellationToken.None);
             return TeamLabNodeAssetCreateResult.Failed(exception.Message);
         }
     }
@@ -236,6 +224,44 @@ public sealed class AgentTeamLabNodeExecutor(
         TeamLabExecutionModel executionModel,
         CancellationToken cancellationToken) =>
         ChangeAssetLifecycleAsync(workerNodeId, kind, resourceId, generation, executionModel, pause: false, cancellationToken);
+
+    public Task<IReadOnlyList<TeamLabNodeAssetLifecycleResult>> ChangeAssetLifecycleBatchAsync(
+        Guid workerNodeId,
+        IReadOnlyList<TeamLabNodeAssetLifecycleRequest> assets,
+        int generation,
+        TeamLabExecutionModel executionModel,
+        bool pause,
+        CancellationToken cancellationToken) =>
+        DispatchAsync<IReadOnlyList<TeamLabNodeAssetLifecycleResult>>(
+            workerNodeId,
+            NodeDispatchCategory.Control,
+            async operationToken =>
+            {
+                try
+                {
+                    var response = await agent.ChangeTeamLabAssetsAsync(workerNodeId,
+                        new TeamLabAssetLifecycleBatchRequest(
+                            generation,
+                            _config.DryRun,
+                            executionModel,
+                            assets.Select(item => new TeamLabAssetLifecycleBatchItem(
+                                item.AssetId,
+                                item.Kind == TeamLabAssetKind.Docker ? "docker" : "vm",
+                                item.ResourceId)).ToArray()),
+                        pause,
+                        operationToken);
+                    return response?.Select(item => new TeamLabNodeAssetLifecycleResult(
+                            item.AssetId, item.Success, item.Message)).ToArray()
+                        ?? assets.Select(item => new TeamLabNodeAssetLifecycleResult(
+                            item.AssetId, false, "Agent returned no lifecycle batch result.")).ToArray();
+                }
+                catch (Exception exception) when (exception is AgentClientException or HttpRequestException or TaskCanceledException)
+                {
+                    return assets.Select(item => new TeamLabNodeAssetLifecycleResult(
+                        item.AssetId, false, exception.Message)).ToArray();
+                }
+            },
+            cancellationToken);
 
     private Task<TeamLabNodeResult> ChangeAssetLifecycleAsync(
         Guid workerNodeId,
@@ -363,7 +389,6 @@ public sealed class AgentTeamLabNodeExecutor(
                 request.Generation,
                 request.RouterNamespace,
                 request.ResourceNames.Distinct(StringComparer.Ordinal).ToArray(),
-                request.SensorAssetKeys.Distinct(StringComparer.Ordinal).ToArray(),
                 request.FabricRemoteCidrs.Distinct(StringComparer.Ordinal).ToArray(),
                 _config.DryRun),
             cancellationToken);
@@ -486,7 +511,6 @@ public sealed class AgentTeamLabNodeExecutor(
                 item.PacketFingerprint,
                 item.FlowFingerprint,
                 item.EvidenceKind.ToString(),
-                item.ProcessIdentityHash,
                 item.Direction,
                 item.FirstSeenAt,
                 item.LastSeenAt,
@@ -499,9 +523,7 @@ public sealed class AgentTeamLabNodeExecutor(
                 response.Health.ActiveFlowCount,
                 response.Health.DroppedCount,
                 response.Health.ParserFailureCount,
-                response.Health.SensorRejectedCount,
                 response.Health.SpoolBytes,
-                response.Health.LastSensorErrorCode,
                 response.Health.LastError));
     }
 
@@ -590,11 +612,82 @@ public sealed class AgentTeamLabNodeExecutor(
         return ToCaptureResult(response, "Failed to delete traffic capture segment.");
     }
 
+    public async Task<IReadOnlyList<TeamLabNodeCaptureResult>> StartCapturesAsync(
+        Guid workerNodeId,
+        IReadOnlyList<TeamLabNodeCaptureStartRequest> requests,
+        CancellationToken cancellationToken)
+    {
+        var responses = await DispatchAsync(workerNodeId, NodeDispatchCategory.Control,
+            operationToken => agent.StartTeamLabCapturesAsync(workerNodeId,
+                requests.Select(request => new TeamLabCaptureStartRequest(
+                    request.RuntimeId, request.Generation, request.CaptureId, request.SegmentId,
+                    request.ObservationPointId, request.InterfaceToken, request.MaxSeconds,
+                    request.MaxBytes, _config.DryRun)).ToArray(), operationToken), cancellationToken);
+        return ToCaptureResults(responses, requests.Select(request => request.SegmentId),
+            "Failed to start traffic capture.");
+    }
+
+    public async Task<IReadOnlyList<TeamLabNodeCaptureResult>> StopCapturesAsync(
+        Guid workerNodeId,
+        IReadOnlyList<TeamLabNodeCaptureIdentity> requests,
+        CancellationToken cancellationToken)
+    {
+        var responses = await DispatchAsync(workerNodeId, NodeDispatchCategory.Control,
+            operationToken => agent.StopTeamLabCapturesAsync(workerNodeId,
+                requests.Select(request => new TeamLabCaptureStopRequest(
+                    request.RuntimeId, request.Generation, request.CaptureId, request.SegmentId,
+                    _config.DryRun)).ToArray(), operationToken), cancellationToken);
+        return ToCaptureResults(responses, requests.Select(request => request.SegmentId),
+            "Failed to stop traffic capture.");
+    }
+
+    public async Task<IReadOnlyList<TeamLabNodeCaptureResult>> GetCaptureStatusesAsync(
+        Guid workerNodeId,
+        IReadOnlyList<TeamLabNodeCaptureIdentity> requests,
+        CancellationToken cancellationToken)
+    {
+        var responses = await DispatchAsync(workerNodeId, NodeDispatchCategory.Probe,
+            operationToken => agent.GetTeamLabCaptureStatusesAsync(workerNodeId,
+                requests.Select(request => new TeamLabCaptureStatusRequest(
+                    request.RuntimeId, request.Generation, request.CaptureId, request.SegmentId,
+                    _config.DryRun)).ToArray(), operationToken), cancellationToken);
+        return ToCaptureResults(responses, requests.Select(request => request.SegmentId),
+            "Failed to read traffic capture status.");
+    }
+
+    public async Task<IReadOnlyList<TeamLabNodeCaptureResult>> UploadCapturesAsync(
+        Guid workerNodeId,
+        IReadOnlyList<TeamLabNodeCaptureUploadRequest> requests,
+        CancellationToken cancellationToken)
+    {
+        var responses = await DispatchAsync(workerNodeId, NodeDispatchCategory.Control,
+            operationToken => agent.UploadTeamLabCapturesAsync(workerNodeId,
+                requests.Select(request => new TeamLabCaptureUploadRequest(
+                    request.RuntimeId, request.Generation, request.CaptureId, request.SegmentId,
+                    request.UploadPath, request.UploadToken, request.MaxBytes, _config.DryRun)).ToArray(),
+                operationToken), cancellationToken);
+        return ToCaptureResults(responses, requests.Select(request => request.SegmentId),
+            "Failed to upload traffic capture.");
+    }
+
+    public async Task<IReadOnlyList<TeamLabNodeCaptureResult>> DeleteCapturesAsync(
+        Guid workerNodeId,
+        IReadOnlyList<TeamLabNodeCaptureIdentity> requests,
+        CancellationToken cancellationToken)
+    {
+        var responses = await DispatchAsync(workerNodeId, NodeDispatchCategory.Cleanup,
+            operationToken => agent.DeleteTeamLabCapturesAsync(workerNodeId,
+                requests.Select(request => new TeamLabCaptureDeleteRequest(
+                    request.RuntimeId, request.Generation, request.CaptureId, request.SegmentId,
+                    _config.DryRun)).ToArray(), operationToken), cancellationToken);
+        return ToCaptureResults(responses, requests.Select(request => request.SegmentId),
+            "Failed to delete traffic capture segment.");
+    }
+
     private async Task<TeamLabNodeAssetCreateResult> CreateContainerAsync(
         Guid workerNodeId,
         TeamLabNodeAssetCreateRequest request,
         ImageTemplate template,
-        string? sensorEndpoint,
         CancellationToken cancellationToken)
     {
         if (template.ImageType != ImageType.Docker)
@@ -630,20 +723,6 @@ public sealed class AgentTeamLabNodeExecutor(
             DnsServers = request.Interfaces.SelectMany(item => item.DnsServers).Distinct(StringComparer.Ordinal).ToList(),
             EnvironmentVariables = environment
         };
-        if (sensorEndpoint?.StartsWith("unix://", StringComparison.OrdinalIgnoreCase) == true)
-        {
-            config.BindMounts.Add(new ContainerBindMount
-            {
-                Source = sensorEndpoint[7..],
-                Destination = "/run/gzctf/sensor.sock",
-                ReadOnly = false
-            });
-            config.EnvironmentVariables["GZCTF_SENSOR_RUNTIME_PUBLIC_ID"] = request.RuntimePublicId.ToString("D");
-            config.EnvironmentVariables["GZCTF_SENSOR_GENERATION"] = request.Generation.ToString();
-            config.EnvironmentVariables["GZCTF_SENSOR_ASSET_KEY"] = request.AssetKey;
-            config.EnvironmentVariables["GZCTF_SENSOR_CHANNEL"] = "unix:///run/gzctf/sensor.sock";
-            config.EnvironmentVariables["GZCTF_SENSOR_HMAC"] = request.Secrets["GZCTF_SENSOR_HMAC"];
-        }
         var container = await agent.CreateContainerOrThrowAsync(workerNodeId, config, cancellationToken);
         var interfaces = request.Interfaces
             .Select((iface, index) => new
@@ -725,19 +804,6 @@ public sealed class AgentTeamLabNodeExecutor(
             return TeamLabNodeAssetCreateResult.Failed(
                 finalized?.Message ?? "The TeamLab container network finalizer returned no result.");
         }
-        var sensor = await StartEndpointSensorAsync(
-            workerNodeId,
-            request,
-            container.ContainerId,
-            TeamLabEndpointSensorChannelMode.Docker,
-            null,
-            cancellationToken);
-        if (!sensor.Success && request.EndpointObservation == TeamLabEndpointObservationMode.Required)
-        {
-            await agent.DestroyContainerAsync(
-                workerNodeId, container.ContainerId, request.Generation, cancellationToken);
-            return TeamLabNodeAssetCreateResult.Failed(sensor.Message);
-        }
         return TeamLabNodeAssetCreateResult.Created(container.ContainerId);
     }
 
@@ -750,10 +816,8 @@ public sealed class AgentTeamLabNodeExecutor(
     {
         if (template.ImageType == ImageType.Docker)
             return TeamLabNodeAssetCreateResult.Failed($"Image template {template.Id} is not a VM template.");
-        var requiresGuestControl = request.EndpointObservation != TeamLabEndpointObservationMode.Disabled;
-        if (requiresGuestControl && (template.VmRuntimeMode == VmRuntimeMode.Opaque ||
-            template.VmArtifactStatus != VmArtifactStatus.Ready ||
-            template.VmRuntimeMode == VmRuntimeMode.Managed &&
+        var requiresGuestControl = template.VmRuntimeMode == VmRuntimeMode.Managed;
+        if (requiresGuestControl && (template.VmArtifactStatus != VmArtifactStatus.Ready ||
             template.PreparedArtifact is not { Status: VmPreparedArtifactStatus.Ready } ||
             !template.CapabilityCertifications.Any(certification =>
                 ManagedVmCertificationPolicy.IsCurrent(certification, template))))
@@ -843,7 +907,6 @@ public sealed class AgentTeamLabNodeExecutor(
             {
                 Enabled = requiresGuestControl,
                 Required = requiresGuestControl,
-                EndpointSensorChannel = false,
                 OsType = template.OSType
             },
             ManagementInterface = management,
@@ -883,74 +946,6 @@ public sealed class AgentTeamLabNodeExecutor(
 
     internal static int CpuUnitsToVcpu(int cpuUnits) =>
         Math.Max(1, (int)Math.Ceiling(Math.Max(1, cpuUnits) / 10d));
-
-    private async Task<TeamLabNodeResult> StartEndpointSensorAsync(
-        Guid workerNodeId,
-        TeamLabNodeAssetCreateRequest request,
-        string runtimeResourceId,
-        TeamLabEndpointSensorChannelMode mode,
-        OSType? osType,
-        CancellationToken cancellationToken)
-    {
-        if (request.EndpointObservation == TeamLabEndpointObservationMode.Disabled)
-            return TeamLabNodeResult.Ok("Endpoint observation is disabled.");
-        var response = await agent.StartTeamLabEndpointSensorAsync(
-            workerNodeId,
-            new TeamLabEndpointSensorStartRequest(
-                request.RuntimeId,
-                request.Generation,
-                request.AssetKey,
-                runtimeResourceId,
-                mode,
-                osType),
-            cancellationToken);
-        if (response is { Success: true })
-            return TeamLabNodeResult.Ok(response.Message);
-        var message = response?.Message ?? "Endpoint sensor could not be started.";
-        if (request.EndpointObservation == TeamLabEndpointObservationMode.Optional)
-            logger.LogWarning(
-                "可选的 TeamLab endpoint sensor 不可用: runtime={RuntimeId}, generation={Generation}, asset={AssetKey}, node={NodeId}, reason={Reason}",
-                request.RuntimeId, request.Generation, request.AssetKey, workerNodeId, message);
-        return TeamLabNodeResult.Failed(message);
-    }
-
-    private async Task<TeamLabEndpointSensorResponse?> RegisterEndpointSensorAsync(
-        Guid workerNodeId,
-        TeamLabNodeAssetCreateRequest request,
-        CancellationToken cancellationToken)
-    {
-        if (request.EndpointObservation == TeamLabEndpointObservationMode.Disabled) return null;
-        if (!request.Secrets.TryGetValue("GZCTF_SENSOR_HMAC", out var credential) ||
-            string.IsNullOrWhiteSpace(credential))
-            return new TeamLabEndpointSensorResponse(false, "Endpoint sensor credential is unavailable.");
-        var resourceId = request.Kind == TeamLabAssetKind.Vm
-            ? TeamLabResourceNameFactory.LinuxName($"tl{request.RuntimeId}-{request.AssetKey}")
-            : request.AssetKey;
-        return await agent.RegisterTeamLabEndpointSensorAsync(
-            workerNodeId,
-            new TeamLabEndpointSensorRegistrationRequest(
-                request.RuntimeId,
-                request.RuntimePublicId.ToString("D"),
-                request.Generation,
-                request.AssetKey,
-                resourceId,
-                1,
-                credential,
-                request.Kind == TeamLabAssetKind.Vm
-                    ? TeamLabEndpointSensorChannelMode.Vm
-                    : TeamLabEndpointSensorChannelMode.Docker),
-            cancellationToken);
-    }
-
-    private async Task RemoveEndpointSensorAsync(
-        Guid workerNodeId,
-        TeamLabNodeAssetCreateRequest request,
-        CancellationToken cancellationToken) =>
-        await agent.RemoveTeamLabEndpointSensorAsync(
-            workerNodeId,
-            new TeamLabEndpointSensorRemoveRequest(
-                request.RuntimeId, request.Generation, request.AssetKey),
-            cancellationToken);
 
     public async Task<TeamLabNodeHealthResult> ProbeAssetHealthAsync(
         Guid workerNodeId,
@@ -1058,7 +1053,7 @@ public sealed class AgentTeamLabNodeExecutor(
     }).ToList();
 
     private static bool RequiresGuestControl(TeamLabNodeAssetCreateRequest request) =>
-        request.EndpointObservation != TeamLabEndpointObservationMode.Disabled;
+        request.Kind == TeamLabAssetKind.Vm && request.VmRuntimeMode == VmRuntimeMode.Managed;
 
     private static TimeSpan BoundedTimeout(int seconds) => TimeSpan.FromSeconds(Math.Max(1, seconds));
 
@@ -1154,6 +1149,17 @@ public sealed class AgentTeamLabNodeExecutor(
                 response.Running,
                 response.Sha256,
                 response.Uploaded);
+
+    private IReadOnlyList<TeamLabNodeCaptureResult> ToCaptureResults(
+        TeamLabCaptureResponse[]? responses,
+        IEnumerable<Guid> segmentIds,
+        string fallback)
+    {
+        var ids = segmentIds.ToArray();
+        return ids.Select((segmentId, index) => responses is not null && index < responses.Length
+            ? ToCaptureResult(responses[index], fallback)
+            : new TeamLabNodeCaptureResult(false, fallback, segmentId, 0, false, null, false)).ToArray();
+    }
 
     private async Task<T> DispatchAsync<T>(
         Guid workerNodeId,

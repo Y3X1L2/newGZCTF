@@ -73,7 +73,7 @@
 2. 配置校验：`TeamLabNetworkConfig.ExecutionModel` 填非法值启动应失败；缺配置默认 V2。
 3. V2 可达：双节点具备 V2 能力时创建 runtime 必须走 `execution-plan/apply`，快照表有行，审计 detail 有 `executionModel=V2`。
 4. fail-fast：任意节点缺 V2 feature 时创建/部署应明确报错，包含节点名和缺失 feature，不得回落 V1。
-5. secrets：V2 下带用户 secrets 创建应 422；`GZCTF_SENSOR_*` 平台注入密钥不受影响。
+5. secrets：V2 下带用户 secrets 创建应 422。
 6. 清理：V2 runtime 销毁必须基于快照，V1 runtime 销毁仍走显式 legacy 清理；结束后快照、队列、容器、VM、网络无残留。
 7. Agent 同步：118 Agent 已与 release 2 一致；125 通过主站节点管理 `sync-agent` 同步后，确认 Agent 配置 `ExecutionModel` 与心跳能力清单一致，且包含 V2 所需 feature。
 

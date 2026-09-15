@@ -156,6 +156,7 @@ public partial class AppDbContext(DbContextOptions<AppDbContext> options) :
     public DbSet<TeamLabRuntimeAsset> TeamLabRuntimeAssets => Set<TeamLabRuntimeAsset>();
     public DbSet<TeamLabVpnPeerRuntime> TeamLabVpnPeerRuntimes => Set<TeamLabVpnPeerRuntime>();
     public DbSet<TeamLabPublicUdpMapping> TeamLabPublicUdpMappings => Set<TeamLabPublicUdpMapping>();
+    public DbSet<TeamLabServiceAccess> TeamLabServiceAccesses => Set<TeamLabServiceAccess>();
     public DbSet<TeamLabEvent> TeamLabEvents => Set<TeamLabEvent>();
     public DbSet<TeamLabTrafficFlow> TeamLabTrafficFlows => Set<TeamLabTrafficFlow>();
     public DbSet<TeamLabTrafficCaptureJob> TeamLabTrafficCaptureJobs => Set<TeamLabTrafficCaptureJob>();
@@ -176,7 +177,6 @@ public partial class AppDbContext(DbContextOptions<AppDbContext> options) :
     public DbSet<TeamLabRuntimeInfrastructureFragment> TeamLabRuntimeInfrastructureFragments => Set<TeamLabRuntimeInfrastructureFragment>();
     public DbSet<TeamLabExecutionPlanSnapshot> TeamLabExecutionPlanSnapshots => Set<TeamLabExecutionPlanSnapshot>();
     public DbSet<TeamLabFabricLinkLease> TeamLabFabricLinkLeases => Set<TeamLabFabricLinkLease>();
-    public DbSet<TeamLabRuntimeDependencyState> TeamLabRuntimeDependencyStates => Set<TeamLabRuntimeDependencyState>();
     public DbSet<TeamLabObservationPoint> TeamLabObservationPoints => Set<TeamLabObservationPoint>();
     public DbSet<TeamLabObservationCursor> TeamLabObservationCursors => Set<TeamLabObservationCursor>();
     public DbSet<TeamLabTrafficObservation> TeamLabTrafficObservations => Set<TeamLabTrafficObservation>();
@@ -1283,10 +1283,9 @@ public partial class AppDbContext(DbContextOptions<AppDbContext> options) :
             entity.Property(e => e.ExecutionStage)
                 .HasConversion<byte>();
 
-            entity.Property(e => e.EndpointObservation)
-                .HasConversion<byte>();
-
             entity.HasIndex(e => new { e.RuntimeId, e.Generation, e.Kind, e.TopologyKey });
+            entity.HasIndex(e => new { e.RuntimeId, e.Generation, e.Status, e.Id })
+                .HasDatabaseName("IX_TeamLabRuntimeAssets_Runtime_Generation_Status_Id");
             entity.HasIndex(e => e.DevicePackageId);
             entity.HasIndex(e => e.AgentOperationId)
                 .IsUnique()
@@ -1327,6 +1326,19 @@ public partial class AppDbContext(DbContextOptions<AppDbContext> options) :
                 .WithOne(e => e.PublicUdpMapping)
                 .HasForeignKey<TeamLabPublicUdpMapping>(e => e.RuntimeId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<TeamLabServiceAccess>(entity =>
+        {
+            entity.HasIndex(e => e.PublicId).IsUnique();
+            entity.HasIndex(e => e.PublicPort).IsUnique().HasFilter("\"RevokedAt\" IS NULL");
+            entity.HasIndex(e => new { e.RuntimeId, e.Generation, e.RuntimeAssetId });
+            entity.HasOne(e => e.Runtime).WithMany(e => e.ServiceAccesses)
+                .HasForeignKey(e => e.RuntimeId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(e => e.RuntimeAsset).WithMany()
+                .HasForeignKey(e => e.RuntimeAssetId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(e => e.WorkerNode).WithMany()
+                .HasForeignKey(e => e.WorkerNodeId).OnDelete(DeleteBehavior.Restrict);
         });
 
         builder.Entity<TeamLabEvent>(entity =>

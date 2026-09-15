@@ -1,5 +1,5 @@
-import { nextTopologyKey, topologyKeys } from '../model/topologyKeys'
 import type { TopologyDocument, TopologyNode, TopologyNodeType, TopologyPosition } from '../model/topologyDocument'
+import { nextTopologyKey, topologyKeys } from '../model/topologyKeys'
 
 const positionAt = (x: number, y: number): TopologyPosition => ({
   x,
@@ -57,6 +57,5 @@ export function createTopologyNode(
     exposePort: null,
     healthCheck: null,
     orderIndex,
-    endpointObservation: 'optional',
   }
 }

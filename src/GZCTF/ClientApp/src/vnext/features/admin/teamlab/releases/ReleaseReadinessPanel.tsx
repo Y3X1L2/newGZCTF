@@ -1,8 +1,7 @@
 import { AlertTriangle, CheckCircle2, CircleDashed, Download, PlayCircle } from 'lucide-react'
 import { ActionButton } from '../../../../shared/Interaction'
-import { StatusBadge } from '../../shared/AdminWorkbench'
 import type { TeamLabAdminReleaseReadiness } from '../api'
-import { TeamLabRuntimeStatusBadge } from '../shared/TeamLabStatusBadge'
+import { TeamLabReadinessStatusBadge, TeamLabRuntimeStatusBadge } from '../shared/TeamLabStatusBadge'
 import { ReleasePlanPanel } from './ReleasePlanPanel'
 import styles from './TeamLabReleasesPage.module.css'
 
@@ -27,9 +26,7 @@ export function ReleaseReadinessPanel({
             <span>运行准备</span>
             <h3 id="release-readiness-heading">运行就绪度</h3>
           </div>
-          <StatusBadge tone={readiness.ready ? 'success' : 'warning'}>
-            {readiness.ready ? '可创建试运行' : '存在阻断项'}
-          </StatusBadge>
+          <TeamLabReadinessStatusBadge ready={readiness.ready} />
         </header>
 
         {readiness.blockingReasons.length ? (

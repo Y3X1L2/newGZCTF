@@ -47,8 +47,6 @@ public sealed class AgentCapabilityService(
             features.Add(AgentFeatureIds.TeamLabFabricLeasedLinks);
             if (dockerAvailable && capabilities.DnsProbe)
                 features.Add(AgentFeatureIds.TeamLabContainerNetworkFinalize);
-            if (HasEndpointSensorArtifacts())
-                features.Add(AgentFeatureIds.TeamLabEndpointSensor);
             if (HasLibPcap())
                 features.Add(AgentFeatureIds.TeamLabObservation);
             if (HasNativeLibvirt())
@@ -142,10 +140,6 @@ public sealed class AgentCapabilityService(
 
     static bool HasArtifactCacheRoot() =>
         Directory.Exists("/var/lib/gzctf/images") || Directory.Exists("/var/lib/gzctf/teamlab");
-
-    static bool HasEndpointSensorArtifacts() =>
-        File.Exists("/opt/gzctf/endpoint-sensor/linux-x64/gzctf-endpoint-sensor") &&
-        File.Exists("/opt/gzctf/endpoint-sensor/win-x64/gzctf-endpoint-sensor.exe");
 
     static long ReadTotalMemory()
     {

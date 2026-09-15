@@ -16,10 +16,9 @@ public sealed class TeamLabScopeAuthorizationService(AppDbContext context)
         bool administrator,
         CancellationToken cancellationToken)
     {
-        var exists = await context.TeamLabControlScopes.AsNoTracking()
-            .AnyAsync(scope => scope.Id == scopeId, cancellationToken);
-        if (!exists || !await HasGrantAsync(scopeId, apiTokenId, administrator, cancellationToken))
-            throw NotFound();
+        await RequireScopeAsync(
+            context.TeamLabControlScopes.Where(scope => scope.Id == scopeId).Select(scope => (Guid?)scope.Id),
+            apiTokenId, administrator, false, cancellationToken);
     }
 
     public async Task RequireWritableAsync(
@@ -28,14 +27,9 @@ public sealed class TeamLabScopeAuthorizationService(AppDbContext context)
         bool administrator,
         CancellationToken cancellationToken)
     {
-        var scope = await context.TeamLabControlScopes.AsNoTracking()
-            .Select(item => new { item.Id, item.IsArchived })
-            .SingleOrDefaultAsync(item => item.Id == scopeId, cancellationToken);
-        if (scope is null || !await HasGrantAsync(scopeId, apiTokenId, administrator, cancellationToken))
-            throw NotFound();
-        if (scope.IsArchived)
-            throw new TeamLabApiContractException(
-                "scope_archived", "该 TeamLab 控制范围已归档，无法执行写入操作。", 409);
+        await RequireScopeAsync(
+            context.TeamLabControlScopes.Where(scope => scope.Id == scopeId).Select(scope => (Guid?)scope.Id),
+            apiTokenId, administrator, true, cancellationToken);
     }
 
     public async Task<Guid> RequireTopologyScopeAsync(
@@ -45,11 +39,9 @@ public sealed class TeamLabScopeAuthorizationService(AppDbContext context)
         bool writable,
         CancellationToken cancellationToken)
     {
-        var scopeId = await context.TeamLabTopologies.AsNoTracking()
-            .Where(item => item.PublicId == topologyId)
-            .Select(item => item.ControlScopeId)
-            .SingleOrDefaultAsync(cancellationToken);
-        return await RequireResourceScopeAsync(scopeId, apiTokenId, administrator, writable, cancellationToken);
+        return await RequireScopeAsync(
+            context.TeamLabTopologies.Where(item => item.PublicId == topologyId).Select(item => item.ControlScopeId),
+            apiTokenId, administrator, writable, cancellationToken);
     }
 
     public async Task<Guid> RequireReleaseScopeAsync(
@@ -59,11 +51,9 @@ public sealed class TeamLabScopeAuthorizationService(AppDbContext context)
         bool writable,
         CancellationToken cancellationToken)
     {
-        var scopeId = await context.TeamLabTopologyReleases.AsNoTracking()
-            .Where(item => item.Id == releaseId)
-            .Select(item => item.ControlScopeId)
-            .SingleOrDefaultAsync(cancellationToken);
-        return await RequireResourceScopeAsync(scopeId, apiTokenId, administrator, writable, cancellationToken);
+        return await RequireScopeAsync(
+            context.TeamLabTopologyReleases.Where(item => item.Id == releaseId).Select(item => item.ControlScopeId),
+            apiTokenId, administrator, writable, cancellationToken);
     }
 
     public async Task<Guid> RequireRuntimeScopeAsync(
@@ -73,11 +63,35 @@ public sealed class TeamLabScopeAuthorizationService(AppDbContext context)
         bool writable,
         CancellationToken cancellationToken)
     {
-        var scopeId = await context.TeamLabRuntimes.AsNoTracking()
-            .Where(item => item.PublicId == runtimeId)
-            .Select(item => item.ControlScopeId)
-            .SingleOrDefaultAsync(cancellationToken);
-        return await RequireResourceScopeAsync(scopeId, apiTokenId, administrator, writable, cancellationToken);
+        return await RequireScopeAsync(
+            context.TeamLabRuntimes.Where(item => item.PublicId == runtimeId).Select(item => item.ControlScopeId),
+            apiTokenId, administrator, writable, cancellationToken);
+    }
+
+    public async Task<Guid?> RequireConnectorScopeAsync(
+        Guid connectorId,
+        Guid? apiTokenId,
+        bool administrator,
+        bool writable,
+        CancellationToken cancellationToken)
+    {
+        var connector = await context.TeamLabConnectors.AsNoTracking()
+            .Where(item => item.PublicId == connectorId)
+            .Select(item => new ConnectorScope(item.ControlScopeId))
+            .SingleOrDefaultAsync(cancellationToken)
+            ?? throw new TeamLabApiContractException("connector_not_found", "未找到连接器", 404);
+        if (connector.ControlScopeId is not { } scopeId)
+        {
+            if (!administrator)
+                throw new TeamLabApiContractException("connector_not_found", "未找到连接器", 404);
+            return null;
+        }
+
+        if (writable)
+            await RequireWritableAsync(scopeId, apiTokenId, administrator, cancellationToken);
+        else
+            await RequireReadableAsync(scopeId, apiTokenId, administrator, cancellationToken);
+        return scopeId;
     }
 
     public async Task<Guid> RequireRolloutScopeAsync(
@@ -87,11 +101,9 @@ public sealed class TeamLabScopeAuthorizationService(AppDbContext context)
         bool writable,
         CancellationToken cancellationToken)
     {
-        var scopeId = await context.TeamLabRollouts.AsNoTracking()
-            .Where(item => item.PublicId == rolloutId)
-            .Select(item => item.ControlScopeId)
-            .SingleOrDefaultAsync(cancellationToken);
-        return await RequireResourceScopeAsync(scopeId, apiTokenId, administrator, writable, cancellationToken);
+        return await RequireScopeAsync(
+            context.TeamLabRollouts.Where(item => item.PublicId == rolloutId).Select(item => item.ControlScopeId),
+            apiTokenId, administrator, writable, cancellationToken);
     }
 
     public async Task RequireLinkPolicyScopeAsync(
@@ -101,13 +113,12 @@ public sealed class TeamLabScopeAuthorizationService(AppDbContext context)
         bool writable,
         CancellationToken cancellationToken)
     {
-        var runtimeId = await context.TeamLabLinkPolicies.AsNoTracking()
-            .Where(item => item.PublicId == policyId)
-            .Select(item => item.Runtime.PublicId)
-            .SingleOrDefaultAsync(cancellationToken);
-        if (runtimeId == Guid.Empty)
-            throw new TeamLabApiContractException("link_policy_not_found", "未找到链路策略", 404);
-        await RequireRuntimeScopeAsync(runtimeId, apiTokenId, administrator, writable, cancellationToken);
+        var found = await RequireScopeAsync(
+            context.TeamLabLinkPolicies.Where(item => item.PublicId == policyId)
+                .Select(item => item.Runtime.ControlScopeId),
+            apiTokenId, administrator, writable, cancellationToken,
+            () => new TeamLabApiContractException("link_policy_not_found", "未找到链路策略", 404));
+        _ = found;
     }
 
     public async Task<IReadOnlySet<Guid>> ListReadableScopesAsync(
@@ -131,35 +142,31 @@ public sealed class TeamLabScopeAuthorizationService(AppDbContext context)
             .ToHashSet();
     }
 
-    private async Task<Guid> RequireResourceScopeAsync(
-        Guid? scopeId,
+    private async Task<Guid> RequireScopeAsync(
+        IQueryable<Guid?> resourceScopeIds,
         Guid? apiTokenId,
         bool administrator,
         bool writable,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Func<TeamLabApiContractException>? notFound = null)
     {
-        if (scopeId is not { } resolvedScope)
-            throw NotFound();
-        if (writable)
-            await RequireWritableAsync(resolvedScope, apiTokenId, administrator, cancellationToken);
-        else
-            await RequireReadableAsync(resolvedScope, apiTokenId, administrator, cancellationToken);
-        return resolvedScope;
-    }
-
-    /// <summary>
-    /// A grant is satisfied by an exact scope grant or by a wildcard grant
-    /// ("teamlab-scope:*" or the global "*:*"). The `administrator` flag is
-    /// reserved for cookie-side actors (browser administrators); API tokens
-    /// must never bypass the grant table via their creator's role.
-    /// </summary>
-    private Task<bool> HasGrantAsync(Guid scopeId, Guid? apiTokenId, bool administrator, CancellationToken cancellationToken) =>
-        administrator
-            ? Task.FromResult(true)
-            : context.ApiTokenResourceGrants.AsNoTracking().AnyAsync(grant =>
+        var scope = await context.TeamLabControlScopes.AsNoTracking()
+            .Where(item => resourceScopeIds.Contains(item.Id))
+            .Where(item => administrator || context.ApiTokenResourceGrants.Any(grant =>
                 grant.TokenId == apiTokenId && grant.ResourceType == "teamlab-scope" &&
-                (grant.ResourceId == scopeId.ToString("D") || grant.ResourceId == "*"), cancellationToken);
+                (grant.ResourceId == item.Id.ToString() || grant.ResourceId == "*")))
+            .Select(item => new { item.Id, item.IsArchived })
+            .SingleOrDefaultAsync(cancellationToken);
+        if (scope is null)
+            throw notFound?.Invoke() ?? NotFound();
+        if (writable && scope.IsArchived)
+            throw new TeamLabApiContractException(
+                "scope_archived", "该 TeamLab 控制范围已归档，无法执行写入操作。", 409);
+        return scope.Id;
+    }
 
     private static TeamLabApiContractException NotFound() =>
         new("scope_not_found", "未找到 TeamLab 控制范围。", 404);
+
+    private sealed record ConnectorScope(Guid? ControlScopeId);
 }

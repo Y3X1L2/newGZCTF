@@ -15,7 +15,7 @@ describe('CapabilityBindingEditor', () => {
   it('binds the numeric topology identifier and chooses the matching image and resource minimums', () => {
     const change = vi.fn()
     render(<CapabilityBindingEditor node={node} onAssetChange={change} imageOptions={[{ id: 42, name: 'PLC', deviceType: 'docker', digest }]} />)
-    fireEvent.change(screen.getByRole('combobox', { name: /设备包/ }), { target: { value: '7' } })
+    fireEvent.change(screen.getByRole('combobox', { name: /设备模板/ }), { target: { value: '7' } })
     expect(change).toHaveBeenCalledWith({ devicePackageId: 7, deviceParameters: null, imageTemplateId: 42,
       resources: { cpuUnits: 2, memoryMiB: 512, storageMiB: 2048 } })
   })

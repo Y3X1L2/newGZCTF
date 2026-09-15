@@ -1,4 +1,4 @@
-import { AlertTriangle, Cable, Check, Cloud, LoaderCircle, Network, Rocket, Save, Workflow } from 'lucide-react'
+import { AlertTriangle, Cable, Check, Cloud, LoaderCircle, Network, Rocket, Save } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { TeamLabImageOption } from '../api'
 import {
@@ -23,7 +23,7 @@ import { TeamLabInspector } from './inspector'
 import { autoLayoutTopology } from './layout/autoLayoutTopology'
 import { createTopologyNode } from './nodeFactory'
 import { NodePalette } from './palette/NodePalette'
-import { connectCanvasNodes, type CanvasConnectionMode } from './state/canvasCommands'
+import { connectCanvasNodes } from './state/canvasCommands'
 import { useEditorHistory } from './state/useEditorHistory'
 import { useEditorSelection } from './state/useEditorSelection'
 import { useEditorShortcuts, type EditorShortcutHandlers } from './state/useEditorShortcuts'
@@ -83,13 +83,14 @@ export function TeamLabDesignPage({
 }: TeamLabDesignPageProps) {
   const { document, canUndo, canRedo, commit, undo, redo } = useEditorHistory(initialDocument)
   const documentRef = useRef(document)
-  const skipServerNotifyRef = useRef(false)
-  const commitDocument = useCallback((nextDocument: TopologyDocument) => {
-    documentRef.current = nextDocument
-    commit(nextDocument)
-  }, [commit])
+  const commitDocument = useCallback(
+    (nextDocument: TopologyDocument) => {
+      documentRef.current = nextDocument
+      commit(nextDocument)
+    },
+    [commit]
+  )
   const { selection, select, clear } = useEditorSelection(document)
-  const [connectionMode, setConnectionMode] = useState<CanvasConnectionMode>('network')
   const [leftPanelOpen, setLeftPanelOpen] = useState(true)
   const [rightPanelOpen, setRightPanelOpen] = useState(true)
   const [focusMode, setFocusMode] = useState(false)
@@ -100,18 +101,12 @@ export function TeamLabDesignPage({
   const lastNotified = useRef(initialDocument)
   const compact = useCompactEditor()
   const effectiveReadOnly = readOnly || compact
+  const visibleConnectionCount = Object.keys(document.connections).length
 
   useEffect(() => {
     documentRef.current = document
     if (lastNotified.current === document) return
     lastNotified.current = document
-    if (skipServerNotifyRef.current) {
-      // Auto-layout is a presentation-only change (editor layout). It must not
-      // be pushed to the server, because a layout tweak would otherwise bump the
-      // topology revision and surface as a new release version.
-      skipServerNotifyRef.current = false
-      return
-    }
     onDocumentChange?.(document)
   }, [document, onDocumentChange])
 
@@ -155,13 +150,13 @@ export function TeamLabDesignPage({
     (sourceKey: string, targetKey: string) => {
       if (effectiveReadOnly) return
       try {
-        commitDocument(connectCanvasNodes(documentRef.current, sourceKey, targetKey, connectionMode))
+        commitDocument(connectCanvasNodes(documentRef.current, sourceKey, targetKey))
         setFeedback(null)
       } catch (error) {
         setFeedback(error instanceof Error ? error.message : '无法创建连接。')
       }
     },
-    [commitDocument, connectionMode, effectiveReadOnly]
+    [commitDocument, effectiveReadOnly]
   )
   const moveNodes = useCallback(
     (positions: ReadonlyMap<string, { x: number; y: number }>) => {
@@ -188,9 +183,6 @@ export function TeamLabDesignPage({
   const resizeRegion = useCallback(
     (networkKey: string, width: number, height: number) => {
       if (effectiveReadOnly) return
-      // Resizing a region container changes only the editor's presentation, so it
-      // must not bump the topology revision and appear as a new release version.
-      skipServerNotifyRef.current = true
       commitDocument(resizeNetworkRegion(documentRef.current, networkKey, width, height).document)
     },
     [commitDocument, effectiveReadOnly]
@@ -205,9 +197,6 @@ export function TeamLabDesignPage({
   const fitRegion = useCallback(
     (networkKey: string) => {
       if (effectiveReadOnly) return
-      // Region sizing is presentation-only, so it must not bump the topology
-      // revision and surface as a new release version.
-      skipServerNotifyRef.current = true
       commitDocument(fitNetworkRegionToMembers(documentRef.current, networkKey).document)
     },
     [commitDocument, effectiveReadOnly]
@@ -249,10 +238,9 @@ export function TeamLabDesignPage({
   const autoLayout = useCallback(() => {
     const currentDocument = documentRef.current
     if (effectiveReadOnly || Object.keys(currentDocument.nodes).length < 2) return
-    skipServerNotifyRef.current = true
     commitDocument(autoLayoutTopology(currentDocument))
     setLayoutRequest((value) => value + 1)
-    setFeedback('已完成自动排版（仅本地布局，不会产生新版本）；可使用撤销恢复原布局。')
+    setFeedback('已完成自动排版，布局将自动保存且不会产生新版本；可使用撤销恢复原布局。')
   }, [commitDocument, effectiveReadOnly])
   const save = useCallback(() => void onSave?.(documentRef.current), [onSave])
   const validate = useCallback(() => void onValidate?.(), [onValidate])
@@ -265,17 +253,21 @@ export function TeamLabDesignPage({
   const toggleFocus = useCallback(() => setFocusMode((value) => !value), [])
   const toggleLeftPanel = useCallback(() => setLeftPanelOpen((value) => !value), [])
   const toggleRightPanel = useCallback(() => setRightPanelOpen((value) => !value), [])
-  const selectCanvasItems = useCallback((nodeKeys: readonly string[], connectionKeys: readonly string[]) => {
-    select(nodeKeys, connectionKeys)
-    if (nodeKeys.length > 0 || connectionKeys.length > 0) setSelectedNetworkKey(null)
-  }, [select])
-  const selectNetworkRegion = useCallback((networkKey: string | null) => {
-    setSelectedNetworkKey(networkKey)
-    if (networkKey) clear()
-  }, [clear])
+  const selectCanvasItems = useCallback(
+    (nodeKeys: readonly string[], connectionKeys: readonly string[]) => {
+      select(nodeKeys, connectionKeys)
+      if (nodeKeys.length > 0 || connectionKeys.length > 0) setSelectedNetworkKey(null)
+    },
+    [select]
+  )
+  const selectNetworkRegion = useCallback(
+    (networkKey: string | null) => {
+      setSelectedNetworkKey(networkKey)
+      if (networkKey) clear()
+    },
+    [clear]
+  )
   const addPaletteNode = useCallback((type: TopologyNodeType) => addNode(type), [addNode])
-  const useNetworkConnections = useCallback(() => setConnectionMode('network'), [])
-  const useDependencyConnections = useCallback(() => setConnectionMode('dependency'), [])
   const shortcutHandlers = useMemo<EditorShortcutHandlers>(
     () => ({
       undo: undoDocument,
@@ -313,30 +305,10 @@ export function TeamLabDesignPage({
           <span>拓扑设计</span>
           <strong>{document.name}</strong>
         </div>
-        <div aria-label="连接类型" className={styles.connectionModes} role="group">
-          <button
-            aria-pressed={connectionMode === 'network'}
-            onClick={useNetworkConnections}
-            title="拖动连线时创建网络连接"
-            type="button"
-          >
-            <Network size={15} />
-            <span>网络连接</span>
-          </button>
-          <button
-            aria-pressed={connectionMode === 'dependency'}
-            onClick={useDependencyConnections}
-            title="拖动连线时创建启动依赖"
-            type="button"
-          >
-            <Workflow size={15} />
-            <span>启动依赖</span>
-          </button>
-        </div>
         <div className={styles.metrics}>
           <span>
             <Cable size={14} />
-            {Object.keys(document.connections).length} 条连接
+            {visibleConnectionCount} 条连接
           </span>
           <span>
             <Network size={14} />
@@ -401,7 +373,6 @@ export function TeamLabDesignPage({
         <TeamLabCanvas
           canRedo={!effectiveReadOnly && canRedo}
           canUndo={!effectiveReadOnly && canUndo}
-          connectionMode={connectionMode}
           document={document}
           focusMode={focusMode}
           focusNodeKey={focusTarget?.nodeKey}

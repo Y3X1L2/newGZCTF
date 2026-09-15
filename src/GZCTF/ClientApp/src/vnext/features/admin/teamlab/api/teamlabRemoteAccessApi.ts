@@ -52,12 +52,18 @@ function connect(value: unknown): TeamLabRemoteConnect {
 
 export function createTeamLabRemoteAccessApi(client: RuntimeJsonClient = runtimeJsonClient) {
   return {
-    async list(filters: { runtimeId?: string; workerNodeId?: string; requestedByUserId?: string; status?: number; after?: number } = {}) {
+    async list(filters: { runtimeId?: string; query?: string; protocol?: TeamLabRemoteProtocol; abnormalOnly?: boolean; status?: number; after?: number } = {}) {
       const page = parse.record(await client.get(`${root}/remote-sessions`, { ...filters, limit: 50 }), '远程会话列表')
       return {
         items: parse.array(page.items, '远程会话列表.items', (entry) => {
           const item = parse.record(entry, '会话条目')
-          return { session: session(item.session), workerNodeId: parse.string(item.workerNodeId, '节点'), requestedByUserId: parse.string(item.requestedByUserId, '操作者') }
+          return {
+            session: session(item.session),
+            workerNodeId: parse.string(item.workerNodeId, '节点'),
+            workerNodeName: parse.string(item.workerNodeName, '节点名称'),
+            requestedByUserId: parse.string(item.requestedByUserId, '操作者'),
+            requestedByName: parse.string(item.requestedByName, '操作者名称'),
+          }
         }),
         nextCursor: parse.nullableNumber(page.nextCursor, '远程会话列表.nextCursor'),
       }

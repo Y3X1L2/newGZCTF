@@ -43,26 +43,12 @@ namespace GZCTF.Migrations
                 type: "jsonb",
                 nullable: true);
 
-            migrationBuilder.AddColumn<byte>(
-                name: "EndpointObservation",
-                table: "TeamLabTopologyAssets",
-                type: "smallint",
-                nullable: false,
-                defaultValue: (byte)0);
-
             migrationBuilder.AddColumn<bool>(
                 name: "Stateless",
                 table: "TeamLabTopologyAssets",
                 type: "boolean",
                 nullable: false,
                 defaultValue: false);
-
-            migrationBuilder.AddColumn<string>(
-                name: "DependenciesJson",
-                table: "TeamLabTopologies",
-                type: "jsonb",
-                nullable: false,
-                defaultValueSql: "'[]'::jsonb");
 
             migrationBuilder.AddColumn<string>(
                 name: "InfrastructureJson",
@@ -169,32 +155,6 @@ namespace GZCTF.Migrations
                         principalTable: "WorkerNodes",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "TeamLabRuntimeDependencyStates",
-                columns: table => new
-                {
-                    Id = table.Column<long>(type: "bigint", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    RuntimeId = table.Column<int>(type: "integer", nullable: false),
-                    Generation = table.Column<int>(type: "integer", nullable: false),
-                    AssetKey = table.Column<string>(type: "character varying(63)", maxLength: 63, nullable: false),
-                    DependsOnKey = table.Column<string>(type: "character varying(63)", maxLength: 63, nullable: false),
-                    Condition = table.Column<byte>(type: "smallint", nullable: false),
-                    Status = table.Column<byte>(type: "smallint", nullable: false),
-                    SatisfiedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
-                    LastError = table.Column<string>(type: "character varying(1024)", maxLength: 1024, nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_TeamLabRuntimeDependencyStates", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_TeamLabRuntimeDependencyStates_TeamLabRuntimes_RuntimeId",
-                        column: x => x.RuntimeId,
-                        principalTable: "TeamLabRuntimes",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateTable(
@@ -485,12 +445,6 @@ namespace GZCTF.Migrations
                 column: "WorkerNodeId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_TeamLabRuntimeDependencyStates_RuntimeId_Generation_AssetKe~",
-                table: "TeamLabRuntimeDependencyStates",
-                columns: new[] { "RuntimeId", "Generation", "AssetKey", "DependsOnKey", "Condition" },
-                unique: true);
-
-            migrationBuilder.CreateIndex(
                 name: "IX_TeamLabRuntimeInfrastructure_PublicId",
                 table: "TeamLabRuntimeInfrastructure",
                 column: "PublicId",
@@ -552,9 +506,6 @@ namespace GZCTF.Migrations
                 name: "TeamLabObservationPoints");
 
             migrationBuilder.DropTable(
-                name: "TeamLabRuntimeDependencyStates");
-
-            migrationBuilder.DropTable(
                 name: "TeamLabRuntimeInfrastructureFragments");
 
             migrationBuilder.DropTable(
@@ -573,16 +524,8 @@ namespace GZCTF.Migrations
                 table: "TeamLabTopologyAssets");
 
             migrationBuilder.DropColumn(
-                name: "EndpointObservation",
-                table: "TeamLabTopologyAssets");
-
-            migrationBuilder.DropColumn(
                 name: "Stateless",
                 table: "TeamLabTopologyAssets");
-
-            migrationBuilder.DropColumn(
-                name: "DependenciesJson",
-                table: "TeamLabTopologies");
 
             migrationBuilder.DropColumn(
                 name: "InfrastructureJson",

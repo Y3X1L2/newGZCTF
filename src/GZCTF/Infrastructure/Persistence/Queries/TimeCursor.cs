@@ -58,6 +58,29 @@ public readonly record struct GuidTimeCursor(DateTimeOffset Time, Guid Id)
     }
 }
 
+public readonly record struct IdCursor(long Id)
+{
+    public string Encode() => WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(
+        Id.ToString(CultureInfo.InvariantCulture)));
+
+    public static IdCursor Decode(string value)
+    {
+        try
+        {
+            var bytes = WebEncoders.Base64UrlDecode(value.Trim());
+            if (bytes.Length is < 1 or > 24 ||
+                !long.TryParse(Encoding.UTF8.GetString(bytes), NumberStyles.None,
+                    CultureInfo.InvariantCulture, out var id) || id <= 0)
+                throw new FormatException();
+            return new IdCursor(id);
+        }
+        catch (Exception exception) when (exception is FormatException or ArgumentException)
+        {
+            throw new InvalidTimeCursorException(exception);
+        }
+    }
+}
+
 public sealed class InvalidTimeCursorException(Exception innerException) :
     Exception("The pagination cursor is invalid.", innerException);
 

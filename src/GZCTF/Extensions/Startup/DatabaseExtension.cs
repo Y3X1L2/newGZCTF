@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Npgsql;
 
 namespace GZCTF.Extensions.Startup;
 
@@ -13,9 +14,15 @@ internal static class DatabaseExtension
                 ExitWithFatalMessage(
                     StaticLocalizer[nameof(Resources.Program.Database_NoConnectionString)]);
 
+            var connection = new NpgsqlConnectionStringBuilder(
+                builder.Configuration.GetConnectionString("Database"));
+            if (!connection.ContainsKey("Connection Idle Lifetime"))
+                connection.ConnectionIdleLifetime = 60;
+            var connectionString = connection.ConnectionString;
+
             builder.Services.AddDbContext<AppDbContext>(options =>
                 {
-                    options.UseNpgsql(builder.Configuration.GetConnectionString("Database"),
+                    options.UseNpgsql(connectionString,
                         o => o.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery));
 
                     options.ConfigureWarnings(w =>
@@ -32,7 +39,7 @@ internal static class DatabaseExtension
             {
                 builder.Configuration.AddEntityConfiguration(options =>
                 {
-                    options.UseNpgsql(builder.Configuration.GetConnectionString("Database"));
+                    options.UseNpgsql(connectionString);
                     options.ConfigureWarnings(w =>
                         w.Ignore(RelationalEventId.PendingModelChangesWarning));
                 });

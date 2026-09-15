@@ -40,6 +40,10 @@ public sealed class ApiTokenRateLimitMiddleware(RequestDelegate next)
             return;
         }
 
+        context.Response.Headers["RateLimit-Limit"] = decision.Limit.ToString();
+        context.Response.Headers["RateLimit-Remaining"] = decision.Remaining.ToString();
+        context.Response.Headers["RateLimit-Reset"] = decision.ResetAfterSeconds.ToString();
+
         if (!decision.Allowed)
         {
             await ExternalApiProblemDetails.WriteAsync(
@@ -48,7 +52,7 @@ public sealed class ApiTokenRateLimitMiddleware(RequestDelegate next)
                 "rate_limit_exceeded",
                 "API token request quota exceeded.",
                 configureHeaders: headers =>
-                    headers.RetryAfter = decision.RetryAfterSeconds.ToString());
+                    headers.RetryAfter = decision.ResetAfterSeconds.ToString());
             return;
         }
 

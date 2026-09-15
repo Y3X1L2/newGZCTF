@@ -346,16 +346,6 @@ public sealed partial class RuntimeFactReconciliationService(
                 item.PublicId.ToString("D"),
                 item.InterfaceToken,
                 item.DesiredStateDigest)))
-            .Concat(assets.Where(item => item.EndpointObservation != TeamLabEndpointObservationMode.Disabled &&
-                item.DesiredPowerState is not ("stopped" or "paused"))
-                .Select(item => new ExpectedTeamLabControlFact(
-                    item.WorkerNodeId!.Value,
-                    item.RuntimeId,
-                    item.Generation,
-                    "endpoint-sensor",
-                    item.TopologyKey,
-                    item.RuntimeResourceId,
-                    null)))
             .Concat(captures.Select(item => new ExpectedTeamLabControlFact(
                 item.WorkerNodeId,
                 item.CaptureJob.RuntimeId,

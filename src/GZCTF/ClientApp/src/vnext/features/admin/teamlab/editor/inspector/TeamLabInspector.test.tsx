@@ -11,7 +11,6 @@ function createDocument(): TopologyDocument {
     observation: {
       flowMetadataEnabled: true,
       onDemandPcapEnabled: true,
-      endpointObservation: 'optional',
     },
     networkLayouts: {},
     nodes: {
@@ -55,7 +54,6 @@ function createDocument(): TopologyDocument {
         exposePort: 8080,
         healthCheck: { kind: 'http', port: 8080 },
         orderIndex: 2,
-        endpointObservation: 'required',
       },
       database: {
         type: 'linux-vm',
@@ -67,7 +65,6 @@ function createDocument(): TopologyDocument {
         exposePort: null,
         healthCheck: { kind: 'tcp', port: 5432 },
         orderIndex: 3,
-        endpointObservation: 'optional',
       },
     },
     connections: {
@@ -87,13 +84,6 @@ function createDocument(): TopologyDocument {
         toSwitchKey: 'data',
         viaNodeKey: 'router',
         direction: 'from-to',
-      },
-      dependency: {
-        type: 'dependency',
-        key: 'dependency',
-        assetKey: 'app',
-        dependsOnKey: 'database',
-        condition: 'service-ready',
       },
     },
   }
@@ -173,12 +163,11 @@ describe('TeamLabInspector', () => {
     expect(asset).toMatchObject({
       imageTemplateId: 42,
       healthCheck: { kind: 'http', port: 8080 },
-      endpointObservation: 'required',
     })
     expect(screen.queryByRole('textbox', { name: /secret/i })).not.toBeInTheDocument()
   })
 
-  it('updates membership, route and dependency connections with dedicated editors', () => {
+  it('updates membership and route connections', () => {
     const membershipChange = vi.fn()
     const membershipView = render(
       <TeamLabInspector
@@ -208,19 +197,6 @@ describe('TeamLabInspector', () => {
       direction: 'bidirectional',
     })
     routeView.unmount()
-
-    const dependencyChange = vi.fn()
-    render(
-      <TeamLabInspector
-        document={createDocument()}
-        onDocumentChange={dependencyChange}
-        selection={selection([], ['dependency'])}
-      />
-    )
-    fireEvent.change(screen.getByLabelText('就绪条件'), { target: { value: 'guest-ready' } })
-    expect((dependencyChange.mock.calls[0][0] as TopologyDocument).connections.dependency).toMatchObject({
-      condition: 'guest-ready',
-    })
   })
 
   it('edits document observation with no selection and summarizes multiple selections', () => {

@@ -12,6 +12,16 @@ namespace GZCTF.Modules.Runtime.Api;
 [Route("api/v1/nodes/{nodeId:guid}/runtime-signals")]
 public sealed class InternalRuntimeSignalsController(RuntimeSignalService signals) : ControllerBase
 {
+    [HttpPost("~/api/internal/teamlab/runtime-signals/batch")]
+    [AllowAnonymous]
+    [EnableRateLimiting(nameof(RateLimiter.LimitPolicy.Query))]
+    public async Task<IActionResult> IngestBatch(
+        AgentRuntimeSignalBatchModel model,
+        CancellationToken cancellationToken)
+    {
+        return await IngestCoreAsync(model.NodeId, model.Signals, cancellationToken);
+    }
+
     [HttpPost]
     [AllowAnonymous]
     [EnableRateLimiting(nameof(RateLimiter.LimitPolicy.Query))]
@@ -20,6 +30,15 @@ public sealed class InternalRuntimeSignalsController(RuntimeSignalService signal
         AgentRuntimeSignalModel model,
         CancellationToken cancellationToken)
     {
+        return await IngestCoreAsync(nodeId, [model], cancellationToken, single: true);
+    }
+
+    private async Task<IActionResult> IngestCoreAsync(
+        Guid nodeId,
+        IReadOnlyList<AgentRuntimeSignalModel> models,
+        CancellationToken cancellationToken,
+        bool single = false)
+    {
         var bearer = Request.Headers.Authorization.ToString();
         var token = bearer.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
             ? bearer[7..].Trim()
@@ -27,7 +46,8 @@ public sealed class InternalRuntimeSignalsController(RuntimeSignalService signal
 
         try
         {
-            return Ok(await signals.IngestAuthenticatedAsync(nodeId, token, model, cancellationToken));
+            var result = await signals.IngestBatchAuthenticatedAsync(nodeId, token, models, cancellationToken);
+            return Ok(single ? result[0] : result);
         }
         catch (RuntimeSignalNodeNotFoundException)
         {

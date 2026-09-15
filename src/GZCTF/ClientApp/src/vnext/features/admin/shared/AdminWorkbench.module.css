@@ -155,27 +155,50 @@
 }
 
 .statusBadge i {
+  display: grid;
   width: 7px;
   height: 7px;
   flex: 0 0 auto;
+  place-items: center;
   border-radius: 50%;
   background: var(--yn-color-muted);
 }
 
+.statusBadge[data-icon] i {
+  width: 14px;
+  height: 14px;
+  border-radius: 0;
+  background: none;
+  color: var(--yn-color-muted);
+}
+
+.statusBadge[data-icon] i svg {
+  width: 14px;
+  height: 14px;
+}
+
 .statusBadge[data-tone='success'] i {
   background: var(--yn-color-brand);
+  color: var(--yn-color-brand);
 }
 
 .statusBadge[data-tone='warning'] i {
   background: var(--yn-color-warning);
+  color: var(--yn-color-warning);
 }
 
 .statusBadge[data-tone='danger'] i {
   background: var(--yn-color-danger);
+  color: var(--yn-color-danger);
 }
 
 .statusBadge[data-tone='info'] i {
   background: var(--yn-color-info);
+  color: var(--yn-color-info);
+}
+
+.statusBadge[data-tone][data-icon] i {
+  background: none;
 }
 
 .statusBadge[data-pulse] i {

@@ -15,7 +15,7 @@ vi.mock('../../../../shared/Interaction', async importOriginal => ({
 const runtime: TeamLabRuntime = {
   id: 'runtime-a', releaseId: 'release-a', generation: 3, status: 'running', stage: 'runtime-ready',
   openForAccess: true, shards: [], networks: [], createdAt: 0, updatedAt: null, error: null,
-  assets: [{ id: 1, key: 'web', name: 'Web', kind: 'docker', runtimeResourceId: 'container-1', primaryIp: null, status: 'running', error: null }],
+  assets: [{ id: 1, key: 'web', name: 'Web', kind: 'docker', networkKeys: [], runtimeResourceId: 'container-1', primaryIp: null, status: 'running', error: null }],
 }
 function mount(value = runtime, path = '/?tab=operations') {
   return render(<MemoryRouter initialEntries={[path]}><SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>

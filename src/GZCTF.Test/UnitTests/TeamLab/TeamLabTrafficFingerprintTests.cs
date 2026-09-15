@@ -79,9 +79,9 @@ public sealed class TeamLabTrafficFingerprintTests
         var start = DateTimeOffset.Parse("2026-07-14T10:00:00Z");
         var observations = new[]
         {
-            StoredObservation(1, 11, start, packet, null, 1),
-            StoredObservation(2, 12, start.AddMilliseconds(2), packet, null, 1),
-            StoredObservation(3, 13, start.AddMilliseconds(4), packet, null, 1)
+            StoredObservation(1, 11, start, packet, 1),
+            StoredObservation(2, 12, start.AddMilliseconds(2), packet, 1),
+            StoredObservation(3, 13, start.AddMilliseconds(4), packet, 1)
         };
 
         var path = Assert.Single(TeamLabTrafficPathCorrelator.BuildPacketPaths(7, 2, observations));
@@ -98,11 +98,11 @@ public sealed class TeamLabTrafficFingerprintTests
         var start = DateTimeOffset.Parse("2026-07-14T10:00:00Z");
         var observations = new[]
         {
-            StoredObservation(1, 11, start, packet, null, 1),
-            StoredObservation(2, 12, start.AddMilliseconds(1), packet, null, 1),
-            StoredObservation(3, 13, start.AddMilliseconds(2), packet, null, 1),
-            StoredObservation(4, 12, start.AddMilliseconds(3), packet, null, 1),
-            StoredObservation(5, 11, start.AddMilliseconds(4), packet, null, 1)
+            StoredObservation(1, 11, start, packet, 1),
+            StoredObservation(2, 12, start.AddMilliseconds(1), packet, 1),
+            StoredObservation(3, 13, start.AddMilliseconds(2), packet, 1),
+            StoredObservation(4, 12, start.AddMilliseconds(3), packet, 1),
+            StoredObservation(5, 11, start.AddMilliseconds(4), packet, 1)
         };
 
         var path = Assert.Single(TeamLabTrafficPathCorrelator.BuildPacketPaths(7, 2, observations));
@@ -119,10 +119,10 @@ public sealed class TeamLabTrafficFingerprintTests
         var secondPacket = Enumerable.Repeat((byte)0x22, 32).ToArray();
         var paths = TeamLabTrafficPathCorrelator.BuildPacketPaths(7, 2,
         [
-            StoredObservation(1, 11, start, firstPacket, null, 1),
-            StoredObservation(2, 12, start.AddMilliseconds(1), firstPacket, null, 1),
-            StoredObservation(3, 11, start.AddMilliseconds(2), secondPacket, null, 2),
-            StoredObservation(4, 12, start.AddMilliseconds(3), secondPacket, null, 2)
+            StoredObservation(1, 11, start, firstPacket, 1),
+            StoredObservation(2, 12, start.AddMilliseconds(1), firstPacket, 1),
+            StoredObservation(3, 11, start.AddMilliseconds(2), secondPacket, 2),
+            StoredObservation(4, 12, start.AddMilliseconds(3), secondPacket, 2)
         ]);
 
         Assert.Equal(2, paths.Count);
@@ -130,46 +130,12 @@ public sealed class TeamLabTrafficFingerprintTests
     }
 
     [Fact]
-    public void PathCorrelation_LabelsSocketSnapshotsAsTemporalRatherThanCausal()
-    {
-        var process = Enumerable.Repeat((byte)0x24, 32).ToArray();
-        var start = DateTimeOffset.Parse("2026-07-14T10:00:00Z");
-        var observations = new[]
-        {
-            StoredObservation(10, 21, start, null, process, 1),
-            StoredObservation(11, 21, start.AddSeconds(1), null, process, 2)
-        };
-
-        var path = Assert.Single(TeamLabTrafficPathCorrelator.BuildTemporalProcessPaths(7, 2, observations));
-
-        Assert.Equal(TeamLabPathConfidence.TemporallyRelated, path.Confidence);
-        Assert.NotEqual(TeamLabPathConfidence.ProcessCorrelated, path.Confidence);
-    }
-
-    [Fact]
-    public void PathCorrelation_LabelsDirectedSameProcessEventsAsProcessCorrelated()
-    {
-        var process = Enumerable.Repeat((byte)0x25, 32).ToArray();
-        var start = DateTimeOffset.Parse("2026-07-14T10:00:00Z");
-        var observations = new[]
-        {
-            StoredObservation(20, 21, start, null, process, 1, "accepted"),
-            StoredObservation(21, 21, start.AddMilliseconds(10), null, process, 2, "connected")
-        };
-
-        var path = Assert.Single(TeamLabTrafficPathCorrelator.BuildTemporalProcessPaths(7, 2, observations));
-
-        Assert.Equal(TeamLabPathConfidence.ProcessCorrelated, path.Confidence);
-        Assert.Equal([20L, 21L], path.Hops.Select(item => item.ObservationId).ToArray());
-    }
-
-    [Fact]
     public void CorrelationCursor_AdvancesMonotonicallyAtVisibleTail()
     {
         var observations = new[]
         {
-            StoredObservation(101, 11, DateTimeOffset.UnixEpoch, Enumerable.Repeat((byte)1, 32).ToArray(), null, 1),
-            StoredObservation(102, 12, DateTimeOffset.UnixEpoch.AddMilliseconds(1), Enumerable.Repeat((byte)1, 32).ToArray(), null, 1)
+            StoredObservation(101, 11, DateTimeOffset.UnixEpoch, Enumerable.Repeat((byte)1, 32).ToArray(), 1),
+            StoredObservation(102, 12, DateTimeOffset.UnixEpoch.AddMilliseconds(1), Enumerable.Repeat((byte)1, 32).ToArray(), 1)
         };
 
         Assert.Equal(102, TeamLabTrafficPathCorrelator.NextScanCursor(observations, 100));
@@ -222,7 +188,6 @@ public sealed class TeamLabTrafficFingerprintTests
         int observationPointId,
         DateTimeOffset observedAt,
         byte[]? packetFingerprint,
-        byte[]? processIdentityHash,
         byte flowMarker,
         string direction = "observed") => new()
     {
@@ -241,10 +206,7 @@ public sealed class TeamLabTrafficFingerprintTests
         PacketLength = 128,
         PacketFingerprint = packetFingerprint,
         FlowFingerprint = Enumerable.Repeat(flowMarker, 32).ToArray(),
-        ProcessIdentityHash = processIdentityHash,
-        EvidenceKind = packetFingerprint is null
-            ? TeamLabTrafficEvidenceKind.EndpointProcess
-            : TeamLabTrafficEvidenceKind.Packet,
+        EvidenceKind = TeamLabTrafficEvidenceKind.Packet,
         Direction = direction
     };
 
@@ -271,6 +233,5 @@ public sealed class TeamLabTrafficFingerprintTests
         null,
         "sha256:" + new string('a', 64),
         "Packet",
-        null,
         "observed");
 }

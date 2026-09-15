@@ -113,7 +113,6 @@ public class DockerService
                     ? fabricManagementNetwork ? primaryNetwork : "none"
                     : primaryNetwork,
                 DNS = dnsServers.Length > 0 ? dnsServers : null,
-                Binds = request.BindMounts.Select(BuildBindMount).ToList(),
             },
             ExposedPorts = request.PublishPort ? new Dictionary<string, EmptyStruct> { [portSpec] = new() } : null,
             NetworkingConfig = !isolatedHostNetwork &&
@@ -796,12 +795,47 @@ public class DockerService
     public async Task<TeamLabFileResult> ManageTeamLabFilesAsync(TeamLabContainerFileRequest request, CancellationToken token)
     {
         if (!TeamLabFileLimits.IsValidPath(request.Path) || request.RuntimeId <= 0 || request.Generation <= 0 ||
-            request.Operation is not ("list" or "download" or "upload" or "delete") ||
+            request.Operation is not ("list" or "download" or "upload" or "delete" or "mkdir" or "move") ||
+            request.Operation == "move" && !TeamLabFileLimits.IsValidPath(request.DestinationPath) ||
             request.Content is { Length: > TeamLabFileLimits.MaxBytes })
             throw new AgentOperationException("Validation", "files.invalid_request", "Invalid file request.", false);
-        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(token);
-        deadline.CancelAfter(TimeSpan.FromSeconds(30));
-        var inspect = await _client.Containers.InspectContainerAsync(request.ContainerId, deadline.Token);
+        return await WithTeamLabFileStoreAsync(request,
+            (store, operationToken) => store.ExecuteAsync(request, operationToken), token);
+    }
+
+    public Task DownloadTeamLabFileAsync(
+        TeamLabContainerFileRequest request,
+        Stream destination,
+        long maxBytes,
+        TimeSpan idleTimeout,
+        CancellationToken token) =>
+        WithTeamLabFileStoreAsync(request,
+            async (store, operationToken) =>
+            {
+                await store.DownloadToAsync(request.Path, destination, maxBytes, idleTimeout, operationToken);
+                return true;
+            }, token);
+
+    public Task UploadTeamLabFileAsync(
+        TeamLabContainerFileRequest request,
+        Stream source,
+        long contentLength,
+        long maxBytes,
+        TimeSpan idleTimeout,
+        CancellationToken token) =>
+        WithTeamLabFileStoreAsync(request,
+            async (store, operationToken) =>
+            {
+                await store.UploadFromAsync(request, source, contentLength, maxBytes, idleTimeout, operationToken);
+                return true;
+            }, token);
+
+    private async Task<T> WithTeamLabFileStoreAsync<T>(
+        TeamLabContainerFileRequest request,
+        Func<TeamLab.LinuxContainerFileStore, CancellationToken, Task<T>> operation,
+        CancellationToken token)
+    {
+        var inspect = await _client.Containers.InspectContainerAsync(request.ContainerId, token);
         var labels = inspect.Config.Labels;
         if (labels is null || !labels.TryGetValue("ManagedBy", out var owner) || owner != "GZCTF" ||
             !labels.TryGetValue("GZCTF.RuntimeId", out var runtime) || runtime != request.RuntimeId.ToString(System.Globalization.CultureInfo.InvariantCulture) ||
@@ -812,10 +846,10 @@ public class DockerService
         try
         {
             using var store = TeamLab.LinuxContainerFileStore.ForProcess(inspect.State.Pid, inspect.ID);
-            var current = await _client.Containers.InspectContainerAsync(inspect.ID, deadline.Token);
+            var current = await _client.Containers.InspectContainerAsync(inspect.ID, token);
             if (current.State.Pid != inspect.State.Pid || current.State.StartedAt != inspect.State.StartedAt)
                 throw new IOException("Container process changed during file access.");
-            return await store.ExecuteAsync(request, deadline.Token);
+            return await operation(store, token);
         }
         catch (TeamLab.LinuxContainerFileStore.NativeFileException error)
         {
@@ -1462,19 +1496,6 @@ public class DockerService
         }
 
         return attachments;
-    }
-
-    private static string BuildBindMount(ContainerBindMount mount)
-    {
-        var source = Path.GetFullPath(mount.Source);
-        var destination = Path.GetFullPath(mount.Destination);
-        var sourceAllowed = source.StartsWith("/run/gzctf-sensor/", StringComparison.Ordinal) ||
-                            source.StartsWith("/opt/gzctf/endpoint-sensor/", StringComparison.Ordinal);
-        var destinationAllowed = destination.StartsWith("/run/gzctf/", StringComparison.Ordinal) ||
-                                 destination.StartsWith("/opt/gzctf/", StringComparison.Ordinal);
-        if (!sourceAllowed || !destinationAllowed || source.Contains(':') || destination.Contains(':'))
-            throw new InvalidOperationException("Container bind mount is outside the managed sensor paths.");
-        return $"{source}:{destination}:{(mount.ReadOnly ? "ro" : "rw")}";
     }
 
     public static string BuildContainerName(CreateContainerRequest request)

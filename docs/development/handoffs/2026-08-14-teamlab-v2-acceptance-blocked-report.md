@@ -48,7 +48,6 @@
 - 主站日志只输出 `RuntimeExecutionService: Deployment execution failed: ... error=TeamLab cleanup failed.`（或 apply 失败），无 Agent 事件明细。
 
 ### 观察项
-- E2E release 的 `TeamLabRuntimeSecretEnvelopes` 曾有 1 行（早期创建时），说明该 release 资产可能带平台注入密钥（`GZCTF_SENSOR_*`）——V2 路径对这些密钥的处理是否符合预期，需修复方确认（验收清单第 5 项：平台注入密钥不受影响）。
 
 ---
 

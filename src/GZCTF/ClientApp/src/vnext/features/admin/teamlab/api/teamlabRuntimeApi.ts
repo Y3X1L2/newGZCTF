@@ -11,6 +11,7 @@ import {
   parseTeamLabCapture,
   parseTeamLabCapturePage,
   parseTeamLabRuntime,
+  parseTeamLabRuntimeStatus,
   parseTeamLabRuntimeEvents,
   parseTeamLabTrafficFlowPage,
   parseTeamLabTrafficPath,
@@ -40,6 +41,7 @@ function supportsDeleteResponse(client: RuntimeJsonClient): client is RuntimeJso
 
 export const teamLabRuntimeKeys = {
   runtime: (runtimeId: string) => ['vnext:admin:teamlab:runtime', runtimeId] as const,
+  runtimeStatus: (runtimeId: string) => ['vnext:admin:teamlab:runtime-status', runtimeId] as const,
   events: (runtimeId: string) => ['vnext:admin:teamlab:runtime-events', runtimeId] as const,
   accessGrants: (runtimeId: string) => ['vnext:admin:teamlab:runtime-access-grants', runtimeId] as const,
   flows: (runtimeId: string) => ['vnext:admin:teamlab:runtime-flows', runtimeId] as const,
@@ -68,6 +70,10 @@ export function createTeamLabRuntimeApi(client: RuntimeJsonClient = runtimeJsonC
 
     async getRuntime(runtimeId: string) {
       return parseTeamLabRuntime(await client.get(`${root}/${runtimeId}`))
+    },
+
+    async getRuntimeStatus(runtimeId: string) {
+      return parseTeamLabRuntimeStatus(await client.get(`${root}/${runtimeId}/status`))
     },
 
     async listEvents(

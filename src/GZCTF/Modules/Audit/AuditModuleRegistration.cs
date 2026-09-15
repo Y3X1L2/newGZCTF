@@ -20,6 +20,8 @@ public static class AuditModuleRegistration
         services.AddScoped<OperationalEventQueryService>();
         services.AddScoped<IApiTokenResourceGrantPolicy, OperationApiTokenResourceGrantPolicy>();
         services.AddScoped<AdminMutationAuditFilter>();
+        services.AddSingleton<ExternalApiAuditWriter>();
+        services.AddHostedService(provider => provider.GetRequiredService<ExternalApiAuditWriter>());
         services.AddHostedService<ApiOperationWorker>();
         services.AddSingleton<IAuthorizationMiddlewareResultHandler, ExternalApiAuthorizationResultHandler>();
         return services;

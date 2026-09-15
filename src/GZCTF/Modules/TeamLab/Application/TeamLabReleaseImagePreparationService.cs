@@ -27,11 +27,9 @@ public sealed class TeamLabReleaseImagePreparationService(
         var execution = TeamLabReleaseCodec.DecodeExecution(release.SchemaVersion, release.CanonicalJson);
         var reference = ImageDistributionReferenceKey.TeamLabRelease(release.Id);
 
-        foreach (var templateId in execution.Assets
-                     .Select(item => item.ImageTemplateId)
-                     .Distinct()
-                     .OrderBy(item => item))
-            await distribution.DistributeTemplateAsync(templateId, reference, cancellationToken);
+        var templateIds = execution.Assets.Select(item => item.ImageTemplateId)
+            .Distinct().OrderBy(item => item).ToArray();
+        await distribution.DistributeTemplatesAsync(templateIds, reference, cancellationToken);
     }
 
     public Task ReleaseAsync(Guid releaseId, CancellationToken cancellationToken) =>

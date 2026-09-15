@@ -52,8 +52,8 @@ export function CapabilityBindingEditor({
       {packages.error || connectors.error ? <p role="alert">扩展资源加载失败，请刷新重试；现有绑定不会被清除。</p> : null}
       <SelectInput
         disabled={readOnly}
-        help="设备包承载工控仿真、蜜罐等协议模拟能力，由外部制品流水线发布。"
-        label="设备包"
+        help="设备模板保存镜像、资源、端口和启动参数，可用于工控设备模拟或普通业务资产。"
+        label="设备模板"
         onChange={(value) => {
           const packageId = Number(value)
           const selected = packageOptions.find(item => item.bindingId === packageId)
@@ -73,7 +73,7 @@ export function CapabilityBindingEditor({
       >
         <option value="0">无（仅镜像运行）</option>
         {boundPackageMissing && node.devicePackageId ? (
-          <option value={String(node.devicePackageId)}>当前设备包 #{node.devicePackageId}（不可用）</option>
+          <option value={String(node.devicePackageId)}>当前设备模板 #{node.devicePackageId}（不可用）</option>
         ) : null}
         {packageOptions.map((item) => (
           <option key={item.id} value={item.bindingId} disabled={!imageFor(item.digest)}>

@@ -28,7 +28,6 @@ function asset(index: number, networkIndex: number): TopologyAssetNode {
     exposePort: type === 'docker' ? 8080 : null,
     healthCheck: type === 'docker' ? { kind: 'tcp', port: 8080 } : null,
     orderIndex: index,
-    endpointObservation: 'optional',
   }
 }
 
@@ -63,15 +62,6 @@ export function createLargeTopologyFixture(): TopologyDocument {
         hostOffset: offset + 10,
         primary: true,
         orderIndex: 0,
-      }
-      if (offset > 0) {
-        connections[`dependency-${assetIndex.toString().padStart(3, '0')}`] = {
-          type: 'dependency',
-          key: `dependency-${assetIndex.toString().padStart(3, '0')}`,
-          assetKey: current.key,
-          dependsOnKey: `asset-${(assetIndex - 1).toString().padStart(3, '0')}`,
-          condition: 'service-ready',
-        }
       }
       if (offset === 3 && networkIndex < 31) {
         connections[`nic-${assetIndex.toString().padStart(3, '0')}-secondary`] = {
@@ -130,7 +120,6 @@ export function createLargeTopologyFixture(): TopologyDocument {
     observation: {
       flowMetadataEnabled: true,
       onDemandPcapEnabled: true,
-      endpointObservation: 'optional',
     },
     networkLayouts: {},
   }

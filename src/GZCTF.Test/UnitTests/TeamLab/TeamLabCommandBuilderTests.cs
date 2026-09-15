@@ -780,7 +780,6 @@ public class TeamLabCommandBuilderTests : IDisposable
             Generation: 1,
             RouterNamespace: "tlr123",
             ResourceNames: ["tlr123", "tlrf123"],
-            SensorAssetKeys: [],
             FabricRemoteCidrs: ["10.77.10.0/24"],
             DryRun: true), CancellationToken.None);
 
@@ -816,7 +815,6 @@ public class TeamLabCommandBuilderTests : IDisposable
                 Generation: 1,
                 RouterNamespace: "tlr123",
                 ResourceNames: ["tlr123", "tl123-entry", "tlrf123"],
-                SensorAssetKeys: ["web"],
                 FabricRemoteCidrs: ["10.77.10.0/24"],
                 DryRun: true), CancellationToken.None);
 
@@ -846,7 +844,6 @@ public class TeamLabCommandBuilderTests : IDisposable
             Generation: 1,
             RouterNamespace: "tlr123",
             ResourceNames: ["tlr123", "tl123-entry", "tlrf123"],
-            SensorAssetKeys: [],
             FabricRemoteCidrs: ["10.77.10.0/24"],
             DryRun: false), CancellationToken.None);
 
@@ -874,7 +871,6 @@ public class TeamLabCommandBuilderTests : IDisposable
                 Generation: 1,
                 RouterNamespace: "tlr123",
                 ResourceNames: ["tlr123", "tl123-entry", "tlrf123"],
-                SensorAssetKeys: [],
                 FabricRemoteCidrs: ["10.77.10.0/24"],
                 DryRun: false), CancellationToken.None);
 
@@ -1443,8 +1439,6 @@ public class TeamLabCommandBuilderTests : IDisposable
         };
         var spool = new ObservationBatchSpool(options, NullLogger<ObservationBatchSpool>.Instance,
             Path.Combine(_stateRoot.Path, "observations"), null);
-        var sensors = new EndpointSensorChannelService(
-            spool, NullLogger<EndpointSensorChannelService>.Instance);
         var uploader = new PcapSegmentUploader(
             new Mock<IHttpClientFactory>().Object,
             Options.Create(new AgentConfig { NodeId = Guid.NewGuid() }));
@@ -1467,7 +1461,6 @@ public class TeamLabCommandBuilderTests : IDisposable
             firewall,
             registry,
             spool,
-            sensors,
             pcap,
             bootstrap,
             new TeamLabRuntimeGenerationStore(options),

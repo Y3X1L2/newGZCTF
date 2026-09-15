@@ -21,7 +21,7 @@ export function DeviceHealthPanel({ runtimeId, generation }: { runtimeId: string
     <header className={styles.panelHeader}><h3 id={title}>设备健康与协议活动</h3>
       <ActionButton type="button" disabled={request.isValidating} onClick={() => void request.mutate()}>刷新结果</ActionButton>
     </header>
-    <p>后台按设备包声明持续检查。协议次数来自设备实际处理请求的累计计数，重启后重新计数；新增活动记录在事件与日志中，不记录寄存器值或报文内容。</p>
+    <p>后台按设备模板中的普通健康检查确认服务是否可用。协议次数仅用于现有演示设备，不代表平台解析工业协议。</p>
     {request.error ? <InlineFeedback tone="danger">{errorMessage(request.error, '设备监督结果读取失败，请重试。')}</InlineFeedback> : null}
     <div className={styles.sessionTableScroll} tabIndex={0} role="region" aria-label="设备监督结果"><table className={`${styles.sessionTable} ${styles.deviceHealthTable}`}>
       <thead><tr><th>设备</th><th>状态</th><th>最近检查</th><th>协议活动</th></tr></thead>

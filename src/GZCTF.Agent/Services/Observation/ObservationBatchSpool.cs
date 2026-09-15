@@ -87,44 +87,6 @@ public sealed class ObservationBatchSpool : BackgroundService
             : observed.PacketOrdinal;
     }
 
-    public long AppendEndpoint(
-        int runtimeId,
-        int generation,
-        string assetKey,
-        DateTimeOffset observedAt,
-        string sourceIp,
-        int? sourcePort,
-        string destinationIp,
-        int? destinationPort,
-        string protocol,
-        string flowFingerprint,
-        string processIdentityHash,
-        string direction)
-    {
-        var key = new RuntimeKey(runtimeId, generation);
-        if (!TryGetActiveEpoch(key, out var epoch)) return 0;
-        var buffer = Buffer(key);
-        var sequence = buffer.NextSequence();
-        var record = new TeamLabObservationRecord(
-            sequence,
-            null,
-            assetKey,
-            observedAt,
-            sourceIp,
-            sourcePort,
-            destinationIp,
-            destinationPort,
-            protocol,
-            null,
-            0,
-            null,
-            flowFingerprint,
-            TeamLabObservationEvidenceKind.EndpointProcess,
-            processIdentityHash,
-            direction);
-        return Append(buffer, record, epoch) ? sequence : 0;
-    }
-
     public TeamLabObservationBatchResponse Read(TeamLabObservationBatchRequest request, TeamLabObservationHealth health)
     {
         var key = new RuntimeKey(request.RuntimeId, request.Generation);

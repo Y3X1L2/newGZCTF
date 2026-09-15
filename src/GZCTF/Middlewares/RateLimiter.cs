@@ -4,6 +4,7 @@ using System.Net;
 using System.Net.Mime;
 using System.Security.Claims;
 using System.Threading.RateLimiting;
+using GZCTF.Modules.Identity.Application;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Localization;
 
@@ -53,6 +54,9 @@ public static class RateLimiter
         options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
         options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
         {
+            if (context.User.FindFirstValue(ApiTokenClaimTypes.ActorType) == "api_token")
+                return RateLimitPartition.GetNoLimiter("api-token");
+
             var userId = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
 
             if (userId is not null)

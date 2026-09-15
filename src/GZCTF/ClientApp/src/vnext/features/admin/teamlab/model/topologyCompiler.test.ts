@@ -13,7 +13,6 @@ const asset = (key: string, type: 'docker' | 'linux-vm' | 'windows-vm', orderInd
   exposePort: null,
   healthCheck: null,
   orderIndex,
-  endpointObservation: 'optional',
 })
 
 function document(): TopologyDocument {
@@ -152,21 +151,14 @@ function document(): TopologyDocument {
         viaNodeKey: 'router-data',
         direction: 'from-to',
       },
-      'dc-after-portal': {
-        type: 'dependency',
-        key: 'dc-after-portal',
-        assetKey: 'dc',
-        dependsOnKey: 'portal',
-        condition: 'service-ready',
-      },
     },
-    observation: { flowMetadataEnabled: true, onDemandPcapEnabled: true, endpointObservation: 'required' },
+    observation: { flowMetadataEnabled: true, onDemandPcapEnabled: true },
     networkLayouts: {},
   }
 }
 
 describe('compileTopologyDocument', () => {
-  it('compiles multi-router, multi-NIC and dependency intent deterministically', () => {
+  it('compiles multi-router and multi-NIC intent deterministically', () => {
     const first = compileTopologyDocument(document())
     const second = compileTopologyDocument(document())
 
@@ -179,7 +171,6 @@ describe('compileTopologyDocument', () => {
         expect.objectContaining({ key: 'app-data-route', viaNodeKey: 'router-data', direction: 'from-to' }),
       ])
     )
-    expect(first.dependencies).toEqual([{ assetKey: 'dc', dependsOnKey: 'portal', condition: 'service-ready' }])
     expect(first.editor.infrastructure['router-edge']).toEqual(position(250, 90))
   })
 })

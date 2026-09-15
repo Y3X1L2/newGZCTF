@@ -112,7 +112,7 @@ public class TeamLabRemoteAuditTests
         var leases = new Mock<IDistributedLeaseProvider>();
         leases.Setup(item => item.AcquireAsync(It.IsAny<string>(), It.IsAny<TimeSpan?>(), It.IsAny<TimeSpan?>(), It.IsAny<CancellationToken>()))
             .Returns(new ValueTask<IDistributedLease>(Mock.Of<IDistributedLease>()));
-        return new(db, storage.Object, new TeamLabAuthorizationService(db, [], []), leases.Object,
+        return new(db, storage.Object, new TeamLabAuthorizationService(db, [], []), new TeamLabScopeAuthorizationService(db), leases.Object,
             Options.Create(new TeamLabRemoteAuditOptions { MaxStorageBytes = quota }),
             new TeamLabEventRecorder(db, Mock.Of<IOperationalEventWriter>(), new OperationalCorrelation()),
             NullLogger<TeamLabRemoteAuditService>.Instance);

@@ -11,7 +11,6 @@ public sealed record OpenCreateTeamLabTopologyModel(
     IReadOnlyList<TeamLabTopologyConnectionModel> Connections,
     TeamLabTopologyEditorModel? Editor = null,
     IReadOnlyList<TeamLabTopologyInfrastructureModel>? Infrastructure = null,
-    IReadOnlyList<TeamLabTopologyDependencyModel>? Dependencies = null,
     TeamLabObservationPolicyModel? Observation = null,
     int SchemaVersion = 2,
     Guid? ControlScopeId = null);
@@ -24,7 +23,6 @@ public sealed record OpenUpdateTeamLabTopologyModel(
     IReadOnlyList<TeamLabTopologyConnectionModel> Connections,
     TeamLabTopologyEditorModel? Editor = null,
     IReadOnlyList<TeamLabTopologyInfrastructureModel>? Infrastructure = null,
-    IReadOnlyList<TeamLabTopologyDependencyModel>? Dependencies = null,
     TeamLabObservationPolicyModel? Observation = null,
     int SchemaVersion = 2);
 
@@ -86,6 +84,7 @@ public sealed record OpenTeamLabRuntimeShardModel(
     OpenTeamLabFailureModel? Failure);
 
 public sealed record OpenTeamLabRuntimeAssetModel(
+    int Id,
     string Key,
     string Name,
     TeamLabAssetKind Kind,
@@ -115,6 +114,59 @@ public sealed record OpenTeamLabRuntimeModel(
     int? ReleaseVersion = null,
     IReadOnlyList<string>? RecoveryActions = null);
 
+public sealed record OpenTeamLabRuntimeSummaryModel(
+    Guid Id,
+    Guid ReleaseId,
+    Guid ControlScopeId,
+    string? ExternalReference,
+    int Generation,
+    TeamLabExecutionModel ExecutionModel,
+    TeamLabRuntimeStatus Status,
+    string Stage,
+    bool OpenForAccess,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset? UpdatedAt);
+
+public sealed record OpenTeamLabRuntimePageModel(
+    IReadOnlyList<OpenTeamLabRuntimeSummaryModel> Items,
+    string? NextCursor);
+
+public sealed record OpenTeamLabRuntimeAssetSummaryModel(
+    int Total,
+    int Pending,
+    int Running,
+    int Paused,
+    int Stopped,
+    int Failed);
+
+public sealed record OpenTeamLabRuntimeStatusModel(
+    Guid Id,
+    int Generation,
+    TeamLabRuntimeStatus Status,
+    string Stage,
+    Guid? DeploymentQueueTicketId,
+    DeploymentQueueTicketStatus? QueueStatus,
+    string? QueueStage,
+    DateTimeOffset? UpdatedAt,
+    OpenTeamLabRuntimeAssetSummaryModel Assets);
+
+public sealed record OpenTeamLabRuntimeAssetPageModel(
+    IReadOnlyList<OpenTeamLabRuntimeAssetModel> Items,
+    string? NextCursor);
+
+public sealed record OpenTeamLabAccessGrantMetadataModel(
+    Guid Id,
+    int Generation,
+    string Type,
+    string ClientAddress,
+    string Endpoint,
+    string AllowedIps,
+    string Dns,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset? AppliedAt,
+    DateTimeOffset? ExpiresAt,
+    DateTimeOffset? ConfigurationConsumedAt);
+
 public sealed record OpenTeamLabRuntimeEventPageModel(
     IReadOnlyList<TeamLabRuntimeEventModel> Items,
     string? NextCursor);
@@ -143,7 +195,6 @@ public static class OpenTeamLabContractMapper
     public static CreateTeamLabTopologyModel ToInternal(this OpenCreateTeamLabTopologyModel model) =>
         new(model.Name, model.Networks, model.Assets, model.Connections, model.Editor,
             Infrastructure: model.Infrastructure,
-            Dependencies: model.Dependencies,
             Observation: model.Observation,
             SchemaVersion: model.SchemaVersion,
             ControlScopeId: model.ControlScopeId);
@@ -151,7 +202,6 @@ public static class OpenTeamLabContractMapper
     public static UpdateTeamLabTopologyModel ToInternal(this OpenUpdateTeamLabTopologyModel model) =>
         new(model.Revision, model.Name, model.Networks, model.Assets, model.Connections, model.Editor,
             Infrastructure: model.Infrastructure,
-            Dependencies: model.Dependencies,
             Observation: model.Observation,
             SchemaVersion: model.SchemaVersion);
 
@@ -179,6 +229,7 @@ public static class OpenTeamLabContractMapper
                 Failure(item.Failure))).ToArray(),
             model.Networks,
             model.Assets.Select(item => new OpenTeamLabRuntimeAssetModel(
+                item.Id,
                 item.Key,
                 item.Name,
                 item.Kind,

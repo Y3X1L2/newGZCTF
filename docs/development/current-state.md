@@ -1,9 +1,15 @@
 # YINYU 当前开发状态
 
-文档整理日期：2026-09-10
+文档整理日期：2026-09-15
 最近一次生产核验：2026-09-08 09:49 UTC（北京时间 17:49）
 
 本文件仅保留最新已知基线、功能边界、未解决事项和接手入口。生产信息是上述核验时点的记录，不能代替下一次操作前的现场检查；本次文档整理没有重新连接服务器。长期协作规则见 [AGENTS.md](../../AGENTS.md)。
+
+## TeamLab API 底座在研状态（2026-09-15）
+
+TeamLab API 候选位于分支 `codex/teamlab-api-product-integration`，P3 性能优化基线为 `d944a10`。P1 已用正式发布包、真实 Agent 和真实 OVN/OVS 跑通完整 API 流程；P2 已完成 Open API、默认布局、画布配色、状态表达、会话审计、服务开放、文件运维、连接器登记等产品与调用闭环，并删除无价值的启动依赖和端点采集链。
+
+P3 候选已完成控制面和 Docker 执行面的并发定位与优化。20 秒、约 600 req/s 的四 Token 混合负载中，总 P95 从 323.56 ms 降至 11.87 ms，5xx、429、请求中断和数据库死锁为 0；没有降低 PostgreSQL 连接池上限。真实执行面已完成单环境 80/100 资产，以及 5 个环境共 100 资产的创建、暂停、恢复、链路策略、抓包和销毁；5 x 20 并发创建 41.69 秒，销毁 8.17 秒。双 Worker 补充测试使用两个独立 Docker daemon、OVS 和 OVN chassis，80 个资产按两个网段和两个分片各放置 40 个；经受管路由器的双向 ICMP 和 TCP/70 均通过，创建 29.73 秒、暂停 1.77 秒、恢复 1.99 秒、销毁 5.05 秒，两个 Agent 和 OVN 最终无运行残留。主站和 Agent Release 构建通过，后端单元测试 1145/1145、Open Operations API 与 SFTP 定向集成测试 7/7 通过。详见 [P1 验证记录](test-reports/2026-09-14-teamlab-api-p1.md)和 [P3 并发记录](test-reports/2026-09-15-teamlab-api-p3.md)。VM、现场物理网卡、三个以上 Worker、跨节点故障恢复和生产规模容量尚未在本候选上回归，因此当前结果不能表述为“支持大型赛事”；生产部署和独立产品拆分也尚未由本阶段执行。
 
 ## 测试环境部署事实（2026-09-09）
 
@@ -26,6 +32,10 @@
 - H03 最终通过正式 API 销毁：运行、分片和资产均为 Destroyed，容器、libvirt 域、qcow2/seed 文件及运行 OVS 接口无残留；专建的模拟 namespace/veth 已删除，Agent 与 OVN Controller 保持 active。拓扑、发布、设备包和已销毁运行历史保留供平台查看。抓包在销毁前已下载验签，销毁后抓包接口为 404，不表述为长期留存附件。详见 `docs/development/handoffs/2026-09-08-h03-hybrid-datapath.md`。
 
 ## 本地在研补充（尚未合并/发布）
+
+2026-09-14 TeamLab 旧端点采集链已在独立任务分支中完整删除，覆盖拓扑/API、运行时、Agent、来宾组件、持久化、前端与发布链；packet flow、网络/工作负载 observation point 和 asset-scope PCAP 保留，工作负载 observation point 由已放置资产自动创建。Release 编译、相关后端单测 156/156、前端相关测试 31/31 和 TypeScript 严格检查通过；尚未合并、推送或部署，真实基础设施未在本轮重新验收。
+
+2026-09-14 TeamLab 产品化改造位于独立工作树 `D:\newgz\newGZCTF-teamlab-product-usability`、分支 `codex/teamlab-product-usability`，基线为 `origin/main 4bef377`，尚未提交、推送或部署。改动已闭环链路策略多资产执行与失败恢复、A07 服务开放、A04 文件运维、运行及会话表达、设备模板结构化登记、现场网卡选择与按需状态读取、协议事件基础校验。后端相关定向测试 76/76、前端相关定向测试 16/16 通过；完整前端测试首次 319/327，其余 8 项测试夹具修正后相关 14/14 通过；后端 Release 构建和前端生产制品构建通过。真实公网入口、VM SFTP、容器文件通道及现场网卡没有在本轮重新部署实测，不能记录为已发布能力。详细记录见 `docs/development/handoffs/2026-09-13-teamlab-product-usability.md`。
 
 首批远端分支已推送：`codex/teamlab-foundation-v1-20260908` 指向 `98d9d839fa5f72a863c4775cc0e680b354c3d9d7`，已通过远端引用回读核对。仅包含第一笔提交及其历史，未包含工作区未提交的前端和验收改动；未合并 main，未部署生产，未发送 QQ 消息。
 

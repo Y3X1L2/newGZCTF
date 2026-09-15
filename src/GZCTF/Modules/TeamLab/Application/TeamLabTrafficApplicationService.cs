@@ -302,9 +302,9 @@ public sealed class TeamLabTrafficApplicationService(
 
         var results = await ExecuteByNodeAsync(
             job.Segments,
-            (segment, token) => executor.StartCaptureAsync(
-                segment.WorkerNodeId,
-                new TeamLabNodeCaptureStartRequest(
+            (nodeId, segments, token) => executor.StartCapturesAsync(
+                nodeId,
+                segments.Select(segment => new TeamLabNodeCaptureStartRequest(
                     runtime.Id,
                     job.Generation,
                     job.PublicId,
@@ -312,7 +312,7 @@ public sealed class TeamLabTrafficApplicationService(
                     segment.ObservationPoint.PublicId,
                     segment.ObservationPoint.InterfaceToken,
                     job.MaxSeconds,
-                    segment.MaxBytes),
+                    segment.MaxBytes)).ToArray(),
                 token),
             cancellationToken);
         var now = DateTimeOffset.UtcNow;
@@ -329,13 +329,9 @@ public sealed class TeamLabTrafficApplicationService(
         }
         else if (failed.Length > 0)
         {
-            // Partial start: a subset of observation points is not registered on the target
-            // node (e.g. V1-only taps on a V2 runtime). Keep the successfully-started
-            // segments capturing instead of stopping them as well, so the topology that is
-            // actually present is still captured.
-            job.Status = TeamLabTrafficCaptureStatus.Running;
+            job.Status = TeamLabTrafficCaptureStatus.PartiallyRunning;
             job.StartedAt ??= now;
-            job.LastError = null;
+            job.LastError = $"{failed.Length} 个抓包分片启动失败";
         }
         else
         {
@@ -347,14 +343,16 @@ public sealed class TeamLabTrafficApplicationService(
         eventRecorder.Record(
             runtime,
             "capture",
-            started.Length == 0 ? TeamLabEventLevel.Error : TeamLabEventLevel.Success,
+            started.Length == 0 ? TeamLabEventLevel.Error :
+            failed.Length > 0 ? TeamLabEventLevel.Warning : TeamLabEventLevel.Success,
             started.Length == 0
                 ? OperationalEventCodes.TeamLab.CaptureFailed
                 : OperationalEventCodes.TeamLab.CaptureStarted,
             started.Length == 0 ? OperationalEventOutcome.Failed : OperationalEventOutcome.Started,
-            started.Length == 0 ? "Traffic capture failed to start." : "Traffic capture started.",
-            started.Length == 0 ? CaptureError(failed[0].Segment.WorkerNodeId) : null,
-            started.Length == 0 ? failed[0].Segment.WorkerNodeId : null,
+            started.Length == 0 ? "Traffic capture failed to start." :
+            failed.Length > 0 ? "Traffic capture started with failed segments." : "Traffic capture started.",
+            failed.Length > 0 ? CaptureError(failed[0].Segment.WorkerNodeId) : null,
+            failed.Length > 0 ? failed[0].Segment.WorkerNodeId : null,
             new Dictionary<string, object?>
             {
                 ["captureScope"] = job.Scope,
@@ -406,7 +404,7 @@ public sealed class TeamLabTrafficApplicationService(
             .Include(item => item.Segments)
             .ThenInclude(item => item.ObservationPoint.Network)
             .Include(item => item.Segments)
-            .ThenInclude(item => item.ObservationPoint.InfrastructureFragment).ThenInclude(item => item.Infrastructure)
+            .ThenInclude(item => item.ObservationPoint.InfrastructureFragment).ThenInclude(item => item!.Infrastructure)
             .Include(item => item.Segments)
             .ThenInclude(item => item.ObservationPoint.Asset)
             .Where(item => item.RuntimeId == runtime.Id);
@@ -452,12 +450,10 @@ public sealed class TeamLabTrafficApplicationService(
         await context.SaveChangesAsync(cancellationToken);
         var results = await ExecuteByNodeAsync(
             active,
-            (segment, token) => executor.StopCaptureAsync(
-                segment.WorkerNodeId,
-                runtime.Id,
-                job.Generation,
-                job.PublicId,
-                segment.PublicId,
+            (nodeId, segments, token) => executor.StopCapturesAsync(
+                nodeId,
+                segments.Select(segment => new TeamLabNodeCaptureIdentity(
+                    runtime.Id, job.Generation, job.PublicId, segment.PublicId)).ToArray(),
                 token),
             cancellationToken);
         var now = DateTimeOffset.UtcNow;
@@ -724,7 +720,6 @@ public sealed class TeamLabTrafficApplicationService(
             : await ingestor.EnqueueAsync(envelopes, cancellationToken);
 
         var previousDropped = cursor.DroppedCount;
-        var previousRejected = cursor.SensorRejectedCount;
         // The Agent may discard only data already accepted by the durable Redis stream.
         // An unavailable stream deliberately leaves the cursor unchanged so its local spool
         // can retry after the control plane has recovered.
@@ -734,8 +729,6 @@ public sealed class TeamLabTrafficApplicationService(
             ? Math.Max(cursor.LastSequence, prepared.NextSequence)
             : cursor.LastSequence;
         cursor.DroppedCount = Math.Max(cursor.DroppedCount, result.DroppedCount) + enqueue.DroppedCount;
-        cursor.SensorRejectedCount = Math.Max(cursor.SensorRejectedCount, result.Health.SensorRejectedCount);
-        cursor.LastSensorErrorCode = result.Health.LastSensorErrorCode;
         cursor.UpdatedAt = now;
         foreach (var point in points)
         {
@@ -761,33 +754,6 @@ public sealed class TeamLabTrafficApplicationService(
                 workerNodeId: source.WorkerNodeId,
                 detail: ObservationDetail(runtime, "dropped", droppedDelta));
             PlatformTelemetry.RecordTeamLabObservation("dropped", "mixed", droppedDelta);
-        }
-        var rejectedDelta = cursor.SensorRejectedCount - previousRejected;
-        if (rejectedDelta > 0)
-        {
-            eventRecorder.Record(
-                runtime,
-                "sensor-authentication",
-                TeamLabEventLevel.Warning,
-                OperationalEventCodes.TeamLab.SensorAuthenticationDegraded,
-                OperationalEventOutcome.Observed,
-                "Endpoint sensor events were rejected by authentication or replay validation.",
-                new OperationalError(
-                    OperationalErrorCategory.Authorization,
-                    OperationalErrorCodes.SensorAuthenticationFailed,
-                    "终端传感器事件校验拒绝了一条或多条记录",
-                    false,
-                    WorkerNodeId: source.WorkerNodeId,
-                    Operation: "teamlab.sensor.verify"),
-                source.WorkerNodeId,
-                new Dictionary<string, object?>
-                {
-                    ["generation"] = runtime.Generation,
-                    ["stage"] = "sensor-authentication",
-                    ["rejectedCount"] = rejectedDelta,
-                    ["errorCode"] = cursor.LastSensorErrorCode
-                });
-            PlatformTelemetry.RecordTeamLabObservation("rejected", "endpoint-process", rejectedDelta);
         }
         if (hadError && string.IsNullOrWhiteSpace(result.Health.LastError))
         {
@@ -961,38 +927,32 @@ public sealed class TeamLabTrafficApplicationService(
 
     private async Task<IReadOnlyList<CaptureNodeResult>> ExecuteByNodeAsync(
         IReadOnlyCollection<TeamLabTrafficCaptureSegment> segments,
-        Func<TeamLabTrafficCaptureSegment, CancellationToken, Task<TeamLabNodeCaptureResult>> action,
+        Func<Guid, IReadOnlyList<TeamLabTrafficCaptureSegment>, CancellationToken,
+            Task<IReadOnlyList<TeamLabNodeCaptureResult>>> action,
         CancellationToken cancellationToken)
     {
         var nodeTasks = segments.GroupBy(item => item.WorkerNodeId)
             .Select(async group =>
             {
-                var results = new List<CaptureNodeResult>();
-                foreach (var segment in group.OrderBy(item => item.PublicId))
+                var ordered = group.OrderBy(item => item.PublicId).ToArray();
+                try
                 {
-                    try
-                    {
-                        results.Add(new CaptureNodeResult(segment, await action(segment, cancellationToken)));
-                    }
-                    catch (Exception exception) when (exception is not OperationCanceledException)
-                    {
-                        logger.LogWarning(exception,
-                            "TeamLab 抓包请求失败，分片 {SegmentId}，节点 {WorkerNodeId}",
-                            segment.PublicId, segment.WorkerNodeId);
-                        results.Add(new CaptureNodeResult(segment,
-                            new TeamLabNodeCaptureResult(
-                                false,
-                                "Agent 抓包请求失败",
-                                segment.PublicId,
-                                segment.CapturedBytes,
-                                false,
-                                segment.Sha256,
-                                false)));
-                    }
+                    var nodeResults = await action(group.Key, ordered, cancellationToken);
+                    return ordered.Select((segment, index) => new CaptureNodeResult(segment,
+                        index < nodeResults.Count ? nodeResults[index] : CaptureFailure(segment))).ToArray();
                 }
-                return results;
+                catch (Exception exception) when (exception is not OperationCanceledException)
+                {
+                    logger.LogWarning(exception,
+                        "TeamLab 抓包批次请求失败，节点 {WorkerNodeId}", group.Key);
+                    return ordered.Select(segment => new CaptureNodeResult(segment, CaptureFailure(segment))).ToArray();
+                }
             });
         return (await Task.WhenAll(nodeTasks)).SelectMany(item => item).ToArray();
+
+        static TeamLabNodeCaptureResult CaptureFailure(TeamLabTrafficCaptureSegment segment) =>
+            new(false, "Agent 抓包请求失败", segment.PublicId, segment.CapturedBytes,
+                false, segment.Sha256, false);
     }
 
     private async Task StopStartedSegmentsAsync(
@@ -1007,12 +967,10 @@ public sealed class TeamLabTrafficApplicationService(
         if (started.Length == 0) return;
         var stopResults = await ExecuteByNodeAsync(
             started,
-            (segment, token) => executor.StopCaptureAsync(
-                segment.WorkerNodeId,
-                runtime.Id,
-                job.Generation,
-                job.PublicId,
-                segment.PublicId,
+            (nodeId, segments, token) => executor.StopCapturesAsync(
+                nodeId,
+                segments.Select(segment => new TeamLabNodeCaptureIdentity(
+                    runtime.Id, job.Generation, job.PublicId, segment.PublicId)).ToArray(),
                 token),
             cancellationToken);
         var now = DateTimeOffset.UtcNow;
@@ -1086,7 +1044,11 @@ public sealed class TeamLabTrafficApplicationService(
         }
         else if (job.Segments.Any(item => item.Status == TeamLabTrafficCaptureSegmentStatus.Running))
         {
-            job.Status = TeamLabTrafficCaptureStatus.Running;
+            var failed = job.Segments.Count(item => item.Status == TeamLabTrafficCaptureSegmentStatus.Failed);
+            job.Status = failed > 0
+                ? TeamLabTrafficCaptureStatus.PartiallyRunning
+                : TeamLabTrafficCaptureStatus.Running;
+            job.LastError = failed > 0 ? $"{failed} 个抓包分片失败" : null;
         }
     }
 

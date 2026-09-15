@@ -13,7 +13,6 @@ public sealed class TeamLabTopology
     public Guid? LastMutationOperationId { get; set; }
     public string EditorMetadataJson { get; set; } = "{\"networks\":{},\"assets\":{}}";
     public string InfrastructureJson { get; set; } = "[]";
-    public string DependenciesJson { get; set; } = "[]";
     public string ObservationJson { get; set; } = "{}";
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
@@ -59,7 +58,6 @@ public sealed class TeamLabTopologyAsset
     public TeamLabHealthCheckKind? HealthCheckKind { get; set; }
     public int? HealthCheckPort { get; set; }
     public int OrderIndex { get; set; }
-    public TeamLabEndpointObservationMode EndpointObservation { get; set; }
     public TeamLabTopology Topology { get; set; } = null!;
     public List<TeamLabTopologyInterface> Interfaces { get; set; } = [];
 }

@@ -213,6 +213,23 @@
   font-size: var(--yn-font-sm);
 }
 
+.dialogChoices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--yn-space-3);
+  margin: 0;
+  padding: var(--yn-space-2) var(--yn-space-3);
+  border: 1px solid var(--yn-color-border);
+  border-radius: var(--yn-radius-md);
+}
+
+.dialogChoices legend {
+  padding: 0 var(--yn-space-1);
+  color: var(--yn-color-text-secondary);
+  font-size: var(--yn-font-sm);
+  font-weight: 650;
+}
+
 @media (max-width: 760px) {
   .page {
     padding-top: var(--yn-space-5);

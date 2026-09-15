@@ -131,9 +131,7 @@ schema v2 在既有 network/asset 基础上增加：
 
 - 显式 `managed-switch` 与 `managed-router` 基础设施节点；
 - 带方向的 L3 connection，不引入端口级 ACL；
-- asset dependency DAG，条件为 network-ready、guest-ready、bootstrap-completed、service-ready；
 - digest-pinned Bootstrap Profile 引用、参数和 secret 参数声明；
-- `disabled`、`preferred`、`required` endpoint observation 模式；
 - stateless 标记，仅用于满足全部受控恢复条件后的自动重建。
 
 平台生成稳定 placement group、runtime infrastructure、fragment、observation point 和 desired-state digest。调用方不能提交 WorkerNode、bridge、namespace、Fabric 地址、宿主命令或任意脚本文本。
@@ -262,6 +260,7 @@ DELETE /runtimes/{runtimeId}/access-grants/{grantId}
 
 - 首版 grant type 为 WireGuard。
 - 创建响应可以返回一次性配置下载 URL，URL 短时有效且只能使用一次。
+- 授权列表只返回当前 generation 中仍未撤销的授权元数据，不返回私钥、配置正文、一次性下载 token、受保护字段或下载 URL。
 - 私钥不在普通 runtime query 中返回。
 - runtime reset/destroy 自动撤销全部 grant。
 - Penetration 选手入口由 Penetration adapter 创建 grant，并执行比赛参与权限检查。
@@ -279,7 +278,7 @@ GET    /runtimes/{runtimeId}/captures/{captureId}/download
 ```
 
 - flow 返回聚合后的五元组、方向、字节数、包数、firstSeen、lastSeen、shard public ID 和 network topology key。
-- path 返回按时间排序的 observation hops；`PacketExact` 只来自相同包指纹，`TemporallyRelated` 来自同一受信 endpoint process identity 的时间关联，不能伪装成包级确定性。
+- path 返回按时间排序的 observation hops；`PacketExact` 只来自相同包指纹。
 - capture 请求必须指定 scope、maxSeconds、maxBytes 和 expiresInSeconds，服务端应用更严格上限。
 - capture scope 支持 runtime、network、asset 和已派生 path。一个 capture job 在每个必要 WorkerNode/observation point 上创建独立 segment。
 - Agent 使用短期、绑定 capture/segment/node/大小/SHA-256 的上传授权流式写入 BlobStorage；摘要或大小不匹配时对象必须删除。
@@ -301,11 +300,30 @@ GET    /topologies/{topologyId}/releases
 GET    /topologies/{topologyId}/releases/{releaseId}
 POST   /topologies/{topologyId}/releases/{releaseId}/plan
 POST   /runtimes
+GET    /runtimes
 GET    /runtimes/{runtimeId}
 POST   /runtimes/{runtimeId}/reset
 DELETE /runtimes/{runtimeId}
 GET    /runtimes/{runtimeId}/events
+GET    /runtimes/{runtimeId}/device-health
+GET    /runtimes/{runtimeId}/status-check
 POST   /runtimes/{runtimeId}/access-grants
+GET    /runtimes/{runtimeId}/access-grants
+GET    /runtimes/{runtimeId}/service-access
+POST   /runtimes/{runtimeId}/assets/{assetId}/service-access
+DELETE /runtimes/{runtimeId}/service-access/{accessId}
+GET    /runtimes/{runtimeId}/assets/{assetId}/control
+POST   /runtimes/{runtimeId}/assets/{assetId}/control
+GET    /runtimes/{runtimeId}/assets/{assetId}/control/{ticketId}
+GET    /remote-sessions
+POST   /runtimes/{runtimeId}/assets/{assetId}/remote-sessions
+GET    /remote-sessions/{sessionId}
+DELETE /remote-sessions/{sessionId}
+POST   /remote-sessions/{sessionId}/connect
+GET    /remote-sessions/{sessionId}/terminal
+POST   /remote-sessions/{sessionId}/audit
+GET    /remote-sessions/{sessionId}/audit
+GET    /remote-sessions/{sessionId}/audit/evidence/{evidenceId}/download
 GET    /runtimes/{runtimeId}/traffic/flows
 GET    /runtimes/{runtimeId}/traffic/paths
 GET    /runtimes/{runtimeId}/traffic/paths/{pathId}
@@ -316,6 +334,11 @@ GET    /runtimes/{runtimeId}/captures/{captureId}/download
 ```
 
 所有写接口使用 Idempotency-Key；异步接口返回 operation。
+
+`status-check` 只返回调用方能理解的资产状态差异，不暴露 WorkerNode、宿主资源名或
+Agent 地址。返回的 `suggestedAction` 直接用于现有单资产控制接口，不建立第二套修复任务。
+远程会话列表按 token 的 `teamlab-scope` 资源授权过滤，用于在调用方遗失会话 ID 后继续
+查询、关闭和取得操作审计。
 
 ## 12. Capabilities
 
@@ -334,8 +357,7 @@ GET    /runtimes/{runtimeId}/captures/{captureId}/download
     "trafficFlows": true,
     "trafficPaths": true,
     "onDemandPcap": true,
-    "bootstrapProfiles": true,
-    "endpointObservation": true
+    "bootstrapProfiles": true
   },
   "limits": {
     "networksPerTopology": 32,

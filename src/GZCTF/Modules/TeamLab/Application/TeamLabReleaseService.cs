@@ -37,6 +37,17 @@ public sealed class TeamLabReleaseService(
                 $"拓扑修订号为 {topology.Revision}，而非 {expectedRevision}",
                 409);
 
+        var definition = TeamLabTopologyApplicationService.ToDefinition(topology);
+        var validation = validator.Validate(definition, topology.SchemaVersion);
+        if (!validation.Valid)
+            throw TeamLabTopologyApplicationService.InvalidTopology(validation);
+        await TeamLabTopologyApplicationService.ValidateImageTemplatesAsync(context, definition, cancellationToken);
+        await TeamLabTopologyApplicationService.ValidateCapabilityResourcesAsync(context, definition, cancellationToken);
+        var imageDigests = await LoadImageDigestsAsync(definition, cancellationToken);
+        var devicePackageDigests = await LoadDevicePackageDigestsAsync(definition, imageDigests, cancellationToken);
+        var canonicalJson = TeamLabReleaseCodec.Encode(topology.SchemaVersion, definition, imageDigests, devicePackageDigests);
+
+        var contentHash = TeamLabReleaseCodec.ComputeContentHash(topology.SchemaVersion, canonicalJson);
         await using var transaction = context.Database.IsRelational()
             ? await context.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken)
             : null;
@@ -60,17 +71,6 @@ public sealed class TeamLabReleaseService(
                 $"拓扑修订号为 {persistedRevision?.ToString() ?? "不可用"}，而非 {expectedRevision}",
                 409);
 
-        var definition = TeamLabTopologyApplicationService.ToDefinition(topology);
-        var validation = validator.Validate(definition, topology.SchemaVersion);
-        if (!validation.Valid)
-            throw TeamLabTopologyApplicationService.InvalidTopology(validation);
-        await TeamLabTopologyApplicationService.ValidateImageTemplatesAsync(context, definition, cancellationToken);
-        await TeamLabTopologyApplicationService.ValidateCapabilityResourcesAsync(context, definition, cancellationToken);
-        var imageDigests = await LoadImageDigestsAsync(definition, cancellationToken);
-        var devicePackageDigests = await LoadDevicePackageDigestsAsync(definition, imageDigests, cancellationToken);
-        var canonicalJson = TeamLabReleaseCodec.Encode(topology.SchemaVersion, definition, imageDigests, devicePackageDigests);
-
-        var contentHash = TeamLabReleaseCodec.ComputeContentHash(topology.SchemaVersion, canonicalJson);
         var existing = await context.TeamLabTopologyReleases
             .AsNoTracking()
             .FirstOrDefaultAsync(item =>

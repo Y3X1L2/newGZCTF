@@ -18,12 +18,12 @@ public sealed class TeamLabAdminRemoteAccessController(
 {
     [HttpGet("remote-sessions")]
     public async Task<TeamLabRemoteSessionPage> List(CancellationToken cancellationToken,
-        Guid? runtimeId = null, Guid? workerNodeId = null, Guid? requestedByUserId = null,
+        Guid? runtimeId = null, string? query = null, TeamLabRemoteProtocol? protocol = null, bool abnormalOnly = false,
         TeamLabRemoteSessionStatus? status = null, long? after = null, int limit = 50)
     {
         var actor = await ActorAsync();
-        return await remoteAccess.ListAsync(actor.Id, actor.Role >= Role.Admin, runtimeId, workerNodeId,
-            requestedByUserId, status, after, limit, cancellationToken);
+        return await remoteAccess.ListAsync(actor.Id, actor.Role >= Role.Admin, runtimeId, query,
+            protocol, abnormalOnly, status, after, limit, cancellationToken);
     }
 
     [HttpGet("runtimes/{runtimeId:guid}/assets/{assetId:int}/remote-access")]

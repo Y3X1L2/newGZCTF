@@ -35,12 +35,12 @@ public class TeamLabRuntime
     public List<TeamLabRuntimeAsset> Assets { get; set; } = [];
     public List<TeamLabRuntimeInfrastructure> Infrastructure { get; set; } = [];
     public List<TeamLabExecutionPlanSnapshot> ExecutionPlanSnapshots { get; set; } = [];
-    public List<TeamLabRuntimeDependencyState> DependencyStates { get; set; } = [];
     public List<TeamLabObservationPoint> ObservationPoints { get; set; } = [];
     public List<TeamLabObservationCursor> ObservationCursors { get; set; } = [];
     public List<TeamLabFabricLinkLease> FabricLinkLeases { get; set; } = [];
     public List<TeamLabVpnPeerRuntime> VpnPeers { get; set; } = [];
     public List<TeamLabAccessGrant> AccessGrants { get; set; } = [];
+    public List<TeamLabServiceAccess> ServiceAccesses { get; set; } = [];
     public List<TeamLabRuntimeSecretEnvelope> SecretEnvelopes { get; set; } = [];
     public TeamLabPublicUdpMapping? PublicUdpMapping { get; set; }
     public List<TeamLabEvent> Events { get; set; } = [];
@@ -136,7 +136,6 @@ public class TeamLabRuntimeAsset
     [MaxLength(96)] public string? SftpHostKeySha256 { get; set; }
     public Guid? AgentOperationId { get; set; }
     public long AgentSignalSequence { get; set; }
-    public TeamLabEndpointObservationMode EndpointObservation { get; set; }
     [MaxLength(128)] public string? ImageDigest { get; set; }
     public int? DevicePackageId { get; set; }
     [MaxLength(2048)] public string? DevicePackageParametersJson { get; set; }

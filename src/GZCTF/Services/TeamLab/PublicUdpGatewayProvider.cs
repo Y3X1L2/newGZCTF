@@ -10,9 +10,12 @@ public interface IPublicUdpGatewayProvider
     bool Enabled => true;
     Task<PublicUdpGatewaySyncResult> SyncMappingAsync(TeamLabPublicUdpMapping mapping, CancellationToken token);
     Task<PublicUdpGatewaySyncResult> RemoveMappingAsync(TeamLabPublicUdpMapping mapping, CancellationToken token);
+    Task<PublicUdpGatewaySyncResult> SyncServiceAsync(PublicServiceGatewayMapping mapping, CancellationToken token);
+    Task<PublicUdpGatewaySyncResult> RemoveServiceAsync(PublicServiceGatewayMapping mapping, CancellationToken token);
 }
 
 public sealed record PublicUdpGatewaySyncResult(bool Success, string Message, string[] Commands);
+public sealed record PublicServiceGatewayMapping(Guid Id, string Protocol, int PublicPort, string WorkerTunnelIp, int WorkerPort);
 
 public class PublicUdpGatewayProvider(
     IOptions<PublicUdpGatewayConfig> options,
@@ -77,6 +80,67 @@ public class PublicUdpGatewayProvider(
         return new PublicUdpGatewaySyncResult(true, "Public UDP gateway mapping removal attempted.", commands);
     }
 
+    public Task<PublicUdpGatewaySyncResult> SyncServiceAsync(PublicServiceGatewayMapping mapping, CancellationToken token) =>
+        ExecuteServiceAsync(mapping, remove: false, token);
+
+    public Task<PublicUdpGatewaySyncResult> RemoveServiceAsync(PublicServiceGatewayMapping mapping, CancellationToken token) =>
+        ExecuteServiceAsync(mapping, remove: true, token);
+
+    private async Task<PublicUdpGatewaySyncResult> ExecuteServiceAsync(
+        PublicServiceGatewayMapping mapping, bool remove, CancellationToken token)
+    {
+        if (mapping.Protocol is not ("tcp" or "udp") || mapping.PublicPort is < 1 or > 65535 ||
+            mapping.WorkerPort is < 1 or > 65535 || string.IsNullOrWhiteSpace(mapping.WorkerTunnelIp))
+            return new(false, "Invalid public service mapping.", []);
+        var commands = BuildServiceCommands(mapping, remove);
+        if (!_config.Enable)
+            return new(false, "Public gateway synchronization is not enabled.", commands);
+        foreach (var command in commands.Where(command => !command.StartsWith('#')))
+        {
+            var result = await RunCommandAsync(command, token);
+            var tolerated = remove
+                ? !ShouldWarnForCommandFailure(command, result.Output)
+                : IsBestEffortRemove(command);
+            if (!result.Success && !tolerated)
+            {
+                if (!remove)
+                    foreach (var cleanup in BuildServiceCommands(mapping, remove: true))
+                        await RunCommandAsync(cleanup, token);
+                return new(false, result.Output, commands);
+            }
+        }
+        return new(true, remove ? "Public service mapping removed." : "Public service mapping synchronized.", commands);
+    }
+
+    private string[] BuildServiceCommands(PublicServiceGatewayMapping mapping, bool remove)
+    {
+        var comment = $"gzctf-teamlab-service-{mapping.Id:N}";
+        if (string.Equals(_config.Provider, "iptables", StringComparison.OrdinalIgnoreCase))
+        {
+            var pre = $"-t nat PREROUTING -p {mapping.Protocol} --dport {mapping.PublicPort} -j DNAT --to-destination {mapping.WorkerTunnelIp}:{mapping.WorkerPort}";
+            var post = $"-t nat POSTROUTING -p {mapping.Protocol} -d {mapping.WorkerTunnelIp} --dport {mapping.WorkerPort} -j MASQUERADE";
+            var deletes = new[]
+            {
+                $"{_config.IptablesBinaryPath} {pre.Replace("-t nat PREROUTING", "-t nat -D PREROUTING")}",
+                $"{_config.IptablesBinaryPath} {post.Replace("-t nat POSTROUTING", "-t nat -D POSTROUTING")}"
+            };
+            return remove ? deletes : [.. deletes,
+                $"{_config.IptablesBinaryPath} {pre.Replace("-t nat PREROUTING", "-t nat -A PREROUTING")}",
+                $"{_config.IptablesBinaryPath} {post.Replace("-t nat POSTROUTING", "-t nat -A POSTROUTING")}"];
+        }
+        var cleanup = BuildNftRemoveCommand(comment);
+        if (remove) return [cleanup];
+        return
+        [
+            $"{_config.NftBinaryPath} add table {_config.NftTable} 2>/dev/null || true",
+            $"{_config.NftBinaryPath} '{BuildNftBaseChainCommand("prerouting", "prerouting", "dstnat")}' 2>/dev/null || true",
+            $"{_config.NftBinaryPath} '{BuildNftBaseChainCommand("postrouting", "postrouting", "srcnat")}' 2>/dev/null || true",
+            cleanup,
+            $"{_config.NftBinaryPath} add rule {_config.NftTable} prerouting {mapping.Protocol} dport {mapping.PublicPort} dnat ip to {mapping.WorkerTunnelIp}:{mapping.WorkerPort} comment \"{comment}\"",
+            $"{_config.NftBinaryPath} add rule {_config.NftTable} postrouting ip daddr {mapping.WorkerTunnelIp} {mapping.Protocol} dport {mapping.WorkerPort} masquerade comment \"{comment}\""
+        ];
+    }
+
     private string[] BuildSyncCommands(TeamLabPublicUdpMapping mapping)
     {
         if (string.Equals(_config.Provider, "iptables", StringComparison.OrdinalIgnoreCase))
@@ -137,8 +201,8 @@ public class PublicUdpGatewayProvider(
         logger.LogWarning("Public UDP gateway command failed with output: {Command}\n{Output}", command, output);
 
     private string BuildNftRemoveCommand(string comment) =>
-        $"{_config.NftBinaryPath} -a list chain {_config.NftTable} prerouting | awk '/comment \"{comment}\"/ {{print $NF}}' | xargs -r -I {{}} {_config.NftBinaryPath} delete rule {_config.NftTable} prerouting handle {{}}; " +
-        $"{_config.NftBinaryPath} -a list chain {_config.NftTable} postrouting | awk '/comment \"{comment}\"/ {{print $NF}}' | xargs -r -I {{}} {_config.NftBinaryPath} delete rule {_config.NftTable} postrouting handle {{}}";
+        $"for chain in prerouting postrouting; do handles=$({_config.NftBinaryPath} -a list chain {_config.NftTable} $chain 2>/dev/null | awk '/comment \"{comment}\"/ {{print $NF}}') || continue; " +
+        $"for handle in $handles; do {_config.NftBinaryPath} delete rule {_config.NftTable} $chain handle $handle || exit 1; done; done";
 
     private string BuildNftBaseChainCommand(string name, string hook, string priority) =>
         $"add chain {_config.NftTable} {name} {{ type nat hook {hook} priority {priority}; policy accept; }}";

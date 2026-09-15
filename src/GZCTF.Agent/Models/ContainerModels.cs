@@ -37,14 +37,6 @@ public class CreateContainerRequest
     public bool RemoveDefaultRoute { get; set; }
     public bool EnableIpForwarding { get; set; }
     public List<ContainerNetworkAttachment> NetworkAttachments { get; set; } = [];
-    public List<ContainerBindMount> BindMounts { get; set; } = [];
-}
-
-public class ContainerBindMount
-{
-    public string Source { get; set; } = string.Empty;
-    public string Destination { get; set; } = string.Empty;
-    public bool ReadOnly { get; set; } = true;
 }
 
 public class ContainerNetworkAttachment

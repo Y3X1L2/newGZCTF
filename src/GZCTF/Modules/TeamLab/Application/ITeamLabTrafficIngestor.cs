@@ -27,7 +27,6 @@ public sealed record TeamLabTrafficEnvelope(
     int PacketLength,
     string? PacketFingerprint,
     string FlowFingerprint,
-    string? ProcessIdentityHash,
     string EvidenceKind,
     string Direction,
     long Packets,
@@ -56,14 +55,13 @@ public sealed record TeamLabTrafficEnvelope(
         var packetFingerprint = NormalizeDigest(sample.PacketFingerprint);
         var flowFingerprint = NormalizeDigest(sample.FlowFingerprint)
                               ?? throw new ArgumentException("Observation flow fingerprint is missing.");
-        var processIdentityHash = NormalizeDigest(sample.ProcessIdentityHash);
         var evidenceKind = sample.EvidenceKind.Trim();
         var firstSeenAt = sample.FirstSeenAt ?? capturedAt;
         var lastSeenAt = sample.LastSeenAt ?? capturedAt;
         var packets = Math.Max(1, sample.Packets);
         var bytes = Math.Max(0, sample.Bytes ?? sample.PacketLength);
         var evidenceInput = string.Join('|', runtimeId, generation, observationPointId, sample.Sequence,
-            evidenceKind, packetFingerprint, flowFingerprint, processIdentityHash);
+            evidenceKind, packetFingerprint, flowFingerprint);
 
         return new TeamLabTrafficEnvelope(
             CurrentSchemaVersion,
@@ -87,7 +85,6 @@ public sealed record TeamLabTrafficEnvelope(
             sample.PacketLength,
             packetFingerprint,
             flowFingerprint,
-            processIdentityHash,
             evidenceKind,
             sample.Direction.Trim().ToLowerInvariant(),
             packets,
@@ -104,14 +101,13 @@ public sealed record TeamLabTrafficEnvelope(
             ObservationPointId <= 0 || WorkerNodeId == Guid.Empty || CapturedAt == default || SourceSequence <= 0 ||
             EvidenceFingerprint.Length != 64 || !EvidenceFingerprint.All(Uri.IsHexDigit) ||
             SourceIp.Length is < 1 or > 64 || DestinationIp.Length is < 1 or > 64 ||
-            Protocol.Length is < 1 or > 16 || EvidenceKind.Length is < 1 or > 32 ||
+            Protocol.Length is < 1 or > 16 ||
+            !EvidenceKind.Equals("Packet", StringComparison.OrdinalIgnoreCase) ||
             Direction.Length is < 1 or > 16 || PacketLength < 0 || Packets < 1 || Bytes < 0 ||
             FirstSeenAt is { } firstSeenAt && LastSeenAt is { } lastSeenAt && firstSeenAt > lastSeenAt ||
             FlowFingerprint.Length != 64 || !FlowFingerprint.All(Uri.IsHexDigit) ||
             PacketFingerprint is not null &&
             (PacketFingerprint.Length != 64 || !PacketFingerprint.All(Uri.IsHexDigit)) ||
-            ProcessIdentityHash is not null &&
-            (ProcessIdentityHash.Length != 64 || !ProcessIdentityHash.All(Uri.IsHexDigit)) ||
             SourcePort is < 0 or > 65535 || DestinationPort is < 0 or > 65535)
             throw new ArgumentException("TeamLab traffic envelope is invalid.");
     }

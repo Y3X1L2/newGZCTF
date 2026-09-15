@@ -1,8 +1,8 @@
 import type { TeamLabAssetKind, TeamLabRuntimeStatus } from './teamlabContracts'
 
 export type TeamLabEventLevel = 'info' | 'success' | 'warning' | 'error'
-export type TeamLabPathConfidence = 'packet-exact' | 'process-correlated' | 'temporally-related'
-export type TeamLabTrafficEvidenceKind = 'packet' | 'endpoint-process'
+export type TeamLabPathConfidence = 'packet-exact'
+export type TeamLabTrafficEvidenceKind = 'packet'
 export type TeamLabObservationPointKind =
   | 'network-bridge'
   | 'router-fragment'
@@ -16,6 +16,7 @@ export type TeamLabCaptureStatus =
   | 'failed'
   | 'expired'
   | 'cleanup-pending'
+  | 'partially-running'
 export type TeamLabCaptureSegmentStatus =
   | 'pending'
   | 'running'
@@ -49,6 +50,7 @@ export interface TeamLabRuntimeAsset {
   key: string
   name: string
   kind: TeamLabAssetKind
+  networkKeys: readonly string[]
   runtimeResourceId: string | null
   primaryIp: string | null
   status: TeamLabRuntimeStatus
@@ -74,6 +76,25 @@ export interface TeamLabRuntime {
   createdAt: number
   updatedAt: number | null
   error: string | null
+}
+
+export interface TeamLabRuntimeStatusSnapshot {
+  id: string
+  generation: number
+  status: TeamLabRuntimeStatus
+  stage: string
+  deploymentQueueTicketId: string | null
+  queueStatus: TeamLabRuntime['queueStatus']
+  queueStage: string | null
+  updatedAt: number | null
+  assets: {
+    total: number
+    pending: number
+    running: number
+    paused: number
+    stopped: number
+    failed: number
+  }
 }
 
 export interface TeamLabRuntimeEvent {

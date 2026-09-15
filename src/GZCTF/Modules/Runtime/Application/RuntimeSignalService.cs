@@ -39,7 +39,24 @@ public sealed class RuntimeSignalService(
             .SingleOrDefaultAsync(cancellationToken);
         if (expectedToken is null) throw new RuntimeSignalNodeNotFoundException();
         if (!FixedTimeEquals(authToken, expectedToken)) throw new RuntimeSignalAuthenticationException();
-        return await IngestAsync(workerNodeId, model, cancellationToken);
+        return (await IngestBatchAsync(workerNodeId, [model], cancellationToken))[0];
+    }
+
+    public async Task<IReadOnlyList<AgentRuntimeSignalIngestResult>> IngestBatchAuthenticatedAsync(
+        Guid workerNodeId,
+        string authToken,
+        IReadOnlyList<AgentRuntimeSignalModel> models,
+        CancellationToken cancellationToken)
+    {
+        if (models.Count is < 1 or > 256)
+            throw new ArgumentException("The runtime signal batch must contain between 1 and 256 signals.", nameof(models));
+        var expectedToken = await context.WorkerNodes.AsNoTracking()
+            .Where(item => item.Id == workerNodeId)
+            .Select(item => item.AuthToken)
+            .SingleOrDefaultAsync(cancellationToken);
+        if (expectedToken is null) throw new RuntimeSignalNodeNotFoundException();
+        if (!FixedTimeEquals(authToken, expectedToken)) throw new RuntimeSignalAuthenticationException();
+        return await IngestBatchAsync(workerNodeId, models, cancellationToken);
     }
 
     public async Task<AgentRuntimeSignalIngestResult> IngestAsync(
@@ -47,71 +64,105 @@ public sealed class RuntimeSignalService(
         AgentRuntimeSignalModel model,
         CancellationToken cancellationToken)
     {
-        Validate(model);
-        var payloadHash = Convert.ToHexStringLower(
-            SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(model, JsonOptions)));
-        var runtime = await context.TeamLabRuntimes.AsNoTracking()
-            .SingleOrDefaultAsync(item => item.Id == model.RuntimeId, cancellationToken)
-            ?? throw new InvalidOperationException("The TeamLab runtime does not exist.");
-        if (runtime.Generation != model.Generation)
-            return new AgentRuntimeSignalIngestResult(false, false, true, model.Sequence);
-        var ownedAsset = await context.TeamLabRuntimeAssets.SingleOrDefaultAsync(item =>
-            item.RuntimeId == model.RuntimeId && item.Generation == model.Generation &&
-            item.WorkerNodeId == workerNodeId && item.AgentOperationId == model.OperationId,
-            cancellationToken);
-        if (ownedAsset is null)
-            throw new InvalidOperationException("The runtime signal operation is not owned by this node.");
+        return (await IngestBatchAsync(workerNodeId, [model], cancellationToken))[0];
+    }
 
-        var latest = await context.AgentRuntimeSignals.AsNoTracking()
-            .Where(item => item.WorkerNodeId == workerNodeId && item.OperationId == model.OperationId)
-            .OrderByDescending(item => item.Sequence)
-            .FirstOrDefaultAsync(cancellationToken);
-        if (latest is not null && model.Sequence < latest.Sequence)
-            return new AgentRuntimeSignalIngestResult(false, false, true, model.Sequence);
-        if (latest is not null && model.Sequence == latest.Sequence)
+    public async Task<IReadOnlyList<AgentRuntimeSignalIngestResult>> IngestBatchAsync(
+        Guid workerNodeId,
+        IReadOnlyList<AgentRuntimeSignalModel> models,
+        CancellationToken cancellationToken)
+    {
+        if (models.Count is < 1 or > 256)
+            throw new ArgumentException("The runtime signal batch must contain between 1 and 256 signals.", nameof(models));
+        var prepared = models.Select(model =>
         {
-            if (!string.Equals(latest.PayloadHash, payloadHash, StringComparison.Ordinal))
+            Validate(model);
+            return new PreparedSignal(model, Convert.ToHexStringLower(
+                SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(model, JsonOptions))));
+        }).ToArray();
+        foreach (var repeated in prepared.GroupBy(item => (item.Model.OperationId, item.Model.Sequence)))
+            if (repeated.Select(item => item.PayloadHash).Distinct(StringComparer.Ordinal).Skip(1).Any())
                 throw new RuntimeSignalConflictException(
                     "The runtime signal sequence was reused with a different payload.");
-            return new AgentRuntimeSignalIngestResult(false, true, false, model.Sequence);
+
+        var runtimeIds = prepared.Select(item => item.Model.RuntimeId).Distinct().ToArray();
+        var runtimes = await context.TeamLabRuntimes.AsNoTracking()
+            .Where(item => runtimeIds.Contains(item.Id))
+            .Select(item => new { item.Id, item.Generation })
+            .ToDictionaryAsync(item => item.Id, cancellationToken);
+        var operationIds = prepared.Select(item => item.Model.OperationId).Distinct().ToArray();
+        var assets = await context.TeamLabRuntimeAssets
+            .Where(item => item.WorkerNodeId == workerNodeId && item.AgentOperationId.HasValue &&
+                           operationIds.Contains(item.AgentOperationId.Value))
+            .ToDictionaryAsync(item => item.AgentOperationId!.Value, cancellationToken);
+        var existing = await context.AgentRuntimeSignals.AsNoTracking()
+            .Where(item => item.WorkerNodeId == workerNodeId && operationIds.Contains(item.OperationId))
+            .Select(item => new { item.OperationId, item.Sequence, item.PayloadHash })
+            .ToArrayAsync(cancellationToken);
+        var latestByOperation = existing.GroupBy(item => item.OperationId)
+            .ToDictionary(group => group.Key, group => group.Max(item => item.Sequence));
+        var existingBySequence = existing.ToDictionary(item => (item.OperationId, item.Sequence));
+        var results = new List<AgentRuntimeSignalIngestResult>(prepared.Length);
+        var acceptedOperations = new HashSet<Guid>();
+
+        foreach (var item in prepared)
+        {
+            var model = item.Model;
+            if (!runtimes.TryGetValue(model.RuntimeId, out var runtime))
+                throw new InvalidOperationException("The TeamLab runtime does not exist.");
+            if (runtime.Generation != model.Generation)
+            {
+                results.Add(new AgentRuntimeSignalIngestResult(false, false, true, model.Sequence));
+                continue;
+            }
+            if (!assets.TryGetValue(model.OperationId, out var asset) || asset.RuntimeId != model.RuntimeId ||
+                asset.Generation != model.Generation)
+                throw new InvalidOperationException("The runtime signal operation is not owned by this node.");
+            if (existingBySequence.TryGetValue((model.OperationId, model.Sequence), out var duplicate))
+            {
+                if (!string.Equals(duplicate.PayloadHash, item.PayloadHash, StringComparison.Ordinal))
+                    throw new RuntimeSignalConflictException(
+                        "The runtime signal sequence was reused with a different payload.");
+                results.Add(new AgentRuntimeSignalIngestResult(false, true, false, model.Sequence));
+                continue;
+            }
+            if (latestByOperation.GetValueOrDefault(model.OperationId) > model.Sequence)
+            {
+                results.Add(new AgentRuntimeSignalIngestResult(false, false, true, model.Sequence));
+                continue;
+            }
+
+            context.AgentRuntimeSignals.Add(new AgentRuntimeSignal
+            {
+                OperationId = model.OperationId,
+                WorkerNodeId = workerNodeId,
+                RuntimeId = model.RuntimeId,
+                Generation = model.Generation,
+                ResourceKind = model.ResourceKind.Trim(),
+                ResourceId = model.ResourceId.Trim(),
+                Sequence = model.Sequence,
+                Stage = model.Stage,
+                Outcome = model.Outcome,
+                ObservedAt = model.ObservedAt,
+                ErrorCode = NullIfWhiteSpace(model.ErrorCode),
+                PayloadHash = item.PayloadHash,
+                Retryable = model.Retryable,
+                FactsJson = JsonSerializer.Serialize(model.Facts ?? new Dictionary<string, string>(), JsonOptions)
+            });
+            latestByOperation[model.OperationId] = model.Sequence;
+            asset.AgentSignalSequence = Math.Max(asset.AgentSignalSequence, model.Sequence);
+            acceptedOperations.Add(model.OperationId);
+            results.Add(new AgentRuntimeSignalIngestResult(true, false, false, model.Sequence));
         }
 
-        context.AgentRuntimeSignals.Add(new AgentRuntimeSignal
-        {
-            OperationId = model.OperationId,
-            WorkerNodeId = workerNodeId,
-            RuntimeId = model.RuntimeId,
-            Generation = model.Generation,
-            ResourceKind = model.ResourceKind.Trim(),
-            ResourceId = model.ResourceId.Trim(),
-            Sequence = model.Sequence,
-            Stage = model.Stage,
-            Outcome = model.Outcome,
-            ObservedAt = model.ObservedAt,
-            ErrorCode = NullIfWhiteSpace(model.ErrorCode),
-            PayloadHash = payloadHash,
-            Retryable = model.Retryable,
-            FactsJson = JsonSerializer.Serialize(model.Facts ?? new Dictionary<string, string>(), JsonOptions)
-        });
-        try
-        {
+        if (acceptedOperations.Count > 0)
             await context.SaveChangesAsync(cancellationToken);
-        }
-        catch (DbUpdateException exception) when (
-            exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
-        {
-            context.ChangeTracker.Clear();
-            return new AgentRuntimeSignalIngestResult(false, true, false, model.Sequence);
-        }
-
-        await context.TeamLabRuntimeAssets
-            .Where(item => item.Id == ownedAsset.Id && item.AgentSignalSequence < model.Sequence)
-            .ExecuteUpdateAsync(setters => setters
-                .SetProperty(item => item.AgentSignalSequence, model.Sequence), cancellationToken);
-
-        await wakeup.NotifyAsync(model.OperationId, cancellationToken);
-        return new AgentRuntimeSignalIngestResult(true, false, false, model.Sequence);
+        foreach (var operationId in acceptedOperations)
+            await wakeup.NotifyAsync(operationId, cancellationToken);
+        return results;
     }
+
+    private sealed record PreparedSignal(AgentRuntimeSignalModel Model, string PayloadHash);
 
     public async Task<RuntimeSignalWaitResult> WaitForAsync(
         Guid operationId,

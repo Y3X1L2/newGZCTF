@@ -114,7 +114,7 @@ public sealed class DataRetentionExecutor(
         var policy = catalog.GetRequired(dataSet);
         var cutoff = now - policy.RawRetention!.Value;
         var candidates = await partitions.GetExpiredPartitionsAsync(dataSet, cutoff, cancellationToken);
-        foreach (var partition in candidates)
+        foreach (var partition in candidates.Take(1))
             await AggregatePartitionAsync(dataSet, partition, leaseOwner, cancellationToken);
 
         try

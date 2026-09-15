@@ -10,16 +10,29 @@ using Microsoft.Extensions.Options;
 namespace GZCTF.Modules.TeamLab.Application;
 
 public sealed class TeamLabRemoteAuditService(AppDbContext context, IBlobStorage storage,
-    TeamLabAuthorizationService authorization, IDistributedLeaseProvider leases,
+    TeamLabAuthorizationService authorization, TeamLabScopeAuthorizationService scopeAuthorization,
+    IDistributedLeaseProvider leases,
     IOptions<TeamLabRemoteAuditOptions> options, TeamLabEventRecorder events, ILogger<TeamLabRemoteAuditService> logger)
 {
     private readonly TeamLabRemoteAuditOptions policy = options.Value;
     private const int MaxFileBytes = 16 * 1024;
     private static string ObjectPath(Guid sessionId) => $"teamlab/remote-audit/{sessionId:N}.json";
 
-    public async Task<TeamLabRemoteAuditPage> ListAsync(Guid sessionId, Guid actorId, bool administrator, CancellationToken token)
+    public Task<TeamLabRemoteAuditPage> ListAsync(Guid sessionId, Guid actorId, bool administrator, CancellationToken token) =>
+        ListCoreAsync(sessionId, BusinessAuthorization(actorId, administrator), token);
+
+    public Task<TeamLabRemoteAuditPage> ListApiAsync(
+        Guid sessionId,
+        Guid apiTokenId,
+        CancellationToken token) =>
+        ListCoreAsync(sessionId, ScopeAuthorization(apiTokenId), token);
+
+    private async Task<TeamLabRemoteAuditPage> ListCoreAsync(
+        Guid sessionId,
+        Func<TeamLabRemoteSession, CancellationToken, Task> authorize,
+        CancellationToken token)
     {
-        var session = await RequireAsync(sessionId, actorId, administrator, token);
+        var session = await RequireAsync(sessionId, authorize, token);
         var policyExpiry = session.EndedAt?.AddDays(policy.RetentionDays);
         var files = await context.Set<TeamLabRemoteAuditFile>().AsNoTracking()
             .Where(item => item.SessionId == session.Id && item.ReadyAt != null &&
@@ -32,10 +45,20 @@ public sealed class TeamLabRemoteAuditService(AppDbContext context, IBlobStorage
         return new(state, policy.RetentionDays, files);
     }
 
-    public async Task GenerateAsync(Guid sessionId, Guid actorId, bool administrator, CancellationToken token)
+    public Task GenerateAsync(Guid sessionId, Guid actorId, bool administrator, CancellationToken token) =>
+        GenerateAuthorizedAsync(sessionId, BusinessAuthorization(actorId, administrator), token);
+
+    public Task GenerateApiAsync(Guid sessionId, Guid apiTokenId, CancellationToken token) =>
+        GenerateAuthorizedAsync(sessionId, ScopeAuthorization(apiTokenId, writable: true), token);
+
+    private async Task GenerateAuthorizedAsync(
+        Guid sessionId,
+        Func<TeamLabRemoteSession, CancellationToken, Task> authorize,
+        CancellationToken token)
     {
-        await RequireAsync(sessionId, actorId, administrator, token);
-        await using var lease = await leases.AcquireAsync("teamlab:remote-audit", TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(30), token);
+        await RequireAsync(sessionId, authorize, token);
+        await using var lease = await leases.AcquireAsync(
+            $"teamlab:remote-audit:{sessionId:N}", TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(30), token);
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(token, lease.LeaseLost);
         var session = await context.TeamLabRemoteSessions.AsNoTracking().Include(item => item.Runtime)
             .SingleAsync(item => item.PublicId == sessionId, linked.Token);
@@ -87,10 +110,26 @@ public sealed class TeamLabRemoteAuditService(AppDbContext context, IBlobStorage
         await context.SaveChangesAsync(token);
     }
 
-    public async Task<TeamLabRemoteAuditDownload> DownloadAsync(Guid sessionId, long fileId, Guid actorId,
-        bool administrator, CancellationToken token)
+    public Task<TeamLabRemoteAuditDownload> DownloadAsync(Guid sessionId, long fileId, Guid actorId,
+        bool administrator, CancellationToken token) =>
+        DownloadCoreAsync(sessionId, fileId, actorId, BusinessAuthorization(actorId, administrator), token);
+
+    public Task<TeamLabRemoteAuditDownload> DownloadApiAsync(
+        Guid sessionId,
+        long fileId,
+        Guid apiTokenId,
+        Guid actorId,
+        CancellationToken token) =>
+        DownloadCoreAsync(sessionId, fileId, actorId, ScopeAuthorization(apiTokenId), token);
+
+    private async Task<TeamLabRemoteAuditDownload> DownloadCoreAsync(
+        Guid sessionId,
+        long fileId,
+        Guid actorId,
+        Func<TeamLabRemoteSession, CancellationToken, Task> authorize,
+        CancellationToken token)
     {
-        var session = await RequireAsync(sessionId, actorId, administrator, token);
+        var session = await RequireAsync(sessionId, authorize, token);
         var file = await context.Set<TeamLabRemoteAuditFile>().AsNoTracking()
             .SingleOrDefaultAsync(item => item.Id == fileId && item.SessionId == session.Id, token)
             ?? throw new TeamLabApiContractException("remote_audit_not_found", "未找到审计文件。", 404);
@@ -110,7 +149,7 @@ public sealed class TeamLabRemoteAuditService(AppDbContext context, IBlobStorage
         var extra = new byte[1];
         if (await source.ReadAsync(extra, token) != 0 || Convert.ToHexStringLower(SHA256.HashData(bytes)) != file.Sha256)
             throw new TeamLabApiContractException("remote_audit_integrity_failed", "审计文件内容校验失败。", 409);
-        await RequireAsync(sessionId, actorId, administrator, token);
+        await RequireAsync(sessionId, authorize, token);
         events.Record(session.Runtime, "remote-audit", TeamLabEventLevel.Info,
             OperationalEventCodes.TeamLab.RemoteAuditDownloaded, OperationalEventOutcome.Succeeded,
             "下载远程会话操作审计证据", detail: new Dictionary<string, object?>
@@ -173,13 +212,40 @@ public sealed class TeamLabRemoteAuditService(AppDbContext context, IBlobStorage
         }
     }
 
-    private async Task<TeamLabRemoteSession> RequireAsync(Guid sessionId, Guid actorId, bool administrator, CancellationToken token)
+    private async Task<TeamLabRemoteSession> RequireAsync(
+        Guid sessionId,
+        Func<TeamLabRemoteSession, CancellationToken, Task> authorize,
+        CancellationToken token)
     {
         var session = await context.TeamLabRemoteSessions.AsNoTracking().Include(item => item.Runtime)
             .SingleOrDefaultAsync(item => item.PublicId == sessionId, token)
             ?? throw new TeamLabApiContractException("remote_session_not_found", "未找到远程会话。", 404);
-        await authorization.RequirePermissionAsync(session.Runtime.PublicId, actorId, administrator,
-            session.RequestedByUserId == actorId ? TeamLabRuntimePermission.RemoteSessionOperate : TeamLabRuntimePermission.MetadataRead, token);
+        await authorize(session, token);
         return session;
     }
+
+    private Func<TeamLabRemoteSession, CancellationToken, Task> BusinessAuthorization(
+        Guid actorId,
+        bool administrator) =>
+        (session, token) => authorization.RequirePermissionAsync(
+            session.Runtime.PublicId,
+            actorId,
+            administrator,
+            session.RequestedByUserId == actorId
+                ? TeamLabRuntimePermission.RemoteSessionOperate
+                : TeamLabRuntimePermission.MetadataRead,
+            token);
+
+    private Func<TeamLabRemoteSession, CancellationToken, Task> ScopeAuthorization(
+        Guid apiTokenId,
+        bool writable = false) =>
+        async (session, token) =>
+        {
+            await scopeAuthorization.RequireRuntimeScopeAsync(
+                session.Runtime.PublicId,
+                apiTokenId,
+                administrator: false,
+                writable,
+                token);
+        };
 }

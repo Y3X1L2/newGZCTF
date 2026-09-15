@@ -8,7 +8,6 @@ namespace GZCTF.Agent.Services.Observation;
 public sealed class TeamLabPacketObserver(
     ObservationPointRegistry registry,
     ObservationBatchSpool spool,
-    EndpointSensorChannelService endpointSensors,
     IOptions<AgentTeamLabConfig> options,
     ILogger<TeamLabPacketObserver> logger) : BackgroundService
 {
@@ -29,7 +28,6 @@ public sealed class TeamLabPacketObserver(
     {
         var flow = _flows.Snapshot();
         var registrations = registry.Snapshot();
-        var sensorRejections = endpointSensors.RejectionSnapshot();
         return new TeamLabObservationHealth(
             !_config.DryRun && _config.Enable,
             registrations.Count,
@@ -37,9 +35,7 @@ public sealed class TeamLabPacketObserver(
             flow.ActiveCount,
             Interlocked.Read(ref _captureFailures) + flow.EvictedCount,
             Interlocked.Read(ref _parserFailures),
-            sensorRejections.Count,
             0,
-            sensorRejections.LastCode,
             _lastError);
     }
 
@@ -92,7 +88,7 @@ public sealed class TeamLabPacketObserver(
                 _lastError = null;
             }
             catch (Exception exception) when (
-                exception is InvalidOperationException or PcapException or UnauthorizedAccessException)
+                exception is InvalidOperationException or ArgumentException or PcapException or UnauthorizedAccessException)
             {
                 Interlocked.Increment(ref _captureFailures);
                 _lastError = Trim(exception.Message);

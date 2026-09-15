@@ -17,11 +17,11 @@ describe('FieldHelpButton', () => {
       y: 740,
       toJSON: () => ({}),
     })
-    render(<FieldHelpButton fieldKey="endpointObservation" />)
+    render(<FieldHelpButton fieldKey="hostOffset" />)
 
-    fireEvent.click(screen.getByRole('button', { name: '关于端点观测' }))
+    fireEvent.click(screen.getByRole('button', { name: '关于主机偏移' }))
 
     await waitFor(() => expect(screen.getByRole('tooltip')).toHaveAttribute('data-placement', 'above'))
-    expect(screen.getByRole('tooltip')).toHaveTextContent('端点观测')
+    expect(screen.getByRole('tooltip')).toHaveTextContent('主机偏移')
   })
 })

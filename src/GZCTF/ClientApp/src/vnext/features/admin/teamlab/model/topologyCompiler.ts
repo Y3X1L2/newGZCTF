@@ -67,7 +67,7 @@ function parseDeviceParameters(text: string | null | undefined, assetKey: string
   try {
     return JSON.parse(trimmed)
   } catch {
-    throw new TopologyCompileError(`资产 '${assetKey}' 的设备包参数不是合法 JSON。`)
+    throw new TopologyCompileError(`资产 '${assetKey}' 的设备模板参数不是合法 JSON。`)
   }
 }
 
@@ -168,7 +168,6 @@ export function compileTopologyDocument(document: TopologyDocument): CreateTeamL
       exposePort: node.exposePort,
       healthCheck: node.healthCheck ? { ...node.healthCheck } : null,
       orderIndex: node.orderIndex,
-      endpointObservation: node.endpointObservation,
       devicePackageId: node.devicePackageId ?? null,
       deviceParameters: parseDeviceParameters(node.deviceParameters, node.key),
       connectorId: node.connectorId ?? null,
@@ -187,13 +186,6 @@ export function compileTopologyDocument(document: TopologyDocument): CreateTeamL
           direction: connection.direction,
         }
       }),
-    dependencies: connections
-      .filter((connection) => connection.type === 'dependency')
-      .map((connection) => ({
-        assetKey: connection.assetKey,
-        dependsOnKey: connection.dependsOnKey,
-        condition: connection.condition,
-      })),
     observation: { ...document.observation },
     editor: compileEditor(document),
   }

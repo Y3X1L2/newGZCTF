@@ -12,7 +12,6 @@ public sealed class TeamLabTrafficObservationEntityConfiguration : IEntityTypeCo
         builder.Property(item => item.EvidenceKind).HasConversion<byte>();
         builder.Property(item => item.PacketFingerprint).HasColumnType("bytea");
         builder.Property(item => item.FlowFingerprint).HasColumnType("bytea").IsRequired();
-        builder.Property(item => item.ProcessIdentityHash).HasColumnType("bytea");
         builder.HasIndex(item => new
         {
             item.RuntimeId,
@@ -25,9 +24,6 @@ public sealed class TeamLabTrafficObservationEntityConfiguration : IEntityTypeCo
         builder.HasIndex(item => new { item.RuntimeId, item.Generation, item.PacketFingerprint, item.ObservedAt })
             .HasFilter("\"PacketFingerprint\" IS NOT NULL")
             .HasDatabaseName("IX_TeamLabObservations_PacketFingerprint");
-        builder.HasIndex(item => new { item.RuntimeId, item.Generation, item.ProcessIdentityHash, item.ObservedAt })
-            .HasFilter("\"ProcessIdentityHash\" IS NOT NULL")
-            .HasDatabaseName("IX_TeamLabObservations_ProcessIdentity");
         builder.HasOne(item => item.Runtime).WithMany(item => item.TrafficObservations)
             .HasForeignKey(item => item.RuntimeId).OnDelete(DeleteBehavior.Cascade);
         builder.HasOne(item => item.ObservationPoint).WithMany()

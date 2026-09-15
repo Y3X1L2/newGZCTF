@@ -106,6 +106,17 @@ public sealed class ImageRemoteAccessService(
         return ToModel(configuration);
     }
 
+    public async Task<ImageRemoteAccessModel> UpdateAsync(
+        int imageTemplateId,
+        UpdateImageRemoteAccessModel request,
+        CancellationToken cancellationToken)
+    {
+        var template = await context.ImageTemplates.AsNoTracking()
+            .SingleOrDefaultAsync(item => item.Id == imageTemplateId, cancellationToken)
+            ?? throw new InvalidOperationException("Image template not found.");
+        return await UpdateAsync(template, request, cancellationToken);
+    }
+
     public string RevealSecret(ImageTemplateRemoteAccess configuration) =>
         string.IsNullOrWhiteSpace(configuration.ProtectedSecret)
             ? throw new InvalidOperationException("The image remote access configuration has no credential.")

@@ -116,9 +116,6 @@ public static class TeamLabReleaseCodec
                     Key = iface.Key.Trim(), NetworkKey = iface.NetworkKey.Trim()
                 }).ToArray()
             }).ToArray(),
-            definition.Dependencies?.OrderBy(item => item.AssetKey, StringComparer.Ordinal)
-                .ThenBy(item => item.DependsOnKey, StringComparer.Ordinal).ThenBy(item => item.Condition)
-                .Select(item => item with { AssetKey = item.AssetKey.Trim(), DependsOnKey = item.DependsOnKey.Trim() }).ToArray(),
             definition.Observation);
 
     private static TeamLabExecutionTopology CompileWithDigests(
@@ -160,7 +157,7 @@ public static class TeamLabReleaseCodec
             execution.Assets.Select(asset => new TeamLabTopologyAssetV2Model(
                 asset.Key, asset.Name, asset.Kind, asset.ImageTemplateId,
                 new TeamLabAssetResourceModel(asset.CpuUnits, asset.MemoryMiB, asset.StorageMiB),
-                asset.Interfaces.Select(ToContract).ToArray(), asset.EndpointObservation, asset.ExposePort,
+                asset.Interfaces.Select(ToContract).ToArray(), asset.ExposePort,
                 asset.HealthCheckKind is { } kind && asset.HealthCheckPort is { } port
                     ? new TeamLabHealthCheckModel(kind, port)
                     : null,
@@ -170,10 +167,8 @@ public static class TeamLabReleaseCodec
             execution.Connections.Select(connection => new TeamLabTopologyConnectionV2Model(
                 connection.Key, connection.FromNetworkKey, connection.ToNetworkKey, connection.ViaNodeKey,
                 connection.ViaAssetKey, connection.Direction)).ToArray(),
-            execution.Dependencies.Select(dependency => new TeamLabTopologyDependencyModel(
-                dependency.AssetKey, dependency.DependsOnKey, dependency.Condition)).ToArray(),
             new TeamLabObservationPolicyModel(execution.Observation.FlowMetadataEnabled,
-                execution.Observation.OnDemandPcapEnabled, execution.Observation.EndpointObservation));
+                execution.Observation.OnDemandPcapEnabled));
     }
 
     private static TeamLabTopologyDefinitionModel FromV1(TeamLabTopologyDefinitionV1Model definition) => Normalize(new(
@@ -190,12 +185,12 @@ public static class TeamLabReleaseCodec
         definition.Networks,
         definition.Assets.Select(asset => new TeamLabTopologyAssetModel(
             asset.Key, asset.Name, asset.Kind, asset.ImageTemplateId, asset.Resources, asset.Interfaces,
-            asset.ExposePort, asset.HealthCheck, asset.OrderIndex, asset.EndpointObservation,
+            asset.ExposePort, asset.HealthCheck, asset.OrderIndex,
             asset.DevicePackageId, asset.DeviceParameters, asset.ConnectorId)).ToArray(),
         definition.Connections.Select(connection => new TeamLabTopologyConnectionModel(
             connection.Key, connection.FromNetworkKey, connection.ToNetworkKey, connection.ViaAssetKey,
             connection.ViaNodeKey, connection.Direction)).ToArray(),
-        definition.Infrastructure, definition.Dependencies, definition.Observation));
+        definition.Infrastructure, definition.Observation));
 
     private static TeamLabTopologyInterfaceModel ToContract(TeamLabExecutionInterface iface) =>
         new(iface.Key, iface.NetworkKey, iface.HostOffset, iface.Primary, iface.DisplayOrder);

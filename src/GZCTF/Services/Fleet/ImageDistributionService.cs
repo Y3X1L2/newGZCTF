@@ -61,6 +61,30 @@ public class ImageDistributionService(
         return records;
     }
 
+    public async Task<IReadOnlyList<ImageDistributionRecord>> DistributeTemplatesAsync(
+        IReadOnlyCollection<int> templateIds,
+        ImageDistributionReferenceKey reference,
+        CancellationToken token)
+    {
+        if (templateIds.Count == 0) return [];
+        var ids = templateIds.Distinct().ToArray();
+        var templates = await context.ImageTemplates.AsNoTracking()
+            .Where(item => ids.Contains(item.Id) && item.Status != ImageStatus.Deleting)
+            .OrderBy(item => item.Id)
+            .ToArrayAsync(token);
+        var nodes = await context.WorkerNodes.AsNoTracking()
+            .Where(item => item.Status == NodeStatus.Online && item.IsSchedulable)
+            .OrderBy(item => item.Name).ThenBy(item => item.Id)
+            .ToArrayAsync(token);
+        List<ImageDistributionRecord> records = [];
+        foreach (var template in templates)
+            foreach (var node in nodes.Where(item => CanNodeUseImage(item, template)))
+                records.Add(await QueueTemplateOnNodeAsync(template, node, reference, token));
+        if (records.Count > 0)
+            coordinator.Wake();
+        return records;
+    }
+
     public async Task DistributeGameAsync(int gameId, CancellationToken token)
     {
         var templateIds = await context.GameChallenges.AsNoTracking()

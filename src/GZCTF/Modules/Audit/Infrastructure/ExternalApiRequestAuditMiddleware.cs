@@ -11,8 +11,7 @@ namespace GZCTF.Modules.Audit.Infrastructure;
 
 public sealed class ExternalApiRequestAuditMiddleware(
     RequestDelegate next,
-    IServiceScopeFactory scopeFactory,
-    ILogger<ExternalApiRequestAuditMiddleware> logger)
+    ExternalApiAuditWriter writer)
 {
     public async Task InvokeAsync(HttpContext context, ExternalApiAuditContext auditContext)
     {
@@ -33,67 +32,53 @@ public sealed class ExternalApiRequestAuditMiddleware(
         finally
         {
             context.Response.Body = originalBody;
-            await PersistAsync(
+            await EnqueueAsync(
                 context,
                 auditContext,
                 countingBody.BytesWritten,
                 Stopwatch.GetElapsedTime(started),
-                logger,
-                scopeFactory);
+                writer);
         }
     }
 
-    private static async Task PersistAsync(
+    private static async Task EnqueueAsync(
         HttpContext context,
         ExternalApiAuditContext auditContext,
         long responseBytes,
         TimeSpan elapsed,
-        ILogger logger,
-        IServiceScopeFactory scopeFactory)
+        ExternalApiAuditWriter writer)
     {
-        try
-        {
-            var routePattern = (context.GetEndpoint() as RouteEndpoint)?.RoutePattern.RawText;
-            var routeKey = $"{context.Request.Method}:{NormalizeRoute(routePattern, context.Request.Path)}";
-            var tokenId = ParseGuidClaim(context.User, ApiTokenClaimTypes.TokenId);
-            var actorId = ParseGuidClaim(context.User, ClaimTypes.NameIdentifier);
-            var scopes = string.Join(' ', context.User.FindAll(ApiTokenClaimTypes.Scope)
-                .Select(claim => claim.Value)
-                .Distinct(StringComparer.Ordinal)
-                .Order(StringComparer.Ordinal));
-            var (resourceType, resourceId) = ResolveResource(context);
-            var remoteIp = NormalizeIp(context.Connection.RemoteIpAddress);
+        var routePattern = (context.GetEndpoint() as RouteEndpoint)?.RoutePattern.RawText;
+        var routeKey = $"{context.Request.Method}:{NormalizeRoute(routePattern, context.Request.Path)}";
+        var tokenId = ParseGuidClaim(context.User, ApiTokenClaimTypes.TokenId);
+        var actorId = ParseGuidClaim(context.User, ClaimTypes.NameIdentifier);
+        var scopes = string.Join(' ', context.User.FindAll(ApiTokenClaimTypes.Scope)
+            .Select(claim => claim.Value)
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal));
+        var (resourceType, resourceId) = ResolveResource(context);
+        var remoteIp = NormalizeIp(context.Connection.RemoteIpAddress);
 
-            await using var scope = scopeFactory.CreateAsyncScope();
-            var database = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            database.ExternalApiRequestAudits.Add(new ExternalApiRequestAudit
-            {
-                TraceId = Activity.Current?.Id ?? context.TraceIdentifier,
-                OperationId = auditContext.OperationId,
-                ApiTokenId = tokenId,
-                ActorUserId = actorId,
-                Scopes = scopes,
-                Method = context.Request.Method,
-                RouteKey = routeKey,
-                ResourceType = resourceType,
-                ResourceId = resourceId,
-                StatusCode = context.Response.StatusCode,
-                ErrorCode = auditContext.ErrorCode ?? DefaultErrorCode(context.Response.StatusCode),
-                RequestBytes = Math.Max(0, context.Request.ContentLength ?? 0),
-                ResponseBytes = responseBytes,
-                RemoteIp = remoteIp,
-                IdempotencyReused = auditContext.IdempotencyReused,
-                DurationMilliseconds = Math.Max(0, (long)elapsed.TotalMilliseconds),
-                CreatedAt = DateTimeOffset.UtcNow
-            });
-            await database.SaveChangesAsync(CancellationToken.None);
-        }
-        catch (Exception exception)
+        await writer.EnqueueAsync(new ExternalApiRequestAudit
         {
-            logger.LogError(exception,
-                "Failed to persist external API request audit for trace {TraceId}",
-                context.TraceIdentifier);
-        }
+            TraceId = Activity.Current?.Id ?? context.TraceIdentifier,
+            OperationId = auditContext.OperationId,
+            ApiTokenId = tokenId,
+            ActorUserId = actorId,
+            Scopes = scopes,
+            Method = context.Request.Method,
+            RouteKey = routeKey,
+            ResourceType = resourceType,
+            ResourceId = resourceId,
+            StatusCode = context.Response.StatusCode,
+            ErrorCode = auditContext.ErrorCode ?? DefaultErrorCode(context.Response.StatusCode),
+            RequestBytes = Math.Max(0, context.Request.ContentLength ?? 0),
+            ResponseBytes = responseBytes,
+            RemoteIp = remoteIp,
+            IdempotencyReused = auditContext.IdempotencyReused,
+            DurationMilliseconds = Math.Max(0, (long)elapsed.TotalMilliseconds),
+            CreatedAt = DateTimeOffset.UtcNow
+        });
     }
 
     private static string NormalizeRoute(string? routePattern, PathString requestPath)

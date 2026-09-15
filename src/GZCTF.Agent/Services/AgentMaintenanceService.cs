@@ -16,8 +16,6 @@ public class AgentMaintenanceService(
     ILogger<AgentMaintenanceService> logger)
 {
     private const string InstalledAgentPath = "/usr/local/bin/gzctf-agent";
-    private const string LinuxSensorPath = "/opt/gzctf/endpoint-sensor/linux-x64/gzctf-endpoint-sensor";
-    private const string WindowsSensorPath = "/opt/gzctf/endpoint-sensor/win-x64/gzctf-endpoint-sensor.exe";
     private const string AgentConfigPath = "/etc/gzctf-agent/appsettings.json";
     private static readonly string BackupDirectory = "/var/lib/gzctf/agent-backups";
 
@@ -26,9 +24,6 @@ public class AgentMaintenanceService(
         if (!Uri.TryCreate(request.DownloadUrl, UriKind.Absolute, out var uri) ||
             uri.Scheme is not ("http" or "https"))
             return new AgentSyncResponse(false, "Invalid agent download URL.", CurrentVersion());
-        if (!TryOptionalUri(request.LinuxSensorDownloadUrl, out var linuxSensorUri) ||
-            !TryOptionalUri(request.WindowsSensorDownloadUrl, out var windowsSensorUri))
-            return new AgentSyncResponse(false, "Invalid managed artifact download URL.", CurrentVersion());
 
         Directory.CreateDirectory(Path.GetDirectoryName(InstalledAgentPath)!);
         var tempPath = CreateSiblingTemporaryPath(InstalledAgentPath);
@@ -73,14 +68,6 @@ public class AgentMaintenanceService(
                 return new AgentSyncResponse(false,
                     $"OVS/OVN data-plane preparation did not converge ({dataPlaneReadiness.Code}).",
                     CurrentVersion());
-            var managedArtifactChanged = false;
-            if (linuxSensorUri is not null)
-                managedArtifactChanged |= await SyncManagedArtifactAsync(
-                    linuxSensorUri, request.LinuxSensorSha256, LinuxSensorPath, executable: true, token);
-            if (windowsSensorUri is not null)
-                managedArtifactChanged |= await SyncManagedArtifactAsync(
-                    windowsSensorUri, request.WindowsSensorSha256, WindowsSensorPath, executable: false, token);
-
             if (agentUpToDate)
             {
                 if (configChanged && request.Restart)
@@ -93,9 +80,9 @@ public class AgentMaintenanceService(
                         ? "Agent was current; OVS/OVN data-plane prerequisites were synchronized."
                         : dataPlaneReadiness is not null
                         ? $"Agent was current; local OVS/OVN prerequisites were prepared ({dataPlaneReadiness.Code})."
-                        : managedArtifactChanged || configChanged
-                        ? "Agent was current; managed runtime artifacts were synchronized."
-                        : "Agent and managed runtime artifacts are already up to date.",
+                        : configChanged
+                        ? "Agent was current; managed runtime configuration was synchronized."
+                        : "Agent and managed runtime configuration are already up to date.",
                     CurrentVersion());
             }
 
@@ -143,42 +130,6 @@ public class AgentMaintenanceService(
         finally
         {
             TryDelete(tempPath);
-        }
-    }
-
-    private async Task<bool> SyncManagedArtifactAsync(
-        Uri uri,
-        string? expectedSha256,
-        string installedPath,
-        bool executable,
-        CancellationToken token)
-    {
-        var expected = NormalizeSha256(expectedSha256)
-                       ?? throw new InvalidOperationException("Managed artifact sha256 is invalid.");
-        if (File.Exists(installedPath) && string.Equals(
-                await ComputeFileSha256Async(installedPath, token), expected, StringComparison.OrdinalIgnoreCase))
-            return false;
-        Directory.CreateDirectory(Path.GetDirectoryName(installedPath)!);
-        var temporary = CreateSiblingTemporaryPath(installedPath);
-        try
-        {
-            await DownloadAsync(uri, temporary, token);
-            var actual = await ComputeFileSha256Async(temporary, token);
-            if (!string.Equals(actual, expected, StringComparison.OrdinalIgnoreCase))
-                throw new InvalidOperationException(
-                    $"Managed artifact sha256 mismatch: expected {expected}, got {actual}.");
-            Directory.CreateDirectory(Path.GetDirectoryName(installedPath)!);
-            File.Move(temporary, installedPath, true);
-            if (executable && !RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-                File.SetUnixFileMode(installedPath,
-                    UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
-                    UnixFileMode.GroupRead | UnixFileMode.GroupExecute |
-                    UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
-            return true;
-        }
-        finally
-        {
-            TryDelete(temporary);
         }
     }
 
@@ -361,16 +312,6 @@ public class AgentMaintenanceService(
         if (value.StartsWith("sha256:", StringComparison.OrdinalIgnoreCase))
             value = value["sha256:".Length..];
         return value.Length == 64 ? value.ToLowerInvariant() : null;
-    }
-
-    private static bool TryOptionalUri(string? value, out Uri? uri)
-    {
-        uri = null;
-        if (string.IsNullOrWhiteSpace(value)) return true;
-        if (!Uri.TryCreate(value, UriKind.Absolute, out var parsed) || parsed.Scheme is not ("http" or "https"))
-            return false;
-        uri = parsed;
-        return true;
     }
 
     private static void TryDelete(string path)

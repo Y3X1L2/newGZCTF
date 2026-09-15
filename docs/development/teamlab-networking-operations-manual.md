@@ -301,7 +301,6 @@ Scope: teamlab.topologies:write
 | `connections` | array | 是 | 网段/路由连接列表 |
 | `editor` | object | 否 | 画布布局（坐标、尺寸、折叠） |
 | `infrastructure` | array | 否 | 交换机/路由器基础设施节点 |
-| `dependencies` | array | 否 | 资产启动依赖 |
 | `observation` | object | 否 | 观测策略 |
 | `controlScopeId` | guid | 创建时可选 | 归属控制范围；管理员可用 |
 
@@ -359,7 +358,6 @@ Scope: teamlab.topologies:write
     "port": 80
   },
   "orderIndex": 0,
-  "endpointObservation": 2,
   "devicePackageId": null,
   "deviceParameters": null,
   "connectorId": null
@@ -385,7 +383,6 @@ Scope: teamlab.topologies:write
 | `healthCheck.kind` | int | 否 | 健康检查类型，`0`=TCP，`1`=HTTP |
 | `healthCheck.port` | int | 否 | 健康检查端口 |
 | `orderIndex` | int | 否 | 排序 |
-| `endpointObservation` | int | 否 | `0`=Disabled，`1`=Optional，`2`=Required |
 | `devicePackageId` | int | 否 | 设备包 ID（虚实结合） |
 | `deviceParameters` | object | 否 | 设备包参数，JSON 对象 |
 | `connectorId` | guid | 否 | 关联现场连接器 |
@@ -440,29 +437,12 @@ Scope: teamlab.topologies:write
 | `networkKey` | string | 否 | 所属网段（交换机通常必填） |
 | `interfaces[]` | array | 是 | 网卡列表，结构与资产网卡相同 |
 
-#### 依赖对象 `dependencies[]`
-
-```json
-{
-  "assetKey": "scada",
-  "dependsOnKey": "plc",
-  "condition": 1
-}
-```
-
-| 字段 | 类型 | 必填 | 说明 |
-| --- | --- | --- | --- |
-| `assetKey` | string | 是 | 后启动资产 |
-| `dependsOnKey` | string | 是 | 先决资产 |
-| `condition` | int | 是 | `0`=NetworkReady，`1`=GuestReady，`2`=ServiceReady，`3`=BootstrapCompleted |
-
 #### 观测策略对象 `observation`
 
 ```json
 {
   "flowMetadataEnabled": true,
-  "onDemandPcapEnabled": true,
-  "endpointObservation": 1
+  "onDemandPcapEnabled": true
 }
 ```
 
@@ -470,7 +450,6 @@ Scope: teamlab.topologies:write
 | --- | --- | --- | --- |
 | `flowMetadataEnabled` | bool | 否 | 是否采集流量元数据，默认 true |
 | `onDemandPcapEnabled` | bool | 否 | 是否允许按需抓包，默认 true |
-| `endpointObservation` | int | 否 | 端点观测模式，`0`=Disabled，`1`=Optional，`2`=Required |
 
 #### 编辑器布局对象 `editor`
 
@@ -567,7 +546,6 @@ Scope: teamlab.topologies:read
     "assets": [],
     "connections": [],
     "infrastructure": [],
-    "dependencies": [],
     "observation": null
   },
   "editor": {
@@ -1041,6 +1019,16 @@ Scope: teamlab.topologies:write
 
 ## 7. 运行时与访问授权
 
+### 7.0 找回可管理的运行时
+
+```http
+GET /api/open/v1/teamlab/runtimes?controlScopeId={scopeId}&externalReference={reference}&status={status}&limit=50&after=<cursor>
+Authorization: Bearer <token>
+Scope: teamlab.runtimes:read
+```
+
+列表只返回当前 token 通过 `teamlab-scope` grant 可读的运行时。同一用户创建的其他 token 不会扩大可见范围。`controlScopeId`、`externalReference`（精确匹配）和数字枚举 `status` 均为可选筛选；`limit` 为 1-100，默认 50。按 `createdAt`、`id` 倒序稳定分页，`nextCursor` 为空时没有下一页。
+
 ### 7.1 创建运行时
 
 ```http
@@ -1260,6 +1248,16 @@ Scope: teamlab.runtimes:write
 ```
 
 只支持 `WireGuard`。响应 `202 Accepted` + operation；操作完成后取得授权 `grantId`。
+
+#### 列出仍可管理的访问授权
+
+```http
+GET /api/open/v1/teamlab/runtimes/{runtimeId}/access-grants
+Authorization: Bearer <token>
+Scope: teamlab.runtimes:read
+```
+
+服务先校验 runtime 的控制范围授权，只返回当前 generation 中尚未撤销的授权元数据。响应不包含客户端/服务端私钥、配置正文、下载 token、token hash、受保护字段或一次性下载 URL。
 
 ### 7.7 下载访问配置
 
@@ -1658,7 +1656,7 @@ Scope: teamlab.traffic:read
 | `limit` | int | 否 | 1-100，默认 50 |
 | `query` | string | 否 | 关键字搜索 |
 | `protocol` | string | 否 | 协议过滤 |
-| `confidence` | string | 否 | `packet-exact`、`process-correlated`、`temporally-related` |
+| `confidence` | string | 否 | `packet-exact` |
 
 响应：
 
@@ -2067,7 +2065,7 @@ deploy, reset, destroy, ready, pause, resume,
 cleanup, fabric, bootstrap, network, route, probe,
 infrastructure, access, remote-access,
 capture, capture-expiry, capture-upload, capture-download,
-observation, sensor-authentication, operation
+observation, operation
 ```
 
 传入白名单之外的值会返回 `422 webhook_event_type_invalid`。若目标环境的测试文档/线上 OpenAPI 出现点分事件名（如 `runtime.ready`），说明该部署包含归一化兼容层；实际对接以该环境 OpenAPI 描述为准。
@@ -2146,6 +2144,16 @@ Scope: teamlab.topologies:write
 响应 `202 Accepted` + operation。重放不推进投递游标，不创建新的业务操作。
 
 ### 11.4 查询异步操作
+
+找回当前 token 发起的操作：
+
+```http
+GET /api/open/v1/operations?status={status}&kind={kind}&limit=50&after=<cursor>
+Authorization: Bearer <token>
+Scope: operations:read
+```
+
+`status` 使用数字枚举，`kind` 精确匹配；两者均可选。列表按 `createdAt`、`id` 倒序稳定分页，只返回当前 token 发起的 operation，不因 token 创建者相同或拥有其他资源授权而混入别的 token 历史。
 
 ```http
 GET /api/open/v1/operations/{operationId}
@@ -2391,7 +2399,7 @@ curl -s -X POST "$BASE/teamlab/topologies" \
     "assets": [
       { "key": "plc", "name": "PLC", "kind": 0, "imageTemplateId": 116, "resources": { "cpuUnits": 1, "memoryMiB": 256, "storageMiB": 256 },
         "interfaces": [ { "key": "plc-eth0", "networkKey": "net-entry", "hostOffset": 10, "primary": true, "orderIndex": 0 } ],
-        "exposePort": 502, "endpointObservation": 2 },
+        "exposePort": 502 },
       { "key": "scada", "name": "SCADA", "kind": 0, "imageTemplateId": 117, "resources": { "cpuUnits": 1, "memoryMiB": 256, "storageMiB": 256 },
         "interfaces": [ { "key": "scada-eth0", "networkKey": "net-core", "hostOffset": 20, "primary": true, "orderIndex": 0 } ] }
     ],
@@ -2538,13 +2546,6 @@ HTTP JSON 中未标注字符串的枚举使用数字值。以下汇总本文用�
 |  | 1 | ManagedRouter |
 | `TeamLabConnectionDirection` | 0 | FromTo |
 |  | 1 | Bidirectional |
-| `TeamLabDependencyCondition` | 0 | NetworkReady |
-|  | 1 | GuestReady |
-|  | 2 | ServiceReady |
-|  | 3 | BootstrapCompleted |
-| `TeamLabEndpointObservationMode` | 0 | Disabled |
-|  | 1 | Optional |
-|  | 2 | Required |
 | `TeamLabExecutionModel` | 0 | V1 |
 |  | 1 | V2 |
 
@@ -2584,12 +2585,9 @@ HTTP JSON 中未标注字符串的枚举使用数字值。以下汇总本文用�
 |  | 2 | FabricUplink |
 |  | 3 | WorkloadEndpoint |
 | `TeamLabTrafficEvidenceKind` | 0 | Packet |
-|  | 1 | EndpointProcess |
 | `TeamLabPathConfidence` | 0 | PacketExact |
-|  | 1 | ProcessCorrelated |
-|  | 2 | TemporallyRelated |
 
-> 注意：`confidence` 查询参数使用字符串 `packet-exact`、`process-correlated`、`temporally-related`；响应里 `confidence` 字段同样是字符串。
+> 注意：`confidence` 查询参数和响应字段均使用字符串 `packet-exact`。
 
 ### 15.4 远程会话（字符串序列化）
 
@@ -2656,6 +2654,14 @@ VM 文件管理使用镜像模板中已启用的 SSH 运维账号，支持密码
 - `POST /api/admin/teamlab/runtimes/{runtimeId}/assets/{assetId}/control`：请求字段 `generation/action/reason/confirmed`，action 为 `start/stop/restart/rebuild/pause/resume`。返回 202 和原部署队列的 `ticketId`。
 - `GET .../control/{ticketId}`：真实任务状态、阶段、错误码和重试资格。
 - `POST .../control/{ticketId}/retry`：仅对可重试失败继续未完成阶段，返回新票据关联。
+
+开放 API 使用同一应用服务和原 `DeploymentQueueTicket`，但仅发布以下路由：
+
+- `GET /api/open/v1/teamlab/runtimes/{runtimeId}/assets/{assetId}/control`：按 token 的 `teamlab-scope` 查询能力。
+- `POST /api/open/v1/teamlab/runtimes/{runtimeId}/assets/{assetId}/control`：必须携带 `Idempotency-Key`，返回 202 和原票据 `ticketId`。
+- `GET /api/open/v1/teamlab/runtimes/{runtimeId}/assets/{assetId}/control/{ticketId}`：查询原票据状态。
+
+开放 API 不发布单资产 retry 路由；管理员接口的 retry 能力不是对外契约。
 
 停止保留容器可写层和 VM 磁盘；暂停保留执行现场；重建替换目标资产资源及可写层，其他资产和场景网络不重建。VM 停止/重启会强制断电，确认框明确提示未保存数据风险。目标资产远程会话先结束，文件传输与生命周期协调执行。后台对账尊重停止/暂停意图；不要用全量 apply 自动拉起主动停止的资产。
 

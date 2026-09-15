@@ -84,9 +84,8 @@ public sealed class TeamLabDataPlanePreparationService(
                 return current;
 
             var localOvs = await SucceedsAsync("ovs-vsctl", ["br-exists", desired.IntegrationBridgeName], cancellationToken);
-            var service = desired.ControlPlane
-                ? await SucceedsAsync("systemctl", ["is-active", "--quiet", "ovn-central"], cancellationToken)
-                : await SucceedsAsync("systemctl", ["is-active", "--quiet", "ovn-controller"], cancellationToken);
+            var service = await SucceedsAsync(
+                "pgrep", ["-x", desired.ControlPlane ? "ovn-northd" : "ovn-controller"], cancellationToken);
             var northbound = false;
             if (localOvs && service && IsOvsdbEndpoint(desired.NorthboundEndpoint))
             {

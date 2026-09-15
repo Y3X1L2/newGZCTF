@@ -10,15 +10,9 @@ public sealed record TeamLabTopologyInfrastructureModel(
     IReadOnlyList<TeamLabTopologyInterfaceModel> Interfaces,
     string? NetworkKey = null);
 
-public sealed record TeamLabTopologyDependencyModel(
-    string AssetKey,
-    string DependsOnKey,
-    TeamLabDependencyCondition Condition);
-
 public sealed record TeamLabObservationPolicyModel(
     bool FlowMetadataEnabled = true,
-    bool OnDemandPcapEnabled = true,
-    TeamLabEndpointObservationMode EndpointObservation = TeamLabEndpointObservationMode.Optional);
+    bool OnDemandPcapEnabled = true);
 
 internal sealed record TeamLabTopologyAssetV2Model(
     string Key,
@@ -27,7 +21,6 @@ internal sealed record TeamLabTopologyAssetV2Model(
     int ImageTemplateId,
     TeamLabAssetResourceModel Resources,
     IReadOnlyList<TeamLabTopologyInterfaceModel> Interfaces,
-    TeamLabEndpointObservationMode EndpointObservation,
     int? ExposePort,
     TeamLabHealthCheckModel? HealthCheck,
     int OrderIndex,
@@ -51,5 +44,4 @@ internal sealed record TeamLabTopologyDefinitionV2Model(
     IReadOnlyList<TeamLabTopologyInfrastructureModel> Infrastructure,
     IReadOnlyList<TeamLabTopologyAssetV2Model> Assets,
     IReadOnlyList<TeamLabTopologyConnectionV2Model> Connections,
-    IReadOnlyList<TeamLabTopologyDependencyModel> Dependencies,
     TeamLabObservationPolicyModel Observation);

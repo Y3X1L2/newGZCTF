@@ -39,6 +39,53 @@ public sealed class EfImageTemplateCatalog(
                 template.UploadedAt))
             .SingleOrDefaultAsync(cancellationToken);
 
+    public async Task<ImageTemplateDetailsPage> ListDetailsAsync(
+        Guid actorUserId,
+        bool includeAll,
+        OSType? osType,
+        ImageType? imageType,
+        ImageStatus? status,
+        string? search,
+        int limit,
+        int? afterId,
+        CancellationToken cancellationToken)
+    {
+        var query = context.ImageTemplates.AsNoTracking()
+            .Where(template => includeAll || template.CreatedById == null || template.CreatedById == actorUserId);
+        if (osType is { } requiredOsType)
+            query = query.Where(template => template.OSType == requiredOsType);
+        if (imageType is { } requiredImageType)
+            query = query.Where(template => template.ImageType == requiredImageType);
+        if (status is { } requiredStatus)
+            query = query.Where(template => template.Status == requiredStatus);
+        if (!string.IsNullOrWhiteSpace(search))
+            query = query.Where(template => EF.Functions.ILike(template.Name, $"%{search.Trim()}%"));
+        if (afterId is { } cursor)
+            query = query.Where(template => template.Id < cursor);
+
+        var rows = await query.OrderByDescending(template => template.Id)
+            .Take(limit + 1)
+            .Select(template => new ImageTemplateDetails(
+                template.Id,
+                template.CreatedById,
+                template.Name,
+                template.OSType,
+                template.ImageType,
+                template.Status,
+                template.RegistryUrl,
+                template.FileSize,
+                template.Description,
+                template.ErrorMessage,
+                template.ImageHash,
+                template.VmArtifactStatus,
+                template.VmRuntimeMode,
+                template.VmNetworkMode,
+                template.UploadedAt))
+            .ToArrayAsync(cancellationToken);
+        var page = rows.Take(limit).ToArray();
+        return new ImageTemplateDetailsPage(page, rows.Length > limit ? page[^1].Id : null);
+    }
+
     public async Task<ImageTemplateDeleteDecision> MarkDeletingAsync(
         int id,
         Func<CancellationToken, Task<ImageTemplateDeleteDecision>> checkReferences,

@@ -152,6 +152,18 @@ public sealed class ImageTemplateOwnershipTests
             CancellationToken cancellationToken) =>
             Task.FromResult<ImageTemplateDetails?>(null);
 
+        public Task<ImageTemplateDetailsPage> ListDetailsAsync(
+            Guid actorUserId,
+            bool includeAll,
+            OSType? osType,
+            ImageType? imageType,
+            ImageStatus? status,
+            string? search,
+            int limit,
+            int? afterId,
+            CancellationToken cancellationToken) =>
+            Task.FromResult(new ImageTemplateDetailsPage([], null));
+
         public Task<ImageTemplateDeleteDecision> MarkDeletingAsync(
             int id,
             Func<CancellationToken, Task<ImageTemplateDeleteDecision>> checkReferences,

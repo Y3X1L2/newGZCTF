@@ -45,8 +45,6 @@ $required = @(
     "GZCTF.dll",
     "efbundle",
     "agent/gzctf-agent",
-    "agent/endpoint-sensor/linux-x64/gzctf-endpoint-sensor",
-    "agent/endpoint-sensor/win-x64/gzctf-endpoint-sensor.exe",
     "agent/guest-supervisor/linux-x64/gzctf-guest-supervisor",
     "agent/guest-supervisor/win-x64/gzctf-guest-supervisor.exe"
 )

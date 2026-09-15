@@ -248,47 +248,56 @@ public sealed class TeamLabRuntimeOrchestrator(
             pause ? "Runtime pause started." : "Runtime resume started.");
         await context.SaveChangesAsync(cancellationToken);
 
-        foreach (var asset in runtime.Assets
-                     .Where(item => item.Generation == runtime.Generation &&
-                         item.Kind is TeamLabResourceKind.Docker or TeamLabResourceKind.Vm &&
-                         item.DesiredPowerState is not ("stopped" or "paused"))
-                     .OrderBy(item => item.WorkerNodeId)
-                     .ThenBy(item => item.Id))
+        var assets = runtime.Assets
+            .Where(item => item.Generation == runtime.Generation &&
+                item.Kind is TeamLabResourceKind.Docker or TeamLabResourceKind.Vm &&
+                item.DesiredPowerState is not ("stopped" or "paused"))
+            .OrderBy(item => item.WorkerNodeId)
+            .ThenBy(item => item.Id)
+            .ToArray();
+        var invalidAsset = assets.FirstOrDefault(item =>
+            item.WorkerNodeId is null || string.IsNullOrWhiteSpace(item.RuntimeResourceId));
+        if (invalidAsset is not null)
+            return await FailLifecycleAsync(
+                runtime,
+                invalidAsset,
+                pause,
+                "runtime_identity_missing",
+                cancellationToken);
+
+        var nodeResults = await Task.WhenAll(assets
+            .GroupBy(item => item.WorkerNodeId!.Value)
+            .Select(async group => await nodes.ChangeAssetLifecycleBatchAsync(
+                group.Key,
+                group.Select(asset => new TeamLabNodeAssetLifecycleRequest(
+                    asset.Id,
+                    asset.Kind == TeamLabResourceKind.Docker ? TeamLabAssetKind.Docker : TeamLabAssetKind.Vm,
+                    asset.RuntimeResourceId!)).ToArray(),
+                runtime.Generation,
+                runtime.ExecutionModel,
+                pause,
+                cancellationToken)));
+        var results = nodeResults.SelectMany(item => item).ToDictionary(item => item.AssetId);
+        TeamLabRuntimeAsset? failedAsset = null;
+        foreach (var asset in assets)
         {
-            if (asset.WorkerNodeId is not { } nodeId || string.IsNullOrWhiteSpace(asset.RuntimeResourceId))
-                return await FailLifecycleAsync(
-                    runtime,
-                    asset,
-                    pause,
-                    "runtime_identity_missing",
-                    cancellationToken);
-
-            var assetKind = asset.Kind switch
+            if (!results.TryGetValue(asset.Id, out var result) || !result.Success)
             {
-                TeamLabResourceKind.Docker => TeamLabAssetKind.Docker,
-                TeamLabResourceKind.Vm => TeamLabAssetKind.Vm,
-                _ => throw new TeamLabApiContractException(
-                    "runtime_asset_kind_unsupported", "运行时包含不受支持的 workload 资源类型", 409)
-            };
-            var result = pause
-                ? await nodes.PauseAssetAsync(nodeId, assetKind, asset.RuntimeResourceId, runtime.Generation,
-                    runtime.ExecutionModel, cancellationToken)
-                : await nodes.ResumeAssetAsync(nodeId, assetKind, asset.RuntimeResourceId, runtime.Generation,
-                    runtime.ExecutionModel, cancellationToken);
-            if (!result.Success)
-                return await FailLifecycleAsync(
-                    runtime,
-                    asset,
-                    pause,
-                    pause ? "runtime_pause_failed" : "resume_blocked",
-                    cancellationToken);
-
+                asset.LastError = result?.Message;
+                failedAsset ??= asset;
+                continue;
+            }
             asset.Status = targetStatus;
             asset.LastError = null;
             asset.ExecutionUpdatedAt = DateTimeOffset.UtcNow;
-            // Persist each acknowledged asset so partial execution remains visible after a restart.
-            await context.SaveChangesAsync(cancellationToken);
         }
+        if (failedAsset is not null)
+            return await FailLifecycleAsync(
+                runtime,
+                failedAsset,
+                pause,
+                pause ? "runtime_pause_failed" : "resume_blocked",
+                cancellationToken);
 
         runtime.Status = targetStatus;
         runtime.LastError = null;
@@ -853,7 +862,6 @@ public sealed class TeamLabRuntimeOrchestrator(
         .Include(item => item.Networks).ThenInclude(item => item.NetworkLease)
         .Include(item => item.Assets)
         .Include(item => item.Infrastructure).ThenInclude(item => item.Fragments)
-        .Include(item => item.DependencyStates)
         .Include(item => item.ObservationPoints)
         .Include(item => item.FabricLinkLeases)
         .Include(item => item.AccessGrants)

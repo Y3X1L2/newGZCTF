@@ -36,7 +36,7 @@ import styles from './TeamLabResourcesPage.module.css'
 type ResourcesTab = 'packages' | 'connectors' | 'cache'
 
 const tabLabels: Record<ResourcesTab, string> = {
-  packages: '设备包目录',
+  packages: '设备模板',
   connectors: '现场连接器',
   cache: '节点制品缓存',
 }
@@ -49,7 +49,7 @@ export function TeamLabResourcesPage() {
   return (
     <div className={styles.page}>
       <AdminPageHeader
-        description="TeamLab 场景可用的设备包目录、现场连接器与节点制品缓存；镜像内容由外部流水线提供，平台只登记与调度。"
+        description="管理 TeamLab 场景可用的设备模板、现场连接器与节点镜像缓存。"
         eyebrow="TEAMLAB RESOURCES"
         title="组网资源"
       />
@@ -97,10 +97,10 @@ function DevicePackagesTab() {
   }
 
   const columns: AdminDataColumn<TeamLabDevicePackage>[] = [
-    { id: 'name', header: '设备包', render: (row) => <span className={styles.primaryCell}>{row.displayName}</span> },
+    { id: 'name', header: '设备模板', render: (row) => <span className={styles.primaryCell}>{row.displayName}</span> },
     { id: 'version', header: '版本', render: (row) => row.version },
     { id: 'kind', header: '制品', render: (row) => deviceArtifactKindLabels[row.artifactKind] },
-    { id: 'assets', header: '资产类型', render: (row) => row.supportedAssetKinds.join('、') || '—' },
+    { id: 'assets', header: '资产类型', render: (row) => row.supportedAssetKinds.map(assetKindLabel).join('、') || '—' },
     { id: 'resources', header: '资源需求', render: (row) => `${row.cpuMillis}m / ${row.memoryMiB}Mi / ${row.storageGib}Gi` },
     {
       id: 'state',
@@ -115,13 +115,13 @@ function DevicePackagesTab() {
   ]
 
   return (
-    <section aria-label="设备包目录">
+    <section aria-label="设备模板目录">
       <FilterToolbar>
         <ToolbarGroup grow>
           <label className={styles.searchBox}>
             <Search aria-hidden="true" size={16} />
             <input
-              aria-label="搜索设备包"
+              aria-label="搜索设备模板"
               onChange={(event) => catalog.setSearchInput(event.currentTarget.value)}
               placeholder="名称"
               type="search"
@@ -130,32 +130,32 @@ function DevicePackagesTab() {
           </label>
         </ToolbarGroup>
         <ActionButton icon={<Plus size={16} />} onClick={() => setRegisterOpen(true)} tone="primary" type="button">
-          登记设备包
+          登记设备模板
         </ActionButton>
         <RefreshIndicator active={catalog.isRefreshing} label={catalog.isRefreshing ? '正在同步' : '数据已同步'} />
       </FilterToolbar>
 
-      {actionError ? <InlineFeedback tone="danger">{errorMessage(actionError, '设备包操作失败。')}</InlineFeedback> : null}
+      {actionError ? <InlineFeedback tone="danger">{errorMessage(actionError, '设备模板操作失败。')}</InlineFeedback> : null}
       {catalog.isLoading ? (
-        <DataState description="正在读取设备包目录。" loading title="设备包加载中" />
+        <DataState description="正在读取设备模板。" loading title="设备模板加载中" />
       ) : catalog.error instanceof RuntimeApiError && catalog.error.status === 403 ? (
         <DataState description="当前账号没有 TeamLab 资源管理权限。" title="无法访问组网资源" />
       ) : catalog.error ? (
-        <DataState description={errorMessage(catalog.error, '设备包目录暂不可用。')} title="设备包目录加载失败" />
+        <DataState description={errorMessage(catalog.error, '设备模板暂不可用。')} title="设备模板加载失败" />
       ) : (
         <>
           <DataTable
-            caption="设备包目录"
+            caption="设备模板目录"
             columns={columns}
-            emptyDescription="登记外部流水线产出的设备包后，场景资产即可引用。"
-            emptyTitle="暂无设备包"
+            emptyDescription="登记镜像和启动参数后，场景资产即可选用该模板。"
+            emptyTitle="暂无设备模板"
             onRowClick={(row) => { setActionError(null); setSelected(row) }}
             rowKey={(row) => row.id}
             rows={[...(catalog.page?.items ?? [])]}
           />
           <CursorPaginationBar
             hasNext={Boolean(catalog.page?.next)}
-            label="设备包分页"
+            label="设备模板分页"
             onNext={() => catalog.page?.next && catalog.cursor.next(catalog.page.next)}
             onPrevious={catalog.cursor.previous}
             page={catalog.cursor.page}
@@ -173,7 +173,7 @@ function DevicePackagesTab() {
       />
 
       <DetailDrawer
-        description={selected?.description ?? '不可变设备包版本的能力与资源声明。'}
+        description={selected?.description ?? '设备模板的镜像、资源、端口和启动参数。'}
         onClose={() => setSelected(null)}
         open={Boolean(selected)}
         title={selected ? `${selected.displayName} · ${selected.version}` : ''}
@@ -202,7 +202,7 @@ function DevicePackagesTab() {
           ) : null
         }
       >
-        {actionError ? <InlineFeedback tone="danger">{errorMessage(actionError, '设备包操作失败。')}</InlineFeedback> : null}
+        {actionError ? <InlineFeedback tone="danger">{errorMessage(actionError, '设备模板操作失败。')}</InlineFeedback> : null}
         {selected ? (
           <dl className={styles.detailList}>
             <div>
@@ -214,24 +214,16 @@ function DevicePackagesTab() {
               <dd className={styles.mono}>{selected.digest ?? '未登记'}</dd>
             </div>
             <div>
-              <dt>端口声明</dt>
-              <dd>{selected.ports.length > 0 ? selected.ports.map((port) => `${port.name}/${port.port}/${port.protocol}`).join('，') : '—'}</dd>
+              <dt>服务端口</dt>
+              <dd>{selected.ports.length > 0 ? selected.ports.map((port) => `${port.name}：${port.port}/${port.protocol.toUpperCase()}`).join('，') : '未配置'}</dd>
             </div>
             <div>
-              <dt>协议事件类型</dt>
-              <dd>{selected.protocolEventTypes.length > 0 ? selected.protocolEventTypes.join('、') : '—'}</dd>
+              <dt>启动参数</dt>
+              <dd>{describeParameters(selected.parameterSchema)}</dd>
             </div>
             <div>
-              <dt>参数 schema</dt>
-              <dd>
-                <pre className={styles.jsonBlock}>{JSON.stringify(selected.parameterSchema, null, 2)}</pre>
-              </dd>
-            </div>
-            <div>
-              <dt>健康声明</dt>
-              <dd>
-                <pre className={styles.jsonBlock}>{JSON.stringify(selected.healthDeclaration, null, 2)}</pre>
-              </dd>
+              <dt>可用性检查</dt>
+              <dd>{describeHealthCheck(selected.healthDeclaration)}</dd>
             </div>
           </dl>
         ) : null}
@@ -239,8 +231,8 @@ function DevicePackagesTab() {
 
       <VNextConfirmDialog
         confirmLabel="归档"
-        description={actionError ? errorMessage(actionError, '设备包归档失败，请重试。') : '归档后设备包不再出现在场景资产选择中，已引用它的历史版本保持可读。'}
-        message={`确认归档设备包 ${archiveTarget?.displayName ?? ''} ${archiveTarget?.version ?? ''}？`}
+        description={actionError ? errorMessage(actionError, '设备模板归档失败，请重试。') : '归档后模板不再出现在场景资产选择中，已引用它的历史版本保持可读。'}
+        message={`确认归档设备模板 ${archiveTarget?.displayName ?? ''} ${archiveTarget?.version ?? ''}？`}
         onClose={() => setArchiveTarget(null)}
         onConfirm={async () => {
           const target = archiveTarget
@@ -250,10 +242,35 @@ function DevicePackagesTab() {
           return saved
         }}
         open={Boolean(archiveTarget)}
-        title="归档设备包"
+        title="归档设备模板"
       />
     </section>
   )
+}
+
+function assetKindLabel(kind: string) {
+  if (kind === 'docker') return 'Docker 容器'
+  if (kind === 'vm') return '虚拟机'
+  return kind
+}
+
+function describeParameters(schema: unknown) {
+  if (!schema || typeof schema !== 'object') return '未配置'
+  const value = schema as { properties?: Record<string, { type?: string }>; required?: string[] }
+  const required = new Set(value.required ?? [])
+  const entries = Object.entries(value.properties ?? {})
+  if (!entries.length) return '未配置'
+  const typeLabels: Record<string, string> = { string: '文本', number: '数字', boolean: '开关' }
+  return entries.map(([name, definition]) =>
+    `${name}（${typeLabels[definition?.type ?? ''] ?? '文本'}${required.has(name) ? '，必填' : ''}）`).join('，')
+}
+
+function describeHealthCheck(declaration: unknown) {
+  if (!declaration || typeof declaration !== 'object') return '不检查'
+  const value = declaration as { kind?: string; port?: number; path?: string }
+  if (value.kind === 'tcp' && value.port) return `检查 TCP 端口 ${value.port}`
+  if (value.kind === 'http' && value.port) return `访问 HTTP ${value.port}${value.path || '/'}`
+  return '不检查'
 }
 
 function ConnectorsTab() {
@@ -290,7 +307,7 @@ function ConnectorsTab() {
     },
     {
       id: 'health',
-      header: '健康',
+      header: '连接状态',
       render: (row) => (
         <StatusBadge tone={connectorHealthLabels[row.health].tone}>{connectorHealthLabels[row.health].label}</StatusBadge>
       ),
@@ -346,40 +363,15 @@ function ConnectorsTab() {
       />
 
       <DetailDrawer
-        description={selected?.description ?? '连接器占用与健康状态。'}
+        description={selected?.description ?? '连接器占用和现场网卡的当前连接状态。'}
         onClose={() => setSelected(null)}
         open={Boolean(selected)}
         title={selected?.displayName ?? ''}
         footer={
           selected && !selected.archived ? (
-            <>
-              <ActionButton
-                disabled={busy || selected.health === 'unreachable'}
-                onClick={() =>
-                  selected && void run(async () => {
-                    const updated = await teamLabResourcesApi.setConnectorHealth(selected.id, 'unreachable')
-                    setSelected(current => current?.id === updated.id ? updated : current)
-                  })
-                }
-                tone="danger"
-                type="button"
-              >
-                标记不可达
-              </ActionButton>
-              <ActionButton
-                disabled={busy || selected.health === 'healthy'}
-                onClick={() => selected && void run(async () => {
-                  const updated = await teamLabResourcesApi.setConnectorHealth(selected.id, 'healthy')
-                  setSelected(current => current?.id === updated.id ? updated : current)
-                })}
-                type="button"
-              >
-                标记健康
-              </ActionButton>
-              <ActionButton disabled={busy} onClick={() => { setActionError(null); setArchiveTarget(selected) }} tone="danger" type="button">
-                归档
-              </ActionButton>
-            </>
+            <ActionButton disabled={busy} onClick={() => { setActionError(null); setArchiveTarget(selected) }} tone="danger" type="button">
+              归档
+            </ActionButton>
           ) : null
         }
       >
@@ -391,8 +383,8 @@ function ConnectorsTab() {
                 <dd className={styles.mono}>{selected.id}</dd>
               </div>
               <div>
-                <dt>健康观察时间</dt>
-                <dd>{selected.healthObservedAt ? formatAdminDate(toAdminDate(selected.healthObservedAt)) : '尚未上报'}</dd>
+                <dt>状态读取时间</dt>
+                <dd>{selected.healthObservedAt ? formatAdminDate(toAdminDate(selected.healthObservedAt)) : '当前连接器没有可读取的网卡配置'}</dd>
               </div>
             </dl>
             <h4 className={styles.subheading}>活动租约</h4>

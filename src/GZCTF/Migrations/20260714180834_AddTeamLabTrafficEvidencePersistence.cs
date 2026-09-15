@@ -86,7 +86,6 @@ namespace GZCTF.Migrations
                     PacketLength = table.Column<int>(type: "integer", nullable: false),
                     PacketFingerprint = table.Column<byte[]>(type: "bytea", nullable: true),
                     FlowFingerprint = table.Column<byte[]>(type: "bytea", nullable: false),
-                    ProcessIdentityHash = table.Column<byte[]>(type: "bytea", nullable: true),
                     EvidenceKind = table.Column<byte>(type: "smallint", nullable: false)
                 },
                 constraints: table =>
@@ -207,12 +206,6 @@ namespace GZCTF.Migrations
                 table: "TeamLabTrafficObservations",
                 columns: new[] { "RuntimeId", "Generation", "PacketFingerprint", "ObservedAt" },
                 filter: "\"PacketFingerprint\" IS NOT NULL");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_TeamLabObservations_ProcessIdentity",
-                table: "TeamLabTrafficObservations",
-                columns: new[] { "RuntimeId", "Generation", "ProcessIdentityHash", "ObservedAt" },
-                filter: "\"ProcessIdentityHash\" IS NOT NULL");
 
             migrationBuilder.CreateIndex(
                 name: "IX_TeamLabObservations_Runtime_Generation_Time_Id",

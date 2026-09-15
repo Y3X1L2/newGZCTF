@@ -4,14 +4,10 @@ using System.Collections.Generic;
 using System.Linq;
 using System.IO;
 using System.Net;
-using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
 using GZCTF.Agent.Models;
 using GZCTF.Agent.Services.Observation;
-using GZCTF.GuestTelemetry.Contracts;
-using GZCTF.GuestTelemetry.Platform;
-using GZCTF.EndpointSensor.Security;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using PacketDotNet;
@@ -280,57 +276,6 @@ public sealed class TeamLabObservationTests
     }
 
     [Fact]
-    public void EndpointSensorSignature_IsAcceptedOnceAndRejectsReplay()
-    {
-        var key = RandomNumberGenerator.GetBytes(32);
-        var runtimePublicId = Guid.NewGuid();
-        var observedAt = DateTimeOffset.UtcNow;
-        var signed = new SensorEventSigner(key).Sign(new SensorEvent(
-            1,
-            runtimePublicId.ToString("D"),
-            4,
-            "windows-ad",
-            100,
-            observedAt,
-            SensorEventKind.Opened,
-            new SensorProcessIdentity(4242, "lsass", observedAt.AddMinutes(-2)),
-            new SensorEndpoint("192.168.10.10", 49152, "TCP"),
-            new SensorEndpoint("192.168.10.20", 389, "TCP"),
-            string.Empty));
-        var agentEvent = new EndpointSensorEvent(
-            signed.SchemaVersion,
-            signed.RuntimePublicId,
-            signed.Generation,
-            signed.AssetKey,
-            signed.Sequence,
-            signed.ObservedAt,
-            (EndpointSensorEventKind)signed.Kind,
-            new EndpointSensorProcessIdentity(
-                signed.Process.ProcessId, signed.Process.Name, signed.Process.StartedAt),
-            new EndpointSensorEndpoint(signed.Local.Address, signed.Local.Port, signed.Local.Protocol),
-            new EndpointSensorEndpoint(signed.Remote.Address, signed.Remote.Port, signed.Remote.Protocol),
-            signed.Signature);
-
-        var accepted = EndpointSensorAuthenticator.Verify(
-            agentEvent, runtimePublicId, 4, "windows-ad", 99, key, observedAt);
-        var replayed = EndpointSensorAuthenticator.Verify(
-            agentEvent, runtimePublicId, 4, "windows-ad", 100, key, observedAt);
-
-        Assert.True(accepted.Success, accepted.Code);
-        Assert.NotNull(accepted.ProcessIdentityHash);
-        Assert.False(replayed.Success);
-        Assert.Equal("sensor_sequence_replayed", replayed.Code);
-    }
-
-    [Fact]
-    public void LinuxConnectionProvider_ParsesProcIpv4Endpoint()
-    {
-        Assert.True(LinuxConnectionProvider.TryEndpoint("02000A0A:A872", out var address, out var port));
-        Assert.Equal("10.10.0.2", address);
-        Assert.Equal(43122, port);
-    }
-
-    [Fact]
     public void FlowAccumulator_EvictsDeterministicallyAtCapacity()
     {
         var accumulator = new FlowAccumulator(128);
@@ -344,7 +289,7 @@ public sealed class TeamLabObservationTests
     }
 
     private static TeamLabObservationHealth Health() =>
-        new(true, 1, 1, 1, 0, 0, 0, 0, null, null);
+        new(true, 1, 1, 1, 0, 0, 0, null);
 
     private static byte[] TcpFrame(byte ttl, ushort ipChecksum, ushort tcpChecksum)
     {

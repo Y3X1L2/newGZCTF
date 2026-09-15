@@ -8,6 +8,9 @@ public sealed class TeamLabRemoteSessionWorker(
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        using (var startupScope = scopes.CreateScope())
+            await startupScope.ServiceProvider.GetRequiredService<ITeamLabRemoteAccessService>()
+                .MarkInterruptedAsync(stoppingToken);
         using var timer = new PeriodicTimer(TimeSpan.FromMinutes(1));
         while (await timer.WaitForNextTickAsync(stoppingToken))
         {

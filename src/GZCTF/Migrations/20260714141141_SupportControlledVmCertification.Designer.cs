@@ -5422,51 +5422,6 @@ namespace GZCTF.Migrations
                     b.ToTable("TeamLabRuntimeAssets");
                 });
 
-            modelBuilder.Entity("GZCTF.Modules.TeamLab.Domain.Runtime.TeamLabRuntimeDependencyState", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
-
-                    b.Property<string>("AssetKey")
-                        .IsRequired()
-                        .HasMaxLength(63)
-                        .HasColumnType("character varying(63)");
-
-                    b.Property<byte>("Condition")
-                        .HasColumnType("smallint");
-
-                    b.Property<string>("DependsOnKey")
-                        .IsRequired()
-                        .HasMaxLength(63)
-                        .HasColumnType("character varying(63)");
-
-                    b.Property<int>("Generation")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("LastError")
-                        .HasMaxLength(1024)
-                        .HasColumnType("character varying(1024)");
-
-                    b.Property<int>("RuntimeId")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTimeOffset?>("SatisfiedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<byte>("Status")
-                        .HasColumnType("smallint");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("RuntimeId", "Generation", "AssetKey", "DependsOnKey", "Condition")
-                        .IsUnique();
-
-                    b.ToTable("TeamLabRuntimeDependencyStates", (string)null);
-                });
-
             modelBuilder.Entity("GZCTF.Modules.TeamLab.Domain.Runtime.TeamLabRuntimeInfrastructure", b =>
                 {
                     b.Property<int>("Id")
@@ -6099,12 +6054,6 @@ namespace GZCTF.Migrations
                     b.Property<Guid?>("CreatedByOperationId")
                         .HasColumnType("uuid");
 
-                    b.Property<string>("DependenciesJson")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("jsonb")
-                        .HasDefaultValueSql("'[]'::jsonb");
-
                     b.Property<string>("EditorMetadataJson")
                         .IsRequired()
                         .HasColumnType("jsonb");
@@ -6173,11 +6122,6 @@ namespace GZCTF.Migrations
 
                     b.Property<int>("CpuUnits")
                         .HasColumnType("integer");
-
-                    b.Property<byte>("EndpointObservation")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("smallint")
-                        .HasDefaultValue((byte)0);
 
                     b.Property<string>("EnvironmentJson")
                         .IsRequired()
@@ -8556,17 +8500,6 @@ namespace GZCTF.Migrations
                     b.Navigation("WorkerNode");
                 });
 
-            modelBuilder.Entity("GZCTF.Modules.TeamLab.Domain.Runtime.TeamLabRuntimeDependencyState", b =>
-                {
-                    b.HasOne("GZCTF.Modules.TeamLab.Domain.Runtime.TeamLabRuntime", "Runtime")
-                        .WithMany("DependencyStates")
-                        .HasForeignKey("RuntimeId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Runtime");
-                });
-
             modelBuilder.Entity("GZCTF.Modules.TeamLab.Domain.Runtime.TeamLabRuntimeInfrastructure", b =>
                 {
                     b.HasOne("GZCTF.Modules.TeamLab.Domain.Runtime.TeamLabRuntime", "Runtime")
@@ -9156,8 +9089,6 @@ namespace GZCTF.Migrations
                     b.Navigation("Assets");
 
                     b.Navigation("BootstrapExecutions");
-
-                    b.Navigation("DependencyStates");
 
                     b.Navigation("Events");
 

@@ -25,6 +25,8 @@ public class AgentTeamLabConfig
     public string OvsIntegrationBridgeName { get; set; } = "br-int";
     public string OvnNbRemote { get; set; } = "tcp:10.250.0.1:6641";
     public int ManagedDhcpLeaseSeconds { get; set; } = 3600;
+    public long MaxFileTransferBytes { get; set; } = TeamLabFileLimits.DefaultMaxTransferBytes;
+    public int FileTransferIdleTimeoutSeconds { get; set; } = 120;
 }
 
 public record TeamLabToolCapabilityReport(
@@ -191,7 +193,6 @@ public record TeamLabCleanupRequest(
     int Generation,
     string RouterNamespace,
     string[] ResourceNames,
-    string[] SensorAssetKeys,
     string[] FabricRemoteCidrs,
     bool DryRun = true);
 
@@ -206,6 +207,22 @@ public record TeamLabAssetLifecycleResponse(
     bool Success,
     bool DryRun,
     string State,
+    string Message);
+
+public record TeamLabAssetLifecycleBatchItem(
+    int AssetId,
+    string Kind,
+    string ResourceId);
+
+public record TeamLabAssetLifecycleBatchRequest(
+    int Generation,
+    bool DryRun,
+    TeamLabExecutionModel ExecutionModel,
+    TeamLabAssetLifecycleBatchItem[] Assets);
+
+public record TeamLabAssetLifecycleBatchResult(
+    int AssetId,
+    bool Success,
     string Message);
 
 public record TeamLabProbeRequest(
@@ -400,8 +417,7 @@ public record TeamLabLinkPolicyResponse(
 
 public enum TeamLabObservationEvidenceKind : byte
 {
-    Packet = 0,
-    EndpointProcess = 1
+    Packet = 0
 }
 
 public record TeamLabObservationBatchRequest(
@@ -427,7 +443,6 @@ public record TeamLabObservationRecord(
     string? PacketFingerprint,
     string FlowFingerprint,
     TeamLabObservationEvidenceKind EvidenceKind,
-    string? ProcessIdentityHash = null,
     string Direction = "observed",
     DateTimeOffset? FirstSeenAt = null,
     DateTimeOffset? LastSeenAt = null,
@@ -441,9 +456,7 @@ public record TeamLabObservationHealth(
     int ActiveFlowCount,
     long DroppedCount,
     long ParserFailureCount,
-    long SensorRejectedCount,
     long SpoolBytes,
-    string? LastSensorErrorCode,
     string? LastError);
 
 public record TeamLabObservationBatchResponse(
@@ -454,37 +467,3 @@ public record TeamLabObservationBatchResponse(
     long PersistedThroughSequence,
     TeamLabObservationRecord[] Records,
     TeamLabObservationHealth Health);
-
-public enum TeamLabEndpointSensorChannelMode : byte
-{
-    Vm = 0,
-    Docker = 1
-}
-
-public record TeamLabEndpointSensorRegistrationRequest(
-    int RuntimeId,
-    string RuntimePublicId,
-    int Generation,
-    string AssetKey,
-    string RuntimeResourceId,
-    int SensorVersion,
-    string HmacKeyBase64,
-    TeamLabEndpointSensorChannelMode Mode);
-
-public record TeamLabEndpointSensorRemoveRequest(
-    int RuntimeId,
-    int Generation,
-    string AssetKey);
-
-public record TeamLabEndpointSensorStartRequest(
-    int RuntimeId,
-    int Generation,
-    string AssetKey,
-    string RuntimeResourceId,
-    TeamLabEndpointSensorChannelMode Mode,
-    VmInitOsType? OsType = null);
-
-public record TeamLabEndpointSensorResponse(
-    bool Success,
-    string Message,
-    string? ChannelEndpoint = null);

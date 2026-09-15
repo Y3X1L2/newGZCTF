@@ -50,6 +50,7 @@ const runtimeWire = {
       kind: 0,
       runtimeResourceId: 'container-1',
       primaryIp: '10.20.1.10',
+      networkKeys: ['edge'],
       status: 5,
       error: null,
     },

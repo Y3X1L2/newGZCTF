@@ -34,7 +34,9 @@ internal sealed class LinuxContainerFileStore : IDisposable
 
     public async Task<TeamLabFileResult> ExecuteAsync(TeamLabContainerFileRequest request, CancellationToken token)
     {
-        if (!TeamLabFileLimits.IsValidPath(request.Path)) throw new IOException("Invalid container path.");
+        if (!TeamLabFileLimits.IsValidPath(request.Path) ||
+            request.Operation == "move" && !TeamLabFileLimits.IsValidPath(request.DestinationPath))
+            throw new IOException("Invalid container path.");
         token.ThrowIfCancellationRequested();
         if (request.Operation == "list")
         {
@@ -63,19 +65,9 @@ internal sealed class LinuxContainerFileStore : IDisposable
         }
         if (request.Operation == "download")
         {
-            using var file = Resolve(root, request.Path, PathFlag);
-            var stat = Stat(file);
-            if ((stat.Mode & 0xf000) != RegularMode || stat.Size > TeamLabFileLimits.MaxBytes)
-                throw new IOException("Only bounded regular files can be downloaded.");
-            using var stream = File.OpenRead($"/proc/self/fd/{file.DangerousGetHandle()}");
             using var result = new MemoryStream();
-            var buffer = new byte[64 * 1024];
-            int count;
-            while ((count = await stream.ReadAsync(buffer, token)) > 0)
-            {
-                if (result.Length + count > TeamLabFileLimits.MaxBytes) throw new IOException("File exceeds the transfer limit.");
-                await result.WriteAsync(buffer.AsMemory(0, count), token);
-            }
+            await DownloadToAsync(request.Path, result, TeamLabFileLimits.MaxBytes,
+                TimeSpan.FromSeconds(30), token);
             return new(Content: result.ToArray());
         }
         var normalized = request.Path.TrimEnd('/');
@@ -83,17 +75,74 @@ internal sealed class LinuxContainerFileStore : IDisposable
         var separator = normalized.LastIndexOf('/');
         using var parent = Resolve(root, separator == 0 ? "/" : normalized[..separator], DirectoryFlag);
         var basename = normalized[(separator + 1)..];
+        if (request.Operation == "mkdir")
+        {
+            Check(MakeDirectoryAt(parent, basename, 0x1ed));
+            return new();
+        }
+        if (request.Operation == "move")
+        {
+            using var source = Resolve(parent, basename, PathFlag | NoFollow);
+            var destination = request.DestinationPath!.TrimEnd('/');
+            if (destination.Length == 0) throw new IOException("The container root cannot be replaced.");
+            var destinationSeparator = destination.LastIndexOf('/');
+            using var destinationParent = Resolve(root,
+                destinationSeparator == 0 ? "/" : destination[..destinationSeparator], DirectoryFlag);
+            Check(RenameAt2(parent, basename, destinationParent, destination[(destinationSeparator + 1)..],
+                request.Overwrite ? 0u : 1u));
+            return new();
+        }
         if (request.Operation == "delete")
         {
             using var target = Resolve(parent, basename, PathFlag | NoFollow);
             var stat = Stat(target);
             if ((stat.Mode & 0xf000) is not (DirectoryMode or RegularMode))
                 throw new IOException("Special files and links cannot be deleted here.");
-            Check(UnlinkAt(parent, basename, (stat.Mode & 0xf000) == DirectoryMode ? 0x200 : 0));
+            if ((stat.Mode & 0xf000) == DirectoryMode && request.Recursive)
+                DeleteTree(parent, basename, token);
+            else
+                Check(UnlinkAt(parent, basename, (stat.Mode & 0xf000) == DirectoryMode ? 0x200 : 0));
             return new();
         }
         if (request.Operation != "upload" || request.Content is not { Length: <= TeamLabFileLimits.MaxBytes } content)
             throw new IOException("Invalid file operation or transfer size.");
+        await using var input = new MemoryStream(content, writable: false);
+        await UploadFromAsync(request, input, content.Length, TeamLabFileLimits.MaxBytes,
+            TimeSpan.FromSeconds(30), token);
+        return new();
+    }
+
+    public async Task DownloadToAsync(
+        string path,
+        Stream destination,
+        long maxBytes,
+        TimeSpan idleTimeout,
+        CancellationToken token)
+    {
+        if (!TeamLabFileLimits.IsValidPath(path)) throw new IOException("Invalid container path.");
+        using var file = Resolve(root, path, PathFlag);
+        var stat = Stat(file);
+        if ((stat.Mode & 0xf000) != RegularMode || maxBytes < 0 || stat.Size > (ulong)maxBytes)
+            throw new IOException("Only bounded regular files can be downloaded.");
+        await using var input = File.OpenRead($"/proc/self/fd/{file.DangerousGetHandle()}");
+        await TeamLabFileLimits.CopyAsync(input, destination, maxBytes, idleTimeout, token);
+    }
+
+    public async Task UploadFromAsync(
+        TeamLabContainerFileRequest request,
+        Stream content,
+        long contentLength,
+        long maxBytes,
+        TimeSpan idleTimeout,
+        CancellationToken token)
+    {
+        if (!TeamLabFileLimits.IsValidPath(request.Path) || contentLength < 0 || contentLength > maxBytes)
+            throw new IOException("Invalid file operation or transfer size.");
+        var normalized = request.Path.TrimEnd('/');
+        if (normalized.Length == 0) throw new IOException("The container root cannot be modified.");
+        var separator = normalized.LastIndexOf('/');
+        using var parent = Resolve(root, separator == 0 ? "/" : normalized[..separator], DirectoryFlag);
+        var basename = normalized[(separator + 1)..];
         Statx? previous = null;
         if (request.Overwrite)
         {
@@ -114,7 +163,7 @@ internal sealed class LinuxContainerFileStore : IDisposable
         {
             using (var output = new FileStream(Resolve(staging, temporary, 1 | 0x40 | 0x80, 0x180), FileAccess.Write))
             {
-                await output.WriteAsync(content, token);
+                await TeamLabFileLimits.CopyAsync(content, output, maxBytes, idleTimeout, token);
                 if (previous is { } original)
                 {
                     Check(ChangeOwner(output.SafeFileHandle, original.Uid, original.Gid));
@@ -126,13 +175,28 @@ internal sealed class LinuxContainerFileStore : IDisposable
             token.ThrowIfCancellationRequested();
             // rename replaces the directory entry, never follows an existing destination link.
             Check(RenameAt2(staging, temporary, parent, basename, request.Overwrite ? 0u : 1u));
-            return new();
         }
         finally
         {
             UnlinkAt(staging, temporary, 0);
             UnlinkAt(parent, TeamLabFileLimits.StagingDirectory, 0x200);
         }
+    }
+
+    static void DeleteTree(SafeFileHandle parent, string name, CancellationToken token)
+    {
+        using var directory = Resolve(parent, name, DirectoryFlag | NoFollow);
+        foreach (var entry in Directory.EnumerateFileSystemEntries($"/proc/self/fd/{directory.DangerousGetHandle()}"))
+        {
+            token.ThrowIfCancellationRequested();
+            var childName = Path.GetFileName(entry);
+            using var child = Resolve(directory, childName, PathFlag | NoFollow);
+            var stat = Stat(child);
+            if ((stat.Mode & 0xf000) == DirectoryMode) DeleteTree(directory, childName, token);
+            else if ((stat.Mode & 0xf000) == RegularMode) Check(UnlinkAt(directory, childName, 0));
+            else throw new IOException("Special files and links cannot be deleted recursively.");
+        }
+        Check(UnlinkAt(parent, name, 0x200));
     }
 
     static void CleanupStaging(SafeFileHandle parent, CancellationToken token)

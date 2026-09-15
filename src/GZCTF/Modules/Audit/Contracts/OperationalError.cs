@@ -54,7 +54,6 @@ public static class OperationalErrorCodes
     public const string BootstrapOperationFailed = "bootstrap.operation_failed";
     public const string HealthProbeTimeout = "health.probe_timeout";
     public const string ObservationUnavailable = "observation.unavailable";
-    public const string SensorAuthenticationFailed = "observation.sensor_authentication_failed";
     public const string StorageUnavailable = "storage.unavailable";
     public const string StorageFileNotFound = "storage.file_not_found";
     public const string DatabaseUnavailable = "database.unavailable";

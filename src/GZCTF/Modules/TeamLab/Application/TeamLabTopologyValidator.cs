@@ -17,8 +17,6 @@ public sealed class TeamLabTopologyValidator(TeamLabAddressPolicy? addressPolicy
     private readonly TeamLabTopologyStructureValidator _structure =
         new(addressPolicy ?? TeamLabAddressPolicy.PlatformDefaults);
 
-    private readonly TeamLabDependencyGraphValidator _dependencies = new();
-
     public TeamLabValidationResultModel Validate(TeamLabTopologyDefinitionModel definition, int schemaVersion = 2)
     {
         var issues = new List<TeamLabValidationIssueModel>();
@@ -32,8 +30,6 @@ public sealed class TeamLabTopologyValidator(TeamLabAddressPolicy? addressPolicy
         }
 
         _structure.Validate(definition, schemaVersion, issues);
-        if (schemaVersion == 2)
-            _dependencies.Validate(definition, issues);
         return new TeamLabValidationResultModel(issues.Count == 0, issues);
     }
 }

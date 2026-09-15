@@ -1,7 +1,9 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import { addTopologyNode } from '../model/topologyCommands'
 import { createEmptyTopologyDocument } from '../model/topologyDocument'
 import { TeamLabDesignPage } from './TeamLabDesignPage'
+import { createTopologyNode } from './nodeFactory'
 
 const OriginalResizeObserver = globalThis.ResizeObserver
 
@@ -55,4 +57,34 @@ describe('TeamLabDesignPage', () => {
 
     expect(view.container.querySelector('.react-flow')).toBe(canvas)
   })
+
+  it('sends auto-layout through the document change persistence path', async () => {
+    let document = createEmptyTopologyDocument('Demo')
+    document = addTopologyNode(document, createTopologyNode(document, 'switch', { x: 0, y: 0 })).document
+    document = addTopologyNode(document, createTopologyNode(document, 'switch', { x: 40, y: 40 })).document
+    const onChange = vi.fn()
+    render(<TeamLabDesignPage initialDocument={document} onDocumentChange={onChange} />)
+
+    fireEvent.click(screen.getByRole('button', { name: '一键自动排版' }))
+
+    await waitFor(() => expect(onChange).toHaveBeenCalledTimes(1))
+    const savedDocument = onChange.mock.calls[0][0]
+    expect(Object.keys(savedDocument.networkLayouts)).toHaveLength(2)
+    expect(savedDocument.nodes).not.toEqual(document.nodes)
+    expect(screen.getByText(/布局将自动保存/)).toBeInTheDocument()
+  })
+
+  it('adds a standard asset with its default resource profile', async () => {
+    const onChange = vi.fn()
+    render(<TeamLabDesignPage initialDocument={createEmptyTopologyDocument('Demo')} onDocumentChange={onChange} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /Docker：轻量容器服务/ }))
+
+    await waitFor(() => expect(onChange).toHaveBeenCalledTimes(1))
+    expect(Object.values(onChange.mock.calls[0][0].nodes)[0]).toMatchObject({
+      type: 'docker',
+      resources: { cpuUnits: 1, memoryMiB: 512, storageMiB: 1024 },
+    })
+  })
+
 })

@@ -1,4 +1,15 @@
-import { Activity, ChevronRight, Grid3X3, LogIn, LogOut, Moon, PlayCircle, Settings, Sun, UserRound } from 'lucide-react'
+import {
+  Activity,
+  ChevronRight,
+  Grid3X3,
+  LogIn,
+  LogOut,
+  Moon,
+  PlayCircle,
+  Settings,
+  Sun,
+  UserRound,
+} from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router'
 import { getPlatformName, PLATFORM_TYPE } from '@Utils/Brand'
@@ -8,7 +19,7 @@ import { useAccountSummary } from '../../features/profile/useUserProfileControll
 import { DrawerRequestClose, VNextConfirmDialog, VNextDrawer } from '../../shared/Interaction'
 import { useVNextTheme } from '../VNextThemeProvider'
 import styles from './PlatformShell.module.css'
-import { currentModule, isModuleActive, platformModules, primaryModules } from './moduleRegistry'
+import { currentModule, platformModules, primaryModules } from './moduleRegistry'
 
 function initials(name?: string | null) {
   const normalized = name?.trim()
@@ -21,12 +32,13 @@ interface DrawerProps {
   onClose: () => void
 }
 
-function ModuleDrawer({ open, onClose }: DrawerProps) {
+export function ModuleDrawer({ open, onClose }: DrawerProps) {
   const location = useLocation()
   const navigate = useNavigate()
   const { isAdmin } = useCurrentAccount()
   const visibleModules = useMemo(() => platformModules.filter((module) => !module.adminOnly || isAdmin), [isAdmin])
   const groups = [...new Set(visibleModules.map((module) => module.group))]
+  const activeModuleId = currentModule(location.pathname).id
 
   return (
     <VNextDrawer
@@ -48,9 +60,10 @@ function ModuleDrawer({ open, onClose }: DrawerProps) {
                   .filter((module) => module.group === group)
                   .map((module) => {
                     const Icon = module.icon
-                    const active = isModuleActive(location.pathname, module.route)
+                    const active = module.id === activeModuleId
                     return (
                       <Link
+                        aria-current={active ? 'page' : undefined}
                         className={active ? styles.moduleLinkActive : styles.moduleLink}
                         key={module.id}
                         onClick={(event) => {

@@ -7,8 +7,8 @@
  * brand green, so a whole scene read as one flat green mass with no hierarchy.
  */
 .region {
-  --region-accent: var(--yn-color-border-strong);
-  --region-tint: color-mix(in srgb, var(--yn-color-canvas-raised) 88%, var(--yn-color-surface));
+  --region-accent: var(--network-accent, var(--yn-color-border-strong));
+  --region-tint: color-mix(in srgb, var(--region-accent) 9%, var(--yn-color-canvas-raised));
 
   display: flex;
   width: 100%;
@@ -23,10 +23,25 @@
     box-shadow var(--yn-motion-fast) var(--yn-ease-standard);
 }
 
-/* The entry network is the scene's ingress; it earns the brand accent. */
+.region[data-color-slot='brand'] {
+  --network-accent: var(--yn-color-brand);
+}
+
+.region[data-color-slot='info'] {
+  --network-accent: var(--yn-color-info);
+}
+
+.region[data-color-slot='success'] {
+  --network-accent: var(--yn-color-success);
+}
+
+.region[data-color-slot='warning'] {
+  --network-accent: var(--yn-color-warning);
+}
+
+/* The entry network keeps its network color but receives a stronger tint. */
 .region[data-entry] {
-  --region-accent: var(--yn-color-brand);
-  --region-tint: color-mix(in srgb, var(--yn-color-brand-soft) 30%, var(--yn-color-canvas-raised));
+  --region-tint: color-mix(in srgb, var(--region-accent) 16%, var(--yn-color-canvas-raised));
 }
 
 .region[data-active] {
@@ -114,8 +129,8 @@
 }
 
 .entryBadge {
-  background: color-mix(in srgb, var(--yn-color-brand) 18%, var(--yn-color-surface));
-  color: var(--yn-color-brand-strong);
+  background: color-mix(in srgb, var(--region-accent) 18%, var(--yn-color-surface));
+  color: var(--region-accent);
 }
 
 .memberBadge {

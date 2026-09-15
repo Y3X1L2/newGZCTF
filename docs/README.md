@@ -48,6 +48,7 @@
 | TeamLab API 基础契约 | [`commercialization/teamlab-api-foundation-contract.md`](commercialization/teamlab-api-foundation-contract.md) |
 | TeamLab 外部控制面 | [`commercialization/teamlab-external-control-plane-contract.md`](commercialization/teamlab-external-control-plane-contract.md) |
 | TeamLab 功能说明 | [`commercialization/teamlab-networking-feature-guide.md`](commercialization/teamlab-networking-feature-guide.md) |
+| TeamLab API 完善、产品修正与独立运行计划（待实施） | [`development/teamlab-api-product-separation-plan.md`](development/teamlab-api-product-separation-plan.md) |
 | 平台能力与差异化 | [`yinyu-platform-capabilities-and-differentiation-20260813.md`](yinyu-platform-capabilities-and-differentiation-20260813.md) |
 | 汇报与演示提纲 | [`yinyu-platform-leadership-report-and-demo-guide-20260810.md`](yinyu-platform-leadership-report-and-demo-guide-20260810.md) |
 

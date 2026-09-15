@@ -108,8 +108,12 @@ public sealed class TeamLabDeploymentOrchestrationTests
         Assert.Equal(operationId, submitted.OperationId);
         Assert.NotNull(submitted.ProtectedPayload);
         nodes.VerifyNoOtherCalls();
-        nodes.Setup(item => item.PauseAssetAsync(It.IsAny<Guid>(), It.IsAny<TeamLabAssetKind>(), "web", runtime.Generation,
-            It.IsAny<TeamLabExecutionModel>(), It.IsAny<CancellationToken>())).ReturnsAsync(TeamLabNodeResult.Ok());
+        nodes.Setup(item => item.ChangeAssetLifecycleBatchAsync(
+                It.IsAny<Guid>(), It.IsAny<IReadOnlyList<TeamLabNodeAssetLifecycleRequest>>(), runtime.Generation,
+                It.IsAny<TeamLabExecutionModel>(), true, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Guid _, IReadOnlyList<TeamLabNodeAssetLifecycleRequest> assets, int _,
+                TeamLabExecutionModel _, bool _, CancellationToken _) => assets.Select(asset =>
+                new TeamLabNodeAssetLifecycleResult(asset.AssetId, true, "OK")).ToArray());
         var result = await orchestrator.ExecuteQueuedLifecycleAsync(runtime.Id, runtime.Generation, true, default, submitted.ProtectedPayload);
         Assert.True(result.Success);
         Assert.Equal(TeamLabRuntimeStatus.Paused, runtime.Status);
@@ -163,11 +167,19 @@ public sealed class TeamLabDeploymentOrchestrationTests
         context.TeamLabTopologyReleases.Add(release);
         await context.SaveChangesAsync();
         var nodes = new Mock<ITeamLabNodeExecutor>();
-        nodes.Setup(item => item.PauseAssetAsync(It.IsAny<Guid>(), It.IsAny<TeamLabAssetKind>(), "first", 1,
-            It.IsAny<TeamLabExecutionModel>(), It.IsAny<CancellationToken>())).ReturnsAsync(TeamLabNodeResult.Ok());
-        nodes.SetupSequence(item => item.PauseAssetAsync(It.IsAny<Guid>(), It.IsAny<TeamLabAssetKind>(), "second", 1,
-            It.IsAny<TeamLabExecutionModel>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(TeamLabNodeResult.Failed("offline")).ReturnsAsync(TeamLabNodeResult.Ok());
+        var attempts = 0;
+        nodes.Setup(item => item.ChangeAssetLifecycleBatchAsync(
+                It.IsAny<Guid>(), It.IsAny<IReadOnlyList<TeamLabNodeAssetLifecycleRequest>>(), 1,
+                It.IsAny<TeamLabExecutionModel>(), true, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Guid _, IReadOnlyList<TeamLabNodeAssetLifecycleRequest> assets, int _,
+                TeamLabExecutionModel _, bool _, CancellationToken _) =>
+            {
+                attempts++;
+                return assets.Select(asset => new TeamLabNodeAssetLifecycleResult(
+                    asset.AssetId,
+                    attempts > 1 || asset.ResourceId == "first",
+                    attempts > 1 || asset.ResourceId == "first" ? "OK" : "offline")).ToArray();
+            });
         var orchestrator = LifecycleOrchestrator(context, nodes.Object);
         await Assert.ThrowsAsync<TeamLabApiContractException>(() => orchestrator.ExecuteQueuedLifecycleAsync(runtime.Id, 1, true, default));
         Assert.Equal(TeamLabRuntimeStatus.Paused, (await context.TeamLabRuntimeAssets.AsNoTracking().SingleAsync(item => item.Id == first.Id)).Status);
@@ -238,7 +250,7 @@ public sealed class TeamLabDeploymentOrchestrationTests
                     Asset("a-fail"),
                     Asset("m-success"),
                     Asset("z-fail")
-                ], []),
+                ]),
                 new Dictionary<string, TeamLabRuntimeOverlayModel>(), CancellationToken.None));
 
         Assert.Contains("create failed", exception.Message, StringComparison.Ordinal);
@@ -294,6 +306,7 @@ public sealed class TeamLabDeploymentOrchestrationTests
             Mock.Of<IPublicUdpGatewayProvider>(),
             eventRecorder,
             RemoteAccess(),
+            ServiceAccessCleanup(),
             Preparation(context));
 
         var result = await cleanup.CleanupAsync(runtime, CancellationToken.None);
@@ -353,6 +366,7 @@ public sealed class TeamLabDeploymentOrchestrationTests
             Mock.Of<IPublicUdpGatewayProvider>(),
             eventRecorder,
             RemoteAccess(),
+            ServiceAccessCleanup(),
             Preparation(context));
 
         var result = await cleanup.CleanupAsync(runtime, CancellationToken.None);
@@ -399,6 +413,7 @@ public sealed class TeamLabDeploymentOrchestrationTests
             Mock.Of<IPublicUdpGatewayProvider>(),
             eventRecorder,
             RemoteAccess(),
+            ServiceAccessCleanup(),
             Preparation(context));
 
         var result = await cleanup.CleanupAsync(runtime, CancellationToken.None);
@@ -446,6 +461,7 @@ public sealed class TeamLabDeploymentOrchestrationTests
             Mock.Of<IPublicUdpGatewayProvider>(),
             eventRecorder,
             RemoteAccess(),
+            ServiceAccessCleanup(),
             Preparation(context));
 
         var result = await cleanup.CleanupAsync(runtime, CancellationToken.None);
@@ -490,6 +506,7 @@ public sealed class TeamLabDeploymentOrchestrationTests
             Mock.Of<IPublicUdpGatewayProvider>(),
             eventRecorder,
             RemoteAccess(),
+            ServiceAccessCleanup(),
             Preparation(context));
 
         var result = await cleanup.CleanupAsync(runtime, markDestroyedOnSuccess: true, CancellationToken.None);
@@ -501,29 +518,18 @@ public sealed class TeamLabDeploymentOrchestrationTests
     }
 
     [Fact]
-    public void DependencyGraph_UnlocksIndependentAssetsAndExactDependencyCondition()
+    public void DeploymentGraph_StartsAssetsIndependently()
     {
         var topology = Topology(
-            [Asset("entry", TeamLabHealthCheckKind.Http), Asset("dependent"), Asset("independent")],
-            [new TeamLabExecutionDependency(
-                "dependent", "entry", TeamLabDependencyCondition.ServiceReady)]);
-        var graph = TeamLabDependencyGraph.Compile(topology);
+            [Asset("entry", TeamLabHealthCheckKind.Http), Asset("dependent"), Asset("independent")]);
+        var graph = TeamLabDeploymentGraph.Compile(topology);
         var completed = new HashSet<string>(StringComparer.Ordinal);
         var scheduled = new HashSet<string>(StringComparer.Ordinal);
 
         Assert.True(graph.TryTakeReadyBatch(completed, scheduled, out var initial));
         Assert.Equal(
-            ["entry:create", "independent:create"],
+            ["dependent:create", "entry:create", "independent:create"],
             initial.Select(item => item.Key).ToArray());
-
-        completed.Add("entry:create");
-        completed.Add("independent:create");
-        Assert.True(graph.TryTakeReadyBatch(completed, scheduled, out var health));
-        Assert.DoesNotContain(health, item => item.Key == "dependent:create");
-
-        completed.Add("entry:health");
-        Assert.True(graph.TryTakeReadyBatch(completed, scheduled, out var unlocked));
-        Assert.Contains(unlocked, item => item.Key == "dependent:create");
     }
 
     private static ITeamLabCaptureCleanup CaptureCleanup()
@@ -535,10 +541,19 @@ public sealed class TeamLabDeploymentOrchestrationTests
         return cleanup.Object;
     }
 
-    [Fact]
-    public void DependencyGraph_RestoresOnlyDurableCompletedStages()
+    private static ITeamLabServiceAccessCleanup ServiceAccessCleanup()
     {
-        var completed = TeamLabDependencyGraph.RestoreCompletedNodes(
+        var cleanup = new Mock<ITeamLabServiceAccessCleanup>();
+        cleanup.Setup(item => item.CleanupRuntimeAsync(
+                It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+        return cleanup.Object;
+    }
+
+    [Fact]
+    public void DeploymentGraph_RestoresOnlyDurableCompletedStages()
+    {
+        var completed = TeamLabDeploymentGraph.RestoreCompletedNodes(
         [
             RuntimeAsset("ready", TeamLabAssetExecutionStage.ServiceReady, "container-ready"),
             RuntimeAsset("guest", TeamLabAssetExecutionStage.GuestReady, "vm-guest"),
@@ -555,12 +570,11 @@ public sealed class TeamLabDeploymentOrchestrationTests
     }
 
     [Fact]
-    public void DependencyGraph_SeparatesVmDomainCreationFromGuestReadiness()
+    public void DeploymentGraph_SeparatesVmDomainCreationFromGuestReadiness()
     {
         var topology = Topology(
-            [Asset("vm") with { Kind = TeamLabAssetKind.Vm }, Asset("container")],
-            []);
-        var graph = TeamLabDependencyGraph.Compile(topology);
+            [Asset("vm") with { Kind = TeamLabAssetKind.Vm }, Asset("container")]);
+        var graph = TeamLabDeploymentGraph.Compile(topology);
         var completed = new HashSet<string>(StringComparer.Ordinal);
         var scheduled = new HashSet<string>(StringComparer.Ordinal);
 
@@ -573,7 +587,7 @@ public sealed class TeamLabDeploymentOrchestrationTests
 
         var vm = RuntimeAsset("vm", TeamLabAssetExecutionStage.Pending, "tl-vm");
         vm.Kind = TeamLabResourceKind.Vm;
-        var restored = TeamLabDependencyGraph.RestoreCompletedNodes([vm]);
+        var restored = TeamLabDeploymentGraph.RestoreCompletedNodes([vm]);
         Assert.Contains("vm:create", restored);
         Assert.DoesNotContain("vm:guestready", restored);
     }
@@ -670,16 +684,14 @@ public sealed class TeamLabDeploymentOrchestrationTests
     }
 
     private static TeamLabExecutionTopology Topology(
-        IReadOnlyList<TeamLabExecutionAsset> assets,
-        IReadOnlyList<TeamLabExecutionDependency> dependencies) => new(
+        IReadOnlyList<TeamLabExecutionAsset> assets) => new(
         2,
         "deployment-dag",
         [],
         [],
         assets,
         [],
-        dependencies,
-        new TeamLabExecutionObservationPolicy(true, true, TeamLabEndpointObservationMode.Disabled));
+        new TeamLabExecutionObservationPolicy(true, true));
 
     private static TeamLabExecutionAsset Asset(string key, TeamLabHealthCheckKind? healthCheckKind = null) => new(
         key,
@@ -693,8 +705,7 @@ public sealed class TeamLabDeploymentOrchestrationTests
         null,
         healthCheckKind,
         healthCheckKind is null ? null : 8080,
-        0,
-        TeamLabEndpointObservationMode.Disabled);
+        0);
 
     private static TeamLabRuntimeAsset RuntimeAsset(
         string key,

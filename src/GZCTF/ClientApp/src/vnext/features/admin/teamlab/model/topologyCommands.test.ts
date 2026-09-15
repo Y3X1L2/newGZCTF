@@ -12,12 +12,7 @@ import {
   updateTopologyConnection,
 } from './topologyCommands'
 import type { TopologyDocument } from './topologyDocument'
-import {
-  MIN_REGION_HEIGHT,
-  MIN_REGION_WIDTH,
-  REGION_HEADER_HEIGHT,
-  REGION_PADDING_X,
-} from './topologyGeometry'
+import { MIN_REGION_HEIGHT, MIN_REGION_WIDTH, REGION_HEADER_HEIGHT, REGION_PADDING_X } from './topologyGeometry'
 
 const position = { x: 0, y: 0, width: null, height: null, collapsed: false }
 const asset = (key: string) => ({
@@ -30,14 +25,13 @@ const asset = (key: string) => ({
   exposePort: null,
   healthCheck: null,
   orderIndex: 0,
-  endpointObservation: 'disabled' as const,
 })
 
 function document(): TopologyDocument {
   return {
     schemaVersion: 2,
     name: 'Commands',
-    observation: { flowMetadataEnabled: true, onDemandPcapEnabled: true, endpointObservation: 'optional' },
+    observation: { flowMetadataEnabled: true, onDemandPcapEnabled: true },
     networkLayouts: {},
     nodes: {
       sw1: {
@@ -104,13 +98,6 @@ function document(): TopologyDocument {
         viaNodeKey: 'router',
         direction: 'bidirectional',
       },
-      dependency: {
-        type: 'dependency',
-        key: 'dependency',
-        assetKey: 'b',
-        dependsOnKey: 'a',
-        condition: 'network-ready',
-      },
     },
   }
 }
@@ -126,14 +113,14 @@ describe('topology commands', () => {
     expect(copiedNodes).toHaveLength(2)
     expect(copiedConnections).toHaveLength(1)
     expect(copiedConnections[0]).toMatchObject({ type: 'membership', nodeKey: 'a-copy', switchKey: 'sw1-copy' })
-    expect(copiedConnections.some((item) => item.type === 'dependency' || item.type === 'route')).toBe(false)
+    expect(copiedConnections.some((item) => item.type === 'route')).toBe(false)
     expect(pasted.nodes['sw1-copy']).toMatchObject({ networkKey: 'net1-copy' })
 
     const pastedAgain = pasteTopologyFragment(pasted, fragment).document
     expect(pastedAgain.nodes['sw1-copy-2']).toMatchObject({ networkKey: 'net1-copy-2' })
   })
 
-  it('deletes all dangling memberships, routes and dependencies atomically', () => {
+  it('deletes all dangling memberships and routes atomically', () => {
     const source = document()
     const changed = deleteTopologyItems(source, { nodeKeys: new Set(['sw1', 'a']), connectionKeys: new Set() })
 

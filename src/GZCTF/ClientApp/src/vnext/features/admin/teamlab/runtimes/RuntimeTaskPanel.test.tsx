@@ -12,7 +12,7 @@ describe('RuntimeTaskPanel', () => {
     expect(screen.getByText('ticket-a')).toBeTruthy()
     expect(screen.getByText('operation-a')).toBeTruthy()
     expect(screen.getByText('等待节点容量')).toBeTruthy()
-    expect(screen.getByText('不能直接重试，请先检查运行事件。')).toBeTruthy()
+    expect(screen.getByText('请先查看运行事件，再按页面提供的恢复操作处理。')).toBeTruthy()
     expect(screen.queryByRole('button', { name: '重试' })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: '查看运行事件' }))
     expect(inspect).toHaveBeenCalledOnce()

@@ -6,6 +6,7 @@ using GZCTF.Modules.Runtime.Application;
 using GZCTF.Modules.TeamLab.Contracts;
 using GZCTF.Modules.TeamLab.Domain;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Hybrid;
 
 namespace GZCTF.Modules.TeamLab.Application;
 
@@ -14,8 +15,24 @@ public sealed class TeamLabTopologyApplicationService(
     TeamLabTopologyValidator validator,
     TeamLabReleaseService releases,
     TeamLabControlScopeService controlScopes,
-    NodeCapacitySnapshotService capacitySnapshots) : ITeamLabTopologyApplicationService
+    NodeCapacitySnapshotService capacitySnapshots,
+    HybridCache? cache = null) : ITeamLabTopologyApplicationService
 {
+    private static readonly HybridCacheEntryOptions ValidationCacheOptions = new()
+    {
+        LocalCacheExpiration = TimeSpan.FromSeconds(2),
+        Expiration = TimeSpan.FromSeconds(2)
+    };
+    private static readonly HybridCacheEntryOptions ReleaseCacheOptions = new()
+    {
+        LocalCacheExpiration = TimeSpan.FromMinutes(10),
+        Expiration = TimeSpan.FromMinutes(30)
+    };
+    private static readonly HybridCacheEntryOptions PlanningCapacityCacheOptions = new()
+    {
+        LocalCacheExpiration = TimeSpan.FromMilliseconds(500),
+        Expiration = TimeSpan.FromSeconds(1)
+    };
     public async Task<TeamLabTopologyStorageReference> GetStorageReferenceAsync(
         Guid topologyId, Guid actorUserId, bool includeAll, CancellationToken cancellationToken)
     {
@@ -93,7 +110,7 @@ public sealed class TeamLabTopologyApplicationService(
     {
         var definition = TeamLabReleaseCodec.Normalize(new TeamLabTopologyDefinitionModel(
             model.Name, model.Networks, model.Assets, model.Connections,
-            model.Infrastructure, model.Dependencies, model.Observation));
+            model.Infrastructure, model.Observation));
         if (requireValid)
             await RequireValidAsync(definition, model.SchemaVersion, cancellationToken);
         var topology = BuildTopology(definition, model.SchemaVersion, actorUserId);
@@ -129,7 +146,6 @@ public sealed class TeamLabTopologyApplicationService(
                 definition.Connections,
                 DeserializeEditor(source.EditorMetadataJson),
                 definition.Infrastructure,
-                definition.Dependencies,
                 definition.Observation,
                 source.SchemaVersion,
                 source.ControlScopeId),
@@ -257,7 +273,7 @@ public sealed class TeamLabTopologyApplicationService(
     {
         var definition = TeamLabReleaseCodec.Normalize(new TeamLabTopologyDefinitionModel(
             model.Name, model.Networks, model.Assets, model.Connections,
-            model.Infrastructure, model.Dependencies, model.Observation));
+            model.Infrastructure, model.Observation));
         if (requireValid)
             await RequireValidAsync(definition, model.SchemaVersion, cancellationToken);
         var current = await RequireTopologyAsync(topologyId, actorUserId, includeAll, cancellationToken);
@@ -267,7 +283,8 @@ public sealed class TeamLabTopologyApplicationService(
                 $"拓扑修订号为 {current.Revision}，不是 {model.Revision}",
                 409);
 
-        var editorJson = SerializeEditor(NormalizeEditor(model.Editor, definition));
+        var editorJson = SerializeEditor(NormalizeEditor(
+            model.Editor ?? DeserializeEditor(current.EditorMetadataJson), definition));
         if (current.SchemaVersion == model.SchemaVersion && SameDefinition(model.SchemaVersion, ToDefinition(current), definition))
         {
             var editorUpdate = new TeamLabTopology { Id = current.Id, Revision = model.Revision };
@@ -303,7 +320,6 @@ public sealed class TeamLabTopologyApplicationService(
                 .SetProperty(item => item.SchemaVersion, model.SchemaVersion)
                 .SetProperty(item => item.EditorMetadataJson, editorJson)
                 .SetProperty(item => item.InfrastructureJson, Serialize(definition.Infrastructure ?? []))
-                .SetProperty(item => item.DependenciesJson, Serialize(definition.Dependencies ?? []))
                 .SetProperty(item => item.ObservationJson, Serialize(definition.Observation ?? new TeamLabObservationPolicyModel()))
                 .SetProperty(item => item.Revision, item => item.Revision + 1)
                 .SetProperty(item => item.LastMutationOperationId, operationId)
@@ -404,6 +420,28 @@ public sealed class TeamLabTopologyApplicationService(
     }
 
     public async Task<TeamLabValidationResultModel> ValidateAsync(
+        Guid topologyId,
+        Guid actorUserId,
+        bool includeAll,
+        CancellationToken cancellationToken)
+    {
+        if (cache is not null)
+        {
+            var revision = await context.TeamLabTopologies.AsNoTracking()
+                .Where(item => item.PublicId == topologyId && (includeAll || item.OwnerUserId == actorUserId))
+                .Select(item => (int?)item.Revision)
+                .SingleOrDefaultAsync(cancellationToken)
+                ?? throw NotFound();
+            return await cache.GetOrCreateAsync(
+                $"teamlab:topology-validation:{topologyId:N}:{revision}",
+                token => ValidateCoreAsync(topologyId, actorUserId, includeAll, token),
+                ValidationCacheOptions,
+                cancellationToken: cancellationToken);
+        }
+        return await ValidateCoreAsync(topologyId, actorUserId, includeAll, cancellationToken);
+    }
+
+    private async ValueTask<TeamLabValidationResultModel> ValidateCoreAsync(
         Guid topologyId,
         Guid actorUserId,
         bool includeAll,
@@ -540,11 +578,50 @@ public sealed class TeamLabTopologyApplicationService(
         bool includeAll,
         CancellationToken cancellationToken)
     {
-        var topology = await RequireTopologyIdentityAsync(topologyId, actorUserId, includeAll, cancellationToken);
+        var source = cache is null
+            ? await LoadPlanSourceAsync(topologyId, releaseId, actorUserId, includeAll, cancellationToken)
+            : await cache.GetOrCreateAsync(
+                $"teamlab:plan-source:{topologyId:N}:{releaseId:N}",
+                token => LoadPlanSourceAsync(topologyId, releaseId, actorUserId, includeAll, token),
+                ReleaseCacheOptions,
+                cancellationToken: cancellationToken);
+        var nodes = cache is null
+            ? await LoadPlanningNodesAsync(cancellationToken)
+            : await cache.GetOrCreateAsync(
+                "teamlab:planning-capacity",
+                LoadPlanningNodesAsync,
+                PlanningCapacityCacheOptions,
+                cancellationToken: cancellationToken);
+        return TeamLabAssetPlanner.Build(source.TopologyId, source.ReleaseId, source.Execution, nodes);
+    }
+
+    private async ValueTask<TeamLabPlanSource> LoadPlanSourceAsync(
+        Guid topologyId,
+        Guid releaseId,
+        Guid actorUserId,
+        bool includeAll,
+        CancellationToken cancellationToken)
+    {
         var release = await context.TeamLabTopologyReleases.AsNoTracking()
-            .SingleOrDefaultAsync(item => item.TopologyId == topology.Id && item.Id == releaseId, cancellationToken)
+            .Where(item => item.Id == releaseId && item.Topology.PublicId == topologyId &&
+                           (includeAll || item.Topology.OwnerUserId == actorUserId))
+            .Select(item => new
+            {
+                TopologyId = item.Topology.PublicId,
+                item.Id,
+                item.SchemaVersion,
+                item.CanonicalJson
+            })
+            .SingleOrDefaultAsync(cancellationToken)
             ?? throw new TeamLabApiContractException("release_not_found", "未找到该拓扑版本", 404);
-        var nodes = (await capacitySnapshots.LoadAsync(cancellationToken))
+        return new TeamLabPlanSource(
+            release.TopologyId,
+            release.Id,
+            TeamLabReleaseCodec.DecodeExecution(release.SchemaVersion, release.CanonicalJson));
+    }
+
+    private async ValueTask<TeamLabPlanningNodeSnapshot[]> LoadPlanningNodesAsync(CancellationToken cancellationToken) =>
+        (await capacitySnapshots.LoadAsync(cancellationToken))
             .Where(item => item.Node.IsSchedulable && item.Node.TeamLabNetworkEnabled &&
                            item.Node.TeamLabTunnelStatus == TeamLabTunnelStatus.Healthy &&
                            item.Node.GetEffectiveStatus(DateTimeOffset.UtcNow) == NodeStatus.Online)
@@ -559,12 +636,11 @@ public sealed class TeamLabTopologyApplicationService(
                 item.Node.MemoryLoad,
                 item.Available))
             .ToArray();
-        return TeamLabAssetPlanner.Build(
-            topology.PublicId,
-            release.Id,
-            TeamLabReleaseCodec.DecodeExecution(release.SchemaVersion, release.CanonicalJson),
-            nodes);
-    }
+
+    private sealed record TeamLabPlanSource(
+        Guid TopologyId,
+        Guid ReleaseId,
+        TeamLabExecutionTopology Execution);
 
     internal static TeamLabApiContractException InvalidTopology(TeamLabValidationResultModel result) =>
         new("topology_invalid", string.Join("; ", result.Issues.Select(item => $"{item.Path}: {item.Message}")), 422);
@@ -652,7 +728,6 @@ public sealed class TeamLabTopologyApplicationService(
                         ? new TeamLabHealthCheckModel(kind, port)
                         : null,
                     item.OrderIndex,
-                    item.EndpointObservation,
                     item.DevicePackageId,
                     ParseDeviceParameters(item.DevicePackageParametersJson),
                     item.ConnectorId)).ToArray(),
@@ -661,7 +736,6 @@ public sealed class TeamLabTopologyApplicationService(
                     item.Key, item.FromNetworkKey, item.ToNetworkKey, item.ViaAssetKey,
                     item.ViaNodeKey, item.Direction)).ToArray(),
             DeserializeList<TeamLabTopologyInfrastructureModel>(topology.InfrastructureJson),
-            DeserializeList<TeamLabTopologyDependencyModel>(topology.DependenciesJson),
             Deserialize<TeamLabObservationPolicyModel>(topology.ObservationJson));
 
     private async Task RequireValidAsync(
@@ -839,8 +913,7 @@ public sealed class TeamLabTopologyApplicationService(
                 ExposePort = model.ExposePort,
                 HealthCheckKind = model.HealthCheck?.Kind,
                 HealthCheckPort = model.HealthCheck?.Port,
-                OrderIndex = model.OrderIndex,
-                EndpointObservation = model.EndpointObservation
+                OrderIndex = model.OrderIndex
             };
             foreach (var iface in model.Interfaces)
             {
@@ -871,7 +944,6 @@ public sealed class TeamLabTopologyApplicationService(
             });
         }
         topology.InfrastructureJson = Serialize(definition.Infrastructure ?? []);
-        topology.DependenciesJson = Serialize(definition.Dependencies ?? []);
         topology.ObservationJson = Serialize(definition.Observation ?? new TeamLabObservationPolicyModel());
     }
 
@@ -888,13 +960,18 @@ public sealed class TeamLabTopologyApplicationService(
         var infrastructureKeys = (definition.Infrastructure ?? [])
             .Select(item => item.Key)
             .ToHashSet(StringComparer.Ordinal);
+        var networks = NormalizeEditorItems(editor?.Networks, networkKeys);
+        CompleteNetworkLayout(networks, definition);
+        var assets = NormalizeEditorItems(editor?.Assets, assetKeys);
+        var infrastructure = NormalizeEditorItems(editor?.Infrastructure, infrastructureKeys);
+        CompleteNodeLayout(networks, assets, infrastructure, definition);
         return new TeamLabTopologyEditorModel(
-            NormalizeEditorItems(editor?.Networks, networkKeys),
-            NormalizeEditorItems(editor?.Assets, assetKeys),
-            NormalizeEditorItems(editor?.Infrastructure, infrastructureKeys));
+            networks,
+            assets,
+            infrastructure);
     }
 
-    private static IReadOnlyDictionary<string, TeamLabEditorItemModel> NormalizeEditorItems(
+    private static Dictionary<string, TeamLabEditorItemModel> NormalizeEditorItems(
         IReadOnlyDictionary<string, TeamLabEditorItemModel>? items,
         IReadOnlySet<string> allowedKeys) =>
         (items ?? new Dictionary<string, TeamLabEditorItemModel>())
@@ -909,6 +986,107 @@ public sealed class TeamLabTopologyApplicationService(
                 Height = NormalizeDimension(pair.Value.Height)
             },
             StringComparer.Ordinal);
+
+    private static void CompleteNetworkLayout(
+        IDictionary<string, TeamLabEditorItemModel> layouts,
+        TeamLabTopologyDefinitionModel definition)
+    {
+        var missing = definition.Networks
+            .Where(item => !layouts.ContainsKey(item.Key))
+            .OrderBy(item => item.OrderIndex)
+            .ThenBy(item => item.Key, StringComparer.Ordinal)
+            .ToArray();
+        if (missing.Length == 0) return;
+
+        const double width = 560;
+        const double gapX = 80;
+        const double gapY = 80;
+        var originY = layouts.Count == 0
+            ? 0
+            : layouts.Values.Max(item => item.Y + (item.Height ?? 360)) + gapY;
+        var rowY = originY;
+        for (var index = 0; index < missing.Length; index += 2)
+        {
+            var row = missing.Skip(index).Take(2).ToArray();
+            var heights = row.Select(network => NetworkHeight(definition, network.Key)).ToArray();
+            for (var column = 0; column < row.Length; column++)
+                layouts[row[column].Key] = new TeamLabEditorItemModel(
+                    column * (width + gapX), rowY, width, heights[column]);
+            rowY += heights.Max() + gapY;
+        }
+    }
+
+    private static double NetworkHeight(TeamLabTopologyDefinitionModel definition, string networkKey)
+    {
+        var assetCount = definition.Assets.Count(item =>
+            string.Equals(PrimaryNetwork(item.Interfaces), networkKey, StringComparison.Ordinal));
+        var routerCount = (definition.Infrastructure ?? []).Count(item =>
+            item.Kind != TeamLabInfrastructureKind.ManagedSwitch &&
+            string.Equals(PrimaryNetwork(item.Interfaces), networkKey, StringComparison.Ordinal));
+        return Math.Max(360, 180 + Math.Ceiling((assetCount + routerCount) / 2d) * 140);
+    }
+
+    private static void CompleteNodeLayout(
+        IReadOnlyDictionary<string, TeamLabEditorItemModel> networkLayouts,
+        IDictionary<string, TeamLabEditorItemModel> assetLayouts,
+        IDictionary<string, TeamLabEditorItemModel> infrastructureLayouts,
+        TeamLabTopologyDefinitionModel definition)
+    {
+        foreach (var network in definition.Networks.OrderBy(item => item.OrderIndex).ThenBy(item => item.Key, StringComparer.Ordinal))
+        {
+            if (!networkLayouts.TryGetValue(network.Key, out var region)) continue;
+            var switches = (definition.Infrastructure ?? [])
+                .Where(item => item.Kind == TeamLabInfrastructureKind.ManagedSwitch &&
+                               string.Equals(item.NetworkKey, network.Key, StringComparison.Ordinal))
+                .OrderBy(item => item.Key, StringComparer.Ordinal)
+                .ToArray();
+            for (var index = 0; index < switches.Length; index++)
+                infrastructureLayouts.TryAdd(switches[index].Key,
+                    new TeamLabEditorItemModel(region.X + 190 + index * 40, region.Y + 52));
+
+            var members = (definition.Infrastructure ?? [])
+                .Where(item => item.Kind != TeamLabInfrastructureKind.ManagedSwitch &&
+                               string.Equals(PrimaryNetwork(item.Interfaces), network.Key, StringComparison.Ordinal))
+                .Select(item => (item.Key, Infrastructure: true, item.Name))
+                .Concat(definition.Assets
+                    .Where(item => string.Equals(PrimaryNetwork(item.Interfaces), network.Key, StringComparison.Ordinal))
+                    .Select(item => (item.Key, Infrastructure: false, item.Name)))
+                .OrderBy(item => item.Name, StringComparer.Ordinal)
+                .ThenBy(item => item.Key, StringComparer.Ordinal)
+                .ToArray();
+            for (var index = 0; index < members.Length; index++)
+            {
+                var position = new TeamLabEditorItemModel(
+                    region.X + 50 + index % 2 * 250,
+                    region.Y + 150 + index / 2 * 140);
+                if (members[index].Infrastructure)
+                    infrastructureLayouts.TryAdd(members[index].Key, position);
+                else
+                    assetLayouts.TryAdd(members[index].Key, position);
+            }
+        }
+
+        var fallbackY = networkLayouts.Count == 0
+            ? 0
+            : networkLayouts.Values.Max(item => item.Y + (item.Height ?? 360)) + 80;
+        CompleteUnattachedLayout(
+            definition.Assets.Select(item => item.Key), assetLayouts, fallbackY);
+        CompleteUnattachedLayout(
+            (definition.Infrastructure ?? []).Select(item => item.Key), infrastructureLayouts, fallbackY + 160);
+    }
+
+    private static void CompleteUnattachedLayout(
+        IEnumerable<string> keys,
+        IDictionary<string, TeamLabEditorItemModel> layouts,
+        double y)
+    {
+        var missing = keys.Where(key => !layouts.ContainsKey(key)).Order(StringComparer.Ordinal).ToArray();
+        for (var index = 0; index < missing.Length; index++)
+            layouts[missing[index]] = new TeamLabEditorItemModel(index % 4 * 230, y + index / 4 * 130);
+    }
+
+    private static string? PrimaryNetwork(IReadOnlyList<TeamLabTopologyInterfaceModel> interfaces) =>
+        interfaces.FirstOrDefault(item => item.Primary)?.NetworkKey ?? interfaces.FirstOrDefault()?.NetworkKey;
 
     private static double? NormalizeDimension(double? value) =>
         value is { } number && IsFinite(number) ? Math.Clamp(number, 80, 4000) : null;

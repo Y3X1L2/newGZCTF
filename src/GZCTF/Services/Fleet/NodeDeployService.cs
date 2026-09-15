@@ -112,22 +112,6 @@ public class NodeDeployService
             var agentUrl = $"{serverUrl.TrimEnd('/')}/api/agent/download";
             RunChecked(ssh, BuildAgentInstallScript(agentUrl, node.Id, sudo, ComputeAgentBinarySha256()),
                 "Install agent binary");
-            RunChecked(ssh, BuildManagedArtifactInstallScript(
-                    $"{serverUrl.TrimEnd('/')}/api/agent/endpoint-sensor/linux-x64/download",
-                    "/opt/gzctf/endpoint-sensor/linux-x64/gzctf-endpoint-sensor",
-                    sudo,
-                    ComputeBundledArtifactSha256(
-                        "agent", "endpoint-sensor", "linux-x64", "gzctf-endpoint-sensor"),
-                    executable: true),
-                "Install Linux endpoint sensor");
-            RunChecked(ssh, BuildManagedArtifactInstallScript(
-                    $"{serverUrl.TrimEnd('/')}/api/agent/endpoint-sensor/win-x64/download",
-                    "/opt/gzctf/endpoint-sensor/win-x64/gzctf-endpoint-sensor.exe",
-                    sudo,
-                    ComputeBundledArtifactSha256(
-                        "agent", "endpoint-sensor", "win-x64", "gzctf-endpoint-sensor.exe"),
-                    executable: false),
-                "Install Windows endpoint sensor");
             WriteRemoteFileIfChanged(ssh, sudo, "/etc/systemd/system/gzctf-agent.service",
                 BuildAgentServiceContent(dotnetRoot), "Write agent systemd unit");
 
@@ -951,36 +935,6 @@ chmod +x "$tmp"
 touch /tmp/gzctf-agent-changed
 rm -f "$tmp"
 {{sudo}} test -x /usr/local/bin/gzctf-agent
-""");
-
-    internal static string BuildManagedArtifactInstallScript(
-        string downloadUrl,
-        string installedPath,
-        string sudo,
-        string? expectedSha256,
-        bool executable) =>
-        NormalizeShellScript($$"""
-expected_sha={{BashQuote(expectedSha256 ?? string.Empty)}}
-installed={{BashQuote(installedPath)}}
-if [ -n "$expected_sha" ] && command -v sha256sum >/dev/null 2>&1 && {{sudo}} test -f "$installed"; then
-  current_sha="$({{sudo}} sha256sum "$installed" | awk '{print $1}')"
-  if [ "$current_sha" = "$expected_sha" ]; then
-    exit 0
-  fi
-fi
-tmp="/tmp/gzctf-artifact-$(date +%s)-$$"
-trap 'rm -f "$tmp"' EXIT
-download_status=127
-command -v wget >/dev/null 2>&1 && wget -q -O "$tmp" {{BashQuote(downloadUrl)}} && download_status=0
-[ "$download_status" -eq 0 ] || { command -v curl >/dev/null 2>&1 && curl -fsSL {{BashQuote(downloadUrl)}} -o "$tmp" && download_status=0; }
-[ "$download_status" -eq 0 ] || { echo "wget or curl is required to download the artifact" >&2; exit 127; }
-test -s "$tmp"
-if [ -n "$expected_sha" ] && command -v sha256sum >/dev/null 2>&1; then
-  downloaded_sha="$(sha256sum "$tmp" | awk '{print $1}')"
-  [ "$downloaded_sha" = "$expected_sha" ] || { echo "Downloaded artifact sha256 mismatch" >&2; exit 1; }
-fi
-{{sudo}} mkdir -p {{BashQuote(Path.GetDirectoryName(installedPath) ?? "/opt/gzctf/endpoint-sensor")}}
-{{sudo}} install -m {{(executable ? "0755" : "0644")}} "$tmp" "$installed"
 """);
 
     private static void WriteRemoteFileIfChanged(SshClient ssh, string sudo, string remotePath, string content, string step)

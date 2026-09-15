@@ -4,7 +4,7 @@ import { mapTopologyDetailToDocument } from '../model/topologyMapper'
 import { createLargeTopologyFixture } from './largeTopologyFixture'
 
 describe('large TeamLab topology fixture', () => {
-  it('compiles deterministically with routers, multi-NIC assets and dependencies', () => {
+  it('compiles deterministically with routers and multi-NIC assets', () => {
     const document = createLargeTopologyFixture()
     const first = compileTopologyDocument(document)
     const second = compileTopologyDocument(createLargeTopologyFixture())
@@ -13,7 +13,6 @@ describe('large TeamLab topology fixture', () => {
     expect(first.assets).toHaveLength(128)
     expect(first.infrastructure).toHaveLength(40)
     expect(first.connections).toHaveLength(24)
-    expect(first.dependencies).toHaveLength(96)
     expect(JSON.stringify(first)).toBe(JSON.stringify(second))
   })
 

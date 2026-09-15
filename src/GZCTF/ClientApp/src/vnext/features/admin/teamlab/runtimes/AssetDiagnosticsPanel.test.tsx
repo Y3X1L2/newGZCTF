@@ -9,9 +9,9 @@ const runtime: TeamLabRuntime = {
   id: 'runtime-a', releaseId: 'release-a', generation: 3, status: 'running', stage: 'runtime-ready',
   openForAccess: true, shards: [], networks: [], createdAt: 1788796800000, updatedAt: null, error: null,
   assets: [
-    { id: 1, key: 'web', name: 'Web', kind: 'docker', runtimeResourceId: 'container-a',
+    { id: 1, key: 'web', name: 'Web', kind: 'docker', networkKeys: [], runtimeResourceId: 'container-a',
       primaryIp: null, status: 'running', error: null },
-    { id: 2, key: 'db', name: 'Database', kind: 'docker', runtimeResourceId: 'container-b',
+    { id: 2, key: 'db', name: 'Database', kind: 'docker', networkKeys: [], runtimeResourceId: 'container-b',
       primaryIp: null, status: 'running', error: null },
   ],
 }

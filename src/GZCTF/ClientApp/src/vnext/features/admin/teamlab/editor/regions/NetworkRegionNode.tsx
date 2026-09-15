@@ -1,12 +1,8 @@
+import { NodeResizer, type Node, type NodeProps } from '@xyflow/react'
 import { ChevronDown, LogIn, Maximize, Network } from 'lucide-react'
 import { memo } from 'react'
-import { NodeResizer, type Node, type NodeProps } from '@xyflow/react'
-import {
-  MAX_REGION_HEIGHT,
-  MAX_REGION_WIDTH,
-  MIN_REGION_HEIGHT,
-  MIN_REGION_WIDTH,
-} from '../../model/topologyGeometry'
+import { MAX_REGION_HEIGHT, MAX_REGION_WIDTH, MIN_REGION_HEIGHT, MIN_REGION_WIDTH } from '../../model/topologyGeometry'
+import { networkColorSlot } from '../networkColor'
 import styles from './NetworkRegionNode.module.css'
 
 /**
@@ -57,6 +53,7 @@ export function NetworkRegionNode({ data }: NodeProps<TeamLabRegionFlowNode>) {
         className={styles.region}
         data-active={data.active || undefined}
         data-collapsed={data.collapsed || undefined}
+        data-color-slot={networkColorSlot(networkKey)}
         data-entry={data.isEntry || undefined}
       >
         <header className={styles.header}>
@@ -103,9 +100,7 @@ export function NetworkRegionNode({ data }: NodeProps<TeamLabRegionFlowNode>) {
             </button>
           </span>
         </header>
-        {data.collapsed ? (
-          <p className={styles.collapsedHint}>已折叠 · {data.memberCount} 台资产未显示</p>
-        ) : null}
+        {data.collapsed ? <p className={styles.collapsedHint}>已折叠 · {data.memberCount} 台资产未显示</p> : null}
       </article>
     </>
   )

@@ -1,7 +1,8 @@
 import { BaseEdge, getSmoothStepPath, type EdgeProps } from '@xyflow/react'
+import { networkColorSlot } from '../networkColor'
 import { EdgeLabel } from './EdgeLabel'
-import type { TeamLabFlowEdge } from './edgeTypes'
 import styles from './TopologyEdge.module.css'
+import type { TeamLabFlowEdge } from './edgeTypes'
 
 export function NetworkEdge({
   sourceX,
@@ -27,10 +28,12 @@ export function NetworkEdge({
   // A route between networks is the meaningful link; an intra-network membership
   // is structural context and stays visually quieter.
   const tone = data?.tone === 'route' ? styles.route : styles.membership
+  const colorSlot = data?.tone === 'membership' && data.networkKey ? networkColorSlot(data.networkKey) : undefined
   return (
     <>
       <BaseEdge
         className={`${styles.edge} ${tone} ${selected ? styles.selected : ''}`}
+        data-color-slot={colorSlot}
         markerStart={markerStart}
         markerEnd={markerEnd}
         path={path}

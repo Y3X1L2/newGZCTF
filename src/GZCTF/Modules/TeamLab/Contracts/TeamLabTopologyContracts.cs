@@ -33,7 +33,6 @@ public sealed record TeamLabTopologyAssetModel(
     int? ExposePort = null,
     TeamLabHealthCheckModel? HealthCheck = null,
     int OrderIndex = 0,
-    TeamLabEndpointObservationMode EndpointObservation = TeamLabEndpointObservationMode.Disabled,
     int? DevicePackageId = null,
     JsonElement? DeviceParameters = null,
     Guid? ConnectorId = null);
@@ -52,7 +51,6 @@ public sealed record TeamLabTopologyDefinitionModel(
     IReadOnlyList<TeamLabTopologyAssetModel> Assets,
     IReadOnlyList<TeamLabTopologyConnectionModel> Connections,
     IReadOnlyList<TeamLabTopologyInfrastructureModel>? Infrastructure = null,
-    IReadOnlyList<TeamLabTopologyDependencyModel>? Dependencies = null,
     TeamLabObservationPolicyModel? Observation = null);
 
 public sealed record TeamLabEditorItemModel(
@@ -74,7 +72,6 @@ public sealed record CreateTeamLabTopologyModel(
     IReadOnlyList<TeamLabTopologyConnectionModel> Connections,
     TeamLabTopologyEditorModel? Editor = null,
     IReadOnlyList<TeamLabTopologyInfrastructureModel>? Infrastructure = null,
-    IReadOnlyList<TeamLabTopologyDependencyModel>? Dependencies = null,
     TeamLabObservationPolicyModel? Observation = null,
     int SchemaVersion = 2,
     Guid? ControlScopeId = null);
@@ -87,7 +84,6 @@ public sealed record UpdateTeamLabTopologyModel(
     IReadOnlyList<TeamLabTopologyConnectionModel> Connections,
     TeamLabTopologyEditorModel? Editor = null,
     IReadOnlyList<TeamLabTopologyInfrastructureModel>? Infrastructure = null,
-    IReadOnlyList<TeamLabTopologyDependencyModel>? Dependencies = null,
     TeamLabObservationPolicyModel? Observation = null,
     int SchemaVersion = 2);
 

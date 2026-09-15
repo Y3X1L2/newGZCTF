@@ -140,6 +140,7 @@ public class TeamLabRemoteAuditPersistenceTests : IAsyncLifetime
         await db.SaveChangesAsync();
         var storage = new LocalBlobStorage(root);
         var audit = new TeamLabRemoteAuditService(db, storage, new TeamLabAuthorizationService(db, [], []),
+            new TeamLabScopeAuthorizationService(db),
             new LocalDevelopmentLeaseProvider(), Options.Create(new TeamLabRemoteAuditOptions()),
             new TeamLabEventRecorder(db, new EfOperationalEventWriter(db, NullLogger<EfOperationalEventWriter>.Instance), new OperationalCorrelation()),
             NullLogger<TeamLabRemoteAuditService>.Instance);

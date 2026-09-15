@@ -1,6 +1,11 @@
 namespace GZCTF.Modules.Identity.Application;
 
-public sealed record ApiTokenRateLimitDecision(bool Available, bool Allowed, int RetryAfterSeconds);
+public sealed record ApiTokenRateLimitDecision(
+    bool Available,
+    bool Allowed,
+    int Limit,
+    int Remaining,
+    int ResetAfterSeconds);
 
 public interface IApiTokenRateLimitStore
 {

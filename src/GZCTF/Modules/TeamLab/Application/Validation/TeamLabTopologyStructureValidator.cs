@@ -24,10 +24,8 @@ internal sealed partial class TeamLabTopologyStructureValidator(TeamLabAddressPo
                 $"A topology must contain between 1 and {TeamLabTopologyValidator.MaxAssets} assets.");
 
         var infrastructure = definition.Infrastructure ?? [];
-        var dependencies = definition.Dependencies ?? [];
         if (schemaVersion == 1 &&
-            (infrastructure.Count > 0 || dependencies.Count > 0 || definition.Observation is not null ||
-             definition.Assets.Any(asset => asset.EndpointObservation != TeamLabEndpointObservationMode.Disabled) ||
+            (infrastructure.Count > 0 || definition.Observation is not null ||
              definition.Connections.Any(connection => connection.ViaNodeKey is not null || connection.Direction is not null)))
         {
             Add(issues, "topology_schema_mismatch", "schemaVersion",

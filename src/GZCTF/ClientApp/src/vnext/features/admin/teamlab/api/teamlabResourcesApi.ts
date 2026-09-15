@@ -3,6 +3,7 @@ import type {
   RegisterTeamLabConnectorRequest,
   RegisterTeamLabDevicePackageRequest,
   TeamLabConnectorHealth,
+  TeamLabHostInterface,
 } from './teamlabResourcesContracts'
 import {
   parseTeamLabConnector,
@@ -11,6 +12,19 @@ import {
   parseTeamLabDevicePackagePage,
   parseTeamLabNodeCachePage,
 } from './teamlabResourcesParsers'
+import { teamLabParsing as parse } from './teamlabParsers'
+
+function parseTeamLabHostInterfaces(value: unknown): readonly TeamLabHostInterface[] {
+  return parse.array(value, '节点网卡', (entry, label) => {
+    const item = parse.record(entry, label)
+    return {
+      name: parse.string(item.name, `${label}.name`),
+      macAddress: parse.string(item.macAddress, `${label}.macAddress`),
+      linkUp: parse.boolean(item.linkUp, `${label}.linkUp`),
+      addresses: parse.array(item.addresses, `${label}.addresses`, parse.string),
+    }
+  })
+}
 
 const root = '/api/admin/teamlab'
 
@@ -58,6 +72,12 @@ export function createTeamLabResourcesApi(client: RuntimeJsonClient = runtimeJso
 
     async registerConnector(request: RegisterTeamLabConnectorRequest) {
       return parseTeamLabConnector(await client.postJson(`${root}/connectors`, request))
+    },
+
+    async listNodeInterfaces(nodeId: string) {
+      return parseTeamLabHostInterfaces(
+        await client.get(`${root}/connector-nodes/${encodeURIComponent(nodeId)}/interfaces`)
+      )
     },
 
     async setConnectorHealth(connectorId: string, health: TeamLabConnectorHealth) {

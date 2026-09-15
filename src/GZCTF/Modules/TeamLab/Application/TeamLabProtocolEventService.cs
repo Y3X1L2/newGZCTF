@@ -21,6 +21,12 @@ public sealed class TeamLabProtocolEventService(
         TeamLabProtocolEventReportModel model,
         CancellationToken cancellationToken)
     {
+        var type = model.Type?.Trim();
+        var source = model.Source?.Trim();
+        if (string.IsNullOrWhiteSpace(type) || type.Length > 64 ||
+            string.IsNullOrWhiteSpace(source) || source.Length > 128)
+            throw new TeamLabApiContractException(
+                "protocol_event_invalid", "事件类型和来源不能为空，且不能超过长度限制", 422);
         var runtime = await context.TeamLabRuntimes.AsNoTracking()
             .SingleOrDefaultAsync(item => item.PublicId == runtimeId, cancellationToken)
             ?? throw new TeamLabApiContractException("runtime_not_found", "未找到 TeamLab 运行时", 404);
@@ -35,8 +41,8 @@ public sealed class TeamLabProtocolEventService(
             .ToArray() ?? [];
         var detail = new Dictionary<string, object?>
         {
-            ["protocolEventType"] = model.Type,
-            ["protocolEventSource"] = model.Source,
+            ["protocolEventType"] = type,
+            ["protocolEventSource"] = source,
             ["protocolEventOccurredAt"] = model.OccurredAt?.ToString("O"),
             ["protocolEventParameterCount"] = parameterNames.Length,
             ["protocolEventParameters"] = string.Join(",", parameterNames),
@@ -50,7 +56,7 @@ public sealed class TeamLabProtocolEventService(
             "收到设备协议事件",
             detail: detail);
         await context.SaveChangesAsync(cancellationToken);
-        return new TeamLabProtocolEventResult(runtimeId, "protocol", model.Type, model.Source);
+        return new TeamLabProtocolEventResult(runtimeId, "protocol", type, source);
     }
 }
 

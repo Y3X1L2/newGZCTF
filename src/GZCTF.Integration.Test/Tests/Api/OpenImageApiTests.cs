@@ -150,6 +150,49 @@ public sealed class OpenImageApiTests(GZCTFApplicationFactory factory) : IAsyncL
     }
 
     [Fact]
+    public async Task OpenImage_ListDiscoversOwnedAndSystemTemplatesOnly()
+    {
+        var owner = await IssueTokenAsync([ApiTokenScopes.ImagesRead]);
+        var other = await IssueTokenAsync([ApiTokenScopes.ImagesRead]);
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        int systemId;
+        int ownedId;
+        int hiddenId;
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var system = new ImageTemplate { Name = $"system-{suffix}", RegistryUrl = "alpine:3.20" };
+            var owned = new ImageTemplate
+            {
+                Name = $"owned-{suffix}", RegistryUrl = "alpine:3.20", CreatedById = owner.CreatorId
+            };
+            var hidden = new ImageTemplate
+            {
+                Name = $"hidden-{suffix}", RegistryUrl = "alpine:3.20", CreatedById = other.CreatorId
+            };
+            context.ImageTemplates.AddRange(system, owned, hidden);
+            await context.SaveChangesAsync();
+            systemId = system.Id;
+            ownedId = owned.Id;
+            hiddenId = hidden.Id;
+        }
+
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", owner.PlainTextToken);
+        using var response = await client.GetAsync($"/api/open/v1/images?search={suffix}&limit=2");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var page = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var ids = page.GetProperty("items").EnumerateArray()
+            .Select(item => item.GetProperty("id").GetInt32()).ToArray();
+        Assert.Contains(systemId, ids);
+        Assert.Contains(ownedId, ids);
+        Assert.DoesNotContain(hiddenId, ids);
+        using var hiddenRead = await client.GetAsync($"/api/open/v1/images/{hiddenId}");
+        Assert.Equal(HttpStatusCode.NotFound, hiddenRead.StatusCode);
+    }
+
+    [Fact]
     public async Task RegisterDockerReference_EnforcesImageResourceGrant()
     {
         var allowedName = $"allowed-{Guid.NewGuid():N}";

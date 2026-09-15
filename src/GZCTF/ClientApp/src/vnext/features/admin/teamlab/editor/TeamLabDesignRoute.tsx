@@ -62,7 +62,6 @@ function TeamLabDesignSession({
   const [publishing, setPublishing] = useState(false)
   const [operationError, setOperationError] = useState<unknown>(null)
   const [focusTarget, setFocusTarget] = useState<TeamLabEditorFocusTarget | null>(null)
-
   const save = useCallback(
     (document: TopologyDocument, revision: number) =>
       teamLabAdminApi.updateTopology(scene.id, mapDocumentToUpdateRequest(document, revision)),
@@ -114,7 +113,7 @@ function TeamLabDesignSession({
     () => [...(releases ?? [])].sort((left, right) => right.version - left.version)[0] ?? null,
     [releases]
   )
-  const hasUnpublishedChanges = autosave.status !== 'saved' || latestRelease?.sourceRevision !== savedRevision
+  const hasUnpublishedChanges = latestRelease?.sourceRevision !== savedRevision
   const publicationState = releasesError
     ? 'loading'
     : !releases

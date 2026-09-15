@@ -28,6 +28,11 @@ public static class TeamLabModuleRegistration
         services.AddScoped<TeamLabRuntimeDifferenceService>();
         services.AddScoped<ITeamLabAssetControlGateway, AgentTeamLabAssetControlGateway>();
         services.AddScoped<ITeamLabAssetFileGateway, AgentTeamLabAssetFileGateway>();
+        services.AddScoped<ITeamLabConnectorNodeGateway, AgentTeamLabConnectorNodeGateway>();
+        services.AddScoped<ITeamLabServiceAccessGateway, AgentTeamLabServiceAccessGateway>();
+        services.AddScoped<TeamLabServiceAccessService>();
+        services.AddScoped<ITeamLabServiceAccessCleanup>(provider =>
+            provider.GetRequiredService<TeamLabServiceAccessService>());
         services.AddScoped<TeamLabReleaseImagePreparationService>();
         services.AddScoped<TeamLabControlScopeService>();
         services.AddScoped<TeamLabScopeAuthorizationService>();
@@ -38,6 +43,7 @@ public static class TeamLabModuleRegistration
         services.AddScoped<TeamLabFabricLinkAllocator>();
         services.AddScoped<TeamLabEventRecorder>();
         services.AddScoped<TeamLabRuntimeProjectionService>();
+        services.AddScoped<TeamLabOpenDiscoveryService>();
         services.AddScoped<TeamLabAdminQueryService>();
         services.AddScoped<ITeamLabUsageProjectionProvider, TeamLabEmptyUsageProjectionProvider>();
         services.AddScoped<TeamLabAuthorizationService>();

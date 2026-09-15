@@ -19,6 +19,29 @@ namespace GZCTF.Services.Fleet;
 
 public class AgentClient
 {
+    public virtual async Task<IReadOnlyList<TeamLabHostInterface>> GetTeamLabHostInterfacesAsync(Guid nodeId, CancellationToken token)
+    {
+        var node = await GetNodeAsync(nodeId, token) ?? throw NodeNotFound(nodeId, "teamlab.interfaces");
+        using var client = BuildClient(node);
+        return await client.GetFromJsonAsync<TeamLabHostInterface[]>("/api/teamlab/interfaces", token)
+            ?? [];
+    }
+    public virtual async Task ApplyTeamLabServiceAccessAsync(Guid nodeId, TeamLabServiceForwardRequest request, CancellationToken token)
+    {
+        var node = await GetNodeAsync(nodeId, token) ?? throw NodeNotFound(nodeId, "teamlab.service-access");
+        using var client = BuildClient(node);
+        using var response = await client.PostAsJsonAsync("/api/teamlab/service-access/apply", request, token);
+        if (!response.IsSuccessStatusCode)
+            throw await CreateAgentExceptionAsync(response, "teamlab.service-access", nodeId, "服务开放失败。", token);
+    }
+    public virtual async Task RemoveTeamLabServiceAccessAsync(Guid nodeId, TeamLabServiceForwardRequest request, CancellationToken token)
+    {
+        var node = await GetNodeAsync(nodeId, token) ?? throw NodeNotFound(nodeId, "teamlab.service-access");
+        using var client = BuildClient(node);
+        using var response = await client.PostAsJsonAsync("/api/teamlab/service-access/remove", request, token);
+        if (!response.IsSuccessStatusCode)
+            throw await CreateAgentExceptionAsync(response, "teamlab.service-access", nodeId, "撤销服务开放失败。", token);
+    }
     public virtual async Task<TeamLabFileResult> ManageTeamLabVmFilesAsync(Guid nodeId, TeamLabVmFileRequest request, CancellationToken token)
     {
         var node = await GetNodeAsync(nodeId, token) ?? throw NodeNotFound(nodeId, "teamlab.files");
@@ -29,6 +52,26 @@ public class AgentClient
             throw await CreateAgentExceptionAsync(response, "teamlab.files", nodeId, "VM 文件操作失败。", deadline.Token);
         return await response.Content.ReadFromJsonAsync<TeamLabFileResult>(deadline.Token)
             ?? throw InvalidAgentResponse(nodeId, "teamlab.files", "Agent 未返回文件操作结果。");
+    }
+    public virtual Task DownloadTeamLabVmFileAsync(Guid nodeId, TeamLabVmFileRequest request,
+        Stream destination, long maxBytes, TimeSpan idleTimeout, CancellationToken token) =>
+        DownloadTeamLabFileAsync(nodeId, "/api/teamlab/vm-files/download", request, destination,
+            maxBytes, idleTimeout, "VM 文件下载失败。", token);
+
+    public virtual async Task UploadTeamLabVmFileAsync(Guid nodeId, TeamLabVmFileRequest request,
+        Stream source, long contentLength, CancellationToken token)
+    {
+        var node = await GetNodeAsync(nodeId, token) ?? throw NodeNotFound(nodeId, "teamlab.files");
+        using var client = BuildClient(node);
+        using var multipart = new MultipartFormDataContent();
+        multipart.Add(JsonContent.Create(request with { Operation = "upload", Content = null }), "metadata");
+        var file = new StreamContent(source);
+        file.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
+        file.Headers.ContentLength = contentLength;
+        multipart.Add(file, "file", "asset-file");
+        using var response = await client.PostAsync("/api/teamlab/vm-files/upload", multipart, token);
+        if (!response.IsSuccessStatusCode)
+            throw await CreateAgentExceptionAsync(response, "teamlab.files", nodeId, "VM 文件上传失败。", token);
     }
     public virtual async Task<TeamLabAssetControlResult> ControlTeamLabAssetAsync(Guid nodeId, TeamLabAssetControlRequest request, CancellationToken token)
     {
@@ -52,6 +95,40 @@ public class AgentClient
             throw await CreateAgentExceptionAsync(response, "teamlab.files", nodeId, "容器文件操作失败。", deadline.Token);
         return await response.Content.ReadFromJsonAsync<TeamLabFileResult>(deadline.Token)
             ?? throw InvalidAgentResponse(nodeId, "teamlab.files", "Agent 未返回文件操作结果。");
+    }
+
+    public virtual Task DownloadTeamLabContainerFileAsync(Guid nodeId, TeamLabContainerFileRequest request,
+        Stream destination, long maxBytes, TimeSpan idleTimeout, CancellationToken token) =>
+        DownloadTeamLabFileAsync(nodeId, "/api/teamlab/diagnostics/container/files/download", request,
+            destination, maxBytes, idleTimeout, "容器文件下载失败。", token);
+
+    public virtual async Task UploadTeamLabContainerFileAsync(Guid nodeId, TeamLabContainerFileRequest request,
+        Stream source, long contentLength, CancellationToken token)
+    {
+        var node = await GetNodeAsync(nodeId, token) ?? throw NodeNotFound(nodeId, "teamlab.files");
+        using var client = BuildClient(node);
+        var query = $"?runtimeId={request.RuntimeId}&generation={request.Generation}" +
+            $"&containerId={Uri.EscapeDataString(request.ContainerId)}&path={Uri.EscapeDataString(request.Path)}" +
+            $"&overwrite={request.Overwrite.ToString().ToLowerInvariant()}";
+        using var content = new StreamContent(source);
+        content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
+        content.Headers.ContentLength = contentLength;
+        using var response = await client.PostAsync("/api/teamlab/diagnostics/container/files/upload" + query, content, token);
+        if (!response.IsSuccessStatusCode)
+            throw await CreateAgentExceptionAsync(response, "teamlab.files", nodeId, "容器文件上传失败。", token);
+    }
+
+    private async Task DownloadTeamLabFileAsync<TRequest>(Guid nodeId, string path, TRequest request,
+        Stream destination, long maxBytes, TimeSpan idleTimeout, string failureMessage, CancellationToken token)
+    {
+        var node = await GetNodeAsync(nodeId, token) ?? throw NodeNotFound(nodeId, "teamlab.files");
+        using var client = BuildClient(node);
+        using var message = new HttpRequestMessage(HttpMethod.Post, path) { Content = JsonContent.Create(request) };
+        using var response = await client.SendAsync(message, HttpCompletionOption.ResponseHeadersRead, token);
+        if (!response.IsSuccessStatusCode)
+            throw await CreateAgentExceptionAsync(response, "teamlab.files", nodeId, failureMessage, token);
+        await using var source = await response.Content.ReadAsStreamAsync(token);
+        await TeamLabFileLimits.CopyAsync(source, destination, maxBytes, idleTimeout, token);
     }
 
     public virtual async Task<TeamLabVmDiagnostics> GetTeamLabVmDiagnosticsAsync(
@@ -81,8 +158,6 @@ public class AgentClient
             ?? throw InvalidAgentResponse(nodeId, "teamlab.diagnostics", "Agent 未返回诊断结果。");
     }
     private static readonly TimeSpan TeamLabRequestTimeout = TimeSpan.FromSeconds(60);
-    private static readonly TimeSpan EndpointSensorStartTimeout = TimeSpan.FromMinutes(2);
-
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IConfiguration _config;
@@ -433,6 +508,14 @@ public class AgentClient
         await PostTeamLabAsync<TeamLabAssetLifecycleRequest, TeamLabAssetLifecycleResponse>(
             nodeId, "/api/teamlab/assets/resume", request, token);
 
+    public virtual async Task<TeamLabAssetLifecycleBatchResult[]?> ChangeTeamLabAssetsAsync(
+        Guid nodeId,
+        TeamLabAssetLifecycleBatchRequest request,
+        bool pause,
+        CancellationToken token) =>
+        await PostTeamLabAsync<TeamLabAssetLifecycleBatchRequest, TeamLabAssetLifecycleBatchResult[]>(
+            nodeId, pause ? "/api/teamlab/assets/pause-batch" : "/api/teamlab/assets/resume-batch", request, token);
+
     public virtual async Task<TeamLabDryRunResponse?> ProbeTeamLabAsync(Guid nodeId, TeamLabProbeRequest request,
         CancellationToken token) => await PostTeamLabAsync<TeamLabProbeRequest, TeamLabDryRunResponse>(nodeId,
         "/api/teamlab/probe", request, token);
@@ -486,25 +569,50 @@ public class AgentClient
         await PostTeamLabAsync<TeamLabCaptureStartRequest, TeamLabCaptureResponse>(nodeId,
             "/api/teamlab/capture/start", request, token);
 
+    public virtual async Task<TeamLabCaptureResponse[]?> StartTeamLabCapturesAsync(Guid nodeId,
+        TeamLabCaptureStartRequest[] requests, CancellationToken token) =>
+        await PostTeamLabAsync<TeamLabCaptureStartRequest[], TeamLabCaptureResponse[]>(nodeId,
+            "/api/teamlab/capture/start-batch", requests, token);
+
     public virtual async Task<TeamLabCaptureResponse?> StopTeamLabCaptureAsync(Guid nodeId,
         TeamLabCaptureStopRequest request, CancellationToken token) =>
         await PostTeamLabAsync<TeamLabCaptureStopRequest, TeamLabCaptureResponse>(nodeId,
             "/api/teamlab/capture/stop", request, token);
+
+    public virtual async Task<TeamLabCaptureResponse[]?> StopTeamLabCapturesAsync(Guid nodeId,
+        TeamLabCaptureStopRequest[] requests, CancellationToken token) =>
+        await PostTeamLabAsync<TeamLabCaptureStopRequest[], TeamLabCaptureResponse[]>(nodeId,
+            "/api/teamlab/capture/stop-batch", requests, token);
 
     public virtual async Task<TeamLabCaptureResponse?> GetTeamLabCaptureStatusAsync(Guid nodeId,
         TeamLabCaptureStatusRequest request, CancellationToken token) =>
         await PostTeamLabAsync<TeamLabCaptureStatusRequest, TeamLabCaptureResponse>(nodeId,
             "/api/teamlab/capture/status", request, token);
 
+    public virtual async Task<TeamLabCaptureResponse[]?> GetTeamLabCaptureStatusesAsync(Guid nodeId,
+        TeamLabCaptureStatusRequest[] requests, CancellationToken token) =>
+        await PostTeamLabAsync<TeamLabCaptureStatusRequest[], TeamLabCaptureResponse[]>(nodeId,
+            "/api/teamlab/capture/status-batch", requests, token);
+
     public virtual async Task<TeamLabCaptureResponse?> UploadTeamLabCaptureAsync(Guid nodeId,
         TeamLabCaptureUploadRequest request, CancellationToken token) =>
         await PostTeamLabAsync<TeamLabCaptureUploadRequest, TeamLabCaptureResponse>(nodeId,
             "/api/teamlab/capture/upload", request, token);
 
+    public virtual async Task<TeamLabCaptureResponse[]?> UploadTeamLabCapturesAsync(Guid nodeId,
+        TeamLabCaptureUploadRequest[] requests, CancellationToken token) =>
+        await PostTeamLabAsync<TeamLabCaptureUploadRequest[], TeamLabCaptureResponse[]>(nodeId,
+            "/api/teamlab/capture/upload-batch", requests, token);
+
     public virtual async Task<TeamLabCaptureResponse?> DeleteTeamLabCaptureAsync(Guid nodeId,
         TeamLabCaptureDeleteRequest request, CancellationToken token) =>
         await PostTeamLabAsync<TeamLabCaptureDeleteRequest, TeamLabCaptureResponse>(nodeId,
             "/api/teamlab/capture/delete", request, token);
+
+    public virtual async Task<TeamLabCaptureResponse[]?> DeleteTeamLabCapturesAsync(Guid nodeId,
+        TeamLabCaptureDeleteRequest[] requests, CancellationToken token) =>
+        await PostTeamLabAsync<TeamLabCaptureDeleteRequest[], TeamLabCaptureResponse[]>(nodeId,
+            "/api/teamlab/capture/delete-batch", requests, token);
 
     public virtual async Task<TeamLabLinkPolicyResponse?> ApplyTeamLabLinkPolicyAsync(
         Guid nodeId,
@@ -514,6 +622,14 @@ public class AgentClient
         await PostTeamLabAsync<TeamLabLinkPolicyApplyRequest, TeamLabLinkPolicyResponse>(
             nodeId, "/api/teamlab/link-policy/apply", request, token, requestTimeout);
 
+    public virtual async Task<TeamLabLinkPolicyResponse[]?> ApplyTeamLabLinkPoliciesAsync(
+        Guid nodeId,
+        TeamLabLinkPolicyApplyRequest[] requests,
+        CancellationToken token,
+        TimeSpan? requestTimeout = null) =>
+        await PostTeamLabAsync<TeamLabLinkPolicyApplyRequest[], TeamLabLinkPolicyResponse[]>(
+            nodeId, "/api/teamlab/link-policy/apply-batch", requests, token, requestTimeout);
+
     public virtual async Task<TeamLabLinkPolicyResponse?> RecoverTeamLabLinkPolicyAsync(
         Guid nodeId,
         TeamLabLinkPolicyRecoverRequest request,
@@ -522,33 +638,20 @@ public class AgentClient
         await PostTeamLabAsync<TeamLabLinkPolicyRecoverRequest, TeamLabLinkPolicyResponse>(
             nodeId, "/api/teamlab/link-policy/recover", request, token, requestTimeout);
 
+    public virtual async Task<TeamLabLinkPolicyResponse[]?> RecoverTeamLabLinkPoliciesAsync(
+        Guid nodeId,
+        TeamLabLinkPolicyRecoverRequest[] requests,
+        CancellationToken token,
+        TimeSpan? requestTimeout = null) =>
+        await PostTeamLabAsync<TeamLabLinkPolicyRecoverRequest[], TeamLabLinkPolicyResponse[]>(
+            nodeId, "/api/teamlab/link-policy/recover-batch", requests, token, requestTimeout);
+
     public virtual async Task<TeamLabObservationBatchResponse?> ReadTeamLabObservationsAsync(
         Guid nodeId,
         TeamLabObservationBatchRequest request,
         CancellationToken token) =>
         await PostTeamLabAsync<TeamLabObservationBatchRequest, TeamLabObservationBatchResponse>(
             nodeId, "/api/teamlab/observations/read", request, token);
-
-    public virtual async Task<TeamLabEndpointSensorResponse?> RegisterTeamLabEndpointSensorAsync(
-        Guid nodeId,
-        TeamLabEndpointSensorRegistrationRequest request,
-        CancellationToken token) =>
-        await PostTeamLabAsync<TeamLabEndpointSensorRegistrationRequest, TeamLabEndpointSensorResponse>(
-            nodeId, "/api/teamlab/sensors/register", request, token);
-
-    public virtual async Task<TeamLabEndpointSensorResponse?> RemoveTeamLabEndpointSensorAsync(
-        Guid nodeId,
-        TeamLabEndpointSensorRemoveRequest request,
-        CancellationToken token) =>
-        await PostTeamLabAsync<TeamLabEndpointSensorRemoveRequest, TeamLabEndpointSensorResponse>(
-            nodeId, "/api/teamlab/sensors/remove", request, token);
-
-    public virtual async Task<TeamLabEndpointSensorResponse?> StartTeamLabEndpointSensorAsync(
-        Guid nodeId,
-        TeamLabEndpointSensorStartRequest request,
-        CancellationToken token) =>
-        await PostTeamLabAsync<TeamLabEndpointSensorStartRequest, TeamLabEndpointSensorResponse>(
-            nodeId, "/api/teamlab/sensors/start", request, token, EndpointSensorStartTimeout);
 
     public virtual async Task<AgentSyncResponse> SyncAgentAsync(Guid nodeId, AgentSyncRequest request,
         CancellationToken token)
@@ -1844,7 +1947,6 @@ public sealed class AgentVmGuestControlConfig
 {
     public bool Enabled { get; set; } = true;
     public bool Required { get; set; } = true;
-    public bool EndpointSensorChannel { get; set; }
     public OSType? OsType { get; set; }
 }
 
@@ -1969,10 +2071,6 @@ public class AgentVmIpResponse
 public record AgentSyncRequest(
     string DownloadUrl,
     string? ExpectedSha256 = null,
-    string? LinuxSensorDownloadUrl = null,
-    string? LinuxSensorSha256 = null,
-    string? WindowsSensorDownloadUrl = null,
-    string? WindowsSensorSha256 = null,
     AgentVmControlPlaneSyncConfig? VmControlPlane = null,
     TeamLabDataPlaneSyncConfig? TeamLabDataPlane = null,
     bool Restart = true);
@@ -2208,7 +2306,6 @@ public record TeamLabCleanupRequest(
     int Generation,
     string RouterNamespace,
     string[] ResourceNames,
-    string[] SensorAssetKeys,
     string[] FabricRemoteCidrs,
     bool DryRun = true);
 
@@ -2223,6 +2320,22 @@ public record TeamLabAssetLifecycleResponse(
     bool Success,
     bool DryRun,
     string State,
+    string Message);
+
+public record TeamLabAssetLifecycleBatchItem(
+    int AssetId,
+    string Kind,
+    string ResourceId);
+
+public record TeamLabAssetLifecycleBatchRequest(
+    int Generation,
+    bool DryRun,
+    TeamLabExecutionModel ExecutionModel,
+    TeamLabAssetLifecycleBatchItem[] Assets);
+
+public record TeamLabAssetLifecycleBatchResult(
+    int AssetId,
+    bool Success,
     string Message);
 
 public record TeamLabProbeRequest(
@@ -2396,8 +2509,7 @@ public record TeamLabLinkPolicyResponse(
 
 public enum TeamLabObservationEvidenceKind : byte
 {
-    Packet = 0,
-    EndpointProcess = 1
+    Packet = 0
 }
 
 public record TeamLabObservationBatchRequest(
@@ -2423,7 +2535,6 @@ public record TeamLabObservationRecord(
     string? PacketFingerprint,
     string FlowFingerprint,
     TeamLabObservationEvidenceKind EvidenceKind,
-    string? ProcessIdentityHash = null,
     string Direction = "observed",
     DateTimeOffset? FirstSeenAt = null,
     DateTimeOffset? LastSeenAt = null,
@@ -2437,9 +2548,7 @@ public record TeamLabObservationHealth(
     int ActiveFlowCount,
     long DroppedCount,
     long ParserFailureCount,
-    long SensorRejectedCount,
     long SpoolBytes,
-    string? LastSensorErrorCode,
     string? LastError);
 
 public record TeamLabObservationBatchResponse(
@@ -2450,37 +2559,3 @@ public record TeamLabObservationBatchResponse(
     long PersistedThroughSequence,
     TeamLabObservationRecord[] Records,
     TeamLabObservationHealth Health);
-
-public enum TeamLabEndpointSensorChannelMode : byte
-{
-    Vm = 0,
-    Docker = 1
-}
-
-public record TeamLabEndpointSensorRegistrationRequest(
-    int RuntimeId,
-    string RuntimePublicId,
-    int Generation,
-    string AssetKey,
-    string RuntimeResourceId,
-    int SensorVersion,
-    string HmacKeyBase64,
-    TeamLabEndpointSensorChannelMode Mode);
-
-public record TeamLabEndpointSensorRemoveRequest(
-    int RuntimeId,
-    int Generation,
-    string AssetKey);
-
-public record TeamLabEndpointSensorStartRequest(
-    int RuntimeId,
-    int Generation,
-    string AssetKey,
-    string RuntimeResourceId,
-    TeamLabEndpointSensorChannelMode Mode,
-    OSType? OsType = null);
-
-public record TeamLabEndpointSensorResponse(
-    bool Success,
-    string Message,
-    string? ChannelEndpoint = null);

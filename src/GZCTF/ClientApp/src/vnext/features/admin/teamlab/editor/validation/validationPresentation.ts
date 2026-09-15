@@ -31,10 +31,6 @@ const messages: Readonly<Record<string, string>> = {
   interface_host_offset_reserved: '主机地址偏移超出可用范围或占用了平台保留地址。',
   topology_key_duplicate: '标识不能重复。',
   topology_key_invalid: '标识必须以小写字母开头，且只能包含小写字母、数字和连字符。',
-  dependency_asset_missing: '启动依赖两端的资产必须存在。',
-  dependency_self_reference: '资产不能依赖自身启动。',
-  dependency_duplicate: '相同的启动依赖不能重复添加。',
-  dependency_cycle: '启动依赖中存在循环，请调整依赖顺序。',
 }
 
 const fieldNames: Readonly<Record<string, string>> = {
@@ -57,7 +53,6 @@ const collectionNames: Readonly<Record<string, string>> = {
   assets: '资产',
   infrastructure: '基础设施',
   connections: '网络连线',
-  dependencies: '启动依赖',
   nodes: '节点',
 }
 

@@ -51,17 +51,17 @@ public sealed class TeamLabPhysicalPlacementService(
             "teamlab.placement", ActivityKind.Internal);
         activity?.SetTag("gzctf.deployment_ticket_id", ticketId.ToString());
         activity?.SetTag("gzctf.teamlab_runtime_id", runtimeId);
-        await using var lease = await leaseProvider.AcquireAsync("fleet:scheduler", TimeSpan.FromSeconds(10),
-            cancellationToken: token);
-        using var linked = CancellationTokenSource.CreateLinkedTokenSource(token, lease.LeaseLost);
-        token = linked.Token;
-
         var existingReservations = await context.FleetCapacityReservations.AsNoTracking()
             .Where(item => item.DeploymentQueueTicketId == ticketId &&
                            item.Status == CapacityReservationStatus.Active)
             .ToArrayAsync(token);
+        var requestToken = token;
         if (existingReservations.Length > 0)
         {
+            await using var existingLease = await leaseProvider.AcquireAsync(
+                "fleet:scheduler", TimeSpan.FromSeconds(10), cancellationToken: token);
+            using var existingLinked = CancellationTokenSource.CreateLinkedTokenSource(token, existingLease.LeaseLost);
+            token = existingLinked.Token;
             var existingRuntime = await context.TeamLabRuntimes
                 .Include(item => item.Shards)
                 .Include(item => item.Networks)
@@ -102,6 +102,7 @@ public sealed class TeamLabPhysicalPlacementService(
             }
             await context.SaveChangesAsync(token);
         }
+        token = requestToken;
 
         var runtime = await context.TeamLabRuntimes
             .Include(item => item.Shards)
@@ -142,12 +143,7 @@ public sealed class TeamLabPhysicalPlacementService(
                 var assets = generationAssets.Where(item => item.PlacementGroupKey == key).ToArray();
                 var resources = assets.Aggregate(WorkloadResourceVector.Zero, (sum, asset) =>
                     sum + RequiredResource(resourcesByAsset, asset.TopologyKey));
-                return new PlacementGroup(key, group.Any(item => item.IsEntry),
-                    resources,
-                    assets.Any(item => item.Kind == TeamLabResourceKind.Docker &&
-                                      item.EndpointObservation == TeamLabEndpointObservationMode.Required),
-                    assets.Any(item => item.Kind == TeamLabResourceKind.Vm &&
-                                      item.EndpointObservation != TeamLabEndpointObservationMode.Disabled));
+                return new PlacementGroup(key, group.Any(item => item.IsEntry), resources);
             })
             .OrderByDescending(item => item.IsEntry)
             .ThenByDescending(item => edges.Where(edge => edge.Touches(item.Key)).Sum(edge => edge.Weight))
@@ -188,6 +184,10 @@ public sealed class TeamLabPhysicalPlacementService(
                     $"single_network_capacity_exceeded: placement group '{oversized.Key}' exceeds every eligible node.");
         }
 
+        await using var lease = await leaseProvider.AcquireAsync(
+            "fleet:scheduler", TimeSpan.FromSeconds(10), cancellationToken: token);
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(token, lease.LeaseLost);
+        token = linked.Token;
         var revalidationCandidates = ApplyCompletedGenerationCredits(runtime, await snapshots.LoadAsync(token));
         if (!RevalidateAssignment(
                 assignment, groups, revalidationCandidates, ignoreDynamicLoad: reusedPreviousPlacement))
@@ -579,7 +579,6 @@ public sealed class TeamLabPhysicalPlacementService(
         var networksByKey = generationNetworks.ToDictionary(item => item.TopologyKey, StringComparer.Ordinal);
         foreach (var asset in runtime.Assets.Where(item =>
                      item.Generation == runtime.Generation &&
-                     (!legacyObservation || item.EndpointObservation != TeamLabEndpointObservationMode.Disabled) &&
                      item.WorkerNodeId != null && item.ShardId != null))
         {
             var interfaces = JsonSerializer.Deserialize<WorkloadInterfaceIntent[]>(asset.InterfaceSummaryJson) ?? [];
@@ -955,23 +954,13 @@ public sealed class TeamLabPhysicalPlacementService(
     {
         var features = new List<string>();
         if (group.IsEntry) features.Add(AgentFeatureIds.WireGuard);
-        if (group.DockerEndpointSensorRequired) features.Add(AgentFeatureIds.TeamLabEndpointSensor);
-        if (group.ManagedVmRequired)
-        {
-            features.Add(AgentFeatureIds.VmGuestManagement);
-            features.Add(AgentFeatureIds.VmConfigDriveV2);
-            features.Add(AgentFeatureIds.VmPreparedImage);
-            features.Add(AgentFeatureIds.RuntimeSignals);
-        }
         return features.Count == 0 ? null : features;
     }
 
     sealed record PlacementGroup(
         string Key,
         bool IsEntry,
-        WorkloadResourceVector Resources,
-        bool DockerEndpointSensorRequired,
-        bool ManagedVmRequired)
+        WorkloadResourceVector Resources)
     {
         public int DockerSlots => Resources.DockerSlots;
         public int VmSlots => Resources.VmSlots;

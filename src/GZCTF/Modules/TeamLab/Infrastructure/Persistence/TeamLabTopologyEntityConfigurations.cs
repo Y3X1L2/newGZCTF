@@ -14,7 +14,6 @@ public sealed class TeamLabTopologyEntityConfiguration : IEntityTypeConfiguratio
         builder.Property(item => item.Name).HasMaxLength(128);
         builder.Property(item => item.EditorMetadataJson).HasColumnType("jsonb");
         builder.Property(item => item.InfrastructureJson).HasColumnType("jsonb").HasDefaultValueSql("'[]'::jsonb");
-        builder.Property(item => item.DependenciesJson).HasColumnType("jsonb").HasDefaultValueSql("'[]'::jsonb");
         builder.Property(item => item.ObservationJson).HasColumnType("jsonb").HasDefaultValueSql("'{}'::jsonb");
         builder.HasIndex(item => item.PublicId).IsUnique();
         builder.HasIndex(item => item.OwnerUserId);
@@ -66,8 +65,6 @@ public sealed class TeamLabTopologyAssetEntityConfiguration : IEntityTypeConfigu
         builder.Property(item => item.Key).HasMaxLength(63);
         builder.Property(item => item.Name).HasMaxLength(128);
         builder.Property(item => item.Kind).HasConversion<byte>();
-        builder.Property(item => item.EndpointObservation).HasConversion<byte>()
-            .HasDefaultValue(TeamLabEndpointObservationMode.Disabled);
         builder.Property(item => item.HealthCheckKind).HasConversion<byte?>();
         builder.Property(item => item.DevicePackageParametersJson).HasMaxLength(2048);
         builder.HasIndex(item => new { item.TopologyId, item.Key }).IsUnique();

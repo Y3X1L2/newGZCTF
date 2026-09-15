@@ -11,7 +11,7 @@ import { teamLabRuntimeApi, teamLabRuntimeKeys } from '../api'
 import { captureStatusLabels, formatBytes } from './runtimePresentation'
 import styles from './RuntimePanels.module.css'
 
-const liveCaptureStatuses = new Set(['pending', 'running', 'stopping', 'cleanup-pending'])
+const liveCaptureStatuses = new Set(['pending', 'running', 'partially-running', 'stopping', 'cleanup-pending'])
 
 export function CapturePanel({ runtimeId, networks }: { runtimeId: string; networks: readonly TeamLabRuntimeNetwork[] }) {
   const scopeId = useId()
@@ -87,7 +87,7 @@ export function CapturePanel({ runtimeId, networks }: { runtimeId: string; netwo
     <section className={styles.panel} aria-labelledby="capture-title">
       <header className={styles.panelHeader}>
         <div><span>抓包取证</span><h3 id="capture-title">按需抓包</h3></div>
-        {capture.data ? <StatusBadge pulse={Boolean(active)} tone={capture.data.status === 'completed' ? 'success' : capture.data.status === 'failed' ? 'danger' : 'info'}>{captureStatusLabels[capture.data.status]}</StatusBadge> : null}
+        {capture.data ? <StatusBadge pulse={Boolean(active)} tone={capture.data.status === 'completed' ? 'success' : capture.data.status === 'failed' ? 'danger' : capture.data.status === 'partially-running' ? 'warning' : 'info'}>{captureStatusLabels[capture.data.status]}</StatusBadge> : null}
       </header>
       <div className={styles.captureLayout}>
         <form className={styles.captureForm} onSubmit={(event) => { event.preventDefault(); void start() }}>

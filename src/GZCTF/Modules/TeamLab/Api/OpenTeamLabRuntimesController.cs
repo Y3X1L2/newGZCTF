@@ -30,12 +30,37 @@ namespace GZCTF.Modules.TeamLab.Api;
 public sealed class OpenTeamLabRuntimesController(
     ITeamLabRuntimeApplicationService runtimes,
     TeamLabRuntimeProjectionService projections,
+    TeamLabOpenDiscoveryService discovery,
     TeamLabRuntimeOperationApplicationService operations,
     TeamLabScopeAuthorizationService scopeAuthorization,
     TeamLabRuntimeLifecycleGuard lifecycleGuard,
     TeamLabAccessGrantService access,
     TeamLabProtocolEventService protocolEvents) : ControllerBase
 {
+    [HttpGet]
+    [OpenApiOperation("列出运行时", "按当前 token 的 TeamLab 控制范围授权返回可继续管理的运行时。")]
+    [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabRuntimesRead)]
+    [ProducesResponseType(typeof(OpenTeamLabRuntimePageModel), StatusCodes.Status200OK)]
+    public async Task<OpenTeamLabRuntimePageModel> List(
+        [FromQuery] Guid? controlScopeId = null,
+        [FromQuery] string? externalReference = null,
+        [FromQuery] TeamLabRuntimeStatus? status = null,
+        [FromQuery, Range(1, 100)] int limit = 50,
+        [FromQuery] string? after = null,
+        CancellationToken cancellationToken = default)
+    {
+        var actor = Actor();
+        return await discovery.ListRuntimesAsync(
+            actor.TokenId,
+            IsAdministrator(),
+            controlScopeId,
+            externalReference,
+            status,
+            after,
+            limit,
+            cancellationToken);
+    }
+
     [HttpPost]
     [OpenApiOperation("创建运行时", "为单个队伍或自动化属主提交已发布拓扑版本的部署任务。")]
     [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabRuntimesWrite)]
@@ -62,6 +87,37 @@ public sealed class OpenTeamLabRuntimesController(
     {
         await AuthorizeRuntimeAsync(runtimeId, cancellationToken);
         return (await runtimes.GetAsync(runtimeId, cancellationToken)).ToOpen();
+    }
+
+    [HttpGet("{runtimeId:guid}/status")]
+    [OpenApiOperation("查询运行状态", "返回适合轮询的运行阶段、当前任务和资产状态汇总，不传输完整拓扑。")]
+    [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabRuntimesRead)]
+    [ProducesResponseType(typeof(OpenTeamLabRuntimeStatusModel), StatusCodes.Status200OK)]
+    public async Task<OpenTeamLabRuntimeStatusModel> Status(
+        Guid runtimeId,
+        CancellationToken cancellationToken)
+    {
+        var actor = Actor();
+        Response.Headers.CacheControl = "no-store";
+        return await discovery.GetRuntimeStatusAsync(
+            runtimeId, actor.TokenId, IsAdministrator(), cancellationToken);
+    }
+
+    [HttpGet("{runtimeId:guid}/assets")]
+    [OpenApiOperation("列出运行资产", "按游标分页返回当前代容器和虚拟机资产，可按状态筛选。")]
+    [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabRuntimesRead)]
+    [ProducesResponseType(typeof(OpenTeamLabRuntimeAssetPageModel), StatusCodes.Status200OK)]
+    public async Task<OpenTeamLabRuntimeAssetPageModel> Assets(
+        Guid runtimeId,
+        [FromQuery] string? cursor = null,
+        [FromQuery, Range(1, 100)] int limit = 50,
+        [FromQuery] TeamLabRuntimeStatus? status = null,
+        CancellationToken cancellationToken = default)
+    {
+        var actor = Actor();
+        Response.Headers.CacheControl = "no-store";
+        return await discovery.ListRuntimeAssetsAsync(
+            runtimeId, actor.TokenId, IsAdministrator(), cursor, limit, status, cancellationToken);
     }
 
     [HttpPost("{runtimeId:guid}/reset")]
@@ -192,6 +248,19 @@ public sealed class OpenTeamLabRuntimesController(
             await RequireRuntimeScopeAsync(runtimeId, true, cancellationToken), model, cancellationToken);
         var operation = ApiOperationModel.FromEntity(result.Operation);
         return Accepted($"/api/open/v1/operations/{operation.Id}", operation);
+    }
+
+    [HttpGet("{runtimeId:guid}/access-grants")]
+    [OpenApiOperation("列出访问授权", "返回当前代仍可管理的访问授权元数据，不返回私钥、配置正文或一次性下载凭据。")]
+    [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabRuntimesRead)]
+    [ProducesResponseType(typeof(IReadOnlyList<OpenTeamLabAccessGrantMetadataModel>), StatusCodes.Status200OK)]
+    public async Task<IReadOnlyList<OpenTeamLabAccessGrantMetadataModel>> ListAccessGrants(
+        Guid runtimeId,
+        CancellationToken cancellationToken)
+    {
+        var actor = Actor();
+        return await discovery.ListAccessGrantsAsync(
+            runtimeId, actor.TokenId, IsAdministrator(), cancellationToken);
     }
 
     [HttpGet("{runtimeId:guid}/access-grants/{grantId:guid}/download")]

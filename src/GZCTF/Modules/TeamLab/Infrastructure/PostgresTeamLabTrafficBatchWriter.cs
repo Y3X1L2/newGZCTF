@@ -34,7 +34,6 @@ public sealed class PostgresTeamLabTrafficBatchWriter(
             packet_length integer NOT NULL,
             packet_fingerprint bytea NULL,
             flow_fingerprint bytea NOT NULL,
-            process_identity_hash bytea NULL,
             evidence_kind smallint NOT NULL,
             direction varchar(16) NOT NULL,
             bytes bigint NOT NULL,
@@ -52,7 +51,7 @@ public sealed class PostgresTeamLabTrafficBatchWriter(
              observation_point_kind, asset_id, worker_node_id, source_sequence,
              source_ip, source_prefix, source_port, destination_ip, destination_prefix,
              destination_port, protocol, tcp_flags, packet_length, packet_fingerprint,
-             flow_fingerprint, process_identity_hash, evidence_kind, direction,
+             flow_fingerprint, evidence_kind, direction,
              bytes, packets, first_seen_at, last_seen_at, captured_at, evidence_fingerprint)
         FROM STDIN (FORMAT BINARY)
         """;
@@ -62,11 +61,11 @@ public sealed class PostgresTeamLabTrafficBatchWriter(
             ("RuntimeId", "Generation", "ObservationPointId", "WorkerNodeId", "SourceSequence",
              "ObservedAt", "Direction", "SourceIp", "SourcePort", "DestinationIp",
              "DestinationPort", "Protocol", "TcpFlags", "PacketLength", "PacketFingerprint",
-             "FlowFingerprint", "ProcessIdentityHash", "EvidenceKind")
+             "FlowFingerprint", "EvidenceKind")
         SELECT runtime_id, generation, observation_point_id, worker_node_id, source_sequence,
                captured_at, direction, source_ip, source_port, destination_ip,
                destination_port, protocol, tcp_flags, packet_length, packet_fingerprint,
-               flow_fingerprint, process_identity_hash, evidence_kind
+               flow_fingerprint, evidence_kind
         FROM teamlab_traffic_ingest_stage
         ON CONFLICT ("RuntimeId", "Generation", "ObservationPointId", "SourceSequence") DO NOTHING;
         """;
@@ -140,10 +139,7 @@ public sealed class PostgresTeamLabTrafficBatchWriter(
                 await WriteDigestAsync(importer, envelope.PacketFingerprint, cancellationToken);
                 await importer.WriteAsync(Convert.FromHexString(envelope.FlowFingerprint), NpgsqlDbType.Bytea,
                     cancellationToken);
-                await WriteDigestAsync(importer, envelope.ProcessIdentityHash, cancellationToken);
-                await importer.WriteAsync(
-                    envelope.EvidenceKind.Equals("Packet", StringComparison.OrdinalIgnoreCase) ? (short)0 : (short)1,
-                    NpgsqlDbType.Smallint, cancellationToken);
+                await importer.WriteAsync((short)0, NpgsqlDbType.Smallint, cancellationToken);
                 await importer.WriteAsync(envelope.Direction, NpgsqlDbType.Varchar, cancellationToken);
                 await importer.WriteAsync(envelope.Bytes, NpgsqlDbType.Bigint, cancellationToken);
                 await importer.WriteAsync(envelope.Packets, NpgsqlDbType.Bigint, cancellationToken);

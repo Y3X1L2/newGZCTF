@@ -12,7 +12,7 @@
 }
 
 /*
- * Four explicit tracks: title (shrinkable), connection modes, metrics, actions.
+ * Three explicit tracks: title (shrinkable), metrics, actions.
  * The title track may shrink to 0 so a long scene name ellipsizes instead of
  * pushing the metrics into the action buttons.
  */
@@ -21,7 +21,7 @@
   min-height: 64px;
   align-items: center;
   gap: var(--yn-space-4);
-  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   padding: var(--yn-space-3) var(--yn-space-4);
   border-bottom: 1px solid var(--yn-color-border);
   background: var(--yn-color-surface);
@@ -44,36 +44,6 @@
   font-size: var(--yn-font-md);
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.connectionModes {
-  display: flex;
-  white-space: nowrap;
-  padding: 3px;
-  border: 1px solid var(--yn-color-border);
-  border-radius: var(--yn-radius-md);
-  background: var(--yn-color-surface-muted);
-}
-
-.connectionModes button {
-  display: flex;
-  min-height: 30px;
-  align-items: center;
-  gap: var(--yn-space-1);
-  padding: 0 var(--yn-space-3);
-  border: 0;
-  border-radius: var(--yn-radius-sm);
-  background: transparent;
-  color: var(--yn-color-muted);
-  cursor: pointer;
-  font: inherit;
-  font-size: var(--yn-font-sm);
-}
-
-.connectionModes button[aria-pressed='true'] {
-  background: var(--yn-color-surface);
-  box-shadow: var(--yn-shadow-surface);
-  color: var(--yn-color-text);
 }
 
 .metrics {
@@ -213,25 +183,6 @@
   }
 }
 
-/*
- * Narrower still: the mode switch becomes icon-only rather than disappearing.
- * Choosing between a network link and a start-order dependency is a core editing
- * action, so it must survive every width where editing is possible at all.
- */
-@media (max-width: 1040px) {
-  .header {
-    grid-template-columns: minmax(0, 1fr) auto auto;
-  }
-
-  .connectionModes button {
-    padding: 0 var(--yn-space-2);
-  }
-
-  .connectionModes button span {
-    display: none;
-  }
-}
-
 @media (max-width: 760px) {
   .page {
     height: auto;
@@ -243,7 +194,6 @@
     flex-wrap: wrap;
   }
 
-  .connectionModes,
   .documentActions {
     display: none;
   }

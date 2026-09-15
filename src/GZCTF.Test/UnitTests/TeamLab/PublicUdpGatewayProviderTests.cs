@@ -1,3 +1,4 @@
+using System;
 using System.Threading;
 using System.Threading.Tasks;
 using GZCTF.Models.Data;
@@ -87,7 +88,7 @@ public class PublicUdpGatewayProviderTests
         Assert.Contains("add table inet gzctf_teamlab", commands[0]);
         Assert.Contains("add chain inet gzctf_teamlab prerouting { type nat hook prerouting priority dstnat; policy accept; }", commands[1]);
         Assert.Contains("add chain inet gzctf_teamlab postrouting { type nat hook postrouting priority srcnat; policy accept; }", commands[2]);
-        Assert.Contains("list chain inet gzctf_teamlab prerouting", commands[3]);
+        Assert.Contains("list chain inet gzctf_teamlab $chain", commands[3]);
         Assert.Contains("add rule inet gzctf_teamlab prerouting", commands[4]);
         Assert.Contains("add rule inet gzctf_teamlab postrouting", commands[5]);
     }
@@ -127,5 +128,23 @@ public class PublicUdpGatewayProviderTests
         Assert.True(PublicUdpGatewayProvider.ShouldWarnForCommandFailure(
             "/usr/sbin/iptables -t nat -A PREROUTING -p udp --dport 32004",
             output));
+    }
+
+    [Fact]
+    public async Task ServiceMapping_UsesProtocolAndStableMappingComment()
+    {
+        var provider = new PublicUdpGatewayProvider(
+            Options.Create(new PublicUdpGatewayConfig { Enable = false, Provider = "nftables" }),
+            NullLogger<PublicUdpGatewayProvider>.Instance);
+        var id = Guid.NewGuid();
+
+        var result = await provider.SyncServiceAsync(
+            new PublicServiceGatewayMapping(id, "tcp", 32020, "10.250.0.20", 32020), default);
+        var commands = string.Join('\n', result.Commands);
+
+        Assert.False(result.Success);
+        Assert.Contains("tcp dport 32020 dnat ip to 10.250.0.20:32020", commands);
+        Assert.Contains($"gzctf-teamlab-service-{id:N}", commands);
+        Assert.Contains("add chain inet gzctf_teamlab prerouting", commands);
     }
 }

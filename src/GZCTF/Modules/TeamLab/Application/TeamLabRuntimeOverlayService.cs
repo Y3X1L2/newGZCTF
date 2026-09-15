@@ -16,25 +16,12 @@ public sealed partial class TeamLabRuntimeOverlayService(IDataProtectionProvider
         int runtimeId,
         int generation,
         IReadOnlyList<TeamLabRuntimeOverlayModel>? overlays,
-        IReadOnlySet<string> assetKeys,
-        IReadOnlySet<string>? sensorAssetKeys = null)
+        IReadOnlySet<string> assetKeys)
     {
         var normalized = (overlays ?? [])
             .OrderBy(item => item.AssetKey, StringComparer.Ordinal)
             .Select(item => Normalize(item, assetKeys))
             .ToDictionary(item => item.AssetKey, StringComparer.Ordinal);
-        foreach (var assetKey in sensorAssetKeys ?? new HashSet<string>())
-        {
-            if (!assetKeys.Contains(assetKey))
-                throw new TeamLabApiContractException("topology_invalid", $"sensor 资源 '{assetKey}' 不存在", 422);
-            var current = normalized.GetValueOrDefault(assetKey) ??
-                          new TeamLabRuntimeOverlayModel(assetKey, null);
-            var secrets = new SortedDictionary<string, string>(StringComparer.Ordinal);
-            foreach (var pair in current.Secrets ?? new Dictionary<string, string>())
-                secrets[pair.Key] = pair.Value;
-            secrets["GZCTF_SENSOR_HMAC"] = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
-            normalized[assetKey] = current with { Secrets = secrets };
-        }
         if (normalized.Count == 0) return null;
         var payloadItems = normalized.Values.OrderBy(item => item.AssetKey, StringComparer.Ordinal).ToArray();
         var payload = JsonSerializer.Serialize(payloadItems);
@@ -92,8 +79,6 @@ public sealed partial class TeamLabRuntimeOverlayService(IDataProtectionProvider
             var key = pair.Key.Trim();
             if (!EnvironmentKeyRegex().IsMatch(key))
                 throw new TeamLabApiContractException("topology_invalid", $"overlay key '{key}' 无效", 422);
-            if (key.StartsWith("GZCTF_SENSOR_", StringComparison.Ordinal))
-                throw new TeamLabApiContractException("topology_invalid", $"overlay key '{key}' 已被平台保留", 422);
             if (pair.Value is null || pair.Value.Length > (secret ? 4096 : 16384))
                 throw new TeamLabApiContractException("topology_invalid", $"overlay value '{key}' 过大", 422);
             normalized[key] = pair.Value;

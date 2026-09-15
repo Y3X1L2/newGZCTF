@@ -23,6 +23,7 @@ public sealed class TeamLabRuntimeCleanupService(
     IPublicUdpGatewayProvider publicGateway,
     TeamLabEventRecorder eventRecorder,
     ITeamLabRemoteAccessService remoteAccess,
+    ITeamLabServiceAccessCleanup serviceAccess,
     TeamLabReleaseImagePreparationService preparation)
 {
     private readonly TeamLabReleaseImagePreparationService _preparation = preparation;
@@ -58,6 +59,7 @@ public sealed class TeamLabRuntimeCleanupService(
         await traffic.StopCollectorsAsync(runtime, cancellationToken);
         var errors = (await captureCleanup.ExpireGenerationAsync(
             runtime.Id, generation, cancellationToken)).ToList();
+        errors.AddRange(await serviceAccess.CleanupRuntimeAsync(runtime.PublicId, cancellationToken));
         var planSnapshots = await context.TeamLabExecutionPlanSnapshots.AsNoTracking()
             .Where(item => item.RuntimeId == runtime.Id && item.Generation == generation)
             .ToDictionaryAsync(item => item.ShardId, cancellationToken);
@@ -475,8 +477,6 @@ public sealed class TeamLabRuntimeCleanupService(
                 .Where(item => !string.IsNullOrWhiteSpace(item))
                 .Distinct(StringComparer.Ordinal)
                 .ToArray(),
-            assets.Where(item => item.EndpointObservation != TeamLabEndpointObservationMode.Disabled)
-                .Select(item => item.TopologyKey).ToArray(),
             runtime.Networks
                 .Where(item => item.Generation == runtime.Generation && item.ShardId != shard.Id)
                 .Select(item => item.Cidr)

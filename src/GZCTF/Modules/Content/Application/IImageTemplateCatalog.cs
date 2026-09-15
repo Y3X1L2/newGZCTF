@@ -7,12 +7,26 @@ public interface IImageTemplateCatalog
 {
     Task<ImageTemplateDescriptor?> FindAsync(int id, CancellationToken cancellationToken);
     Task<ImageTemplateDetails?> FindDetailsAsync(int id, CancellationToken cancellationToken);
+    Task<ImageTemplateDetailsPage> ListDetailsAsync(
+        Guid actorUserId,
+        bool includeAll,
+        OSType? osType,
+        ImageType? imageType,
+        ImageStatus? status,
+        string? search,
+        int limit,
+        int? afterId,
+        CancellationToken cancellationToken);
     Task<ImageTemplateDeleteDecision> MarkDeletingAsync(
         int id,
         Func<CancellationToken, Task<ImageTemplateDeleteDecision>> checkReferences,
         CancellationToken cancellationToken);
     Task CompleteDeletionAsync(int id, CancellationToken cancellationToken);
 }
+
+public sealed record ImageTemplateDetailsPage(
+    IReadOnlyList<ImageTemplateDetails> Items,
+    int? NextId);
 
 public sealed class ImageTemplateDeletionService(
     IImageTemplateCatalog catalog,

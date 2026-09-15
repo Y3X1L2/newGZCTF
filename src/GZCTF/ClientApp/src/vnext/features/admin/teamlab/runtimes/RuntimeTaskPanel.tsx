@@ -29,7 +29,7 @@ export function RuntimeTaskPanel({ runtime, onInspect }: {
     {runtime.failure ? <InlineFeedback tone="danger">
       <span>{runtime.failure.detail || '运行操作未能完成。'}</span>{' '}
       <span>错误码：{runtime.failure.code}；阶段：{runtime.failure.stage}。</span>{' '}
-      <span>{runtime.failure.retryable ? '允许重试，请先处理错误原因。' : '不能直接重试，请先检查运行事件。'}</span>
+      <span>{runtime.failure.retryable ? '处理错误原因后，可使用“重新部署”。' : '请先查看运行事件，再按页面提供的恢复操作处理。'}</span>
     </InlineFeedback> : null}
   </section>
 }

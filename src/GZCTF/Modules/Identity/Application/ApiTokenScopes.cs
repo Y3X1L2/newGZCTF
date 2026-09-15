@@ -26,6 +26,7 @@ public static class ApiTokenScopes
     public const string TeamLabCaptureWrite = "teamlab.capture:write";
     public const string TeamLabResourcePoolsRead = "teamlab.resource-pools:read";
     public const string TeamLabDevicePackagesRead = "teamlab.device-packages:read";
+    public const string TeamLabDevicePackagesWrite = "teamlab.device-packages:write";
     public const string TeamLabConnectorsRead = "teamlab.connectors:read";
     public const string TeamLabConnectorsWrite = "teamlab.connectors:write";
     public const string TeamLabLinkPoliciesRead = "teamlab.link-policies:read";
@@ -60,6 +61,7 @@ public static class ApiTokenScopes
         TeamLabCaptureWrite,
         TeamLabResourcePoolsRead,
         TeamLabDevicePackagesRead,
+        TeamLabDevicePackagesWrite,
         TeamLabConnectorsRead,
         TeamLabConnectorsWrite,
         TeamLabLinkPoliciesRead,

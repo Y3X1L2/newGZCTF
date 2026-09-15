@@ -1,6 +1,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using System.IO;
 using GZCTF.Models;
 using GZCTF.Infrastructure.Concurrency;
 using GZCTF.Modules.Content.Application;
@@ -85,6 +86,64 @@ public sealed class TeamLabAssetFileTests
     }
 
     [Fact]
+    public async Task StreamingTransferSupportsFilesAboveLegacyJsonLimit()
+    {
+        await using var db = Context();
+        var asset = await Seed(db);
+        var payload = new byte[TeamLabFileLimits.MaxBytes + 1024];
+        RandomNumberGenerator.Fill(payload);
+        var gateway = new Mock<ITeamLabAssetFileGateway>(MockBehavior.Strict);
+        gateway.Setup(item => item.UploadAsync(asset.WorkerNodeId!.Value,
+                It.Is<TeamLabContainerFileRequest>(request => request.Operation == "upload" && request.Path == "/large.bin"),
+                It.IsAny<Stream>(), payload.LongLength, It.IsAny<CancellationToken>()))
+            .Returns<Guid, TeamLabContainerFileRequest, Stream, long, CancellationToken>(
+                async (_, _, source, _, token) =>
+                {
+                    using var copy = new MemoryStream();
+                    await source.CopyToAsync(copy, token);
+                    Assert.Equal(payload, copy.ToArray());
+                });
+        gateway.Setup(item => item.DownloadAsync(asset.WorkerNodeId!.Value,
+                It.Is<TeamLabContainerFileRequest>(request => request.Operation == "download" && request.Path == "/large.bin"),
+                It.IsAny<Stream>(), TeamLabFileLimits.DefaultMaxTransferBytes, It.IsAny<TimeSpan>(),
+                It.IsAny<CancellationToken>()))
+            .Returns<Guid, TeamLabContainerFileRequest, Stream, long, TimeSpan, CancellationToken>(
+                async (_, _, destination, _, _, token) => await destination.WriteAsync(payload, token));
+        var service = Service(db, gateway.Object);
+        await using (var source = new MemoryStream(payload, writable: false))
+            await service.UploadAsync(asset.Runtime.PublicId, asset.Id, asset.Runtime.CreatedById!.Value,
+                false, 3, "/large.bin", source, payload.LongLength, false, false, default);
+        await using var destination = new MemoryStream();
+        await service.DownloadAsync(asset.Runtime.PublicId, asset.Id, asset.Runtime.CreatedById!.Value,
+            false, 3, "/large.bin", destination, default);
+        Assert.Equal(payload, destination.ToArray());
+        gateway.VerifyAll();
+    }
+
+    [Theory]
+    [InlineData("mkdir", "/data/archive", null, false, false)]
+    [InlineData("move", "/data/a.txt", "/data/archive/a.txt", false, false)]
+    [InlineData("delete", "/data/archive", null, true, true)]
+    public async Task DirectoryOperationsReachAgentWithStructuredFields(
+        string operation, string path, string? destinationPath, bool recursive, bool confirmed)
+    {
+        await using var db = Context();
+        var asset = await Seed(db);
+        var gateway = new Mock<ITeamLabAssetFileGateway>(MockBehavior.Strict);
+        gateway.Setup(item => item.ExecuteAsync(asset.WorkerNodeId!.Value,
+            It.Is<TeamLabContainerFileRequest>(request => request.Operation == operation && request.Path == path &&
+                request.DestinationPath == destinationPath && request.Recursive == recursive),
+            It.IsAny<CancellationToken>())).ReturnsAsync(new TeamLabFileResult());
+
+        await Service(db, gateway.Object).ExecuteAsync(asset.Runtime.PublicId, asset.Id,
+            asset.Runtime.CreatedById!.Value, false,
+            new TeamLabAssetFileCommand(3, operation, path, Confirmed: confirmed,
+                DestinationPath: destinationPath, Recursive: recursive), default);
+
+        gateway.VerifyAll();
+    }
+
+    [Fact]
     public async Task VmIdentityIsPinnedBeforeFileAccessAndCanBeExplicitlyRenewed()
     {
         await using var db = Context();
@@ -124,7 +183,7 @@ public sealed class TeamLabAssetFileTests
 
     static AppDbContext Context() => new(new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
     static TeamLabAssetFileService Service(AppDbContext db, ITeamLabAssetFileGateway gateway, IDataProtectionProvider? protection = null) =>
-        new(db, new TeamLabAuthorizationService(db, [], []), gateway,
+        new(db, new TeamLabAuthorizationService(db, [], []), new TeamLabScopeAuthorizationService(db), gateway,
             new TeamLabEventRecorder(db, new EfOperationalEventWriter(db, NullLogger<EfOperationalEventWriter>.Instance), new OperationalCorrelation()),
             new ImageRemoteAccessService(db, protection ?? new EphemeralDataProtectionProvider()), new LocalDevelopmentLeaseProvider(),
             new TeamLabRuntimeOperationPayloadProtector(new EphemeralDataProtectionProvider()));

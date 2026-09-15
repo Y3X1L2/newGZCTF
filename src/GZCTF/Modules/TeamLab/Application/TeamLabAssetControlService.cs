@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text.Json;
 using GZCTF.Models.Data;
+using GZCTF.Modules.Audit.Application;
 using GZCTF.Modules.Runtime.Application;
 using GZCTF.Modules.Audit.Domain;
 using GZCTF.Modules.Audit.Contracts;
@@ -20,6 +21,7 @@ public interface ITeamLabAssetControlGateway
 }
 
 public sealed class TeamLabAssetControlService(AppDbContext context, TeamLabAuthorizationService authorization,
+    TeamLabScopeAuthorizationService scopeAuthorization,
     TeamLabRuntimeLifecycleGuard lifecycle, ITeamLabRuntimeQueue queue, TeamLabRuntimeOperationPayloadProtector protector,
     ITeamLabAssetControlGateway gateway, ITeamLabRemoteAccessService sessions, TeamLabEventRecorder events, IDistributedLeaseProvider leases)
 {
@@ -28,6 +30,20 @@ public sealed class TeamLabAssetControlService(AppDbContext context, TeamLabAuth
         await authorization.RequirePermissionAsync(runtimeId, actorId, administrator, TeamLabRuntimePermission.StateRead, token);
         var permissions = await authorization.EvaluateAsync(runtimeId, actorId, administrator, token);
         if (!permissions.HasFlag(TeamLabRuntimePermission.LifecycleManage)) return new(false, "当前账号没有资产生命周期管理权限。");
+        return await AvailabilityCoreAsync(runtimeId, assetId, token);
+    }
+
+    public async Task<TeamLabAssetControlAvailability> AvailabilityForApiAsync(
+        Guid runtimeId, int assetId, Guid apiTokenId, CancellationToken token)
+    {
+        await scopeAuthorization.RequireRuntimeScopeAsync(
+            runtimeId, apiTokenId, administrator: false, writable: false, token);
+        return await AvailabilityCoreAsync(runtimeId, assetId, token);
+    }
+
+    private async Task<TeamLabAssetControlAvailability> AvailabilityCoreAsync(
+        Guid runtimeId, int assetId, CancellationToken token)
+    {
         var asset = await LoadAsync(runtimeId, assetId, token);
         try { await RequireRuntimeAsync(asset, asset.Runtime.Generation, token); }
         catch (TeamLabApiContractException error) { return new(false, error.Message); }
@@ -38,14 +54,22 @@ public sealed class TeamLabAssetControlService(AppDbContext context, TeamLabAuth
 
     public async Task<TeamLabAssetControlTask> GetTaskAsync(Guid runtimeId, int assetId, Guid ticketId, Guid actorId, bool administrator, CancellationToken token)
     {
-        var (ticket, _) = await RequireTicketAsync(runtimeId, assetId, ticketId, actorId, administrator, token);
-        return new(ticket.Id, ticket.Status.ToString().ToLowerInvariant(), ticket.StageMessage,
-            ticket.ErrorCode, ticket.Status == DeploymentQueueTicketStatus.Failed && ticket.Retryable);
+        await authorization.RequirePermissionAsync(runtimeId, actorId, administrator, TeamLabRuntimePermission.LifecycleManage, token);
+        return ToTask(await RequireTicketAsync(runtimeId, assetId, ticketId, token));
+    }
+
+    public async Task<TeamLabAssetControlTask> GetTaskForApiAsync(
+        Guid runtimeId, int assetId, Guid ticketId, Guid apiTokenId, CancellationToken token)
+    {
+        await scopeAuthorization.RequireRuntimeScopeAsync(
+            runtimeId, apiTokenId, administrator: false, writable: false, token);
+        return ToTask(await RequireTicketAsync(runtimeId, assetId, ticketId, token));
     }
 
     public async Task<TeamLabQueueTicketResult> RetryAsync(Guid runtimeId, int assetId, Guid ticketId, Guid actorId, bool administrator, CancellationToken token)
     {
-        var (ticket, payload) = await RequireTicketAsync(runtimeId, assetId, ticketId, actorId, administrator, token);
+        await authorization.RequirePermissionAsync(runtimeId, actorId, administrator, TeamLabRuntimePermission.LifecycleManage, token);
+        var (ticket, payload) = await RequireTicketAsync(runtimeId, assetId, ticketId, token);
         if (ticket.Status != DeploymentQueueTicketStatus.Failed || !ticket.Retryable)
             throw new TeamLabApiContractException("asset_control.not_retryable", "只有失败的资产操作可以继续执行。", 409);
         var asset = await LoadAsync(runtimeId, assetId, token);
@@ -54,9 +78,8 @@ public sealed class TeamLabAssetControlService(AppDbContext context, TeamLabAuth
     }
 
     async Task<(DeploymentQueueTicket Ticket, TeamLabRuntimeOperationPayload Payload)> RequireTicketAsync(
-        Guid runtimeId, int assetId, Guid ticketId, Guid actorId, bool administrator, CancellationToken token)
+        Guid runtimeId, int assetId, Guid ticketId, CancellationToken token)
     {
-        await authorization.RequirePermissionAsync(runtimeId, actorId, administrator, TeamLabRuntimePermission.LifecycleManage, token);
         var ticket = await context.DeploymentQueueTickets.AsNoTracking().SingleOrDefaultAsync(item => item.Id == ticketId && item.Operation == RuntimeOperationKind.AssetControl, token);
         var payload = ticket?.ProtectedPayload is { } value ? protector.Unprotect(value) : null;
         if (ticket is null || payload?.RuntimeId != runtimeId || payload.AssetControl?.AssetId != assetId)
@@ -81,7 +104,61 @@ public sealed class TeamLabAssetControlService(AppDbContext context, TeamLabAuth
         return await QueueAsync(asset, actorId, payload, token);
     }
 
-    Task<TeamLabQueueTicketResult> QueueAsync(TeamLabRuntimeAsset asset, Guid actorId, TeamLabRuntimeOperationPayload payload, CancellationToken token)
+    public async Task<TeamLabQueueTicketResult> EnqueueForApiAsync(
+        Guid runtimeId,
+        int assetId,
+        Guid actorId,
+        Guid apiTokenId,
+        string idempotencyKey,
+        TeamLabAssetControlCommand command,
+        CancellationToken token)
+    {
+        Validate(command);
+        var normalizedCommand = command with { Reason = command.Reason.Trim() };
+        var normalizedKey = ExternalIdempotencyKey.Normalize(idempotencyKey);
+        var controlScopeId = await scopeAuthorization.RequireRuntimeScopeAsync(
+            runtimeId, apiTokenId, administrator: false, writable: true, token);
+        var payloadHash = Convert.ToHexStringLower(SHA256.HashData(
+            System.Text.Encoding.UTF8.GetBytes($"teamlab-asset-control\n{apiTokenId:D}\n{normalizedKey}")));
+        var existing = await context.DeploymentQueueTickets.AsNoTracking()
+            .Where(item => item.Operation == RuntimeOperationKind.AssetControl && item.PayloadHash == payloadHash)
+            .OrderBy(item => item.CreatedAt)
+            .ThenBy(item => item.Id)
+            .FirstOrDefaultAsync(token);
+        if (existing is not null)
+        {
+            var existingPayload = existing.ProtectedPayload is { } value ? protector.Unprotect(value) : null;
+            if (existingPayload?.RuntimeId == runtimeId &&
+                existingPayload.ControlScopeId == controlScopeId &&
+                existingPayload.AssetControl is { } existingControl &&
+                existingControl.AssetId == assetId &&
+                existingControl.ApiTokenId == apiTokenId &&
+                existingControl.Command == normalizedCommand)
+                return new(existing.Id);
+            throw new IdempotencyConflictException();
+        }
+
+        var asset = await LoadAsync(runtimeId, assetId, token);
+        await RequireRuntimeAsync(asset, normalizedCommand.Generation, token);
+        if (normalizedCommand.Action != "rebuild" && string.IsNullOrWhiteSpace(asset.RuntimeResourceId))
+            throw new TeamLabApiContractException("asset_control.resource_missing", "资产缺少执行身份，请使用重建。", 409);
+        var payload = new TeamLabRuntimeOperationPayload(null, runtimeId, null)
+        {
+            ControlScopeId = controlScopeId,
+            AssetControl = new(assetId, normalizedCommand, asset.RuntimeResourceId,
+                asset.Kind == TeamLabResourceKind.Vm ? asset.NativeIdentity : null,
+                WorkerNodeId: asset.WorkerNodeId!.Value,
+                ApiTokenId: apiTokenId)
+        };
+        return await QueueAsync(asset, actorId, payload, token, payloadHash);
+    }
+
+    Task<TeamLabQueueTicketResult> QueueAsync(
+        TeamLabRuntimeAsset asset,
+        Guid actorId,
+        TeamLabRuntimeOperationPayload payload,
+        CancellationToken token,
+        string? payloadHash = null)
     {
         var command = payload.AssetControl!.Command;
         var runtimeId = asset.Runtime.PublicId;
@@ -89,7 +166,7 @@ public sealed class TeamLabAssetControlService(AppDbContext context, TeamLabAuth
             WorkloadSchedulingIdentity.ForRuntime(asset.RuntimeId, $"teamlab-runtime:{asset.RuntimeId}", asset.Runtime.CreatedById),
             asset.Runtime.ExternalReference ?? runtimeId.ToString("D"), $"{asset.Name}: {command.Action}", command.Generation,
             RuntimeOperationKind.AssetControl, TargetNodeId: asset.WorkerNodeId, ProtectedPayload: protector.Protect(payload),
-            PayloadHash: Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(payload)))), token);
+            PayloadHash: payloadHash ?? Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(payload)))), token);
     }
 
     public async Task<TeamLabNodeResult> ExecuteAsync(DeploymentQueueTicket ticket, CancellationToken token)
@@ -107,8 +184,16 @@ public sealed class TeamLabAssetControlService(AppDbContext context, TeamLabAuth
             return TeamLabNodeResult.Failed("asset_control.identity_conflict");
         var actor = await context.Users.AsNoTracking().SingleOrDefaultAsync(item => item.Id == ticket.OwnerUserId, token);
         if (actor is null || actor.Role == Role.Banned) return TeamLabNodeResult.Failed("asset_control.actor_unavailable");
-        await authorization.RequirePermissionAsync(asset.Runtime.PublicId, actor.Id, actor.Role >= Role.Admin,
-            TeamLabRuntimePermission.LifecycleManage, token);
+        if (control.ApiTokenId is { } apiTokenId)
+        {
+            var scopeId = await scopeAuthorization.RequireRuntimeScopeAsync(
+                asset.Runtime.PublicId, apiTokenId, administrator: false, writable: true, token);
+            if (payload.ControlScopeId != scopeId)
+                return TeamLabNodeResult.Failed("asset_control.identity_conflict");
+        }
+        else
+            await authorization.RequirePermissionAsync(asset.Runtime.PublicId, actor.Id, actor.Role >= Role.Admin,
+                TeamLabRuntimePermission.LifecycleManage, token);
         await RequireRuntimeAsync(asset, ticket.Generation, token);
         var snapshot = await context.TeamLabExecutionPlanSnapshots.AsNoTracking().SingleOrDefaultAsync(item =>
             item.RuntimeId == asset.RuntimeId && item.Generation == asset.Generation && item.ShardId == asset.ShardId, token)
@@ -197,6 +282,14 @@ public sealed class TeamLabAssetControlService(AppDbContext context, TeamLabAuth
             throw new TeamLabApiContractException("asset_control.invalid_request", "请选择操作并填写 4-500 字的操作原因。", 422);
         if (command.Action is not ("start" or "resume") && !command.Confirmed)
             throw new TeamLabApiContractException("asset_control.confirmation_required", "此操作会中断连接或替换磁盘，需要确认。", 422);
+    }
+
+    private static TeamLabAssetControlTask ToTask(
+        (DeploymentQueueTicket Ticket, TeamLabRuntimeOperationPayload Payload) resolved)
+    {
+        var ticket = resolved.Ticket;
+        return new(ticket.Id, ticket.Status.ToString().ToLowerInvariant(), ticket.StageMessage,
+            ticket.ErrorCode, ticket.Status == DeploymentQueueTicketStatus.Failed && ticket.Retryable);
     }
 
     async Task<TeamLabRuntimeAsset> LoadAsync(Guid runtimeId, int assetId, CancellationToken token) =>

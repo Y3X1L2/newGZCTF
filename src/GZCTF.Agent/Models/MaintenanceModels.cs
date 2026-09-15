@@ -5,10 +5,6 @@ namespace GZCTF.Agent.Models;
 public record AgentSyncRequest(
     string DownloadUrl,
     string? ExpectedSha256 = null,
-    string? LinuxSensorDownloadUrl = null,
-    string? LinuxSensorSha256 = null,
-    string? WindowsSensorDownloadUrl = null,
-    string? WindowsSensorSha256 = null,
     AgentVmControlPlaneSyncConfig? VmControlPlane = null,
     TeamLabDataPlaneSyncConfig? TeamLabDataPlane = null,
     bool Restart = true);

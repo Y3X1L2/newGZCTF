@@ -115,6 +115,13 @@ export interface RegisterTeamLabConnectorRequest {
   managedNic?: { nodeId: string; interfaceName: string; macAddress: string }
 }
 
+export interface TeamLabHostInterface {
+  name: string
+  macAddress: string
+  linkUp: boolean
+  addresses: readonly string[]
+}
+
 export interface TeamLabNodeCacheEntry {
   templateId: number
   nodeId: string

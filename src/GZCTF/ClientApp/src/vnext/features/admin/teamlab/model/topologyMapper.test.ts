@@ -56,7 +56,6 @@ function detail(): TeamLabTopologyDetail {
           exposePort: 8080,
           healthCheck: { kind: 'http', port: 8080 },
           orderIndex: 0,
-          endpointObservation: 'required',
           devicePackageId: null,
           deviceParameters: null,
           connectorId: null,
@@ -71,7 +70,6 @@ function detail(): TeamLabTopologyDetail {
           exposePort: null,
           healthCheck: { kind: 'tcp', port: 389 },
           orderIndex: 1,
-          endpointObservation: 'optional',
           devicePackageId: null,
           deviceParameters: null,
           connectorId: null,
@@ -87,8 +85,7 @@ function detail(): TeamLabTopologyDetail {
           direction: 'from-to',
         },
       ],
-      dependencies: [{ assetKey: 'web', dependsOnKey: 'dc', condition: 'service-ready' }],
-      observation: { flowMetadataEnabled: true, onDemandPcapEnabled: false, endpointObservation: 'required' },
+      observation: { flowMetadataEnabled: true, onDemandPcapEnabled: false },
     },
     editor: {
       networks: { client: position(0), domain: position(200) },
@@ -202,15 +199,12 @@ describe('topology API round trip', () => {
     const source = detail()
     source.schemaVersion = 1
     source.definition.infrastructure = []
-    source.definition.dependencies = []
     source.definition.observation = {
       flowMetadataEnabled: true,
       onDemandPcapEnabled: true,
-      endpointObservation: 'optional',
     }
     source.definition.assets = source.definition.assets.map((asset) => ({
       ...asset,
-      endpointObservation: 'disabled',
     }))
     source.definition.connections = []
 

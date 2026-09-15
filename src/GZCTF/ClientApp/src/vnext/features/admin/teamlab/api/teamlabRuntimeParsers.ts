@@ -8,6 +8,7 @@ import type {
   TeamLabObservationPointKind,
   TeamLabPathConfidence,
   TeamLabRuntime,
+  TeamLabRuntimeStatusSnapshot,
   TeamLabRuntimeEvent,
   TeamLabTrafficEvidenceKind,
   TeamLabTrafficFlowPage,
@@ -60,17 +61,11 @@ const eventLevels = {
 } as const
 const pathConfidences = {
   0: 'packet-exact',
-  1: 'process-correlated',
-  2: 'temporally-related',
   PacketExact: 'packet-exact',
-  ProcessCorrelated: 'process-correlated',
-  TemporallyRelated: 'temporally-related',
 } as const
 const evidenceKinds = {
   0: 'packet',
-  1: 'endpoint-process',
   Packet: 'packet',
-  EndpointProcess: 'endpoint-process',
 } as const
 const observationPointKinds = {
   0: 'network-bridge',
@@ -90,6 +85,7 @@ const captureStatuses = {
   4: 'failed',
   5: 'expired',
   6: 'cleanup-pending',
+  7: 'partially-running',
   Pending: 'pending',
   Running: 'running',
   Stopping: 'stopping',
@@ -97,6 +93,7 @@ const captureStatuses = {
   Failed: 'failed',
   Expired: 'expired',
   CleanupPending: 'cleanup-pending',
+  PartiallyRunning: 'partially-running',
 } as const
 const captureSegmentStatuses = {
   0: 'pending',
@@ -176,6 +173,7 @@ export function parseTeamLabRuntime(value: unknown): TeamLabRuntime {
         key: parse.string(asset.key, `${label}.key`),
         name: parse.string(asset.name, `${label}.name`),
         kind: assetKind(asset.kind, `${label}.kind`),
+        networkKeys: parse.array(asset.networkKeys, `${label}.networkKeys`, parse.string),
         runtimeResourceId: parse.nullableString(asset.runtimeResourceId, `${label}.runtimeResourceId`),
         primaryIp: parse.nullableString(asset.primaryIp, `${label}.primaryIp`),
         status: runtimeStatus(asset.status, `${label}.status`),
@@ -185,6 +183,29 @@ export function parseTeamLabRuntime(value: unknown): TeamLabRuntime {
     createdAt: parse.number(item.createdAt, 'TeamLab runtime.createdAt'),
     updatedAt: parse.nullableNumber(item.updatedAt, 'TeamLab runtime.updatedAt'),
     error: parse.nullableString(item.error, 'TeamLab runtime.error'),
+  }
+}
+
+export function parseTeamLabRuntimeStatus(value: unknown): TeamLabRuntimeStatusSnapshot {
+  const item = parse.record(value, 'TeamLab runtime status')
+  const assets = parse.record(item.assets, 'TeamLab runtime status.assets')
+  return {
+    id: parse.string(item.id, 'TeamLab runtime status.id'),
+    generation: parse.number(item.generation, 'TeamLab runtime status.generation'),
+    status: runtimeStatus(item.status, 'TeamLab runtime status.status'),
+    stage: parse.string(item.stage, 'TeamLab runtime status.stage'),
+    deploymentQueueTicketId: parse.nullableString(item.deploymentQueueTicketId, 'TeamLab runtime status.deploymentQueueTicketId'),
+    queueStatus: item.queueStatus == null ? null : parse.enumValue(item.queueStatus, queueStatuses, 'TeamLab runtime status.queueStatus'),
+    queueStage: parse.nullableString(item.queueStage, 'TeamLab runtime status.queueStage'),
+    updatedAt: parse.nullableNumber(item.updatedAt, 'TeamLab runtime status.updatedAt'),
+    assets: {
+      total: parse.number(assets.total, 'TeamLab runtime status.assets.total'),
+      pending: parse.number(assets.pending, 'TeamLab runtime status.assets.pending'),
+      running: parse.number(assets.running, 'TeamLab runtime status.assets.running'),
+      paused: parse.number(assets.paused, 'TeamLab runtime status.assets.paused'),
+      stopped: parse.number(assets.stopped, 'TeamLab runtime status.assets.stopped'),
+      failed: parse.number(assets.failed, 'TeamLab runtime status.assets.failed'),
+    },
   }
 }
 

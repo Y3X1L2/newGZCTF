@@ -21,8 +21,10 @@ public sealed class RuntimeSchedulingService(
     IOperationalEventWriter events,
     OperationalCorrelation correlation,
     IOptions<KvmSettings> kvmOptions,
-    ILogger<RuntimeSchedulingService> logger)
+    ILogger<RuntimeSchedulingService> logger,
+    IServiceScopeFactory? scopeFactory = null)
 {
+    const int SchedulingParallelism = 8;
     static readonly TimeSpan ClaimTimeout = TimeSpan.FromMinutes(2);
 
     public async Task<int> SchedulePendingAsync(CancellationToken token)
@@ -33,27 +35,46 @@ public sealed class RuntimeSchedulingService(
         var ticketIds = await selector.SelectAsync(now, token);
 
         var scheduled = 0;
-        foreach (var ticketId in ticketIds)
+        if (scopeFactory is null)
         {
-            // Isolated per ticket: without this, one ticket that throws skips every ticket behind it
-            // for the rest of the tick, and a persistently failing one at the head of the queue
-            // starves the rest indefinitely.
-            try
-            {
-                if (await TryScheduleTicketAsync(ticketId, now, token))
+            foreach (var ticketId in ticketIds)
+                if (await TryScheduleTicketSafelyAsync(ticketId, now, token))
                     scheduled++;
-            }
-            catch (OperationCanceledException) when (token.IsCancellationRequested)
-            {
-                throw;
-            }
-            catch (Exception exception)
-            {
-                await ReleaseFailedClaimAsync(ticketId, exception, token);
-            }
+            return scheduled;
         }
+        await Parallel.ForEachAsync(ticketIds, new ParallelOptions
+        {
+            MaxDegreeOfParallelism = SchedulingParallelism,
+            CancellationToken = token
+        }, async (ticketId, cancellationToken) =>
+        {
+            await using var scope = scopeFactory.CreateAsyncScope();
+            var scheduler = scope.ServiceProvider.GetRequiredService<RuntimeSchedulingService>();
+            if (await scheduler.TryScheduleTicketSafelyAsync(ticketId, now, cancellationToken))
+                Interlocked.Increment(ref scheduled);
+        });
 
         return scheduled;
+    }
+
+    async Task<bool> TryScheduleTicketSafelyAsync(
+        Guid ticketId,
+        DateTimeOffset now,
+        CancellationToken token)
+    {
+        try
+        {
+            return await TryScheduleTicketAsync(ticketId, now, token);
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            await ReleaseFailedClaimAsync(ticketId, exception, token);
+            return false;
+        }
     }
 
     /// <summary>

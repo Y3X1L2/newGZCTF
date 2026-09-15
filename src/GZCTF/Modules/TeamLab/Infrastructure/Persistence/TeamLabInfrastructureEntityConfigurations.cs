@@ -90,26 +90,3 @@ public sealed class TeamLabFabricLinkLeaseEntityConfiguration : IEntityTypeConfi
             .OnDelete(DeleteBehavior.Restrict);
     }
 }
-
-public sealed class TeamLabRuntimeDependencyStateEntityConfiguration
-    : IEntityTypeConfiguration<TeamLabRuntimeDependencyState>
-{
-    public void Configure(EntityTypeBuilder<TeamLabRuntimeDependencyState> builder)
-    {
-        builder.ToTable("TeamLabRuntimeDependencyStates");
-        builder.Property(item => item.Condition).HasConversion<byte>();
-        builder.Property(item => item.Status).HasConversion<byte>();
-        builder.HasIndex(item => new
-        {
-            item.RuntimeId,
-            item.Generation,
-            item.AssetKey,
-            item.DependsOnKey,
-            item.Condition
-        }).IsUnique();
-        builder.HasOne(item => item.Runtime)
-            .WithMany(item => item.DependencyStates)
-            .HasForeignKey(item => item.RuntimeId)
-            .OnDelete(DeleteBehavior.Cascade);
-    }
-}

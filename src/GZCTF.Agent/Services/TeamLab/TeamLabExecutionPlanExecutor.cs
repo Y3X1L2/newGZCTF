@@ -13,6 +13,7 @@ namespace GZCTF.Agent.Services.TeamLab;
 public sealed partial class TeamLabExecutionPlanExecutor(
     TeamLabOvnNetworkProvider ovn,
     TeamLabOvsAttachmentProvider ovs,
+    TeamLabPlayerGatewayProvider playerGateways,
     TeamLabManagedNicProvider managedNics,
     LinuxNetworkAttachmentService linuxNetwork,
     DockerService docker,
@@ -23,6 +24,7 @@ public sealed partial class TeamLabExecutionPlanExecutor(
     ILogger<TeamLabExecutionPlanExecutor> logger)
 {
     static readonly TimeSpan HealthProbeTimeout = TimeSpan.FromSeconds(10);
+    static readonly int AssetParallelism = Math.Clamp(Environment.ProcessorCount, 2, 8);
     readonly AgentConfig agent = agentOptions.Value;
     readonly KeyedSemaphoreRegistry<(int RuntimeId, int Generation, string ShardKey)> executionLocks = new();
 
@@ -48,6 +50,12 @@ public sealed partial class TeamLabExecutionPlanExecutor(
                 var network = await ovn.ProbeAsync(plan, cancellationToken);
                 if (!network.Success)
                     return Failure(plan, "network", network.Message);
+                if (plan.NetworkOwner)
+                    foreach (var intent in plan.Networks.Where(item => item.PlayerGateway is not null))
+                    {
+                        var gateway = await playerGateways.ProbeAsync(plan, intent, cancellationToken);
+                        if (!gateway.Success) return Failure(plan, "network", gateway.Message);
+                    }
                 foreach (var intent in plan.Networks)
                 foreach (var connector in (intent.Connectors ?? []).Where(item => item.NodeId == agent.NodeId))
                 {
@@ -86,6 +94,14 @@ public sealed partial class TeamLabExecutionPlanExecutor(
                 plan.RuntimeId, plan.Generation, network.Message);
             return Failure(plan, network.Stage, network.Message);
         }
+        if (plan.NetworkOwner)
+            foreach (var intent in plan.Networks.Where(item => item.PlayerGateway is not null))
+            {
+                var gateway = await playerGateways.ApplyAsync(plan, intent, cancellationToken);
+                if (gateway.Success) continue;
+                await ovn.RemoveAsync(plan, cancellationToken);
+                return Failure(plan, "network", gateway.Message);
+            }
         try
         {
             await observations.ApplyExecutionPlanAsync(plan, cancellationToken);
@@ -113,10 +129,6 @@ public sealed partial class TeamLabExecutionPlanExecutor(
                 return Failure(plan, "network", result.Message);
             }
         }
-        var dockerAssets = plan.Assets.Where(asset => asset.Kind.Equals("docker", StringComparison.OrdinalIgnoreCase)).ToArray();
-        var vmAssets = plan.Assets.Where(asset => asset.Kind.Equals("vm", StringComparison.OrdinalIgnoreCase)).ToArray();
-        var dockerLimit = Math.Max(1, agent.ExecutionLimits.DockerCreates ?? 1);
-        var vmLimit = Math.Max(1, agent.ExecutionLimits.VmCreates ?? 1);
         try
         {
             async ValueTask ApplyAssetAsync(TeamLabAssetExecutionSpecV2 asset, CancellationToken token)
@@ -147,13 +159,9 @@ public sealed partial class TeamLabExecutionPlanExecutor(
                 }
             }
 
-            var dockerWork = Parallel.ForEachAsync(dockerAssets,
-                new ParallelOptions { MaxDegreeOfParallelism = dockerLimit, CancellationToken = cancellationToken },
+            await Parallel.ForEachAsync(plan.Assets,
+                new ParallelOptions { MaxDegreeOfParallelism = AssetParallelism, CancellationToken = cancellationToken },
                 (asset, token) => ApplyAssetAsync(asset, token));
-            var vmWork = Parallel.ForEachAsync(vmAssets,
-                new ParallelOptions { MaxDegreeOfParallelism = vmLimit, CancellationToken = cancellationToken },
-                (asset, token) => ApplyAssetAsync(asset, token));
-            await Task.WhenAll(dockerWork, vmWork);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -259,10 +267,6 @@ public sealed partial class TeamLabExecutionPlanExecutor(
     {
         var events = new ConcurrentQueue<TeamLabExecutionEventV2>();
         var beforeCleanup = await ReadInventoryAsync(plan, cancellationToken);
-        var dockerAssets = plan.Assets.Where(asset => asset.Kind.Equals("docker", StringComparison.OrdinalIgnoreCase)).ToArray();
-        var vmAssets = plan.Assets.Where(asset => asset.Kind.Equals("vm", StringComparison.OrdinalIgnoreCase)).ToArray();
-        var dockerLimit = Math.Max(1, agent.ExecutionLimits.DockerCreates ?? 1);
-        var vmLimit = Math.Max(1, agent.ExecutionLimits.VmCreates ?? 1);
         async ValueTask CleanupAssetAsyncTimed(TeamLabAssetExecutionSpecV2 asset, CancellationToken token)
         {
             var sw = System.Diagnostics.Stopwatch.StartNew();
@@ -272,13 +276,9 @@ public sealed partial class TeamLabExecutionPlanExecutor(
                 plan.RuntimeId, plan.Generation, asset.AssetKey, asset.Kind, sw.ElapsedMilliseconds);
         }
 
-        var dockerCleanup = Parallel.ForEachAsync(dockerAssets,
-            new ParallelOptions { MaxDegreeOfParallelism = dockerLimit, CancellationToken = cancellationToken },
+        await Parallel.ForEachAsync(plan.Assets,
+            new ParallelOptions { MaxDegreeOfParallelism = AssetParallelism, CancellationToken = cancellationToken },
             (asset, token) => CleanupAssetAsyncTimed(asset, token));
-        var vmCleanup = Parallel.ForEachAsync(vmAssets,
-            new ParallelOptions { MaxDegreeOfParallelism = vmLimit, CancellationToken = cancellationToken },
-            (asset, token) => CleanupAssetAsyncTimed(asset, token));
-        await Task.WhenAll(dockerCleanup, vmCleanup);
 
         foreach (var asset in plan.Assets.Where(asset =>
                      asset.Kind.Equals("docker", StringComparison.OrdinalIgnoreCase)))
@@ -308,6 +308,14 @@ public sealed partial class TeamLabExecutionPlanExecutor(
             events.Enqueue(Event(plan, connector.PortKey, "cleanup", result.Success ? "succeeded" : "failed",
                 result.Success ? null : "connector_cleanup_failed", result.Message));
         }
+        if (plan.NetworkOwner)
+            foreach (var intent in plan.Networks.Where(item => item.PlayerGateway is not null))
+            {
+                var result = await playerGateways.RemoveAsync(intent, cancellationToken);
+                events.Enqueue(Event(plan, intent.PlayerGateway!.PortKey, "cleanup",
+                    result.Success ? "succeeded" : "failed",
+                    result.Success ? null : "player_gateway_cleanup_failed", result.Message));
+            }
         var network = await ovn.RemoveAsync(plan, cancellationToken);
         events.Enqueue(Event(plan, null, "cleanup", network.Success ? "succeeded" : "failed",
             network.Success ? null : "network_cleanup_failed", network.Message));

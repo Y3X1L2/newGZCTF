@@ -172,7 +172,6 @@ public static class OperationalEventCodes
         public const string ObservationDegraded = "teamlab.observation.degraded";
         public const string ObservationDropped = "teamlab.observation.dropped";
         public const string ObservationRecovered = "teamlab.observation.recovered";
-        public const string SensorAuthenticationDegraded = "teamlab.sensor.authentication_degraded";
         public const string TrafficPathDerived = "teamlab.traffic.path_derived";
         public const string GuardedRebuildAllowed = "teamlab.recovery.rebuild_allowed";
         public const string GuardedRebuildBlocked = "teamlab.recovery.rebuild_blocked";

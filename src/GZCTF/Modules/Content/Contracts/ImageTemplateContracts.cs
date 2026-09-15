@@ -64,6 +64,10 @@ public sealed record OpenImageTemplateModel(
         details.UploadedAt);
 }
 
+public sealed record OpenImageTemplatePageModel(
+    IReadOnlyList<OpenImageTemplateModel> Items,
+    string? NextCursor);
+
 public enum ImageTemplateDeleteStatus
 {
     Deleted,

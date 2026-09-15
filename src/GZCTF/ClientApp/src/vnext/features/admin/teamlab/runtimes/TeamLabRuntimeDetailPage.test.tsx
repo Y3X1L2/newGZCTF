@@ -39,6 +39,7 @@ const runtime: TeamLabRuntime = {
       key: 'web',
       name: 'Web 服务',
       kind: 'docker',
+      networkKeys: ['entry'],
       runtimeResourceId: 'container-1',
       primaryIp: '10.10.0.10',
       status: 'running',

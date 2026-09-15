@@ -9,7 +9,6 @@ public sealed record TeamLabExecutionTopology(
     IReadOnlyList<TeamLabExecutionInfrastructure> Infrastructure,
     IReadOnlyList<TeamLabExecutionAsset> Assets,
     IReadOnlyList<TeamLabExecutionConnection> Connections,
-    IReadOnlyList<TeamLabExecutionDependency> Dependencies,
     TeamLabExecutionObservationPolicy Observation);
 
 public sealed record TeamLabExecutionNetwork(
@@ -48,7 +47,6 @@ public sealed record TeamLabExecutionAsset(
     TeamLabHealthCheckKind? HealthCheckKind,
     int? HealthCheckPort,
     int DisplayOrder,
-    TeamLabEndpointObservationMode EndpointObservation,
     string? ImageDigest = null,
     int? DevicePackageId = null,
     string? DeviceParametersJson = null,
@@ -66,15 +64,9 @@ public sealed record TeamLabExecutionConnection(
     string? ViaAssetKey,
     TeamLabConnectionDirection Direction);
 
-public sealed record TeamLabExecutionDependency(
-    string AssetKey,
-    string DependsOnKey,
-    TeamLabDependencyCondition Condition);
-
 public sealed record TeamLabExecutionObservationPolicy(
     bool FlowMetadataEnabled,
-    bool OnDemandPcapEnabled,
-    TeamLabEndpointObservationMode EndpointObservation);
+    bool OnDemandPcapEnabled);
 
 internal sealed record TeamLabRuntimeInfrastructureInterfaceIntent(
     string Key,

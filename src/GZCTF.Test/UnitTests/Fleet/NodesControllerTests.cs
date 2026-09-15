@@ -775,12 +775,8 @@ public class NodesControllerTests
         Assert.True(agent.Request?.Restart);
         Assert.False(string.IsNullOrWhiteSpace(agent.Request?.ExpectedSha256));
         Assert.Equal(2, agent.Requests.Count);
-        Assert.Null(agent.Requests[0].LinuxSensorDownloadUrl);
-        Assert.Null(agent.Requests[0].WindowsSensorDownloadUrl);
         Assert.Null(agent.Requests[0].VmControlPlane);
         Assert.Null(agent.Requests[0].TeamLabDataPlane);
-        Assert.False(string.IsNullOrWhiteSpace(agent.Requests[1].LinuxSensorDownloadUrl));
-        Assert.False(string.IsNullOrWhiteSpace(agent.Requests[1].WindowsSensorDownloadUrl));
         Assert.False(agent.Request?.VmControlPlane?.Enabled);
     }
 

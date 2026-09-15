@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Text.Json;
 using GZCTF.Models;
+using GZCTF.Infrastructure.Concurrency;
 using GZCTF.Modules.TeamLab.Application;
 using GZCTF.Modules.TeamLab.Contracts;
 using GZCTF.Modules.TeamLab.Domain;
@@ -174,7 +175,7 @@ public sealed class TeamLabWebhookTests
         context.SaveChanges();
 
         var deliverer = new StubDeliverer(failEventIds: [2]);
-        var service = new TeamLabWebhookService(context, protection, deliverer);
+        var service = new TeamLabWebhookService(context, protection, deliverer, new LocalDevelopmentLeaseProvider());
         var created = service.CreateForOperationAsync(new CreateTeamLabWebhookModel(scope.Id, "https://8.8.8.8/hook", ["ready"], Enabled: true, FromEventId: 1), Guid.NewGuid(), Guid.NewGuid(), default).Result;
 
         // First pass: event 1 does not match the filter (cursor advances silently),
@@ -224,7 +225,7 @@ public sealed class TeamLabWebhookTests
         context.SaveChanges();
 
         var deliverer = new StubDeliverer(Array.Empty<long>());
-        var service = new TeamLabWebhookService(context, protection, deliverer);
+        var service = new TeamLabWebhookService(context, protection, deliverer, new LocalDevelopmentLeaseProvider());
         var created = service.CreateForOperationAsync(new CreateTeamLabWebhookModel(scope.Id, "https://8.8.8.8/hook", [], Enabled: true, FromEventId: 1), Guid.NewGuid(), Guid.NewGuid(), default).Result;
 
         service.DeliverPendingAsync(default).Wait();
@@ -249,7 +250,7 @@ public sealed class TeamLabWebhookTests
             Event(2, scope.Id, runtimeId, "deploy", "filtered"));
         context.SaveChanges();
         var deliverer = new StubDeliverer([]);
-        var service = new TeamLabWebhookService(context, protection, deliverer);
+        var service = new TeamLabWebhookService(context, protection, deliverer, new LocalDevelopmentLeaseProvider());
         var created = service.CreateForOperationAsync(
             new CreateTeamLabWebhookModel(scope.Id, "https://8.8.8.8/hook", ["ready"], true, 1),
             Guid.NewGuid(), Guid.NewGuid(), default).Result;
@@ -271,7 +272,7 @@ public sealed class TeamLabWebhookTests
         context.TeamLabEvents.Add(Event(1, scope.Id, Guid.NewGuid(), "ready", "fails"));
         context.SaveChanges();
         var deliverer = new StubDeliverer([1]);
-        var service = new TeamLabWebhookService(context, protection, deliverer);
+        var service = new TeamLabWebhookService(context, protection, deliverer, new LocalDevelopmentLeaseProvider());
         var created = service.CreateForOperationAsync(
             new CreateTeamLabWebhookModel(scope.Id, "https://8.8.8.8/hook", [], true, 1),
             Guid.NewGuid(), Guid.NewGuid(), default).Result;
@@ -300,7 +301,8 @@ public sealed class TeamLabWebhookTests
         var protection = DataProtectionProvider.Create("GZCTF.Test.Webhook");
         var scope = new TeamLabControlScope { Id = Guid.NewGuid(), Key = "scope-v", DisplayName = "scope" };
         context.TeamLabControlScopes.Add(scope);
-        var service = new TeamLabWebhookService(context, protection, new StubDeliverer(Array.Empty<long>()));
+        var service = new TeamLabWebhookService(context, protection, new StubDeliverer(Array.Empty<long>()),
+            new LocalDevelopmentLeaseProvider());
         var created = service.CreateForOperationAsync(new CreateTeamLabWebhookModel(scope.Id, "https://8.8.8.8/hook", [], Enabled: true, FromEventId: 1), Guid.NewGuid(), Guid.NewGuid(), default).Result;
 
         service.RevokeAsync(created.Id, default).Wait();
@@ -317,7 +319,8 @@ public sealed class TeamLabWebhookTests
         var scope = new TeamLabControlScope { Id = Guid.NewGuid(), Key = "scope-s", DisplayName = "scope" };
         context.TeamLabControlScopes.Add(scope);
         var operationId = Guid.NewGuid();
-        var service = new TeamLabWebhookService(context, protection, new StubDeliverer([]));
+        var service = new TeamLabWebhookService(context, protection, new StubDeliverer([]),
+            new LocalDevelopmentLeaseProvider());
         var webhook = service.CreateForOperationAsync(
             new CreateTeamLabWebhookModel(scope.Id, "https://8.8.8.8/hook", [], true, 1),
             Guid.NewGuid(), operationId, default).Result;

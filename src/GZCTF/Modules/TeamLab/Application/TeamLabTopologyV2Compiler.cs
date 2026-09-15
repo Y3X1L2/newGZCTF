@@ -44,11 +44,8 @@ public static class TeamLabTopologyV2Compiler
                 connection.ViaNodeKey,
                 connection.ViaAssetKey,
                 connection.Direction ?? TeamLabConnectionDirection.Bidirectional)).ToArray(),
-            (definition.Dependencies ?? []).Select(dependency => new TeamLabExecutionDependency(
-                dependency.AssetKey, dependency.DependsOnKey, dependency.Condition)).ToArray(),
             new TeamLabExecutionObservationPolicy(
                 observation.FlowMetadataEnabled,
-                observation.OnDemandPcapEnabled,
-                observation.EndpointObservation));
+                observation.OnDemandPcapEnabled));
     }
 }

@@ -8,7 +8,7 @@ import { useVNextPageTitle } from '../../../../shared/useVNextPageTitle'
 import { MetricItem, MetricStrip, RefreshIndicator } from '../../shared/AdminWorkbench'
 import { formatAdminDate } from '../../shared/adminFormat'
 import { teamLabRuntimeApi } from '../api'
-import { TeamLabRuntimeStatusBadge } from '../shared/TeamLabStatusBadge'
+import { TeamLabAccessStatusBadge, TeamLabRuntimeStatusBadge } from '../shared/TeamLabStatusBadge'
 import { CapturePanel } from './CapturePanel'
 import { AssetDiagnosticsPanel } from './AssetDiagnosticsPanel'
 import { AssetFilesPanel } from './AssetFilesPanel'
@@ -21,6 +21,7 @@ import { RuntimeEventPanel } from './RuntimeEventPanel'
 import { RuntimeLinkPolicyPanel } from './RuntimeLinkPolicyPanel'
 import { RuntimeLogPanel } from './RuntimeLogPanel'
 import { RuntimeRemoteAccessPanel } from './RuntimeRemoteAccessPanel'
+import { ServiceAccessPanel } from './ServiceAccessPanel'
 import { RemoteSessionsPanel } from './RemoteSessionsPanel'
 import { RuntimeShardTable } from './RuntimeShardTable'
 import { RuntimeStageTimeline } from './RuntimeStageTimeline'
@@ -33,6 +34,7 @@ import { TrafficPathPanel } from './TrafficPathPanel'
 import { emptyTeamLabEventFilters, useRuntimeEvents, type TeamLabEventFilters } from './useRuntimeEvents'
 import { useTeamLabRuntime } from './useTeamLabRuntime'
 import { useTrafficObservability, type TrafficFlowFilters, type TrafficPathFilters } from './useTrafficObservability'
+import { isRuntimeTransitioning } from './runtimePresentation'
 
 type RuntimeTab = 'overview' | 'operations' | 'link-policies' | 'events' | 'traffic' | 'capture'
 
@@ -116,8 +118,10 @@ export function TeamLabRuntimeDetailPage() {
     return <DataState description={errorMessage(runtimeState.error, '运行时加载失败。')} title="无法打开运行时" />
 
   const queueActive = !!runtime.queueStatus && ['pending', 'scheduling', 'scheduled', 'running'].includes(runtime.queueStatus)
+  const canCancelCreation = runtime.queueStatus === 'pending' || runtime.queueStatus === 'scheduling'
+  const nodeExecutionActive = runtime.queueStatus === 'scheduled' || runtime.queueStatus === 'running'
   const canReset = !runtime.managedRolloutId && !queueActive && ['running', 'failed', 'paused'].includes(runtime.status)
-  const canDestroy = !runtime.managedRolloutId && !['destroying', 'destroyed', 'cleanup-pending'].includes(runtime.status)
+  const canDestroy = !runtime.managedRolloutId && !nodeExecutionActive && !['destroying', 'destroyed', 'cleanup-pending'].includes(runtime.status)
   const cleanupPending = runtime.status === 'cleanup-pending'
   return (
     <section className={styles.page}>
@@ -135,7 +139,7 @@ export function TeamLabRuntimeDetailPage() {
         </div>
         <div className={styles.actions}>
           <RefreshIndicator
-            active={runtimeState.isRefreshing}
+            active={runtimeState.isRefreshing && isRuntimeTransitioning(runtime.status)}
             label={runtimeState.isRefreshing ? '同步中' : '状态已同步'}
           />
           <ActionButton
@@ -144,7 +148,7 @@ export function TeamLabRuntimeDetailPage() {
             onClick={() => setResetOpen(true)}
             type="button"
           >
-            重置
+            {runtime.status === 'failed' ? '重新部署' : '重置'}
           </ActionButton>
           {(['running', 'paused'].includes(runtime.status) || runtime.error === 'runtime_pause_failed') ? <ActionButton disabled={acting || queueActive || !!runtime.managedRolloutId} icon={runtime.status === 'paused' ? <Play size={16} /> : <Pause size={16} />} onClick={() => setPauseOpen(true)} type="button">{runtime.status === 'paused' ? '恢复' : runtime.error === 'runtime_pause_failed' ? '重试暂停' : '暂停'}</ActionButton> : null}
           {cleanupPending ? (
@@ -165,7 +169,7 @@ export function TeamLabRuntimeDetailPage() {
               tone="danger"
               type="button"
             >
-              销毁
+              {canCancelCreation ? '取消创建' : '销毁'}
             </ActionButton>
           )}
         </div>
@@ -191,7 +195,7 @@ export function TeamLabRuntimeDetailPage() {
         <MetricItem
           detail={formatAdminDate(runtime.updatedAt ?? runtime.createdAt)}
           label="选手入口"
-          value={runtime.openForAccess ? '已开放' : '未开放'}
+          value={<TeamLabAccessStatusBadge open={runtime.openForAccess} />}
           tone={runtime.openForAccess ? 'success' : 'neutral'}
         />
       </MetricStrip>
@@ -238,10 +242,10 @@ export function TeamLabRuntimeDetailPage() {
             />
           </>
         ) : null}
-        {tab === 'operations' ? <><DeviceHealthPanel runtimeId={runtime.id} generation={runtime.generation} /><RuntimeDifferencesPanel key={`${runtime.id}:${runtime.generation}`} runtime={runtime} /><AssetControlPanel runtime={runtime} /><AssetDiagnosticsPanel runtime={runtime} /><AssetFilesPanel runtime={runtime} /><VmDiagnosticsPanel runtime={runtime} /><RuntimeRemoteAccessPanel runtime={runtime} /><RemoteSessionsPanel runtimeId={runtime.id} /></> : null}
+        {tab === 'operations' ? <><DeviceHealthPanel runtimeId={runtime.id} generation={runtime.generation} /><RuntimeDifferencesPanel key={`${runtime.id}:${runtime.generation}`} runtime={runtime} /><AssetControlPanel runtime={runtime} /><AssetDiagnosticsPanel runtime={runtime} /><ServiceAccessPanel runtime={runtime} /><AssetFilesPanel runtime={runtime} /><VmDiagnosticsPanel runtime={runtime} /><RuntimeRemoteAccessPanel runtime={runtime} /><RemoteSessionsPanel runtimeId={runtime.id} /></> : null}
         {tab === 'link-policies' ? (
           <RuntimeLinkPolicyPanel
-            assets={runtime.assets.map((asset) => ({ key: asset.key, name: asset.name }))}
+            assets={runtime.assets.map((asset) => ({ key: asset.key, name: asset.name, networkKeys: asset.networkKeys }))}
             networks={runtime.networks.map((network) => ({ key: network.key, name: network.name }))}
             runtimeId={runtime.id}
           />
@@ -281,16 +285,16 @@ export function TeamLabRuntimeDetailPage() {
       />
       <VNextConfirmDialog open={pauseOpen} onClose={() => setPauseOpen(false)} onConfirm={pauseOrResume} title={runtime.status === 'paused' ? '恢复运行环境' : '暂停运行环境'} confirmLabel="确认" description="保留原节点、网络和磁盘，按当前运行代次操作。" message={runtime.status === 'paused' ? '恢复后请核对服务健康状态。' : '暂停将中断当前业务连接。'} />
       <VNextConfirmDialog
-        confirmLabel={cleanupPending ? '继续清理' : '确认销毁'}
-        confirmationText={cleanupPending ? undefined : runtime.id.slice(0, 8)}
+        confirmLabel={cleanupPending ? '继续清理' : canCancelCreation ? '确认取消' : '确认销毁'}
+        confirmationText={cleanupPending || canCancelCreation ? undefined : runtime.id.slice(0, 8)}
         description={
-          cleanupPending ? '重新提交当前代资源的幂等清理任务。' : '所有分片、路由、抓包任务和临时资源将进入清理流程。'
+          cleanupPending ? '重新提交当前代资源的清理任务。' : canCancelCreation ? '取消尚未进入节点执行的创建任务。' : '所有分片、路由、抓包任务和临时资源将进入清理流程。'
         }
-        message={cleanupPending ? '仅重试尚未完成的清理，不会创建新的运行资源。' : '销毁操作不可撤销。'}
+        message={cleanupPending ? '仅处理尚未完成的清理，不会创建新的运行资源。' : canCancelCreation ? '已创建的预留资源会一并释放。' : '销毁操作不可撤销。'}
         onClose={() => setDestroyOpen(false)}
         onConfirm={destroy}
         open={destroyOpen}
-        title={cleanupPending ? '恢复运行时清理' : '销毁运行环境'}
+        title={cleanupPending ? '恢复运行时清理' : canCancelCreation ? '取消创建' : '销毁运行环境'}
       />
     </section>
   )

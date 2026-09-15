@@ -25,11 +25,11 @@ public sealed class EfOperationalEventWriter(
         "shardCount", "decision", "reasonCode", "matchedCount", "missingCount",
         "conflictCount", "orphanCount", "deferredCount", "correctedCount", "replayedCount",
         "captureScope", "captureSegmentCount", "captureWorkerCount", "infrastructureCount",
-        "leaseCount", "pathCount", "packetExactCount", "processCorrelatedCount", "temporalCount", "rejectedCount",
+        "leaseCount", "pathCount", "packetExactCount", "rejectedCount",
         "rebootCount", "assetKind", "assetKey", "infrastructureKind", "evidenceKind",
         "placementElapsedMs", "placementGroupCount", "placementEdgeCount", "placementImprovementPasses",
         "stateless", "result", "count", "reason", "errorCode", "remoteSessionId",
-        "assetId", "protocol", "actorUserId", "auditFileId", "filePath", "ticketId",
+        "assetId", "protocol", "actorUserId", "auditFileId", "filePath", "destinationPath", "ticketId",
         "tail", "truncated", "logsAvailable",
         "protocolEventType", "protocolEventSource", "protocolEventOccurredAt",
         "protocolEventParameterCount", "protocolEventParameters"

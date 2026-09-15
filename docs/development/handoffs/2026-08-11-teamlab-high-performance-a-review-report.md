@@ -675,7 +675,7 @@ P1 中"同身份不同 digest 拒绝覆盖"（P1-9）、"失败分片收敛"（P
 **P2-E4（= 全局 P2-26）Docker 门依赖镜像内 `sh` 与 `/tmp`，且容器先启动后接网（busy-wait 门）**
 - 证据：门实现为镜像入口 `while [ ! -f /tmp/.gzctf-teamlab-network-ready ]; do sleep 0.05; done`（`DockerService.cs:626-634`）；无 `sh` 的镜像必失败；释放文件失败则容器 20Hz 空转。`StartImmediately=true` 容器在 veth 接入前已启动（NetworkMode=None 无网，语义安全但占 CPU）。
 - 建议：`docker create` 不启动 + exec 后 `start` 替代 busy-wait 门。
-**P2-E5（= 全局 P1-10）V2 资产不含任何 secrets/flag/cloud-init，与 V1 语义不平移**：V1 注入 `FLAG`/`GZCTF_SENSOR_*` 与 guest control；V2 计划契约刻意不含 secrets（正确），但 Agent 直接不再注入 → 依赖环境变量的场景在 V2 下静默缺参。建议主站按 `Asset.Secrets` 非空显式拒绝 V2。
+**P2-E5（= 全局 P1-10）V2 资产不含用户 secrets/flag/cloud-init，与 V1 语义不平移**：V2 计划契约刻意不含用户 secrets，但 Agent 直接不再注入，依赖环境变量的场景会静默缺参。建议主站按 `Asset.Secrets` 非空显式拒绝 V2。
 **P2-E6（= 全局 P2-23 另一面）同节点多分片时 inventory 串扰**：inventory 只按 RuntimeId+Generation 过滤（executor:288-293），不按 ShardKey；同一节点承载该 runtime 两个分片时，分片 A 的 apply/cleanup 会看到分片 B 的资产 → cleanup 因 `resource_remains` 误报失败。建议 docker label 增加 `GZCTF.ShardKey`。
 **P2-E7（= 全局 P2-24 另一面）apply 用 tag 引用，计划承诺的不可变 digest 未校验**：`Image = asset.ImageReference ?? asset.ImageDigest`（executor:313）；`ImageDigest` 写入计划并参与 digest 校验，但实际创建走 tag；标签被移动时跑的不是计划承诺的内容。建议创建前按 `ImageDigest` 做 `InspectImageAsync` 比对。
 **P2-E8（= 全局 P1-24）V2 分片在 `planCompilationError`/标记缺失时的静默旧路径回退**：标记缺失时回退旧路径——经 inventory（RuntimeId label）仍可收敛 V2 容器，但 OVS/OVN 资源不在 `BuildCleanupRequest` 资源名清单内 → V2 独有 OVSDB 资源残留。建议标记缺失时同样调用 `CleanupExecutionPlanAsync`（计划可从 release 重编译），仅编译失败才回退。

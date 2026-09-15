@@ -51,7 +51,6 @@ chmod 0755 \
   "$next/GZCTF" \
   "$next/efbundle" \
   "$next/agent/gzctf-agent" \
-  "$next/agent/endpoint-sensor/linux-x64/gzctf-endpoint-sensor" \
   "$next/agent/guest-supervisor/linux-x64/gzctf-guest-supervisor" \
   "$next/agent/guest-supervisor/win-x64/gzctf-guest-supervisor.exe"
 

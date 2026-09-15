@@ -8,7 +8,7 @@ export interface ValidationLocation {
   field: string | null
 }
 
-const indexedPath = /^(networks|assets|infrastructure|connections|dependencies)\[(\d+)](?:\.(.+))?$/
+const indexedPath = /^(networks|assets|infrastructure|connections)\[(\d+)](?:\.(.+))?$/
 
 export function locateValidationIssue(
   document: TopologyDocument,
@@ -33,16 +33,5 @@ export function locateValidationIssue(
   if (collection === 'infrastructure') {
     return { nodeKey: compiled.infrastructure[index]?.key ?? null, connectionKey: null, field }
   }
-  if (collection === 'connections') {
-    return { nodeKey: null, connectionKey: compiled.connections[index]?.key ?? null, field }
-  }
-  const dependency = compiled.dependencies[index]
-  const connection = Object.values(document.connections).find(
-    (candidate) =>
-      candidate.type === 'dependency' &&
-      candidate.assetKey === dependency?.assetKey &&
-      candidate.dependsOnKey === dependency.dependsOnKey &&
-      candidate.condition === dependency.condition
-  )
-  return { nodeKey: null, connectionKey: connection?.key ?? null, field }
+  return { nodeKey: null, connectionKey: compiled.connections[index]?.key ?? null, field }
 }

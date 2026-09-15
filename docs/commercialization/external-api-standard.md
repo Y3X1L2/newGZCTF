@@ -169,7 +169,8 @@ Pending -> Running -> Succeeded
 }
 ```
 
-- 查询：`GET /api/open/v1/operations/{operationId}`。
+- 查询单项：`GET /api/open/v1/operations/{operationId}`。
+- 找回列表：`GET /api/open/v1/operations?status={status}&kind={kind}&limit=50&after={cursor}`，只返回当前 token 发起的 operation；同一用户创建的其他 token 不共享操作历史。
 - operation 只能由创建者、显式授权 token 或管理员查询。
 - `stage` 使用稳定枚举值，显示文案由客户端本地化。
 - deployment operation 必须关联现有 `DeploymentQueueTicket`，不能复制队列状态机。

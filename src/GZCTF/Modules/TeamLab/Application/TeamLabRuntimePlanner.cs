@@ -241,7 +241,6 @@ public sealed class TeamLabRuntimePlanner(
             .Include(item => item.Networks)
             .Include(item => item.Assets)
             .Include(item => item.Infrastructure)
-            .Include(item => item.DependencyStates)
             .Include(item => item.SecretEnvelopes)
             .Include(item => item.Events)
             .SingleOrDefaultAsync(item => item.PublicId == runtimePublicId, cancellationToken)
@@ -400,7 +399,6 @@ public sealed class TeamLabRuntimePlanner(
                 InterfaceSummaryJson = JsonSerializer.Serialize(interfaces),
                 Status = TeamLabRuntimeStatus.Pending,
                 ExecutionStage = TeamLabAssetExecutionStage.Pending,
-                EndpointObservation = asset.EndpointObservation,
                 ImageDigest = asset.ImageDigest ?? templateDigests.GetValueOrDefault(resolvedTemplateIds[asset.Key])?.ImageHash,
                 Image = asset.Kind == TeamLabAssetKind.Docker && templateDigests.TryGetValue(resolvedTemplateIds[asset.Key], out var dockerTemplate)
                     ? DockerImageReference.ResolvePullTarget(
@@ -437,33 +435,8 @@ public sealed class TeamLabRuntimePlanner(
                 Status = TeamLabRuntimeStatus.Pending
             });
         }
-        foreach (var dependency in definition.Dependencies)
-        {
-            runtime.DependencyStates.Add(new TeamLabRuntimeDependencyState
-            {
-                RuntimeId = runtime.Id,
-                Generation = runtime.Generation,
-                AssetKey = dependency.AssetKey,
-                DependsOnKey = dependency.DependsOnKey,
-                Condition = dependency.Condition
-            });
-        }
-        if (runtime.ExecutionModel == TeamLabExecutionModel.V2)
-        {
-            var unsupportedSecret = TeamLabExecutionModelPolicy.FindUnsupportedSecretKey(runtimeOverlays ?? []);
-            if (unsupportedSecret is not null)
-                throw new TeamLabApiContractException(
-                    "execution_model_secrets_unsupported",
-                    $"V2 执行模型暂不支持运行时密钥覆盖，请移除资产密钥 '{unsupportedSecret}' 后重试",
-                    422);
-        }
-
         var envelope = overlayService.Protect(runtime.Id, runtime.Generation, runtimeOverlays,
-            definition.Assets.Select(item => item.Key).ToHashSet(StringComparer.Ordinal),
-            definition.Assets
-                .Where(item => item.EndpointObservation != TeamLabEndpointObservationMode.Disabled)
-                .Select(item => item.Key)
-                .ToHashSet(StringComparer.Ordinal));
+            definition.Assets.Select(item => item.Key).ToHashSet(StringComparer.Ordinal));
         if (envelope is not null) runtime.SecretEnvelopes.Add(envelope);
         runtime.Status = TeamLabRuntimeStatus.Scheduled;
         eventRecorder.Record(
