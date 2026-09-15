@@ -1,0 +1,153 @@
+﻿table,entity,primary_key
+AcademicImportJobs,GZCTF.Modules.Provisioning.Domain.AcademicImportJob,OperationId
+AgentRuntimeSignals,GZCTF.Modules.Runtime.Domain.AgentRuntimeSignal,Id
+ApiOperations,GZCTF.Modules.Audit.Domain.ApiOperation,Id
+ApiTokenResourceGrants,GZCTF.Modules.Identity.Domain.ApiTokenResourceGrant,"TokenId, ResourceType, ResourceId"
+ApiTokenScopeGrants,GZCTF.Modules.Identity.Domain.ApiTokenScopeGrant,"TokenId, Scope"
+ApiTokens,GZCTF.Modules.Identity.Domain.ApiToken,Id
+AspNetRoleClaims,Microsoft.AspNetCore.Identity.IdentityRoleClaim<System.Guid>,Id
+AspNetRoles,Microsoft.AspNetCore.Identity.IdentityRole<System.Guid>,Id
+AspNetUserClaims,Microsoft.AspNetCore.Identity.IdentityUserClaim<System.Guid>,Id
+AspNetUserLogins,Microsoft.AspNetCore.Identity.IdentityUserLogin<System.Guid>,"LoginProvider, ProviderKey"
+AspNetUserRoles,Microsoft.AspNetCore.Identity.IdentityUserRole<System.Guid>,"UserId, RoleId"
+AspNetUserTokens,Microsoft.AspNetCore.Identity.IdentityUserToken<System.Guid>,"UserId, LoginProvider, Name"
+AspNetUsers,GZCTF.Models.Data.UserInfo,Id
+Attachments,GZCTF.Models.Data.Attachment,Id
+AwdpCheckerTasks,GZCTF.Models.Data.AwdpCheckerTask,Id
+AwdpFlags,GZCTF.Models.Data.AwdpFlag,Id
+AwdpPatchSubmissions,GZCTF.Models.Data.AwdpPatchSubmission,Id
+AwdpRecoveryRecords,GZCTF.Models.Data.AwdpRecoveryRecord,Id
+AwdpResetRecords,GZCTF.Models.Data.AwdpResetRecord,Id
+AwdpRounds,GZCTF.Models.Data.AwdpRound,Id
+AwdpServiceInstances,GZCTF.Models.Data.AwdpServiceInstance,Id
+AwdpServices,GZCTF.Models.Data.AwdpService,Id
+BootstrapProfileDistributions,GZCTF.Modules.Content.Domain.BootstrapProfileDistribution,Id
+BootstrapProfileOperationJobs,GZCTF.Modules.Content.Domain.BootstrapProfileOperationJob,Id
+BootstrapProfileVersions,GZCTF.Modules.Content.Domain.BootstrapProfileVersion,Id
+BootstrapProfiles,GZCTF.Modules.Content.Domain.BootstrapProfile,Id
+ChallengeMutationJobs,GZCTF.Modules.Ctf.Domain.ChallengeMutationJob,OperationId
+CheatInfo,GZCTF.Models.Data.CheatInfo,SubmissionId
+Configs,GZCTF.Models.Data.Config,ConfigKey
+Containers,GZCTF.Models.Data.Container,Id
+DataGovernanceRuns,GZCTF.Modules.Audit.Domain.DataGovernanceRun,Id
+DataProtectionKeys,Microsoft.AspNetCore.DataProtection.EntityFrameworkCore.DataProtectionKey,Id
+DeploymentLifecycleAggregates,GZCTF.Modules.Audit.Domain.DeploymentLifecycleAggregate,Id
+DeploymentQueueTickets,GZCTF.Models.Data.DeploymentQueueTicket,Id
+DivisionChallengeConfig,GZCTF.Models.Data.DivisionChallengeConfig,"ChallengeId, DivisionId"
+Divisions,GZCTF.Models.Data.Division,Id
+DockerRegistryMigrationItems,GZCTF.Models.Data.DockerRegistryMigrationItem,Id
+DockerRegistryMigrationTasks,GZCTF.Models.Data.DockerRegistryMigrationTask,Id
+ExerciseChallenges,GZCTF.Models.Data.ExerciseChallenge,Id
+ExerciseDependencies,GZCTF.Models.Data.ExerciseDependency,"SourceId, TargetId"
+ExerciseInstances,GZCTF.Models.Data.ExerciseInstance,"UserId, ExerciseId"
+ExerciseMutationJobs,GZCTF.Modules.Exercise.Domain.ExerciseMutationJob,OperationId
+ExerciseSubmissions,GZCTF.Models.Data.ExerciseSubmission,Id
+ExternalApiRequestAudits,GZCTF.Modules.Audit.Domain.ExternalApiRequestAudit,Id
+Files,GZCTF.Models.Data.LocalFile,Id
+FirstSolves,GZCTF.Models.Data.FirstSolve,"ParticipationId, ChallengeId, FlagId"
+FlagContexts,GZCTF.Models.Data.FlagContext,Id
+FleetCapacityReservations,GZCTF.Models.Data.FleetCapacityReservation,Id
+GameChallenges,GZCTF.Models.Data.GameChallenge,Id
+GameEvents,GZCTF.Models.Data.GameEvent,Id
+GameInstances,GZCTF.Models.Data.GameInstance,"ChallengeId, ParticipationId"
+GameNotices,GZCTF.Models.Data.GameNotice,Id
+GamePhases,GZCTF.Models.Data.GamePhase,Id
+Games,GZCTF.Models.Data.Game,Id
+ImageDistributionRecords,GZCTF.Models.Data.ImageDistributionRecord,Id
+ImageDistributionReferences,GZCTF.Modules.Runtime.Domain.ImageDistributionReference,Id
+ImageImportJobs,GZCTF.Modules.Content.Domain.ImageImportJob,OperationId
+ImageTemplateCapabilityCertifications,GZCTF.Modules.Content.Domain.ImageTemplateCapabilityCertification,Id
+ImageTemplateCertificationJobs,GZCTF.Modules.Content.Domain.ImageTemplateCertificationJob,Id
+ImageTemplateRemoteAccesses,GZCTF.Modules.Content.Domain.ImageTemplateRemoteAccess,ImageTemplateId
+ImageTemplates,GZCTF.Models.Data.ImageTemplate,Id
+Logs,GZCTF.Models.Data.LogModel,"TimeUtc, Id"
+OperationalEvents,GZCTF.Modules.Audit.Domain.OperationalEvent,Id
+OperationalLogAggregates,GZCTF.Modules.Audit.Domain.OperationalLogAggregate,Id
+Participations,GZCTF.Models.Data.Participation,Id
+PenetrationGameLabBindings,GZCTF.Modules.Penetration.Domain.PenetrationGameLabBinding,GameId
+PenetrationObjectives,GZCTF.Modules.Penetration.Domain.PenetrationObjective,Id
+PenetrationResetRecords,GZCTF.Models.Data.PenetrationResetRecord,Id
+PenetrationSubmissions,GZCTF.Models.Data.PenetrationSubmission,Id
+PenetrationTeamLabOperatorGrants,GZCTF.Modules.Penetration.Domain.PenetrationTeamLabOperatorGrant,Id
+PenetrationTeamRuntimeBindings,GZCTF.Modules.Penetration.Domain.PenetrationTeamRuntimeBinding,"GameId, TeamId"
+Posts,GZCTF.Models.Data.Post,Id
+ProjectionRevisions,GZCTF.Infrastructure.Cache.ProjectionRevision,"Projection, ResourceKey"
+StudentGroupManagers,GZCTF.Models.Data.StudentGroupManager,"GroupId, ManagerId"
+StudentGroupMembers,GZCTF.Models.Data.StudentGroupMember,"GroupId, StudentId"
+StudentGroups,GZCTF.Models.Data.StudentGroup,Id
+Submissions,GZCTF.Models.Data.Submission,Id
+TeamJoinRequests,GZCTF.Models.Data.TeamJoinRequest,Id
+TeamLabAccessGrants,GZCTF.Modules.TeamLab.Domain.Runtime.TeamLabAccessGrant,Id
+TeamLabConnectorLeases,GZCTF.Modules.TeamLab.Domain.TeamLabConnectorLease,Id
+TeamLabConnectors,GZCTF.Modules.TeamLab.Domain.TeamLabConnector,Id
+TeamLabControlScopes,GZCTF.Modules.TeamLab.Domain.TeamLabControlScope,Id
+TeamLabDevicePackages,GZCTF.Modules.TeamLab.Domain.TeamLabDevicePackage,Id
+TeamLabEvents,GZCTF.Modules.TeamLab.Domain.Runtime.TeamLabEvent,Id
+TeamLabExecutionPlanSnapshots,GZCTF.Modules.TeamLab.Domain.Runtime.TeamLabExecutionPlanSnapshot,Id
+TeamLabFabricLinkLeases,GZCTF.Modules.TeamLab.Domain.Runtime.TeamLabFabricLinkLease,Id
+TeamLabLinkPolicies,GZCTF.Modules.TeamLab.Domain.TeamLabLinkPolicy,Id
+TeamLabNetworkLeases,GZCTF.Modules.TeamLab.Domain.TeamLabNetworkLease,Id
+TeamLabObservationCursors,GZCTF.Modules.TeamLab.Domain.TeamLabObservationCursor,Id
+TeamLabObservationPoints,GZCTF.Modules.TeamLab.Domain.Runtime.TeamLabObservationPoint,Id
+TeamLabPublicUdpMappings,GZCTF.Modules.TeamLab.Domain.Runtime.TeamLabPublicUdpMapping,Id
+TeamLabRemoteAuditFiles,GZCTF.Modules.TeamLab.Domain.Runtime.TeamLabRemoteAuditFile,Id
+TeamLabRemoteSessions,GZCTF.Modules.TeamLab.Domain.Runtime.TeamLabRemoteSession,Id
+TeamLabRolloutTargets,GZCTF.Modules.TeamLab.Domain.TeamLabRolloutTarget,Id
+TeamLabRollouts,GZCTF.Modules.TeamLab.Domain.TeamLabRollout,Id
+TeamLabRuntimeAssets,GZCTF.Modules.TeamLab.Domain.Runtime.TeamLabRuntimeAsset,Id
+TeamLabRuntimeDependencyStates,GZCTF.Modules.TeamLab.Domain.Runtime.TeamLabRuntimeDependencyState,Id
+TeamLabRuntimeInfrastructure,GZCTF.Modules.TeamLab.Domain.Runtime.TeamLabRuntimeInfrastructure,Id
+TeamLabRuntimeInfrastructureFragments,GZCTF.Modules.TeamLab.Domain.Runtime.TeamLabRuntimeInfrastructureFragment,Id
+TeamLabRuntimeNetworks,GZCTF.Modules.TeamLab.Domain.Runtime.TeamLabRuntimeNetwork,Id
+TeamLabRuntimeOperationJobs,GZCTF.Modules.TeamLab.Domain.TeamLabRuntimeOperationJob,OperationId
+TeamLabRuntimeSecretEnvelopes,GZCTF.Modules.TeamLab.Domain.Runtime.TeamLabRuntimeSecretEnvelope,Id
+TeamLabRuntimeShards,GZCTF.Modules.TeamLab.Domain.Runtime.TeamLabRuntimeShard,Id
+TeamLabRuntimes,GZCTF.Modules.TeamLab.Domain.Runtime.TeamLabRuntime,Id
+TeamLabTopologies,GZCTF.Modules.TeamLab.Domain.TeamLabTopology,Id
+TeamLabTopologyAssets,GZCTF.Modules.TeamLab.Domain.TeamLabTopologyAsset,Id
+TeamLabTopologyConnections,GZCTF.Modules.TeamLab.Domain.TeamLabTopologyConnection,Id
+TeamLabTopologyInterfaces,GZCTF.Modules.TeamLab.Domain.TeamLabTopologyInterface,Id
+TeamLabTopologyNetworks,GZCTF.Modules.TeamLab.Domain.TeamLabTopologyNetwork,Id
+TeamLabTopologyReleases,GZCTF.Modules.TeamLab.Domain.TeamLabTopologyRelease,Id
+TeamLabTrafficCaptureJobs,GZCTF.Modules.TeamLab.Domain.TeamLabTrafficCaptureJob,Id
+TeamLabTrafficCaptureSegments,GZCTF.Modules.TeamLab.Domain.TeamLabTrafficCaptureSegment,Id
+TeamLabTrafficCorrelationCursors,GZCTF.Modules.TeamLab.Domain.TeamLabTrafficCorrelationCursor,Id
+TeamLabTrafficFlowAggregates,GZCTF.Modules.TeamLab.Domain.TeamLabTrafficFlowAggregate,Id
+TeamLabTrafficFlows,GZCTF.Modules.TeamLab.Domain.Runtime.TeamLabTrafficFlow,"CapturedAt, Id"
+TeamLabTrafficObservations,GZCTF.Modules.TeamLab.Domain.TeamLabTrafficObservation,Id
+TeamLabTrafficPathHops,GZCTF.Modules.TeamLab.Domain.TeamLabTrafficPathHop,Id
+TeamLabTrafficPaths,GZCTF.Modules.TeamLab.Domain.TeamLabTrafficPath,Id
+TeamLabVpnPeerRuntimes,GZCTF.Modules.TeamLab.Domain.Runtime.TeamLabVpnPeerRuntime,Id
+TeamLabWebhookDeliveryFailures,GZCTF.Modules.TeamLab.Domain.TeamLabWebhookDeliveryFailure,Id
+TeamLabWebhookSubscriptions,GZCTF.Modules.TeamLab.Domain.TeamLabWebhookSubscription,Id
+TeamUserInfo,TeamUserInfo,"MembersId, TeamsId"
+Teams,GZCTF.Models.Data.Team,Id
+TheoryAnswerSheets,GZCTF.Models.Data.TheoryAnswerSheet,Id
+TheoryPaperQuestions,GZCTF.Models.Data.TheoryPaperQuestion,Id
+TheoryPapers,GZCTF.Models.Data.TheoryPaper,Id
+TheoryQuestionBankItems,GZCTF.Models.Data.TheoryQuestionBankItem,Id
+TheoryQuestionTagBindings,GZCTF.Modules.Theory.Domain.TheoryQuestionTagBinding,"QuestionId, TagId"
+TheoryQuestionTags,GZCTF.Modules.Theory.Domain.TheoryQuestionTag,Id
+TheorySubmissionAnswers,GZCTF.Models.Data.TheorySubmissionAnswer,Id
+TrainingChapterProgresses,GZCTF.Models.Data.TrainingChapterProgress,"ChapterId, UserId"
+TrainingCheckIns,GZCTF.Models.Data.TrainingCheckIn,"UserId, CheckInDate"
+TrainingCourseChallenges,GZCTF.Models.Data.TrainingCourseChallenge,"CourseId, ExerciseChallengeId"
+TrainingCourseChapterChallenges,GZCTF.Models.Data.TrainingCourseChapterChallenge,"ChapterId, ExerciseChallengeId"
+TrainingCourseChapterTheoryAnswers,GZCTF.Models.Data.TrainingCourseChapterTheoryAnswer,Id
+TrainingCourseChapterTheoryPapers,GZCTF.Models.Data.TrainingCourseChapterTheoryPaper,Id
+TrainingCourseChapterTheoryQuestions,GZCTF.Models.Data.TrainingCourseChapterTheoryQuestion,Id
+TrainingCourseChapterTheorySheets,GZCTF.Models.Data.TrainingCourseChapterTheorySheet,Id
+TrainingCourseChapters,GZCTF.Models.Data.TrainingCourseChapter,Id
+TrainingCourseEnrollments,GZCTF.Models.Data.TrainingCourseEnrollment,"CourseId, UserId"
+TrainingCourseImageTemplateBindings,GZCTF.Modules.Training.Domain.TrainingCourseImageTemplateBinding,"CourseId, ImageTemplateId"
+TrainingCourseProgresses,GZCTF.Models.Data.TrainingCourseProgress,"CourseId, UserId"
+TrainingCourseResources,GZCTF.Models.Data.TrainingCourseResource,Id
+TrainingCourseSubmissions,GZCTF.Models.Data.TrainingCourseSubmission,Id
+TrainingCourseTeachers,GZCTF.Models.Data.TrainingCourseTeacher,"CourseId, TeacherId"
+TrainingCourseTheoryQuestions,GZCTF.Models.Data.TrainingCourseTheoryQuestion,Id
+TrainingCourses,GZCTF.Models.Data.TrainingCourse,Id
+UserParticipations,GZCTF.Models.Data.UserParticipation,"GameId, TeamId, UserId"
+VmInstances,GZCTF.Models.Data.VmInstance,Id
+VmPreparedArtifacts,GZCTF.Modules.Content.Domain.VmPreparedArtifact,Id
+WorkerNodeMetricSamples,GZCTF.Modules.Runtime.Domain.WorkerNodeMetricSample,"WorkerNodeId, WindowStart"
+WorkerNodes,GZCTF.Models.Data.WorkerNode,Id

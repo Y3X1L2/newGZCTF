@@ -1,0 +1,462 @@
+flowchart LR
+  %% Parent to child. Labels are FK columns. No business rows included.
+  t0["AcademicImportJobs"]
+  t1["AgentRuntimeSignals"]
+  t2["ApiOperations"]
+  t3["ApiTokenResourceGrants"]
+  t4["ApiTokenScopeGrants"]
+  t5["ApiTokens"]
+  t6["AspNetRoleClaims"]
+  t7["AspNetRoles"]
+  t8["AspNetUserClaims"]
+  t9["AspNetUserLogins"]
+  t10["AspNetUserRoles"]
+  t11["AspNetUserTokens"]
+  t12["AspNetUsers"]
+  t13["Attachments"]
+  t14["AwdpCheckerTasks"]
+  t15["AwdpFlags"]
+  t16["AwdpPatchSubmissions"]
+  t17["AwdpRecoveryRecords"]
+  t18["AwdpResetRecords"]
+  t19["AwdpRounds"]
+  t20["AwdpServiceInstances"]
+  t21["AwdpServices"]
+  t22["BootstrapProfileDistributions"]
+  t23["BootstrapProfileOperationJobs"]
+  t24["BootstrapProfileVersions"]
+  t25["BootstrapProfiles"]
+  t26["ChallengeMutationJobs"]
+  t27["CheatInfo"]
+  t28["Configs"]
+  t29["Containers"]
+  t30["DataGovernanceRuns"]
+  t31["DataProtectionKeys"]
+  t32["DeploymentLifecycleAggregates"]
+  t33["DeploymentQueueTickets"]
+  t34["DivisionChallengeConfig"]
+  t35["Divisions"]
+  t36["DockerRegistryMigrationItems"]
+  t37["DockerRegistryMigrationTasks"]
+  t38["ExerciseChallenges"]
+  t39["ExerciseDependencies"]
+  t40["ExerciseInstances"]
+  t41["ExerciseMutationJobs"]
+  t42["ExerciseSubmissions"]
+  t43["ExternalApiRequestAudits"]
+  t44["Files"]
+  t45["FirstSolves"]
+  t46["FlagContexts"]
+  t47["FleetCapacityReservations"]
+  t48["GameChallenges"]
+  t49["GameEvents"]
+  t50["GameInstances"]
+  t51["GameNotices"]
+  t52["GamePhases"]
+  t53["Games"]
+  t54["ImageDistributionRecords"]
+  t55["ImageDistributionReferences"]
+  t56["ImageImportJobs"]
+  t57["ImageTemplateCapabilityCertifications"]
+  t58["ImageTemplateCertificationJobs"]
+  t59["ImageTemplateRemoteAccesses"]
+  t60["ImageTemplates"]
+  t61["Logs"]
+  t62["OperationalEvents"]
+  t63["OperationalLogAggregates"]
+  t64["Participations"]
+  t65["PenetrationGameLabBindings"]
+  t66["PenetrationObjectives"]
+  t67["PenetrationResetRecords"]
+  t68["PenetrationSubmissions"]
+  t69["PenetrationTeamLabOperatorGrants"]
+  t70["PenetrationTeamRuntimeBindings"]
+  t71["Posts"]
+  t72["ProjectionRevisions"]
+  t73["StudentGroupManagers"]
+  t74["StudentGroupMembers"]
+  t75["StudentGroups"]
+  t76["Submissions"]
+  t77["TeamJoinRequests"]
+  t78["TeamLabAccessGrants"]
+  t79["TeamLabConnectorLeases"]
+  t80["TeamLabConnectors"]
+  t81["TeamLabControlScopes"]
+  t82["TeamLabDevicePackages"]
+  t83["TeamLabEvents"]
+  t84["TeamLabExecutionPlanSnapshots"]
+  t85["TeamLabFabricLinkLeases"]
+  t86["TeamLabLinkPolicies"]
+  t87["TeamLabNetworkLeases"]
+  t88["TeamLabObservationCursors"]
+  t89["TeamLabObservationPoints"]
+  t90["TeamLabPublicUdpMappings"]
+  t91["TeamLabRemoteAuditFiles"]
+  t92["TeamLabRemoteSessions"]
+  t93["TeamLabRolloutTargets"]
+  t94["TeamLabRollouts"]
+  t95["TeamLabRuntimeAssets"]
+  t96["TeamLabRuntimeDependencyStates"]
+  t97["TeamLabRuntimeInfrastructure"]
+  t98["TeamLabRuntimeInfrastructureFragments"]
+  t99["TeamLabRuntimeNetworks"]
+  t100["TeamLabRuntimeOperationJobs"]
+  t101["TeamLabRuntimeSecretEnvelopes"]
+  t102["TeamLabRuntimeShards"]
+  t103["TeamLabRuntimes"]
+  t104["TeamLabTopologies"]
+  t105["TeamLabTopologyAssets"]
+  t106["TeamLabTopologyConnections"]
+  t107["TeamLabTopologyInterfaces"]
+  t108["TeamLabTopologyNetworks"]
+  t109["TeamLabTopologyReleases"]
+  t110["TeamLabTrafficCaptureJobs"]
+  t111["TeamLabTrafficCaptureSegments"]
+  t112["TeamLabTrafficCorrelationCursors"]
+  t113["TeamLabTrafficFlowAggregates"]
+  t114["TeamLabTrafficFlows"]
+  t115["TeamLabTrafficObservations"]
+  t116["TeamLabTrafficPathHops"]
+  t117["TeamLabTrafficPaths"]
+  t118["TeamLabVpnPeerRuntimes"]
+  t119["TeamLabWebhookDeliveryFailures"]
+  t120["TeamLabWebhookSubscriptions"]
+  t121["TeamUserInfo"]
+  t122["Teams"]
+  t123["TheoryAnswerSheets"]
+  t124["TheoryPaperQuestions"]
+  t125["TheoryPapers"]
+  t126["TheoryQuestionBankItems"]
+  t127["TheoryQuestionTagBindings"]
+  t128["TheoryQuestionTags"]
+  t129["TheorySubmissionAnswers"]
+  t130["TrainingChapterProgresses"]
+  t131["TrainingCheckIns"]
+  t132["TrainingCourseChallenges"]
+  t133["TrainingCourseChapterChallenges"]
+  t134["TrainingCourseChapterTheoryAnswers"]
+  t135["TrainingCourseChapterTheoryPapers"]
+  t136["TrainingCourseChapterTheoryQuestions"]
+  t137["TrainingCourseChapterTheorySheets"]
+  t138["TrainingCourseChapters"]
+  t139["TrainingCourseEnrollments"]
+  t140["TrainingCourseImageTemplateBindings"]
+  t141["TrainingCourseProgresses"]
+  t142["TrainingCourseResources"]
+  t143["TrainingCourseSubmissions"]
+  t144["TrainingCourseTeachers"]
+  t145["TrainingCourseTheoryQuestions"]
+  t146["TrainingCourses"]
+  t147["UserParticipations"]
+  t148["VmInstances"]
+  t149["VmPreparedArtifacts"]
+  t150["WorkerNodeMetricSamples"]
+  t151["WorkerNodes"]
+  t2 -->|"OperationId"| t0
+  t103 -->|"RuntimeId"| t1
+  t151 -->|"WorkerNodeId"| t1
+  t5 -->|"ApiTokenId"| t2
+  t12 -->|"ActorUserId"| t2
+  t33 -->|"DeploymentQueueTicketId"| t2
+  t5 -->|"TokenId"| t3
+  t5 -->|"TokenId"| t4
+  t12 -->|"CreatorId"| t5
+  t7 -->|"RoleId"| t6
+  t12 -->|"UserId"| t8
+  t12 -->|"UserId"| t9
+  t7 -->|"RoleId"| t10
+  t12 -->|"UserId"| t10
+  t12 -->|"UserId"| t11
+  t44 -->|"LocalFileId"| t13
+  t19 -->|"RoundId"| t14
+  t21 -->|"ServiceId"| t14
+  t122 -->|"TeamId"| t14
+  t12 -->|"SubmittedByUserId"| t15
+  t19 -->|"RoundId"| t15
+  t21 -->|"ServiceId"| t15
+  t122 -->|"SubmittedByTeamId"| t15
+  t122 -->|"TeamId"| t15
+  t19 -->|"RoundId"| t16
+  t21 -->|"ServiceId"| t16
+  t122 -->|"TeamId"| t16
+  t21 -->|"ServiceId"| t17
+  t122 -->|"TeamId"| t17
+  t21 -->|"ServiceId"| t18
+  t122 -->|"TeamId"| t18
+  t53 -->|"GameId"| t19
+  t21 -->|"ServiceId"| t20
+  t29 -->|"ContainerId"| t20
+  t122 -->|"TeamId"| t20
+  t53 -->|"GameId"| t21
+  t24 -->|"ProfileVersionId"| t22
+  t151 -->|"WorkerNodeId"| t22
+  t2 -->|"OperationId"| t23
+  t12 -->|"CreatedById"| t24
+  t25 -->|"ProfileId"| t24
+  t12 -->|"CreatedById"| t25
+  t2 -->|"OperationId"| t26
+  t53 -->|"GameId"| t26
+  t53 -->|"GameId"| t27
+  t64 -->|"SourceTeamId"| t27
+  t64 -->|"SubmitTeamId"| t27
+  t76 -->|"SubmissionId"| t27
+  t151 -->|"NodeId"| t29
+  t151 -->|"TargetNodeId"| t33
+  t35 -->|"DivisionId"| t34
+  t48 -->|"ChallengeId"| t34
+  t53 -->|"GameId"| t35
+  t37 -->|"TaskId"| t36
+  t60 -->|"ImageTemplateId"| t36
+  t151 -->|"TargetNodeId"| t37
+  t13 -->|"AttachmentId"| t38
+  t29 -->|"TestContainerId"| t38
+  t60 -->|"ImageTemplateId"| t38
+  t146 -->|"TrainingCourseId"| t38
+  t38 -->|"SourceId"| t39
+  t38 -->|"TargetId"| t39
+  t12 -->|"UserId"| t40
+  t29 -->|"ContainerId"| t40
+  t38 -->|"ExerciseId"| t40
+  t46 -->|"FlagId"| t40
+  t2 -->|"OperationId"| t41
+  t38 -->|"ExerciseId"| t41
+  t12 -->|"UserId"| t42
+  t38 -->|"ExerciseChallengeId"| t42
+  t46 -->|"FlagId"| t42
+  t2 -->|"OperationId"| t43
+  t5 -->|"ApiTokenId"| t43
+  t12 -->|"ActorUserId"| t43
+  t46 -->|"FlagId"| t45
+  t48 -->|"ChallengeId"| t45
+  t64 -->|"ParticipationId"| t45
+  t76 -->|"SubmissionId"| t45
+  t13 -->|"AttachmentId"| t46
+  t38 -->|"ExerciseId"| t46
+  t48 -->|"ChallengeId"| t46
+  t48 -->|"GameChallengeId"| t46
+  t33 -->|"DeploymentQueueTicketId"| t47
+  t151 -->|"WorkerNodeId"| t47
+  t13 -->|"AttachmentId"| t48
+  t29 -->|"TestContainerId"| t48
+  t53 -->|"GameId"| t48
+  t60 -->|"ImageTemplateId"| t48
+  t12 -->|"UserId"| t49
+  t53 -->|"GameId"| t49
+  t122 -->|"TeamId"| t49
+  t29 -->|"ContainerId"| t50
+  t46 -->|"FlagId"| t50
+  t48 -->|"ChallengeId"| t50
+  t64 -->|"ParticipationId"| t50
+  t53 -->|"GameId"| t51
+  t53 -->|"GameId"| t52
+  t12 -->|"OwnerId"| t53
+  t60 -->|"ImageTemplateId"| t54
+  t151 -->|"WorkerNodeId"| t54
+  t54 -->|"DistributionRecordId"| t55
+  t2 -->|"OperationId"| t56
+  t12 -->|"CreatedById"| t56
+  t60 -->|"ImageTemplateId"| t56
+  t12 -->|"CertifiedById"| t57
+  t60 -->|"ImageTemplateId"| t57
+  t151 -->|"WorkerNodeId"| t57
+  t2 -->|"OperationId"| t58
+  t60 -->|"ImageTemplateId"| t59
+  t12 -->|"CreatedById"| t60
+  t149 -->|"PreparedArtifactId"| t60
+  t35 -->|"DivisionId"| t64
+  t44 -->|"WriteupId"| t64
+  t53 -->|"GameId"| t64
+  t122 -->|"TeamId"| t64
+  t53 -->|"GameId"| t65
+  t94 -->|"ActiveRolloutId"| t65
+  t104 -->|"TopologyId"| t65
+  t109 -->|"ActiveReleaseId"| t65
+  t53 -->|"GameId"| t66
+  t12 -->|"UserId"| t67
+  t103 -->|"RuntimeId"| t67
+  t12 -->|"UserId"| t68
+  t53 -->|"GameId"| t68
+  t64 -->|"ParticipationId"| t68
+  t66 -->|"ObjectiveId"| t68
+  t122 -->|"TeamId"| t68
+  t12 -->|"GrantedByUserId"| t69
+  t12 -->|"UserId"| t69
+  t53 -->|"GameId"| t69
+  t53 -->|"GameId"| t70
+  t103 -->|"RuntimeId"| t70
+  t122 -->|"TeamId"| t70
+  t12 -->|"AuthorId"| t71
+  t12 -->|"AddedById"| t73
+  t12 -->|"ManagerId"| t73
+  t75 -->|"GroupId"| t73
+  t12 -->|"AddedById"| t74
+  t12 -->|"StudentId"| t74
+  t75 -->|"GroupId"| t74
+  t12 -->|"CreatedById"| t75
+  t12 -->|"ReviewedById"| t76
+  t12 -->|"UserId"| t76
+  t46 -->|"FlagId"| t76
+  t48 -->|"ChallengeId"| t76
+  t53 -->|"GameId"| t76
+  t64 -->|"ParticipationId"| t76
+  t122 -->|"TeamId"| t76
+  t12 -->|"ReviewedById"| t77
+  t12 -->|"UserId"| t77
+  t122 -->|"TeamId"| t77
+  t2 -->|"ApiOperationId"| t78
+  t103 -->|"RuntimeId"| t78
+  t80 -->|"ConnectorId"| t79
+  t103 -->|"RuntimeId"| t79
+  t81 -->|"ControlScopeId"| t80
+  t103 -->|"RuntimeId"| t83
+  t102 -->|"ShardId"| t84
+  t103 -->|"RuntimeId"| t84
+  t102 -->|"ShardId"| t85
+  t103 -->|"RuntimeId"| t85
+  t151 -->|"WorkerNodeId"| t85
+  t103 -->|"RuntimeId"| t86
+  t103 -->|"RuntimeId"| t87
+  t109 -->|"TopologyReleaseId"| t87
+  t103 -->|"RuntimeId"| t88
+  t151 -->|"WorkerNodeId"| t88
+  t95 -->|"AssetId"| t89
+  t98 -->|"InfrastructureFragmentId"| t89
+  t99 -->|"NetworkId"| t89
+  t102 -->|"ShardId"| t89
+  t103 -->|"RuntimeId"| t89
+  t151 -->|"WorkerNodeId"| t89
+  t103 -->|"RuntimeId"| t90
+  t92 -->|"SessionId"| t91
+  t12 -->|"RequestedByUserId"| t92
+  t95 -->|"RuntimeAssetId"| t92
+  t103 -->|"RuntimeId"| t92
+  t151 -->|"WorkerNodeId"| t92
+  t94 -->|"RolloutId"| t93
+  t103 -->|"RuntimeId"| t93
+  t81 -->|"ControlScopeId"| t94
+  t109 -->|"ReleaseId"| t94
+  t102 -->|"ShardId"| t95
+  t103 -->|"RuntimeId"| t95
+  t151 -->|"WorkerNodeId"| t95
+  t103 -->|"RuntimeId"| t96
+  t103 -->|"RuntimeId"| t97
+  t97 -->|"InfrastructureId"| t98
+  t102 -->|"ShardId"| t98
+  t151 -->|"WorkerNodeId"| t98
+  t87 -->|"NetworkLeaseId"| t99
+  t102 -->|"ShardId"| t99
+  t103 -->|"RuntimeId"| t99
+  t151 -->|"WorkerNodeId"| t99
+  t2 -->|"OperationId"| t100
+  t103 -->|"RuntimeId"| t100
+  t103 -->|"RuntimeId"| t101
+  t103 -->|"RuntimeId"| t102
+  t151 -->|"WorkerNodeId"| t102
+  t12 -->|"CreatedById"| t103
+  t81 -->|"ControlScopeId"| t103
+  t102 -->|"EntryShardId"| t103
+  t109 -->|"TopologyReleaseId"| t103
+  t2 -->|"CreatedByOperationId"| t104
+  t2 -->|"LastMutationOperationId"| t104
+  t12 -->|"OwnerUserId"| t104
+  t81 -->|"ControlScopeId"| t104
+  t60 -->|"ImageTemplateId"| t105
+  t82 -->|"DevicePackageId"| t105
+  t104 -->|"TopologyId"| t105
+  t104 -->|"TopologyId"| t106
+  t105 -->|"AssetId"| t107
+  t108 -->|"NetworkId"| t107
+  t104 -->|"TopologyId"| t108
+  t2 -->|"ApiOperationId"| t109
+  t12 -->|"PublishedById"| t109
+  t81 -->|"ControlScopeId"| t109
+  t104 -->|"TopologyId"| t109
+  t2 -->|"ApiOperationId"| t110
+  t103 -->|"RuntimeId"| t110
+  t89 -->|"ObservationPointId"| t111
+  t110 -->|"CaptureJobId"| t111
+  t151 -->|"WorkerNodeId"| t111
+  t103 -->|"RuntimeId"| t112
+  t99 -->|"NetworkId"| t114
+  t102 -->|"ShardId"| t114
+  t103 -->|"RuntimeId"| t114
+  t151 -->|"WorkerNodeId"| t114
+  t89 -->|"ObservationPointId"| t115
+  t103 -->|"RuntimeId"| t115
+  t151 -->|"WorkerNodeId"| t115
+  t89 -->|"ObservationPointId"| t116
+  t115 -->|"ObservationId"| t116
+  t117 -->|"PathId"| t116
+  t103 -->|"RuntimeId"| t117
+  t103 -->|"RuntimeId"| t118
+  t120 -->|"SubscriptionId"| t119
+  t81 -->|"ControlScopeId"| t120
+  t12 -->|"MembersId"| t121
+  t122 -->|"TeamsId"| t121
+  t12 -->|"CaptainId"| t122
+  t12 -->|"UserId"| t123
+  t53 -->|"GameId"| t123
+  t64 -->|"ParticipationId"| t123
+  t125 -->|"PaperId"| t123
+  t125 -->|"PaperId"| t124
+  t126 -->|"SourceQuestionId"| t124
+  t53 -->|"GameId"| t125
+  t126 -->|"QuestionId"| t127
+  t128 -->|"TagId"| t127
+  t123 -->|"AnswerSheetId"| t129
+  t124 -->|"PaperQuestionId"| t129
+  t12 -->|"UserId"| t130
+  t138 -->|"ChapterId"| t130
+  t12 -->|"UserId"| t131
+  t12 -->|"CreatedById"| t132
+  t38 -->|"ExerciseChallengeId"| t132
+  t146 -->|"CourseId"| t132
+  t132 -->|"CourseId, ExerciseChallengeId"| t133
+  t138 -->|"ChapterId"| t133
+  t136 -->|"PaperQuestionId"| t134
+  t137 -->|"SheetId"| t134
+  t12 -->|"UpdatedById"| t135
+  t138 -->|"ChapterId"| t135
+  t146 -->|"CourseId"| t135
+  t135 -->|"PaperId"| t136
+  t145 -->|"SourceQuestionId"| t136
+  t12 -->|"UserId"| t137
+  t135 -->|"PaperId"| t137
+  t138 -->|"ChapterId"| t137
+  t146 -->|"CourseId"| t137
+  t12 -->|"CreatedById"| t138
+  t12 -->|"UpdatedById"| t138
+  t44 -->|"VideoFileId"| t138
+  t138 -->|"ParentId"| t138
+  t146 -->|"CourseId"| t138
+  t12 -->|"ReviewedById"| t139
+  t12 -->|"UserId"| t139
+  t146 -->|"CourseId"| t139
+  t12 -->|"AddedById"| t140
+  t60 -->|"ImageTemplateId"| t140
+  t146 -->|"CourseId"| t140
+  t12 -->|"UserId"| t141
+  t146 -->|"CourseId"| t141
+  t12 -->|"CreatedById"| t142
+  t44 -->|"LocalFileId"| t142
+  t146 -->|"CourseId"| t142
+  t12 -->|"UserId"| t143
+  t38 -->|"ExerciseChallengeId"| t143
+  t46 -->|"FlagId"| t143
+  t138 -->|"ChapterId"| t143
+  t146 -->|"CourseId"| t143
+  t12 -->|"AssignedById"| t144
+  t12 -->|"TeacherId"| t144
+  t146 -->|"CourseId"| t144
+  t12 -->|"CreatedById"| t145
+  t12 -->|"UpdatedById"| t145
+  t146 -->|"CourseId"| t145
+  t12 -->|"CreatedById"| t146
+  t12 -->|"UpdatedById"| t146
+  t12 -->|"UserId"| t147
+  t53 -->|"GameId"| t147
+  t64 -->|"ParticipationId"| t147
+  t122 -->|"TeamId"| t147
+  t48 -->|"ChallengeId"| t148
+  t151 -->|"NodeId"| t148
+  t151 -->|"WorkerNodeId"| t150

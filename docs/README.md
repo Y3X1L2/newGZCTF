@@ -23,6 +23,7 @@
 | 运行事件分类 | [`commercialization/event-taxonomy.md`](commercialization/event-taxonomy.md) |
 | 缓存失效 | [`commercialization/cache-invalidation-map.md`](commercialization/cache-invalidation-map.md) |
 | 数据库索引与生命周期 | [`commercialization/database-index-and-lifecycle-audit.md`](commercialization/database-index-and-lifecycle-audit.md) |
+| 数据库关系图与复用汇报简报 | [`commercialization/database-relationship-brief.md`](commercialization/database-relationship-brief.md) |
 | 模块文档覆盖 | [`modules/README.md`](modules/README.md) |
 
 ## 3. 前端规范
