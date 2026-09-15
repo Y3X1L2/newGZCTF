@@ -4,6 +4,7 @@ param(
     [Parameter(Mandatory = $true)][string]$AdminPassword,
     [string]$AgentBaseUrl = "http://127.0.0.1:18501",
     [int[]]$SingleAssetCounts = @(80, 100),
+    [ValidateRange(1, 16)][int]$NetworkCount = 1,
     [int]$ConcurrentRuntimeCount = 5,
     [int]$ConcurrentAssetCount = 20,
     [string]$OutputPath = "artifacts/teamlab-p3/full-chain-latest.json"
@@ -89,20 +90,43 @@ function Add-Measurement {
 
 function New-TopologyRelease {
     param([int]$AssetCount, [guid]$ScopeId, [int]$ImageId, [int]$DeviceBindingId, [string]$Token)
+    [int]$assetsPerNetwork = [math]::Ceiling($AssetCount / $NetworkCount)
     $assets = for ($index = 0; $index -lt $AssetCount; $index++) {
+        [int]$networkIndex = [math]::Floor($index / $assetsPerNetwork)
+        $networkKey = if ($NetworkCount -eq 1) { "lab" } else { "lab-$networkIndex" }
+        [int]$hostOffset = 10 + ($index % $assetsPerNetwork)
         @{
             key = "node-$index"; name = "Node $index"; kind = 0; imageTemplateId = $ImageId
             devicePackageId = $DeviceBindingId
             resources = @{ cpuUnits = 1; memoryMiB = 64; storageMiB = 1024 }
-            interfaces = @(@{ key = "eth0"; networkKey = "lab"; hostOffset = 10 + $index; primary = $true; orderIndex = 0 })
+            interfaces = @(@{ key = "eth0"; networkKey = $networkKey; hostOffset = $hostOffset; primary = $true; orderIndex = 0 })
             healthCheck = @{ kind = 0; port = 70 }; orderIndex = $index
         }
     }
+    $networks = @(for ($networkIndex = 0; $networkIndex -lt $NetworkCount; $networkIndex++) {
+        @{
+            key = if ($NetworkCount -eq 1) { "lab" } else { "lab-$networkIndex" }
+            name = "Lab network $($networkIndex + 1)"; isEntry = $networkIndex -eq 0; orderIndex = $networkIndex
+            addressPool = @{ poolCidr = "10.$(88 + $networkIndex).0.0/16"; runtimePrefixLength = 24 }
+        }
+    })
+    $infrastructure = @()
+    $connections = @()
+    if ($NetworkCount -gt 1) {
+        $routerInterfaces = @(for ($networkIndex = 0; $networkIndex -lt $NetworkCount; $networkIndex++) {
+            @{ key = "lab-$networkIndex"; networkKey = "lab-$networkIndex"; hostOffset = 1
+                primary = $networkIndex -eq 0; orderIndex = $networkIndex }
+        })
+        $infrastructure = @(@{ key = "lab-router"; name = "Lab router"; kind = 1; interfaces = $routerInterfaces })
+        $connections = @(for ($networkIndex = 1; $networkIndex -lt $NetworkCount; $networkIndex++) {
+            @{ key = "lab-0-to-lab-$networkIndex"; fromNetworkKey = "lab-0"; toNetworkKey = "lab-$networkIndex"
+                viaNodeKey = "lab-router"; direction = 1 }
+        })
+    }
     $submit = Submit-Operation Post "/api/open/v1/teamlab/topologies" $Token "p3-topology-$stamp-$AssetCount" @{
         name = "P3 $AssetCount assets $stamp"; controlScopeId = $ScopeId; schemaVersion = 2
-        networks = @(@{ key = "lab"; name = "Lab network"; isEntry = $true; orderIndex = 0
-            addressPool = @{ poolCidr = "10.88.0.0/16"; runtimePrefixLength = 24 } })
-        assets = $assets; connections = @()
+        networks = $networks
+        assets = $assets; infrastructure = $infrastructure; connections = $connections
     }
     $topologyResult = Wait-Operation $submit.Id $Token
     $topologyId = [guid](Resolve-ResourceId $topologyResult.Operation)
@@ -150,14 +174,19 @@ function Invoke-Lifecycle {
 function Invoke-NetworkPolicy {
     param([guid]$RuntimeId, [int]$AssetCount, [string]$Token)
     $started = [Diagnostics.Stopwatch]::StartNew()
-    $policy = Invoke-Json Post "/api/open/v1/teamlab/link-policies" $Token @{
-        runtimeId = $RuntimeId; networkKey = "lab"; assetKey = $null; kind = "latency"
-        parameters = @{ delayMillis = 10 }; recoverAt = $null
+    $policies = for ($networkIndex = 0; $networkIndex -lt $NetworkCount; $networkIndex++) {
+        $networkKey = if ($NetworkCount -eq 1) { "lab" } else { "lab-$networkIndex" }
+        Invoke-Json Post "/api/open/v1/teamlab/link-policies" $Token @{
+            runtimeId = $RuntimeId; networkKey = $networkKey; assetKey = $null; kind = "latency"
+            parameters = @{ delayMillis = 10 }; recoverAt = $null
+        }
     }
     Add-Measurement "link-policy-apply" $AssetCount 1 $started.Elapsed.TotalMilliseconds
     $started.Restart()
-    $recovered = Invoke-Json Post "/api/open/v1/teamlab/link-policies/$($policy.id)/recover" $Token
-    if (([string]$recovered.status).ToLowerInvariant() -notin @("2", "recovered")) { throw "Link policy recovery failed." }
+    foreach ($policy in $policies) {
+        $recovered = Invoke-Json Post "/api/open/v1/teamlab/link-policies/$($policy.id)/recover" $Token
+        if (([string]$recovered.status).ToLowerInvariant() -notin @("2", "recovered")) { throw "Link policy recovery failed." }
+    }
     Add-Measurement "link-policy-recover" $AssetCount 1 $started.Elapsed.TotalMilliseconds
 }
 
@@ -242,7 +271,11 @@ try {
         healthDeclaration = @{ kind = "tcp"; port = 70 }; protocolEventTypes = @()
     }
 
-    $counts = @($SingleAssetCounts + $ConcurrentAssetCount | Select-Object -Unique)
+    $counts = if ($ConcurrentRuntimeCount -gt 0) {
+        @($SingleAssetCounts + $ConcurrentAssetCount | Select-Object -Unique)
+    } else {
+        @($SingleAssetCounts | Select-Object -Unique)
+    }
     $releases = @{}
     foreach ($count in $counts) {
         $releases[$count] = New-TopologyRelease $count ([guid]$scope.id) $imageId ([int]$device.bindingId) $token
@@ -258,27 +291,29 @@ try {
         Stop-Runtimes @($runtimeId) $token $count
     }
 
-    $batchStarted = [Diagnostics.Stopwatch]::StartNew()
-    $submissions = for ($index = 0; $index -lt $ConcurrentRuntimeCount; $index++) {
-        $release = $releases[$ConcurrentAssetCount]
-        $submit = Submit-Operation Post "/api/open/v1/teamlab/runtimes" $token "p3-batch-create-$stamp-$index" @{
-            releaseId = $release.ReleaseId; externalReference = "p3-$stamp-batch-$index"; overlays = @()
+    if ($ConcurrentRuntimeCount -gt 0) {
+        $batchStarted = [Diagnostics.Stopwatch]::StartNew()
+        $submissions = for ($index = 0; $index -lt $ConcurrentRuntimeCount; $index++) {
+            $release = $releases[$ConcurrentAssetCount]
+            $submit = Submit-Operation Post "/api/open/v1/teamlab/runtimes" $token "p3-batch-create-$stamp-$index" @{
+                releaseId = $release.ReleaseId; externalReference = "p3-$stamp-batch-$index"; overlays = @()
+            }
+            [pscustomobject]@{ Submit = $submit; Index = $index }
         }
-        [pscustomobject]@{ Submit = $submit; Index = $index }
+        $batchIds = foreach ($entry in $submissions) {
+            $completed = Wait-Operation $entry.Submit.Id $token
+            $id = [guid](Resolve-ResourceId $completed.Operation)
+            $runtimeIds.Add($id)
+            Wait-Runtime $id @("5", "running") $token | Out-Null
+            Assert-AssetPage $id $ConcurrentAssetCount $token
+            $id
+        }
+        Add-Measurement "create-concurrent" ($ConcurrentRuntimeCount * $ConcurrentAssetCount) $ConcurrentRuntimeCount $batchStarted.Elapsed.TotalMilliseconds
+        Invoke-Lifecycle $batchIds "pause" $token ($ConcurrentRuntimeCount * $ConcurrentAssetCount)
+        Invoke-Lifecycle $batchIds "resume" $token ($ConcurrentRuntimeCount * $ConcurrentAssetCount)
+        Invoke-Capture $batchIds $token ($ConcurrentRuntimeCount * $ConcurrentAssetCount)
+        Stop-Runtimes $batchIds $token ($ConcurrentRuntimeCount * $ConcurrentAssetCount)
     }
-    $batchIds = foreach ($entry in $submissions) {
-        $completed = Wait-Operation $entry.Submit.Id $token
-        $id = [guid](Resolve-ResourceId $completed.Operation)
-        $runtimeIds.Add($id)
-        Wait-Runtime $id @("5", "running") $token | Out-Null
-        Assert-AssetPage $id $ConcurrentAssetCount $token
-        $id
-    }
-    Add-Measurement "create-concurrent" ($ConcurrentRuntimeCount * $ConcurrentAssetCount) $ConcurrentRuntimeCount $batchStarted.Elapsed.TotalMilliseconds
-    Invoke-Lifecycle $batchIds "pause" $token ($ConcurrentRuntimeCount * $ConcurrentAssetCount)
-    Invoke-Lifecycle $batchIds "resume" $token ($ConcurrentRuntimeCount * $ConcurrentAssetCount)
-    Invoke-Capture $batchIds $token ($ConcurrentRuntimeCount * $ConcurrentAssetCount)
-    Stop-Runtimes $batchIds $token ($ConcurrentRuntimeCount * $ConcurrentAssetCount)
 
     $agentToken = (docker exec gzctf-teamlab-p3-db-1 psql -U postgres -d gzctf_p1 -At -c `
         'SELECT "AuthToken" FROM "WorkerNodes" WHERE "Name"=''P3 real worker'' LIMIT 1;').Trim()
@@ -292,6 +327,7 @@ try {
     $report = [ordered]@{
         result = "passed"; startedAt = $stamp; completedAt = [DateTimeOffset]::Now
         singleAssetCounts = $SingleAssetCounts
+        networkCount = $NetworkCount
         concurrent = @{ runtimes = $ConcurrentRuntimeCount; assetsPerRuntime = $ConcurrentAssetCount }
         measurements = $measurements
         residuals = @{ containers = 0; teamLabResources = 0 }
