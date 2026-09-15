@@ -4,6 +4,122 @@
   padding: 0 var(--yn-page-gutter) 80px;
 }
 
+.personalHeader {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  grid-template-areas: 'copy visual';
+  column-gap: var(--yn-space-5);
+  border-bottom: 1px solid var(--yn-color-border);
+}
+
+@media (max-width: 980px) {
+  .personalHeader {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: 'copy';
+  }
+}
+
+.personalHeader .brandCopy {
+  max-width: none;
+  padding: var(--yn-space-7) 0;
+}
+
+.personalHeader h1 {
+  font-size: clamp(28px, 3vw, 42px);
+  overflow-wrap: anywhere;
+}
+
+.personalHeader .brandActions {
+  margin-top: var(--yn-space-5);
+}
+
+.personalWorkspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 0.3fr);
+  gap: var(--yn-space-7);
+  margin-top: var(--yn-space-7);
+}
+
+.personalMain,
+.personalNotices,
+.learningAndGames > section {
+  min-width: 0;
+  align-self: start;
+}
+
+.personalNotices {
+  padding-left: var(--yn-space-5);
+  border-left: 1px solid var(--yn-color-border);
+}
+
+.learningAndGames {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--yn-space-6);
+  margin-top: var(--yn-space-6);
+}
+
+.personalWorkspace .continueSection,
+.personalWorkspace .noticeSection {
+  margin-top: 0;
+}
+
+.personalWorkspace .continueGrid,
+.personalWorkspace .courseGrid {
+  grid-template-columns: 1fr;
+}
+
+.personalWorkspace .continueGrid {
+  gap: var(--yn-space-2);
+}
+
+.personalWorkspace .continueCard {
+  min-height: 80px;
+  align-items: center;
+  padding: var(--yn-space-3) var(--yn-space-4);
+}
+
+.personalWorkspace .continueMeta {
+  align-self: center;
+}
+
+.personalWorkspace {
+  --yn-card-media-height: clamp(156px, 15vw, 196px);
+}
+
+.personalWorkspace .eventCard {
+  grid-template-columns: 1fr;
+  grid-template-rows: var(--yn-card-media-height) minmax(230px, 1fr);
+  min-height: 380px;
+}
+
+.personalWorkspace .eventPoster,
+.personalWorkspace .courseCover {
+  min-height: 0;
+  height: var(--yn-card-media-height);
+  aspect-ratio: auto;
+}
+
+.personalWorkspace .courseCard {
+  grid-template-rows: var(--yn-card-media-height) minmax(230px, 1fr);
+  min-height: 380px;
+}
+
+.personalWorkspace .eventBody,
+.personalWorkspace .courseBody {
+  padding: var(--yn-space-5);
+}
+
+.personalWorkspace .eventList,
+.personalWorkspace .courseGrid {
+  gap: var(--yn-space-5);
+}
+
+.learningAndGames > .courseSection,
+.learningAndGames > .gamesSection {
+  margin-top: 0;
+}
+
 .eyebrow {
   color: var(--yn-color-muted);
   font-family: var(--yn-font-mono);
@@ -250,6 +366,122 @@
   margin-top: var(--yn-space-8);
 }
 
+.pathTopGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(300px, 0.82fr);
+  gap: var(--yn-space-7);
+  margin-top: var(--yn-space-7);
+}
+
+.pathTopGrid .continueSection,
+.pathTopMain,
+.pathTopRail {
+  min-width: 0;
+  margin-top: 0;
+}
+
+.pathTopMain {
+  display: grid;
+  align-content: start;
+  gap: var(--yn-space-7);
+}
+
+.pathTopRail {
+  display: grid;
+  align-content: start;
+  gap: var(--yn-space-6);
+  padding-left: var(--yn-space-6);
+  border-left: 1px solid var(--yn-color-border);
+}
+
+.pathTopRail .metricStrip {
+  grid-template-columns: 1fr;
+  margin-top: 0;
+  border-top: 0;
+}
+
+.pathTopRail .metricStrip > div {
+  min-height: 82px;
+  padding: var(--yn-space-3) 0;
+  border-right: 0;
+  border-bottom: 1px solid var(--yn-color-border);
+}
+
+.pathTopRail .metricStrip > div:last-child {
+  border-bottom: 0;
+}
+
+.pathTopRail .activitySection {
+  min-width: 0;
+  margin-top: 0;
+}
+
+.pathTopMain .noticeList a {
+  min-height: 60px;
+}
+
+.pathTopRail .activitySection {
+  padding: var(--yn-space-5) 0 0;
+  border-top: 1px solid var(--yn-color-border);
+}
+
+.activitySectionCompact {
+  display: block;
+}
+
+.activitySectionCompact h2 {
+  font-size: var(--yn-font-lg);
+}
+
+.activitySectionCompact p {
+  font-size: var(--yn-font-xs);
+}
+
+.activitySectionCompact dl {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--yn-space-3);
+  margin-top: var(--yn-space-4);
+}
+
+.activitySectionCompact dl div {
+  display: block;
+}
+
+.activitySectionCompact dd {
+  margin-top: 3px;
+  font-size: var(--yn-font-md);
+}
+
+.pathTopGrid .continueGrid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.pathTopGrid .continueCard {
+  min-height: 76px;
+  padding: var(--yn-space-3);
+}
+
+.pathLayout .metricStrip {
+  margin-top: var(--yn-space-6);
+}
+
+.pathLayout .pathTopRail .metricStrip {
+  margin-top: 0;
+}
+
+.pathLayout .metricStrip > div {
+  min-height: 82px;
+  padding: var(--yn-space-3) var(--yn-space-4);
+}
+
+.pathLayout .pathTopRail .metricStrip > div {
+  padding: var(--yn-space-3) 0;
+}
+
+.pathLayout .contentGrid .courseSection {
+  margin-top: 0;
+}
+
 .gamesSection,
 .noticeSection {
   min-width: 0;
@@ -405,10 +637,10 @@
   display: grid;
   width: max-content;
   max-width: 100%;
-  grid-template-columns: repeat(16, 13px);
-  grid-template-rows: repeat(7, 13px);
-  grid-auto-flow: column;
-  gap: 4px;
+  grid-template-columns: repeat(7, 12px);
+  grid-template-rows: repeat(3, 12px);
+  grid-auto-flow: row;
+  gap: 3px;
   overflow: hidden;
 }
 
@@ -594,6 +826,32 @@
     grid-template-columns: 1fr;
   }
 
+  .pathTopGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .pathTopRail {
+    padding-top: var(--yn-space-6);
+    border-top: 1px solid var(--yn-color-border);
+    border-left: 0;
+  }
+
+  .pathTopRail .activitySection {
+    padding-top: var(--yn-space-5);
+  }
+
+  .pathTopRail .metricStrip {
+    border-top: 1px solid var(--yn-color-border);
+  }
+
+  .pathTopRail .metricStrip > div {
+    padding: var(--yn-space-4) 0;
+  }
+
+  .pathTopGrid .continueGrid {
+    grid-template-columns: 1fr;
+  }
+
   .courseGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -673,9 +931,516 @@
     display: none;
   }
 
-  .heatmap {
-    grid-template-columns: repeat(16, 10px);
-    grid-template-rows: repeat(7, 10px);
-    gap: 3px;
+}
+
+/* The signed-in landing page is a task surface first; public discovery follows below. */
+.brandBand {
+  min-height: clamp(280px, 32vh, 360px);
+  grid-template-columns: minmax(0, 1.28fr) minmax(320px, 0.72fr);
+  grid-template-areas: 'copy visual';
+}
+
+.brandCopy {
+  grid-area: copy;
+  min-width: 0;
+  padding: var(--yn-space-8) 0;
+}
+
+.brandCopy h1 {
+  max-width: 100%;
+  font-size: clamp(36px, 3.5vw, 48px);
+  line-height: 1.15;
+  white-space: normal;
+}
+
+.brandCopy h1 span {
+  display: block;
+  margin-top: var(--yn-space-2);
+  font-size: 30px;
+  line-height: 1.35;
+}
+
+.brandTitleRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(208px, 238px);
+  align-items: center;
+  gap: var(--yn-space-5);
+  margin-top: var(--yn-space-2);
+}
+
+.brandTitleRow:not(:has(.brandActivity)) {
+  grid-template-columns: 1fr;
+}
+
+.brandTitleRow h1 {
+  margin-top: 0;
+}
+
+.brandActivity {
+  z-index: 2;
+  min-width: 0;
+}
+
+.brandActivity .activitySection {
+  display: grid;
+  min-height: 92px;
+  grid-template-areas:
+    'intro heatmap'
+    'stats stats';
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: var(--yn-space-3);
+  row-gap: var(--yn-space-2);
+  margin: 0;
+  padding: var(--yn-space-2) 0 var(--yn-space-2) var(--yn-space-4);
+  border: 0;
+  border-left: 1px solid var(--yn-color-border);
+  border-radius: 0;
+  background: transparent;
+}
+
+.brandActivity .activitySection > div:first-child {
+  grid-area: intro;
+}
+
+.brandActivity .activitySection h2 {
+  margin: 0;
+  font-size: var(--yn-font-md);
+}
+
+.activityIntro > span {
+  display: block;
+  margin-top: var(--yn-space-1);
+  color: var(--yn-color-muted);
+  font-size: var(--yn-font-xs);
+}
+
+.brandActivity .activitySection .heatmap {
+  grid-area: heatmap;
+  margin: 0;
+}
+
+.brandActivity .activityStatus {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: var(--yn-font-xs);
+}
+
+.brandActivity .activitySection dl {
+  display: flex;
+  grid-area: stats;
+  flex-wrap: wrap;
+  gap: var(--yn-space-3);
+  min-width: 0;
+  margin: 0;
+  padding-top: var(--yn-space-2);
+  border-top: 1px solid var(--yn-color-border);
+}
+
+.brandActivity .activitySection dl div {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.brandActivity .activitySection dd {
+  margin: 0;
+  font-size: var(--yn-font-sm);
+}
+
+.topWorkspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(300px, 0.82fr);
+  gap: clamp(var(--yn-space-5), 3vw, var(--yn-space-7));
+  margin-top: clamp(var(--yn-space-6), 5vw, 64px);
+}
+
+.topContinue,
+.topNotice {
+  min-width: 0;
+}
+
+.topContinue .continueSection,
+.topNotice .noticeSection {
+  margin-top: 0;
+}
+
+.topContinue .continueGrid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+}
+
+.topContinue .continueGridSingle {
+  max-width: 620px;
+}
+
+.topNotice {
+  padding-left: var(--yn-space-6);
+  border-left: 1px solid var(--yn-color-border);
+}
+
+.memoryBand {
+  display: grid;
+  grid-template-columns: minmax(340px, 1fr) minmax(0, 1.9fr);
+  align-items: center;
+  gap: var(--yn-space-5);
+  margin-top: clamp(var(--yn-space-5), 4vw, var(--yn-space-7));
+  padding: 0 var(--yn-space-5);
+  border: 1px solid var(--yn-color-border);
+  border-radius: var(--yn-radius-lg);
+  background: var(--yn-color-surface);
+}
+
+.memoryBand .activitySection {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.6fr) minmax(180px, 1fr) auto;
+  gap: var(--yn-space-5);
+  margin-top: 0;
+  padding: var(--yn-space-4) 0;
+  border: 0;
+}
+
+.memoryBand .activitySection h2 {
+  margin: 0;
+  font-size: var(--yn-font-md);
+}
+
+.memoryBand .activitySection p {
+  margin: var(--yn-space-1) 0 0;
+  font-size: var(--yn-font-xs);
+}
+
+.memoryBand .activitySection dl {
+  display: flex;
+  align-items: center;
+  gap: var(--yn-space-4);
+  min-width: 0;
+  margin: 0;
+}
+
+.memoryBand .activitySection dl div {
+  display: grid;
+  gap: 2px;
+}
+
+.memoryBand .activitySection dd {
+  margin: 0;
+  font-size: var(--yn-font-sm);
+}
+
+.workspaceGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(300px, 0.82fr);
+  gap: clamp(var(--yn-space-6), 5vw, var(--yn-space-8));
+  margin-top: clamp(56px, 8vw, 104px);
+}
+
+.workspaceMain {
+  display: grid;
+  align-content: start;
+  gap: clamp(var(--yn-space-7), 5vw, 72px);
+  min-width: 0;
+}
+
+.workspaceRail {
+  display: grid;
+  align-content: start;
+  gap: var(--yn-space-6);
+  min-width: 0;
+  padding-left: var(--yn-space-6);
+  border-left: 1px solid var(--yn-color-border);
+}
+
+.workspaceRail .metricStrip {
+  grid-template-columns: 1fr;
+  margin-top: 0;
+  border-top: 1px solid var(--yn-color-border);
+}
+
+.workspaceRail .metricStrip > div {
+  min-height: 82px;
+  padding: var(--yn-space-3) 0;
+  border-right: 0;
+  border-bottom: 1px solid var(--yn-color-border);
+}
+
+.workspaceRail .metricStrip > div:last-child {
+  border-bottom: 0;
+}
+
+.continueCopy strong,
+.continueCopy small,
+.continueMeta,
+.noticeList strong,
+.noticeList small,
+.eventBody > p,
+.courseBody h3,
+.courseBody > p {
+  overflow: visible;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.continueCard {
+  min-height: 112px;
+  align-items: start;
+}
+
+.continueMeta {
+  max-width: 220px;
+  align-self: start;
+}
+
+.noticeList a {
+  min-height: 0;
+  align-items: start;
+  padding: var(--yn-space-4) 0;
+}
+
+.eventBody > p,
+.courseBody > p {
+  display: block;
+}
+
+.courseBody > p:last-of-type,
+.noticeList small:last-child {
+  color: var(--yn-color-muted);
+  font-size: var(--yn-font-xs);
+}
+
+.courseBody {
+  min-height: 0;
+}
+
+.pathLayout > .continueSection {
+  margin-top: var(--yn-space-7);
+}
+
+.pathLayout > .activitySection {
+  margin-top: var(--yn-space-6);
+}
+
+@media (max-width: 1240px) {
+  .brandBand {
+    grid-template-columns: minmax(0, 1fr) 220px;
+    gap: var(--yn-space-6);
   }
+
+  .brandTitleRow {
+    grid-template-columns: minmax(0, 1fr) 220px;
+  }
+
+  .brandCopy h1 span {
+    font-size: 26px;
+  }
+}
+
+@media (max-width: 980px) {
+  .brandBand {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: 'copy';
+  }
+
+  .topWorkspace {
+    grid-template-columns: 1fr;
+  }
+
+  .topNotice {
+    padding-top: var(--yn-space-6);
+    padding-left: 0;
+    border-top: 1px solid var(--yn-color-border);
+    border-left: 0;
+  }
+
+  .workspaceGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .workspaceRail {
+    grid-template-columns: 1fr;
+    padding-top: var(--yn-space-6);
+    padding-left: 0;
+    border-top: 1px solid var(--yn-color-border);
+    border-left: 0;
+  }
+
+  .workspaceRail .metricStrip {
+    border-top: 0;
+  }
+
+}
+
+@media (max-width: 760px) {
+  .brandBand {
+    min-height: 0;
+    grid-template-columns: 1fr;
+    grid-template-areas: 'copy';
+  }
+
+  .brandCopy {
+    padding: var(--yn-space-6) 0;
+  }
+
+  .brandCopy h1 {
+    font-size: 40px;
+  }
+
+  .brandCopy h1 span {
+    font-size: 26px;
+  }
+
+  .brandCopy > p {
+    margin-top: var(--yn-space-4);
+  }
+
+  .brandActions {
+    flex-direction: row;
+    margin-top: var(--yn-space-5);
+  }
+
+  .brandActivity {
+    width: min(100%, 238px);
+    justify-self: start;
+  }
+
+  .brandActivity .activitySection {
+    min-height: 76px;
+    padding: 0;
+    border-left: 0;
+  }
+
+  .brandTitleRow {
+    grid-template-columns: 1fr;
+    gap: var(--yn-space-4);
+  }
+
+  .workspaceRail {
+    grid-template-columns: 1fr;
+  }
+
+  .topWorkspace {
+    gap: var(--yn-space-5);
+    margin-top: var(--yn-space-5);
+  }
+
+  .workspaceGrid {
+    margin-top: var(--yn-space-10);
+  }
+
+  .workspaceMain {
+    gap: var(--yn-space-10);
+  }
+
+  .topNotice {
+    padding-top: var(--yn-space-4);
+  }
+
+  .topNotice .noticeList a {
+    min-height: 64px;
+  }
+}
+
+@media (max-width: 540px) {
+  .personalWorkspace {
+    --yn-card-media-height: 168px;
+  }
+
+  .continueCard {
+    grid-template-columns: 38px minmax(0, 1fr) 18px;
+  }
+
+  .continueMeta {
+    display: block;
+    grid-column: 2;
+    grid-row: 2;
+    max-width: none;
+  }
+
+  .continueCard > svg {
+    grid-column: 3;
+    grid-row: 1 / span 2;
+    align-self: center;
+  }
+}
+
+.memoryBand .activitySection {
+  grid-template-columns: auto auto minmax(0, 1fr);
+  gap: var(--yn-space-3);
+  align-items: center;
+}
+
+.memoryBand .activitySection > .activityIntro {
+  grid-column: auto;
+}
+
+.memoryBand .activitySection dl {
+  flex-wrap: wrap;
+  gap: var(--yn-space-2) var(--yn-space-3);
+}
+
+.memoryBand .metricStrip {
+  min-width: 0;
+  margin-top: 0;
+  border: 0;
+}
+
+.memoryBand .metricStrip > div {
+  min-width: 0;
+  min-height: 76px;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  gap: 3px var(--yn-space-2);
+  padding: var(--yn-space-3) var(--yn-space-4);
+  border-right: 0;
+  border-left: 1px solid var(--yn-color-border);
+}
+
+.memoryBand .metricIcon {
+  width: 32px;
+  height: 32px;
+}
+
+.memoryBand .metricStrip strong {
+  max-width: 6ch;
+  font-size: var(--yn-font-xl);
+}
+
+.memoryBand .activityIntro + dl {
+  grid-column: 2 / -1;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.pathLayout :is(h2, h3, strong, small, p, dd, dt, time) {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 1180px) {
+  .memoryBand { grid-template-columns: 1fr; gap: 0; }
+  .memoryBand .activitySection { grid-template-columns: auto auto 1fr; }
+  .memoryBand .activitySection dl { justify-content: flex-end; }
+  .memoryBand .metricStrip { border-top: 1px solid var(--yn-color-border); }
+  .memoryBand .metricStrip > div:first-child { border-left: 0; padding-left: 0; }
+  .personalWorkspace { grid-template-columns: minmax(0, 1fr) 240px; gap: var(--yn-space-5); }
+  .learningAndGames { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 760px) {
+  .personalWorkspace, .learningAndGames { grid-template-columns: 1fr; }
+  .personalHeader, .memoryBand, .personalMain > .continueSection { display: block; }
+  .personalHeader .brandCopy { padding: var(--yn-space-5) 0; }
+  .personalHeader .brandCopy > p { margin-top: var(--yn-space-3); font-size: var(--yn-font-sm); line-height: 1.6; }
+  .personalHeader .brandActions { margin-top: var(--yn-space-4); }
+  .personalHeader .secondaryAction { display: none; }
+  .memoryBand { margin-top: var(--yn-space-4); padding: 0 var(--yn-space-4); }
+  .memoryBand .activitySection { grid-template-columns: minmax(0, 1fr) auto; gap: var(--yn-space-3); padding: var(--yn-space-4) 0; }
+  .memoryBand .activitySection dl,
+  .memoryBand .activityIntro + dl { grid-column: 1 / -1; justify-content: flex-start; gap: var(--yn-space-4); }
+  .memoryBand .metricStrip { grid-template-columns: 1fr; }
+  .memoryBand .metricStrip > div { padding: var(--yn-space-3) 0; border-left: 0; border-bottom: 1px solid var(--yn-color-border); }
+  .memoryBand .metricStrip > div:last-child { border-bottom: 0; }
+  .personalMain > .continueSection { margin-top: var(--yn-space-5); }
+  .personalNotices { padding: var(--yn-space-6) 0 0; border-left: 0; border-top: 1px solid var(--yn-color-border); }
+  .learningAndGames { margin-top: 0; gap: var(--yn-space-8); }
+  .personalNotices .noticeList time { display: block; grid-column: 2; }
 }
