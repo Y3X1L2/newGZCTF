@@ -283,9 +283,9 @@ public sealed class TeamLabExecutionPlanV2Tests
 
         var attachments = plan.Assets[0].NetworkAttachments;
         Assert.Equal(2, attachments.Count);
-        Assert.Equal("docker-switch-nic", attachments[0].PortKey);
+        Assert.Equal("docker-1:docker-switch-nic", attachments[0].PortKey);
         Assert.Equal("eth0", attachments[0].InterfaceName);
-        Assert.Equal("uplink-extra", attachments[1].PortKey);
+        Assert.Equal("docker-1:uplink-extra", attachments[1].PortKey);
         Assert.Equal("eth1", attachments[1].InterfaceName);
         Assert.All(attachments, attachment =>
         {

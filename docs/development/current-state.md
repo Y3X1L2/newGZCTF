@@ -7,7 +7,7 @@
 
 ## TeamLab API 底座在研状态（2026-09-14）
 
-TeamLab API 候选位于 `codex/teamlab-api-product-integration`，基线为 `origin/main 4bef377`，尚未推送或部署。当前候选已补齐远程会话范围查询、运行时设备健康查询和运行状态检查三个 Open API，并沿用 `teamlab-scope` 授权、现有资产控制入口和独立 Open DTO，不向外暴露 Worker 或操作者内部标识。主站、单元测试项目和集成测试项目编译通过，OpenAPI 快照契约检查通过。P1 本地基础组合与 API 驱动脚本已在电脑重启前后各成功执行一次，相关集成测试 8/8 通过；当前模拟 Agent 未启用 TeamLab 执行面，不能据此认定 Docker 组网、VM、运维、公网入口或抓包实链通过。结果见 [TeamLab API P1 本地验证记录](test-reports/2026-09-14-teamlab-api-p1.md)。并发压测、生产部署和独立产品拆分尚未开始。
+TeamLab API 候选位于 `codex/teamlab-api-product-integration`，尚未推送或部署。当前候选已补齐远程会话范围查询、运行时设备健康查询和运行状态检查三个 Open API，并沿用 `teamlab-scope` 授权、现有资产控制入口和独立 Open DTO，不向外暴露 Worker 或操作者内部标识。P1 已使用正式发布包、独立 Docker Engine 和真实 OVN/OVS 执行面跑通完整 API 流程，覆盖双容器部署、文件运维、资产启停、全网段链路策略、服务开放、WebSocket 终端、操作审计、范围隔离和销毁清理；API、PostgreSQL、Agent、Docker、OVN、OVS 一致性检查通过。结果见 [TeamLab API P1 本地验证记录](test-reports/2026-09-14-teamlab-api-p1.md)。VM、现场物理网卡、多 Worker 隧道、并发压测、生产部署和独立产品拆分尚未由本阶段验证。
 
 ## 测试环境部署事实（2026-09-09）
 

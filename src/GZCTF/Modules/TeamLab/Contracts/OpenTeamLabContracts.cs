@@ -84,6 +84,7 @@ public sealed record OpenTeamLabRuntimeShardModel(
     OpenTeamLabFailureModel? Failure);
 
 public sealed record OpenTeamLabRuntimeAssetModel(
+    int Id,
     string Key,
     string Name,
     TeamLabAssetKind Kind,
@@ -205,6 +206,7 @@ public static class OpenTeamLabContractMapper
                 Failure(item.Failure))).ToArray(),
             model.Networks,
             model.Assets.Select(item => new OpenTeamLabRuntimeAssetModel(
+                item.Id,
                 item.Key,
                 item.Name,
                 item.Kind,

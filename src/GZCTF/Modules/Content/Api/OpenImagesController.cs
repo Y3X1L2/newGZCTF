@@ -21,6 +21,7 @@ public sealed class OpenImagesController(
     ImageImportApplicationService imports,
     IImageTemplateCatalog catalog,
     ImageTemplateDeletionService deletion,
+    ImageRemoteAccessService remoteAccess,
     ImageTemplateCertificationService certifications,
     IAuthorizationService authorization) : ControllerBase
 {
@@ -174,6 +175,37 @@ public sealed class OpenImagesController(
             return await NotFoundProblemAsync();
 
         return Ok(OpenImageTemplateModel.FromDetails(template));
+    }
+
+    [HttpGet("{imageTemplateId:int}/remote-access")]
+    [Authorize(Policy = "scope:" + ApiTokenScopes.ImagesRead)]
+    [ProducesResponseType(typeof(ImageRemoteAccessModel), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetRemoteAccess(
+        int imageTemplateId,
+        CancellationToken cancellationToken)
+    {
+        var (_, actorUserId) = GetActor();
+        var template = await catalog.FindDetailsAsync(imageTemplateId, cancellationToken);
+        if (template is null || !await CanAccessTemplateAsync(template, actorUserId))
+            return await NotFoundProblemAsync();
+        return Ok(await remoteAccess.GetAsync(imageTemplateId, cancellationToken));
+    }
+
+    [HttpPatch("{imageTemplateId:int}/remote-access")]
+    [Authorize(Policy = "scope:" + ApiTokenScopes.ImagesWrite)]
+    [ProducesResponseType(typeof(ImageRemoteAccessModel), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UpdateRemoteAccess(
+        int imageTemplateId,
+        UpdateImageRemoteAccessModel model,
+        CancellationToken cancellationToken)
+    {
+        var (_, actorUserId) = GetActor();
+        var template = await catalog.FindDetailsAsync(imageTemplateId, cancellationToken);
+        if (template is null || !await CanAccessTemplateAsync(template, actorUserId))
+            return await NotFoundProblemAsync();
+        return Ok(await remoteAccess.UpdateAsync(imageTemplateId, model, cancellationToken));
     }
 
     [HttpDelete("{imageTemplateId:int}")]

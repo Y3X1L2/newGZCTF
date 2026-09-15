@@ -54,7 +54,7 @@ public static class TeamLabExecutionPlanCompiler
                     {
                         var owner = interfaceOwners[record.MacAddress];
                         return new TeamLabNetworkPortV2(
-                            owner.Interface.Key,
+                            PortKey(owner.AssetKey, owner.Interface.Key),
                             owner.AssetKey,
                             record.MacAddress,
                             AddressWithoutPrefix(record.IpAddress));
@@ -64,7 +64,7 @@ public static class TeamLabExecutionPlanCompiler
                         .Where(item => !switchIntent.Records.Any(record =>
                             record.MacAddress.Equals(item.MacAddress, StringComparison.OrdinalIgnoreCase)))
                         .Select(item => new TeamLabNetworkPortV2(
-                            item.Key,
+                            PortKey(asset.AssetKey, item.Key),
                             asset.AssetKey,
                             item.MacAddress,
                             AddressWithoutPrefix(item.IpAddress)))))
@@ -201,12 +201,14 @@ public static class TeamLabExecutionPlanCompiler
             .OrderBy(item => item.Key, StringComparer.Ordinal)
             .Select((item, index) => new TeamLabAssetNetworkAttachmentV2(
                 item.NetworkKey,
-                item.Key,
+                PortKey(asset.AssetKey, item.Key),
                 $"eth{index}",
                 AddressWithoutPrefix(item.IpAddress),
                 gateways.GetValueOrDefault(item.NetworkKey),
                 item.Primary))
             .ToArray();
+
+    static string PortKey(string assetKey, string interfaceKey) => $"{assetKey}:{interfaceKey}";
 
     static string AddressWithoutPrefix(string address) => address.Split('/', 2)[0];
 

@@ -795,7 +795,8 @@ public class DockerService
     public async Task<TeamLabFileResult> ManageTeamLabFilesAsync(TeamLabContainerFileRequest request, CancellationToken token)
     {
         if (!TeamLabFileLimits.IsValidPath(request.Path) || request.RuntimeId <= 0 || request.Generation <= 0 ||
-            request.Operation is not ("list" or "download" or "upload" or "delete") ||
+            request.Operation is not ("list" or "download" or "upload" or "delete" or "mkdir" or "move") ||
+            request.Operation == "move" && !TeamLabFileLimits.IsValidPath(request.DestinationPath) ||
             request.Content is { Length: > TeamLabFileLimits.MaxBytes })
             throw new AgentOperationException("Validation", "files.invalid_request", "Invalid file request.", false);
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(token);

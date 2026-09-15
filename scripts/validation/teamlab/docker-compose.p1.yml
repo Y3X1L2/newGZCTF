@@ -1,0 +1,151 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: gzctf_p1
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: p1-local-db
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d gzctf_p1"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+    networks:
+      default:
+        ipv4_address: 10.250.0.10
+
+  redis:
+    image: redis:7-alpine
+    tmpfs:
+      - /data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+    networks:
+      default:
+        ipv4_address: 10.250.0.11
+
+  registry:
+    image: registry:2
+    ports:
+      - "15000:5000"
+    tmpfs:
+      - /var/lib/registry
+    networks:
+      default:
+        ipv4_address: 10.250.0.12
+
+  guacd:
+    image: guacamole/guacd:latest
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 4822"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+    networks:
+      default:
+        ipv4_address: 10.250.0.13
+
+  api:
+    build:
+      context: ../../..
+      dockerfile: scripts/validation/teamlab/docker/api.Dockerfile
+      args:
+        PUBLISH_PATH: ${TEAMLAB_P1_PUBLISH_PATH}
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8080
+      ADMIN_PASSWORD: ${TEAMLAB_P1_ADMIN_PASSWORD}
+      XorKey: teamlab-p1-isolated-xor-key
+      ConnectionStrings__Database: Host=db;Port=5432;Database=gzctf_p1;Username=postgres;Password=p1-local-db
+      ConnectionStrings__RedisCache: redis:6379
+      ConnectionStrings__Storage: disk://path=/app/files
+      GuacamoleSettings__GuacamoleApiUrl: http://guacd:4822
+      TeamLab__Enable: "true"
+      TeamLab__DryRun: "false"
+      TeamLab__ExecutionModel: V2
+      TeamLab__ReservedCidrs__0: 172.16.0.0/12
+      ContainerProvider__PublicEntry: 127.0.0.1
+      ContainerProvider__DockerConfig__PublicPortStart: 32100
+      ContainerProvider__DockerConfig__PublicPortEnd: 32120
+      PublicUdpGatewayConfig__Enable: "true"
+      PublicUdpGatewayConfig__Provider: iptables
+      PublicUdpGatewayConfig__PublicEndpoint: 127.0.0.1
+      DockerRegistrySettings__Address: 127.0.0.1:15000
+      DockerRegistrySettings__Namespace: p1
+    ports:
+      - "18080:8080"
+    cap_add:
+      - NET_ADMIN
+    sysctls:
+      net.ipv4.ip_forward: "1"
+    networks:
+      default:
+        ipv4_address: 10.250.0.3
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    tmpfs:
+      - /app/files
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      guacd:
+        condition: service_healthy
+      registry:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/api/Config"]
+      interval: 2s
+      timeout: 3s
+      retries: 90
+
+  agent:
+    build:
+      context: ../../..
+      dockerfile: scripts/validation/teamlab/docker/agent.Dockerfile
+      args:
+        PUBLISH_PATH: ${TEAMLAB_P1_PUBLISH_PATH}
+    privileged: true
+    pid: host
+    cgroup: host
+    environment:
+      ASPNETCORE_URLS: http://+:5001
+      Agent__NodeId: ${TEAMLAB_P1_NODE_ID}
+      Agent__AuthToken: ${TEAMLAB_P1_NODE_TOKEN}
+      Agent__ServerUrl: http://api:8080
+      Agent__ListenPort: 5001
+      Agent__HeartbeatIntervalSeconds: 2
+      Agent__GuestManagement__Enabled: "false"
+      Docker__Uri: unix:///var/run/docker.sock
+      Docker__PublicEntry: 127.0.0.1
+      TeamLab__Enable: "true"
+      TeamLab__DryRun: "false"
+      TeamLab__ExecutionModel: V2
+      TeamLab__RuntimeStateRoot: /var/lib/gzctf/teamlab
+      TeamLab__FabricInterfaceName: eth0
+      TeamLab__OvnNorthboundEndpoint: unix:/var/run/ovn/ovnnb_db.sock
+      TeamLab__OvnSouthboundEndpoint: unix:/var/run/ovn/ovnsb_db.sock
+      TeamLab__OvsLocalEndpoint: unix:/var/run/openvswitch/db.sock
+      TeamLab__OvsIntegrationBridgeName: br-int
+      TeamLab__OvnNbRemote: unix:/var/run/ovn/ovnnb_db.sock
+    ports:
+      - "18501:5001"
+      - "32100-32120:32100-32120"
+    networks:
+      default:
+        ipv4_address: 10.250.0.2
+    depends_on:
+      api:
+        condition: service_healthy
+
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: 10.250.0.0/24

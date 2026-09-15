@@ -1,52 +1,81 @@
 # TeamLab API P1 本地验证记录
 
-验证日期：2026-09-14
+验证日期：2026-09-15
 
 候选分支：`codex/teamlab-api-product-integration`
 
-候选提交：`61b951f`
+验证提交：`7577754`
 
-## 验证目的
+正式发布包：`teamlab-p1-20260915-111524`
 
-建立可以重复执行的本地 TeamLab API 检查入口，确认候选主站能够在本地 PostgreSQL、Redis 和 Docker 环境中启动，并由正式 HTTP 接口完成调用身份、范围授权、资源发现和运行状态读取。
+## 验证目标
 
-## 本地组合
+用一条可重复执行的 API 流水线验证 TeamLab 底座，而不是通过前端逐页点击或使用执行替身。流程从正式发布包启动，经过资源创建、真实部署和运行操作，最后销毁环境并检查各层状态是否一致。
 
-- Docker Engine `29.4.0`。
-- `newgzctf-main-db-1`：PostgreSQL 16，沿用本地开发数据卷。
-- `newgzctf-main-redis-1`：Redis 7。
-- `newgzctf-main-guacd-1`：Guacd。
-- 主站：当前工作树 Release 构建，监听 `http://127.0.0.1:8080`。
-- Agent：`gzctf-agent-local-sim:20260907`，连接本地主站。
+## 隔离环境
 
-电脑异常重启后，Docker Desktop 4.70 留下无法访问的 Windows Unix 套接字。停止 Docker 与 WSL、保留改名 `%LOCALAPPDATA%\Docker\run` 和 `%LOCALAPPDATA%\docker-secrets-engine` 后，Docker 恢复启动；镜像、容器和数据卷未删除。
+- 主站、PostgreSQL 16、Redis 7、Registry 和 Guacd使用独立 Compose 项目。
+- Agent 启用 TeamLab V2 执行面，运行独立 Docker Engine，不读取或污染宿主的题目容器。
+- 网络使用真实 OVN northd、OVN controller、OVS 内核数据面、Linux veth 和 nftables。
+- PostgreSQL 和 Redis 使用临时数据，流水线不会接触现有开发数据卷。
+- 公网入口端口进入 Agent，再由 nftables 和 OVS/OVN 转发到场景资产，与生产 Worker 的流量路径一致。
 
-## API 驱动结果
-
-执行入口：
+完整入口：
 
 ```powershell
-.\scripts\validation\teamlab\run-teamlab-api-p1.ps1 `
-  -AdminUser <本地管理员> `
-  -AdminPassword <本地管理员密码>
+.\scripts\validation\teamlab\invoke-teamlab-api-p1-pipeline.ps1
 ```
 
-脚本只通过正式 HTTP 接口工作：登录后签发带 `teamlab-scope:*` 的短期 Token，结束时撤销 Token。脚本完成控制范围创建和归档，并检查能力、控制范围、拓扑、运行实例、资源池、设备模板、连接器、远程会话和 Operation 列表。存在授权运行实例时，继续检查运行详情、事件、访问授权、服务开放、远程访问、设备健康、运行状态差异、流量、路径和抓包列表。
-
-脚本在电脑重启前后各执行一次，均成功。重启后的结果为：发现 1 个拓扑、1 个授权运行实例、1 个资源池和 1 个连接器；远程会话与 Operation 当前为空；该运行实例的 10 个详情入口全部返回有效响应。两次创建的测试控制范围均已归档，临时 API Token 均已撤销。
-
-相关集成测试：
+调试时可复用已经构建的正式发布包：
 
 ```powershell
-dotnet test src/GZCTF.Integration.Test/GZCTF.Integration.Test.csproj `
-  -c Release --no-build `
-  --filter "FullyQualifiedName~OpenTeamLabCapabilityResourcesApiTests|FullyQualifiedName~OpenTeamLabOperationsApiTests"
+.\scripts\validation\teamlab\invoke-teamlab-api-p1-pipeline.ps1 `
+  -ExistingReleaseId teamlab-p1-20260915-111524 `
+  -KeepEnvironment
 ```
 
-结果：8/8 通过，覆盖设备模板、连接器、文件操作、会话、操作审计、设备健康、运行状态检查以及控制范围隔离。
+## 实际结果
 
-## 能力边界
+流水线通过正式 HTTP API 完成以下操作，并于 2026-09-15 返回 `passed`：
 
-当前本地 Agent 配置为 `TeamLab__Enable=false`、`TeamLab__DryRun=true`。本轮确认的是主站真实 HTTP、真实 PostgreSQL/Redis、Token 授权和协议级执行替身能够组成可重复的 P1 环境；没有据此认定 Docker 组网、OVN/OVS、VM、SFTP、VNC、公网服务开放和 PCAP 实际链路通过。
+1. 创建两个控制范围，并签发各自受限的 API Token。
+2. 构建并导入 OCI 镜像，配置容器终端，创建设备模板。
+3. 创建双资产、单网段拓扑，完成校验、发布和执行计划生成。
+4. 将镜像分发到真实 Agent，创建运行环境和两个真实容器。
+5. 核对 API、PostgreSQL、Agent inventory、独立 Docker、OVN 和 OVS 的资源事实。
+6. 完成目录创建、文件上传、下载、移动和递归删除。
+7. 完成资产停止和重新启动。
+8. 对整个网段的两个资产接口应用 25 ms 时延，并恢复原状态。
+9. 创建公网服务入口，确认 HTTP 内容可访问，再撤销入口。
+10. 创建真实 WebSocket PTY 会话，执行终端命令，按资产名称查询会话并结束会话。
+11. 生成、下载并校验操作审计证据。
+12. 验证另一个控制范围的 Token 无法读取拓扑、运行实例、操作、资产和会话。
+13. 通过正式 API 销毁运行环境，确认 Docker、OVN 和 OVS 无本轮残留。
 
-P2 使用同一脚本和候选主站，更换为启用 TeamLab 的当前 Agent 后补跑创建运行实例、节点执行、运维、服务开放和销毁链。出现失败时只修复实际断点，不新增平行状态机或通用重试框架。
+结果摘要：
+
+```text
+assetCount: 2
+apiDatabaseAgentDockerOvnOvsConsistent: true
+wholeNetworkPolicyTargets: 2
+serviceAccess: created_reached_revoked
+terminal: real_websocket_pty
+scopeIsolation: passed
+cleanup: passed
+auditEvidenceSha256: e97dd04095dd058d623ff59bff3fbbca5affb365ced322c5a98d447ee7dbe151
+```
+
+证据目录：`artifacts/teamlab-p1/evidence/teamlab-p1-20260915-111524`。该目录属于本地验证制品，不提交仓库。
+
+## 本轮修复
+
+- 为入口网段创建真实的 OVS internal 端口，使 Worker 可以进入 OVN 逻辑交换机。
+- 公网测试端口改为映射到 Agent，而不是不执行转发规则的 API 容器。
+- P1 OVS 改用生产一致的内核 `system` 数据面。
+- Agent 使用独立 Docker Engine，避免宿主遗留容器影响 inventory 和状态检查。
+- 修正 Registry 回环转发、管理员随机密码约束和独立 Docker 一致性查询。
+- 流程失败时先通过正式 Runtime API 清理已创建资源，再撤销测试 Token。
+
+## 当前边界
+
+P1 已覆盖 Docker 场景的完整 API 和真实网络执行链。VM、SFTP、VNC、现场物理网卡和多 Worker 隧道不属于这条 Docker P1 流水线，它们继续使用各自的专项验收，不由本报告推断通过。

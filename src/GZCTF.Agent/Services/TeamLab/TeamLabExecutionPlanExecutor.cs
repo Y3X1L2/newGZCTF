@@ -13,6 +13,7 @@ namespace GZCTF.Agent.Services.TeamLab;
 public sealed partial class TeamLabExecutionPlanExecutor(
     TeamLabOvnNetworkProvider ovn,
     TeamLabOvsAttachmentProvider ovs,
+    TeamLabPlayerGatewayProvider playerGateways,
     TeamLabManagedNicProvider managedNics,
     LinuxNetworkAttachmentService linuxNetwork,
     DockerService docker,
@@ -48,6 +49,12 @@ public sealed partial class TeamLabExecutionPlanExecutor(
                 var network = await ovn.ProbeAsync(plan, cancellationToken);
                 if (!network.Success)
                     return Failure(plan, "network", network.Message);
+                if (plan.NetworkOwner)
+                    foreach (var intent in plan.Networks.Where(item => item.PlayerGateway is not null))
+                    {
+                        var gateway = await playerGateways.ProbeAsync(plan, intent, cancellationToken);
+                        if (!gateway.Success) return Failure(plan, "network", gateway.Message);
+                    }
                 foreach (var intent in plan.Networks)
                 foreach (var connector in (intent.Connectors ?? []).Where(item => item.NodeId == agent.NodeId))
                 {
@@ -86,6 +93,14 @@ public sealed partial class TeamLabExecutionPlanExecutor(
                 plan.RuntimeId, plan.Generation, network.Message);
             return Failure(plan, network.Stage, network.Message);
         }
+        if (plan.NetworkOwner)
+            foreach (var intent in plan.Networks.Where(item => item.PlayerGateway is not null))
+            {
+                var gateway = await playerGateways.ApplyAsync(plan, intent, cancellationToken);
+                if (gateway.Success) continue;
+                await ovn.RemoveAsync(plan, cancellationToken);
+                return Failure(plan, "network", gateway.Message);
+            }
         try
         {
             await observations.ApplyExecutionPlanAsync(plan, cancellationToken);
@@ -308,6 +323,14 @@ public sealed partial class TeamLabExecutionPlanExecutor(
             events.Enqueue(Event(plan, connector.PortKey, "cleanup", result.Success ? "succeeded" : "failed",
                 result.Success ? null : "connector_cleanup_failed", result.Message));
         }
+        if (plan.NetworkOwner)
+            foreach (var intent in plan.Networks.Where(item => item.PlayerGateway is not null))
+            {
+                var result = await playerGateways.RemoveAsync(intent, cancellationToken);
+                events.Enqueue(Event(plan, intent.PlayerGateway!.PortKey, "cleanup",
+                    result.Success ? "succeeded" : "failed",
+                    result.Success ? null : "player_gateway_cleanup_failed", result.Message));
+            }
         var network = await ovn.RemoveAsync(plan, cancellationToken);
         events.Enqueue(Event(plan, null, "cleanup", network.Success ? "succeeded" : "failed",
             network.Success ? null : "network_cleanup_failed", network.Message));

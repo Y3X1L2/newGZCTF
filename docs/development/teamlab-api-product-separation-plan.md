@@ -569,7 +569,7 @@ P0 就确定拆解边界，使 P2 新接口能够沿用到独立服务，减少�
 - TeamLab P0 静态审查中的链路策略、控制范围授权、运行与任务发现、文件与资产操作、远程会话和审计、设备模板、连接器及设备健康缺口已经落入当前候选代码。
 - 补充审查后新增远程会话列表、设备健康和运行状态检查公开接口；状态检查复用现有单资产控制，不建立另一套修复任务。
 - 管理端原始系统日志、节点诊断和内部任务表不作为公开产品契约；外部调用使用运行事件、ApiOperation 和资产控制任务查询。
-- P1 基础组合已经在本地 Docker Engine 29.4.0 上运行：PostgreSQL、Redis、Guacd、当前候选主站和协议级模拟 Agent 均可启动，API 驱动脚本在电脑重启前后各成功执行一次。
+- P1 已在隔离的本地 Compose 中以正式发布包、真实 Agent、独立 Docker Engine 和真实 OVN/OVS 执行面跑通。API 驱动脚本完成双容器部署、运维、链路策略、服务开放、终端、审计、范围隔离和销毁，并确认 API、PostgreSQL、Agent、Docker、OVN、OVS 状态一致。
 - OpenAPI 快照契约检查通过；TeamLab Open API 相关集成测试 8/8 通过。当前模拟 Agent 未启用 TeamLab 执行面，因此 Docker 组网、VM、SFTP、VNC、服务开放和 PCAP 真实链路仍按 P2 执行，不提前记为通过。
 - P1 结果见 [TeamLab API P1 本地验证记录](test-reports/2026-09-14-teamlab-api-p1.md)。未运行性能测试，未连接或修改服务器。
 

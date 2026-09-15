@@ -144,15 +144,17 @@ public sealed class TeamLabShardDeploymentService(
         var topologyAssets = definition.Assets.ToDictionary(item => item.Key, StringComparer.Ordinal);
         var legacyPreparedImages = imagePreparation ?? StartImagePreparation();
         var allowedRoutes = BuildAllowedRoutes(runtime, definition);
-        var builtRequests = await Task.WhenAll(runtimeAssets.Select(item => BuildAssetRequest(
-            runtime,
-            item,
-            topologyAssets[item.TopologyKey],
-            templates[item.SourceTemplateId!.Value],
-            overlays.GetValueOrDefault(item.TopologyKey),
-            allowedRoutes,
-            imageReady: true,
-            cancellationToken)));
+        var builtRequests = new List<TeamLabNodeAssetCreateRequest>(runtimeAssets.Length);
+        foreach (var item in runtimeAssets)
+            builtRequests.Add(await BuildAssetRequest(
+                runtime,
+                item,
+                topologyAssets[item.TopologyKey],
+                templates[item.SourceTemplateId!.Value],
+                overlays.GetValueOrDefault(item.TopologyKey),
+                allowedRoutes,
+                imageReady: true,
+                cancellationToken));
         var work = runtimeAssets.Zip(builtRequests)
             .ToDictionary(pair => pair.First.TopologyKey,
                 pair => new AssetWork(pair.First, pair.Second),
@@ -546,18 +548,20 @@ public sealed class TeamLabShardDeploymentService(
                         $"Runtime has conflicting frozen image digests for template {group.Key}.");
                 return values[0];
             });
-        var allAssetRequests = (await Task.WhenAll(runtimeAssets
-                .OrderBy(item => item.TopologyKey, StringComparer.Ordinal)
-                .Select(asset => BuildAssetRequest(
-                    runtime,
-                    asset,
-                    definition.Assets.Single(item => item.Key == asset.TopologyKey),
-                    templates[asset.SourceTemplateId!.Value],
-                    overlays.GetValueOrDefault(asset.TopologyKey),
-                    allowedRoutes,
-                    imageReady: true,
-                    cancellationToken))))
-            .ToDictionary(item => item.AssetKey, StringComparer.Ordinal);
+        var allAssetRequests = new Dictionary<string, TeamLabNodeAssetCreateRequest>(StringComparer.Ordinal);
+        foreach (var asset in runtimeAssets.OrderBy(item => item.TopologyKey, StringComparer.Ordinal))
+        {
+            var request = await BuildAssetRequest(
+                runtime,
+                asset,
+                definition.Assets.Single(item => item.Key == asset.TopologyKey),
+                templates[asset.SourceTemplateId!.Value],
+                overlays.GetValueOrDefault(asset.TopologyKey),
+                allowedRoutes,
+                imageReady: true,
+                cancellationToken);
+            allAssetRequests.Add(request.AssetKey, request);
+        }
         var orderedShards = runtime.Shards.Where(item => item.Generation == runtime.Generation)
             .OrderBy(item => item.Id)
             .ToArray();
