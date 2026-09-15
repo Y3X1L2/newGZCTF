@@ -160,3 +160,10 @@ export const runtimeJsonClient: RuntimeJsonClient = {
     await requestJson({ path, method: 'DELETE', query }, true)
   },
 }
+
+export function postRuntimeBinary(path: string, body: Blob, query?: RuntimeQuery) {
+  return requestJson(
+    { path, method: 'POST', query, body, type: 'application/octet-stream' as ContentType },
+    true
+  )
+}

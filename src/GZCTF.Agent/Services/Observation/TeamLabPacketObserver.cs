@@ -88,7 +88,7 @@ public sealed class TeamLabPacketObserver(
                 _lastError = null;
             }
             catch (Exception exception) when (
-                exception is InvalidOperationException or PcapException or UnauthorizedAccessException)
+                exception is InvalidOperationException or ArgumentException or PcapException or UnauthorizedAccessException)
             {
                 Interlocked.Increment(ref _captureFailures);
                 _lastError = Trim(exception.Message);

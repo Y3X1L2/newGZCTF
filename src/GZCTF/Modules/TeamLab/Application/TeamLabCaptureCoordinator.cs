@@ -100,24 +100,24 @@ public sealed class TeamLabCaptureCoordinator(
             TeamLabTrafficCaptureSegmentStatus.Running or TeamLabTrafficCaptureSegmentStatus.Stopping).ToArray();
         if (active.Length > 0)
         {
-            var statusResults = await ExecuteByNodeAsync(
-                active,
-                (segment, token) => segment.Status == TeamLabTrafficCaptureSegmentStatus.Stopping
-                    ? executor.StopCaptureAsync(
-                        segment.WorkerNodeId,
-                        job.RuntimeId,
-                        job.Generation,
-                        job.PublicId,
-                        segment.PublicId,
-                        token)
-                    : executor.GetCaptureStatusAsync(
-                        segment.WorkerNodeId,
-                        job.RuntimeId,
-                        job.Generation,
-                        job.PublicId,
-                        segment.PublicId,
-                        token),
-                cancellationToken);
+            var stopping = active.Where(segment => segment.Status == TeamLabTrafficCaptureSegmentStatus.Stopping).ToArray();
+            var running = active.Where(segment => segment.Status == TeamLabTrafficCaptureSegmentStatus.Running).ToArray();
+            var batches = new List<Task<IReadOnlyList<CaptureNodeResult>>>();
+            if (stopping.Length > 0)
+                batches.Add(ExecuteByNodeAsync(
+                    stopping,
+                    (nodeId, segments, token) => executor.StopCapturesAsync(nodeId,
+                        segments.Select(segment => new TeamLabNodeCaptureIdentity(
+                            job.RuntimeId, job.Generation, job.PublicId, segment.PublicId)).ToArray(), token),
+                    cancellationToken));
+            if (running.Length > 0)
+                batches.Add(ExecuteByNodeAsync(
+                    running,
+                    (nodeId, segments, token) => executor.GetCaptureStatusesAsync(nodeId,
+                        segments.Select(segment => new TeamLabNodeCaptureIdentity(
+                            job.RuntimeId, job.Generation, job.PublicId, segment.PublicId)).ToArray(), token),
+                    cancellationToken));
+            var statusResults = (await Task.WhenAll(batches)).SelectMany(item => item).ToArray();
             now = DateTimeOffset.UtcNow;
             foreach (var (segment, result) in statusResults)
                 TeamLabTrafficApplicationService.ApplyNodeResult(segment, result, now);
@@ -141,9 +141,9 @@ public sealed class TeamLabCaptureCoordinator(
         await context.SaveChangesAsync(cancellationToken);
         var uploadResults = await ExecuteByNodeAsync(
             ready,
-            (segment, token) => executor.UploadCaptureAsync(
-                segment.WorkerNodeId,
-                new TeamLabNodeCaptureUploadRequest(
+            (nodeId, segments, token) => executor.UploadCapturesAsync(
+                nodeId,
+                segments.Select(segment => new TeamLabNodeCaptureUploadRequest(
                     job.RuntimeId,
                     job.Generation,
                     job.PublicId,
@@ -156,7 +156,7 @@ public sealed class TeamLabCaptureCoordinator(
                         segment.CapturedBytes,
                         segment.MaxBytes,
                     segment.Sha256!), CaptureUploadTokenLifetime(segment.CapturedBytes)),
-                    segment.MaxBytes),
+                    segment.MaxBytes)).ToArray(),
                 token),
             cancellationToken);
         foreach (var (segment, result) in uploadResults)
@@ -202,12 +202,10 @@ public sealed class TeamLabCaptureCoordinator(
             .ToArray();
         var cleanupResults = await ExecuteByNodeAsync(
             pendingSegments,
-            (segment, token) => executor.DeleteCaptureAsync(
-                segment.WorkerNodeId,
-                job.RuntimeId,
-                job.Generation,
-                job.PublicId,
-                segment.PublicId,
+            (nodeId, segments, token) => executor.DeleteCapturesAsync(
+                nodeId,
+                segments.Select(segment => new TeamLabNodeCaptureIdentity(
+                    job.RuntimeId, job.Generation, job.PublicId, segment.PublicId)).ToArray(),
                 token),
             cancellationToken);
         foreach (var segment in pendingSegments)
@@ -275,37 +273,31 @@ public sealed class TeamLabCaptureCoordinator(
 
     private async Task<IReadOnlyList<CaptureNodeResult>> ExecuteByNodeAsync(
         IReadOnlyCollection<TeamLabTrafficCaptureSegment> segments,
-        Func<TeamLabTrafficCaptureSegment, CancellationToken, Task<TeamLabNodeCaptureResult>> action,
+        Func<Guid, IReadOnlyList<TeamLabTrafficCaptureSegment>, CancellationToken,
+            Task<IReadOnlyList<TeamLabNodeCaptureResult>>> action,
         CancellationToken cancellationToken)
     {
         var tasks = segments.GroupBy(item => item.WorkerNodeId).Select(async group =>
         {
-            var results = new List<CaptureNodeResult>();
-            foreach (var segment in group.OrderBy(item => item.PublicId))
+            var ordered = group.OrderBy(item => item.PublicId).ToArray();
+            try
             {
-                try
-                {
-                    results.Add(new CaptureNodeResult(segment, await action(segment, cancellationToken)));
-                }
-                catch (Exception exception) when (exception is not OperationCanceledException)
-                {
-                    logger.LogWarning(exception,
-                        "TeamLab 抓包协调失败，分片 {SegmentId}，节点 {WorkerNodeId}",
-                        segment.PublicId, segment.WorkerNodeId);
-                    results.Add(new CaptureNodeResult(segment,
-                        new TeamLabNodeCaptureResult(
-                            false,
-                            "Agent 抓包协调失败",
-                            segment.PublicId,
-                            segment.CapturedBytes,
-                            false,
-                            segment.Sha256,
-                            false)));
-                }
+                var nodeResults = await action(group.Key, ordered, cancellationToken);
+                return ordered.Select((segment, index) => new CaptureNodeResult(segment,
+                    index < nodeResults.Count ? nodeResults[index] : CaptureFailure(segment))).ToArray();
             }
-            return results;
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                logger.LogWarning(exception,
+                    "TeamLab 抓包协调批次失败，节点 {WorkerNodeId}", group.Key);
+                return ordered.Select(segment => new CaptureNodeResult(segment, CaptureFailure(segment))).ToArray();
+            }
         });
         return (await Task.WhenAll(tasks)).SelectMany(item => item).ToArray();
+
+        static TeamLabNodeCaptureResult CaptureFailure(TeamLabTrafficCaptureSegment segment) =>
+            new(false, "Agent 抓包协调失败", segment.PublicId, segment.CapturedBytes,
+                false, segment.Sha256, false);
     }
 
     private IQueryable<TeamLabTrafficCaptureJob> CaptureQuery() =>

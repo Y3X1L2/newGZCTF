@@ -44,10 +44,25 @@ public static class TeamLabExecutionPlanCompiler
                     : throw new InvalidOperationException(
                         $"Network MAC address {group.Key} is assigned to more than one asset."),
                 StringComparer.OrdinalIgnoreCase);
+        var interfacesByNetwork = allAssets
+            .SelectMany(asset => asset.Interfaces.Select(item => new InterfaceOwner(
+                item.MacAddress, asset.AssetKey, item)))
+            .GroupBy(item => item.Interface.NetworkKey, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
+        var policiesByCidr = infrastructure.ForwardPolicies
+            .SelectMany(policy => new[] { policy.SourceCidr, policy.DestinationCidr }
+                .Distinct(StringComparer.Ordinal)
+                .Select(cidr => new { Cidr = cidr, Policy = policy }))
+            .GroupBy(item => item.Cidr, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key,
+                group => group.Select(item => item.Policy).ToArray(), StringComparer.Ordinal);
 
         var networks = infrastructure.Switches
             .Select(switchIntent =>
             {
+                var recordedMacs = switchIntent.Records
+                    .Select(record => record.MacAddress)
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
                 var networkPorts = switchIntent.Records
                     .Where(record => interfaceOwners.ContainsKey(record.MacAddress))
                     .Select(record =>
@@ -59,15 +74,13 @@ public static class TeamLabExecutionPlanCompiler
                             record.MacAddress,
                             AddressWithoutPrefix(record.IpAddress));
                     })
-                    .Concat(allAssets.SelectMany(asset => asset.Interfaces
-                        .Where(item => item.NetworkKey == switchIntent.Network.Key)
-                        .Where(item => !switchIntent.Records.Any(record =>
-                            record.MacAddress.Equals(item.MacAddress, StringComparison.OrdinalIgnoreCase)))
-                        .Select(item => new TeamLabNetworkPortV2(
-                            PortKey(asset.AssetKey, item.Key),
-                            asset.AssetKey,
-                            item.MacAddress,
-                            AddressWithoutPrefix(item.IpAddress)))))
+                    .Concat(interfacesByNetwork.GetValueOrDefault(switchIntent.Network.Key, [])
+                        .Where(owner => !recordedMacs.Contains(owner.MacAddress))
+                        .Select(owner => new TeamLabNetworkPortV2(
+                            PortKey(owner.AssetKey, owner.Interface.Key),
+                            owner.AssetKey,
+                            owner.MacAddress,
+                            AddressWithoutPrefix(owner.Interface.IpAddress))))
                     .DistinctBy(item => item.Key, StringComparer.Ordinal)
                     .ToArray();
                 var playerGateway = switchIntent.Network.IsEntry
@@ -79,7 +92,10 @@ public static class TeamLabExecutionPlanCompiler
                     switchIntent.Network.GatewayIp,
                     networkPorts,
                     [],
-                    Policies(infrastructure.ForwardPolicies, switchIntent.Network.Cidr),
+                    (policiesByCidr.GetValueOrDefault(switchIntent.Network.Cidr) ?? [])
+                        .Select(policy => new TeamLabNetworkPolicyV2(
+                            policy.SourceCidr, policy.DestinationCidr, "any", null, policy.Allow))
+                        .ToArray(),
                     switchIntent.DhcpDnsServiceName,
                     switchIntent.Records.Select(record => new TeamLabDhcpLeaseV2(
                         record.MacAddress,
@@ -135,14 +151,13 @@ public static class TeamLabExecutionPlanCompiler
                 asset.Device);
         }).ToArray();
 
+        var assetKinds = assets.ToDictionary(item => item.AssetKey, item => item.Kind, StringComparer.Ordinal);
         var observationIntents = observations
             .Where(point => point.Kind == TeamLabObservationPointKind.WorkloadEndpoint &&
                             !string.IsNullOrWhiteSpace(point.NetworkKey))
             .Select(point =>
             {
-                var isVm = assets.Any(asset =>
-                    string.Equals(asset.AssetKey, point.TopologyKey, StringComparison.Ordinal) &&
-                    asset.Kind == TeamLabAssetKind.Vm);
+                var isVm = assetKinds.GetValueOrDefault(point.TopologyKey) == TeamLabAssetKind.Vm;
                 return new TeamLabObservationIntentV2(
                     point.PublicId,
                     point.TopologyKey,
@@ -186,13 +201,6 @@ public static class TeamLabExecutionPlanCompiler
         TeamLabNetworkControlIntentV2 control) =>
         $"sha256:{Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(
             new { networks, control }))).ToLowerInvariant()}";
-
-    static TeamLabNetworkPolicyV2[] Policies(
-        IReadOnlyList<TeamLabNodeForwardPolicy> policies, string networkCidr) =>
-        policies.Where(policy => policy.SourceCidr == networkCidr || policy.DestinationCidr == networkCidr)
-            .Select(policy => new TeamLabNetworkPolicyV2(
-                policy.SourceCidr, policy.DestinationCidr, "any", null, policy.Allow))
-            .ToArray();
 
     static TeamLabAssetNetworkAttachmentV2[] NetworkAttachments(
         TeamLabNodeAssetCreateRequest asset,

@@ -43,7 +43,8 @@ public sealed class TeamLabAccessGrantService(
         var runtime = await LoadRuntimeAsync(runtimePublicId, cancellationToken);
         var now = DateTimeOffset.UtcNow;
         return runtime.AccessGrants
-            .Where(item => item.Generation == runtime.Generation && !item.Revoked && item.ExpiresAt > now)
+            .Where(item => item.Generation == runtime.Generation && item.AppliedAt != null &&
+                           !item.Revoked && item.ExpiresAt > now)
             .OrderByDescending(item => item.CreatedAt)
             .Select(item =>
             {
@@ -89,7 +90,13 @@ public sealed class TeamLabAccessGrantService(
             ? runtime.AccessGrants.SingleOrDefault(item => item.ApiOperationId == operation)
             : null;
         var activeGrant = runtime.AccessGrants.SingleOrDefault(item =>
-            item.Generation == runtime.Generation && !item.Revoked && item.ExpiresAt > DateTimeOffset.UtcNow);
+            item.Generation == runtime.Generation && item.AppliedAt != null &&
+            !item.Revoked && item.ExpiresAt > DateTimeOffset.UtcNow);
+        var pendingGrant = operationId is null
+            ? runtime.AccessGrants.SingleOrDefault(item =>
+                item.Generation == runtime.Generation && item.AppliedAt == null &&
+                !item.Revoked && item.ExpiresAt > DateTimeOffset.UtcNow)
+            : null;
         string token;
         if (grant is null && activeGrant is not null)
         {
@@ -104,6 +111,7 @@ public sealed class TeamLabAccessGrantService(
                 return ToModel(runtime, activeGrant, DownloadUrl(runtime, activeGrant, token));
             grant = activeGrant;
         }
+        grant ??= pendingGrant;
         if (grant is null)
         {
             var client = GenerateKeyPair();
@@ -188,7 +196,8 @@ public sealed class TeamLabAccessGrantService(
     {
         var grant = await context.TeamLabAccessGrants.AsNoTracking()
             .Include(item => item.Runtime)
-            .SingleOrDefaultAsync(item => item.ApiOperationId == operationId, cancellationToken);
+            .SingleOrDefaultAsync(item => item.ApiOperationId == operationId && item.AppliedAt != null,
+                cancellationToken);
         if (grant is null)
             return null;
         var token = grant.ConfigurationConsumedAt is null && grant.ExpiresAt > DateTimeOffset.UtcNow &&
@@ -207,7 +216,8 @@ public sealed class TeamLabAccessGrantService(
     {
         var runtime = await LoadRuntimeAsync(runtimePublicId, cancellationToken);
         var grant = runtime.AccessGrants.SingleOrDefault(item => item.PublicId == grantPublicId &&
-                                                                 item.Generation == runtime.Generation && !item.Revoked)
+                                                                 item.Generation == runtime.Generation &&
+                                                                 item.AppliedAt != null && !item.Revoked)
             ?? throw new TeamLabApiContractException("access_grant_not_found", "未找到访问授权", 404);
         if (grant.ConfigurationConsumedAt is not null || grant.ExpiresAt <= DateTimeOffset.UtcNow ||
             string.IsNullOrWhiteSpace(grant.DownloadTokenHash) ||
@@ -231,6 +241,13 @@ public sealed class TeamLabAccessGrantService(
             ?? throw new TeamLabApiContractException("access_grant_not_found", "未找到访问授权", 404);
         if (grant.Revoked)
             return;
+        if (grant.AppliedAt is null)
+        {
+            grant.Revoked = true;
+            grant.RevokedAt = DateTimeOffset.UtcNow;
+            await context.SaveChangesAsync(cancellationToken);
+            return;
+        }
         var entryShard = runtime.Shards.Single(item => item.Id == runtime.EntryShardId && item.Generation == runtime.Generation);
         var entryNetwork = ResolveEntryNetwork(runtime, entryShard);
         var isV2 = runtime.ExecutionModel == TeamLabExecutionModel.V2;

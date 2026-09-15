@@ -21,6 +21,7 @@ namespace GZCTF.Modules.TeamLab.Api;
 public sealed class TeamLabAdminRuntimeController(
     ITeamLabRuntimeApplicationService runtimes,
     TeamLabRuntimeProjectionService projections,
+    TeamLabOpenDiscoveryService discovery,
     TeamLabAdminQueryService queries,
     TeamLabReleaseImagePreparationService imagePreparation,
     TeamLabTrafficApplicationService traffic,
@@ -114,6 +115,14 @@ public sealed class TeamLabAdminRuntimeController(
     {
         await RequireAsync(runtimeId, TeamLabRuntimePermission.StateRead, cancellationToken);
         return await runtimes.GetAsync(runtimeId, cancellationToken);
+    }
+
+    [HttpGet("{runtimeId:guid}/status")]
+    public async Task<OpenTeamLabRuntimeStatusModel> Status(Guid runtimeId, CancellationToken cancellationToken)
+    {
+        await RequireAsync(runtimeId, TeamLabRuntimePermission.StateRead, cancellationToken);
+        Response.Headers.CacheControl = "no-store";
+        return await discovery.GetRuntimeStatusProjectionAsync(runtimeId, cancellationToken);
     }
 
     [HttpGet("{runtimeId:guid}/logs")]

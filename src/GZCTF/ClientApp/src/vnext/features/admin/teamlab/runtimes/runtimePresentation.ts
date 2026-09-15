@@ -67,6 +67,7 @@ export const captureStatusLabels: Record<TeamLabCaptureStatus, string> = {
   failed: '失败',
   expired: '已过期',
   'cleanup-pending': '等待清理',
+  'partially-running': '部分分片运行中',
 }
 
 export function endpoint(ip: string, port: number | null) {

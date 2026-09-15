@@ -25,6 +25,8 @@ public class AgentTeamLabConfig
     public string OvsIntegrationBridgeName { get; set; } = "br-int";
     public string OvnNbRemote { get; set; } = "tcp:10.250.0.1:6641";
     public int ManagedDhcpLeaseSeconds { get; set; } = 3600;
+    public long MaxFileTransferBytes { get; set; } = TeamLabFileLimits.DefaultMaxTransferBytes;
+    public int FileTransferIdleTimeoutSeconds { get; set; } = 120;
 }
 
 public record TeamLabToolCapabilityReport(
@@ -205,6 +207,22 @@ public record TeamLabAssetLifecycleResponse(
     bool Success,
     bool DryRun,
     string State,
+    string Message);
+
+public record TeamLabAssetLifecycleBatchItem(
+    int AssetId,
+    string Kind,
+    string ResourceId);
+
+public record TeamLabAssetLifecycleBatchRequest(
+    int Generation,
+    bool DryRun,
+    TeamLabExecutionModel ExecutionModel,
+    TeamLabAssetLifecycleBatchItem[] Assets);
+
+public record TeamLabAssetLifecycleBatchResult(
+    int AssetId,
+    bool Success,
     string Message);
 
 public record TeamLabProbeRequest(

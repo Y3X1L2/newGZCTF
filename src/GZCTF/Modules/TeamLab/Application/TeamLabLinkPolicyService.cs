@@ -137,26 +137,19 @@ public sealed class TeamLabLinkPolicyService(AppDbContext context, ITeamLabLinkP
             return;
         }
 
-        var applied = new List<string>();
-        foreach (var target in targets)
+        var kindName = TeamLabCapabilityResourceContractMapper.LinkPolicyKindName(kind);
+        var results = await dispatcher.ApplyBatchAsync(
+            runtime, networkKey, targets, kindName, parameters, cancellationToken);
+        var applied = targets.Where(target => results.GetValueOrDefault(target)?.Success == true).ToArray();
+        var failure = targets.Select(target => results.GetValueOrDefault(target))
+            .FirstOrDefault(result => result is null || !result.Success);
+        if (failure is not null)
         {
-            var response = await dispatcher.ApplyAsync(
-                runtime, networkKey, target,
-                TeamLabCapabilityResourceContractMapper.LinkPolicyKindName(kind),
-                parameters, cancellationToken);
-            if (response.Success)
-            {
-                applied.Add(target);
-                continue;
-            }
-
-            foreach (var completed in applied)
-                await dispatcher.RecoverAsync(
-                    runtime, networkKey, completed,
-                    TeamLabCapabilityResourceContractMapper.LinkPolicyKindName(kind),
-                    parameters, cancellationToken);
+            if (applied.Length > 0)
+                await dispatcher.RecoverBatchAsync(
+                    runtime, networkKey, applied, kindName, parameters, cancellationToken);
             policy.Status = TeamLabLinkPolicyStatus.Failed;
-            policy.LastError = Truncate(response.Message, 512);
+            policy.LastError = Truncate(failure?.Message ?? "Agent 未返回链路策略结果", 512);
             return;
         }
 
@@ -181,19 +174,18 @@ public sealed class TeamLabLinkPolicyService(AppDbContext context, ITeamLabLinkP
             return;
         }
 
-        foreach (var target in targets)
+        var results = await dispatcher.RecoverBatchAsync(
+            runtime, networkKey, targets,
+            TeamLabCapabilityResourceContractMapper.LinkPolicyKindName(policy.Kind),
+            policy.ParametersJson, cancellationToken);
+        var failure = targets.Select(target => results.GetValueOrDefault(target))
+            .FirstOrDefault(result => result is null || !result.Success);
+        if (failure is not null)
         {
-            var response = await dispatcher.RecoverAsync(
-                runtime, networkKey, target,
-                TeamLabCapabilityResourceContractMapper.LinkPolicyKindName(policy.Kind),
-                policy.ParametersJson, cancellationToken);
-            if (!response.Success)
-            {
-                policy.LastError = Truncate(response.Message, 512);
-                policy.Status = TeamLabLinkPolicyStatus.Failed;
-                policy.UpdatedAt = DateTimeOffset.UtcNow;
-                return;
-            }
+            policy.LastError = Truncate(failure?.Message ?? "Agent 未返回链路策略恢复结果", 512);
+            policy.Status = TeamLabLinkPolicyStatus.Failed;
+            policy.UpdatedAt = DateTimeOffset.UtcNow;
+            return;
         }
         policy.LastError = null;
         policy.Status = TeamLabLinkPolicyStatus.Recovered;

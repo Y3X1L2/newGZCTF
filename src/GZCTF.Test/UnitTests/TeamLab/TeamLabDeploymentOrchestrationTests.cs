@@ -108,8 +108,12 @@ public sealed class TeamLabDeploymentOrchestrationTests
         Assert.Equal(operationId, submitted.OperationId);
         Assert.NotNull(submitted.ProtectedPayload);
         nodes.VerifyNoOtherCalls();
-        nodes.Setup(item => item.PauseAssetAsync(It.IsAny<Guid>(), It.IsAny<TeamLabAssetKind>(), "web", runtime.Generation,
-            It.IsAny<TeamLabExecutionModel>(), It.IsAny<CancellationToken>())).ReturnsAsync(TeamLabNodeResult.Ok());
+        nodes.Setup(item => item.ChangeAssetLifecycleBatchAsync(
+                It.IsAny<Guid>(), It.IsAny<IReadOnlyList<TeamLabNodeAssetLifecycleRequest>>(), runtime.Generation,
+                It.IsAny<TeamLabExecutionModel>(), true, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Guid _, IReadOnlyList<TeamLabNodeAssetLifecycleRequest> assets, int _,
+                TeamLabExecutionModel _, bool _, CancellationToken _) => assets.Select(asset =>
+                new TeamLabNodeAssetLifecycleResult(asset.AssetId, true, "OK")).ToArray());
         var result = await orchestrator.ExecuteQueuedLifecycleAsync(runtime.Id, runtime.Generation, true, default, submitted.ProtectedPayload);
         Assert.True(result.Success);
         Assert.Equal(TeamLabRuntimeStatus.Paused, runtime.Status);
@@ -163,11 +167,19 @@ public sealed class TeamLabDeploymentOrchestrationTests
         context.TeamLabTopologyReleases.Add(release);
         await context.SaveChangesAsync();
         var nodes = new Mock<ITeamLabNodeExecutor>();
-        nodes.Setup(item => item.PauseAssetAsync(It.IsAny<Guid>(), It.IsAny<TeamLabAssetKind>(), "first", 1,
-            It.IsAny<TeamLabExecutionModel>(), It.IsAny<CancellationToken>())).ReturnsAsync(TeamLabNodeResult.Ok());
-        nodes.SetupSequence(item => item.PauseAssetAsync(It.IsAny<Guid>(), It.IsAny<TeamLabAssetKind>(), "second", 1,
-            It.IsAny<TeamLabExecutionModel>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(TeamLabNodeResult.Failed("offline")).ReturnsAsync(TeamLabNodeResult.Ok());
+        var attempts = 0;
+        nodes.Setup(item => item.ChangeAssetLifecycleBatchAsync(
+                It.IsAny<Guid>(), It.IsAny<IReadOnlyList<TeamLabNodeAssetLifecycleRequest>>(), 1,
+                It.IsAny<TeamLabExecutionModel>(), true, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Guid _, IReadOnlyList<TeamLabNodeAssetLifecycleRequest> assets, int _,
+                TeamLabExecutionModel _, bool _, CancellationToken _) =>
+            {
+                attempts++;
+                return assets.Select(asset => new TeamLabNodeAssetLifecycleResult(
+                    asset.AssetId,
+                    attempts > 1 || asset.ResourceId == "first",
+                    attempts > 1 || asset.ResourceId == "first" ? "OK" : "offline")).ToArray();
+            });
         var orchestrator = LifecycleOrchestrator(context, nodes.Object);
         await Assert.ThrowsAsync<TeamLabApiContractException>(() => orchestrator.ExecuteQueuedLifecycleAsync(runtime.Id, 1, true, default));
         Assert.Equal(TeamLabRuntimeStatus.Paused, (await context.TeamLabRuntimeAssets.AsNoTracking().SingleAsync(item => item.Id == first.Id)).Status);

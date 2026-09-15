@@ -24,23 +24,24 @@ public sealed class ApiTokenRateLimitStore(
         {
             var connection = await connections.GetAsync();
             if (connection is null)
-                return new(false, false, 0);
+                return new(false, false, requestsPerMinute, 0, 0);
 
             var result = (RedisResult[]?)await connection.GetDatabase().ScriptEvaluateAsync(
                 ConsumeScript,
                 [keyspace.CreateOpaque(RedisKeyPurpose.Lease, "api-rate", tokenId.ToString("N"))],
                 [60]);
             if (result is not [var countResult, var ttlResult])
-                return new(false, false, 0);
+                return new(false, false, requestsPerMinute, 0, 0);
 
             var count = (long)countResult;
             var ttl = Math.Max(1, (int)(long)ttlResult);
-            return new(true, count <= requestsPerMinute, ttl);
+            return new(true, count <= requestsPerMinute, requestsPerMinute,
+                Math.Max(0, requestsPerMinute - (int)Math.Min(count, int.MaxValue)), ttl);
         }
         catch (Exception exception) when (exception is RedisException or InvalidOperationException)
         {
             logger.LogWarning(exception, "API token rate limiter Redis operation failed");
-            return new(false, false, 0);
+            return new(false, false, requestsPerMinute, 0, 0);
         }
     }
 }

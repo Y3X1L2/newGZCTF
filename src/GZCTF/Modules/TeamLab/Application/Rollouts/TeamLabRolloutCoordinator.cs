@@ -16,7 +16,9 @@ public sealed class TeamLabRolloutCoordinator(
     TeamLabAccessGrantService access,
     ImageDistributionService distribution,
     IDistributedLeaseProvider leases,
-    ILogger<TeamLabRolloutCoordinator> logger)
+    ILogger<TeamLabRolloutCoordinator> logger,
+    IServiceScopeFactory? scopeFactory = null,
+    TeamLabServiceAccessService? serviceAccess = null)
 {
     private const int TargetBatchSize = 8;
 
@@ -33,49 +35,72 @@ public sealed class TeamLabRolloutCoordinator(
             .Select(item => new { item.Id, item.PublicId })
             .Take(Math.Clamp(limit, 1, 16))
             .ToArrayAsync(cancellationToken);
-        foreach (var rollout in rollouts)
+        if (rollouts.Length == 0) return 0;
+        if (scopeFactory is null)
         {
-            IDistributedLease lease;
-            try
+            foreach (var rollout in rollouts)
+                await ProcessClaimedRolloutAsync(rollout.Id, rollout.PublicId, cancellationToken);
+        }
+        else
+        {
+            await Parallel.ForEachAsync(rollouts, new ParallelOptions
             {
-                lease = await leases.AcquireAsync(
-                    $"teamlab:rollout:{rollout.PublicId:D}",
-                    TimeSpan.FromMilliseconds(250),
-                    TimeSpan.FromSeconds(30),
-                    cancellationToken);
-            }
-            catch (TimeoutException)
+                MaxDegreeOfParallelism = Math.Min(8, rollouts.Length),
+                CancellationToken = cancellationToken
+            }, async (rollout, token) =>
             {
-                logger.LogDebug("TeamLab rollout {RolloutId} 正在由其他 worker 协调", rollout.PublicId);
-                continue;
-            }
-            await using (lease)
-            {
-                using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, lease.LeaseLost);
-                try
-                {
-                    await ProcessOneAsync(rollout.Id, linked.Token);
-                }
-                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-                {
-                    throw;
-                }
-                catch (OperationCanceledException) when (lease.LeaseLost.IsCancellationRequested)
-                {
-                    logger.LogWarning("TeamLab rollout {RolloutId} 的 lease 已丢失；协调在提交下一个 target 前已停止", rollout.PublicId);
-                }
-                catch (DbUpdateConcurrencyException)
-                {
-                    logger.LogDebug("TeamLab rollout {RolloutId} 被并发修改；下一个 tick 将重新协调", rollout.PublicId);
-                }
-                catch (Exception exception)
-                {
-                    logger.LogError(exception, "TeamLab rollout {RolloutId} 协调失败", rollout.PublicId);
-                    await RecordFailureAsync(rollout.Id, exception.Message, cancellationToken);
-                }
-            }
+                await using var scope = scopeFactory.CreateAsyncScope();
+                var coordinator = scope.ServiceProvider.GetRequiredService<TeamLabRolloutCoordinator>();
+                await coordinator.ProcessClaimedRolloutAsync(rollout.Id, rollout.PublicId, token);
+            });
         }
         return rollouts.Length;
+    }
+
+    private async Task ProcessClaimedRolloutAsync(
+        int rolloutId,
+        Guid rolloutPublicId,
+        CancellationToken cancellationToken)
+    {
+        IDistributedLease lease;
+        try
+        {
+            lease = await leases.AcquireAsync(
+                $"teamlab:rollout:{rolloutPublicId:D}",
+                TimeSpan.FromMilliseconds(250),
+                TimeSpan.FromSeconds(30),
+                cancellationToken);
+        }
+        catch (TimeoutException)
+        {
+            logger.LogDebug("TeamLab rollout {RolloutId} 正在由其他 worker 协调", rolloutPublicId);
+            return;
+        }
+        await using (lease)
+        {
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, lease.LeaseLost);
+            try
+            {
+                await ProcessOneAsync(rolloutId, linked.Token);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (OperationCanceledException) when (lease.LeaseLost.IsCancellationRequested)
+            {
+                logger.LogWarning("TeamLab rollout {RolloutId} 的 lease 已丢失；协调在提交下一个 target 前已停止", rolloutPublicId);
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                logger.LogDebug("TeamLab rollout {RolloutId} 被并发修改；下一个 tick 将重新协调", rolloutPublicId);
+            }
+            catch (Exception exception)
+            {
+                logger.LogError(exception, "TeamLab rollout {RolloutId} 协调失败", rolloutPublicId);
+                await RecordFailureAsync(rolloutId, exception.Message, cancellationToken);
+            }
+        }
     }
 
     private async Task ProcessOneAsync(int rolloutId, CancellationToken cancellationToken)
@@ -122,30 +147,54 @@ public sealed class TeamLabRolloutCoordinator(
             await context.SaveChangesAsync(cancellationToken);
         }
 
-        foreach (var target in rollout.Targets
-                     .Where(item => item.IsDesired && !item.RebuildRequested && item.RuntimeId is null &&
-                                    item.Status is TeamLabRolloutTargetStatus.Pending or
-                                        TeamLabRolloutTargetStatus.Provisioning)
-                     .OrderBy(item => item.Id)
-                     .Take(TargetBatchSize))
+        var pendingTargets = rollout.Targets
+            .Where(item => item.IsDesired && !item.RebuildRequested && item.RuntimeId is null &&
+                           item.Status is TeamLabRolloutTargetStatus.Pending or
+                               TeamLabRolloutTargetStatus.Provisioning)
+            .OrderBy(item => item.Id)
+            .Take(TargetBatchSize)
+            .ToArray();
+        foreach (var target in pendingTargets)
         {
             target.Status = TeamLabRolloutTargetStatus.Provisioning;
             target.UpdatedAt = DateTimeOffset.UtcNow;
+        }
+        if (pendingTargets.Length > 0)
             await context.SaveChangesAsync(cancellationToken);
-            try
+
+        if (scopeFactory is null)
+        {
+            foreach (var target in pendingTargets)
+                await ProvisionTargetAsync(provider, rollout, target, cancellationToken);
+            if (pendingTargets.Length > 0)
+                await context.SaveChangesAsync(cancellationToken);
+        }
+        else
+        {
+            await Parallel.ForEachAsync(pendingTargets, new ParallelOptions
             {
-                var provisioned = await provider.ProvisionAsync(rollout, target, cancellationToken);
-                target.RuntimeId = provisioned.RuntimeId;
-                target.LastOperationId = provisioned.OperationId;
-                target.LastError = null;
-            }
-            catch (Exception exception)
+                MaxDegreeOfParallelism = TargetBatchSize,
+                CancellationToken = cancellationToken
+            }, async (target, token) =>
             {
-                target.Status = TeamLabRolloutTargetStatus.Failed;
-                target.LastError = Limit(exception.Message);
-            }
-            target.UpdatedAt = DateTimeOffset.UtcNow;
-            await context.SaveChangesAsync(cancellationToken);
+                await using var scope = scopeFactory.CreateAsyncScope();
+                var scopedContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                var scopedRollout = await scopedContext.TeamLabRollouts
+                    .Include(item => item.Release)
+                    .SingleAsync(item => item.Id == rollout.Id, token);
+                var scopedTarget = await scopedContext.TeamLabRolloutTargets
+                    .SingleAsync(item => item.Id == target.Id, token);
+                var scopedProvider = scope.ServiceProvider.GetServices<ITeamLabRolloutTargetProvider>()
+                    .Single(item => item.AdapterKind == scopedRollout.AdapterKind);
+                await ProvisionTargetAsync(scopedProvider, scopedRollout, scopedTarget, token);
+                await scopedContext.SaveChangesAsync(token);
+            });
+            context.ChangeTracker.Clear();
+            rollout = await context.TeamLabRollouts
+                .Include(item => item.Release)
+                .Include(item => item.Targets)
+                .ThenInclude(item => item.Runtime)
+                .SingleAsync(item => item.Id == rollout.Id, cancellationToken);
         }
 
         await RefreshTargetFactsAsync(rollout, cancellationToken);
@@ -185,6 +234,27 @@ public sealed class TeamLabRolloutCoordinator(
             rollout.UpdatedAt = now;
             await context.SaveChangesAsync(cancellationToken);
         }
+    }
+
+    private static async Task ProvisionTargetAsync(
+        ITeamLabRolloutTargetProvider provider,
+        TeamLabRollout rollout,
+        TeamLabRolloutTarget target,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var provisioned = await provider.ProvisionAsync(rollout, target, cancellationToken);
+            target.RuntimeId = provisioned.RuntimeId;
+            target.LastOperationId = provisioned.OperationId;
+            target.LastError = null;
+        }
+        catch (Exception exception)
+        {
+            target.Status = TeamLabRolloutTargetStatus.Failed;
+            target.LastError = Limit(exception.Message);
+        }
+        target.UpdatedAt = DateTimeOffset.UtcNow;
     }
 
     private async Task ProcessRebuildRequestsAsync(
@@ -232,71 +302,91 @@ public sealed class TeamLabRolloutCoordinator(
         TeamLabRollout rollout,
         CancellationToken cancellationToken)
     {
-        foreach (var target in rollout.Targets
-                     .Where(item => item.IsDesired && !item.RebuildRequested && item.RuntimeId is { } runtimeId &&
-                                    item.Status is TeamLabRolloutTargetStatus.Ready or
-                                        TeamLabRolloutTargetStatus.AccessOpen)
-                     .OrderBy(item => item.Id)
-                     .Take(TargetBatchSize))
-        {
-            var runtime = await context.TeamLabRuntimes.AsNoTracking()
-                .SingleOrDefaultAsync(item => item.Id == target.RuntimeId, cancellationToken);
-            if (runtime is null || runtime.Status == TeamLabRuntimeStatus.Paused)
-                continue;
-            // A deployment is paused only after it reaches a stable running state. Submitting
-            // a pause command while its startup operation is still active leaves both state
-            // machines waiting on an operation the runtime cannot execute.
-            if (runtime.Status != TeamLabRuntimeStatus.Running)
-                continue;
-            await operations.SubmitRolloutTargetLifecycleAsync(
-                null,
-                rollout.CreatedByUserId,
-                $"teamlab-target-{target.PublicId:N}-pause-r{rollout.Revision}",
-                runtime.PublicId,
-                rollout.PublicId,
-                target.PublicId,
-                rollout.ControlScopeId,
-                pause: true,
-                cancellationToken);
-        }
+        var targets = rollout.Targets
+            .Where(item => item.IsDesired && !item.RebuildRequested && item.RuntimeId.HasValue &&
+                           item.Status is TeamLabRolloutTargetStatus.Ready or
+                               TeamLabRolloutTargetStatus.AccessOpen)
+            .OrderBy(item => item.Id)
+            .Take(TargetBatchSize)
+            .ToArray();
+        var runtimeIds = targets.Select(item => item.RuntimeId!.Value).ToArray();
+        var runtimeFacts = await context.TeamLabRuntimes.AsNoTracking()
+            .Where(item => runtimeIds.Contains(item.Id))
+            .Select(item => new { item.Id, item.PublicId, item.Status })
+            .ToDictionaryAsync(item => item.Id, cancellationToken);
+        var requests = targets
+            .Where(target => runtimeFacts.TryGetValue(target.RuntimeId!.Value, out var runtime) &&
+                             runtime.Status == TeamLabRuntimeStatus.Running)
+            .Select(target => (RuntimeId: runtimeFacts[target.RuntimeId!.Value].PublicId,
+                TargetId: target.PublicId, Pause: true))
+            .ToArray();
+        await SubmitLifecycleBatchAsync(rollout, requests, cancellationToken);
     }
 
     private async Task ProcessResumeRequestsAsync(
         TeamLabRollout rollout,
         CancellationToken cancellationToken)
     {
-        foreach (var target in rollout.Targets
-                     .Where(item => item.IsDesired && item.RuntimeId is { } runtimeId &&
-                                    item.Status == TeamLabRolloutTargetStatus.Paused)
-                     .OrderBy(item => item.Id)
-                     .Take(TargetBatchSize))
-        {
-            var runtime = await context.TeamLabRuntimes.AsNoTracking()
-                .SingleOrDefaultAsync(item => item.Id == target.RuntimeId, cancellationToken);
-            if (runtime is null || runtime.Status != TeamLabRuntimeStatus.Paused)
-                continue;
-            await operations.SubmitRolloutTargetLifecycleAsync(
+        var targets = rollout.Targets
+            .Where(item => item.IsDesired && item.RuntimeId.HasValue &&
+                           item.Status == TeamLabRolloutTargetStatus.Paused)
+            .OrderBy(item => item.Id)
+            .Take(TargetBatchSize)
+            .ToArray();
+        var runtimeIds = targets.Select(item => item.RuntimeId!.Value).ToArray();
+        var runtimeFacts = await context.TeamLabRuntimes.AsNoTracking()
+            .Where(item => runtimeIds.Contains(item.Id))
+            .Select(item => new { item.Id, item.PublicId, item.Status })
+            .ToDictionaryAsync(item => item.Id, cancellationToken);
+        var requests = targets
+            .Where(target => runtimeFacts.TryGetValue(target.RuntimeId!.Value, out var runtime) &&
+                             runtime.Status == TeamLabRuntimeStatus.Paused)
+            .Select(target => (RuntimeId: runtimeFacts[target.RuntimeId!.Value].PublicId,
+                TargetId: target.PublicId, Pause: false))
+            .ToArray();
+        await SubmitLifecycleBatchAsync(rollout, requests, cancellationToken);
+    }
+
+    private async Task SubmitLifecycleBatchAsync(TeamLabRollout rollout,
+        (Guid RuntimeId, Guid TargetId, bool Pause)[] requests, CancellationToken cancellationToken)
+    {
+        async Task SubmitAsync(TeamLabRuntimeOperationApplicationService service,
+            (Guid RuntimeId, Guid TargetId, bool Pause) request, CancellationToken token) =>
+            await service.SubmitRolloutTargetLifecycleAsync(
                 null,
                 rollout.CreatedByUserId,
-                $"teamlab-target-{target.PublicId:N}-resume-r{rollout.Revision}",
-                runtime.PublicId,
+                $"teamlab-target-{request.TargetId:N}-{(request.Pause ? "pause" : "resume")}-r{rollout.Revision}",
+                request.RuntimeId,
                 rollout.PublicId,
-                target.PublicId,
+                request.TargetId,
                 rollout.ControlScopeId,
-                pause: false,
-                cancellationToken);
+                request.Pause,
+                token);
+
+        if (scopeFactory is null)
+        {
+            foreach (var request in requests)
+                await SubmitAsync(operations, request, cancellationToken);
+            return;
         }
+        await Parallel.ForEachAsync(requests, new ParallelOptions
+        {
+            MaxDegreeOfParallelism = TargetBatchSize,
+            CancellationToken = cancellationToken
+        }, async (request, token) =>
+        {
+            await using var scope = scopeFactory.CreateAsyncScope();
+            await SubmitAsync(scope.ServiceProvider.GetRequiredService<TeamLabRuntimeOperationApplicationService>(),
+                request, token);
+        });
     }
 
     private async Task<bool> PrepareImagesAsync(TeamLabRollout rollout, CancellationToken cancellationToken)
     {
         var definition = TeamLabReleaseCodec.DecodeExecution(rollout.Release.SchemaVersion, rollout.Release.CanonicalJson);
         var templateIds = definition.Assets.Select(item => item.ImageTemplateId).Distinct().Order().ToArray();
-        foreach (var templateId in templateIds)
-            await distribution.DistributeTemplateAsync(
-                templateId,
-                ImageDistributionReferenceKey.TeamLabRollout(rollout.Id),
-                cancellationToken);
+        await distribution.DistributeTemplatesAsync(templateIds,
+            ImageDistributionReferenceKey.TeamLabRollout(rollout.Id), cancellationToken);
         if (templateIds.Length == 0) return true;
 
         var records = await context.ImageDistributionRecords.AsNoTracking()
@@ -345,6 +435,23 @@ public sealed class TeamLabRolloutCoordinator(
             .Where(item => runtimeIds.Contains(item.Id))
             .Select(item => new { item.Id, item.Status, item.LastError })
             .ToDictionaryAsync(item => item.Id, cancellationToken);
+        var drainingRuntimeIds = rollout.Targets
+            .Where(item => item.RuntimeId.HasValue && item.Status == TeamLabRolloutTargetStatus.Draining)
+            .Select(item => item.RuntimeId!.Value)
+            .ToArray();
+        var teardownTickets = drainingRuntimeIds.Length == 0
+            ? new Dictionary<int, DeploymentQueueTicketStatus>()
+            : (await context.DeploymentQueueTickets.AsNoTracking()
+                .Where(item => item.TeamLabRuntimeId.HasValue &&
+                               drainingRuntimeIds.Contains(item.TeamLabRuntimeId.Value) &&
+                               item.Operation == RuntimeOperationKind.Destroy)
+                .Select(item => new { RuntimeId = item.TeamLabRuntimeId!.Value, item.Status, item.CreatedAt, item.Id })
+                .ToArrayAsync(cancellationToken))
+                .GroupBy(item => item.RuntimeId)
+                .ToDictionary(group => group.Key, group => group
+                    .OrderByDescending(item => item.CreatedAt)
+                    .ThenByDescending(item => item.Id)
+                    .First().Status);
         var changed = false;
         var now = DateTimeOffset.UtcNow;
         foreach (var target in rollout.Targets.Where(item => item.RuntimeId.HasValue))
@@ -373,13 +480,7 @@ public sealed class TeamLabRolloutCoordinator(
                 }
                 else
                 {
-                    var teardownStatus = await context.DeploymentQueueTickets.AsNoTracking()
-                        .Where(item => item.TeamLabRuntimeId == target.RuntimeId &&
-                                       item.Operation == RuntimeOperationKind.Destroy)
-                        .OrderByDescending(item => item.CreatedAt)
-                        .ThenByDescending(item => item.Id)
-                        .Select(item => (DeploymentQueueTicketStatus?)item.Status)
-                        .FirstOrDefaultAsync(cancellationToken);
+                    var teardownStatus = teardownTickets.GetValueOrDefault(target.RuntimeId!.Value);
                     if (teardownStatus is DeploymentQueueTicketStatus.Pending or
                         DeploymentQueueTicketStatus.Scheduling or DeploymentQueueTicketStatus.Scheduled or
                         DeploymentQueueTicketStatus.Running or DeploymentQueueTicketStatus.Succeeded)
@@ -430,11 +531,32 @@ public sealed class TeamLabRolloutCoordinator(
         if (!rollout.DesiredAccessOpen)
         {
             var openRuntimes = await context.TeamLabRuntimes.AsNoTracking()
-                .Where(item => runtimeIds.Contains(item.Id) && item.IsOpenToPlayers)
+                .Where(item => runtimeIds.Contains(item.Id) &&
+                    (item.IsOpenToPlayers || item.ServiceAccesses.Any(mapping => mapping.RevokedAt == null)))
                 .Select(item => item.PublicId)
                 .ToArrayAsync(cancellationToken);
-            foreach (var runtimeId in openRuntimes)
-                await access.RevokeAllAsync(runtimeId, cancellationToken);
+            if (scopeFactory is null)
+            {
+                foreach (var runtimeId in openRuntimes)
+                {
+                    await access.RevokeAllAsync(runtimeId, cancellationToken);
+                    if (serviceAccess is not null)
+                        await serviceAccess.CleanupRuntimeAsync(runtimeId, cancellationToken);
+                }
+            }
+            else
+            {
+                await Parallel.ForEachAsync(openRuntimes, new ParallelOptions
+                {
+                    MaxDegreeOfParallelism = TargetBatchSize,
+                    CancellationToken = cancellationToken
+                }, async (runtimeId, token) =>
+                {
+                    await using var scope = scopeFactory.CreateAsyncScope();
+                    await scope.ServiceProvider.GetRequiredService<TeamLabAccessGrantService>().RevokeAllAsync(runtimeId, token);
+                    await scope.ServiceProvider.GetRequiredService<TeamLabServiceAccessService>().CleanupRuntimeAsync(runtimeId, token);
+                });
+            }
         }
         return changed;
     }
@@ -452,18 +574,45 @@ public sealed class TeamLabRolloutCoordinator(
             target.UpdatedAt = now;
             changed = true;
         }
-        foreach (var target in rollout.Targets
-                     .Where(item => item.RuntimeId.HasValue && item.Status != TeamLabRolloutTargetStatus.Destroyed &&
-                                    item.Status != TeamLabRolloutTargetStatus.Draining)
-                     .OrderBy(item => item.Id)
-                     .Take(TargetBatchSize))
+        var targets = rollout.Targets
+            .Where(item => item.RuntimeId.HasValue && item.Status != TeamLabRolloutTargetStatus.Destroyed &&
+                           item.Status != TeamLabRolloutTargetStatus.Draining)
+            .OrderBy(item => item.Id)
+            .Take(TargetBatchSize)
+            .ToArray();
+        var runtimeIds = targets.Select(item => item.RuntimeId!.Value).ToArray();
+        var runtimesById = await context.TeamLabRuntimes.AsNoTracking()
+            .Where(item => runtimeIds.Contains(item.Id))
+            .Select(item => new { item.Id, item.PublicId })
+            .ToDictionaryAsync(item => item.Id, cancellationToken);
+        var destroyRequests = targets
+            .Where(target => runtimesById.ContainsKey(target.RuntimeId!.Value))
+            .Select(target => (Target: target, RuntimeId: runtimesById[target.RuntimeId!.Value].PublicId))
+            .ToArray();
+        if (scopeFactory is null)
         {
-            var runtime = await context.TeamLabRuntimes.AsNoTracking()
-                .SingleAsync(item => item.Id == target.RuntimeId, cancellationToken);
-            await runtimes.DestroyRolloutTargetAndEnqueueAsync(runtime.PublicId, rollout.Id, target.LastOperationId, rollout.CreatedByUserId,
-                cancellationToken);
-            target.Status = TeamLabRolloutTargetStatus.Draining;
-            target.UpdatedAt = DateTimeOffset.UtcNow;
+            foreach (var request in destroyRequests)
+                await runtimes.DestroyRolloutTargetAndEnqueueAsync(request.RuntimeId, rollout.Id,
+                    request.Target.LastOperationId, rollout.CreatedByUserId, cancellationToken);
+        }
+        else
+        {
+            await Parallel.ForEachAsync(destroyRequests, new ParallelOptions
+            {
+                MaxDegreeOfParallelism = TargetBatchSize,
+                CancellationToken = cancellationToken
+            }, async (request, token) =>
+            {
+                await using var scope = scopeFactory.CreateAsyncScope();
+                await scope.ServiceProvider.GetRequiredService<ITeamLabRuntimeApplicationService>()
+                    .DestroyRolloutTargetAndEnqueueAsync(request.RuntimeId, rollout.Id,
+                        request.Target.LastOperationId, rollout.CreatedByUserId, token);
+            });
+        }
+        foreach (var request in destroyRequests)
+        {
+            request.Target.Status = TeamLabRolloutTargetStatus.Draining;
+            request.Target.UpdatedAt = DateTimeOffset.UtcNow;
             changed = true;
         }
         changed |= await RefreshTargetFactsAsync(rollout, cancellationToken);

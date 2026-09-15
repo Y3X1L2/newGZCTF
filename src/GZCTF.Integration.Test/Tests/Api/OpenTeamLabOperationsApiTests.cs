@@ -58,13 +58,13 @@ public sealed class OpenTeamLabOperationsApiTests(GZCTFApplicationFactory factor
         Assert.NotNull(list);
         Assert.Contains(list.Items, item => item.Name == "seed.txt" && item.Kind == "file");
 
-        var payload = "streamed payload"u8.ToArray();
-        using (var upload = new MultipartFormDataContent())
+        var payload = new byte[TeamLabFileLimits.MaxBytes + 1024];
+        RandomNumberGenerator.Fill(payload);
+        using (var upload = new ByteArrayContent(payload))
         {
-            upload.Add(new StringContent("1"), "generation");
-            upload.Add(new StringContent("/upload.bin"), "path");
-            upload.Add(new ByteArrayContent(payload), "file", "upload.bin");
-            using var response = await client.PostAsync($"{basePath}/upload", upload);
+            upload.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
+            using var response = await client.PostAsync(
+                $"{basePath}/upload?generation=1&path=%2Fupload.bin", upload);
             Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
         }
 
@@ -96,7 +96,7 @@ public sealed class OpenTeamLabOperationsApiTests(GZCTFApplicationFactory factor
             await AssertProblemAsync(response, HttpStatusCode.NotFound, "scope_not_found");
 
         Assert.Equal(
-            ["list", "upload", "download", "mkdir", "move", "delete"],
+            ["list", "upload-stream", "download-stream", "mkdir", "move", "delete"],
             gateway.Operations.ToArray());
 
         await using var verificationScope = host.Services.CreateAsyncScope();
@@ -741,6 +741,30 @@ public sealed class OpenTeamLabOperationsApiTests(GZCTFApplicationFactory factor
             Guid nodeId,
             TeamLabVmFileRequest request,
             CancellationToken token) =>
+            throw new NotSupportedException("The HTTP fixture uses a container asset.");
+
+        public async Task DownloadAsync(Guid nodeId, TeamLabContainerFileRequest request, Stream destination,
+            long maxBytes, TimeSpan idleTimeout, CancellationToken token)
+        {
+            Operations.Enqueue("download-stream");
+            await destination.WriteAsync(files[request.Path], token);
+        }
+
+        public Task DownloadVmAsync(Guid nodeId, TeamLabVmFileRequest request, Stream destination,
+            long maxBytes, TimeSpan idleTimeout, CancellationToken token) =>
+            throw new NotSupportedException("The HTTP fixture uses a container asset.");
+
+        public async Task UploadAsync(Guid nodeId, TeamLabContainerFileRequest request, Stream source,
+            long contentLength, CancellationToken token)
+        {
+            Operations.Enqueue("upload-stream");
+            using var content = new MemoryStream();
+            await source.CopyToAsync(content, token);
+            files[request.Path] = content.ToArray();
+        }
+
+        public Task UploadVmAsync(Guid nodeId, TeamLabVmFileRequest request, Stream source,
+            long contentLength, CancellationToken token) =>
             throw new NotSupportedException("The HTTP fixture uses a container asset.");
 
         private TeamLabFileResult Store(string path, byte[] content)

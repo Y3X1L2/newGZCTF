@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using GZCTF.Infrastructure.Concurrency;
 using GZCTF.Infrastructure.Persistence.Queries;
 using GZCTF.Modules.TeamLab.Contracts;
 using GZCTF.Modules.TeamLab.Domain;
@@ -14,7 +15,8 @@ namespace GZCTF.Modules.TeamLab.Application;
 public sealed class TeamLabWebhookService(
     AppDbContext context,
     IDataProtectionProvider protection,
-    ITeamLabWebhookDeliverer deliverer)
+    ITeamLabWebhookDeliverer deliverer,
+    IDistributedLeaseProvider leases)
 {
     private const string SecretPurpose = "GZCTF.TeamLab.Webhook.v1";
     private const int MaxRecordedFailures = 20;
@@ -167,7 +169,14 @@ public sealed class TeamLabWebhookService(
         var processed = 0;
         foreach (var subscriptionId in subscriptionIds)
         {
-            processed += await DeliverSubscriptionAsync(subscriptionId, cancellationToken);
+            try
+            {
+                processed += await DeliverSubscriptionAsync(subscriptionId, cancellationToken);
+            }
+            catch (TimeoutException)
+            {
+                // Another application instance owns this subscription delivery pass.
+            }
             if (cancellationToken.IsCancellationRequested)
                 break;
         }
@@ -178,18 +187,16 @@ public sealed class TeamLabWebhookService(
         Guid subscriptionId,
         CancellationToken cancellationToken)
     {
-        await using var transaction = context.Database.IsRelational()
-            ? await context.Database.BeginTransactionAsync(cancellationToken)
-            : null;
-        await AcquireSubscriptionLockAsync(subscriptionId, cancellationToken);
+        await using var lease = await leases.AcquireAsync(
+            $"teamlab:webhook:{subscriptionId:N}",
+            TimeSpan.FromMilliseconds(100),
+            TimeSpan.FromMinutes(2),
+            cancellationToken);
         var subscription = await context.TeamLabWebhookSubscriptions
             .Include(item => item.Failures)
             .SingleAsync(item => item.Id == subscriptionId, cancellationToken);
         if (!subscription.Active || subscription.NextDeliveryAt > DateTimeOffset.UtcNow)
-        {
-            if (transaction is not null) await transaction.CommitAsync(cancellationToken);
             return 0;
-        }
         var chunk = await LoadScopeEventsAsync(
             subscription.ControlScopeId,
             subscription.DeliveryCursor + 1,
@@ -199,7 +206,6 @@ public sealed class TeamLabWebhookService(
         {
             subscription.NextDeliveryAt = null;
             await SaveChangesAsync(cancellationToken);
-            if (transaction is not null) await transaction.CommitAsync(cancellationToken);
             return 0;
         }
         var eventTypes = TeamLabWebhookDelivery.ParseEventTypes(subscription.EventTypesJson);
@@ -229,7 +235,6 @@ public sealed class TeamLabWebhookService(
                 await SaveChangesAsync(cancellationToken);
                 await TrimFailureRecordsAsync(subscription, cancellationToken);
                 await SaveChangesAsync(cancellationToken);
-                if (transaction is not null) await transaction.CommitAsync(cancellationToken);
                 return delivered;
             }
             subscription.DeliveryCursor = localEvent.Id;
@@ -238,26 +243,7 @@ public sealed class TeamLabWebhookService(
             delivered++;
         }
         await SaveChangesAsync(cancellationToken);
-        if (transaction is not null) await transaction.CommitAsync(cancellationToken);
         return delivered;
-    }
-
-    /// <summary>
-    /// Serializes the per-subscription delivery pass with a PostgreSQL advisory
-    /// transaction lock so concurrent worker instances never regress the cursor.
-    /// In-memory providers skip the lock; the unique API operation constraint and
-    /// at-least-once semantics remain the final guard.
-    /// </summary>
-    private async Task AcquireSubscriptionLockAsync(Guid subscriptionId, CancellationToken cancellationToken)
-    {
-        if (!context.Database.IsRelational())
-            return;
-        if (context.Database.CurrentTransaction is null)
-            throw new InvalidOperationException("Webhook advisory lock requires an explicit transaction.");
-        var lockKey = $"teamlab:webhook:{subscriptionId:N}";
-        await context.Database.ExecuteSqlInterpolatedAsync(
-            $"SELECT pg_advisory_xact_lock(hashtextextended({lockKey}, 0))",
-            cancellationToken);
     }
 
     private async Task<TeamLabWebhookDeliveryResult> DeliverOneAsync(

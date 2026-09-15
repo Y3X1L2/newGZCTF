@@ -647,6 +647,8 @@ public class TeamLabNetworkConfig
     public int ManagedVmRebootAllowanceSeconds { get; set; } = 300;
     public int ManagedVmMaximumBootstrapTimeoutSeconds { get; set; } = 28800;
     public int RecoveryGraceSeconds { get; set; } = 30;
+    public long MaxFileTransferBytes { get; set; } = TeamLabFileLimits.DefaultMaxTransferBytes;
+    public int FileTransferIdleTimeoutSeconds { get; set; } = 120;
 }
 
 public class PublicUdpGatewayConfig

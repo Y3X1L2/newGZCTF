@@ -81,7 +81,8 @@ public sealed partial class PostgresPartitionManager(
         string dataSet,
         DateTimeOffset cutoff,
         string leaseOwner,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        int maxPartitions = 1)
     {
         EnsurePostgres();
         var definition = GetDefinition(dataSet);
@@ -89,9 +90,11 @@ public sealed partial class PostgresPartitionManager(
 
         var dropped = 0;
         long rowsDeleted = 0;
-        foreach (var partition in partitions)
+        foreach (var partition in partitions.Take(Math.Max(1, maxPartitions)))
         {
             await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+            await context.Database.ExecuteSqlRawAsync(
+                "SET LOCAL lock_timeout = '2s'", cancellationToken);
             await context.Database.ExecuteSqlRawAsync(
                 "SELECT pg_advisory_xact_lock({0})", [AdvisoryLockKey], cancellationToken);
             await ExecuteDdlAsync($"LOCK TABLE \"{partition.Name}\" IN ACCESS EXCLUSIVE MODE", cancellationToken);
@@ -166,6 +169,8 @@ public sealed partial class PostgresPartitionManager(
     {
         var name = PartitionName(definition, start);
         await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+        await context.Database.ExecuteSqlRawAsync(
+            "SET LOCAL lock_timeout = '2s'", cancellationToken);
         await context.Database.ExecuteSqlRawAsync(
             "SELECT pg_advisory_xact_lock({0})", [AdvisoryLockKey], cancellationToken);
         await ExecuteDdlAsync($$"""

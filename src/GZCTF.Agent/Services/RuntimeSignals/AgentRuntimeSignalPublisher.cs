@@ -32,50 +32,34 @@ public sealed class AgentRuntimeSignalPublisher(
 
     internal async Task PublishPendingAsync(Guid operationId, CancellationToken cancellationToken)
     {
-        foreach (var signal in await journal.ReadPendingAsync(operationId, cancellationToken))
+        var signals = await journal.ReadPendingAsync(operationId, cancellationToken);
+        foreach (var batch in signals.Chunk(256))
         {
             var client = clientFactory.CreateClient();
             client.DefaultRequestHeaders.Authorization =
                 new AuthenticationHeaderValue("Bearer", _config.AuthToken);
             using var response = await client.PostAsJsonAsync(
-                $"{_config.ServerUrl.TrimEnd('/')}/api/v1/nodes/{_config.NodeId:D}/runtime-signals",
-                signal,
+                $"{_config.ServerUrl.TrimEnd('/')}/api/internal/teamlab/runtime-signals/batch",
+                new AgentRuntimeSignalBatchModel(_config.NodeId, batch),
                 cancellationToken);
+            if (response.StatusCode == HttpStatusCode.Conflict)
+            {
+                await journal.AcknowledgeAsync(operationId, batch[^1].Sequence, cancellationToken);
+                continue;
+            }
             if (!response.IsSuccessStatusCode)
             {
-                if (response.StatusCode == HttpStatusCode.Conflict)
-                {
-                    var reason = await TryReadRejectionAsync(response, cancellationToken);
-                    logger.LogWarning(
-                        "Runtime signal conflict is terminal and was discarded: operation={OperationId}, sequence={Sequence}, reason={Reason}",
-                        signal.OperationId, signal.Sequence, reason);
-                    await journal.AcknowledgeAsync(operationId, signal.Sequence, cancellationToken);
-                    continue;
-                }
                 logger.LogWarning(
-                    "Runtime signal delivery failed: operation={OperationId}, sequence={Sequence}, status={Status}",
-                    signal.OperationId, signal.Sequence, (int)response.StatusCode);
+                    "Runtime signal batch delivery failed: operation={OperationId}, count={Count}, status={Status}",
+                    operationId, batch.Length, (int)response.StatusCode);
                 return;
             }
-            var result = await response.Content.ReadFromJsonAsync<AgentRuntimeSignalIngestResult>(
+            var result = await response.Content.ReadFromJsonAsync<AgentRuntimeSignalIngestResult[]>(
                 cancellationToken);
-            if (result is null || !result.Accepted && !result.Duplicate && !result.Stale)
+            if (result is null || result.Length != batch.Length ||
+                result.Any(item => !item.Accepted && !item.Duplicate && !item.Stale))
                 return;
-            await journal.AcknowledgeAsync(operationId, signal.Sequence, cancellationToken);
-        }
-    }
-
-    private static async Task<string> TryReadRejectionAsync(
-        HttpResponseMessage response,
-        CancellationToken cancellationToken)
-    {
-        try
-        {
-            return (await response.Content.ReadAsStringAsync(cancellationToken)).Trim();
-        }
-        catch
-        {
-            return string.Empty;
+            await journal.AcknowledgeAsync(operationId, batch[^1].Sequence, cancellationToken);
         }
     }
 

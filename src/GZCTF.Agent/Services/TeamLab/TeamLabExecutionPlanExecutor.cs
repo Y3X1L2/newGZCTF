@@ -24,6 +24,7 @@ public sealed partial class TeamLabExecutionPlanExecutor(
     ILogger<TeamLabExecutionPlanExecutor> logger)
 {
     static readonly TimeSpan HealthProbeTimeout = TimeSpan.FromSeconds(10);
+    static readonly int AssetParallelism = Math.Clamp(Environment.ProcessorCount, 2, 8);
     readonly AgentConfig agent = agentOptions.Value;
     readonly KeyedSemaphoreRegistry<(int RuntimeId, int Generation, string ShardKey)> executionLocks = new();
 
@@ -128,10 +129,6 @@ public sealed partial class TeamLabExecutionPlanExecutor(
                 return Failure(plan, "network", result.Message);
             }
         }
-        var dockerAssets = plan.Assets.Where(asset => asset.Kind.Equals("docker", StringComparison.OrdinalIgnoreCase)).ToArray();
-        var vmAssets = plan.Assets.Where(asset => asset.Kind.Equals("vm", StringComparison.OrdinalIgnoreCase)).ToArray();
-        var dockerLimit = Math.Max(1, agent.ExecutionLimits.DockerCreates ?? 1);
-        var vmLimit = Math.Max(1, agent.ExecutionLimits.VmCreates ?? 1);
         try
         {
             async ValueTask ApplyAssetAsync(TeamLabAssetExecutionSpecV2 asset, CancellationToken token)
@@ -162,13 +159,9 @@ public sealed partial class TeamLabExecutionPlanExecutor(
                 }
             }
 
-            var dockerWork = Parallel.ForEachAsync(dockerAssets,
-                new ParallelOptions { MaxDegreeOfParallelism = dockerLimit, CancellationToken = cancellationToken },
+            await Parallel.ForEachAsync(plan.Assets,
+                new ParallelOptions { MaxDegreeOfParallelism = AssetParallelism, CancellationToken = cancellationToken },
                 (asset, token) => ApplyAssetAsync(asset, token));
-            var vmWork = Parallel.ForEachAsync(vmAssets,
-                new ParallelOptions { MaxDegreeOfParallelism = vmLimit, CancellationToken = cancellationToken },
-                (asset, token) => ApplyAssetAsync(asset, token));
-            await Task.WhenAll(dockerWork, vmWork);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -274,10 +267,6 @@ public sealed partial class TeamLabExecutionPlanExecutor(
     {
         var events = new ConcurrentQueue<TeamLabExecutionEventV2>();
         var beforeCleanup = await ReadInventoryAsync(plan, cancellationToken);
-        var dockerAssets = plan.Assets.Where(asset => asset.Kind.Equals("docker", StringComparison.OrdinalIgnoreCase)).ToArray();
-        var vmAssets = plan.Assets.Where(asset => asset.Kind.Equals("vm", StringComparison.OrdinalIgnoreCase)).ToArray();
-        var dockerLimit = Math.Max(1, agent.ExecutionLimits.DockerCreates ?? 1);
-        var vmLimit = Math.Max(1, agent.ExecutionLimits.VmCreates ?? 1);
         async ValueTask CleanupAssetAsyncTimed(TeamLabAssetExecutionSpecV2 asset, CancellationToken token)
         {
             var sw = System.Diagnostics.Stopwatch.StartNew();
@@ -287,13 +276,9 @@ public sealed partial class TeamLabExecutionPlanExecutor(
                 plan.RuntimeId, plan.Generation, asset.AssetKey, asset.Kind, sw.ElapsedMilliseconds);
         }
 
-        var dockerCleanup = Parallel.ForEachAsync(dockerAssets,
-            new ParallelOptions { MaxDegreeOfParallelism = dockerLimit, CancellationToken = cancellationToken },
+        await Parallel.ForEachAsync(plan.Assets,
+            new ParallelOptions { MaxDegreeOfParallelism = AssetParallelism, CancellationToken = cancellationToken },
             (asset, token) => CleanupAssetAsyncTimed(asset, token));
-        var vmCleanup = Parallel.ForEachAsync(vmAssets,
-            new ParallelOptions { MaxDegreeOfParallelism = vmLimit, CancellationToken = cancellationToken },
-            (asset, token) => CleanupAssetAsyncTimed(asset, token));
-        await Task.WhenAll(dockerCleanup, vmCleanup);
 
         foreach (var asset in plan.Assets.Where(asset =>
                      asset.Kind.Equals("docker", StringComparison.OrdinalIgnoreCase)))

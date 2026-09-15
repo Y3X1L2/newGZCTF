@@ -13,6 +13,8 @@ public sealed class TeamLabRemoteSessionEntityConfiguration : IEntityTypeConfigu
         builder.HasIndex(item => item.PublicId).IsUnique();
         builder.HasIndex(item => new { item.Status, item.ExpiresAt });
         builder.HasIndex(item => new { item.RuntimeId, item.Generation, item.RuntimeAssetId });
+        builder.HasIndex(item => new { item.RuntimeId, item.Generation, item.Status, item.CreatedAt, item.Id })
+            .HasDatabaseName("IX_TeamLabRemoteSessions_Runtime_Generation_Status_Created_Id");
         builder.HasIndex(item => new { item.RequestedByUserId, item.RuntimeAssetId, item.Protocol })
             .IsUnique()
             .HasFilter("\"Status\" IN (1, 2, 3, 4)");

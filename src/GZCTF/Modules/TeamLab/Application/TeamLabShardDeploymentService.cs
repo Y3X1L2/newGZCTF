@@ -344,17 +344,23 @@ public sealed class TeamLabShardDeploymentService(
 
         // The network owner must converge the global OVN intent before other shards attach
         // their local ports, otherwise a non-owner can race ahead of the logical topology.
-        var orderedShards = shards.OrderBy(shard => plans[shard.Id].NetworkOwner ? 0 : 1)
-            .ThenBy(shard => shard.Id)
+        var ownerShards = shards.Where(shard => plans[shard.Id].NetworkOwner)
+            .OrderBy(shard => shard.Id)
+            .ToArray();
+        var memberShards = shards.Where(shard => !plans[shard.Id].NetworkOwner)
+            .OrderBy(shard => shard.Id)
             .ToArray();
         var results = new List<ExecutionPlanApplyResult>();
-        foreach (var shard in orderedShards)
+        foreach (var shard in ownerShards)
         {
             var result = await ApplyExecutionPlanAsync(shard.WorkerNodeId, plans[shard.Id], cancellationToken);
             results.Add(result);
             if (!result.Success)
                 break;
         }
+        if (results.All(item => item.Success))
+            results.AddRange(await Task.WhenAll(memberShards.Select(shard =>
+                ApplyExecutionPlanAsync(shard.WorkerNodeId, plans[shard.Id], cancellationToken))));
         var failed = results.Where(item => !item.Success).ToArray();
         if (failed.Length > 0)
         {

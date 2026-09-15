@@ -16,5 +16,5 @@ public sealed class FaultInjectingApiTokenRateLimitStore(IApiTokenRateLimitStore
     public Task<ApiTokenRateLimitDecision> ConsumeAsync(Guid tokenId, int requestsPerMinute) =>
         Available
             ? inner.ConsumeAsync(tokenId, requestsPerMinute)
-            : Task.FromResult(new ApiTokenRateLimitDecision(false, false, 0));
+            : Task.FromResult(new ApiTokenRateLimitDecision(false, false, requestsPerMinute, 0, 0));
 }

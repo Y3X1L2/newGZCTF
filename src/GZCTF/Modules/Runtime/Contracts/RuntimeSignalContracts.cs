@@ -65,3 +65,7 @@ public sealed record AgentRuntimeSignalIngestResult(
     bool Duplicate,
     bool Stale,
     long Sequence);
+
+public sealed record AgentRuntimeSignalBatchModel(
+    Guid NodeId,
+    IReadOnlyList<AgentRuntimeSignalModel> Signals);

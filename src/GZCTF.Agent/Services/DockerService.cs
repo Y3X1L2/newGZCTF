@@ -799,9 +799,43 @@ public class DockerService
             request.Operation == "move" && !TeamLabFileLimits.IsValidPath(request.DestinationPath) ||
             request.Content is { Length: > TeamLabFileLimits.MaxBytes })
             throw new AgentOperationException("Validation", "files.invalid_request", "Invalid file request.", false);
-        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(token);
-        deadline.CancelAfter(TimeSpan.FromSeconds(30));
-        var inspect = await _client.Containers.InspectContainerAsync(request.ContainerId, deadline.Token);
+        return await WithTeamLabFileStoreAsync(request,
+            (store, operationToken) => store.ExecuteAsync(request, operationToken), token);
+    }
+
+    public Task DownloadTeamLabFileAsync(
+        TeamLabContainerFileRequest request,
+        Stream destination,
+        long maxBytes,
+        TimeSpan idleTimeout,
+        CancellationToken token) =>
+        WithTeamLabFileStoreAsync(request,
+            async (store, operationToken) =>
+            {
+                await store.DownloadToAsync(request.Path, destination, maxBytes, idleTimeout, operationToken);
+                return true;
+            }, token);
+
+    public Task UploadTeamLabFileAsync(
+        TeamLabContainerFileRequest request,
+        Stream source,
+        long contentLength,
+        long maxBytes,
+        TimeSpan idleTimeout,
+        CancellationToken token) =>
+        WithTeamLabFileStoreAsync(request,
+            async (store, operationToken) =>
+            {
+                await store.UploadFromAsync(request, source, contentLength, maxBytes, idleTimeout, operationToken);
+                return true;
+            }, token);
+
+    private async Task<T> WithTeamLabFileStoreAsync<T>(
+        TeamLabContainerFileRequest request,
+        Func<TeamLab.LinuxContainerFileStore, CancellationToken, Task<T>> operation,
+        CancellationToken token)
+    {
+        var inspect = await _client.Containers.InspectContainerAsync(request.ContainerId, token);
         var labels = inspect.Config.Labels;
         if (labels is null || !labels.TryGetValue("ManagedBy", out var owner) || owner != "GZCTF" ||
             !labels.TryGetValue("GZCTF.RuntimeId", out var runtime) || runtime != request.RuntimeId.ToString(System.Globalization.CultureInfo.InvariantCulture) ||
@@ -812,10 +846,10 @@ public class DockerService
         try
         {
             using var store = TeamLab.LinuxContainerFileStore.ForProcess(inspect.State.Pid, inspect.ID);
-            var current = await _client.Containers.InspectContainerAsync(inspect.ID, deadline.Token);
+            var current = await _client.Containers.InspectContainerAsync(inspect.ID, token);
             if (current.State.Pid != inspect.State.Pid || current.State.StartedAt != inspect.State.StartedAt)
                 throw new IOException("Container process changed during file access.");
-            return await store.ExecuteAsync(request, deadline.Token);
+            return await operation(store, token);
         }
         catch (TeamLab.LinuxContainerFileStore.NativeFileException error)
         {

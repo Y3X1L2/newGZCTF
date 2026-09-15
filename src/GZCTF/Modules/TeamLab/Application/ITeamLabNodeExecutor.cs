@@ -299,6 +299,22 @@ public sealed record TeamLabNodeCaptureResult(
     string? Sha256,
     bool Uploaded);
 
+public sealed record TeamLabNodeCaptureIdentity(
+    int RuntimeId,
+    int Generation,
+    Guid CaptureId,
+    Guid SegmentId);
+
+public sealed record TeamLabNodeAssetLifecycleRequest(
+    int AssetId,
+    TeamLabAssetKind Kind,
+    string ResourceId);
+
+public sealed record TeamLabNodeAssetLifecycleResult(
+    int AssetId,
+    bool Success,
+    string? Message);
+
 public interface ITeamLabNodeExecutor
 {
     Task<TeamLabExecutionPlanApplyResponse> ApplyExecutionPlanAsync(
@@ -343,6 +359,13 @@ public interface ITeamLabNodeExecutor
         int generation,
         TeamLabExecutionModel executionModel,
         CancellationToken cancellationToken);
+    Task<IReadOnlyList<TeamLabNodeAssetLifecycleResult>> ChangeAssetLifecycleBatchAsync(
+        Guid workerNodeId,
+        IReadOnlyList<TeamLabNodeAssetLifecycleRequest> assets,
+        int generation,
+        TeamLabExecutionModel executionModel,
+        bool pause,
+        CancellationToken cancellationToken);
     Task<TeamLabNodeResult> DestroyAssetAsync(Guid workerNodeId, TeamLabAssetKind kind, string resourceId, CancellationToken cancellationToken);
     Task<TeamLabScenarioArtifactCommitResult> CommitScenarioArtifactAsync(
         Guid workerNodeId,
@@ -366,4 +389,62 @@ public interface ITeamLabNodeExecutor
     Task<TeamLabNodeCaptureResult> GetCaptureStatusAsync(Guid workerNodeId, int runtimeId, int generation, Guid captureId, Guid segmentId, CancellationToken cancellationToken);
     Task<TeamLabNodeCaptureResult> UploadCaptureAsync(Guid workerNodeId, TeamLabNodeCaptureUploadRequest request, CancellationToken cancellationToken);
     Task<TeamLabNodeCaptureResult> DeleteCaptureAsync(Guid workerNodeId, int runtimeId, int generation, Guid captureId, Guid segmentId, CancellationToken cancellationToken);
+
+    async Task<IReadOnlyList<TeamLabNodeCaptureResult>> StartCapturesAsync(
+        Guid workerNodeId,
+        IReadOnlyList<TeamLabNodeCaptureStartRequest> requests,
+        CancellationToken cancellationToken)
+    {
+        var results = new List<TeamLabNodeCaptureResult>(requests.Count);
+        foreach (var request in requests)
+            results.Add(await StartCaptureAsync(workerNodeId, request, cancellationToken));
+        return results;
+    }
+
+    async Task<IReadOnlyList<TeamLabNodeCaptureResult>> StopCapturesAsync(
+        Guid workerNodeId,
+        IReadOnlyList<TeamLabNodeCaptureIdentity> requests,
+        CancellationToken cancellationToken)
+    {
+        var results = new List<TeamLabNodeCaptureResult>(requests.Count);
+        foreach (var request in requests)
+            results.Add(await StopCaptureAsync(workerNodeId, request.RuntimeId, request.Generation,
+                request.CaptureId, request.SegmentId, cancellationToken));
+        return results;
+    }
+
+    async Task<IReadOnlyList<TeamLabNodeCaptureResult>> GetCaptureStatusesAsync(
+        Guid workerNodeId,
+        IReadOnlyList<TeamLabNodeCaptureIdentity> requests,
+        CancellationToken cancellationToken)
+    {
+        var results = new List<TeamLabNodeCaptureResult>(requests.Count);
+        foreach (var request in requests)
+            results.Add(await GetCaptureStatusAsync(workerNodeId, request.RuntimeId, request.Generation,
+                request.CaptureId, request.SegmentId, cancellationToken));
+        return results;
+    }
+
+    async Task<IReadOnlyList<TeamLabNodeCaptureResult>> UploadCapturesAsync(
+        Guid workerNodeId,
+        IReadOnlyList<TeamLabNodeCaptureUploadRequest> requests,
+        CancellationToken cancellationToken)
+    {
+        var results = new List<TeamLabNodeCaptureResult>(requests.Count);
+        foreach (var request in requests)
+            results.Add(await UploadCaptureAsync(workerNodeId, request, cancellationToken));
+        return results;
+    }
+
+    async Task<IReadOnlyList<TeamLabNodeCaptureResult>> DeleteCapturesAsync(
+        Guid workerNodeId,
+        IReadOnlyList<TeamLabNodeCaptureIdentity> requests,
+        CancellationToken cancellationToken)
+    {
+        var results = new List<TeamLabNodeCaptureResult>(requests.Count);
+        foreach (var request in requests)
+            results.Add(await DeleteCaptureAsync(workerNodeId, request.RuntimeId, request.Generation,
+                request.CaptureId, request.SegmentId, cancellationToken));
+        return results;
+    }
 }

@@ -1,6 +1,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using System.IO;
 using GZCTF.Models;
 using GZCTF.Infrastructure.Concurrency;
 using GZCTF.Modules.Content.Application;
@@ -82,6 +83,41 @@ public sealed class TeamLabAssetFileTests
             asset.Id, Guid.NewGuid(), false, new(3, "list", "/"), default));
         Assert.Equal(403, denied.StatusCode);
         gateway.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task StreamingTransferSupportsFilesAboveLegacyJsonLimit()
+    {
+        await using var db = Context();
+        var asset = await Seed(db);
+        var payload = new byte[TeamLabFileLimits.MaxBytes + 1024];
+        RandomNumberGenerator.Fill(payload);
+        var gateway = new Mock<ITeamLabAssetFileGateway>(MockBehavior.Strict);
+        gateway.Setup(item => item.UploadAsync(asset.WorkerNodeId!.Value,
+                It.Is<TeamLabContainerFileRequest>(request => request.Operation == "upload" && request.Path == "/large.bin"),
+                It.IsAny<Stream>(), payload.LongLength, It.IsAny<CancellationToken>()))
+            .Returns<Guid, TeamLabContainerFileRequest, Stream, long, CancellationToken>(
+                async (_, _, source, _, token) =>
+                {
+                    using var copy = new MemoryStream();
+                    await source.CopyToAsync(copy, token);
+                    Assert.Equal(payload, copy.ToArray());
+                });
+        gateway.Setup(item => item.DownloadAsync(asset.WorkerNodeId!.Value,
+                It.Is<TeamLabContainerFileRequest>(request => request.Operation == "download" && request.Path == "/large.bin"),
+                It.IsAny<Stream>(), TeamLabFileLimits.DefaultMaxTransferBytes, It.IsAny<TimeSpan>(),
+                It.IsAny<CancellationToken>()))
+            .Returns<Guid, TeamLabContainerFileRequest, Stream, long, TimeSpan, CancellationToken>(
+                async (_, _, destination, _, _, token) => await destination.WriteAsync(payload, token));
+        var service = Service(db, gateway.Object);
+        await using (var source = new MemoryStream(payload, writable: false))
+            await service.UploadAsync(asset.Runtime.PublicId, asset.Id, asset.Runtime.CreatedById!.Value,
+                false, 3, "/large.bin", source, payload.LongLength, false, false, default);
+        await using var destination = new MemoryStream();
+        await service.DownloadAsync(asset.Runtime.PublicId, asset.Id, asset.Runtime.CreatedById!.Value,
+            false, 3, "/large.bin", destination, default);
+        Assert.Equal(payload, destination.ToArray());
+        gateway.VerifyAll();
     }
 
     [Theory]

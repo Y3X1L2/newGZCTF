@@ -16,6 +16,7 @@ export type TeamLabCaptureStatus =
   | 'failed'
   | 'expired'
   | 'cleanup-pending'
+  | 'partially-running'
 export type TeamLabCaptureSegmentStatus =
   | 'pending'
   | 'running'
@@ -75,6 +76,25 @@ export interface TeamLabRuntime {
   createdAt: number
   updatedAt: number | null
   error: string | null
+}
+
+export interface TeamLabRuntimeStatusSnapshot {
+  id: string
+  generation: number
+  status: TeamLabRuntimeStatus
+  stage: string
+  deploymentQueueTicketId: string | null
+  queueStatus: TeamLabRuntime['queueStatus']
+  queueStage: string | null
+  updatedAt: number | null
+  assets: {
+    total: number
+    pending: number
+    running: number
+    paused: number
+    stopped: number
+    failed: number
+  }
 }
 
 export interface TeamLabRuntimeEvent {

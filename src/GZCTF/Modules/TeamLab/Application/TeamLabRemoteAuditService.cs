@@ -57,7 +57,8 @@ public sealed class TeamLabRemoteAuditService(AppDbContext context, IBlobStorage
         CancellationToken token)
     {
         await RequireAsync(sessionId, authorize, token);
-        await using var lease = await leases.AcquireAsync("teamlab:remote-audit", TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(30), token);
+        await using var lease = await leases.AcquireAsync(
+            $"teamlab:remote-audit:{sessionId:N}", TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(30), token);
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(token, lease.LeaseLost);
         var session = await context.TeamLabRemoteSessions.AsNoTracking().Include(item => item.Runtime)
             .SingleAsync(item => item.PublicId == sessionId, linked.Token);

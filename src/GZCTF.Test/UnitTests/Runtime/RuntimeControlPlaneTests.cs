@@ -607,6 +607,7 @@ public sealed class RuntimeControlPlaneTests
         {
             Id = 900,
             TopologyReleaseId = releaseId,
+            ExecutionModel = GZCTF.TeamLab.Contracts.TeamLabExecutionModel.V1,
             Status = TeamLabRuntimeStatus.Scheduled,
             Networks =
             [
@@ -816,6 +817,7 @@ public sealed class RuntimeControlPlaneTests
         {
             Id = 901,
             TopologyReleaseId = releaseId,
+            ExecutionModel = GZCTF.TeamLab.Contracts.TeamLabExecutionModel.V1,
             Status = TeamLabRuntimeStatus.Scheduled,
             Networks =
             [

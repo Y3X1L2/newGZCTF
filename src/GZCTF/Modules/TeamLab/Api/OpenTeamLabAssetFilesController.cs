@@ -10,6 +10,7 @@ using GZCTF.TeamLab.Contracts;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NSwag.Annotations;
+using System.Net.Http.Headers;
 
 namespace GZCTF.Modules.TeamLab.Api;
 
@@ -59,54 +60,33 @@ public sealed class OpenTeamLabAssetFilesController(TeamLabAssetFileService file
         CancellationToken cancellationToken)
     {
         var actor = Actor();
-        var result = await files.ExecuteApiAsync(
-            runtimeId,
-            assetId,
-            actor.TokenId,
-            actor.UserId,
-            new TeamLabAssetFileCommand(generation, "download", path),
-            cancellationToken);
         Response.Headers.CacheControl = "no-store";
         Response.Headers["X-Content-Type-Options"] = "nosniff";
-        return File(
-            result.Content ?? throw new TeamLabApiContractException(
-                "files.content_unavailable", "节点未返回文件内容。", 502),
-            MediaTypeNames.Application.Octet,
-            System.IO.Path.GetFileName(path));
+        Response.ContentType = MediaTypeNames.Application.Octet;
+        Response.Headers.ContentDisposition = new ContentDispositionHeaderValue("attachment")
+            { FileNameStar = System.IO.Path.GetFileName(path) }.ToString();
+        await files.DownloadApiAsync(runtimeId, assetId, actor.TokenId, actor.UserId,
+            generation, path, Response.Body, cancellationToken);
+        return new EmptyResult();
     }
 
     [HttpPost("upload")]
     [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabRemoteSessionsWrite)]
-    [Consumes("multipart/form-data")]
-    [RequestSizeLimit(12 * 1024 * 1024)]
-    [RequestFormLimits(MultipartBodyLengthLimit = 12 * 1024 * 1024)]
+    [Consumes(MediaTypeNames.Application.Octet)]
+    [DisableRequestSizeLimit]
     [OpenApiOperation("上传资产文件", "以 multipart 二进制流上传单个文件；覆盖已有文件时必须显式确认。")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> Upload(
         Guid runtimeId,
         int assetId,
-        [FromForm] OpenUploadTeamLabAssetFileModel model,
+        [FromQuery] OpenUploadTeamLabAssetFileModel model,
         CancellationToken cancellationToken)
     {
-        if (model.File.Length > TeamLabFileLimits.MaxBytes)
-            throw new TeamLabApiContractException("files.too_large", "文件超过 8 MiB 上限。", 413);
-
-        await using var input = model.File.OpenReadStream();
-        using var content = new MemoryStream((int)model.File.Length);
-        await input.CopyToAsync(content, cancellationToken);
+        var contentLength = Request.ContentLength
+            ?? throw new TeamLabApiContractException("files.length_required", "上传文件必须提供 Content-Length。", 411);
         var actor = Actor();
-        await files.ExecuteApiAsync(
-            runtimeId,
-            assetId,
-            actor.TokenId,
-            actor.UserId,
-            new TeamLabAssetFileCommand(
-                model.Generation,
-                "upload",
-                model.Path,
-                content.ToArray(),
-                model.Overwrite,
-                model.Confirmed),
+        await files.UploadApiAsync(runtimeId, assetId, actor.TokenId, actor.UserId,
+            model.Generation, model.Path, Request.Body, contentLength, model.Overwrite, model.Confirmed,
             cancellationToken);
         Response.Headers.CacheControl = "no-store";
         return NoContent();

@@ -8,6 +8,7 @@ import type {
   TeamLabObservationPointKind,
   TeamLabPathConfidence,
   TeamLabRuntime,
+  TeamLabRuntimeStatusSnapshot,
   TeamLabRuntimeEvent,
   TeamLabTrafficEvidenceKind,
   TeamLabTrafficFlowPage,
@@ -84,6 +85,7 @@ const captureStatuses = {
   4: 'failed',
   5: 'expired',
   6: 'cleanup-pending',
+  7: 'partially-running',
   Pending: 'pending',
   Running: 'running',
   Stopping: 'stopping',
@@ -91,6 +93,7 @@ const captureStatuses = {
   Failed: 'failed',
   Expired: 'expired',
   CleanupPending: 'cleanup-pending',
+  PartiallyRunning: 'partially-running',
 } as const
 const captureSegmentStatuses = {
   0: 'pending',
@@ -180,6 +183,29 @@ export function parseTeamLabRuntime(value: unknown): TeamLabRuntime {
     createdAt: parse.number(item.createdAt, 'TeamLab runtime.createdAt'),
     updatedAt: parse.nullableNumber(item.updatedAt, 'TeamLab runtime.updatedAt'),
     error: parse.nullableString(item.error, 'TeamLab runtime.error'),
+  }
+}
+
+export function parseTeamLabRuntimeStatus(value: unknown): TeamLabRuntimeStatusSnapshot {
+  const item = parse.record(value, 'TeamLab runtime status')
+  const assets = parse.record(item.assets, 'TeamLab runtime status.assets')
+  return {
+    id: parse.string(item.id, 'TeamLab runtime status.id'),
+    generation: parse.number(item.generation, 'TeamLab runtime status.generation'),
+    status: runtimeStatus(item.status, 'TeamLab runtime status.status'),
+    stage: parse.string(item.stage, 'TeamLab runtime status.stage'),
+    deploymentQueueTicketId: parse.nullableString(item.deploymentQueueTicketId, 'TeamLab runtime status.deploymentQueueTicketId'),
+    queueStatus: item.queueStatus == null ? null : parse.enumValue(item.queueStatus, queueStatuses, 'TeamLab runtime status.queueStatus'),
+    queueStage: parse.nullableString(item.queueStage, 'TeamLab runtime status.queueStage'),
+    updatedAt: parse.nullableNumber(item.updatedAt, 'TeamLab runtime status.updatedAt'),
+    assets: {
+      total: parse.number(assets.total, 'TeamLab runtime status.assets.total'),
+      pending: parse.number(assets.pending, 'TeamLab runtime status.assets.pending'),
+      running: parse.number(assets.running, 'TeamLab runtime status.assets.running'),
+      paused: parse.number(assets.paused, 'TeamLab runtime status.assets.paused'),
+      stopped: parse.number(assets.stopped, 'TeamLab runtime status.assets.stopped'),
+      failed: parse.number(assets.failed, 'TeamLab runtime status.assets.failed'),
+    },
   }
 }
 

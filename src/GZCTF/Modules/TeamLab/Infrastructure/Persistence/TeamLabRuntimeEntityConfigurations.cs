@@ -14,6 +14,8 @@ public sealed class TeamLabRuntimeFoundationEntityConfiguration : IEntityTypeCon
         builder.HasIndex(item => item.PublicId).IsUnique();
         builder.HasIndex(item => item.TopologyReleaseId);
         builder.HasIndex(item => item.ControlScopeId);
+        builder.HasIndex(item => new { item.ControlScopeId, item.Status, item.CreatedAt, item.PublicId })
+            .HasDatabaseName("IX_TeamLabRuntimes_Scope_Status_Created_PublicId");
         builder.HasIndex(item => new { item.CreatedById, item.ExternalReference })
             .IsUnique()
             .HasFilter("\"ExternalReference\" IS NOT NULL");
@@ -65,6 +67,8 @@ public sealed class TeamLabEventEntityConfiguration : IEntityTypeConfiguration<T
         builder.HasIndex(item => item.OperationId)
             .HasFilter("\"OperationId\" IS NOT NULL")
             .HasDatabaseName("IX_TeamLabEvents_Operation");
+        builder.HasIndex(item => new { item.RuntimeId, item.Generation, item.Stage, item.CreatedAt, item.Id })
+            .HasDatabaseName("IX_TeamLabEvents_Runtime_Generation_Stage_Created_Id");
         builder.HasOne(item => item.Runtime)
             .WithMany(item => item.Events)
             .HasForeignKey(item => item.RuntimeId)

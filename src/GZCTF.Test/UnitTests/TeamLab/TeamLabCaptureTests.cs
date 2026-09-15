@@ -41,14 +41,15 @@ public sealed class TeamLabCaptureTests
         var entered = 0;
         var bothEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var executor = new Mock<ITeamLabNodeExecutor>(MockBehavior.Strict);
-        executor.Setup(item => item.StartCaptureAsync(
-                It.IsAny<Guid>(), It.IsAny<TeamLabNodeCaptureStartRequest>(), It.IsAny<CancellationToken>()))
-            .Returns(async (Guid _, TeamLabNodeCaptureStartRequest request, CancellationToken token) =>
+        executor.Setup(item => item.StartCapturesAsync(
+                It.IsAny<Guid>(), It.IsAny<IReadOnlyList<TeamLabNodeCaptureStartRequest>>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(async (Guid _, IReadOnlyList<TeamLabNodeCaptureStartRequest> requests, CancellationToken token) =>
             {
                 if (Interlocked.Increment(ref entered) == 2) bothEntered.TrySetResult();
                 await bothEntered.Task.WaitAsync(TimeSpan.FromSeconds(2), token);
-                return new TeamLabNodeCaptureResult(
-                    true, "started", request.SegmentId, 0, true, null, false);
+                return requests.Select(request => new TeamLabNodeCaptureResult(
+                    true, "started", request.SegmentId, 0, true, null, false)).ToArray();
             });
         var service = CreateTrafficService(context, executor.Object);
 
@@ -253,15 +254,15 @@ public sealed class TeamLabCaptureTests
         await context.SaveChangesAsync();
 
         var executor = new Mock<ITeamLabNodeExecutor>(MockBehavior.Strict);
-        executor.Setup(item => item.DeleteCaptureAsync(
+        executor.Setup(item => item.DeleteCapturesAsync(
                 firstNode.Id,
-                runtime.Id,
-                runtime.Generation,
-                job.PublicId,
-                segment.PublicId,
+                It.IsAny<IReadOnlyList<TeamLabNodeCaptureIdentity>>(),
                 It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new TeamLabNodeCaptureResult(
-                true, "deleted", segment.PublicId, content.Length, false, digest, false));
+            .ReturnsAsync(new[]
+            {
+                new TeamLabNodeCaptureResult(
+                    true, "deleted", segment.PublicId, content.Length, false, digest, false)
+            });
         var writer = new EfOperationalEventWriter(context, NullLogger<EfOperationalEventWriter>.Instance);
         var coordinator = new TeamLabCaptureCoordinator(
             context,

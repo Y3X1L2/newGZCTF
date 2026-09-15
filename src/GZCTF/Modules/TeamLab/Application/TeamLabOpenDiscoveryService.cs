@@ -11,6 +11,127 @@ public sealed class TeamLabOpenDiscoveryService(
     AppDbContext context,
     TeamLabScopeAuthorizationService scopeAuthorization)
 {
+    public async Task<OpenTeamLabRuntimeStatusModel> GetRuntimeStatusAsync(
+        Guid runtimeId,
+        Guid apiTokenId,
+        bool hasWildcardScopeGrant,
+        CancellationToken cancellationToken)
+    {
+        await scopeAuthorization.RequireRuntimeScopeAsync(
+            runtimeId, apiTokenId, hasWildcardScopeGrant, writable: false, cancellationToken);
+        return await GetRuntimeStatusProjectionAsync(runtimeId, cancellationToken);
+    }
+
+    public async Task<OpenTeamLabRuntimeStatusModel> GetRuntimeStatusProjectionAsync(
+        Guid runtimeId,
+        CancellationToken cancellationToken)
+    {
+        var runtime = await context.TeamLabRuntimes.AsNoTracking()
+            .Where(item => item.PublicId == runtimeId)
+            .Select(item => new
+            {
+                item.Id,
+                item.PublicId,
+                item.Generation,
+                item.Status,
+                item.UpdatedAt,
+                Total = item.Assets.Count(asset => asset.Generation == item.Generation &&
+                    (asset.Kind == TeamLabResourceKind.Docker || asset.Kind == TeamLabResourceKind.Vm)),
+                Pending = item.Assets.Count(asset => asset.Generation == item.Generation &&
+                    (asset.Kind == TeamLabResourceKind.Docker || asset.Kind == TeamLabResourceKind.Vm) &&
+                    (asset.Status == TeamLabRuntimeStatus.Pending || asset.Status == TeamLabRuntimeStatus.Planning ||
+                     asset.Status == TeamLabRuntimeStatus.Scheduled || asset.Status == TeamLabRuntimeStatus.Deploying ||
+                     asset.Status == TeamLabRuntimeStatus.Probing)),
+                Running = item.Assets.Count(asset => asset.Generation == item.Generation &&
+                    (asset.Kind == TeamLabResourceKind.Docker || asset.Kind == TeamLabResourceKind.Vm) &&
+                    asset.Status == TeamLabRuntimeStatus.Running),
+                Paused = item.Assets.Count(asset => asset.Generation == item.Generation &&
+                    (asset.Kind == TeamLabResourceKind.Docker || asset.Kind == TeamLabResourceKind.Vm) &&
+                    asset.Status == TeamLabRuntimeStatus.Paused),
+                Stopped = item.Assets.Count(asset => asset.Generation == item.Generation &&
+                    (asset.Kind == TeamLabResourceKind.Docker || asset.Kind == TeamLabResourceKind.Vm) &&
+                    asset.Status == TeamLabRuntimeStatus.Stopped),
+                Failed = item.Assets.Count(asset => asset.Generation == item.Generation &&
+                    (asset.Kind == TeamLabResourceKind.Docker || asset.Kind == TeamLabResourceKind.Vm) &&
+                    asset.Status == TeamLabRuntimeStatus.Failed)
+            })
+            .SingleOrDefaultAsync(cancellationToken)
+            ?? throw new TeamLabApiContractException("runtime_not_found", "未找到 TeamLab 运行时。", 404);
+        var ticket = await context.DeploymentQueueTickets.AsNoTracking()
+            .Where(item => item.TeamLabRuntimeId == runtime.Id && item.Generation == runtime.Generation)
+            .OrderByDescending(item => item.CreatedAt)
+            .ThenByDescending(item => item.Id)
+            .Select(item => new { item.Id, item.Status, item.Stage })
+            .FirstOrDefaultAsync(cancellationToken);
+        return new OpenTeamLabRuntimeStatusModel(
+            runtime.PublicId,
+            runtime.Generation,
+            runtime.Status,
+            Stage(runtime.Status),
+            ticket?.Id,
+            ticket?.Status,
+            ticket?.Stage.ToString(),
+            runtime.UpdatedAt,
+            new OpenTeamLabRuntimeAssetSummaryModel(runtime.Total, runtime.Pending, runtime.Running,
+                runtime.Paused, runtime.Stopped, runtime.Failed));
+    }
+
+    public async Task<OpenTeamLabRuntimeAssetPageModel> ListRuntimeAssetsAsync(
+        Guid runtimeId,
+        Guid apiTokenId,
+        bool hasWildcardScopeGrant,
+        string? cursor,
+        int limit,
+        TeamLabRuntimeStatus? status,
+        CancellationToken cancellationToken)
+    {
+        if (limit is < 1 or > 100 || status.HasValue && !Enum.IsDefined(status.Value))
+            throw new TeamLabApiContractException("runtime_asset_filter_invalid", "运行资产筛选条件无效。", 400);
+        await scopeAuthorization.RequireRuntimeScopeAsync(
+            runtimeId, apiTokenId, hasWildcardScopeGrant, writable: false, cancellationToken);
+        var runtime = await context.TeamLabRuntimes.AsNoTracking()
+            .Where(item => item.PublicId == runtimeId)
+            .Select(item => new { item.Id, item.Generation, item.Status })
+            .SingleOrDefaultAsync(cancellationToken)
+            ?? throw new TeamLabApiContractException("runtime_not_found", "未找到 TeamLab 运行时。", 404);
+        IdCursor? decoded = null;
+        if (!string.IsNullOrWhiteSpace(cursor))
+        {
+            try { decoded = IdCursor.Decode(cursor); }
+            catch (InvalidTimeCursorException)
+            {
+                throw new TeamLabApiContractException("runtime_asset_cursor_invalid", "分页游标无效。", 400);
+            }
+        }
+        var query = context.TeamLabRuntimeAssets.AsNoTracking()
+            .Where(item => item.RuntimeId == runtime.Id && item.Generation == runtime.Generation &&
+                           (item.Kind == TeamLabResourceKind.Docker || item.Kind == TeamLabResourceKind.Vm));
+        if (decoded is { } value)
+            query = query.Where(item => item.Id > value.Id);
+        if (status is { } requestedStatus)
+            query = query.Where(item => item.Status == requestedStatus);
+        var rows = await query.OrderBy(item => item.Id).Take(limit + 1)
+            .Select(item => new
+            {
+                item.Id, item.TopologyKey, item.Name, item.Kind, item.IpAddress, item.Status, item.LastError
+            })
+            .ToArrayAsync(cancellationToken);
+        var items = rows.Take(limit).Select(item => new OpenTeamLabRuntimeAssetModel(
+            item.Id,
+            item.TopologyKey,
+            item.Name,
+            item.Kind == TeamLabResourceKind.Docker ? TeamLabAssetKind.Docker : TeamLabAssetKind.Vm,
+            item.IpAddress,
+            item.Status,
+            string.IsNullOrWhiteSpace(item.LastError)
+                ? null
+                : new OpenTeamLabFailureModel("asset_deployment_failed", "asset", false, null,
+                    "asset", item.TopologyKey, item.LastError))).ToArray();
+        return new OpenTeamLabRuntimeAssetPageModel(
+            items,
+            rows.Length > limit ? new IdCursor(items[^1].Id).Encode() : null);
+    }
+
     public async Task<OpenTeamLabRuntimePageModel> ListRuntimesAsync(
         Guid apiTokenId,
         bool hasWildcardScopeGrant,

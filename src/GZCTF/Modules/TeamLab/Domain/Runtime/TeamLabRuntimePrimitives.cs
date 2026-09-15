@@ -98,7 +98,8 @@ public enum TeamLabTrafficCaptureStatus : byte
     Completed = 3,
     Failed = 4,
     Expired = 5,
-    CleanupPending = 6
+    CleanupPending = 6,
+    PartiallyRunning = 7
 }
 
 public enum TeamLabAccessGrantType : byte

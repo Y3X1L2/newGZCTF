@@ -13,25 +13,16 @@ public sealed record OpenTeamLabAssetFileListModel(IReadOnlyList<OpenTeamLabAsse
 public sealed class OpenUploadTeamLabAssetFileModel
 {
     [Range(1, int.MaxValue)]
-    [FromForm(Name = "generation")]
     [JsonPropertyName("generation")]
     public int Generation { get; set; }
 
     [Required, StringLength(1024, MinimumLength = 1)]
-    [FromForm(Name = "path")]
     [JsonPropertyName("path")]
     public string Path { get; set; } = string.Empty;
 
-    [Required]
-    [FromForm(Name = "file")]
-    [JsonPropertyName("file")]
-    public IFormFile File { get; set; } = null!;
-
-    [FromForm(Name = "overwrite")]
     [JsonPropertyName("overwrite")]
     public bool Overwrite { get; set; }
 
-    [FromForm(Name = "confirmed")]
     [JsonPropertyName("confirmed")]
     public bool Confirmed { get; set; }
 }

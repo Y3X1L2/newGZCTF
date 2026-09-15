@@ -26,6 +26,9 @@ public sealed class DeploymentQueueTicketEntityConfiguration : IEntityTypeConfig
             .HasDatabaseName("IX_DeploymentQueueTickets_Status_NotBefore_Created_Id");
         builder.HasIndex(item => new { item.TargetNodeId, item.Status, item.CreatedAt, item.Id })
             .HasDatabaseName("IX_DeploymentQueueTickets_Node_Status_Created_Id");
+        builder.HasIndex(item => new { item.TeamLabRuntimeId, item.Generation, item.Operation, item.CreatedAt, item.Id })
+            .HasFilter("\"TeamLabRuntimeId\" IS NOT NULL")
+            .HasDatabaseName("IX_DeploymentQueueTickets_TeamLabRuntime_Generation_Operation_Created_Id");
         builder.HasIndex(item => new { item.Status, item.CompletedAt, item.Id })
             .IsDescending(false, true, true)
             .HasFilter("\"Status\" IN (4, 5, 6)")

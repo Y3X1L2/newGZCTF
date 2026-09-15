@@ -7,9 +7,9 @@
 
 ## TeamLab API 底座在研状态（2026-09-15）
 
-TeamLab API 候选位于分支 `codex/teamlab-api-product-integration`，已推送基线为 `b7f4df4`。P1 已用正式发布包、真实 Agent 和真实 OVN/OVS 跑通完整 API 流程；P2 已完成 Open API、默认布局、画布配色、状态表达、会话审计、服务开放、文件运维、连接器登记等产品与调用闭环，并删除无价值的启动依赖和端点采集链。
+TeamLab API 候选位于分支 `codex/teamlab-api-product-integration`，已推送基线为 `2862402`。P1 已用正式发布包、真实 Agent 和真实 OVN/OVS 跑通完整 API 流程；P2 已完成 Open API、默认布局、画布配色、状态表达、会话审计、服务开放、文件运维、连接器登记等产品与调用闭环，并删除无价值的启动依赖和端点采集链。
 
-P3 已完成 80/100 资产控制面并发定位与优化。20 秒、约 600 req/s 的四 Token 混合负载中，总 P95 从 323.56 ms 降至 11.87 ms，5xx、429、请求中断和数据库死锁为 0；没有降低 PostgreSQL 连接池上限。80 和 100 资产计划在稳定容量节点上各取得一次 HTTP 200，同修订并发写入最终一项成功、一项明确冲突。详见 [P1 验证记录](test-reports/2026-09-14-teamlab-api-p1.md)和 [P3 并发记录](test-reports/2026-09-15-teamlab-api-p3.md)。VM、现场物理网卡和多 Worker 隧道沿用此前专项验收结论，尚未在本候选上重新回归；生产部署和独立产品拆分尚未由本阶段执行。
+P3 候选已完成控制面和单 Worker Docker 执行面的并发定位与优化。20 秒、约 600 req/s 的四 Token 混合负载中，总 P95 从 323.56 ms 降至 11.87 ms，5xx、429、请求中断和数据库死锁为 0；没有降低 PostgreSQL 连接池上限。真实执行面已完成单环境 80/100 资产，以及 5 个环境共 100 资产的创建、暂停、恢复、链路策略、抓包和销毁；5 x 20 并发创建 41.69 秒，销毁 8.17 秒，最终容器和 Agent TeamLab 资源残留均为 0。主站和 Agent Release 构建通过，后端单元测试 1145/1145、Open Operations API 与 SFTP 定向集成测试 7/7 通过。详见 [P1 验证记录](test-reports/2026-09-14-teamlab-api-p1.md)和 [P3 并发记录](test-reports/2026-09-15-teamlab-api-p3.md)。VM、现场物理网卡、多 Worker 隧道、跨节点故障恢复和生产规模容量尚未在本候选上回归，因此当前结果不能表述为“支持大型赛事”；生产部署和独立产品拆分也尚未由本阶段执行。
 
 ## 测试环境部署事实（2026-09-09）
 

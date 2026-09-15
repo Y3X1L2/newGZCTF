@@ -95,16 +95,22 @@ public sealed class TeamLabRuntimeOperationHandler(
                 ?? throw new ApiOperationTerminalException("teamlab_payload_invalid", "销毁运行时 ID 缺失。");
             await operations.UpdateProgressAsync(operationId, leaseOwner, "runtime-destroying", 0, 1,
                 "teamlab-runtime", runtimeId.ToString("D"), null, cancellationToken);
-            var queued = await runtimes.DestroyAndEnqueueAsync(
-                runtimeId, operationId, operation.ActorUserId, cancellationToken);
+            var ticketId = await context.DeploymentQueueTickets.AsNoTracking()
+                .Where(ticket => ticket.ApiOperationId == operationId &&
+                                 ticket.Operation == RuntimeOperationKind.Destroy)
+                .OrderByDescending(ticket => ticket.CreatedAt)
+                .Select(ticket => (Guid?)ticket.Id)
+                .FirstOrDefaultAsync(cancellationToken);
+            if (ticketId is null)
+                ticketId = (await runtimes.DestroyAndEnqueueAsync(
+                    runtimeId, operationId, operation.ActorUserId, cancellationToken)).TicketId;
             job.RuntimeId = await context.TeamLabRuntimes.AsNoTracking()
                 .Where(runtime => runtime.PublicId == runtimeId)
                 .Select(runtime => (int?)runtime.Id)
                 .SingleAsync(cancellationToken);
             job.RuntimePublicId = runtimeId;
-            job.ProtectedPayload = null;
             await context.SaveChangesAsync(cancellationToken);
-            await WaitForTicketAsync(job, queued.TicketId, operationId, leaseOwner, cancellationToken);
+            await WaitForTicketAsync(job, ticketId.Value, operationId, leaseOwner, cancellationToken);
             return;
         }
 
@@ -216,7 +222,6 @@ public sealed class TeamLabRuntimeOperationHandler(
                 job.RuntimeId = result.RuntimeId;
                 job.RuntimePublicId = result.RuntimePublicId;
             }
-            job.ProtectedPayload = null;
             await context.SaveChangesAsync(cancellationToken);
         }
 
@@ -623,14 +628,12 @@ public sealed class TeamLabRuntimeOperationHandler(
         string leaseOwner,
         CancellationToken cancellationToken)
     {
-        while (true)
+        context.ChangeTracker.Clear();
+        var ticket = await context.DeploymentQueueTickets.AsNoTracking()
+            .SingleOrDefaultAsync(item => item.Id == ticketId, cancellationToken)
+            ?? throw new InvalidOperationException("The TeamLab deployment queue ticket was deleted.");
+        var (stage, progress) = ticket.Status switch
         {
-            context.ChangeTracker.Clear();
-            var ticket = await context.DeploymentQueueTickets.AsNoTracking()
-                .SingleOrDefaultAsync(item => item.Id == ticketId, cancellationToken)
-                ?? throw new InvalidOperationException("The TeamLab deployment queue ticket was deleted.");
-            var (stage, progress) = ticket.Status switch
-            {
                 DeploymentQueueTicketStatus.Pending => ("runtime-queued", 1L),
                 DeploymentQueueTicketStatus.Scheduling or DeploymentQueueTicketStatus.Scheduled =>
                     ("runtime-assigned", 2L),
@@ -639,26 +642,27 @@ public sealed class TeamLabRuntimeOperationHandler(
                 DeploymentQueueTicketStatus.Failed => ("runtime-failed", 4L),
                 DeploymentQueueTicketStatus.Cancelled => ("runtime-cancelled", 4L),
                 _ => ("runtime-queued", 1L)
-            };
-            if (ticket.Operation is RuntimeOperationKind.Pause or RuntimeOperationKind.Resume)
-                stage = LifecycleTicketStage(ticket.Operation, ticket.Status);
-            await operations.UpdateProgressAsync(operationId, leaseOwner, stage, progress, 4,
-                "teamlab-runtime", job.RuntimePublicId?.ToString("D"), ticket.Id, cancellationToken);
-            if (ticket.Status == DeploymentQueueTicketStatus.Succeeded)
-            {
-                var projection = (await runtimes.GetAsync(job.RuntimePublicId!.Value, cancellationToken)).ToOpen();
-                var trackedJob = await context.TeamLabRuntimeOperationJobs.SingleAsync(item => item.OperationId == operationId, cancellationToken);
-                await CompleteJobAsync(trackedJob, projection, cancellationToken);
-                return;
-            }
-            if (ticket.Status is DeploymentQueueTicketStatus.Failed or DeploymentQueueTicketStatus.Cancelled)
-                throw new ApiOperationTerminalException(
-                    ticket.Status == DeploymentQueueTicketStatus.Cancelled ? "operation_cancelled" : "operation_failed",
-                    ticket.Status == DeploymentQueueTicketStatus.Cancelled
-                        ? "TeamLab 部署已取消。"
-                        : "TeamLab 部署失败，请使用 operation ID 查看管理员诊断。");
-            await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
+        };
+        if (ticket.Operation is RuntimeOperationKind.Pause or RuntimeOperationKind.Resume)
+            stage = LifecycleTicketStage(ticket.Operation, ticket.Status);
+        await operations.UpdateProgressAsync(operationId, leaseOwner, stage, progress, 4,
+            "teamlab-runtime", job.RuntimePublicId?.ToString("D"), ticket.Id, cancellationToken);
+        if (ticket.Status == DeploymentQueueTicketStatus.Succeeded)
+        {
+            var projection = (await runtimes.GetAsync(job.RuntimePublicId!.Value, cancellationToken)).ToOpen();
+            var trackedJob = await context.TeamLabRuntimeOperationJobs.SingleAsync(
+                item => item.OperationId == operationId, cancellationToken);
+            await CompleteJobAsync(trackedJob, projection, cancellationToken);
+            return;
         }
+        if (ticket.Status is DeploymentQueueTicketStatus.Failed or DeploymentQueueTicketStatus.Cancelled)
+            throw new ApiOperationTerminalException(
+                ticket.Status == DeploymentQueueTicketStatus.Cancelled ? "operation_cancelled" : "operation_failed",
+                ticket.Status == DeploymentQueueTicketStatus.Cancelled
+                    ? "TeamLab 部署已取消。"
+                    : "TeamLab 部署失败，请使用 operation ID 查看管理员诊断。");
+        throw new ApiOperationDeferredException(stage, "deployment_in_progress",
+            "TeamLab 运行任务仍在执行。", TimeSpan.FromSeconds(1));
     }
 
     private TeamLabRuntimeOperationPayload ReadPayload(TeamLabRuntimeOperationJob job)

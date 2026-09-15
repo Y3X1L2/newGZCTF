@@ -13,7 +13,8 @@ public sealed class TeamLabTrafficPathCorrelator(
     AppDbContext context,
     IDistributedLeaseProvider locks,
     TeamLabEventRecorder eventRecorder,
-    ILogger<TeamLabTrafficPathCorrelator> logger)
+    ILogger<TeamLabTrafficPathCorrelator> logger,
+    IServiceScopeFactory? scopeFactory = null)
 {
     private const int BatchSize = 500;
     private static readonly TimeSpan PacketWindow = TimeSpan.FromSeconds(5);
@@ -44,19 +45,41 @@ public sealed class TeamLabTrafficPathCorrelator(
         var sources = sourceRows
             .Select(source => new CorrelationSource(source.RuntimeId, source.Generation))
             .ToArray();
+        if (sources.Length == 0) return 0;
 
         var created = 0;
-        foreach (var source in sources)
+        if (scopeFactory is null)
+        {
+            foreach (var source in sources)
+            {
+                try
+                {
+                    created += await CorrelateSourceAsync(source, cancellationToken);
+                }
+                catch (TimeoutException)
+                {
+                    // Another application instance owns this correlation lease.
+                }
+            }
+            return created;
+        }
+        await Parallel.ForEachAsync(sources, new ParallelOptions
+        {
+            MaxDegreeOfParallelism = Math.Min(8, sources.Length),
+            CancellationToken = cancellationToken
+        }, async (source, token) =>
         {
             try
             {
-                created += await CorrelateSourceAsync(source, cancellationToken);
+                await using var scope = scopeFactory.CreateAsyncScope();
+                var correlator = scope.ServiceProvider.GetRequiredService<TeamLabTrafficPathCorrelator>();
+                Interlocked.Add(ref created, await correlator.CorrelateSourceAsync(source, token));
             }
             catch (TimeoutException)
             {
                 // Another application instance owns this correlation lease.
             }
-        }
+        });
         return created;
     }
 

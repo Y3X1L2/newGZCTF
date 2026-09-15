@@ -11,6 +11,16 @@ namespace GZCTF.Agent.Services.TeamLab;
 
 internal static class SftpAssetFileStore
 {
+    internal static Task DownloadToAsync(string address, TeamLabVmFileRequest request, Stream destination,
+        long maxBytes, TimeSpan idleTimeout, CancellationToken token) =>
+        ExecuteTransferAsync(address, request, idleTimeout,
+            (client, ct) => DownloadConnectedAsync(client, request.Path, destination, maxBytes, idleTimeout, ct), token);
+
+    internal static Task UploadFromAsync(string address, TeamLabVmFileRequest request, Stream source,
+        long contentLength, long maxBytes, TimeSpan idleTimeout, CancellationToken token) =>
+        ExecuteTransferAsync(address, request, idleTimeout,
+            (client, ct) => UploadConnectedAsync(client, request, source, contentLength, maxBytes, idleTimeout, ct), token);
+
     internal static async Task<TeamLabFileResult> ExecuteAsync(string address, TeamLabVmFileRequest request, CancellationToken token)
     {
         if (!TeamLabFileLimits.IsValidPath(request.Path) || request.Port is < 1 or > 65535 ||
@@ -76,17 +86,9 @@ internal static class SftpAssetFileStore
             }
             if (request.Operation == "download")
             {
-                if (attributes is not { IsRegularFile: true } || attributes.Size > TeamLabFileLimits.MaxBytes)
-                    throw Failure("files.unavailable", "只能下载不超过 8 MiB 的普通文件。");
-                await using var input = await client.OpenAsync(path, FileMode.Open, FileAccess.Read, token);
                 using var output = new MemoryStream();
-                var buffer = new byte[64 * 1024];
-                int count;
-                while ((count = await input.ReadAsync(buffer, token)) > 0)
-                {
-                    if (output.Length + count > TeamLabFileLimits.MaxBytes) throw Failure("files.too_large", "文件超过 8 MiB。");
-                    output.Write(buffer, 0, count);
-                }
+                await DownloadConnectedAsync(client, path, output, TeamLabFileLimits.MaxBytes,
+                    TimeSpan.FromSeconds(30), token);
                 return new(Content: output.ToArray(), HostKeySha256: fingerprint);
             }
             if (request.Operation == "delete")
@@ -97,51 +99,10 @@ internal static class SftpAssetFileStore
                 else throw Failure("files.unavailable", "只能删除普通文件或空目录。");
                 return new(HostKeySha256: fingerprint);
             }
-            if (request.Content is null || exists && (!request.Overwrite || attributes?.IsRegularFile != true))
-                throw Failure("files.destination_exists", "目标已存在；仅在确认后覆盖普通文件。");
-            var parent = path[..(path.LastIndexOf('/') + 1)];
-            var staging = parent + TeamLabFileLimits.StagingDirectory;
-            if (!await client.ExistsAsync(staging, token))
-            {
-                await client.CreateDirectoryAsync(staging, token);
-                client.ChangePermissions(staging, 700); // SSH.NET accepts octal digits, not raw POSIX mode bits.
-            }
-            var stagingAttributes = await client.GetAttributesAsync(staging, token);
-            if (!stagingAttributes.IsDirectory || stagingAttributes.IsSymbolicLink) throw Failure("files.restricted", "上传暂存目录无效。");
-            await CleanupStagingAsync(client, parent, token);
-            var temporary = staging + "/" + Guid.NewGuid().ToString("N");
-            try
-            {
-                await using (var output = await client.OpenAsync(temporary, FileMode.CreateNew, FileAccess.Write, token))
-                    await output.WriteAsync(request.Content, token);
-                if (attributes is not null)
-                {
-                    var updated = await client.GetAttributesAsync(temporary, token);
-                    updated.UserId = attributes.UserId;
-                    updated.GroupId = attributes.GroupId;
-                    updated.OwnerCanRead = attributes.OwnerCanRead; updated.OwnerCanWrite = attributes.OwnerCanWrite; updated.OwnerCanExecute = attributes.OwnerCanExecute;
-                    updated.GroupCanRead = attributes.GroupCanRead; updated.GroupCanWrite = attributes.GroupCanWrite; updated.GroupCanExecute = attributes.GroupCanExecute;
-                    updated.OthersCanRead = attributes.OthersCanRead; updated.OthersCanWrite = attributes.OthersCanWrite; updated.OthersCanExecute = attributes.OthersCanExecute;
-                    client.SetAttributes(temporary, updated);
-                }
-                token.ThrowIfCancellationRequested();
-                if (request.Overwrite) client.RenameFile(temporary, path, isPosix: true);
-                else await client.RenameFileAsync(temporary, path, token);
-            }
-            finally
-            {
-                using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                try
-                {
-                    if (client.IsConnected && await client.ExistsAsync(temporary, cleanup.Token)) await client.DeleteFileAsync(temporary, cleanup.Token);
-                    if (client.IsConnected)
-                    {
-                        try { await client.DeleteDirectoryAsync(staging, cleanup.Token); }
-                        catch (SshException) { /* A nonempty staging directory is retained for later cleanup. */ }
-                    }
-                }
-                catch (Exception) when (!client.IsConnected || cleanup.IsCancellationRequested) { }
-            }
+            if (request.Content is null) throw Failure("files.invalid_request", "上传内容不能为空。");
+            await using var upload = new MemoryStream(request.Content, writable: false);
+            await UploadConnectedAsync(client, request, upload, request.Content.LongLength,
+                TeamLabFileLimits.MaxBytes, TimeSpan.FromSeconds(30), token);
             return new(HostKeySha256: fingerprint);
         }
         catch (SshException) when (fingerprint is not null && request.HostKeySha256 is not null && fingerprint != request.HostKeySha256)
@@ -150,6 +111,111 @@ internal static class SftpAssetFileStore
         catch (SftpPathNotFoundException) { throw Failure("files.not_found", "未找到文件或目录。"); }
         catch (SftpPermissionDeniedException) { throw Failure("files.permission_denied", "SSH 账号没有操作此路径的权限。"); }
         catch (SshException) { throw Failure("files.sftp_failed", "SFTP 操作失败，请检查目录权限、目标文件和虚拟机 SSH 服务。"); }
+    }
+
+    static async Task ExecuteTransferAsync(string address, TeamLabVmFileRequest request, TimeSpan idleTimeout,
+        Func<SftpClient, CancellationToken, Task> operation, CancellationToken token)
+    {
+        if (!TeamLabFileLimits.IsValidPath(request.Path) || request.Port is < 1 or > 65535 ||
+            string.IsNullOrWhiteSpace(request.Username) || request.Credential.Length is 0 or > 8192 ||
+            request.HostKeySha256 is null)
+            throw Failure("files.invalid_request", "SFTP 请求无效。");
+        using var key = request.Credential.StartsWith("-----BEGIN", StringComparison.Ordinal)
+            ? new PrivateKeyFile(new MemoryStream(Encoding.UTF8.GetBytes(request.Credential))) : null;
+        AuthenticationMethod authentication = key is null
+            ? new PasswordAuthenticationMethod(request.Username, request.Credential)
+            : new PrivateKeyAuthenticationMethod(request.Username, key);
+        var connection = new Renci.SshNet.ConnectionInfo(address, request.Port, request.Username, authentication)
+            { Timeout = TimeSpan.FromSeconds(10) };
+        using var client = new SftpClient(connection) { OperationTimeout = idleTimeout };
+        string? fingerprint = null;
+        client.HostKeyReceived += (_, args) =>
+        {
+            fingerprint = "SHA256:" + Convert.ToBase64String(SHA256.HashData(args.HostKey)).TrimEnd('=');
+            args.CanTrust = request.HostKeySha256 == fingerprint;
+        };
+        try
+        {
+            await client.ConnectAsync(token);
+            await operation(client, token);
+        }
+        catch (SshException) when (fingerprint is not null && fingerprint != request.HostKeySha256)
+        { throw Failure("files.host_key_changed", "虚拟机 SSH 身份已变化，文件连接已停止；请核对虚拟机是否在平台外被替换。"); }
+        catch (SshAuthenticationException) { throw Failure("files.authentication_failed", "SSH 运维账号认证失败，请在镜像模板中更新账号配置。"); }
+        catch (SftpPathNotFoundException) { throw Failure("files.not_found", "未找到文件或目录。"); }
+        catch (SftpPermissionDeniedException) { throw Failure("files.permission_denied", "SSH 账号没有操作此路径的权限。"); }
+        catch (SshException) { throw Failure("files.sftp_failed", "SFTP 操作失败，请检查目录权限、目标文件和虚拟机 SSH 服务。"); }
+    }
+
+    static async Task DownloadConnectedAsync(SftpClient client, string path, Stream destination,
+        long maxBytes, TimeSpan idleTimeout, CancellationToken token)
+    {
+        path = path.TrimEnd('/');
+        if (path.Length == 0) path = "/";
+        if (!await client.ExistsAsync(path, token)) throw Failure("files.not_found", "未找到文件或目录。");
+        var attributes = await client.GetAttributesAsync(path, token);
+        if (!attributes.IsRegularFile || attributes.IsSymbolicLink || attributes.Size > maxBytes)
+            throw Failure("files.too_large", "只能下载传输上限内的普通文件。");
+        await using var input = await client.OpenAsync(path, FileMode.Open, FileAccess.Read, token);
+        await TeamLabFileLimits.CopyAsync(input, destination, maxBytes, idleTimeout, token);
+    }
+
+    static async Task UploadConnectedAsync(SftpClient client, TeamLabVmFileRequest request, Stream source,
+        long contentLength, long maxBytes, TimeSpan idleTimeout, CancellationToken token)
+    {
+        if (contentLength < 0 || contentLength > maxBytes) throw Failure("files.too_large", "文件超过传输上限。");
+        var path = request.Path.TrimEnd('/');
+        if (path.Length == 0) throw Failure("files.invalid_path", "不能替换文件系统根目录。");
+        var exists = await client.ExistsAsync(path, token);
+        var attributes = exists ? await client.GetAttributesAsync(path, token) : null;
+        if (attributes?.IsSymbolicLink == true) throw Failure("files.restricted", "文件操作不跟随符号链接。");
+        if (exists && (!request.Overwrite || attributes?.IsRegularFile != true))
+            throw Failure("files.destination_exists", "目标已存在；仅在确认后覆盖普通文件。");
+        var parent = path[..(path.LastIndexOf('/') + 1)];
+        var staging = parent + TeamLabFileLimits.StagingDirectory;
+        if (!await client.ExistsAsync(staging, token))
+        {
+            await client.CreateDirectoryAsync(staging, token);
+            client.ChangePermissions(staging, 700);
+        }
+        var stagingAttributes = await client.GetAttributesAsync(staging, token);
+        if (!stagingAttributes.IsDirectory || stagingAttributes.IsSymbolicLink)
+            throw Failure("files.restricted", "上传暂存目录无效。");
+        await CleanupStagingAsync(client, parent, token);
+        var temporary = staging + "/" + Guid.NewGuid().ToString("N");
+        try
+        {
+            await using (var output = await client.OpenAsync(temporary, FileMode.CreateNew, FileAccess.Write, token))
+                await TeamLabFileLimits.CopyAsync(source, output, maxBytes, idleTimeout, token);
+            if (attributes is not null)
+            {
+                var updated = await client.GetAttributesAsync(temporary, token);
+                updated.UserId = attributes.UserId;
+                updated.GroupId = attributes.GroupId;
+                updated.OwnerCanRead = attributes.OwnerCanRead; updated.OwnerCanWrite = attributes.OwnerCanWrite; updated.OwnerCanExecute = attributes.OwnerCanExecute;
+                updated.GroupCanRead = attributes.GroupCanRead; updated.GroupCanWrite = attributes.GroupCanWrite; updated.GroupCanExecute = attributes.GroupCanExecute;
+                updated.OthersCanRead = attributes.OthersCanRead; updated.OthersCanWrite = attributes.OthersCanWrite; updated.OthersCanExecute = attributes.OthersCanExecute;
+                client.SetAttributes(temporary, updated);
+            }
+            token.ThrowIfCancellationRequested();
+            if (request.Overwrite) client.RenameFile(temporary, path, isPosix: true);
+            else await client.RenameFileAsync(temporary, path, token);
+        }
+        finally
+        {
+            using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            try
+            {
+                if (client.IsConnected && await client.ExistsAsync(temporary, cleanup.Token))
+                    await client.DeleteFileAsync(temporary, cleanup.Token);
+                if (client.IsConnected)
+                {
+                    try { await client.DeleteDirectoryAsync(staging, cleanup.Token); }
+                    catch (SshException) { }
+                }
+            }
+            catch (Exception) when (!client.IsConnected || cleanup.IsCancellationRequested) { }
+        }
     }
 
     static async Task DeleteTreeAsync(SftpClient client, string path, CancellationToken token)

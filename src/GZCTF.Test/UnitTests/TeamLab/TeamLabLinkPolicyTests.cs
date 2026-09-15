@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Net.Http;
 using System.Text.Json;
 using System.Threading;
@@ -76,18 +78,20 @@ public sealed class TeamLabLinkPolicyTests
         });
         await context.SaveChangesAsync();
         var dispatcher = new Mock<ITeamLabLinkPolicyDispatcher>();
-        dispatcher.Setup(item => item.ApplyAsync(
-                runtime, "office-net", It.IsAny<string>(), "latency", It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new TeamLabLinkPolicyDispatchResult(true, "applied"));
+        dispatcher.Setup(item => item.ApplyBatchAsync(
+                runtime, "office-net", It.IsAny<IReadOnlyList<string>>(), "latency", It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync((TeamLabRuntime _, string _, IReadOnlyList<string> assets, string _, string _,
+                CancellationToken _) => Results(assets, true, "applied"));
 
         var result = await new TeamLabLinkPolicyService(context, dispatcher.Object)
             .ApplyAsync(Command(runtime.PublicId, "latency", """{"delayMillis":10}"""), default);
 
         Assert.Equal("active", result.Status);
-        dispatcher.Verify(item => item.ApplyAsync(
-            runtime, "office-net", "plc-1", "latency", It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
-        dispatcher.Verify(item => item.ApplyAsync(
-            runtime, "office-net", "hmi-1", "latency", It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
+        dispatcher.Verify(item => item.ApplyBatchAsync(
+            runtime, "office-net", It.Is<IReadOnlyList<string>>(assets =>
+                assets.SequenceEqual(new[] { "plc-1", "hmi-1" })), "latency", It.IsAny<string>(),
+            It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -102,22 +106,27 @@ public sealed class TeamLabLinkPolicyTests
         });
         await context.SaveChangesAsync();
         var dispatcher = new Mock<ITeamLabLinkPolicyDispatcher>();
-        dispatcher.Setup(item => item.ApplyAsync(
-                runtime, "office-net", "plc-1", "latency", It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new TeamLabLinkPolicyDispatchResult(true, "applied"));
-        dispatcher.Setup(item => item.ApplyAsync(
-                runtime, "office-net", "hmi-1", "latency", It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new TeamLabLinkPolicyDispatchResult(false, "agent failed"));
-        dispatcher.Setup(item => item.RecoverAsync(
-                runtime, "office-net", "plc-1", "latency", It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new TeamLabLinkPolicyDispatchResult(true, "recovered"));
+        dispatcher.Setup(item => item.ApplyBatchAsync(
+                runtime, "office-net", It.IsAny<IReadOnlyList<string>>(), "latency", It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Dictionary<string, TeamLabLinkPolicyDispatchResult>(StringComparer.Ordinal)
+            {
+                ["plc-1"] = new(true, "applied"),
+                ["hmi-1"] = new(false, "agent failed")
+            });
+        dispatcher.Setup(item => item.RecoverBatchAsync(
+                runtime, "office-net", It.IsAny<IReadOnlyList<string>>(), "latency", It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync((TeamLabRuntime _, string _, IReadOnlyList<string> assets, string _, string _,
+                CancellationToken _) => Results(assets, true, "recovered"));
 
         var result = await new TeamLabLinkPolicyService(context, dispatcher.Object)
             .ApplyAsync(Command(runtime.PublicId, "latency", """{"delayMillis":10}"""), default);
 
         Assert.Equal("failed", result.Status);
-        dispatcher.Verify(item => item.RecoverAsync(
-            runtime, "office-net", "plc-1", "latency", It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
+        dispatcher.Verify(item => item.RecoverBatchAsync(
+            runtime, "office-net", It.Is<IReadOnlyList<string>>(assets => assets.SequenceEqual(new[] { "plc-1" })),
+            "latency", It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -159,18 +168,28 @@ public sealed class TeamLabLinkPolicyTests
     private static TeamLabLinkPolicyService CreateService(AppDbContext context, bool applySucceeds = true)
     {
         var dispatcher = new Mock<ITeamLabLinkPolicyDispatcher>();
-        dispatcher.Setup(item => item.ApplyAsync(
-                It.IsAny<TeamLabRuntime>(), It.IsAny<string>(), It.IsAny<string>(),
+        dispatcher.Setup(item => item.ApplyBatchAsync(
+                It.IsAny<TeamLabRuntime>(), It.IsAny<string>(), It.IsAny<IReadOnlyList<string>>(),
                 It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new TeamLabLinkPolicyDispatchResult(
-                applySucceeds, applySucceeds ? "applied" : "agent failed"));
-        dispatcher.Setup(item => item.RecoverAsync(
-                It.IsAny<TeamLabRuntime>(), It.IsAny<string>(), It.IsAny<string>(),
+            .ReturnsAsync((TeamLabRuntime _, string _, IReadOnlyList<string> assets, string _, string _,
+                CancellationToken _) => Results(assets, applySucceeds,
+                applySucceeds ? "applied" : "agent failed"));
+        dispatcher.Setup(item => item.RecoverBatchAsync(
+                It.IsAny<TeamLabRuntime>(), It.IsAny<string>(), It.IsAny<IReadOnlyList<string>>(),
                 It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new TeamLabLinkPolicyDispatchResult(
-                applySucceeds, applySucceeds ? "recovered" : "agent failed"));
+            .ReturnsAsync((TeamLabRuntime _, string _, IReadOnlyList<string> assets, string _, string? _,
+                CancellationToken _) => Results(assets, applySucceeds,
+                applySucceeds ? "recovered" : "agent failed"));
         return new TeamLabLinkPolicyService(context, dispatcher.Object);
     }
+
+    private static IReadOnlyDictionary<string, TeamLabLinkPolicyDispatchResult> Results(
+        IReadOnlyList<string> assets,
+        bool success,
+        string message) => assets.ToDictionary(
+        asset => asset,
+        _ => new TeamLabLinkPolicyDispatchResult(success, message),
+        StringComparer.Ordinal);
 
     private static async Task<TeamLabRuntime> AddRuntimeAsync(AppDbContext context)
     {

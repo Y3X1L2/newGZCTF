@@ -1284,6 +1284,8 @@ public partial class AppDbContext(DbContextOptions<AppDbContext> options) :
                 .HasConversion<byte>();
 
             entity.HasIndex(e => new { e.RuntimeId, e.Generation, e.Kind, e.TopologyKey });
+            entity.HasIndex(e => new { e.RuntimeId, e.Generation, e.Status, e.Id })
+                .HasDatabaseName("IX_TeamLabRuntimeAssets_Runtime_Generation_Status_Id");
             entity.HasIndex(e => e.DevicePackageId);
             entity.HasIndex(e => e.AgentOperationId)
                 .IsUnique()

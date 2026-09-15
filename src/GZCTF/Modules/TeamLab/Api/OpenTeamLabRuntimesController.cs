@@ -89,6 +89,37 @@ public sealed class OpenTeamLabRuntimesController(
         return (await runtimes.GetAsync(runtimeId, cancellationToken)).ToOpen();
     }
 
+    [HttpGet("{runtimeId:guid}/status")]
+    [OpenApiOperation("查询运行状态", "返回适合轮询的运行阶段、当前任务和资产状态汇总，不传输完整拓扑。")]
+    [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabRuntimesRead)]
+    [ProducesResponseType(typeof(OpenTeamLabRuntimeStatusModel), StatusCodes.Status200OK)]
+    public async Task<OpenTeamLabRuntimeStatusModel> Status(
+        Guid runtimeId,
+        CancellationToken cancellationToken)
+    {
+        var actor = Actor();
+        Response.Headers.CacheControl = "no-store";
+        return await discovery.GetRuntimeStatusAsync(
+            runtimeId, actor.TokenId, IsAdministrator(), cancellationToken);
+    }
+
+    [HttpGet("{runtimeId:guid}/assets")]
+    [OpenApiOperation("列出运行资产", "按游标分页返回当前代容器和虚拟机资产，可按状态筛选。")]
+    [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabRuntimesRead)]
+    [ProducesResponseType(typeof(OpenTeamLabRuntimeAssetPageModel), StatusCodes.Status200OK)]
+    public async Task<OpenTeamLabRuntimeAssetPageModel> Assets(
+        Guid runtimeId,
+        [FromQuery] string? cursor = null,
+        [FromQuery, Range(1, 100)] int limit = 50,
+        [FromQuery] TeamLabRuntimeStatus? status = null,
+        CancellationToken cancellationToken = default)
+    {
+        var actor = Actor();
+        Response.Headers.CacheControl = "no-store";
+        return await discovery.ListRuntimeAssetsAsync(
+            runtimeId, actor.TokenId, IsAdministrator(), cursor, limit, status, cancellationToken);
+    }
+
     [HttpPost("{runtimeId:guid}/reset")]
     [OpenApiOperation("重置运行时", "按运行时的发布版本与可选覆盖配置提交受控清理并重新部署。")]
     [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabRuntimesWrite)]

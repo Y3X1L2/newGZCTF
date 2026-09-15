@@ -131,6 +131,29 @@ public sealed record OpenTeamLabRuntimePageModel(
     IReadOnlyList<OpenTeamLabRuntimeSummaryModel> Items,
     string? NextCursor);
 
+public sealed record OpenTeamLabRuntimeAssetSummaryModel(
+    int Total,
+    int Pending,
+    int Running,
+    int Paused,
+    int Stopped,
+    int Failed);
+
+public sealed record OpenTeamLabRuntimeStatusModel(
+    Guid Id,
+    int Generation,
+    TeamLabRuntimeStatus Status,
+    string Stage,
+    Guid? DeploymentQueueTicketId,
+    DeploymentQueueTicketStatus? QueueStatus,
+    string? QueueStage,
+    DateTimeOffset? UpdatedAt,
+    OpenTeamLabRuntimeAssetSummaryModel Assets);
+
+public sealed record OpenTeamLabRuntimeAssetPageModel(
+    IReadOnlyList<OpenTeamLabRuntimeAssetModel> Items,
+    string? NextCursor);
+
 public sealed record OpenTeamLabAccessGrantMetadataModel(
     Guid Id,
     int Generation,

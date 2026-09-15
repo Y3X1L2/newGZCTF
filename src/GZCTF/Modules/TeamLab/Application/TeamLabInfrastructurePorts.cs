@@ -37,6 +37,36 @@ public interface ITeamLabLinkPolicyDispatcher
         string kind,
         string? parameters,
         CancellationToken cancellationToken);
+
+    async Task<IReadOnlyDictionary<string, TeamLabLinkPolicyDispatchResult>> ApplyBatchAsync(
+        Domain.Runtime.TeamLabRuntime runtime,
+        string networkKey,
+        IReadOnlyList<string> assetKeys,
+        string kind,
+        string parameters,
+        CancellationToken cancellationToken)
+    {
+        var results = new Dictionary<string, TeamLabLinkPolicyDispatchResult>(StringComparer.Ordinal);
+        foreach (var assetKey in assetKeys)
+            results[assetKey] = await ApplyAsync(
+                runtime, networkKey, assetKey, kind, parameters, cancellationToken);
+        return results;
+    }
+
+    async Task<IReadOnlyDictionary<string, TeamLabLinkPolicyDispatchResult>> RecoverBatchAsync(
+        Domain.Runtime.TeamLabRuntime runtime,
+        string networkKey,
+        IReadOnlyList<string> assetKeys,
+        string kind,
+        string? parameters,
+        CancellationToken cancellationToken)
+    {
+        var results = new Dictionary<string, TeamLabLinkPolicyDispatchResult>(StringComparer.Ordinal);
+        foreach (var assetKey in assetKeys)
+            results[assetKey] = await RecoverAsync(
+                runtime, networkKey, assetKey, kind, parameters, cancellationToken);
+        return results;
+    }
 }
 
 public sealed record TeamLabLinkPolicyDispatchResult(bool Success, string Message);

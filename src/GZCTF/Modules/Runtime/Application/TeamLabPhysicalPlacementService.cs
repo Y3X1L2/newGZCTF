@@ -51,17 +51,17 @@ public sealed class TeamLabPhysicalPlacementService(
             "teamlab.placement", ActivityKind.Internal);
         activity?.SetTag("gzctf.deployment_ticket_id", ticketId.ToString());
         activity?.SetTag("gzctf.teamlab_runtime_id", runtimeId);
-        await using var lease = await leaseProvider.AcquireAsync("fleet:scheduler", TimeSpan.FromSeconds(10),
-            cancellationToken: token);
-        using var linked = CancellationTokenSource.CreateLinkedTokenSource(token, lease.LeaseLost);
-        token = linked.Token;
-
         var existingReservations = await context.FleetCapacityReservations.AsNoTracking()
             .Where(item => item.DeploymentQueueTicketId == ticketId &&
                            item.Status == CapacityReservationStatus.Active)
             .ToArrayAsync(token);
+        var requestToken = token;
         if (existingReservations.Length > 0)
         {
+            await using var existingLease = await leaseProvider.AcquireAsync(
+                "fleet:scheduler", TimeSpan.FromSeconds(10), cancellationToken: token);
+            using var existingLinked = CancellationTokenSource.CreateLinkedTokenSource(token, existingLease.LeaseLost);
+            token = existingLinked.Token;
             var existingRuntime = await context.TeamLabRuntimes
                 .Include(item => item.Shards)
                 .Include(item => item.Networks)
@@ -102,6 +102,7 @@ public sealed class TeamLabPhysicalPlacementService(
             }
             await context.SaveChangesAsync(token);
         }
+        token = requestToken;
 
         var runtime = await context.TeamLabRuntimes
             .Include(item => item.Shards)
@@ -183,6 +184,10 @@ public sealed class TeamLabPhysicalPlacementService(
                     $"single_network_capacity_exceeded: placement group '{oversized.Key}' exceeds every eligible node.");
         }
 
+        await using var lease = await leaseProvider.AcquireAsync(
+            "fleet:scheduler", TimeSpan.FromSeconds(10), cancellationToken: token);
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(token, lease.LeaseLost);
+        token = linked.Token;
         var revalidationCandidates = ApplyCompletedGenerationCredits(runtime, await snapshots.LoadAsync(token));
         if (!RevalidateAssignment(
                 assignment, groups, revalidationCandidates, ignoreDynamicLoad: reusedPreviousPlacement))

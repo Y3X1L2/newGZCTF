@@ -44,6 +44,22 @@ public sealed class TeamLabSftpFileTests
         var replaced = Encoding.UTF8.GetBytes("updated");
         await SftpAssetFileStore.ExecuteAsync(server.Hostname, request with { Operation = "upload", Path = path, Content = replaced, Overwrite = true }, default);
         Assert.Equal(replaced, (await SftpAssetFileStore.ExecuteAsync(server.Hostname, request with { Operation = "download", Path = path }, default)).Content);
+        var streamedPath = "/home/qa/streamed.bin";
+        var streamed = new byte[TeamLabFileLimits.MaxBytes + 1024];
+        RandomNumberGenerator.Fill(streamed);
+        await using (var source = new MemoryStream(streamed, writable: false))
+            await SftpAssetFileStore.UploadFromAsync(server.Hostname,
+                request with { Operation = "upload", Path = streamedPath }, source, streamed.LongLength,
+                TeamLabFileLimits.DefaultMaxTransferBytes, TimeSpan.FromSeconds(30), default);
+        await using (var destination = new MemoryStream())
+        {
+            await SftpAssetFileStore.DownloadToAsync(server.Hostname,
+                request with { Operation = "download", Path = streamedPath }, destination,
+                TeamLabFileLimits.DefaultMaxTransferBytes, TimeSpan.FromSeconds(30), default);
+            Assert.Equal(streamed, destination.ToArray());
+        }
+        await SftpAssetFileStore.ExecuteAsync(server.Hostname,
+            request with { Operation = "delete", Path = streamedPath }, default);
         await Assert.ThrowsAsync<AgentOperationException>(() => SftpAssetFileStore.ExecuteAsync(server.Hostname,
             request with { Operation = "list", HostKeySha256 = "SHA256:" + new string('x', 43) }, default));
         await SftpAssetFileStore.ExecuteAsync(server.Hostname, request with { Operation = "delete", Path = path }, default);
