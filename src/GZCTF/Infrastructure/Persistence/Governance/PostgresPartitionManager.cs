@@ -149,9 +149,9 @@ public sealed partial class PostgresPartitionManager(
         command.CommandText = $"""
             SELECT EXISTS (
                 SELECT 1
-                FROM \"{partition.Name}\" flow
-                JOIN \"TeamLabRuntimes\" runtime ON runtime.\"Id\" = flow.\"RuntimeId\"
-                WHERE runtime.\"Status\" NOT IN (6, 8, 10)
+                FROM "{partition.Name}" flow
+                JOIN "TeamLabRuntimes" runtime ON runtime."Id" = flow."RuntimeId"
+                WHERE runtime."Status" NOT IN (6, 8, 10)
             )
             """;
         command.Transaction = context.Database.CurrentTransaction?.GetDbTransaction();

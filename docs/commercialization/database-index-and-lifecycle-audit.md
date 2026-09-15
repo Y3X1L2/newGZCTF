@@ -6,6 +6,8 @@
 
 事实来源：当前源码、PostgreSQL migration 与真实查询计划
 
+2026-09-15 源码复核：存储规模、结构耦合、复用边界和分阶段改进见[数据库演进审查](database-storage-and-evolution-review.md)。本页默认值以 `DataRetentionOptions` 为准，运行环境覆盖值需单独核验。
+
 ## 1. 审计规则
 
 1. PostgreSQL 是业务事实、部署状态、API operation 和可恢复状态的唯一来源。
@@ -31,7 +33,7 @@
 | ImageDistributionRecord | 模板/节点当前状态 | unique `(ImageTemplateId, WorkerNodeId)`；`(WorkerNodeId, Status, LastCheckedAt)` | current fact |
 | ImageDistributionReference | 业务引用 | unique `(DistributionRecordId, Kind, ResourceId)`；`(Kind, ResourceId)` | owner managed |
 | TeamLabEvent | runtime/generation 时间线 | `(RuntimeId, Generation, CreatedAt DESC, Id DESC)` | terminal runtime 180 days |
-| TeamLabTrafficFlow | runtime/generation/window/网络查询 | 时间分区；`(RuntimeId, Generation, CapturedAt DESC, Id DESC)`；window 内 fingerprint unique | raw 7 days |
+| TeamLabTrafficFlow | runtime/generation/window/网络查询 | 时间分区；`(RuntimeId, Generation, CapturedAt DESC, Id DESC)`；window 内 fingerprint unique | raw 30 days |
 | TeamLabTrafficFlowAggregate | runtime/network/协议趋势 | unique 完整聚合维度；`(RuntimeId, Generation, BucketStart)` | 180 days |
 | WorkerNodeMetricSample | 节点分钟级容量趋势 | unique `(WorkerNodeId, WindowStart)`；`(WindowStart, WorkerNodeId)` | 180 days |
 | LogModel | 时间/级别/logger | 月分区；`(TimeUtc DESC, Id DESC)`；`(Level, TimeUtc DESC, Id DESC)` | raw 30 days |
@@ -43,7 +45,12 @@
 | 数据集 | 原始保留 | 聚合保留 | 清理前置条件 | 清理动作 |
 | --- | ---: | ---: | --- | --- |
 | system-log | 30 天 | 180 天 | 小时聚合已校验 | drop 完整月分区或批量删除 |
-| teamlab-flow | 7 天 | 180 天 | 5 分钟聚合已校验且 runtime window 关闭 | drop 完整日分区 |
+| teamlab-flow | 30 天 | 180 天 | 5 分钟聚合已校验且 runtime window 关闭 | drop 完整日分区 |
+| teamlab-flow-aggregate | 180 天 | 不聚合 | 按 BucketStart 到期 | SKIP LOCKED 分批删除 |
+| teamlab-observation | 7 天 | 不聚合 | 按 ObservedAt 到期 | SKIP LOCKED 分批删除 |
+| teamlab-traffic-path | 30 天 | 不聚合 | 按 EndedAt 到期 | SKIP LOCKED 分批删除 |
+| teamlab-capture | 7 天 | 不聚合 | CaptureJob.ExpiresAt 到期 | 标记 CleanupPending，协调 WorkerNode 删除文件 |
+| operational-event | 180 天 | 不聚合 | 按 OccurredAt 到期 | SKIP LOCKED 分批删除 |
 | deployment-ticket | 180 天 | 365 天日聚合 | terminal、无 active operation 引用 | SKIP LOCKED 分批删除 |
 | api-operation | 90 天 | 不聚合 | terminal、超出幂等恢复窗口、无运行 job | SKIP LOCKED 分批删除 |
 | teamlab-event | 180 天 | 不聚合 | runtime terminal 且事件不属于当前 generation 排障窗口 | SKIP LOCKED 分批删除 |
@@ -51,6 +58,8 @@
 | worker-node-metric | 180 天 | 不聚合 | 已持久化分钟样本 | SKIP LOCKED 分批删除 |
 
 上述值是可配置默认值，不是硬编码业务常量。任何缩短必须先完成备份/合规确认并记录配置变更审计。
+
+清理执行限制：多数历史表每周期只处理一批，默认 1,000 行、周期 60 分钟。完整月/日分区、引用保护和 runtime/generation 条件可能延长实际留存；默认天数不保证所有到期行立即删除。capture 标记完成不等于节点文件已回收。system-log 聚合 180 天和 deployment-ticket 聚合 365 天目前在 policy catalog 中固定，未提供同名 options 配置项。
 
 ## 4. 分区约束
 

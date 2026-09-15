@@ -104,9 +104,10 @@ H03 最新专项（2026-09-08）：真实 OVN/OVS＋QEMU Linux 来宾＋namespac
 
 ## 4. 未解决事项
 
-- **数据保留 SQL**：`teamlab-flow` 分区清理存在 PostgreSQL `42601` 语法错误，最近核验仍按小时发生；需要独立修复及定向回归，不能用删除生产数据绕过。
+- **数据保留 SQL**：`teamlab-flow` 分区清理的 `42601` 已在 `codex/database-maintainability-review` 定位为 C# 原始 SQL 字符串多余反斜杠，并提交源码修复；PostgreSQL 定向集成 4/4 通过。尚未部署，不能将生产最近核验的按小时失败视为已恢复。验证结果见[数据库审查交接](handoffs/2026-09-15-database-maintainability-review.md)。
+- **数据库增长与演进**：已形成[源码审查与路线](../commercialization/database-storage-and-evolution-review.md)及只读容量脚本；基线快照映射 152 张逻辑表，不代表当前运行库表数或体积。单周期单批清理吞吐、空流量聚合窗口重复扫描、Blob GC 和模块写入边界仍需后续治理；本次未现场采集容量。
 - **指标并发**：2026-09-08 观察到一次指标持久化 `DbUpdateConcurrencyException`，后续心跳/指标恢复；仍需并发和失败批次重试回归，不能将自动恢复等同于根因已修复。
-- **迁移来源**：`20260604165857_AddTheoryExamEntities`、`20260604193010_SyncTheoryExam` 的来源仍未恢复，导致 134 条数据库历史与 132 条可发现迁移存在差异。另有 `20260802023000_RemoveDestroyedTeamLabUdpMappings.cs` 缺少迁移元数据，不能按源码文件数认定 bundle 会执行。禁止伪造或删除历史；后续迁移须在新鲜生产备份副本验证。详见 [迁移交接](handoffs/2026-09-02-migration-drift-reconciliation.md) 与 [发布核验](handoffs/2026-09-08-pr9-production-rollout.md)。
+- **迁移来源**：`20260604165857_AddTheoryExamEntities`、`20260604193010_SyncTheoryExam` 的来源仍未恢复，9 月 8 日生产核验的 134 条历史与当时 132 条可发现迁移存在差异；本次 `4bef3770` 源码有 138 个迁移 ID，head 为 `20260908111521_TeamLabDeviceObservation`，不代表生产已经升级。另有 `20260802023000_RemoveDestroyedTeamLabUdpMappings.cs` 缺少迁移元数据，不能按源码文件数认定 bundle 会执行。禁止伪造或删除历史；后续迁移须在新鲜生产备份副本验证。详见 [迁移交接](handoffs/2026-09-02-migration-drift-reconciliation.md) 与 [发布核验](handoffs/2026-09-08-pr9-production-rollout.md)。
 - **依赖与存储回收**：SSH.NET 已知依赖风险和 Blob 自动 GC 缺口仍未处理；风险范围见 [PR 审计](handoffs/2026-09-07-pr9-review-merge.md)。
 - **节点一致性与持久性**：远端 Worker Agent 仍为兼容的混合版本；如需统一，应另开维护任务逐节点同步。已安装的 `.31` 网桥恢复机制尚未完成整机重启验收。
 - **自主练习与回退**：核心业务测试已完成并由用户确认；内容运营验收和真实应用回退演练仍未完成。

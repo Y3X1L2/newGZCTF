@@ -314,6 +314,51 @@ public sealed class DatabaseGovernanceMigrationTests : IAsyncLifetime
         Assert.All(await context.DataGovernanceRuns
                 .Where(item => item.Operation == "drop-partition").ToArrayAsync(),
             item => Assert.False(string.IsNullOrWhiteSpace(item.PartitionName)));
+
+        // The flow path also checks runtime windows; log-only coverage never executes that SQL.
+        Assert.Equal(0, (await partitions.DropExpiredPartitionsAsync(
+            "teamlab-flow", partitionCutoff, "phase4-test", CancellationToken.None)).PartitionCount);
+        var flowPartitions = await partitions.GetExpiredPartitionsAsync(
+            "teamlab-flow", partitionCutoff, CancellationToken.None);
+        Assert.Contains(flowPartitions, item => item.Name == "TeamLabTrafficFlows_p20260110");
+        Assert.Contains(flowPartitions, item => item.Name == "TeamLabTrafficFlows_p20260111");
+        foreach (var partition in flowPartitions)
+        {
+            var rows = await context.TeamLabTrafficFlows.LongCountAsync(
+                item => item.CapturedAt >= partition.Lower && item.CapturedAt < partition.Upper);
+            if (rows == 0)
+                continue;
+            context.DataGovernanceRuns.Add(new DataGovernanceRun
+            {
+                DataSet = "teamlab-flow",
+                Operation = "aggregate-partition",
+                Status = DataGovernanceRunStatus.Completed,
+                LeaseOwner = "phase4-test",
+                Cutoff = partition.Upper,
+                RowsRead = rows,
+                PartitionName = partition.Name,
+                CompletedAt = DateTimeOffset.UtcNow
+            });
+        }
+        var runtime = await context.TeamLabRuntimes.SingleAsync(item => item.Id == seed.RuntimeId);
+        runtime.Status = TeamLabRuntimeStatus.Running;
+        await context.SaveChangesAsync();
+        Assert.Equal(0, (await partitions.DropExpiredPartitionsAsync(
+            "teamlab-flow", partitionCutoff, "phase4-test", CancellationToken.None)).PartitionCount);
+        Assert.Equal(2, await context.TeamLabTrafficFlows.CountAsync());
+
+        runtime.Status = TeamLabRuntimeStatus.Destroyed;
+        await context.SaveChangesAsync();
+        var flowDrop = await partitions.DropExpiredPartitionsAsync(
+            "teamlab-flow", partitionCutoff, "phase4-test", CancellationToken.None);
+        Assert.Equal(2, flowDrop.PartitionCount);
+        Assert.Equal(2, flowDrop.RowsDeleted);
+        Assert.Empty(await context.TeamLabTrafficFlows.ToArrayAsync());
+        Assert.Equal(flowDrop.RowsDeleted, await context.DataGovernanceRuns
+            .Where(item => item.DataSet == "teamlab-flow" && item.Operation == "drop-partition")
+            .SumAsync(item => item.RowsDeleted));
+        Assert.Equal(0, (await partitions.DropExpiredPartitionsAsync(
+            "teamlab-flow", partitionCutoff, "phase4-test", CancellationToken.None)).PartitionCount);
     }
 
     private AppDbContext CreateContext()
