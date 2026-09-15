@@ -95,7 +95,6 @@ TeamLabRemoteSessions,GZCTF.Modules.TeamLab.Domain.Runtime.TeamLabRemoteSession,
 TeamLabRolloutTargets,GZCTF.Modules.TeamLab.Domain.TeamLabRolloutTarget,Id
 TeamLabRollouts,GZCTF.Modules.TeamLab.Domain.TeamLabRollout,Id
 TeamLabRuntimeAssets,GZCTF.Modules.TeamLab.Domain.Runtime.TeamLabRuntimeAsset,Id
-TeamLabRuntimeDependencyStates,GZCTF.Modules.TeamLab.Domain.Runtime.TeamLabRuntimeDependencyState,Id
 TeamLabRuntimeInfrastructure,GZCTF.Modules.TeamLab.Domain.Runtime.TeamLabRuntimeInfrastructure,Id
 TeamLabRuntimeInfrastructureFragments,GZCTF.Modules.TeamLab.Domain.Runtime.TeamLabRuntimeInfrastructureFragment,Id
 TeamLabRuntimeNetworks,GZCTF.Modules.TeamLab.Domain.Runtime.TeamLabRuntimeNetwork,Id
@@ -103,6 +102,7 @@ TeamLabRuntimeOperationJobs,GZCTF.Modules.TeamLab.Domain.TeamLabRuntimeOperation
 TeamLabRuntimeSecretEnvelopes,GZCTF.Modules.TeamLab.Domain.Runtime.TeamLabRuntimeSecretEnvelope,Id
 TeamLabRuntimeShards,GZCTF.Modules.TeamLab.Domain.Runtime.TeamLabRuntimeShard,Id
 TeamLabRuntimes,GZCTF.Modules.TeamLab.Domain.Runtime.TeamLabRuntime,Id
+TeamLabServiceAccesses,GZCTF.Modules.TeamLab.Domain.Runtime.TeamLabServiceAccess,Id
 TeamLabTopologies,GZCTF.Modules.TeamLab.Domain.TeamLabTopology,Id
 TeamLabTopologyAssets,GZCTF.Modules.TeamLab.Domain.TeamLabTopologyAsset,Id
 TeamLabTopologyConnections,GZCTF.Modules.TeamLab.Domain.TeamLabTopologyConnection,Id

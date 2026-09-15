@@ -1,8 +1,8 @@
 {
   "source": "src/GZCTF/Migrations/AppDbContextModelSnapshot.cs",
-  "snapshot_sha256": "66a35aaeeabb027d56da39441fb130b243e6de68fcc455eaa1de0a38c7dc9012",
+  "snapshot_sha256": "4b90a467bcc1ef38c7c4eab780d1f8e56ca1748c735255d1e3cfbee9f9fc8929",
   "logical_tables": 152,
-  "model_foreign_keys": 308,
+  "model_foreign_keys": 310,
   "scope": "EF snapshot only; excludes physical partitions, non-FK references and live database drift",
   "cardinality": "EF relationships plus primary keys and unfiltered unique indexes; delete behavior is EF metadata, not a live catalog query"
 }

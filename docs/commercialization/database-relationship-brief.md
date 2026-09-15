@@ -2,7 +2,7 @@
 
 日期：2026-09-15。用途：汇报当前数据结构，明确新平台复用范围和首批交付内容。
 
-源码基线为 `4bef3770`，模型快照包含 **152 张逻辑表、308 条外键关系**。这些是源码模型统计，生产库可能因迁移版本和遗留表而不同；本材料不是生产数据库结构导出，也不包含生产业务数据。
+源码基线为 `f389d26c`，模型快照包含 **152 张逻辑表、310 条外键关系**。这些是源码模型统计，生产库可能因迁移版本和遗留表而不同；本材料不是生产数据库结构导出，也不包含生产业务数据。
 
 ## 一分钟汇报
 
@@ -62,10 +62,10 @@ Teams.CaptainId 还引用用户；该关系和 UserParticipations 对 GameId、T
 | --- | --- | --- |
 | 不能仅因表多就拆库或合表 | 152 张表承担不同事实；尚未采集现网体积和负载 | 先测容量、增长率和查询，再做性能决策 |
 | 修改影响范围需要缩小 | 部分 Controller 直接操作多模块数据，映射仍部分集中在 AppDbContext | 建议明确表 owner，按用例收拢读写入口和公开接口 |
-| 数据清理有已定位故障 | 流量分区检查 SQL 含错误反斜杠，会中断该周期后续清理 | 独立审计分支已修复，PostgreSQL 专项 4/4；未合并和部署 |
+| 数据清理有已定位故障 | 流量分区检查 SQL 含错误反斜杠，会中断该周期后续清理 | 独立审计分支已修复，原基线 PostgreSQL 专项 4/4；需与最新 main 同步复验，未部署 |
 | 后续治理仍有缺口 | 单周期单批清理吞吐、空窗口扫描、Blob GC、历史迁移来源 | 已记录后续任务，本次未宣称全部修复 |
 
-审计修复提交 `293b6d2d` 位于 `codex/database-maintainability-review`；后续文件存储说明修订为 `44dd2f0`。该分支 Release 构建通过，全量单测 1,121/1,123，两项为既有 TeamLab 调度断言失败。当前关系图分支仅交付文档和生成工具，不改变计分、数据库或生产环境。
+审计修复提交 `293b6d2d` 位于 `codex/database-maintainability-review`；后续文件存储说明修订为 `44dd2f0`。前次审计构建通过，单测为 1,121/1,123；这是原基线的历史验证结果，不代表最新 main 的门禁状态。最新 main 已增加分区处理数量限制和锁超时，审计修复合并前需适配并复跑。当前关系图分支仅交付文档和生成工具，不改变计分、数据库或生产环境。
 
 ## 需要需求方确认的五个问题
 
@@ -81,12 +81,12 @@ Teams.CaptainId 还引用用户；该关系和 UserParticipations 对 GameId、T
 
 ## 可直接转发的说明
 
-> 已整理现有数据库关系和审计结果，重点展开了用户、战队、参赛、提交与积分榜。现有结构可以作为复用基础，但积分涉及赛制和计算规则，不能只复制几张表。建议先确认新平台首批赛制、需要共享的数据、队伍及积分规则，以及本周验收范围；范围确定后，再给出调整后的表结构、API 和迁移方案。组网 API 作为后续独立事项推进。
+> 已整理现有数据库关系和审计结果，重点展开了用户、战队、参赛、提交与积分榜。现有结构可以作为复用基础，但积分涉及赛制和计算规则，不能只复制几张表。建议先确认新平台首批赛制、需要共享的数据、队伍及积分规则，以及本周验收范围；范围确定后，再给出调整后的表结构、API 和迁移方案。组网 API 的独立产品化范围作为后续事项确认。
 
 ## 技术核对附录
 
 - [完整逻辑表清单](database-diagrams/tables.csv)：152 张表及对应实体和主键。
-- [完整外键清单](database-diagrams/foreign-keys.csv)：308 条关系，记录子表、外键列、被引用表、删除行为和基数；基数结合主键、无条件唯一索引推导，不包含 hash 等非外键引用或仅在业务代码中检查的规则。
+- [完整外键清单](database-diagrams/foreign-keys.csv)：310 条关系，记录子表、外键列、被引用表、删除行为和基数；基数结合主键、无条件唯一索引推导，不包含 hash 等非外键引用或仅在业务代码中检查的规则。
 - [完整关系图 Mermaid 源文件](database-diagrams/full-schema.mmd)：可按模块筛选后渲染；全部节点同时展示较密，不作为汇报主图。
 - 来源：`src/GZCTF/Migrations/AppDbContextModelSnapshot.cs`、`Models/AppDbContext.cs`、`Models/Data/Team.cs`、`UserParticipation.cs`、`FirstSolve.cs`、`Modules/Ctf/Infrastructure/Persistence/CtfQueryEntityConfigurations.cs`、`Repositories/GameRepository.cs`、`Models/Request/Game/ScoreboardModel.cs`、`Controllers/TheoryPlayerController.cs`。
 - 生成和检查：`python scripts/documentation/build_database_relationship_brief.py`，需 Python 与 Pillow。Windows 默认使用微软雅黑，其他环境可通过 `--font` 指定中文字体。工具仅读取源码快照，不连接数据库；如快照生成格式变化会报错，需要复核解析器。生成统计保存在 [manifest.json](database-diagrams/manifest.json)，含快照 SHA-256，便于确认材料对应的版本。

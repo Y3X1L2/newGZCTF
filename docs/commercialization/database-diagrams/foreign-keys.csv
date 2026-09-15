@@ -185,7 +185,6 @@ TeamLabRollouts,ReleaseId,TeamLabTopologyReleases,Id,1,0..N,Restrict
 TeamLabRuntimeAssets,ShardId,TeamLabRuntimeShards,Id,0..1,0..N,SetNull
 TeamLabRuntimeAssets,RuntimeId,TeamLabRuntimes,Id,1,0..N,Cascade
 TeamLabRuntimeAssets,WorkerNodeId,WorkerNodes,Id,0..1,0..N,SetNull
-TeamLabRuntimeDependencyStates,RuntimeId,TeamLabRuntimes,Id,1,0..N,Cascade
 TeamLabRuntimeInfrastructure,RuntimeId,TeamLabRuntimes,Id,1,0..N,Cascade
 TeamLabRuntimeInfrastructureFragments,InfrastructureId,TeamLabRuntimeInfrastructure,Id,1,0..N,Cascade
 TeamLabRuntimeInfrastructureFragments,ShardId,TeamLabRuntimeShards,Id,1,0..N,Cascade
@@ -203,6 +202,9 @@ TeamLabRuntimes,CreatedById,AspNetUsers,Id,0..1,0..N,SetNull
 TeamLabRuntimes,ControlScopeId,TeamLabControlScopes,Id,0..1,0..N,Restrict
 TeamLabRuntimes,EntryShardId,TeamLabRuntimeShards,Id,0..1,0..N,SetNull
 TeamLabRuntimes,TopologyReleaseId,TeamLabTopologyReleases,Id,1,0..N,Restrict
+TeamLabServiceAccesses,RuntimeAssetId,TeamLabRuntimeAssets,Id,1,0..N,Cascade
+TeamLabServiceAccesses,RuntimeId,TeamLabRuntimes,Id,1,0..N,Cascade
+TeamLabServiceAccesses,WorkerNodeId,WorkerNodes,Id,1,0..N,Restrict
 TeamLabTopologies,CreatedByOperationId,ApiOperations,Id,0..1,0..1,SetNull
 TeamLabTopologies,LastMutationOperationId,ApiOperations,Id,0..1,0..1,SetNull
 TeamLabTopologies,OwnerUserId,AspNetUsers,Id,0..1,0..N,SetNull
