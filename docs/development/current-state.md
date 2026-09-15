@@ -7,7 +7,7 @@
 
 ## TeamLab API 底座在研状态（2026-09-14）
 
-TeamLab API 候选位于 `codex/teamlab-api-product-integration`，尚未推送或部署。当前候选已补齐远程会话范围查询、运行时设备健康查询和运行状态检查三个 Open API，并沿用 `teamlab-scope` 授权、现有资产控制入口和独立 Open DTO，不向外暴露 Worker 或操作者内部标识。P1 已使用正式发布包、独立 Docker Engine 和真实 OVN/OVS 执行面跑通完整 API 流程，覆盖双容器部署、文件运维、资产启停、全网段链路策略、服务开放、WebSocket 终端、操作审计、范围隔离和销毁清理；API、PostgreSQL、Agent、Docker、OVN、OVS 一致性检查通过。结果见 [TeamLab API P1 本地验证记录](test-reports/2026-09-14-teamlab-api-p1.md)。VM、现场物理网卡、多 Worker 隧道、并发压测、生产部署和独立产品拆分尚未由本阶段验证。
+TeamLab API 候选位于已推送分支 `codex/teamlab-api-product-integration`，当前提交为 `48bc10e`。P2 代码改造已经并入该候选：包括完整 Open API 调用链、API 创建拓扑的默认布局、网段与连线配色、场景及运行状态表达、版本提示修正、会话操作审计入口、导航高亮修正、服务开放、文件运维、连接器登记，以及无价值启动依赖和端点采集链的删除。P1 随后使用正式发布包、独立 Docker Engine、真实 Agent 和真实 OVN/OVS 执行面跑通完整 API 流程，覆盖双容器部署、文件运维、资产启停、全网段链路策略、服务开放、WebSocket 终端、操作审计、范围隔离和销毁清理；API、PostgreSQL、Agent、Docker、OVN、OVS 一致性检查通过。结果见 [TeamLab API P1 本地验证记录](test-reports/2026-09-14-teamlab-api-p1.md)。VM、现场物理网卡和多 Worker 隧道已有此前专项验收记录，但尚未在 `48bc10e` 候选上重新回归；并发压测、生产部署和独立产品拆分尚未由本阶段执行。
 
 ## 测试环境部署事实（2026-09-09）
 
