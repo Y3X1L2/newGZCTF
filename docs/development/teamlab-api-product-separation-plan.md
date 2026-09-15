@@ -573,6 +573,8 @@ P0 就确定拆解边界，使 P2 新接口能够沿用到独立服务，减少�
 - P1 已在隔离的本地 Compose 中以正式发布包、真实 Agent、独立 Docker Engine 和真实 OVN/OVS 执行面跑通。API 驱动脚本完成双容器部署、运维、链路策略、服务开放、终端、审计、范围隔离和销毁，并确认 API、PostgreSQL、Agent、Docker、OVN、OVS 状态一致。
 - OpenAPI 快照契约检查通过；TeamLab Open API 相关集成测试 8/8 通过。P1 已使用真实 Agent 和真实 OVN/OVS 验证 Docker 组网、服务开放、文件运维、终端与审计；VM、SFTP、VNC、现场连接器和多 Worker 链路沿用此前专项验收结论，尚未在当前候选上重新回归，不再误记为 P2 代码缺口。
 - P1 结果见 [TeamLab API P1 本地验证记录](test-reports/2026-09-14-teamlab-api-p1.md)。未运行性能测试，未连接或修改服务器。
+- P3 已完成 80/100 资产控制面并发定位与优化。在单 API 实例、四个受限 Token、约 600 req/s 的 20 秒混合负载下，总 P95 从 323.56 ms 降至 11.87 ms，5xx、429、请求中断、数据库死锁均为 0；同修订并发写入最终一项成功、一项明确返回 `topology_revision_conflict`。
+- P3 没有降低 PostgreSQL 连接池上限。改动集中在限流路径、审计批量落库、Token 不变元数据复用、控制范围授权合并、拓扑/发布版本计算复用和负载脚本本身。补齐稳定控制面容量节点后，80 与 100 资产计划各完成一次 HTTP 200 的成功放置。结果与边界见 [TeamLab API P3 并发定位与优化记录](test-reports/2026-09-15-teamlab-api-p3.md)。
 
 ### 8.3 P0 API 审查处理结果
 

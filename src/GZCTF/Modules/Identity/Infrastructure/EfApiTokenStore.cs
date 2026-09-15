@@ -1,12 +1,16 @@
 using GZCTF.Models;
 using GZCTF.Modules.Identity.Application;
+using GZCTF.Modules.Identity.Domain;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using ApiTokenEntity = GZCTF.Modules.Identity.Domain.ApiToken;
 
 namespace GZCTF.Modules.Identity.Infrastructure;
 
-public sealed class EfApiTokenStore(AppDbContext context) : IApiTokenStore
+public sealed class EfApiTokenStore(AppDbContext context, IMemoryCache cache) : IApiTokenStore
 {
+    private static readonly TimeSpan MetadataCacheLifetime = TimeSpan.FromMinutes(10);
+
     public async Task AddAsync(ApiTokenEntity token, CancellationToken cancellationToken)
     {
         context.ApiTokens.Add(token);
@@ -23,26 +27,68 @@ public sealed class EfApiTokenStore(AppDbContext context) : IApiTokenStore
         Guid id,
         CancellationToken cancellationToken)
     {
-        var result = await context.ApiTokens
+        var state = await context.ApiTokens
             .AsNoTracking()
             .Where(token => token.Id == id)
             .Select(token => new
             {
-                Token = token,
+                token.CreatorId,
+                token.ExpiresAt,
+                token.LastUsedAt,
+                token.RevokedAt,
                 CreatorRole = context.Users
                     .Where(user => user.Id == token.CreatorId)
                     .Select(user => (Role?)user.Role)
-                    .SingleOrDefault(),
-                Scopes = token.Scopes.ToList(),
-                Resources = token.Resources.ToList()
+                    .SingleOrDefault()
             })
             .SingleOrDefaultAsync(cancellationToken);
-        if (result?.CreatorRole is not { } creatorRole)
+        if (state?.CreatorRole is not { } creatorRole)
             return null;
 
-        result.Token.Scopes = result.Scopes;
-        result.Token.Resources = result.Resources;
-        return new ApiTokenValidationRecord(result.Token, creatorRole);
+        var metadata = await cache.GetOrCreateAsync(
+            CacheKey(id),
+            async entry =>
+            {
+                entry.AbsoluteExpirationRelativeToNow = MetadataCacheLifetime;
+                return await context.ApiTokens.AsNoTracking()
+                    .Where(token => token.Id == id)
+                    .Select(token => new CachedTokenMetadata(
+                        token.Name,
+                        token.SecretHash,
+                        token.RequestsPerMinute,
+                        token.CreatedAt,
+                        token.Scopes.Select(scope => scope.Scope).ToArray(),
+                        token.Resources.Select(resource => new CachedResourceGrant(
+                            resource.ResourceType, resource.ResourceId)).ToArray()))
+                    .SingleOrDefaultAsync(cancellationToken);
+            });
+        if (metadata is null)
+            return null;
+
+        var token = new ApiTokenEntity
+        {
+            Id = id,
+            Name = metadata.Name,
+            CreatorId = state.CreatorId,
+            SecretHash = metadata.SecretHash,
+            RequestsPerMinute = metadata.RequestsPerMinute,
+            CreatedAt = metadata.CreatedAt,
+            ExpiresAt = state.ExpiresAt,
+            LastUsedAt = state.LastUsedAt,
+            RevokedAt = state.RevokedAt,
+            Scopes = metadata.Scopes.Select(scope => new ApiTokenScopeGrant
+            {
+                TokenId = id,
+                Scope = scope
+            }).ToList(),
+            Resources = metadata.Resources.Select(resource => new ApiTokenResourceGrant
+            {
+                TokenId = id,
+                ResourceType = resource.ResourceType,
+                ResourceId = resource.ResourceId
+            }).ToList()
+        };
+        return new ApiTokenValidationRecord(token, creatorRole);
     }
 
     public async Task<IReadOnlyList<ApiTokenEntity>> ListAsync(
@@ -72,6 +118,8 @@ public sealed class EfApiTokenStore(AppDbContext context) : IApiTokenStore
             .ExecuteUpdateAsync(setters => setters
                 .SetProperty(token => token.RevokedAt, _ => DateTimeOffset.UtcNow), cancellationToken);
 
+        if (affectedRows > 0)
+            cache.Remove(CacheKey(id));
         return affectedRows > 0;
     }
 
@@ -81,4 +129,16 @@ public sealed class EfApiTokenStore(AppDbContext context) : IApiTokenStore
                             (token.LastUsedAt == null || token.LastUsedAt < usedAt.AddMinutes(-1)))
             .ExecuteUpdateAsync(setters => setters
                 .SetProperty(token => token.LastUsedAt, _ => usedAt), cancellationToken);
+
+    private static string CacheKey(Guid id) => $"api-token:metadata:{id:N}";
+
+    private sealed record CachedTokenMetadata(
+        string Name,
+        byte[] SecretHash,
+        int RequestsPerMinute,
+        DateTimeOffset CreatedAt,
+        string[] Scopes,
+        CachedResourceGrant[] Resources);
+
+    private sealed record CachedResourceGrant(string ResourceType, string ResourceId);
 }

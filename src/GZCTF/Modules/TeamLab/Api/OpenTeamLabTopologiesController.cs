@@ -191,7 +191,6 @@ public sealed class OpenTeamLabTopologiesController(
     public async Task<TeamLabPlanModel> Plan(Guid topologyId, Guid releaseId, CancellationToken cancellationToken)
     {
         var actor = Actor();
-        await scopeAuthorization.RequireTopologyScopeAsync(topologyId, actor.TokenId, IsAdministrator(), false, cancellationToken);
         await scopeAuthorization.RequireReleaseScopeAsync(releaseId, actor.TokenId, IsAdministrator(), false, cancellationToken);
         return await topologies.PlanAsync(topologyId, releaseId, actor.UserId, true, cancellationToken);
     }

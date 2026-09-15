@@ -6,6 +6,7 @@ using GZCTF.Modules.Runtime.Application;
 using GZCTF.Modules.TeamLab.Contracts;
 using GZCTF.Modules.TeamLab.Domain;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Hybrid;
 
 namespace GZCTF.Modules.TeamLab.Application;
 
@@ -14,8 +15,24 @@ public sealed class TeamLabTopologyApplicationService(
     TeamLabTopologyValidator validator,
     TeamLabReleaseService releases,
     TeamLabControlScopeService controlScopes,
-    NodeCapacitySnapshotService capacitySnapshots) : ITeamLabTopologyApplicationService
+    NodeCapacitySnapshotService capacitySnapshots,
+    HybridCache? cache = null) : ITeamLabTopologyApplicationService
 {
+    private static readonly HybridCacheEntryOptions ValidationCacheOptions = new()
+    {
+        LocalCacheExpiration = TimeSpan.FromSeconds(2),
+        Expiration = TimeSpan.FromSeconds(2)
+    };
+    private static readonly HybridCacheEntryOptions ReleaseCacheOptions = new()
+    {
+        LocalCacheExpiration = TimeSpan.FromMinutes(10),
+        Expiration = TimeSpan.FromMinutes(30)
+    };
+    private static readonly HybridCacheEntryOptions PlanningCapacityCacheOptions = new()
+    {
+        LocalCacheExpiration = TimeSpan.FromMilliseconds(500),
+        Expiration = TimeSpan.FromSeconds(1)
+    };
     public async Task<TeamLabTopologyStorageReference> GetStorageReferenceAsync(
         Guid topologyId, Guid actorUserId, bool includeAll, CancellationToken cancellationToken)
     {
@@ -408,6 +425,28 @@ public sealed class TeamLabTopologyApplicationService(
         bool includeAll,
         CancellationToken cancellationToken)
     {
+        if (cache is not null)
+        {
+            var revision = await context.TeamLabTopologies.AsNoTracking()
+                .Where(item => item.PublicId == topologyId && (includeAll || item.OwnerUserId == actorUserId))
+                .Select(item => (int?)item.Revision)
+                .SingleOrDefaultAsync(cancellationToken)
+                ?? throw NotFound();
+            return await cache.GetOrCreateAsync(
+                $"teamlab:topology-validation:{topologyId:N}:{revision}",
+                token => ValidateCoreAsync(topologyId, actorUserId, includeAll, token),
+                ValidationCacheOptions,
+                cancellationToken: cancellationToken);
+        }
+        return await ValidateCoreAsync(topologyId, actorUserId, includeAll, cancellationToken);
+    }
+
+    private async ValueTask<TeamLabValidationResultModel> ValidateCoreAsync(
+        Guid topologyId,
+        Guid actorUserId,
+        bool includeAll,
+        CancellationToken cancellationToken)
+    {
         var topology = await RequireTopologyAsync(topologyId, actorUserId, includeAll, cancellationToken);
         var definition = ToDefinition(topology);
         var result = validator.Validate(definition, topology.SchemaVersion);
@@ -539,11 +578,50 @@ public sealed class TeamLabTopologyApplicationService(
         bool includeAll,
         CancellationToken cancellationToken)
     {
-        var topology = await RequireTopologyIdentityAsync(topologyId, actorUserId, includeAll, cancellationToken);
+        var source = cache is null
+            ? await LoadPlanSourceAsync(topologyId, releaseId, actorUserId, includeAll, cancellationToken)
+            : await cache.GetOrCreateAsync(
+                $"teamlab:plan-source:{topologyId:N}:{releaseId:N}",
+                token => LoadPlanSourceAsync(topologyId, releaseId, actorUserId, includeAll, token),
+                ReleaseCacheOptions,
+                cancellationToken: cancellationToken);
+        var nodes = cache is null
+            ? await LoadPlanningNodesAsync(cancellationToken)
+            : await cache.GetOrCreateAsync(
+                "teamlab:planning-capacity",
+                LoadPlanningNodesAsync,
+                PlanningCapacityCacheOptions,
+                cancellationToken: cancellationToken);
+        return TeamLabAssetPlanner.Build(source.TopologyId, source.ReleaseId, source.Execution, nodes);
+    }
+
+    private async ValueTask<TeamLabPlanSource> LoadPlanSourceAsync(
+        Guid topologyId,
+        Guid releaseId,
+        Guid actorUserId,
+        bool includeAll,
+        CancellationToken cancellationToken)
+    {
         var release = await context.TeamLabTopologyReleases.AsNoTracking()
-            .SingleOrDefaultAsync(item => item.TopologyId == topology.Id && item.Id == releaseId, cancellationToken)
+            .Where(item => item.Id == releaseId && item.Topology.PublicId == topologyId &&
+                           (includeAll || item.Topology.OwnerUserId == actorUserId))
+            .Select(item => new
+            {
+                TopologyId = item.Topology.PublicId,
+                item.Id,
+                item.SchemaVersion,
+                item.CanonicalJson
+            })
+            .SingleOrDefaultAsync(cancellationToken)
             ?? throw new TeamLabApiContractException("release_not_found", "未找到该拓扑版本", 404);
-        var nodes = (await capacitySnapshots.LoadAsync(cancellationToken))
+        return new TeamLabPlanSource(
+            release.TopologyId,
+            release.Id,
+            TeamLabReleaseCodec.DecodeExecution(release.SchemaVersion, release.CanonicalJson));
+    }
+
+    private async ValueTask<TeamLabPlanningNodeSnapshot[]> LoadPlanningNodesAsync(CancellationToken cancellationToken) =>
+        (await capacitySnapshots.LoadAsync(cancellationToken))
             .Where(item => item.Node.IsSchedulable && item.Node.TeamLabNetworkEnabled &&
                            item.Node.TeamLabTunnelStatus == TeamLabTunnelStatus.Healthy &&
                            item.Node.GetEffectiveStatus(DateTimeOffset.UtcNow) == NodeStatus.Online)
@@ -558,12 +636,11 @@ public sealed class TeamLabTopologyApplicationService(
                 item.Node.MemoryLoad,
                 item.Available))
             .ToArray();
-        return TeamLabAssetPlanner.Build(
-            topology.PublicId,
-            release.Id,
-            TeamLabReleaseCodec.DecodeExecution(release.SchemaVersion, release.CanonicalJson),
-            nodes);
-    }
+
+    private sealed record TeamLabPlanSource(
+        Guid TopologyId,
+        Guid ReleaseId,
+        TeamLabExecutionTopology Execution);
 
     internal static TeamLabApiContractException InvalidTopology(TeamLabValidationResultModel result) =>
         new("topology_invalid", string.Join("; ", result.Issues.Select(item => $"{item.Path}: {item.Message}")), 422);

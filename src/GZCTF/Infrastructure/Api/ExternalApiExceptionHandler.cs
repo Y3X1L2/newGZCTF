@@ -25,10 +25,6 @@ public sealed class ExternalApiExceptionHandler(
         }
         catch (ApiContractException exception)
         {
-            logger.LogWarning(
-                "API request rejected: code={Code}, trace={TraceId}",
-                exception.Code,
-                context.TraceIdentifier);
             await ExternalApiProblemDetails.WriteAsync(
                 context,
                 exception.StatusCode,
