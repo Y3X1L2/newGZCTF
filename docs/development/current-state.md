@@ -1,7 +1,7 @@
 # YINYU 当前开发状态
 
-文档整理日期：2026-09-10
-最近一次生产核验：2026-09-10 05:51 UTC（北京时间 13:51）
+文档整理日期：2026-09-16
+最近一次生产核验：2026-09-16 13:37 UTC（北京时间 21:37）
 
 本文件仅保留最新已知基线、功能边界、未解决事项和接手入口。生产信息是上述核验时点的现场记录，不能代替下一次操作前的重新检查。长期协作规则见 [AGENTS.md](../../AGENTS.md)。
 
@@ -11,21 +11,18 @@
 | --- | --- |
 | 仓库 / 开发分支 | `https://github.com/Y3X1L2/newGZCTF.git` / `main`；开发从最新 `origin/main` 创建任务分支 |
 | 固定发布标签 | `stable-20260908` → `ab2bd54b7e16d454e3a8f54960c4bb4689047c4a`；已推送 annotated tag，不移动标签 |
-| 主站发布 | `10.24.0.27` 的主站及本机 Agent 使用 `/opt/gzctf/releases/teamlab-production-a8438f676a747876312ed5e5b3475270efb27f91-20260910/publish`；提交 `a8438f676a747876312ed5e5b3475270efb27f91`，999 个 manifest 文件长度/摘要匹配 |
+| 主站发布 | `10.24.0.27` 主站使用 `/opt/gzctf/releases/training-ui-12e2c1a09dee1be4571e1349a2bd489cf3a2ca56-20260916/publish`；379 个 manifest 文件已校验，本机 Agent 未更换 |
 | 持久化附件 | `/opt/gzctf/publish/files` → `/opt/gzctf/shared/files` |
-| 数据库 | 140 条迁移历史，head `20260908111521_TeamLabDeviceObservation`；6 条 TeamLab 前向迁移已先在新鲜生产备份副本验证，再应用到生产 |
-| 应用回退 | `/opt/gzctf/publish.previous` → `/opt/gzctf/releases/pr9-converged-ab2bd54b7e16d454e3a8f54960c4bb4689047c4a-20260908/publish` |
-| 备份 | `/opt/gzctf/backups/teamlab-a8438f6-pre-20260910T033757Z`；数据库 custom dump 与共享文件归档均非空、摘要已记录，dump catalog 可读并完成隔离恢复/迁移验证 |
-| 执行节点 | 最近核验三节点均 Online/Stable/schedulable；Agent 摘要前缀：`.27` `76c8273e...`、`.30` `3747f353...`、`.31` `2f12bca5...`，本轮仅同步 `.27` 本机 Agent |
-| 健康状态 | 指标端口 `3001/healthz` 为 HTTP 200 / Degraded；业务端口 `8080/healthz` 按契约返回 404；降级原因见未解决事项 |
+| 数据库 | 140 条迁移历史，head `20260908111521_TeamLabDeviceObservation`；本次无迁移，已完成新鲜备份的隔离恢复验证 |
+| 应用回退 | `/opt/gzctf/publish.previous` → `/opt/gzctf/releases/training-instance-flag-eaac7f2684755f6471b684c2432e6e18dea3eb92-20260916/publish` |
+| 备份 | `/opt/gzctf/backups/training-ui-pre-20260916T125755Z`；数据库恢复、九类核心表计数、附件归档和加密配置备份已验证 |
+| 执行节点 | 三节点均可调度且心跳新鲜；本机 Agent active，摘要前缀 `0acc37f7...`，本次未更新执行面 |
+| 健康状态 | 主站/本机 Agent active；首页、/api/Config 为 200；指标端口 /healthz 为 200 / Degraded，既有缺口见下文 |
 | 技术栈 | .NET 10、ASP.NET Core、EF Core、PostgreSQL、Redis、React 19、TypeScript、Vite、pnpm |
 
 版本关系以实时 `git fetch origin --prune`、`git status` 和 `git log` 为准。需要复现该次生产源码时使用固定标签；`main` 后续是否仅有文档变化，应重新比较，不能长期假定。发布包摘要、回退边界和验收依据集中在 [稳定基线说明](handoffs/2026-09-08-stable-baseline.md)。
 
-当前 TeamLab 生产版本来自 `codex/teamlab-production-rollout-20260910`，发布提交
-`a8438f676a747876312ed5e5b3475270efb27f91` 已推送。该提交正常合并功能基线
-`b8e2baffe0505fad952efb47eab889a297c9b837` 与当时最新 `origin/main`
-`e10097ef8dcc98b76ea3477ebc5d6c1b5d19af65`；尚未合并回 `main`。
+当前生产版本来自 `codex/training-ui-production-20260916`，在实际线上 `eaac7f26` 上追加复制和培训状态修复，发布代码 `12e2c1a09dee1be4571e1349a2bd489cf3a2ca56` 已推送，未合并 main。生产基线与 main 不同，后续部署必须继续核对现场版本。完整备份、测试、验收和回退信息见[本次发布交接](handoffs/2026-09-16-training-ui-production-rollout.md)。
 
 ## 2. 当前功能边界
 
@@ -57,7 +54,7 @@
 
 ## 4. 未解决事项
 
-- **培训展示与复制**：`codex/training-progress-clipboard-fixes` 已定位并修复 HTTP 剪贴板访问、课程详情漏传个人章节进度/题目绑定、课程完成数量落后一章的问题；尚未部署。验证与历史聚合处理范围见[修复交接](handoffs/2026-09-16-training-progress-clipboard-fixes.md)。
+- **培训展示与复制**：`codex/training-progress-clipboard-fixes` 已定位并修复 HTTP 剪贴板访问、课程详情漏传个人章节进度/题目绑定、课程完成数量落后一章的问题；已以生产补丁 `12e2c1a0` 发布并验收。历史首页/目录汇总未批量回填；验证与处理范围见[修复交接](handoffs/2026-09-16-training-progress-clipboard-fixes.md)。
 
 - **数据保留 SQL**：`teamlab-flow` 分区清理存在 PostgreSQL `42601` 语法错误，最近核验仍按小时发生；需要独立修复及定向回归，不能用删除生产数据绕过。
 - **指标并发**：2026-09-08 观察到一次指标持久化 `DbUpdateConcurrencyException`，后续心跳/指标恢复；仍需并发和失败批次重试回归，不能将自动恢复等同于根因已修复。
