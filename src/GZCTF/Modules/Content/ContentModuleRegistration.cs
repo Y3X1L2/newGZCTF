@@ -26,6 +26,7 @@ public static class ContentModuleRegistration
         services.AddScoped<IImageTemplateReferenceProvider, TeamLabImageTemplateReferenceProvider>();
         services.AddScoped<ITrainingCourseDeletionStore, EfTrainingCourseDeletionStore>();
         services.AddScoped<TrainingCourseDeletionService>();
+        services.AddScoped<TrainingCourseDetailProjectionService>();
         services.AddScoped<IImageImportSubmissionStore, EfImageImportSubmissionStore>();
         services.AddSingleton<IImageImportStagingStore, FileImageImportStagingStore>();
         services.AddScoped<IImageImportExecutor, DockerImageImportExecutor>();

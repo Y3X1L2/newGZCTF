@@ -36,6 +36,7 @@ public class TrainingCourseAdminController(
     DockerImageRegistryService dockerRegistry,
     TheoryExamService theoryService,
     TrainingCourseDeletionService courseDeletion,
+    TrainingCourseDetailProjectionService courseDetails,
     ImageDistributionService imageDistribution,
     ImageImportApplicationService imageImports,
     IProjectionRevisionStore projectionRevisions,
@@ -493,14 +494,16 @@ public class TrainingCourseAdminController(
         if (course is null)
             return NotFound();
 
-        return Ok(TrainingCourseModel.FromCourse(
+        var model = TrainingCourseModel.FromCourse(
             course,
             canLearn: true,
             canEdit: true,
             canManageTeachers: await CanManageTeachers(actor, course, token),
             canManageEnrollments: true,
             canDelete: CanDeleteCourse(actor, course),
-            includeDetail: true));
+            includeDetail: true);
+        await courseDetails.PopulateAsync(model, actor.Id, token);
+        return Ok(model);
     }
 
     [HttpPost]
