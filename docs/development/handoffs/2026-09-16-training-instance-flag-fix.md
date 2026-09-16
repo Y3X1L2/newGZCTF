@@ -42,7 +42,7 @@
 
 ## 提交、部署与后续
 
-- 当前任务分支 `codex/training-instance-flag-fix`，提交和推送待最终测试复核后记录；不合并 `main`，保留 worktree。
-- 本次尚未部署主站或 Agent，未改业务配置、课程题目、业务数据库或 Registry；用户已说明课程实例可停止/销毁，但现有业务实例没有被本次测试替换。
-- 现场 629 的旧记录需要主站发布此修复后，按正式 API 重新创建实例触发修复。无须手工补写 Flag、清库或修改历史 migration。
-- 目标主站实际版本与仓库旧基线记录不一致；部署前核对真实发布物身份、现有迁移、备份和回滚目录，不能直接用文档旧 SHA 或无审查地把整个最新 main 覆盖上去。
+- 原开发修复提交 `1515fb9af702ff885d0fa67ab42acbf117e9a086` 已推送到 `origin/codex/training-instance-flag-fix`；部署回移提交 `eaac7f2684755f6471b684c2432e6e18dea3eb92` 已推送到 `origin/codex/training-instance-flag-release`。未合并 main，两个 worktree 保留供审查。
+- 用户后续明确授权部署，2026-09-16 05:54 UTC 已原子切换主站至维护分支修复 `eaac7f26`。Agent、前端、数据库 schema 和 Registry 未更新；发布与备份见 [发布记录](2026-09-16-training-hotfix-rollout.md)。
+- 现场 629 已通过正式 API 创建流程补齐实例 Flag 关联（记录 626），独立停止/重建后仍有效；未手工改写 Flag 或业务实例行。三个课程实例最终同时运行，供用户继续测试。
+- 发布阶段已核对实际维护版本和历史增量包，单独回移课程修复，避免夹带最新 main 的 TeamLab 重构和迁移。新 release、旧回退目录及已恢复验证的新鲜备份均保留。
