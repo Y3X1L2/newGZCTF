@@ -1,7 +1,7 @@
 # YINYU 当前开发状态
 
-文档整理日期：2026-09-15
-最近一次生产核验：2026-09-08 09:49 UTC（北京时间 17:49）
+文档整理日期：2026-09-16
+最近一次生产核验：2026-09-16 13:37 UTC（北京时间 21:37）
 
 本文件仅保留最新已知基线、功能边界、未解决事项和接手入口。生产信息是上述核验时点的记录，不能代替下一次操作前的现场检查；本次文档整理没有重新连接服务器。长期协作规则见 [AGENTS.md](../../AGENTS.md)。
 
@@ -73,13 +73,13 @@ H03 最新专项（2026-09-08）：真实 OVN/OVS＋QEMU Linux 来宾＋namespac
 | --- | --- |
 | 仓库 / 开发分支 | `https://github.com/Y3X1L2/newGZCTF.git` / `main`；开发从最新 `origin/main` 创建任务分支 |
 | 固定发布标签 | `stable-20260908` → `ab2bd54b7e16d454e3a8f54960c4bb4689047c4a`；已推送 annotated tag，不移动标签 |
-| 主站发布 | `10.24.0.27` 的主站及本机 Agent 使用 `/opt/gzctf/releases/pr9-converged-ab2bd54b7e16d454e3a8f54960c4bb4689047c4a-20260908/publish`；994 个 manifest 文件长度/摘要匹配 |
+| 主站发布 | `10.24.0.27` 主站使用 `/opt/gzctf/releases/training-ui-12e2c1a09dee1be4571e1349a2bd489cf3a2ca56-20260916/publish`；379 个 manifest 文件已校验，本机 Agent 未更换 |
 | 持久化附件 | `/opt/gzctf/publish/files` → `/opt/gzctf/shared/files` |
-| 数据库 | 134 条迁移历史，head `20260816192540_TeamLabCapabilityClosure`；当前发布无新增迁移 |
-| 应用回退 | `/opt/gzctf/publish.previous` → `/opt/gzctf/releases/practice-validation-9eef8ac12c626672081e81fadbde39946e7d2237/publish` |
-| 备份 | `/opt/gzctf/backups/pr9-rollout-pre-ab2bd54b-20260908T080802Z`；预备与最终数据库备份均实际恢复验证，最终数据库/附件备份摘要复核通过 |
-| 执行节点 | 最近核验三节点均 Online/Stable/schedulable，Fabric Disabled；Agent 摘要前缀：`.27` `d93cf212...`、`.30` `3747f353...`、`.31` `2f12bca5...`，远端版本未完全统一 |
-| 健康状态 | 指标端口 `3001/healthz` 为 HTTP 200 / Degraded；业务端口 `8080/healthz` 按契约返回 404；降级原因见未解决事项 |
+| 数据库 | 140 条迁移历史，head `20260908111521_TeamLabDeviceObservation`；本次无迁移，已完成新鲜备份的隔离恢复验证 |
+| 应用回退 | `/opt/gzctf/publish.previous` → `/opt/gzctf/releases/training-instance-flag-eaac7f2684755f6471b684c2432e6e18dea3eb92-20260916/publish` |
+| 备份 | `/opt/gzctf/backups/training-ui-pre-20260916T125755Z`；数据库恢复、九类核心表计数、附件归档和加密配置备份已验证 |
+| 执行节点 | 三节点均可调度且心跳新鲜；本机 Agent active，摘要前缀 `0acc37f7...`，本次未更新执行面 |
+| 健康状态 | 主站/本机 Agent active；首页、/api/Config 为 200；指标端口 /healthz 为 200 / Degraded，既有缺口见下文 |
 | 技术栈 | .NET 10、ASP.NET Core、EF Core、PostgreSQL、Redis、React 19、TypeScript、Vite、pnpm |
 
 版本关系以实时 `git fetch origin --prune`、`git status` 和 `git log` 为准。需要复现该次生产源码时使用固定标签；`main` 后续是否仅有文档变化，应重新比较，不能长期假定。发布包摘要、回退边界和验收依据集中在 [稳定基线说明](handoffs/2026-09-08-stable-baseline.md)。
@@ -114,7 +114,7 @@ H03 最新专项（2026-09-08）：真实 OVN/OVS＋QEMU Linux 来宾＋namespac
 
 ## 4. 未解决事项
 
-- **培训展示与复制**：`codex/training-progress-clipboard-fixes` 已定位并修复 HTTP 剪贴板访问、课程详情漏传个人章节进度/题目绑定、课程完成数量落后一章的问题；尚未部署。验证与历史聚合处理范围见[修复交接](handoffs/2026-09-16-training-progress-clipboard-fixes.md)。
+- **培训展示与复制**：已以生产补丁 `12e2c1a0` 发布到 `10.24.0.27` 并完成三项页面验收；历史首页/目录汇总未批量回填。备份、测试和回退见[发布交接](handoffs/2026-09-16-training-ui-production-rollout.md)。
 
 - **数据保留 SQL**：`teamlab-flow` 分区清理存在 PostgreSQL `42601` 语法错误，最近核验仍按小时发生；需要独立修复及定向回归，不能用删除生产数据绕过。
 - **指标并发**：2026-09-08 观察到一次指标持久化 `DbUpdateConcurrencyException`，后续心跳/指标恢复；仍需并发和失败批次重试回归，不能将自动恢复等同于根因已修复。
