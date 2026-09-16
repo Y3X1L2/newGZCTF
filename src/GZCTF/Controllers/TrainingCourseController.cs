@@ -1073,6 +1073,8 @@ public class TrainingCourseController(
                 queue = queued.QueueStatus
             });
 
+        if (result.Status == TaskStatus.Denied)
+            return BadRequest(new RequestResponse("课程实例数量已达上限（含排队任务），请先停止或销毁已有实例。"));
         if (result.Status != TaskStatus.Success || result.Result is null)
             return BadRequest(new RequestResponse("课程容器创建失败，请稍后重试。"));
 

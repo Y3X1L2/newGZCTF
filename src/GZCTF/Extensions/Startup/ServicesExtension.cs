@@ -49,6 +49,11 @@ internal static class ServicesExtension
             builder.AddConfig<ManagedConfig>();
             builder.AddConfig<PortalSsoConfig>();
             builder.AddConfig<ContainerPolicy>();
+            builder.AddConfig<TrainingContainerPolicy>();
+            builder.Services.AddOptions<TrainingContainerPolicy>()
+                .Validate(config => config.MaxContainerCountPerUser >= 0,
+                    "TrainingContainerPolicy.MaxContainerCountPerUser must be nonnegative.")
+                .ValidateOnStart();
             builder.AddConfig<ContainerProvider>();
             builder.AddConfig<TeamLabNetworkConfig>();
             // Compatibility: older appsettings used the shorter "TeamLabNetwork" section name.

@@ -20,6 +20,7 @@ public class ExerciseInstanceRepository(
     IContainerManager service,
     IContainerRepository containerRepository,
     IOptionsSnapshot<ContainerPolicy> containerPolicy,
+    IOptionsSnapshot<TrainingContainerPolicy> trainingContainerPolicy,
     DockerImageRegistryService dockerRegistry,
     INginxProxySyncService nginxProxySync,
     DeploymentQueueService deploymentQueue,
@@ -232,7 +233,7 @@ public class ExerciseInstanceRepository(
             instance.ContainerId = null;
         }
 
-        await RegenerateLegacyDynamicFlagAsync(instance, token);
+        await EnsureDynamicFlagAsync(instance, token);
 
         await using var ownerLock = await lockService.AcquireAsync(
             BuildContainerLimitLockKey(user.Id),
@@ -247,14 +248,18 @@ public class ExerciseInstanceRepository(
             return new TaskResult<Container>(TaskStatus.Success, instance.Container);
 
         // containerLimit == 0 means unlimited
-        var containerLimit = containerPolicy.Value.MaxExerciseContainerCountPerUser;
+        var isTraining = instance.Exercise.TrainingCourseId.HasValue;
+        var containerLimit = isTraining
+            ? trainingContainerPolicy.Value.MaxContainerCountPerUser
+            : containerPolicy.Value.MaxExerciseContainerCountPerUser;
         if (containerLimit > 0)
         {
-            var queuedCount = await CountActiveQueuedContainersAsync(user.Id, instance.ExerciseId, token);
+            var queuedCount = await CountActiveQueuedContainersAsync(user.Id, instance.ExerciseId, isTraining, token);
             var running = await Context.ExerciseInstances
                 .Include(i => i.Exercise)
                 .Include(i => i.Container)
-                .Where(i => i.UserId == user.Id && i.ContainerId != null)
+                .Where(i => i.UserId == user.Id && i.ContainerId != null &&
+                            i.Exercise.TrainingCourseId.HasValue == isTraining)
                 .OrderBy(i => i.Container!.StartedAt)
                 .ToListAsync(token);
 
@@ -265,6 +270,9 @@ public class ExerciseInstanceRepository(
 
             if (running.Count >= allowedRunningBeforeCreate && first is not null)
             {
+                if (isTraining || !containerPolicy.Value.AutoDestroyOnLimitReached)
+                    return new TaskResult<Container>(TaskStatus.Denied);
+
                 logger.Log(
                     StaticLocalizer[nameof(Resources.Program.InstanceRepository_ContainerAutoDestroy),
                         user.UserName!, first.Exercise.Title,
@@ -376,19 +384,31 @@ public class ExerciseInstanceRepository(
         }
     }
 
-    async Task RegenerateLegacyDynamicFlagAsync(ExerciseInstance instance, CancellationToken token)
+    async Task EnsureDynamicFlagAsync(ExerciseInstance instance, CancellationToken token)
     {
-        if (!instance.TryRegenerateLegacyDynamicFlag())
+        // Old loaded instances (including static-to-dynamic edits) may have no flag.
+        // Repair only under the runtime lease and before a new container is created.
+        if (instance.Exercise.Type == ChallengeType.DynamicContainer &&
+            string.IsNullOrWhiteSpace(instance.FlagContext?.Flag))
+        {
+            instance.FlagContext = FlagContext.CreateInstanceFlag(instance.Exercise.GenerateDynamicFlag());
+            instance.IsLoaded = true;
+        }
+        else if (!instance.TryRegenerateLegacyDynamicFlag())
             return;
 
         await SaveAsync(token);
     }
 
-    async Task<int> CountActiveQueuedContainersAsync(Guid userId, int currentExerciseId, CancellationToken token) =>
+    async Task<int> CountActiveQueuedContainersAsync(Guid userId, int currentExerciseId, bool isTraining,
+        CancellationToken token) =>
         await Context.DeploymentQueueTickets.CountAsync(t =>
-            t.Kind == DeploymentQueueKind.ExerciseContainer &&
+            t.Kind == (isTraining ? DeploymentQueueKind.TrainingContainer : DeploymentQueueKind.ExerciseContainer) &&
+            t.Operation == RuntimeOperationKind.Create &&
             t.OwnerUserId == userId &&
             t.ChallengeId != currentExerciseId &&
+            !Context.ExerciseInstances.Any(i => i.UserId == userId && i.ExerciseId == t.ChallengeId &&
+                                               i.ContainerId != null) &&
             ActiveQueueStatuses.Contains(t.Status), token);
 
     public async Task<(AnswerResult Status, int? FlagId)> VerifyAnswer(UserInfo user, ExerciseInstance instance, string answer,
