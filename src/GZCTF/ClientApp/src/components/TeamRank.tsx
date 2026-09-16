@@ -11,7 +11,6 @@ import {
   Text,
   Title,
 } from '@mantine/core'
-import { useClipboard } from '@mantine/hooks'
 import { showNotification } from '@mantine/notifications'
 import { mdiCheck, mdiExclamationThick, mdiKey } from '@mdi/js'
 import { Icon } from '@mdi/react'
@@ -22,6 +21,7 @@ import { useNavigate, useParams } from 'react-router'
 import { YinyuHexField } from '@Components/yinyu/YinyuUI'
 import { ErrorCodes } from '@Utils/Shared'
 import { useIsMobile } from '@Utils/ThemeOverride'
+import { useClipboard } from '@Hooks/useClipboard'
 import { useGameTeamInfo } from '@Hooks/useGame'
 import gameClasses from '@Styles/GameCard.module.css'
 import misc from '@Styles/Misc.module.css'

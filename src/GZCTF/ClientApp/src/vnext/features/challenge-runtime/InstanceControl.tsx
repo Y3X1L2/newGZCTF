@@ -12,6 +12,7 @@ import {
   User,
 } from 'lucide-react'
 import { useEffect, useId, useMemo, useState } from 'react'
+import { useClipboard } from '@Hooks/useClipboard'
 import { ContainerEntryStatus } from '@Api'
 import { ActionButton, InlineFeedback } from '../../shared/Interaction'
 import { StatusPill } from '../../shared/Primitives'
@@ -43,6 +44,7 @@ export function InstanceControl({ controller }: { controller: RuntimeInstanceCon
   const titleId = useId()
   const [now, setNow] = useState(Date.now())
   const [copiedField, setCopiedField] = useState<string | null>(null)
+  const clipboard = useClipboard({ timeout: 1600 })
   const running = controller.phase === 'running' || controller.phase === 'extending'
 
   useEffect(() => {
@@ -63,9 +65,7 @@ export function InstanceControl({ controller }: { controller: RuntimeInstanceCon
 
   const copyValue = async (field: string, value?: string | null) => {
     if (!value) return
-    await navigator.clipboard.writeText(value)
-    setCopiedField(field)
-    window.setTimeout(() => setCopiedField((current) => (current === field ? null : current)), 1600)
+    if (await clipboard.copy(value)) setCopiedField(field)
   }
 
   return (
@@ -81,6 +81,7 @@ export function InstanceControl({ controller }: { controller: RuntimeInstanceCon
       </header>
 
       {controller.error ? <InlineFeedback tone="danger">{controller.error}</InlineFeedback> : null}
+      {clipboard.error ? <InlineFeedback tone="danger">{clipboard.error.message}</InlineFeedback> : null}
 
       {controller.phase === 'idle' || controller.phase === 'failed' ? (
         <div className={styles.idlePanel}>
@@ -173,7 +174,7 @@ export function InstanceControl({ controller }: { controller: RuntimeInstanceCon
                       title={`复制${item.label}`}
                       type="button"
                     >
-                      {copiedField === item.field ? <Check size={17} /> : <Copy size={17} />}
+                      {clipboard.copied && copiedField === item.field ? <Check size={17} /> : <Copy size={17} />}
                     </button>
                   </div>
                 ))}
@@ -203,7 +204,7 @@ export function InstanceControl({ controller }: { controller: RuntimeInstanceCon
                 title="复制入口"
                 type="button"
               >
-                {copiedField === 'entry' ? <Check size={17} /> : <Copy size={17} />}
+                {clipboard.copied && copiedField === 'entry' ? <Check size={17} /> : <Copy size={17} />}
               </button>
               {entryHref ? (
                 <a

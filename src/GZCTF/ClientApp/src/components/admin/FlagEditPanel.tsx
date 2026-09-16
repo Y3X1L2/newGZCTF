@@ -1,5 +1,4 @@
 import { ActionIcon, Group, Input, SimpleGrid, Stack, Text } from '@mantine/core'
-import { useClipboard } from '@mantine/hooks'
 import { showNotification } from '@mantine/notifications'
 import { mdiCheck, mdiDeleteOutline } from '@mdi/js'
 import { Icon } from '@mdi/react'
@@ -7,6 +6,7 @@ import { FC } from 'react'
 import { useTranslation } from 'react-i18next'
 import { YinyuPanel } from '@Components/yinyu/YinyuUI'
 import { useDisplayInputStyles } from '@Utils/ThemeOverride'
+import { useClipboard } from '@Hooks/useClipboard'
 import { Attachment, FlagInfoModel } from '@Api'
 
 interface FlagCardProps {

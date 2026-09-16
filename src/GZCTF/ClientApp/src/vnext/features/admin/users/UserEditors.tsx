@@ -1,3 +1,4 @@
+import { useClipboard } from '@Hooks/useClipboard'
 import { Copy, KeyRound, Save, Trash2, UserPlus } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import {
@@ -266,7 +267,8 @@ export function UserDetailDrawer({
 }
 
 export function PasswordResultDialog({ password, onClose }: { password: string | null; onClose: () => void }) {
-  const [copied, setCopied] = useState(false)
+  const clipboard = useClipboard()
+  useEffect(() => clipboard.reset(), [password, clipboard.reset])
   return (
     <VNextDialog
       description="该随机密码只在本次操作结果中展示，请通过安全渠道交付给用户。"
@@ -280,16 +282,13 @@ export function PasswordResultDialog({ password, onClose }: { password: string |
         <code>{password}</code>
         <ActionButton
           icon={<Copy size={16} />}
-          onClick={async () => {
-            if (!password) return
-            await navigator.clipboard.writeText(password)
-            setCopied(true)
-          }}
+          onClick={() => void clipboard.copy(password)}
           type="button"
         >
-          {copied ? '已复制' : '复制密码'}
+          {clipboard.copied ? '已复制' : '复制密码'}
         </ActionButton>
       </div>
+      {clipboard.error ? <InlineFeedback tone="danger">{clipboard.error.message}</InlineFeedback> : null}
     </VNextDialog>
   )
 }

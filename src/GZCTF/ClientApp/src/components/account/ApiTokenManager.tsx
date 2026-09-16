@@ -18,6 +18,7 @@ import { notifications } from '@mantine/notifications'
 import { mdiContentCopy, mdiDeleteOutline, mdiKeyPlus } from '@mdi/js'
 import { Icon } from '@mdi/react'
 import { memo, useCallback, useMemo, useState } from 'react'
+import { copyText } from '@Utils/clipboard'
 import api, { ApiTokenCreateModel } from '@Api'
 
 interface ResourceForm {
@@ -189,9 +190,7 @@ export const ApiTokenManager = memo(function ApiTokenManager() {
             min={1}
             max={10000}
             value={model.requestsPerMinute}
-            onChange={(value) =>
-              setModel((current) => ({ ...current, requestsPerMinute: Number(value) || 60 }))
-            }
+            onChange={(value) => setModel((current) => ({ ...current, requestsPerMinute: Number(value) || 60 }))}
           />
           <TextInput
             label="过期时间"
@@ -254,7 +253,13 @@ export const ApiTokenManager = memo(function ApiTokenManager() {
           </Code>
           <Button
             leftSection={<Icon path={mdiContentCopy} size={0.85} />}
-            onClick={async () => issuedSecret && navigator.clipboard.writeText(issuedSecret)}
+            onClick={async () => {
+              const copied = issuedSecret ? await copyText(issuedSecret) : false
+              notifications.show({
+                color: copied ? 'green' : 'red',
+                message: copied ? '已复制' : '复制失败，请选中文本后手动复制。',
+              })
+            }}
           >
             复制
           </Button>

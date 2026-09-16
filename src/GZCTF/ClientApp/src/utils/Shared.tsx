@@ -602,37 +602,7 @@ export const isValidPhoneNumber = (value?: string | null) => {
   return !phone || PHONE_PATTERN.test(phone)
 }
 
-export const copyText = async (value: string) => {
-  if (!value)
-    return false
-
-  if (navigator.clipboard?.writeText) {
-    try {
-      await navigator.clipboard.writeText(value)
-      return true
-    } catch {
-      // HTTP/IP access is not a secure context in many browsers, so use a DOM fallback.
-    }
-  }
-
-  const textarea = document.createElement('textarea')
-  textarea.value = value
-  textarea.setAttribute('readonly', 'true')
-  textarea.style.position = 'fixed'
-  textarea.style.left = '-9999px'
-  textarea.style.top = '0'
-  textarea.style.opacity = '0'
-  document.body.appendChild(textarea)
-  textarea.focus()
-  textarea.select()
-  textarea.setSelectionRange(0, textarea.value.length)
-
-  try {
-    return document.execCommand('copy')
-  } finally {
-    document.body.removeChild(textarea)
-  }
-}
+export { copyText } from './clipboard'
 
 /**
  * Client Error class to encapsulate client-side errors
