@@ -1,15 +1,17 @@
 # YINYU 当前开发状态
 
-文档整理日期：2026-09-15
-最近一次生产核验：2026-09-08 09:49 UTC（北京时间 17:49）
+文档整理日期：2026-09-16
+最近一次生产核验：2026-09-16 06:00 UTC（北京时间 14:00，课程修复发布专项）
 
-本文件仅保留最新已知基线、功能边界、未解决事项和接手入口。生产信息是上述核验时点的记录，不能代替下一次操作前的现场检查；本次文档整理没有重新连接服务器。长期协作规则见 [AGENTS.md](../../AGENTS.md)。
+本文件仅保留最新已知基线、功能边界、未解决事项和接手入口。本次核验覆盖课程修复发布及相关服务；其他模块现场验收以对应记录为准，不能代替下一次操作前的检查。长期协作规则见 [AGENTS.md](../../AGENTS.md)。
 
-## 课程实例专项核验（2026-09-16，修复未部署）
+## 课程实例修复已部署（2026-09-16）
 
-对 `10.24.0.27` 课程 32 / 章节 69 的专项检查确认：课程容器误用公共练习的单实例额度且忽略自动清理开关；`ez_rce_2` 的旧学员实例已加载但没有 Flag 关联。任务分支 `codex/training-instance-flag-fix` 已实现独立课程额度、禁止课程实例自动驱逐、创建前修复缺失动态 Flag。Release 构建、1159 项单测和 11 项定向 PostgreSQL / 真实 Docker 集成测试通过；独立 BusyBox 实测覆盖三容器不同端口、注入一致性和单实例销毁隔离，未解题或执行攻击载荷。当前主站尚未部署修复，629 的业务记录尚未修改。
+课程 32 / 章节 69 的实例覆盖和缺失 Flag 已修复并发布。原 main 开发修复位于 `codex/training-instance-flag-fix`；部署为维护分支 `codex/training-instance-flag-release` 的 `eaac7f2684755f6471b684c2432e6e18dea3eb92`，基于现场版本回移同一修复，无数据库迁移、前端或 Agent 更新。
 
-本次读取的主站软链接为 `/opt/gzctf/releases/agent-fabric-dd2f464da2bf-20260910`，与下文 9 月 8 日全量核验基线不同；目录 manifest 与路径身份亦不一致，发布前必须重新确认二进制身份。本次只做课程专项检查，不替代全站发布验收。详见 [任务交接](handoffs/2026-09-16-training-instance-flag-fix.md)。
+正式 API 已确认 627、629、630 三个实例同时运行，入口分别为 `203.195.157.191:30001`、`:30002`、`:30000`。629 的缺失 Flag 关联已由平台创建流程修复；三容器环境变量与各自数据库值匹配，只记录布尔结果。独立停止并重建 629 后另外两个实例保持不变，最终三个实例留给用户继续测试。未解题、未读取题目 Flag 文件、未提交 Flag。
+
+主站、Agent、三节点、队列、镜像和共享附件核验通过；健康端点仍为既有 Degraded。维护分支 Release 构建和课程定向 22 项单测通过，全量单测 1139/1141，两个既有 TeamLab 断言失败保留记录。新鲜备份已完整恢复验证；详见 [发布记录](handoffs/2026-09-16-training-hotfix-rollout.md)和 [开发交接](handoffs/2026-09-16-training-instance-flag-fix.md)。
 
 ## TeamLab API 底座在研状态（2026-09-15）
 
@@ -79,12 +81,12 @@ H03 最新专项（2026-09-08）：真实 OVN/OVS＋QEMU Linux 来宾＋namespac
 | --- | --- |
 | 仓库 / 开发分支 | `https://github.com/Y3X1L2/newGZCTF.git` / `main`；开发从最新 `origin/main` 创建任务分支 |
 | 固定发布标签 | `stable-20260908` → `ab2bd54b7e16d454e3a8f54960c4bb4689047c4a`；已推送 annotated tag，不移动标签 |
-| 主站发布 | `10.24.0.27` 的主站及本机 Agent 使用 `/opt/gzctf/releases/pr9-converged-ab2bd54b7e16d454e3a8f54960c4bb4689047c4a-20260908/publish`；994 个 manifest 文件长度/摘要匹配 |
+| 主站发布 | `10.24.0.27` 已发布课程修复 `eaac7f2684755f6471b684c2432e6e18dea3eb92`，目录 `/opt/gzctf/releases/training-instance-flag-eaac7f2684755f6471b684c2432e6e18dea3eb92-20260916/publish`；只替换主站 DLL，1210 个文件 manifest 已校验，Agent 与前端沿用原制品 |
 | 持久化附件 | `/opt/gzctf/publish/files` → `/opt/gzctf/shared/files` |
-| 数据库 | 134 条迁移历史，head `20260816192540_TeamLabCapabilityClosure`；当前发布无新增迁移 |
-| 应用回退 | `/opt/gzctf/publish.previous` → `/opt/gzctf/releases/practice-validation-9eef8ac12c626672081e81fadbde39946e7d2237/publish` |
-| 备份 | `/opt/gzctf/backups/pr9-rollout-pre-ab2bd54b-20260908T080802Z`；预备与最终数据库备份均实际恢复验证，最终数据库/附件备份摘要复核通过 |
-| 执行节点 | 最近核验三节点均 Online/Stable/schedulable，Fabric Disabled；Agent 摘要前缀：`.27` `d93cf212...`、`.30` `3747f353...`、`.31` `2f12bca5...`，远端版本未完全统一 |
+| 数据库 | 140 条迁移历史，head `20260908111521_TeamLabDeviceObservation`；本次无迁移，新鲜备份已完整恢复验证 |
+| 应用回退 | `/opt/gzctf/publish.previous` → `/opt/gzctf/releases/agent-fabric-dd2f464da2bf-20260910` |
+| 备份 | `/opt/gzctf/backups/training-eaac7f26-pre-20260916T052014Z`；数据库及附件备份摘要已核对，数据库已在隔离容器完整恢复，临时恢复库已清理 |
+| 执行节点 | 2026-09-16 06:00 UTC 核验三节点均 Online、可调度且心跳新鲜；本次没有更新或重启 Agent |
 | 健康状态 | 指标端口 `3001/healthz` 为 HTTP 200 / Degraded；业务端口 `8080/healthz` 按契约返回 404；降级原因见未解决事项 |
 | 技术栈 | .NET 10、ASP.NET Core、EF Core、PostgreSQL、Redis、React 19、TypeScript、Vite、pnpm |
 
