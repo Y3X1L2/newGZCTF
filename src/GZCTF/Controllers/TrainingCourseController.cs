@@ -5,6 +5,7 @@ using GZCTF.Models.Internal;
 using GZCTF.Models.Request.Game;
 using GZCTF.Models.Request.Training;
 using GZCTF.Repositories.Interface;
+using GZCTF.Modules.Training.Application;
 using GZCTF.Services;
 using GZCTF.Services.Config;
 using GZCTF.Services.Fleet;
@@ -25,6 +26,7 @@ public class TrainingCourseController(
     IConfigService configService,
     IPlatformCache cache,
     IOptionsSnapshot<ContainerPolicy> containerPolicy,
+    TrainingCourseDetailProjectionService courseDetails,
     ILogger<TrainingCourseController> logger) : ControllerBase
 {
     private async Task<UserInfo> CurrentUser() =>
@@ -233,14 +235,25 @@ public class TrainingCourseController(
             .Select(c => c.Id)
             .ToArrayAsync(token);
 
-        var completedChapterIds = await context.TrainingChapterProgresses
+        var chapterStatuses = await context.TrainingChapterProgresses.AsNoTracking()
             .Where(p => p.UserId == user.Id &&
                         p.CourseId == course.Id &&
-                        publishedChapterIds.Contains(p.ChapterId) &&
-                        p.Status == TrainingCourseProgressStatus.Completed)
-            .Select(p => p.ChapterId)
-            .ToArrayAsync(token);
-        var completedChapters = completedChapterIds.Length;
+                        publishedChapterIds.Contains(p.ChapterId))
+            .ToDictionaryAsync(p => p.ChapterId, p => p.Status, token);
+        // The current completion is still tracked until the caller saves the chapter
+        // and course together. A database-only count would lag by one completion.
+        foreach (var entry in context.ChangeTracker.Entries<TrainingChapterProgress>())
+        {
+            var chapter = entry.Entity;
+            if (chapter.UserId != user.Id || chapter.CourseId != course.Id ||
+                !publishedChapterIds.Contains(chapter.ChapterId))
+                continue;
+            if (entry.State == EntityState.Deleted)
+                chapterStatuses.Remove(chapter.ChapterId);
+            else if (entry.State is EntityState.Added or EntityState.Modified)
+                chapterStatuses[chapter.ChapterId] = chapter.Status;
+        }
+        var completedChapters = chapterStatuses.Values.Count(status => status == TrainingCourseProgressStatus.Completed);
 
         var challengeIds = await context.TrainingCourseChallenges
             .Where(c => c.CourseId == course.Id)
@@ -262,7 +275,7 @@ public class TrainingCourseController(
         progress.ChallengeSolvedCount = solvedCount;
         progress.Status = publishedChapterIds.Length > 0 && completedChapters >= publishedChapterIds.Length
             ? TrainingCourseProgressStatus.Completed
-            : completedChapters > 0 || solvedCount > 0
+            : completedChapters > 0 || solvedCount > 0 || chapterStatuses.Values.Contains(TrainingCourseProgressStatus.Learning)
                 ? TrainingCourseProgressStatus.Learning
                 : TrainingCourseProgressStatus.NotStarted;
         progress.StartedAt ??= DateTimeOffset.UtcNow;
@@ -280,8 +293,10 @@ public class TrainingCourseController(
         int chapterId,
         CancellationToken token)
     {
-        var progress = await context.TrainingChapterProgresses
-            .SingleOrDefaultAsync(item => item.ChapterId == chapterId && item.UserId == user.Id, token);
+        var progress = context.TrainingChapterProgresses.Local
+            .SingleOrDefault(item => item.ChapterId == chapterId && item.UserId == user.Id)
+            ?? await context.TrainingChapterProgresses
+                .SingleOrDefaultAsync(item => item.ChapterId == chapterId && item.UserId == user.Id, token);
         if (progress is not null)
             return progress;
 
@@ -646,6 +661,8 @@ public class TrainingCourseController(
             canManageEnrollments: canEdit || user.Role >= Role.Admin,
             canDelete: false,
             includeDetail: includeDetail);
+
+        await courseDetails.PopulateAsync(model, user.Id, token);
 
         if (model.Chapters.Count > 0)
         {

@@ -1,3 +1,4 @@
+import { challengeChapterLabel } from '../courseBindings'
 import { Box, FileArchive, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router'
@@ -68,7 +69,7 @@ export function CourseChallengesPanel({
                 {challenge.isRequired ? '必做' : '选做'}
               </StatusPill>
               <span className={styles.chapterLabel}>
-                {challenge.chapterId ? `章节 #${challenge.chapterId}` : '未绑定章节'}
+                {challengeChapterLabel(challenge, course.chapters ?? [])}
               </span>
               <div className={styles.rowActions}>
                 <Link

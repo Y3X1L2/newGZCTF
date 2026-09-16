@@ -57,6 +57,8 @@
 
 ## 4. 未解决事项
 
+- **培训展示与复制**：`codex/training-progress-clipboard-fixes` 已定位并修复 HTTP 剪贴板访问、课程详情漏传个人章节进度/题目绑定、课程完成数量落后一章的问题；尚未部署。验证与历史聚合处理范围见[修复交接](handoffs/2026-09-16-training-progress-clipboard-fixes.md)。
+
 - **数据保留 SQL**：`teamlab-flow` 分区清理存在 PostgreSQL `42601` 语法错误，最近核验仍按小时发生；需要独立修复及定向回归，不能用删除生产数据绕过。
 - **指标并发**：2026-09-08 观察到一次指标持久化 `DbUpdateConcurrencyException`，后续心跳/指标恢复；仍需并发和失败批次重试回归，不能将自动恢复等同于根因已修复。
 - **迁移来源**：`20260604165857_AddTheoryExamEntities`、`20260604193010_SyncTheoryExam` 的来源仍未恢复，导致 134 条数据库历史与 132 条可发现迁移存在差异。另有 `20260802023000_RemoveDestroyedTeamLabUdpMappings.cs` 缺少迁移元数据，不能按源码文件数认定 bundle 会执行。禁止伪造或删除历史；后续迁移须在新鲜生产备份副本验证。详见 [迁移交接](handoffs/2026-09-02-migration-drift-reconciliation.md) 与 [发布核验](handoffs/2026-09-08-pr9-production-rollout.md)。
