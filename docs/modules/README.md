@@ -16,7 +16,7 @@
 | Runtime | Agent 能力协议、调度/恢复手册、节点部署文档 | 较完整 | 面向业务模块的 command/query 速查表 |
 | TeamLab | TeamLab 契约、功能说明、基础验收手册、页面/API 规格 | 较完整 | 双 Worker 故障、长期流量和规模验收手册 |
 | Theory | 总纲、页面/API 规格、Open API | 业务入口可查 | JSON 出题格式、答卷快照、判分和重试策略总览 |
-| Training | 总纲、页面/API 规格、Windows/实例运维文档 | 业务入口可查 | 课程权限、教师/学员、资源绑定和实例生命周期总览 |
+| Training | 总纲、页面/API 规格、[课程容器生命周期](training-container-lifecycle.md)、Windows/实例运维文档 | 业务入口和课程容器规则可查 | 课程权限、教师/学员、资源绑定总览 |
 
 Agent 不在 `Modules` 目录，但执行面文档覆盖较好：
 
