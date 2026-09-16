@@ -1,3 +1,4 @@
+import { copyText } from '@Utils/clipboard'
 import { Copy, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useOutletContext } from 'react-router'
@@ -44,10 +45,10 @@ export function AdminGameDivisionsPage() {
   const copyInviteCode = async (division: Division) => {
     if (!division.inviteCode) return
     try {
-      await navigator.clipboard.writeText(division.inviteCode)
+      if (!(await copyText(division.inviteCode))) throw new Error('Copy failed')
       setFeedback({ tone: 'success', message: `赛区“${division.name}”的邀请码已复制。` })
     } catch {
-      setFeedback({ tone: 'danger', message: '浏览器拒绝访问剪贴板。' })
+      setFeedback({ tone: 'danger', message: '复制失败，请选中文本后手动复制。' })
     }
   }
 

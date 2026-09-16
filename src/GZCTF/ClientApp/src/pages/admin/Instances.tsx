@@ -13,7 +13,6 @@ import {
   Tooltip,
   useMantineTheme,
 } from '@mantine/core'
-import { useClipboard } from '@mantine/hooks'
 import { showNotification } from '@mantine/notifications'
 import {
   mdiAccountGroupOutline,
@@ -32,6 +31,7 @@ import { YinyuTableShell } from '@Components/yinyu/YinyuUI'
 import { useLanguage } from '@Utils/I18n'
 import { showErrorMsg } from '@Utils/Shared'
 import { useChallengeCategoryLabelMap, getProxyUrl } from '@Utils/Shared'
+import { useClipboard } from '@Hooks/useClipboard'
 import api, { ChallengeModel, ChallengeCategory, TeamModel } from '@Api'
 import classes from '@Styles/Instances.module.css'
 import misc from '@Styles/Misc.module.css'

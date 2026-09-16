@@ -1,3 +1,4 @@
+import { copyText } from '@Utils/clipboard'
 import { Clipboard, Download, Save, Trash2, Upload } from 'lucide-react'
 import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useOutletContext } from 'react-router'
@@ -172,10 +173,10 @@ export function AdminGameInfoPage() {
   const copyPublicKey = async () => {
     if (!game.publicKey) return
     try {
-      await navigator.clipboard.writeText(game.publicKey)
+      if (!(await copyText(game.publicKey))) throw new Error('Copy failed')
       setFeedback({ tone: 'success', message: '比赛公钥已复制。' })
     } catch {
-      setFeedback({ tone: 'danger', message: '浏览器拒绝访问剪贴板。' })
+      setFeedback({ tone: 'danger', message: '复制失败，请选中文本后手动复制。' })
     }
   }
 

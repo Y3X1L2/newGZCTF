@@ -16,7 +16,7 @@ import {
   Text,
   TextInput,
 } from '@mantine/core'
-import { useClipboard, useInputState } from '@mantine/hooks'
+import { useInputState } from '@mantine/hooks'
 import { useModals } from '@mantine/modals'
 import { showNotification } from '@mantine/notifications'
 import {
@@ -38,10 +38,11 @@ import { AdminPage } from '@Components/admin/AdminPage'
 import { UserEditModal, RoleColorMap, roleDisplayName } from '@Components/admin/UserEditModal'
 import { YinyuTableShell } from '@Components/yinyu/YinyuUI'
 import { showErrorMsg } from '@Utils/Shared'
+import { StudentGroupBriefModel, studentGroupAdminApi } from '@Utils/StudentGroupApi'
 import { useArrayResponse } from '@Hooks/useArrayResponse'
+import { useClipboard } from '@Hooks/useClipboard'
 import { useUser } from '@Hooks/useUser'
 import api, { Role, UserInfoModel } from '@Api'
-import { StudentGroupBriefModel, studentGroupAdminApi } from '@Utils/StudentGroupApi'
 import tableClasses from '@Styles/Table.module.css'
 
 const ITEM_COUNT_PER_PAGE = 30
@@ -488,12 +489,7 @@ const Users: FC = () => {
             )
           }}
         />
-        <Modal
-          opened={createModalOpened}
-          onClose={() => setCreateModalOpened(false)}
-          title="新建用户"
-          size="lg"
-        >
+        <Modal opened={createModalOpened} onClose={() => setCreateModalOpened(false)} title="新建用户" size="lg">
           <Stack gap="md">
             <Group grow align="start">
               <TextInput

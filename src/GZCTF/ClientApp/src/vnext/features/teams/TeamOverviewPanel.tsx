@@ -1,6 +1,7 @@
 import { Clipboard, RefreshCw } from 'lucide-react'
+import { useClipboard } from '@Hooks/useClipboard'
 import { TeamInfoModel } from '@Api'
-import { ActionButton } from '../../shared/Interaction'
+import { ActionButton, InlineFeedback } from '../../shared/Interaction'
 import { MemberAvatar } from './TeamAvatar'
 import styles from './TeamsPage.module.css'
 
@@ -12,6 +13,7 @@ interface TeamOverviewPanelProps {
 }
 
 export function TeamOverviewPanel({ team, isCaptain, inviteCode, onRefreshInviteCode }: TeamOverviewPanelProps) {
+  const clipboard = useClipboard()
   return (
     <div className={styles.overviewGrid}>
       <section className={styles.metricBand}>
@@ -57,15 +59,16 @@ export function TeamOverviewPanel({ team, isCaptain, inviteCode, onRefreshInvite
             <ActionButton
               disabled={!inviteCode}
               icon={<Clipboard size={15} />}
-              onClick={() => inviteCode && void navigator.clipboard.writeText(inviteCode)}
+              onClick={() => void clipboard.copy(inviteCode)}
               type="button"
             >
-              复制
+              {clipboard.copied ? '已复制' : '复制'}
             </ActionButton>
             <ActionButton icon={<RefreshCw size={15} />} onClick={() => void onRefreshInviteCode()} type="button">
               刷新
             </ActionButton>
           </div>
+          {clipboard.error ? <InlineFeedback tone="danger">{clipboard.error.message}</InlineFeedback> : null}
         </section>
       ) : null}
     </div>

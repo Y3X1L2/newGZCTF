@@ -1,13 +1,14 @@
 import { Copy, KeyRound } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useClipboard } from '@Hooks/useClipboard'
 import { ApiTokenModel, Role } from '@Api'
 import { ActionButton, InlineFeedback, VNextConfirmDialog, VNextDialog } from '../../shared/Interaction'
 import { DataState, StatusPill } from '../../shared/Primitives'
 import { errorMessage } from '../../shared/errors'
 import { useCurrentAccount } from '../account/useCurrentAccount'
-import { settingsApi, useApiTokens } from './settingsApi'
-import { TokenCreateDialog } from './TokenCreateDialog'
 import styles from './SettingsPage.module.css'
+import { TokenCreateDialog } from './TokenCreateDialog'
+import { settingsApi, useApiTokens } from './settingsApi'
 
 function formatTime(value?: number | null) {
   return value ? new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium', timeStyle: 'short' }).format(value) : '未设置'
@@ -67,6 +68,8 @@ function TokenRow({ token, onRevoke }: { token: ApiTokenModel; onRevoke: (id: st
 }
 
 function SecretDialog({ onClose, secret }: { onClose: () => void; secret: string | null }) {
+  const clipboard = useClipboard()
+  useEffect(() => clipboard.reset(), [secret, clipboard.reset])
   return (
     <VNextDialog
       description="关闭后无法再次查看明文，请立即存放到安全位置。"
@@ -82,14 +85,11 @@ function SecretDialog({ onClose, secret }: { onClose: () => void; secret: string
     >
       <div className={styles.secretBox}>
         <code>{secret}</code>
-        <ActionButton
-          icon={<Copy size={16} />}
-          onClick={() => secret && void navigator.clipboard.writeText(secret)}
-          type="button"
-        >
-          复制
+        <ActionButton icon={<Copy size={16} />} onClick={() => void clipboard.copy(secret)} type="button">
+          {clipboard.copied ? '已复制' : '复制'}
         </ActionButton>
       </div>
+      {clipboard.error ? <InlineFeedback tone="danger">{clipboard.error.message}</InlineFeedback> : null}
     </VNextDialog>
   )
 }

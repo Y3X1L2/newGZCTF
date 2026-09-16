@@ -1,5 +1,4 @@
 import { ActionIcon, Button, Divider, Group, Stack, Text, TextInput, Tooltip } from '@mantine/core'
-import { useClipboard } from '@mantine/hooks'
 import { useDebouncedCallback, useDebouncedState } from '@mantine/hooks'
 import { showNotification } from '@mantine/notifications'
 import {
@@ -19,6 +18,7 @@ import { useTranslation } from 'react-i18next'
 import { HandleWsrxError, useWsrx } from '@Components/WsrxProvider'
 import { YinyuPanel, YinyuStatusPill } from '@Components/yinyu/YinyuUI'
 import { getProxyUrl as getProxyEntry } from '@Utils/Shared'
+import { useClipboard } from '@Hooks/useClipboard'
 import { useConfig } from '@Hooks/useConfig'
 import { ClientFlagContext, ContainerPortMappingType } from '@Api'
 import classes from '@Styles/InstanceEntry.module.css'
@@ -196,10 +196,7 @@ export const InstanceEntry: FC<InstanceEntryProps> = (props) => {
             </Text>
           </Stack>
 
-          <Button
-            onClick={onCreate}
-            disabled={disabled}
-          >
+          <Button onClick={onCreate} disabled={disabled}>
             {t('challenge.button.instance.create')}
           </Button>
         </Group>
