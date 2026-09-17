@@ -1,9 +1,18 @@
 # YINYU 当前开发状态
 
-文档整理日期：2026-09-15
-最近一次生产核验：2026-09-08 09:49 UTC（北京时间 17:49）
+文档整理日期：2026-09-17
+最近一次生产核验：2026-09-17 10:08 UTC（北京时间 18:08）
 
-本文件仅保留最新已知基线、功能边界、未解决事项和接手入口。生产信息是上述核验时点的记录，不能代替下一次操作前的现场检查；本次文档整理没有重新连接服务器。长期协作规则见 [AGENTS.md](../../AGENTS.md)。
+本文件仅保留最新已知基线、功能边界、未解决事项和接手入口。生产信息是上述核验时点的记录，不能代替下一次操作前的现场检查。长期协作规则见 [AGENTS.md](../../AGENTS.md)。
+
+## TeamLab 热更新生产发布（2026-09-17）
+
+- `10.24.0.27` 已原子切换到 `/opt/gzctf/releases/teamlab-hot-update-3d11dd968375-20260917/publish`，运行源码为 `3d11dd968375af8429f6f84c04f555e27bdd55b8`。`publish.previous` 指向切换前的 `training-ui-12e2c1a09dee1be4571e1349a2bd489cf3a2ca56-20260916/publish`，主站与本机 Agent 均从新目录启动。
+- 发布前备份位于 `/opt/gzctf/backups/teamlab-hot-update-3d11dd968375-20260917-pre`：初始数据库备份约 802 MiB、停止写入后的最终数据库备份约 803 MiB、共享附件备份约 304 MiB，摘要写入该目录的 `checksums.sha256`；两份数据库备份目录均可读取，最终备份包含 2184 个目录条目。
+- 同一生产备份先恢复到隔离数据库并执行候选 `efbundle`，核心业务计数保持一致；临时数据库随后删除。生产迁移从 140 条前向到 143 条，当前迁移头为 `20260917063722_AddTeamLabRuntimeHotUpdate`。
+- `gzctf.service` 与 `gzctf-agent.service` 均为 active/running、`NRestarts=0`；首页、`/api/Config`、`/api-docs/` 和 `/openapi/open-v1.json` 均返回 200，公开 OpenAPI 已包含运行时更新预览与提交接口。发布前后活动部署票据均为 0，原有 1 个运行中普通容器实例仍保留，TeamLab 无活动运行环境。
+- 三个节点均 Online 且可调度；`.30`、`.31` 的 TeamLab Fabric 为 Healthy。本机 Agent 能力探测正常，但 `gzctf-fabric` 接口当前不存在，因此本机 Fabric 保持 Disabled；本次未伪造数据库健康状态，也未改变既有 Fabric 拓扑。
+- 本次完成发布与基础冒烟，没有在生产创建 TeamLab 运行环境或执行在线资产更新。真实多 Worker 热更新仍需使用可清理场景单独验收。
 
 ## TeamLab API 底座在研状态（2026-09-15）
 
