@@ -49,7 +49,7 @@ public class NodeTunnelService(
         if (!probe.Success)
             return new TeamLabNodeEnableResult(false, probe.Message, []);
 
-        ApplyDryRunProbeResult(node);
+        ApplyDryRunProbeResult(node, probe.Status?.FabricReady == true, probe.Status?.FabricIp);
         await context.SaveChangesAsync(token);
 
         return new TeamLabNodeEnableResult(true,
@@ -110,11 +110,13 @@ public class NodeTunnelService(
             octet is >= 0 and <= 255);
     }
 
-    internal static void ApplyDryRunProbeResult(WorkerNode node)
+    internal static void ApplyDryRunProbeResult(WorkerNode node, bool fabricReady, string? fabricIp)
     {
-        if (node.TeamLabNetworkEnabled && node.TeamLabTunnelStatus == TeamLabTunnelStatus.Healthy &&
-            !string.IsNullOrWhiteSpace(node.TeamLabTunnelIp))
+        if (node.TeamLabNetworkEnabled && fabricReady &&
+            !string.IsNullOrWhiteSpace(node.TeamLabTunnelIp) &&
+            string.Equals(node.TeamLabTunnelIp, fabricIp, StringComparison.Ordinal))
         {
+            node.TeamLabTunnelStatus = TeamLabTunnelStatus.Healthy;
             node.TeamLabTunnelLastError = null;
             return;
         }
