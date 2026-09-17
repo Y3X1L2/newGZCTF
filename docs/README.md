@@ -68,6 +68,7 @@
 | Redis 部署与恢复 | [`commercialization/runbooks/redis-deployment-and-recovery.md`](commercialization/runbooks/redis-deployment-and-recovery.md) |
 | 数据库治理 | [`commercialization/runbooks/database-governance-operations.md`](commercialization/runbooks/database-governance-operations.md) |
 | TeamLab 基础验收 | [`commercialization/runbooks/teamlab-foundation-acceptance.md`](commercialization/runbooks/teamlab-foundation-acceptance.md) |
+| TeamLab 比赛仿真测试 | [`development/teamlab-competition-simulation-test-plan.md`](development/teamlab-competition-simulation-test-plan.md) |
 | AWDP 人工验收 | [`yinyu-awdp-manual-acceptance.md`](yinyu-awdp-manual-acceptance.md) |
 
 ## 6. 交接与状态维护
