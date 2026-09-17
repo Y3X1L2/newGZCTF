@@ -51,7 +51,7 @@ public class InternalController : ControllerBase
             return Unauthorized(new RequestResponse("Invalid internal sync token", StatusCodes.Status401Unauthorized));
         }
 
-        var mappings = await _containerRepository.GetProxyPortMappingsAsync(token);
+        var mappings = await GetPortMappingsAsync(token);
         Response.Headers["X-GZCTF-Port-Map-Revision"] = PortMappingRevision.Compute(mappings);
         return Ok(mappings);
     }
@@ -70,7 +70,7 @@ public class InternalController : ControllerBase
             return Unauthorized(new RequestResponse("Invalid internal sync token", StatusCodes.Status401Unauthorized));
         }
 
-        var mappings = await _containerRepository.GetProxyPortMappingsAsync(token);
+        var mappings = await GetPortMappingsAsync(token);
         var currentRevision = PortMappingRevision.Compute(mappings);
         var acknowledgedLeaseIds = (request.LeaseIds ?? []).Distinct().Order().ToArray();
 
@@ -96,6 +96,18 @@ public class InternalController : ControllerBase
                 currentRevision, publicationError);
 
         return Ok(new PortMapAckResponse(currentRevision, updated));
+    }
+
+    async Task<PortMappingEntry[]> GetPortMappingsAsync(CancellationToken token)
+    {
+        var containerMappings = await _containerRepository.GetProxyPortMappingsAsync(token);
+        var serviceMappings = await _context.TeamLabServiceAccesses.AsNoTracking()
+            .Where(access => access.Protocol == "tcp" && access.Status == "active" &&
+                             access.RevokedAt == null && access.WorkerNode.TeamLabTunnelIp != null)
+            .Select(access => new PortMappingEntry(
+                access.PublicPort, access.WorkerNode.TeamLabTunnelIp!, access.PublicPort, access.PortLeaseId))
+            .ToArrayAsync(token);
+        return [.. containerMappings, .. serviceMappings];
     }
 
     /// <summary>

@@ -871,16 +871,8 @@ public sealed class TeamLabPhysicalPlacementService(
             return left.HasValue && right.HasValue && left != right ? edge.Weight : 0;
         });
 
-    /// <summary>
-    /// Only mappings of runtimes that still exist occupy a port. A destroyed runtime's row would
-    /// otherwise hold its public port forever, and the pool is finite, so the platform would stop
-    /// scheduling any TeamLab runtime once it had created as many as the range holds.
-    /// </summary>
-    IQueryable<TeamLabPublicUdpMapping> LiveUdpMappings() =>
-        context.TeamLabPublicUdpMappings.AsNoTracking()
-            .Where(item => context.TeamLabRuntimes
-                .Any(runtime => runtime.Id == item.RuntimeId &&
-                                runtime.Status != TeamLabRuntimeStatus.Destroyed));
+    IQueryable<TeamLabPublicUdpMapping> OccupiedUdpMappings() =>
+        context.TeamLabPublicUdpMappings.AsNoTracking();
 
     async Task<(TeamLabPublicUdpMapping? Mapping, string? Error)> AllocateUdpMappingAsync(
         TeamLabRuntime runtime, Guid nodeId, CancellationToken token)
@@ -888,9 +880,9 @@ public sealed class TeamLabPhysicalPlacementService(
         var node = await context.WorkerNodes.AsNoTracking().SingleAsync(item => item.Id == nodeId, token);
         if (string.IsNullOrWhiteSpace(node.TeamLabTunnelIp))
             return (null, $"Node '{node.Name}' has no TeamLab tunnel IP.");
-        var usedPublic = await LiveUdpMappings()
+        var usedPublic = await OccupiedUdpMappings()
             .Select(item => item.PublicUdpPort).ToArrayAsync(token);
-        var usedWorker = await LiveUdpMappings()
+        var usedWorker = await OccupiedUdpMappings()
             .Where(item => item.WorkerTunnelIp == node.TeamLabTunnelIp)
             .Select(item => item.WorkerWireGuardPort).ToArrayAsync(token);
 
@@ -921,7 +913,7 @@ public sealed class TeamLabPhysicalPlacementService(
         var node = await context.WorkerNodes.AsNoTracking().SingleAsync(item => item.Id == nodeId, token);
         if (string.IsNullOrWhiteSpace(node.TeamLabTunnelIp))
             return $"Node '{node.Name}' has no TeamLab tunnel IP.";
-        var used = await LiveUdpMappings()
+        var used = await OccupiedUdpMappings()
             .Where(item => item.Id != mapping.Id && item.WorkerTunnelIp == node.TeamLabTunnelIp)
             .Select(item => item.WorkerWireGuardPort).ToArrayAsync(token);
         var workerPort = FirstFree(

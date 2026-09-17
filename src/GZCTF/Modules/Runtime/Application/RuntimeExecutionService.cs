@@ -444,10 +444,15 @@ public sealed class RuntimeExecutionService(
     static async Task ReleaseCapacityAsync(AppDbContext context, FleetCapacityReservationService capacity,
         DeploymentQueueTicket ticket, CancellationToken token)
     {
-        if (ticket.Kind == DeploymentQueueKind.TeamLabRuntime && ticket.TeamLabRuntimeId is { } runtimeId)
+        if (ticket.Kind == DeploymentQueueKind.TeamLabRuntime && ticket.TeamLabRuntimeId is not null)
         {
-            foreach (var slot in await TeamLabCapacityFacts.LoadAsync(context, runtimeId, token))
-                await capacity.ReleaseAsync(ticket.Id, slot.WorkerNodeId, token);
+            var nodeIds = await context.FleetCapacityReservations.AsNoTracking()
+                .Where(item => item.DeploymentQueueTicketId == ticket.Id &&
+                               item.Status == CapacityReservationStatus.Active)
+                .Select(item => item.WorkerNodeId)
+                .ToArrayAsync(token);
+            foreach (var reservedNodeId in nodeIds)
+                await capacity.ReleaseAsync(ticket.Id, reservedNodeId, token);
             return;
         }
 
