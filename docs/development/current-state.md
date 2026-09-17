@@ -5,6 +5,13 @@
 
 本文件仅保留最新已知基线、功能边界、未解决事项和接手入口。生产信息是上述核验时点的记录，不能代替下一次操作前的现场检查。长期协作规则见 [AGENTS.md](../../AGENTS.md)。
 
+## TeamLab Fabric 与比赛仿真准备（2026-09-17）
+
+- `10.24.0.27` 已发布 `2c1e14ed5f94cbdb795c473662c8c08b1ff1e1f1`，目录为 `/opt/gzctf/releases/teamlab-fabric-check-2c1e14e-20260917/publish`。兼容性检测现在使用本次 Agent 返回的 Fabric 结果，不再把刚写入的 `Probing` 状态误判为不可调度。
+- `.27`、`.30`、`.31` 均 Online、可调度且 Fabric Healthy；三台 Agent SHA-256 均为 `f2ea24f472b71997afa3c3c191fa55350f76defe0cf7a266a7e4526e5d4da5a2`。`.27`、`.31` 可承载 Docker 与 VM；`.30` 没有 `/dev/kvm`，只承载 Docker。
+- 生产调用兼容性检测后 `.27` 仍保持 Tunnel/Fabric Healthy，Docker 与 VM 均可调度。回归单测 1/1、前端测试 347/347、完整发布包构建通过。
+- 双队比赛仿真测试计划及轻量框架位于 `docs/development/teamlab-competition-simulation-test-plan.md` 和 `scripts/validation/teamlab-match/`。框架短流程测试已通过；生产场景接线、模板/镜像核对和正式两小时测试尚未执行。
+
 ## TeamLab 热更新生产发布（2026-09-17）
 
 - `10.24.0.27` 已原子切换到 `/opt/gzctf/releases/teamlab-hot-update-3d11dd968375-20260917/publish`，运行源码为 `3d11dd968375af8429f6f84c04f555e27bdd55b8`。`publish.previous` 指向切换前的 `training-ui-12e2c1a09dee1be4571e1349a2bd489cf3a2ca56-20260916/publish`，主站与本机 Agent 均从新目录启动。

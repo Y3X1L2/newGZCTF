@@ -1,0 +1,53 @@
+{
+  "name": "TeamLab 双队比赛仿真",
+  "durationSeconds": 7200,
+  "baseUrl": "${GZCTF_BASE_URL}",
+  "auth": {
+    "bearerToken": "${GZCTF_API_TOKEN}"
+  },
+  "teams": [
+    {
+      "name": "red",
+      "virtualUsers": 25,
+      "burstUsers": 50,
+      "probes": [
+        { "name": "web-entry", "type": "http", "url": "${RED_WEB_URL}", "expectStatus": 200 },
+        { "name": "tcp-service", "type": "tcp", "host": "${RED_TCP_HOST}", "port": "${RED_TCP_PORT}" },
+        { "name": "modbus-plc", "type": "modbus", "host": "${RED_MODBUS_HOST}", "port": "${RED_MODBUS_PORT}", "unitId": 1, "startAddress": 0, "quantity": 4 }
+      ]
+    },
+    {
+      "name": "blue",
+      "virtualUsers": 25,
+      "burstUsers": 50,
+      "probes": [
+        { "name": "web-entry", "type": "http", "url": "${BLUE_WEB_URL}", "expectStatus": 200 },
+        { "name": "tcp-service", "type": "tcp", "host": "${BLUE_TCP_HOST}", "port": "${BLUE_TCP_PORT}" },
+        { "name": "modbus-plc", "type": "modbus", "host": "${BLUE_MODBUS_HOST}", "port": "${BLUE_MODBUS_PORT}", "unitId": 1, "startAddress": 0, "quantity": 4 }
+      ]
+    }
+  ],
+  "monitors": [
+    { "name": "nodes", "path": "/api/admin/nodes", "intervalSeconds": 5 },
+    { "name": "runtime-red", "path": "/api/open/v1/teamlab/runtimes/${RED_RUNTIME_ID}/status", "intervalSeconds": 5 },
+    { "name": "runtime-blue", "path": "/api/open/v1/teamlab/runtimes/${BLUE_RUNTIME_ID}/status", "intervalSeconds": 5 }
+  ],
+  "stages": [
+    {
+      "name": "环境核对",
+      "atSeconds": 0,
+      "actions": [
+        { "name": "读取红队运行状态", "method": "GET", "path": "/api/open/v1/teamlab/runtimes/${RED_RUNTIME_ID}/status" },
+        { "name": "读取蓝队运行状态", "method": "GET", "path": "/api/open/v1/teamlab/runtimes/${BLUE_RUNTIME_ID}/status" }
+      ]
+    },
+    { "name": "平稳访问与 Flag", "atSeconds": 600, "actions": [] },
+    { "name": "突发访问与链路策略", "atSeconds": 2100, "actions": [] },
+    { "name": "抓包与工控流量", "atSeconds": 3000, "actions": [] },
+    { "name": "运行中资产更新", "atSeconds": 3900, "actions": [] },
+    { "name": "远程运维与审计", "atSeconds": 4800, "actions": [] },
+    { "name": "故障恢复", "atSeconds": 5700, "actions": [] },
+    { "name": "清理与残留检查", "atSeconds": 6900, "actions": [] }
+  ]
+}
+

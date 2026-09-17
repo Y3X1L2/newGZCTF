@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>TeamLab 比赛仿真</title>
+  <style>
+    :root{color-scheme:dark;background:#101417;color:#edf1f3;font:14px system-ui,sans-serif}body{margin:0}.bar{height:4px;background:#253037}.bar i{display:block;height:100%;background:#38b07c}.head{padding:22px 28px;border-bottom:1px solid #2b353b;display:flex;justify-content:space-between}.head h1{font-size:20px;margin:0 0 6px}.muted{color:#93a1a9}.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;padding:18px 28px}.panel{border:1px solid #2b353b;border-radius:6px;padding:14px;background:#171d21}.value{font-size:25px;font-weight:650;margin-top:8px}.wide{grid-column:span 2}.ok{color:#5bd39a}.bad{color:#ff7373}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:9px;border-bottom:1px solid #293238}th{color:#93a1a9;font-weight:500}@media(max-width:850px){.grid{grid-template-columns:1fr}.wide{grid-column:span 1}}
+  </style>
+</head>
+<body>
+  <div class="bar"><i id="progress"></i></div>
+  <header class="head"><div><h1>TeamLab 比赛仿真</h1><span class="muted" id="phase">等待启动</span></div><div id="clock">00:00:00</div></header>
+  <main class="grid">
+    <section class="panel"><div class="muted">请求速率</div><div class="value" id="rps">0 req/s</div></section>
+    <section class="panel"><div class="muted">成功率</div><div class="value" id="success">-</div></section>
+    <section class="panel"><div class="muted">P95 延迟</div><div class="value" id="p95">-</div></section>
+    <section class="panel"><div class="muted">故障</div><div class="value" id="failures">0</div></section>
+    <section class="panel wide"><div class="muted">队伍访问</div><table><thead><tr><th>队伍</th><th>成功</th><th>失败</th><th>P95</th></tr></thead><tbody id="teams"></tbody></table></section>
+    <section class="panel wide"><div class="muted">最近故障</div><table><thead><tr><th>时间</th><th>分类</th><th>位置</th><th>次数</th></tr></thead><tbody id="errors"></tbody></table></section>
+    <section class="panel wide"><div class="muted">节点与运行状态</div><pre id="monitors">等待采样</pre></section>
+    <section class="panel wide"><div class="muted">阶段进度</div><table><tbody id="stages"></tbody></table></section>
+  </main>
+<script>
+const $=id=>document.getElementById(id);const fmt=s=>new Date(s*1000).toISOString().slice(11,19);
+function draw(s){$('phase').textContent=s.phase;$('clock').textContent=fmt(s.elapsedSeconds);$('progress').style.width=`${s.progressPercent}%`;const m=s.metrics;$('rps').textContent=`${m.rps.toFixed(1)} req/s`;$('success').textContent=m.total?`${(100*m.success/m.total).toFixed(2)}%`:'-';$('p95').textContent=m.total?`${m.p95Ms.toFixed(0)} ms`:'-';$('failures').textContent=s.errors.reduce((n,e)=>n+e.count,0);$('failures').className=`value ${s.errors.length?'bad':'ok'}`;$('teams').innerHTML=Object.entries(s.teams).map(([n,v])=>`<tr><td>${n}</td><td>${v.success}</td><td>${v.failed}</td><td>${v.p95Ms.toFixed(0)} ms</td></tr>`).join('');$('errors').innerHTML=s.errors.slice(-8).reverse().map(e=>`<tr><td>${e.lastAt.slice(11,19)}</td><td>${e.category}</td><td>${e.source}</td><td>${e.count}</td></tr>`).join('');$('monitors').textContent=JSON.stringify(s.monitors,null,2);$('stages').innerHTML=s.stages.map(x=>`<tr><td>${x.name}</td><td class="${x.status==='passed'?'ok':x.status==='failed'?'bad':'muted'}">${x.status}</td></tr>`).join('')}
+const es=new EventSource('/events');es.onmessage=e=>draw(JSON.parse(e.data));fetch('/api/state').then(r=>r.json()).then(draw);
+</script>
+</body></html>
+
