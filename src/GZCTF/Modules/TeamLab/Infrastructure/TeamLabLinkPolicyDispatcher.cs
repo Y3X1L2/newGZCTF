@@ -198,7 +198,7 @@ public sealed class TeamLabLinkPolicyDispatcher(AgentClient agent, AppDbContext 
     {
         var json = await context.TeamLabExecutionPlanSnapshots.AsNoTracking()
             .Where(item => item.RuntimeId == runtime.Id && item.Generation == runtime.Generation && item.ShardId == shardId)
-            .Select(item => item.PlanJson).SingleOrDefaultAsync(token);
+            .Select(item => item.CurrentPlanJson ?? item.PlanJson).SingleOrDefaultAsync(token);
         var plan = json is null ? null : JsonSerializer.Deserialize<TeamLabExecutionPlanV2>(json);
         return plan is not null && plan.IsValid(out _) ? plan.NetworkDigest : null;
     }
@@ -212,7 +212,7 @@ public sealed class TeamLabLinkPolicyDispatcher(AgentClient agent, AppDbContext 
         if (ids.Length == 0) return new Dictionary<int, string>();
         var snapshots = await context.TeamLabExecutionPlanSnapshots.AsNoTracking()
             .Where(item => item.RuntimeId == runtime.Id && item.Generation == runtime.Generation && ids.Contains(item.ShardId))
-            .Select(item => new { item.ShardId, item.PlanJson })
+            .Select(item => new { item.ShardId, PlanJson = item.CurrentPlanJson ?? item.PlanJson })
             .ToArrayAsync(token);
         return snapshots.Select(item =>
             {

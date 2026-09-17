@@ -94,7 +94,9 @@ public class DeploymentQueueTicket
 
     public static string BuildActiveIdentity(DeploymentQueueRequest request) =>
         $"{request.Operation}:{BuildSubjectConcurrencyKey(request)}:{Math.Max(1, request.Generation)}" +
-        (request.Operation == RuntimeOperationKind.AssetControl ? $":{request.PayloadHash}" : string.Empty);
+        (request.Operation is RuntimeOperationKind.AssetControl or RuntimeOperationKind.Update
+            ? $":{request.PayloadHash}"
+            : string.Empty);
 
     public static string BuildSubjectConcurrencyKey(DeploymentQueueRequest request) =>
         request.Identity.SubjectConcurrencyKey;
@@ -138,7 +140,8 @@ public enum RuntimeOperationKind : byte
     Destroy = 5,
     Pause = 6,
     Resume = 7,
-    AssetControl = 8
+    AssetControl = 8,
+    Update = 9
 }
 
 public enum DeploymentStage : byte

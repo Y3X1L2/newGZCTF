@@ -1,0 +1,757 @@
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
+using GZCTF.Models;
+using GZCTF.Models.Data;
+using GZCTF.Models.Internal;
+using GZCTF.Modules.Runtime.Application;
+using GZCTF.Modules.Runtime.Domain;
+using GZCTF.Modules.TeamLab.Contracts;
+using GZCTF.Modules.TeamLab.Domain;
+using GZCTF.Modules.TeamLab.Domain.Runtime;
+using GZCTF.Services.Fleet;
+using GZCTF.TeamLab.Contracts;
+using GZCTF.TeamLab.Contracts.Execution;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
+
+namespace GZCTF.Modules.TeamLab.Application;
+
+public sealed class TeamLabRuntimeUpdateService(
+    AppDbContext context,
+    TeamLabRuntimeOperationPayloadProtector payloads,
+    ITeamLabRuntimeQueue queue,
+    FleetCapacityReservationService capacity,
+    TeamLabRuntimeLifecycleGuard lifecycleGuard,
+    TeamLabShardDeploymentService deployment,
+    ITeamLabNodeExecutor nodes,
+    ITeamLabAssetControlGateway assetControl,
+    ITeamLabArtifactDistribution artifacts,
+    ITeamLabRemoteAccessService remoteAccess,
+    TeamLabServiceAccessService serviceAccess,
+    TeamLabTrafficApplicationService traffic,
+    TeamLabEventRecorder events,
+    ILogger<TeamLabRuntimeUpdateService> logger)
+{
+    public async Task<TeamLabRuntimeUpdatePreviewModel> PreviewAsync(
+        Guid runtimeId,
+        Guid releaseId,
+        CancellationToken token)
+    {
+        var runtime = await context.TeamLabRuntimes.AsNoTracking()
+            .Include(item => item.Shards)
+            .Include(item => item.Networks)
+            .Include(item => item.Assets)
+            .SingleOrDefaultAsync(item => item.PublicId == runtimeId, token)
+            ?? throw new TeamLabApiContractException("runtime_not_found", "未找到 TeamLab 运行时", 404);
+        if (await lifecycleGuard.IsRolloutManagedAsync(runtimeId, token))
+            throw new TeamLabApiContractException(
+                "runtime_managed_by_rollout",
+                "此运行时由比赛 rollout 管理，请使用比赛生命周期 API。",
+                409);
+        return await PreviewCoreAsync(runtime, releaseId, token);
+    }
+
+    public async Task<TeamLabQueueTicketResult> EnqueueAsync(
+        Guid runtimeId,
+        UpdateTeamLabRuntimeModel command,
+        Guid actorUserId,
+        Guid? operationId,
+        CancellationToken token)
+    {
+        var runtime = await context.TeamLabRuntimes.AsNoTracking()
+            .Include(item => item.Shards)
+            .Include(item => item.Networks)
+            .Include(item => item.Assets)
+            .SingleOrDefaultAsync(item => item.PublicId == runtimeId, token)
+            ?? throw new TeamLabApiContractException("runtime_not_found", "未找到 TeamLab 运行时", 404);
+        if (await lifecycleGuard.IsRolloutManagedAsync(runtimeId, token))
+            throw new TeamLabApiContractException(
+                "runtime_managed_by_rollout",
+                "此运行时由比赛 rollout 管理，请使用比赛生命周期 API。",
+                409);
+        var preview = await PreviewCoreAsync(runtime, command.ReleaseId, token);
+        if (!preview.CanApply)
+            throw new TeamLabApiContractException(
+                "runtime_update_requires_reset",
+                preview.ResetRequiredReason ?? "本次修改需要完整重置运行环境。",
+                409);
+        BuildOverlayValues(command.Overlays, preview.Changes);
+
+        var payload = new TeamLabRuntimeOperationPayload(null, runtimeId, null)
+        {
+            ControlScopeId = runtime.ControlScopeId,
+            Update = command
+        };
+        var protectedPayload = payloads.Protect(payload);
+        var payloadHash = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(protectedPayload)));
+        return await queue.EnqueueAsync(new TeamLabQueueRequest(
+            runtime.Id,
+            preview.Changes.Count(item => item.Kind == TeamLabAssetKind.Docker && item.Action is "add" or "replace"),
+            preview.Changes.Count(item => item.Kind == TeamLabAssetKind.Vm && item.Action is "add" or "replace"),
+            actorUserId,
+            operationId,
+            runtime.PublicId,
+            WorkloadSchedulingIdentity.ForRuntime(runtime.Id, $"teamlab-runtime:{runtime.Id}", runtime.CreatedById),
+            runtime.ExternalReference ?? runtime.PublicId.ToString("D"),
+            $"运行修订 {runtime.PlanRevision + 1}",
+            runtime.Generation,
+            RuntimeOperationKind.Update,
+            ProtectedPayload: protectedPayload,
+            PayloadHash: payloadHash), token);
+    }
+
+    public async Task<TeamLabNodeResult> ExecuteAsync(
+        int runtimeId,
+        Guid ticketId,
+        string? protectedPayload,
+        CancellationToken token)
+    {
+        if (string.IsNullOrWhiteSpace(protectedPayload))
+            return TeamLabNodeResult.Failed("runtime_update.payload_missing");
+        var payload = payloads.Unprotect(protectedPayload);
+        var command = payload.Update;
+        if (command is null)
+            return TeamLabNodeResult.Failed("runtime_update.payload_invalid");
+
+        var ticket = await context.DeploymentQueueTickets.SingleOrDefaultAsync(
+            item => item.Id == ticketId && item.TeamLabRuntimeId == runtimeId &&
+                    item.Operation == RuntimeOperationKind.Update,
+            token);
+        if (ticket is null)
+            return TeamLabNodeResult.Failed("runtime_update.ticket_invalid");
+
+        var runtime = await LoadRuntimeAsync(runtimeId, token);
+        if (runtime.Status != TeamLabRuntimeStatus.Running)
+            return TeamLabNodeResult.Failed("runtime_update.runtime_not_running");
+        if (runtime.ExecutionModel != TeamLabExecutionModel.V2)
+            return TeamLabNodeResult.Failed("runtime_update.execution_model_unsupported");
+
+        var preview = await PreviewCoreAsync(runtime, command.ReleaseId, token);
+        if (!preview.CanApply)
+            return TeamLabNodeResult.Failed(preview.ResetRequiredReason ?? "runtime_update.requires_reset");
+
+        var currentRelease = await LoadReleaseAsync(runtime.TopologyReleaseId, token);
+        var targetRelease = await LoadReleaseAsync(command.ReleaseId, token);
+        var currentDefinition = TeamLabReleaseCodec.DecodeExecution(
+            currentRelease.SchemaVersion, currentRelease.CanonicalJson);
+        var targetDefinition = TeamLabReleaseCodec.DecodeExecution(
+            targetRelease.SchemaVersion, targetRelease.CanonicalJson);
+        var currentAssets = currentDefinition.Assets.ToDictionary(item => item.Key, StringComparer.Ordinal);
+        var targetAssets = targetDefinition.Assets.ToDictionary(item => item.Key, StringComparer.Ordinal);
+        var changes = BuildChanges(currentDefinition, targetDefinition);
+        var overlayValues = BuildOverlayValues(command.Overlays, changes);
+        if (changes.Count == 0)
+        {
+            runtime.TopologyReleaseId = targetRelease.Id;
+            runtime.ControlScopeId = targetRelease.ControlScopeId;
+            runtime.UpdatedAt = DateTimeOffset.UtcNow;
+            events.Record(runtime, "update", TeamLabEventLevel.Success,
+                "teamlab.runtime.update.succeeded", GZCTF.Modules.Audit.Domain.OperationalEventOutcome.Succeeded,
+                "运行环境已切换到内容相同的新发布版本。");
+            await context.SaveChangesAsync(token);
+            return TeamLabNodeResult.Ok("Runtime release updated without execution changes.");
+        }
+
+        var affectedKeys = changes.Select(item => item.AssetKey).ToHashSet(StringComparer.Ordinal);
+        var trackedAssets = runtime.Assets
+            .Where(item => item.Generation == runtime.Generation && affectedKeys.Contains(item.TopologyKey))
+            .ToArray();
+        var propertySnapshots = trackedAssets.ToDictionary(
+            item => item.Id,
+            item => context.Entry(item).CurrentValues.Clone());
+        var oldRuntimeValues = context.Entry(runtime).CurrentValues.Clone();
+        var oldPlans = new Dictionary<string, TeamLabExecutionPlanV2>(StringComparer.Ordinal);
+        foreach (var asset in trackedAssets.Where(item => item.Status != TeamLabRuntimeStatus.Destroyed))
+            oldPlans[asset.TopologyKey] = await LoadAssetPlanAsync(runtime, asset, token);
+
+        var newAssets = new List<TeamLabRuntimeAsset>();
+        var created = new List<(TeamLabRuntimeAsset Asset, TeamLabExecutionPlanV2 Plan)>();
+        var removed = new List<(TeamLabRuntimeAsset Asset, TeamLabExecutionPlanV2 Plan, string? ResourceId, string? NativeIdentity)>();
+        TeamLabExecutionPlanV2? currentNetworkPlan = null;
+        TeamLabExecutionPlanV2? desiredNetworkPlan = null;
+        Guid networkOwnerNodeId = Guid.Empty;
+        var networkUpdated = false;
+        try
+        {
+            var templates = await LoadTemplatesAsync(targetDefinition, token);
+            var networks = runtime.Networks
+                .Where(item => item.Generation == runtime.Generation)
+                .ToDictionary(item => item.TopologyKey, StringComparer.Ordinal);
+            var groups = TeamLabAssetPlanner.BuildGroups(targetDefinition);
+            var groupByAsset = groups.SelectMany(group => group.AssetKeys.Select(key => (key, group.Key)))
+                .ToDictionary(item => item.key, item => item.Key, StringComparer.Ordinal);
+            var shardByNetwork = networks.ToDictionary(
+                item => item.Key,
+                item => item.Value.ShardId ?? throw new TeamLabApiContractException(
+                    "runtime_update_placement_missing", "运行网段缺少节点分片。", 409),
+                StringComparer.Ordinal);
+            var capacityItems = BuildCapacityDelta(
+                changes,
+                currentAssets,
+                targetAssets,
+                runtime,
+                shardByNetwork);
+            if (capacityItems.Count > 0)
+            {
+                var reservation = await capacity.TryReserveBatchAsync(
+                    ticketId, capacityItems, requireTeamLab: true, token);
+                if (!reservation.Success)
+                    throw new TeamLabRuntimeExecutionException(reservation.Message);
+            }
+
+            foreach (var change in changes)
+            {
+                var existing = runtime.Assets
+                    .Where(item => item.Generation == runtime.Generation && item.TopologyKey == change.AssetKey)
+                    .OrderByDescending(item => item.Status != TeamLabRuntimeStatus.Destroyed)
+                    .ThenByDescending(item => item.Id)
+                    .FirstOrDefault();
+                if (change.Action == "remove")
+                {
+                    if (existing is null || !oldPlans.TryGetValue(change.AssetKey, out var oldPlan))
+                        throw new TeamLabApiContractException("runtime_update_asset_missing", $"运行资产 {change.AssetKey} 不存在。", 409);
+                    removed.Add((existing, oldPlan, existing.RuntimeResourceId, existing.NativeIdentity));
+                    existing.Status = TeamLabRuntimeStatus.Destroying;
+                    continue;
+                }
+
+                var target = targetAssets[change.AssetKey];
+                var shardIds = target.Interfaces.Select(item => shardByNetwork[item.NetworkKey]).Distinct().ToArray();
+                if (shardIds.Length != 1)
+                    throw new TeamLabApiContractException(
+                        "runtime_update_requires_reset",
+                        $"资产 {target.Name} 会改变现有跨节点网络归属，需要完整重置。",
+                        409);
+                var shard = runtime.Shards.Single(item => item.Id == shardIds[0] && item.Generation == runtime.Generation);
+                var desired = TeamLabRuntimePlanner.CreateRuntimeAsset(
+                    runtime, target, groupByAsset[target.Key], networks, templates[target.ImageTemplateId]);
+                desired.ShardId = shard.Id;
+                desired.WorkerNodeId = shard.WorkerNodeId;
+                desired.AgentOperationId = Guid.CreateVersion7();
+                if (change.Action == "replace")
+                {
+                    if (existing is null || !oldPlans.TryGetValue(change.AssetKey, out var oldPlan))
+                        throw new TeamLabApiContractException("runtime_update_asset_missing", $"运行资产 {change.AssetKey} 不存在。", 409);
+                    removed.Add((existing, oldPlan, existing.RuntimeResourceId, existing.NativeIdentity));
+                    CopyDesiredAsset(desired, existing);
+                }
+                else if (existing is { Status: TeamLabRuntimeStatus.Destroyed })
+                {
+                    CopyDesiredAsset(desired, existing);
+                }
+                else
+                {
+                    runtime.Assets.Add(desired);
+                    newAssets.Add(desired);
+                }
+            }
+
+            foreach (var change in changes.Where(item => item.Action == "remove"))
+            {
+                var asset = removed.Single(item => item.Asset.TopologyKey == change.AssetKey).Asset;
+                asset.Status = TeamLabRuntimeStatus.Destroyed;
+            }
+            runtime.TopologyReleaseId = targetRelease.Id;
+            runtime.ControlScopeId = targetRelease.ControlScopeId;
+            runtime.UpdatedAt = DateTimeOffset.UtcNow;
+            await context.SaveChangesAsync(token);
+
+            var activeAssets = runtime.Assets
+                .Where(item => item.Generation == runtime.Generation && item.Status != TeamLabRuntimeStatus.Destroyed)
+                .ToArray();
+            var targetPlans = await deployment.CompileExecutionPlansAsync(
+                runtime, targetDefinition, activeAssets, templates, overlayValues, token);
+            var currentSnapshot = await LoadNetworkSnapshotAsync(runtime, token);
+            currentNetworkPlan = ReadPlan(currentSnapshot.CurrentPlanJson ?? currentSnapshot.PlanJson);
+            desiredNetworkPlan = targetPlans.Values.Single(item => item.NetworkOwner);
+            networkOwnerNodeId = currentSnapshot.WorkerNodeId;
+
+            await StopAffectedCapturesAsync(runtime, trackedAssets.Select(item => item.Id).ToArray(), token);
+            foreach (var item in removed)
+            {
+                await remoteAccess.EndAssetSessionsAsync(
+                    runtime.Id, item.Asset.Id, runtime.Generation, "runtime-update", token);
+                var result = await assetControl.ExecuteAsync(
+                    item.Asset.WorkerNodeId!.Value,
+                    new(item.Plan, item.Asset.TopologyKey, "remove", item.ResourceId, item.NativeIdentity),
+                    token);
+                if (!result.Success)
+                    throw new TeamLabRuntimeExecutionException(
+                        $"资产 {item.Asset.Name} 移除失败：{result.ErrorCode ?? "asset_remove_failed"}");
+                item.Asset.RuntimeResourceId = null;
+                item.Asset.NativeIdentity = null;
+                item.Asset.SftpHostKeySha256 = null;
+                item.Asset.ExecutionUpdatedAt = DateTimeOffset.UtcNow;
+            }
+
+            var networkResult = await nodes.UpdateExecutionNetworkAsync(
+                networkOwnerNodeId, currentNetworkPlan, desiredNetworkPlan, token);
+            if (!networkResult.Success)
+                throw new TeamLabRuntimeExecutionException(
+                    networkResult.Message ?? networkResult.ErrorCode ?? "Network update failed.");
+            networkUpdated = true;
+
+            foreach (var change in changes.Where(item => item.Action is "add" or "replace"))
+            {
+                var asset = runtime.Assets.Single(item => item.Generation == runtime.Generation &&
+                    item.Status != TeamLabRuntimeStatus.Destroyed && item.TopologyKey == change.AssetKey);
+                var fullPlan = targetPlans[asset.ShardId!.Value];
+                var miniPlan = AssetPlan(fullPlan, asset.TopologyKey, runtime.PlanRevision + 1, asset.Id);
+                var template = templates[asset.SourceTemplateId!.Value];
+                await artifacts.EnsureImageAsync(runtime.Id, asset.WorkerNodeId!.Value, template, token);
+                var result = await assetControl.ExecuteAsync(
+                    asset.WorkerNodeId.Value,
+                    new(miniPlan, asset.TopologyKey, "create", null, null),
+                    token);
+                if (!result.Success || result.Asset is null)
+                    throw new TeamLabRuntimeExecutionException(
+                        $"资产 {asset.Name} 创建失败：{result.ErrorCode ?? "asset_create_failed"}");
+                asset.RuntimeResourceId = result.Asset.ResourceId;
+                asset.NativeIdentity = result.Asset.NativeIdentity ?? result.Asset.ResourceId;
+                asset.Status = TeamLabRuntimeStatus.Running;
+                asset.ExecutionStage = TeamLabAssetExecutionStage.ServiceReady;
+                asset.ExecutionPlanJson = JsonSerializer.Serialize(miniPlan);
+                asset.LastError = null;
+                asset.ExecutionUpdatedAt = DateTimeOffset.UtcNow;
+                created.Add((asset, miniPlan));
+            }
+
+            foreach (var change in changes.Where(item => item.Action == "remove"))
+            {
+                var asset = removed.Single(item => item.Asset.TopologyKey == change.AssetKey).Asset;
+                var accessIds = await context.TeamLabServiceAccesses.AsNoTracking()
+                    .Where(item => item.RuntimeAssetId == asset.Id && item.RevokedAt == null)
+                    .Select(item => item.PublicId)
+                    .ToArrayAsync(token);
+                foreach (var accessId in accessIds)
+                    await serviceAccess.RemoveAsync(runtime.PublicId, accessId, token);
+                asset.Status = TeamLabRuntimeStatus.Destroyed;
+                asset.ExecutionPlanJson = null;
+                asset.LastError = null;
+            }
+
+            foreach (var snapshot in runtime.ExecutionPlanSnapshots.Where(item =>
+                         item.Generation == runtime.Generation && targetPlans.ContainsKey(item.ShardId)))
+                snapshot.CurrentPlanJson = JsonSerializer.Serialize(targetPlans[snapshot.ShardId]);
+            runtime.TopologyReleaseId = targetRelease.Id;
+            runtime.ControlScopeId = targetRelease.ControlScopeId;
+            runtime.PlanRevision++;
+            runtime.Status = TeamLabRuntimeStatus.Running;
+            runtime.LastError = null;
+            runtime.UpdatedAt = DateTimeOffset.UtcNow;
+            foreach (var shard in runtime.Shards.Where(item => item.Generation == runtime.Generation))
+            {
+                shard.Status = TeamLabRuntimeStatus.Running;
+                shard.LastError = null;
+                shard.UpdatedAt = runtime.UpdatedAt;
+            }
+            events.Record(runtime, "update", TeamLabEventLevel.Success,
+                "teamlab.runtime.update.succeeded", GZCTF.Modules.Audit.Domain.OperationalEventOutcome.Succeeded,
+                $"运行环境修订 {runtime.PlanRevision} 已完成，共处理 {changes.Count} 个资产。",
+                detail: new Dictionary<string, object?>
+                {
+                    ["planRevision"] = runtime.PlanRevision,
+                    ["added"] = changes.Count(item => item.Action == "add"),
+                    ["removed"] = changes.Count(item => item.Action == "remove"),
+                    ["replaced"] = changes.Count(item => item.Action == "replace")
+                });
+            await context.SaveChangesAsync(token);
+            return TeamLabNodeResult.Ok("Runtime assets updated.");
+        }
+        catch (Exception exception) when (!token.IsCancellationRequested)
+        {
+            logger.LogWarning(exception, "TeamLab 运行环境 {RuntimeId} 热更新失败", runtime.PublicId);
+            var rollbackErrors = new List<string>();
+            foreach (var item in created.AsEnumerable().Reverse())
+                try
+                {
+                    await assetControl.ExecuteAsync(item.Asset.WorkerNodeId!.Value,
+                        new(item.Plan, item.Asset.TopologyKey, "remove", item.Asset.RuntimeResourceId, item.Asset.NativeIdentity), token);
+                }
+                catch (Exception rollbackException)
+                {
+                    rollbackErrors.Add(rollbackException.Message);
+                }
+            if (networkUpdated && currentNetworkPlan is not null && desiredNetworkPlan is not null)
+                try
+                {
+                    var result = await nodes.UpdateExecutionNetworkAsync(
+                        networkOwnerNodeId, desiredNetworkPlan, currentNetworkPlan, token);
+                    if (!result.Success) rollbackErrors.Add(result.Message ?? "Network rollback failed.");
+                }
+                catch (Exception rollbackException)
+                {
+                    rollbackErrors.Add(rollbackException.Message);
+                }
+            var restoredIdentities = new Dictionary<int, (string? ResourceId, string? NativeIdentity)>();
+            foreach (var item in removed)
+                try
+                {
+                    var result = await assetControl.ExecuteAsync(item.Asset.WorkerNodeId!.Value,
+                        new(item.Plan, item.Asset.TopologyKey, "create", null, null), token);
+                    if (!result.Success || result.Asset is null)
+                        rollbackErrors.Add(result.ErrorCode ?? $"{item.Asset.TopologyKey} rollback failed");
+                    else
+                        restoredIdentities[item.Asset.Id] =
+                            (result.Asset.ResourceId, result.Asset.NativeIdentity ?? result.Asset.ResourceId);
+                }
+                catch (Exception rollbackException)
+                {
+                    rollbackErrors.Add(rollbackException.Message);
+                }
+
+            foreach (var snapshot in propertySnapshots)
+                context.Entry(trackedAssets.Single(item => item.Id == snapshot.Key)).CurrentValues.SetValues(snapshot.Value);
+            foreach (var restored in restoredIdentities)
+            {
+                var asset = trackedAssets.Single(item => item.Id == restored.Key);
+                asset.RuntimeResourceId = restored.Value.ResourceId;
+                asset.NativeIdentity = restored.Value.NativeIdentity;
+            }
+            foreach (var asset in newAssets)
+                context.TeamLabRuntimeAssets.Remove(asset);
+            context.Entry(runtime).CurrentValues.SetValues(oldRuntimeValues);
+            runtime.Status = rollbackErrors.Count == 0 ? TeamLabRuntimeStatus.Running : TeamLabRuntimeStatus.Failed;
+            runtime.LastError = rollbackErrors.Count == 0
+                ? null
+                : string.Join("; ", rollbackErrors).Truncate(1024);
+            runtime.UpdatedAt = DateTimeOffset.UtcNow;
+            events.Record(runtime, "update", TeamLabEventLevel.Error,
+                "teamlab.runtime.update.failed", GZCTF.Modules.Audit.Domain.OperationalEventOutcome.Failed,
+                rollbackErrors.Count == 0
+                    ? "运行环境更新失败，本次变更已撤销。"
+                    : "运行环境更新失败，部分撤销操作未完成。",
+                detail: new Dictionary<string, object?> { ["rollbackComplete"] = rollbackErrors.Count == 0 });
+            await context.SaveChangesAsync(CancellationToken.None);
+            return TeamLabNodeResult.Failed(exception.Message);
+        }
+    }
+
+    async Task<TeamLabRuntimeUpdatePreviewModel> PreviewCoreAsync(
+        TeamLabRuntime runtime,
+        Guid releaseId,
+        CancellationToken token)
+    {
+        var current = await LoadReleaseAsync(runtime.TopologyReleaseId, token);
+        var target = await LoadReleaseAsync(releaseId, token);
+        var currentDefinition = TeamLabReleaseCodec.DecodeExecution(current.SchemaVersion, current.CanonicalJson);
+        var targetDefinition = TeamLabReleaseCodec.DecodeExecution(target.SchemaVersion, target.CanonicalJson);
+        var reason = runtime.ExecutionModel != TeamLabExecutionModel.V2
+            ? "当前运行环境不是 V2 执行模型，需要完整重置。"
+            : runtime.Status != TeamLabRuntimeStatus.Running
+                ? "只有运行中的环境可以更新资产。"
+                : current.TopologyId != target.TopologyId
+                    ? "目标版本不属于当前场景，需要完整重置。"
+                    : target.IsArchived
+                        ? "目标发布版本已归档。"
+                        : !SameTopologyStructure(currentDefinition, targetDefinition)
+                            ? "网段、路由或基础设施发生变化，需要完整重置。"
+                            : !SameConnectorBindings(currentDefinition, targetDefinition)
+                                ? "现场连接器发生变化，需要完整重置。"
+                                : PlacementChangeReason(runtime, targetDefinition);
+        return new TeamLabRuntimeUpdatePreviewModel(
+            runtime.PublicId,
+            current.Id,
+            target.Id,
+            runtime.PlanRevision,
+            reason is null,
+            reason,
+            BuildChanges(currentDefinition, targetDefinition));
+    }
+
+    internal static IReadOnlyList<TeamLabRuntimeUpdateChangeModel> BuildChanges(
+        TeamLabExecutionTopology current,
+        TeamLabExecutionTopology target)
+    {
+        var currentByKey = current.Assets.ToDictionary(item => item.Key, StringComparer.Ordinal);
+        var targetByKey = target.Assets.ToDictionary(item => item.Key, StringComparer.Ordinal);
+        var changes = new List<TeamLabRuntimeUpdateChangeModel>();
+        foreach (var asset in target.Assets.OrderBy(item => item.DisplayOrder).ThenBy(item => item.Key, StringComparer.Ordinal))
+        {
+            if (!currentByKey.TryGetValue(asset.Key, out var existing))
+                changes.Add(new(asset.Key, asset.Name, asset.Kind, "add"));
+            else if (!AssetEquals(existing, asset))
+                changes.Add(new(asset.Key, asset.Name, asset.Kind, "replace"));
+        }
+        foreach (var asset in current.Assets.Where(item => !targetByKey.ContainsKey(item.Key))
+                     .OrderBy(item => item.DisplayOrder).ThenBy(item => item.Key, StringComparer.Ordinal))
+            changes.Add(new(asset.Key, asset.Name, asset.Kind, "remove"));
+        return changes;
+    }
+
+    static bool AssetEquals(TeamLabExecutionAsset left, TeamLabExecutionAsset right) =>
+        string.Equals(JsonSerializer.Serialize(left), JsonSerializer.Serialize(right), StringComparison.Ordinal);
+
+    internal static bool SameTopologyStructure(TeamLabExecutionTopology current, TeamLabExecutionTopology target)
+    {
+        static string Shape(TeamLabExecutionTopology topology) => JsonSerializer.Serialize(new
+        {
+            topology.SchemaVersion,
+            topology.Networks,
+            topology.Infrastructure,
+            topology.Connections,
+            topology.Observation
+        });
+        return string.Equals(Shape(current), Shape(target), StringComparison.Ordinal);
+    }
+
+    internal static bool SameConnectorBindings(
+        TeamLabExecutionTopology current,
+        TeamLabExecutionTopology target)
+    {
+        static string Shape(TeamLabExecutionTopology topology) => JsonSerializer.Serialize(
+            topology.Assets
+                .Where(item => item.ConnectorId is not null)
+                .OrderBy(item => item.Key, StringComparer.Ordinal)
+                .Select(item => new { item.Key, item.ConnectorId }));
+        return string.Equals(Shape(current), Shape(target), StringComparison.Ordinal);
+    }
+
+    internal static IReadOnlyDictionary<string, TeamLabRuntimeOverlayModel> BuildOverlayValues(
+        IReadOnlyList<TeamLabRuntimeOverlayModel>? overlays,
+        IReadOnlyList<TeamLabRuntimeUpdateChangeModel> changes)
+    {
+        var eligibleKeys = changes
+            .Where(item => item.Action is "add" or "replace")
+            .Select(item => item.AssetKey)
+            .ToHashSet(StringComparer.Ordinal);
+        var values = new Dictionary<string, TeamLabRuntimeOverlayModel>(StringComparer.Ordinal);
+        foreach (var overlay in overlays ?? [])
+        {
+            if (!eligibleKeys.Contains(overlay.AssetKey))
+                throw new TeamLabApiContractException(
+                    "runtime_update_overlay_not_applicable",
+                    $"资产 {overlay.AssetKey} 未新增或替换，不能在本次更新中修改运行参数。",
+                    400);
+            if (!values.TryAdd(overlay.AssetKey, overlay))
+                throw new TeamLabApiContractException(
+                    "runtime_update_overlay_duplicated",
+                    $"资产 {overlay.AssetKey} 的运行参数重复。",
+                    400);
+        }
+        return values;
+    }
+
+    static string? PlacementChangeReason(TeamLabRuntime runtime, TeamLabExecutionTopology target)
+    {
+        var shardByNetwork = runtime.Networks
+            .Where(item => item.Generation == runtime.Generation)
+            .ToDictionary(item => item.TopologyKey, item => item.ShardId, StringComparer.Ordinal);
+        var workerByShard = runtime.Shards
+            .Where(item => item.Generation == runtime.Generation)
+            .ToDictionary(item => item.Id, item => item.WorkerNodeId);
+        var activeByKey = runtime.Assets
+            .Where(item => item.Generation == runtime.Generation && item.Status != TeamLabRuntimeStatus.Destroyed)
+            .ToDictionary(item => item.TopologyKey, StringComparer.Ordinal);
+        foreach (var asset in target.Assets)
+        {
+            var shards = asset.Interfaces.Select(item => shardByNetwork.GetValueOrDefault(item.NetworkKey)).Distinct().ToArray();
+            if (shards.Any(item => item is null) || shards.Length != 1)
+                return $"资产 {asset.Name} 会改变现有跨节点网络归属，需要完整重置。";
+            if (activeByKey.TryGetValue(asset.Key, out var current) &&
+                current.WorkerNodeId != workerByShard[shards[0]!.Value])
+                return $"资产 {asset.Name} 会迁移到其他节点，需要完整重置。";
+        }
+        return null;
+    }
+
+    static IReadOnlyList<FleetCapacityBatchItem> BuildCapacityDelta(
+        IReadOnlyList<TeamLabRuntimeUpdateChangeModel> changes,
+        IReadOnlyDictionary<string, TeamLabExecutionAsset> currentDefinitions,
+        IReadOnlyDictionary<string, TeamLabExecutionAsset> targetDefinitions,
+        TeamLabRuntime runtime,
+        IReadOnlyDictionary<string, int> shardByNetwork)
+    {
+        var currentAssets = runtime.Assets
+            .Where(item => item.Generation == runtime.Generation && item.Status != TeamLabRuntimeStatus.Destroyed)
+            .ToDictionary(item => item.TopologyKey, StringComparer.Ordinal);
+        var workerByShard = runtime.Shards
+            .Where(item => item.Generation == runtime.Generation)
+            .ToDictionary(item => item.Id, item => item.WorkerNodeId);
+        var deltas = new Dictionary<Guid, WorkloadResourceVector>();
+        foreach (var change in changes)
+        {
+            if (change.Action is "remove" or "replace")
+            {
+                var current = currentAssets[change.AssetKey];
+                Add(current.WorkerNodeId!.Value, Negate(Resource(currentDefinitions[change.AssetKey])));
+            }
+            if (change.Action is "add" or "replace")
+            {
+                var target = targetDefinitions[change.AssetKey];
+                var shardId = target.Interfaces.Select(item => shardByNetwork[item.NetworkKey]).Distinct().Single();
+                Add(workerByShard[shardId], Resource(target));
+            }
+        }
+
+        return deltas
+            .Select(item => new FleetCapacityBatchItem(item.Key, Positive(item.Value)))
+            .Where(item => item.Resources != WorkloadResourceVector.Zero)
+            .ToArray();
+
+        void Add(Guid nodeId, WorkloadResourceVector value) =>
+            deltas[nodeId] = deltas.GetValueOrDefault(nodeId) + value;
+    }
+
+    static WorkloadResourceVector Resource(TeamLabExecutionAsset asset) => new(
+        asset.CpuUnits,
+        asset.MemoryMiB,
+        asset.StorageMiB,
+        asset.Kind == TeamLabAssetKind.Docker ? 1 : 0,
+        asset.Kind == TeamLabAssetKind.Vm ? 1 : 0);
+
+    static WorkloadResourceVector Positive(WorkloadResourceVector value) => new(
+        Math.Max(0, value.CpuUnits),
+        Math.Max(0, value.MemoryMiB),
+        Math.Max(0, value.StorageMiB),
+        Math.Max(0, value.DockerSlots),
+        Math.Max(0, value.VmSlots));
+
+    static WorkloadResourceVector Negate(WorkloadResourceVector value) => new(
+        -value.CpuUnits,
+        -value.MemoryMiB,
+        -value.StorageMiB,
+        -value.DockerSlots,
+        -value.VmSlots);
+
+    async Task<TeamLabRuntime> LoadRuntimeAsync(int runtimeId, CancellationToken token) =>
+        await context.TeamLabRuntimes
+            .Include(item => item.Shards)
+            .Include(item => item.Networks)
+            .Include(item => item.Assets)
+            .Include(item => item.Infrastructure).ThenInclude(item => item.Fragments)
+            .Include(item => item.ObservationPoints)
+            .Include(item => item.FabricLinkLeases)
+            .Include(item => item.ExecutionPlanSnapshots)
+            .Include(item => item.Events)
+            .SingleAsync(item => item.Id == runtimeId, token);
+
+    async Task<TeamLabTopologyRelease> LoadReleaseAsync(Guid releaseId, CancellationToken token) =>
+        await context.TeamLabTopologyReleases.AsNoTracking()
+            .SingleOrDefaultAsync(item => item.Id == releaseId, token)
+        ?? throw new TeamLabApiContractException("release_not_found", "未找到拓扑版本", 404);
+
+    async Task<Dictionary<int, ImageTemplate>> LoadTemplatesAsync(
+        TeamLabExecutionTopology definition,
+        CancellationToken token)
+    {
+        await TeamLabTopologyApplicationService.ValidateImageTemplatesAsync(context, definition, token);
+        var ids = definition.Assets.Select(item => item.ImageTemplateId).Distinct().ToArray();
+        return await context.ImageTemplates.AsNoTracking()
+            .Where(item => ids.Contains(item.Id))
+            .ToDictionaryAsync(item => item.Id, token);
+    }
+
+    async Task<TeamLabExecutionPlanV2> LoadAssetPlanAsync(
+        TeamLabRuntime runtime,
+        TeamLabRuntimeAsset asset,
+        CancellationToken token)
+    {
+        var json = asset.ExecutionPlanJson;
+        if (string.IsNullOrWhiteSpace(json))
+            json = await context.TeamLabExecutionPlanSnapshots.AsNoTracking()
+                .Where(item => item.RuntimeId == runtime.Id && item.Generation == runtime.Generation &&
+                               item.ShardId == asset.ShardId)
+                .Select(item => item.PlanJson)
+                .SingleOrDefaultAsync(token);
+        var plan = ReadPlan(json);
+        if (!plan.Assets.Any(item => item.AssetKey == asset.TopologyKey))
+            throw new TeamLabApiContractException(
+                "runtime_update_plan_missing",
+                $"资产 {asset.Name} 缺少可执行快照。",
+                409);
+        return plan;
+    }
+
+    async Task<TeamLabExecutionPlanSnapshot> LoadNetworkSnapshotAsync(
+        TeamLabRuntime runtime,
+        CancellationToken token)
+    {
+        var snapshots = await context.TeamLabExecutionPlanSnapshots
+            .Where(item => item.RuntimeId == runtime.Id && item.Generation == runtime.Generation)
+            .ToArrayAsync(token);
+        return snapshots.Single(item => ReadPlan(item.CurrentPlanJson ?? item.PlanJson).NetworkOwner);
+    }
+
+    static TeamLabExecutionPlanV2 ReadPlan(string? json)
+    {
+        var plan = string.IsNullOrWhiteSpace(json)
+            ? null
+            : JsonSerializer.Deserialize<TeamLabExecutionPlanV2>(json);
+        if (plan is null || !plan.IsValid(out _))
+            throw new TeamLabApiContractException("runtime_update_plan_invalid", "运行执行快照不可读取。", 409);
+        return plan;
+    }
+
+    static TeamLabExecutionPlanV2 AssetPlan(
+        TeamLabExecutionPlanV2 fullPlan,
+        string assetKey,
+        int revision,
+        int assetId)
+    {
+        var plan = fullPlan with
+        {
+            ShardKey = $"{fullPlan.ShardKey}-r{revision}-a{assetId}",
+            PlanDigest = string.Empty,
+            NetworkOwner = false,
+            Assets = fullPlan.Assets.Where(item => item.AssetKey == assetKey).ToArray(),
+            ObservationPoints = fullPlan.ObservationPoints.Where(item => item.AssetKey == assetKey).ToArray()
+        };
+        var digest = Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(plan)));
+        return plan with { PlanDigest = $"sha256:{digest}" };
+    }
+
+    static void CopyDesiredAsset(TeamLabRuntimeAsset source, TeamLabRuntimeAsset target)
+    {
+        target.PlacementGroupKey = source.PlacementGroupKey;
+        target.Kind = source.Kind;
+        target.Name = source.Name;
+        target.SourceTemplateId = source.SourceTemplateId;
+        target.Image = source.Image;
+        target.NetworkKey = source.NetworkKey;
+        target.IpAddress = source.IpAddress;
+        target.MacAddress = source.MacAddress;
+        target.InterfaceSummaryJson = source.InterfaceSummaryJson;
+        target.ImageDigest = source.ImageDigest;
+        target.DevicePackageId = source.DevicePackageId;
+        target.DevicePackageParametersJson = source.DevicePackageParametersJson;
+        target.ConnectorId = source.ConnectorId;
+        target.ShardId = source.ShardId;
+        target.WorkerNodeId = source.WorkerNodeId;
+        target.AgentOperationId = source.AgentOperationId;
+        target.RuntimeResourceId = null;
+        target.NativeIdentity = null;
+        target.SftpHostKeySha256 = null;
+        target.Status = TeamLabRuntimeStatus.Pending;
+        target.ExecutionStage = TeamLabAssetExecutionStage.Pending;
+        target.DesiredPowerState = "running";
+        target.ExecutionPlanJson = null;
+        target.LastError = null;
+    }
+
+    async Task StopAffectedCapturesAsync(
+        TeamLabRuntime runtime,
+        IReadOnlyCollection<int> assetIds,
+        CancellationToken token)
+    {
+        if (assetIds.Count == 0) return;
+        var ids = await context.TeamLabTrafficCaptureJobs.AsNoTracking()
+            .Where(item => item.RuntimeId == runtime.Id && item.Generation == runtime.Generation &&
+                           item.Segments.Any(segment => segment.ObservationPoint.AssetId != null &&
+                               assetIds.Contains(segment.ObservationPoint.AssetId.Value)) &&
+                           item.Status != TeamLabTrafficCaptureStatus.Completed &&
+                           item.Status != TeamLabTrafficCaptureStatus.Failed &&
+                           item.Status != TeamLabTrafficCaptureStatus.Expired)
+            .Select(item => item.PublicId)
+            .ToArrayAsync(token);
+        foreach (var id in ids)
+            await traffic.StopCaptureAsync(runtime.PublicId, id, token);
+    }
+}
+
+file static class TeamLabRuntimeUpdateStringExtensions
+{
+    public static string Truncate(this string value, int length) =>
+        value.Length <= length ? value : value[..length];
+}

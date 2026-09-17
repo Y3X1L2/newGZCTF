@@ -1,4 +1,4 @@
-import { Activity, ArrowLeft, Boxes, FileClock, Network, RotateCcw, Trash2, Wrench, Pause, Play } from 'lucide-react'
+import { Activity, ArrowLeft, Boxes, FileClock, Network, PackagePlus, RotateCcw, Trash2, Wrench, Pause, Play } from 'lucide-react'
 import { useCallback, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router'
 import { ActionButton, InlineFeedback, VNextConfirmDialog } from '../../../../shared/Interaction'
@@ -33,6 +33,7 @@ import { TrafficFlowPanel } from './TrafficFlowPanel'
 import { TrafficPathPanel } from './TrafficPathPanel'
 import { emptyTeamLabEventFilters, useRuntimeEvents, type TeamLabEventFilters } from './useRuntimeEvents'
 import { useTeamLabRuntime } from './useTeamLabRuntime'
+import { useRuntimeUpdatePreview } from './useRuntimeUpdatePreview'
 import { useTrafficObservability, type TrafficFlowFilters, type TrafficPathFilters } from './useTrafficObservability'
 import { isRuntimeTransitioning } from './runtimePresentation'
 
@@ -48,6 +49,7 @@ export function TeamLabRuntimeDetailPage() {
   const [resetOpen, setResetOpen] = useState(false)
   const [destroyOpen, setDestroyOpen] = useState(false)
   const [pauseOpen, setPauseOpen] = useState(false)
+  const [updateOpen, setUpdateOpen] = useState(false)
   const [acting, setActing] = useState(false)
   const [actionError, setActionError] = useState<unknown>(null)
   const [flowFilters, setFlowFilters] = useState<TrafficFlowFilters>(initialFlowFilters)
@@ -55,6 +57,7 @@ export function TeamLabRuntimeDetailPage() {
   const [eventFilters, setEventFilters] = useState<TeamLabEventFilters>(emptyTeamLabEventFilters)
   const runtimeState = useTeamLabRuntime(runtimeId)
   const runtime = runtimeState.runtime
+  const updateState = useRuntimeUpdatePreview(topologyId, runtimeId, runtime?.releaseId, !runtime?.managedRolloutId)
   const events = useRuntimeEvents(tab === 'events' ? runtimeId : '', runtime?.status, eventFilters)
   const traffic = useTrafficObservability(tab === 'traffic' ? runtimeId : '', runtime?.status, flowFilters, pathFilters)
 
@@ -111,6 +114,25 @@ export function TeamLabRuntimeDetailPage() {
     } finally { setActing(false) }
   }
 
+  const applyRelease = async () => {
+    if (!runtime || !updateState.latestRelease || !updateState.preview || acting) return false
+    setActing(true)
+    setActionError(null)
+    try {
+      const request = { releaseId: updateState.latestRelease.id, overlays: null }
+      const next = updateState.preview.canApply
+        ? await teamLabRuntimeApi.updateRuntime(runtime.id, request)
+        : await teamLabRuntimeApi.resetRuntime(runtime.id, request)
+      await runtimeState.mutate(next, { revalidate: false })
+      return true
+    } catch (error) {
+      setActionError(error)
+      return false
+    } finally {
+      setActing(false)
+    }
+  }
+
   if (!runtimeId) return <DataState description="运行时标识无效。" title="无法打开运行时" />
   if (runtimeState.isLoading)
     return <DataState description="正在读取运行时、分片和资产投影。" loading title="运行时加载中" />
@@ -123,6 +145,12 @@ export function TeamLabRuntimeDetailPage() {
   const canReset = !runtime.managedRolloutId && !queueActive && ['running', 'failed', 'paused'].includes(runtime.status)
   const canDestroy = !runtime.managedRolloutId && !nodeExecutionActive && !['destroying', 'destroyed', 'cleanup-pending'].includes(runtime.status)
   const cleanupPending = runtime.status === 'cleanup-pending'
+  const hasNewRelease = updateState.latestRelease?.id !== undefined &&
+    updateState.latestRelease.id !== runtime.releaseId
+  const canSwitchRelease = updateState.preview?.canApply
+    ? runtime.status === 'running' && !queueActive
+    : canReset
+  const updateActions = { add: '新增', remove: '移除', replace: '替换' } as const
   return (
     <section className={styles.page}>
       <Link className={styles.backLink} to={searchParams.get('from') === 'runtime-search' ? '/admin/teamlab?view=runtimes' : `/admin/teamlab/${topologyId}/runtimes`}>
@@ -134,7 +162,7 @@ export function TeamLabRuntimeDetailPage() {
           <span>运行控制</span>
           <h2>运行实例 {runtime.id.slice(0, 8)}</h2>
           <p>
-            发布 {runtime.releaseId} · 第 {runtime.generation} 代
+            发布 {runtime.releaseVersion ? `v${runtime.releaseVersion}` : runtime.releaseId} · 第 {runtime.generation} 代 · 修订 {runtime.planRevision ?? 0}
           </p>
         </div>
         <div className={styles.actions}>
@@ -142,6 +170,16 @@ export function TeamLabRuntimeDetailPage() {
             active={runtimeState.isRefreshing && isRuntimeTransitioning(runtime.status)}
             label={runtimeState.isRefreshing ? '同步中' : '状态已同步'}
           />
+          {hasNewRelease ? (
+            <ActionButton
+              disabled={!updateState.preview || !canSwitchRelease || acting}
+              icon={<PackagePlus size={16} />}
+              onClick={() => setUpdateOpen(true)}
+              type="button"
+            >
+              {updateState.isLoading ? '检查新版本' : `切换到 v${updateState.latestRelease!.version}`}
+            </ActionButton>
+          ) : null}
           <ActionButton
             disabled={!canReset || acting}
             icon={<RotateCcw size={16} />}
@@ -175,6 +213,12 @@ export function TeamLabRuntimeDetailPage() {
         </div>
       </header>
       {runtime.managedRolloutId ? <InlineFeedback tone="neutral">批量发布托管：{runtime.managedRolloutId}</InlineFeedback> : null}
+      {updateState.error ? <InlineFeedback tone="danger">{errorMessage(updateState.error, '新版本检查失败。')}</InlineFeedback> : null}
+      {hasNewRelease && updateState.preview && !updateState.preview.canApply ? (
+        <InlineFeedback tone="neutral">
+          v{updateState.latestRelease!.version} 涉及运行结构调整：{updateState.preview.resetRequiredReason} 可通过完整重置切换版本。
+        </InlineFeedback>
+      ) : null}
       <RuntimeTaskPanel runtime={runtime} onInspect={() => inspectFailure({ generation: runtime.generation, stage: '' })} />
       {actionError ? (
         <InlineFeedback tone="danger">{errorMessage(actionError, '运行时操作失败。')}</InlineFeedback>
@@ -273,6 +317,32 @@ export function TeamLabRuntimeDetailPage() {
         {tab === 'capture' ? <CapturePanel networks={runtime.networks} runtimeId={runtime.id} /> : null}
       </div>
 
+      <VNextConfirmDialog
+        confirmLabel={updateState.preview?.canApply ? '更新运行环境' : '重置并切换'}
+        description={updateState.preview?.canApply
+          ? '只处理发生变化的资产，其他资产和现有网络保持运行。'
+          : '该版本不能在线更新，将清理当前代并按新版本重新部署。'}
+        message={
+          <div className={styles.updateSummary}>
+            {updateState.preview?.changes.length ? (
+              <ul>
+                {updateState.preview.changes.map((change) => (
+                  <li key={change.assetKey}>
+                    <strong>{updateActions[change.action]}</strong>
+                    <span>{change.assetName}</span>
+                    <small>{change.kind === 'vm' ? '虚拟机' : '容器'}</small>
+                  </li>
+                ))}
+              </ul>
+            ) : <p>资产配置没有变化，仅切换运行环境关联的发布版本。</p>}
+          </div>
+        }
+        onClose={() => setUpdateOpen(false)}
+        onConfirm={applyRelease}
+        open={updateOpen}
+        title={`切换到发布版本 v${updateState.latestRelease?.version ?? ''}`}
+        tone="primary"
+      />
       <VNextConfirmDialog
         confirmLabel="确认重置"
         description="当前代资源会先被清理，再按同一发布版本创建下一代。"

@@ -26,6 +26,7 @@ public sealed class TeamLabRuntimeOrchestrator(
     ITeamLabDeploymentProgress stageMachine,
     TeamLabTrafficApplicationService traffic,
     TeamLabRuntimeCleanupService cleanup,
+    TeamLabRuntimeUpdateService updates,
     ITeamLabArtifactDistribution imageDistribution,
     TeamLabPhysicalPlacementService placement,
     TeamLabRuntimeLifecycleGuard lifecycleGuard,
@@ -35,6 +36,25 @@ public sealed class TeamLabRuntimeOrchestrator(
     TeamLabEventRecorder eventRecorder,
     ILogger<TeamLabRuntimeOrchestrator> logger) : ITeamLabRuntimeApplicationService
 {
+    public Task<TeamLabRuntimeUpdatePreviewModel> PreviewUpdateAsync(
+        Guid runtimeId, Guid releaseId, CancellationToken cancellationToken) =>
+        updates.PreviewAsync(runtimeId, releaseId, cancellationToken);
+
+    public Task<TeamLabQueueTicketResult> UpdateAndEnqueueAsync(
+        Guid runtimeId,
+        UpdateTeamLabRuntimeModel command,
+        Guid actorUserId,
+        Guid? operationId,
+        CancellationToken cancellationToken) =>
+        updates.EnqueueAsync(runtimeId, command, actorUserId, operationId, cancellationToken);
+
+    public Task<TeamLabNodeResult> ExecuteQueuedUpdateAsync(
+        int runtimeId,
+        Guid ticketId,
+        string? protectedPayload,
+        CancellationToken cancellationToken) =>
+        updates.ExecuteAsync(runtimeId, ticketId, protectedPayload, cancellationToken);
+
     public async Task<TeamLabRuntimeCreateResult> PlanAndEnqueueAsync(
         CreateTeamLabRuntimeModel command,
         Guid actorUserId,

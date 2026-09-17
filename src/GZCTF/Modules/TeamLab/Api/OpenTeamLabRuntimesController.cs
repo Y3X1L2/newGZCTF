@@ -140,6 +140,46 @@ public sealed class OpenTeamLabRuntimesController(
         return Accepted($"/api/open/v1/operations/{operation.Id}", operation);
     }
 
+    [HttpGet("{runtimeId:guid}/updates/preview")]
+    [OpenApiOperation("预览运行时更新", "比较当前运行版本和目标发布版本，返回资产新增、删除、替换以及是否需要完整重置。")]
+    [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabRuntimesRead)]
+    [ProducesResponseType(typeof(TeamLabRuntimeUpdatePreviewModel), StatusCodes.Status200OK)]
+    public async Task<TeamLabRuntimeUpdatePreviewModel> PreviewUpdate(
+        Guid runtimeId,
+        [FromQuery, Required] Guid releaseId,
+        CancellationToken cancellationToken)
+    {
+        await AuthorizeRuntimeAsync(runtimeId, cancellationToken);
+        Response.Headers.CacheControl = "no-store";
+        return await runtimes.PreviewUpdateAsync(runtimeId, releaseId, cancellationToken);
+    }
+
+    [HttpPost("{runtimeId:guid}/updates")]
+    [OpenApiOperation("更新运行时资产", "在保留现有运行环境的情况下，将资产更新到指定发布版本。")]
+    [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabRuntimesWrite)]
+    [ProducesResponseType(typeof(ApiOperationModel), StatusCodes.Status202Accepted)]
+    public async Task<IActionResult> Update(
+        Guid runtimeId,
+        UpdateTeamLabRuntimeModel model,
+        [FromHeader(Name = "Idempotency-Key"), Required] string idempotencyKey,
+        CancellationToken cancellationToken)
+    {
+        await AuthorizeRuntimeAsync(runtimeId, cancellationToken);
+        await RequireDirectLifecycleControlAsync(runtimeId, cancellationToken);
+        var actor = Actor();
+        var result = await operations.SubmitUpdateAsync(
+            actor.TokenId,
+            actor.UserId,
+            idempotencyKey,
+            $"POST:/api/open/v1/teamlab/runtimes/{runtimeId:D}/updates",
+            runtimeId,
+            await RequireRuntimeScopeAsync(runtimeId, true, cancellationToken),
+            model,
+            cancellationToken);
+        var operation = ApiOperationModel.FromEntity(result.Operation);
+        return Accepted($"/api/open/v1/operations/{operation.Id}", operation);
+    }
+
     [HttpDelete("{runtimeId:guid}")]
     [OpenApiOperation("销毁运行时", "提交清理运行时的所有分片、资产、路由、抓包与访问授权。")]
     [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabRuntimesWrite)]

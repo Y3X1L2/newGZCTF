@@ -1283,6 +1283,8 @@ public partial class AppDbContext(DbContextOptions<AppDbContext> options) :
             entity.Property(e => e.ExecutionStage)
                 .HasConversion<byte>();
 
+            entity.Property(e => e.ExecutionPlanJson).HasColumnType("jsonb");
+
             entity.HasIndex(e => new { e.RuntimeId, e.Generation, e.Kind, e.TopologyKey });
             entity.HasIndex(e => new { e.RuntimeId, e.Generation, e.Status, e.Id })
                 .HasDatabaseName("IX_TeamLabRuntimeAssets_Runtime_Generation_Status_Id");

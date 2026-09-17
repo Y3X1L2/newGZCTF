@@ -61,6 +61,19 @@ public class TeamLabController(
         return Ok(await executionPlans.ApplyAsync(request.Plan, token));
     }
 
+    [HttpPost("execution-plan/network-update")]
+    public async Task<IActionResult> UpdateExecutionNetwork(
+        [FromBody] TeamLabExecutionNetworkUpdateRequest? request,
+        CancellationToken token)
+    {
+        if (teamLabOptions.Value.ExecutionModel != TeamLabExecutionModel.V2)
+            return NotFound();
+        if (request?.CurrentPlan is null || request.DesiredPlan is null)
+            return BadRequest("Current and desired execution plans are required.");
+        await using var permit = await gate.EnterAsync(AgentOperationCategory.TeamLabNetwork, token);
+        return Ok(await executionPlans.UpdateNetworkAsync(request, token));
+    }
+
     [HttpPost("execution-plan/asset-control")]
     public async Task<TeamLabAssetControlResult> ControlAsset(TeamLabAssetControlRequest request, CancellationToken token)
     {

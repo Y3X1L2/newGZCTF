@@ -141,6 +141,8 @@ export function parseTeamLabRuntime(value: unknown): TeamLabRuntime {
     queueStatus: item.queueStatus == null ? null : parse.enumValue(item.queueStatus, queueStatuses, 'TeamLab runtime.queueStatus'),
     id: parse.string(item.id, 'TeamLab runtime.id'),
     releaseId: parse.string(item.releaseId, 'TeamLab runtime.releaseId'),
+    releaseVersion: item.releaseVersion == null ? null : parse.number(item.releaseVersion, 'TeamLab runtime.releaseVersion'),
+    planRevision: item.planRevision == null ? 0 : parse.number(item.planRevision, 'TeamLab runtime.planRevision'),
     generation: parse.number(item.generation, 'TeamLab runtime.generation'),
     status: runtimeStatus(item.status, 'TeamLab runtime.status'),
     stage: parse.string(item.stage, 'TeamLab runtime.stage'),
@@ -183,6 +185,30 @@ export function parseTeamLabRuntime(value: unknown): TeamLabRuntime {
     createdAt: parse.number(item.createdAt, 'TeamLab runtime.createdAt'),
     updatedAt: parse.nullableNumber(item.updatedAt, 'TeamLab runtime.updatedAt'),
     error: parse.nullableString(item.error, 'TeamLab runtime.error'),
+  }
+}
+
+export function parseTeamLabRuntimeUpdatePreview(value: unknown) {
+  const item = parse.record(value, 'TeamLab runtime update preview')
+  const actions = new Set(['add', 'remove', 'replace'])
+  return {
+    runtimeId: parse.string(item.runtimeId, 'TeamLab runtime update preview.runtimeId'),
+    currentReleaseId: parse.string(item.currentReleaseId, 'TeamLab runtime update preview.currentReleaseId'),
+    targetReleaseId: parse.string(item.targetReleaseId, 'TeamLab runtime update preview.targetReleaseId'),
+    currentPlanRevision: parse.number(item.currentPlanRevision, 'TeamLab runtime update preview.currentPlanRevision'),
+    canApply: parse.boolean(item.canApply, 'TeamLab runtime update preview.canApply'),
+    resetRequiredReason: parse.nullableString(item.resetRequiredReason, 'TeamLab runtime update preview.resetRequiredReason'),
+    changes: parse.array(item.changes, 'TeamLab runtime update preview.changes', (entry, label) => {
+      const change = parse.record(entry, label)
+      const action = parse.string(change.action, `${label}.action`)
+      if (!actions.has(action)) throw new Error('无法识别的运行环境更新动作，请刷新页面。')
+      return {
+        assetKey: parse.string(change.assetKey, `${label}.assetKey`),
+        assetName: parse.string(change.assetName, `${label}.assetName`),
+        kind: assetKind(change.kind, `${label}.kind`),
+        action: action as 'add' | 'remove' | 'replace',
+      }
+    }),
   }
 }
 

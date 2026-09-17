@@ -157,6 +157,30 @@ public sealed class TeamLabAdminRuntimeController(
             await runtimes.GetAsync(runtimeId, cancellationToken));
     }
 
+    [HttpGet("{runtimeId:guid}/updates/preview")]
+    public async Task<TeamLabRuntimeUpdatePreviewModel> PreviewUpdate(
+        Guid runtimeId,
+        [FromQuery, Required] Guid releaseId,
+        CancellationToken cancellationToken)
+    {
+        await RequireAsync(runtimeId, TeamLabRuntimePermission.StateRead, cancellationToken);
+        Response.Headers.CacheControl = "no-store";
+        return await runtimes.PreviewUpdateAsync(runtimeId, releaseId, cancellationToken);
+    }
+
+    [HttpPost("{runtimeId:guid}/updates")]
+    public async Task<ActionResult<TeamLabRuntimeProjectionModel>> Update(
+        Guid runtimeId,
+        UpdateTeamLabRuntimeModel model,
+        CancellationToken cancellationToken)
+    {
+        await RequireAsync(runtimeId, TeamLabRuntimePermission.LifecycleManage, cancellationToken);
+        var actor = await ActorAsync();
+        await runtimes.UpdateAndEnqueueAsync(runtimeId, model, actor.Id, null, cancellationToken);
+        return Accepted($"/api/admin/teamlab/runtimes/{runtimeId:D}",
+            await runtimes.GetAsync(runtimeId, cancellationToken));
+    }
+
     [HttpPost("{runtimeId:guid}/pause")]
     public async Task<ActionResult<TeamLabRuntimeProjectionModel>> Pause(Guid runtimeId, CancellationToken cancellationToken)
     {

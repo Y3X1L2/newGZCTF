@@ -197,13 +197,15 @@ public sealed class TeamLabRuntimeCleanupService(
         TeamLabRuntime runtime,
         int generation)
     {
-        var plan = JsonSerializer.Deserialize<GZCTF.TeamLab.Contracts.Execution.TeamLabExecutionPlanV2>(snapshot.PlanJson)
+        var currentPlan = snapshot.CurrentPlanJson ?? snapshot.PlanJson;
+        var plan = JsonSerializer.Deserialize<GZCTF.TeamLab.Contracts.Execution.TeamLabExecutionPlanV2>(currentPlan)
             ?? throw new TeamLabRuntimeExecutionException(
                 $"Execution-plan cleanup snapshot is unreadable for shard {snapshot.ShardId}.");
         if (plan.RuntimeId != runtime.Id || plan.RuntimePublicId != runtime.PublicId ||
             plan.Generation != generation || !string.Equals(plan.ShardKey,
                 snapshot.ShardId.ToString(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal) ||
-            !string.Equals(plan.PlanDigest, snapshot.PlanDigest, StringComparison.Ordinal) ||
+            (snapshot.CurrentPlanJson is null &&
+             !string.Equals(plan.PlanDigest, snapshot.PlanDigest, StringComparison.Ordinal)) ||
             !plan.IsValid(out _))
             throw new TeamLabRuntimeExecutionException(
                 $"Execution-plan cleanup snapshot is invalid for shard {snapshot.ShardId}.");

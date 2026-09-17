@@ -612,6 +612,24 @@ public sealed class AgentTeamLabNodeExecutor(
         return ToCaptureResult(response, "Failed to delete traffic capture segment.");
     }
 
+    public async Task<TeamLabExecutionNetworkUpdateResponse> UpdateExecutionNetworkAsync(
+        Guid workerNodeId,
+        TeamLabExecutionPlanV2 currentPlan,
+        TeamLabExecutionPlanV2 desiredPlan,
+        CancellationToken cancellationToken)
+    {
+        var limits = await ResolveDispatchLimitsAsync(workerNodeId, cancellationToken);
+        var response = await dispatchLimiter.RunAsync(
+            workerNodeId,
+            NodeDispatchCategory.TeamLabNetwork,
+            NodeDispatchLimitPolicy.Resolve(limits, NodeDispatchCategory.TeamLabNetwork),
+            operationToken => agent.UpdateTeamLabExecutionNetworkAsync(
+                workerNodeId, new(currentPlan, desiredPlan), operationToken,
+                ExecutionPlanDeadline(desiredPlan, limits)),
+            cancellationToken);
+        return response ?? new(false, false, "agent_empty_response", "Agent did not return a network update result.");
+    }
+
     public async Task<IReadOnlyList<TeamLabNodeCaptureResult>> StartCapturesAsync(
         Guid workerNodeId,
         IReadOnlyList<TeamLabNodeCaptureStartRequest> requests,

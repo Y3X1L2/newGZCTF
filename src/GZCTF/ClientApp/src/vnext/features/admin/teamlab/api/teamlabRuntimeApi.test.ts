@@ -265,6 +265,36 @@ describe('TeamLab runtime contract boundary', () => {
     )
   })
 
+  it('previews and submits a runtime asset update', async () => {
+    const targetReleaseId = '019f0000-0000-7000-8000-000000000199'
+    const get = vi.fn().mockResolvedValue({
+      runtimeId: runtimeWire.id,
+      currentReleaseId: runtimeWire.releaseId,
+      targetReleaseId,
+      currentPlanRevision: 2,
+      canApply: true,
+      resetRequiredReason: null,
+      changes: [{ assetKey: 'worker', assetName: 'Worker', kind: 0, action: 'add' }],
+    })
+    const postJson = vi.fn().mockResolvedValue(runtimeWire)
+    const api = createTeamLabRuntimeApi(runtimeClient({ get, postJson }))
+
+    await expect(api.previewUpdate(runtimeWire.id, targetReleaseId)).resolves.toMatchObject({
+      canApply: true,
+      changes: [{ assetKey: 'worker', action: 'add' }],
+    })
+    await api.updateRuntime(runtimeWire.id, { releaseId: targetReleaseId, overlays: null })
+
+    expect(get).toHaveBeenCalledWith(
+      `/api/admin/teamlab/runtimes/${runtimeWire.id}/updates/preview`,
+      { releaseId: targetReleaseId }
+    )
+    expect(postJson).toHaveBeenCalledWith(
+      `/api/admin/teamlab/runtimes/${runtimeWire.id}/updates`,
+      { releaseId: targetReleaseId, overlays: null }
+    )
+  })
+
   it('returns the server projection from DELETE and rejects trial creation without header transport support', async () => {
     const deleteJson = vi.fn().mockResolvedValue({ ...runtimeWire, status: 9 })
     const api = createTeamLabRuntimeApi({ ...runtimeClient(), deleteJson })

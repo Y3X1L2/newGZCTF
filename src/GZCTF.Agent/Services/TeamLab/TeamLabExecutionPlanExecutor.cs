@@ -261,6 +261,11 @@ public sealed partial class TeamLabExecutionPlanExecutor(
         return await CleanupCoreAsync(plan, cancellationToken);
     }
 
+    public Task<TeamLabExecutionNetworkUpdateResponse> UpdateNetworkAsync(
+        TeamLabExecutionNetworkUpdateRequest request,
+        CancellationToken cancellationToken) =>
+        ovn.ReconcileAsync(request.CurrentPlan, request.DesiredPlan, cancellationToken);
+
     async Task<TeamLabExecutionPlanCleanupResponse> CleanupCoreAsync(
         TeamLabExecutionPlanV2 plan,
         CancellationToken cancellationToken)

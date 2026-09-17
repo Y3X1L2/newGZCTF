@@ -119,6 +119,68 @@ public sealed class TeamLabOvnNetworkProvider(
         }
     }
 
+    public async Task<TeamLabExecutionNetworkUpdateResponse> ReconcileAsync(
+        TeamLabExecutionPlanV2 current,
+        TeamLabExecutionPlanV2 desired,
+        CancellationToken cancellationToken)
+    {
+        if (!current.IsValid(out var currentError))
+            return new(false, false, "network_plan_invalid", currentError);
+        if (!desired.IsValid(out var desiredError))
+            return new(false, false, "network_plan_invalid", desiredError);
+        if (!current.NetworkOwner || !desired.NetworkOwner ||
+            current.RuntimeId != desired.RuntimeId ||
+            current.RuntimePublicId != desired.RuntimePublicId ||
+            current.Generation != desired.Generation)
+            return new(false, false, "network_identity_conflict", "Network plan identity does not match the running generation.");
+        if (!HasSameStructure(current, desired))
+            return new(false, false, "network_structure_changed", "Network structure changed and requires a full runtime reset.");
+
+        try
+        {
+            if (await AllResourcesPresentAsync(desired, cancellationToken))
+                return new(true, true, null, "Network intent already matches the requested revision.");
+            if (!await AllResourcesPresentAsync(current, cancellationToken))
+                return new(false, false, "network_identity_conflict", "The active OVN network does not match the current runtime plan.");
+
+            var operations = BuildRemoveOperations(current)
+                .Concat(BuildApplyOperations(desired))
+                .ToArray();
+            await ovsdb.TransactAsync(
+                config.OvnNorthboundEndpoint,
+                config.OvnNorthboundDatabase,
+                operations,
+                cancellationToken);
+            return new(true, false, null, "Network asset ports were updated.");
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception) when (exception is SocketException or IOException or InvalidOperationException or JsonException or OperationCanceledException)
+        {
+            logger.LogWarning(exception,
+                "TeamLab OVN revision failed for runtime {RuntimeId}, generation {Generation}",
+                current.RuntimeId, current.Generation);
+            return new(false, false, "network_update_failed", $"OVN network update failed: {Trim(exception.Message)}");
+        }
+    }
+
+    static bool HasSameStructure(TeamLabExecutionPlanV2 current, TeamLabExecutionPlanV2 desired)
+    {
+        static string Shape(TeamLabExecutionPlanV2 plan) => JsonSerializer.Serialize(new
+        {
+            Networks = plan.Networks.OrderBy(item => item.Key, StringComparer.Ordinal).Select(item => item with
+            {
+                Ports = [],
+                DhcpLeases = [],
+                DnsRecords = []
+            }),
+            plan.NetworkControl
+        });
+        return string.Equals(Shape(current), Shape(desired), StringComparison.Ordinal);
+    }
+
     public async Task<TeamLabOvnApplyResult> RemoveAsync(
         TeamLabExecutionPlanV2 plan,
         CancellationToken cancellationToken)

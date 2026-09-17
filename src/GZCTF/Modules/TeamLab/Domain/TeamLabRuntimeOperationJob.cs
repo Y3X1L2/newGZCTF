@@ -30,7 +30,8 @@ public enum TeamLabRuntimeOperationKind : byte
     WebhookReplay = 25,
     ReleasePreparationRelease = 26,
     RemoteSessionCreate = 27,
-    RemoteSessionEnd = 28
+    RemoteSessionEnd = 28,
+    Update = 29
 }
 
 public sealed class TeamLabRuntimeOperationJob

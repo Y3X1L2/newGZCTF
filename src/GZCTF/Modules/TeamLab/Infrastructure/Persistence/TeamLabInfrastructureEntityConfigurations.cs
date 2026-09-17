@@ -56,6 +56,7 @@ public sealed class TeamLabExecutionPlanSnapshotEntityConfiguration
         builder.ToTable("TeamLabExecutionPlanSnapshots");
         builder.Property(item => item.PlanDigest).HasMaxLength(96);
         builder.Property(item => item.PlanJson).HasColumnType("jsonb");
+        builder.Property(item => item.CurrentPlanJson).HasColumnType("jsonb");
         builder.HasIndex(item => new { item.RuntimeId, item.Generation, item.ShardId }).IsUnique();
         builder.HasOne(item => item.Runtime)
             .WithMany(item => item.ExecutionPlanSnapshots)

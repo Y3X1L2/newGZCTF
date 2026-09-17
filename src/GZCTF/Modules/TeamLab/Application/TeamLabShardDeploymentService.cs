@@ -37,7 +37,7 @@ public sealed class TeamLabShardDeploymentService(
     {
         var currentShards = runtime.Shards.Where(item => item.Generation == runtime.Generation).ToArray();
         var runtimeAssets = runtime.Assets
-            .Where(item => item.Generation == runtime.Generation)
+            .Where(item => item.Generation == runtime.Generation && item.Status != TeamLabRuntimeStatus.Destroyed)
             .OrderBy(item => item.TopologyKey, StringComparer.Ordinal)
             .ToArray();
         var templates = await context.ImageTemplates.AsNoTracking()
@@ -325,7 +325,8 @@ public sealed class TeamLabShardDeploymentService(
                     ShardId = shard.Id,
                     WorkerNodeId = shard.WorkerNodeId,
                     PlanDigest = plan.PlanDigest,
-                    PlanJson = planJson
+                    PlanJson = planJson,
+                    CurrentPlanJson = planJson
                 });
             }
             foreach (var fragment in runtime.Infrastructure
@@ -509,7 +510,7 @@ public sealed class TeamLabShardDeploymentService(
         CancellationToken cancellationToken)
     {
         var runtimeAssets = runtime.Assets
-            .Where(item => item.Generation == runtime.Generation)
+            .Where(item => item.Generation == runtime.Generation && item.Status != TeamLabRuntimeStatus.Destroyed)
             .OrderBy(item => item.TopologyKey, StringComparer.Ordinal)
             .ToArray();
         var templateIds = runtimeAssets
@@ -529,7 +530,7 @@ public sealed class TeamLabShardDeploymentService(
             cancellationToken);
     }
 
-    private async Task<IReadOnlyDictionary<int, TeamLabExecutionPlanV2>> CompileExecutionPlansAsync(
+    internal async Task<IReadOnlyDictionary<int, TeamLabExecutionPlanV2>> CompileExecutionPlansAsync(
         TeamLabRuntime runtime,
         TeamLabExecutionTopology definition,
         IReadOnlyCollection<TeamLabRuntimeAsset> runtimeAssets,

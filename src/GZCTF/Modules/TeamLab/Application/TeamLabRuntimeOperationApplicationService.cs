@@ -13,6 +13,7 @@ public sealed record TeamLabRuntimeOperationPayload(
     Guid? RuntimeId,
     ResetTeamLabRuntimeModel? Reset)
 {
+    public UpdateTeamLabRuntimeModel? Update { get; init; }
     public Guid? ControlScopeId { get; init; }
     public CreateTeamLabRolloutModel? CreateRollout { get; init; }
     public ReplaceTeamLabRolloutTargetsModel? ReplaceRolloutTargets { get; init; }
@@ -145,6 +146,22 @@ public sealed class TeamLabRuntimeOperationApplicationService(
         CancellationToken cancellationToken) =>
         SubmitAsync(apiTokenId, actorUserId, idempotencyKey, routeKey, TeamLabRuntimeOperationKind.Reset,
             new TeamLabRuntimeOperationPayload(null, runtimeId, command) { ControlScopeId = controlScopeId }, cancellationToken);
+
+    public Task<IdempotencyBeginResult> SubmitUpdateAsync(
+        Guid? apiTokenId,
+        Guid actorUserId,
+        string idempotencyKey,
+        string routeKey,
+        Guid runtimeId,
+        Guid controlScopeId,
+        UpdateTeamLabRuntimeModel command,
+        CancellationToken cancellationToken) =>
+        SubmitAsync(apiTokenId, actorUserId, idempotencyKey, routeKey, TeamLabRuntimeOperationKind.Update,
+            new TeamLabRuntimeOperationPayload(null, runtimeId, null)
+            {
+                ControlScopeId = controlScopeId,
+                Update = command
+            }, cancellationToken);
 
     public Task<IdempotencyBeginResult> SubmitDestroyAsync(
         Guid? apiTokenId,

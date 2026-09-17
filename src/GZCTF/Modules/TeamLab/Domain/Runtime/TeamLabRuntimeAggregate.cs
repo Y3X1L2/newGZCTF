@@ -13,6 +13,7 @@ public class TeamLabRuntime
     public Guid TopologyReleaseId { get; set; }
     public Guid? CreatedById { get; set; }
     public int Generation { get; set; } = 1;
+    public int PlanRevision { get; set; }
     // Kept as a runtime fact for databases upgraded through the scenario-build branch.
     // TeamLab authoring no longer exposes this implementation detail.
     public bool IsScenarioBuild { get; set; }
@@ -66,6 +67,7 @@ public sealed class TeamLabExecutionPlanSnapshot
     [MaxLength(96)] public string PlanDigest { get; set; } = string.Empty;
     [MaxLength(32)] public string SchemaVersion { get; set; } = "v2";
     public string PlanJson { get; set; } = string.Empty;
+    public string? CurrentPlanJson { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public TeamLabRuntime Runtime { get; set; } = null!;
     public TeamLabRuntimeShard Shard { get; set; } = null!;
@@ -141,6 +143,7 @@ public class TeamLabRuntimeAsset
     [MaxLength(2048)] public string? DevicePackageParametersJson { get; set; }
     public Guid? ConnectorId { get; set; }
     [MaxLength(8192)] public string? DeviceObservationJson { get; set; }
+    public string? ExecutionPlanJson { get; set; }
     public DateTimeOffset? DeviceNextProbeAt { get; set; }
     public DateTimeOffset? ExecutionUpdatedAt { get; set; }
     [MaxLength(1024)] public string? LastError { get; set; }

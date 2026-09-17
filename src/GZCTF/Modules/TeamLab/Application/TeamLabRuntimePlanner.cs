@@ -376,39 +376,12 @@ public sealed class TeamLabRuntimePlanner(
         }
         foreach (var asset in definition.Assets.OrderBy(item => item.Key, StringComparer.Ordinal))
         {
-            var interfaces = asset.Interfaces.OrderBy(item => item.DisplayOrder).Select(iface =>
-            {
-                var network = runtimeNetworkByKey[iface.NetworkKey];
-                var parsed = ParseNetwork(network.Cidr);
-                return new RuntimeInterfaceIntent(iface.Key, iface.NetworkKey, HostAt(parsed, iface.HostOffset),
-                    parsed.PrefixLength, MacAddress(runtime.Id, asset.Key, iface.Key), iface.Primary);
-            }).ToArray();
-            var primary = interfaces.Single(item => item.Primary);
-            runtime.Assets.Add(new TeamLabRuntimeAsset
-            {
-                RuntimeId = runtime.Id,
-                Generation = runtime.Generation,
-                PlacementGroupKey = groupByAsset[asset.Key],
-                Kind = asset.Kind == TeamLabAssetKind.Docker ? TeamLabResourceKind.Docker : TeamLabResourceKind.Vm,
-                TopologyKey = asset.Key,
-                Name = asset.Name,
-                SourceTemplateId = resolvedTemplateIds[asset.Key],
-                NetworkKey = primary.NetworkKey,
-                IpAddress = primary.IpAddress,
-                MacAddress = primary.MacAddress,
-                InterfaceSummaryJson = JsonSerializer.Serialize(interfaces),
-                Status = TeamLabRuntimeStatus.Pending,
-                ExecutionStage = TeamLabAssetExecutionStage.Pending,
-                ImageDigest = asset.ImageDigest ?? templateDigests.GetValueOrDefault(resolvedTemplateIds[asset.Key])?.ImageHash,
-                Image = asset.Kind == TeamLabAssetKind.Docker && templateDigests.TryGetValue(resolvedTemplateIds[asset.Key], out var dockerTemplate)
-                    ? DockerImageReference.ResolvePullTarget(
-                        dockerTemplate.Name,
-                        dockerTemplate.RegistryUrl).FullImage
-                    : null,
-                DevicePackageId = asset.DevicePackageId,
-                DevicePackageParametersJson = asset.DeviceParametersJson,
-                ConnectorId = asset.ConnectorId
-            });
+            runtime.Assets.Add(CreateRuntimeAsset(
+                runtime,
+                asset,
+                groupByAsset[asset.Key],
+                runtimeNetworkByKey,
+                templateDigests[resolvedTemplateIds[asset.Key]]));
         }
         var connectionsByNode = definition.Connections
             .Where(item => item.ViaNodeKey is not null)
@@ -524,6 +497,46 @@ public sealed class TeamLabRuntimePlanner(
             if (uint.MaxValue - start < size) break;
         }
         return null;
+    }
+
+    internal static TeamLabRuntimeAsset CreateRuntimeAsset(
+        TeamLabRuntime runtime,
+        TeamLabExecutionAsset asset,
+        string placementGroupKey,
+        IReadOnlyDictionary<string, TeamLabRuntimeNetwork> runtimeNetworkByKey,
+        ImageTemplate template)
+    {
+        var interfaces = asset.Interfaces.OrderBy(item => item.DisplayOrder).Select(iface =>
+        {
+            var network = runtimeNetworkByKey[iface.NetworkKey];
+            var parsed = ParseNetwork(network.Cidr);
+            return new RuntimeInterfaceIntent(iface.Key, iface.NetworkKey, HostAt(parsed, iface.HostOffset),
+                parsed.PrefixLength, MacAddress(runtime.Id, asset.Key, iface.Key), iface.Primary);
+        }).ToArray();
+        var primary = interfaces.Single(item => item.Primary);
+        return new TeamLabRuntimeAsset
+        {
+            RuntimeId = runtime.Id,
+            Generation = runtime.Generation,
+            PlacementGroupKey = placementGroupKey,
+            Kind = asset.Kind == TeamLabAssetKind.Docker ? TeamLabResourceKind.Docker : TeamLabResourceKind.Vm,
+            TopologyKey = asset.Key,
+            Name = asset.Name,
+            SourceTemplateId = asset.ImageTemplateId,
+            NetworkKey = primary.NetworkKey,
+            IpAddress = primary.IpAddress,
+            MacAddress = primary.MacAddress,
+            InterfaceSummaryJson = JsonSerializer.Serialize(interfaces),
+            Status = TeamLabRuntimeStatus.Pending,
+            ExecutionStage = TeamLabAssetExecutionStage.Pending,
+            ImageDigest = asset.ImageDigest ?? template.ImageHash,
+            Image = asset.Kind == TeamLabAssetKind.Docker
+                ? DockerImageReference.ResolvePullTarget(template.Name, template.RegistryUrl).FullImage
+                : null,
+            DevicePackageId = asset.DevicePackageId,
+            DevicePackageParametersJson = asset.DeviceParametersJson,
+            ConnectorId = asset.ConnectorId
+        };
     }
 
     private static IPNetwork ParseNetwork(string cidr)

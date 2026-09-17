@@ -66,6 +66,8 @@ export interface TeamLabRuntime {
   queueStatus?: 'pending' | 'scheduling' | 'scheduled' | 'running' | 'succeeded' | 'failed' | 'cancelled' | null
   id: string
   releaseId: string
+  releaseVersion?: number | null
+  planRevision?: number
   generation: number
   status: TeamLabRuntimeStatus
   stage: string
@@ -128,6 +130,28 @@ export interface CreateTeamLabTrialRequest {
 export interface ResetTeamLabRuntimeRequest {
   overlays: readonly TeamLabRuntimeOverlay[] | null
   releaseId: string | null
+}
+
+export interface UpdateTeamLabRuntimeRequest {
+  releaseId: string
+  overlays: readonly TeamLabRuntimeOverlay[] | null
+}
+
+export interface TeamLabRuntimeUpdateChange {
+  assetKey: string
+  assetName: string
+  kind: TeamLabAssetKind
+  action: 'add' | 'remove' | 'replace'
+}
+
+export interface TeamLabRuntimeUpdatePreview {
+  runtimeId: string
+  currentReleaseId: string
+  targetReleaseId: string
+  currentPlanRevision: number
+  canApply: boolean
+  resetRequiredReason: string | null
+  changes: readonly TeamLabRuntimeUpdateChange[]
 }
 
 export interface TeamLabAccessGrant {

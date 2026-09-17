@@ -215,6 +215,7 @@ public sealed class DeploymentQueueViewService(AppDbContext context)
         RuntimeOperationKind.Stop => "停止",
         RuntimeOperationKind.Reset => "重置",
         RuntimeOperationKind.Destroy => "销毁",
+        RuntimeOperationKind.Update => "更新",
         _ => operation.ToString()
     };
 

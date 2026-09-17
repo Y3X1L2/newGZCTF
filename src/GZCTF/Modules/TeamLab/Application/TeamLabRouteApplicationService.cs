@@ -35,7 +35,7 @@ public sealed class TeamLabRouteApplicationService(
         if (links.Count != shards.Length)
             throw new TeamLabRuntimeExecutionException("Runtime Fabric link leases are incomplete.");
         var templateIds = runtime.Assets
-            .Where(asset => asset.Generation == runtime.Generation && asset.SourceTemplateId.HasValue)
+            .Where(asset => asset.Generation == runtime.Generation && asset.Status != TeamLabRuntimeStatus.Destroyed && asset.SourceTemplateId.HasValue)
             .Select(asset => asset.SourceTemplateId!.Value)
             .Distinct()
             .ToArray();
@@ -173,7 +173,7 @@ public sealed class TeamLabRouteApplicationService(
         if (links.Count != shards.Length)
             throw new TeamLabRuntimeExecutionException("Runtime Fabric link leases are incomplete.");
         var templateIds = runtime.Assets
-            .Where(asset => asset.Generation == runtime.Generation && asset.SourceTemplateId.HasValue)
+            .Where(asset => asset.Generation == runtime.Generation && asset.Status != TeamLabRuntimeStatus.Destroyed && asset.SourceTemplateId.HasValue)
             .Select(asset => asset.SourceTemplateId!.Value)
             .Distinct()
             .ToArray();
@@ -209,7 +209,7 @@ public sealed class TeamLabRouteApplicationService(
         if (allNetworks.Length == 0)
             throw new TeamLabRuntimeExecutionException("Runtime has no network intent.");
         var templateIds = runtime.Assets
-            .Where(asset => asset.Generation == runtime.Generation && asset.SourceTemplateId.HasValue)
+            .Where(asset => asset.Generation == runtime.Generation && asset.Status != TeamLabRuntimeStatus.Destroyed && asset.SourceTemplateId.HasValue)
             .Select(asset => asset.SourceTemplateId!.Value)
             .Distinct()
             .ToArray();
@@ -218,7 +218,7 @@ public sealed class TeamLabRouteApplicationService(
             .ToDictionaryAsync(item => item.Id, item => item.VmNetworkMode, cancellationToken);
         var allowedPairs = TeamLabReachabilityCompiler.Compile(definition);
         var dnsRecords = runtime.Assets
-            .Where(asset => asset.Generation == runtime.Generation)
+            .Where(asset => asset.Generation == runtime.Generation && asset.Status != TeamLabRuntimeStatus.Destroyed)
             .SelectMany(asset => ParseInterfaces(asset)
                 .Select(iface => new TeamLabNodeDnsRecord(
                     asset.TopologyKey, iface.IpAddress, iface.MacAddress, iface.Primary)))
@@ -231,6 +231,7 @@ public sealed class TeamLabRouteApplicationService(
             network => network.TopologyKey,
             network => (IReadOnlyList<TeamLabNodeDnsRecord>)runtime.Assets
                 .Where(asset => asset.Generation == runtime.Generation &&
+                                asset.Status != TeamLabRuntimeStatus.Destroyed &&
                                 (asset.Kind != TeamLabResourceKind.Vm ||
                                  !asset.SourceTemplateId.HasValue ||
                                  networkModes.GetValueOrDefault(asset.SourceTemplateId.Value) !=
@@ -317,7 +318,7 @@ public sealed class TeamLabRouteApplicationService(
             item.Cidr, link.NodeAddress)).ToArray();
         var policies = BuildForwardPolicies(allNetworks, shard.Id, allowedPairs);
         var dnsRecords = runtime.Assets
-            .Where(asset => asset.Generation == runtime.Generation)
+            .Where(asset => asset.Generation == runtime.Generation && asset.Status != TeamLabRuntimeStatus.Destroyed)
             .SelectMany(asset => ParseInterfaces(asset)
                 .Select(iface => new TeamLabNodeDnsRecord(
                     asset.TopologyKey, iface.IpAddress, iface.MacAddress, iface.Primary)))
@@ -330,6 +331,7 @@ public sealed class TeamLabRouteApplicationService(
             network => network.TopologyKey,
             network => (IReadOnlyList<TeamLabNodeDnsRecord>)runtime.Assets
                 .Where(asset => asset.Generation == runtime.Generation &&
+                                asset.Status != TeamLabRuntimeStatus.Destroyed &&
                                 (asset.Kind != TeamLabResourceKind.Vm ||
                                  !asset.SourceTemplateId.HasValue ||
                                  networkModes.GetValueOrDefault(asset.SourceTemplateId.Value) !=

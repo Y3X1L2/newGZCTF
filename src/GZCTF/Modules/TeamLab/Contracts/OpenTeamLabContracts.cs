@@ -112,7 +112,8 @@ public sealed record OpenTeamLabRuntimeModel(
     IReadOnlyList<OpenTeamLabRuntimeSubStageModel>? SubStages = null,
     Guid? ControlScopeId = null,
     int? ReleaseVersion = null,
-    IReadOnlyList<string>? RecoveryActions = null);
+    IReadOnlyList<string>? RecoveryActions = null,
+    int PlanRevision = 0);
 
 public sealed record OpenTeamLabRuntimeSummaryModel(
     Guid Id,
@@ -246,7 +247,8 @@ public static class OpenTeamLabContractMapper
                 item.Id, item.Status, item.Message)).ToArray(),
             model.ControlScopeId,
             model.ReleaseVersion,
-            model.RecoveryActions);
+            model.RecoveryActions,
+            model.PlanRevision);
 
     public static OpenTeamLabCaptureModel ToOpen(this TeamLabCaptureModel model) =>
         new(model.Id, model.Status, model.Scope, model.NetworkKey, model.MaxBytes, model.MaxSeconds,

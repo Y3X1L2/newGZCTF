@@ -325,7 +325,11 @@ public interface ITeamLabNodeExecutor
         Guid workerNodeId,
         TeamLabExecutionPlanV2 plan,
         CancellationToken cancellationToken);
-
+    Task<TeamLabExecutionNetworkUpdateResponse> UpdateExecutionNetworkAsync(
+        Guid workerNodeId,
+        TeamLabExecutionPlanV2 currentPlan,
+        TeamLabExecutionPlanV2 desiredPlan,
+        CancellationToken cancellationToken);
     Task<TeamLabNodeRuntimeInventory> GetRuntimeInventoryAsync(
         Guid workerNodeId,
         CancellationToken cancellationToken);

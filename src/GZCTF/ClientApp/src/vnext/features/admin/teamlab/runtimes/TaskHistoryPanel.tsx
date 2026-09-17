@@ -6,7 +6,7 @@ import { formatAdminDate } from '../../shared/adminFormat'
 import { useTaskHistory } from './useTaskHistory'
 import styles from './RuntimePanels.module.css'
 
-const operations: Record<string, string> = { create: '创建', reset: '重建', destroy: '销毁', pause: '暂停', resume: '恢复', stop: '停止', extend: '续期', assetcontrol: '单资产操作' }
+const operations: Record<string, string> = { create: '创建', reset: '重建', destroy: '销毁', pause: '暂停', resume: '恢复', stop: '停止', extend: '续期', assetcontrol: '单资产操作', update: '更新资产' }
 const statuses: Record<string, string> = { pending: '等待执行', scheduling: '正在调度', scheduled: '等待节点', running: '执行中', succeeded: '成功', failed: '失败', cancelled: '已取消' }
 
 export function TaskHistoryPanel({ runtimeId, generation }: { runtimeId: string; generation: number }) {

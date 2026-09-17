@@ -480,6 +480,18 @@ public class AgentClient
             token,
             requestTimeout);
 
+    public virtual Task<TeamLabExecutionNetworkUpdateResponse?> UpdateTeamLabExecutionNetworkAsync(
+        Guid nodeId,
+        TeamLabExecutionNetworkUpdateRequest request,
+        CancellationToken token,
+        TimeSpan? requestTimeout = null) =>
+        PostTeamLabAsync<TeamLabExecutionNetworkUpdateRequest, TeamLabExecutionNetworkUpdateResponse>(
+            nodeId,
+            "/api/teamlab/execution-plan/network-update",
+            request,
+            token,
+            requestTimeout);
+
     public virtual async Task<TeamLabDryRunResponse?> ConfigureTeamLabWireGuardAsync(Guid nodeId,
         TeamLabWireGuardRequest request, CancellationToken token) =>
         await PostTeamLabAsync<TeamLabWireGuardRequest, TeamLabDryRunResponse>(nodeId,

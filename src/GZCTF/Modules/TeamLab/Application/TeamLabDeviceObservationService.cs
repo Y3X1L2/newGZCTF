@@ -98,7 +98,11 @@ public sealed class TeamLabDeviceObservationService(AppDbContext context, ITeamL
         var snapshot = await context.TeamLabExecutionPlanSnapshots.AsNoTracking().SingleOrDefaultAsync(item =>
             item.RuntimeId == runtime.Id && item.Generation == asset.Generation && item.ShardId == asset.ShardId, token);
         TeamLabExecutionPlanV2? plan = null;
-        try { if (snapshot is not null) plan = JsonSerializer.Deserialize<TeamLabExecutionPlanV2>(snapshot.PlanJson); }
+        try
+        {
+            var planJson = asset.ExecutionPlanJson ?? snapshot?.PlanJson;
+            if (planJson is not null) plan = JsonSerializer.Deserialize<TeamLabExecutionPlanV2>(planJson);
+        }
         catch (JsonException) { }
         var device = plan?.Assets.SingleOrDefault(item => item.AssetKey == asset.TopologyKey)?.Device;
         var interval = device?.HealthIntervalSeconds ?? 30;
@@ -106,13 +110,14 @@ public sealed class TeamLabDeviceObservationService(AppDbContext context, ITeamL
         var identity = (asset.RuntimeResourceId, asset.NativeIdentity, asset.WorkerNodeId);
         TeamLabDeviceObservation observation;
         if (asset.DesiredPowerState is "stopped" or "paused") observation = new("stopped", DateTimeOffset.UtcNow);
-        else if (plan is null || !plan.IsValid(out _) || device is null || asset.RuntimeResourceId is null || asset.WorkerNodeId != snapshot!.WorkerNodeId)
+        else if (plan is null || !plan.IsValid(out _) || device is null || asset.RuntimeResourceId is null ||
+                 asset.WorkerNodeId is null || snapshot is not null && asset.WorkerNodeId != snapshot.WorkerNodeId)
             observation = new("unavailable", DateTimeOffset.UtcNow, "device.execution_snapshot_missing");
         else
         {
             try
             {
-                observation = await observer.ProbeAsync(snapshot.WorkerNodeId,
+                observation = await observer.ProbeAsync(asset.WorkerNodeId.Value,
                     new(plan, asset.TopologyKey, asset.RuntimeResourceId, asset.NativeIdentity), token)
                     ?? new("unavailable", DateTimeOffset.UtcNow, "device.node_unavailable");
             }

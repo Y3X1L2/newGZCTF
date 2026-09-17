@@ -457,7 +457,8 @@ public sealed class RuntimeExecutionService(
 
     static bool RequiresCapacityReservation(DeploymentQueueTicket ticket) =>
         ticket.Operation == RuntimeOperationKind.Create ||
-        ticket.Kind == DeploymentQueueKind.TeamLabRuntime && ticket.Operation == RuntimeOperationKind.Reset;
+        ticket.Kind == DeploymentQueueKind.TeamLabRuntime &&
+        ticket.Operation is RuntimeOperationKind.Reset or RuntimeOperationKind.Update;
 
     static string TrimError(string? message)
     {

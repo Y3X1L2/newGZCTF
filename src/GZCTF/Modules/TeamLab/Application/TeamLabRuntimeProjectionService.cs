@@ -73,6 +73,7 @@ public sealed class TeamLabRuntimeProjectionService(AppDbContext context)
                     runtime.Networks.Where(item => item.Generation == runtime.Generation && item.ShardId == shard.Id)
                         .Select(item => item.TopologyKey).Order(StringComparer.Ordinal).ToArray(),
                     runtime.Assets.Where(item => item.Generation == runtime.Generation && item.ShardId == shard.Id)
+                        .Where(item => item.Status != TeamLabRuntimeStatus.Destroyed)
                         .Select(item => item.TopologyKey).Order(StringComparer.Ordinal).ToArray(),
                     shard.LastError,
                     TeamLabFailurePresentation.ForResource(
@@ -83,6 +84,7 @@ public sealed class TeamLabRuntimeProjectionService(AppDbContext context)
                 .Select(item => new TeamLabRuntimeNetworkProjectionModel(
                     item.TopologyKey, item.Name, item.Cidr, item.GatewayIp)).ToArray(),
             runtime.Assets.Where(item => item.Generation == runtime.Generation &&
+                                         item.Status != TeamLabRuntimeStatus.Destroyed &&
                                          item.Kind is TeamLabResourceKind.Docker or TeamLabResourceKind.Vm)
                 .OrderBy(item => item.TopologyKey, StringComparer.Ordinal)
                 .Select(item => new TeamLabRuntimeAssetProjectionModel(
@@ -109,7 +111,8 @@ public sealed class TeamLabRuntimeProjectionService(AppDbContext context)
             release.Version,
             TeamLabFailurePresentation.RecoveryActions(runtime.Status, runtimeFailure),
             runtimeFailure,
-            managedRolloutId);
+            managedRolloutId,
+            runtime.PlanRevision);
     }
 
     private static TeamLabRuntimeStatus EffectiveAssetStatus(

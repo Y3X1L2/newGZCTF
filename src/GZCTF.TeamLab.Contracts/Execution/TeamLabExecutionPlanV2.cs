@@ -305,6 +305,16 @@ public sealed record TeamLabExecutionPlanV2(
     }
 }
 
+public sealed record TeamLabExecutionNetworkUpdateRequest(
+    TeamLabExecutionPlanV2 CurrentPlan,
+    TeamLabExecutionPlanV2 DesiredPlan);
+
+public sealed record TeamLabExecutionNetworkUpdateResponse(
+    bool Success,
+    bool AlreadyApplied,
+    string? ErrorCode,
+    string? Message);
+
 public sealed record TeamLabNetworkIntentV2(
     string Key,
     string Cidr,

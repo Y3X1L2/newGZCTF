@@ -37,6 +37,21 @@ public interface ITeamLabRuntimeApplicationService
         ResetTeamLabRuntimeModel command,
         Guid? operationId,
         CancellationToken cancellationToken);
+    Task<TeamLabRuntimeUpdatePreviewModel> PreviewUpdateAsync(
+        Guid runtimeId,
+        Guid releaseId,
+        CancellationToken cancellationToken);
+    Task<TeamLabQueueTicketResult> UpdateAndEnqueueAsync(
+        Guid runtimeId,
+        UpdateTeamLabRuntimeModel command,
+        Guid actorUserId,
+        Guid? operationId,
+        CancellationToken cancellationToken);
+    Task<TeamLabNodeResult> ExecuteQueuedUpdateAsync(
+        int runtimeId,
+        Guid ticketId,
+        string? protectedPayload,
+        CancellationToken cancellationToken);
     Task<TeamLabNodeResult> ExecuteQueuedAsync(int runtimeId, CancellationToken cancellationToken);
     Task<TeamLabNodeResult> ExecuteQueuedResetAsync(
         int runtimeId,

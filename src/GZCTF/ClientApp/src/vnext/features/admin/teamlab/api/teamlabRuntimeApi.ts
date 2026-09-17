@@ -4,6 +4,7 @@ import type {
   CreateTeamLabCaptureRequest,
   CreateTeamLabTrialRequest,
   ResetTeamLabRuntimeRequest,
+  UpdateTeamLabRuntimeRequest,
 } from './teamlabRuntimeContracts'
 import {
   parseTeamLabAccessGrant,
@@ -12,6 +13,7 @@ import {
   parseTeamLabCapturePage,
   parseTeamLabRuntime,
   parseTeamLabRuntimeStatus,
+  parseTeamLabRuntimeUpdatePreview,
   parseTeamLabRuntimeEvents,
   parseTeamLabTrafficFlowPage,
   parseTeamLabTrafficPath,
@@ -42,6 +44,8 @@ function supportsDeleteResponse(client: RuntimeJsonClient): client is RuntimeJso
 export const teamLabRuntimeKeys = {
   runtime: (runtimeId: string) => ['vnext:admin:teamlab:runtime', runtimeId] as const,
   runtimeStatus: (runtimeId: string) => ['vnext:admin:teamlab:runtime-status', runtimeId] as const,
+  updatePreview: (runtimeId: string, releaseId: string) =>
+    ['vnext:admin:teamlab:runtime-update-preview', runtimeId, releaseId] as const,
   events: (runtimeId: string) => ['vnext:admin:teamlab:runtime-events', runtimeId] as const,
   accessGrants: (runtimeId: string) => ['vnext:admin:teamlab:runtime-access-grants', runtimeId] as const,
   flows: (runtimeId: string) => ['vnext:admin:teamlab:runtime-flows', runtimeId] as const,
@@ -98,6 +102,16 @@ export function createTeamLabRuntimeApi(client: RuntimeJsonClient = runtimeJsonC
 
     async resetRuntime(runtimeId: string, request: ResetTeamLabRuntimeRequest) {
       return parseTeamLabRuntime(await client.postJson(`${root}/${runtimeId}/reset`, request))
+    },
+
+    async previewUpdate(runtimeId: string, releaseId: string) {
+      return parseTeamLabRuntimeUpdatePreview(
+        await client.get(`${root}/${runtimeId}/updates/preview`, { releaseId })
+      )
+    },
+
+    async updateRuntime(runtimeId: string, request: UpdateTeamLabRuntimeRequest) {
+      return parseTeamLabRuntime(await client.postJson(`${root}/${runtimeId}/updates`, request))
     },
 
     async destroyRuntime(runtimeId: string) {

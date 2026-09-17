@@ -22,6 +22,25 @@ public sealed record ResetTeamLabRuntimeModel(
     IReadOnlyList<TeamLabRuntimeOverlayModel>? Overlays,
     Guid? ReleaseId = null);
 
+public sealed record UpdateTeamLabRuntimeModel(
+    Guid ReleaseId,
+    IReadOnlyList<TeamLabRuntimeOverlayModel>? Overlays = null);
+
+public sealed record TeamLabRuntimeUpdateChangeModel(
+    string AssetKey,
+    string AssetName,
+    TeamLabAssetKind Kind,
+    string Action);
+
+public sealed record TeamLabRuntimeUpdatePreviewModel(
+    Guid RuntimeId,
+    Guid CurrentReleaseId,
+    Guid TargetReleaseId,
+    int CurrentPlanRevision,
+    bool CanApply,
+    string? ResetRequiredReason,
+    IReadOnlyList<TeamLabRuntimeUpdateChangeModel> Changes);
+
 public sealed record TeamLabRuntimeShardProjectionModel(
     Guid Id,
     Guid WorkerNodeId,
@@ -86,7 +105,8 @@ public sealed record TeamLabRuntimeProjectionModel(
     int? ReleaseVersion = null,
     IReadOnlyList<string>? RecoveryActions = null,
     TeamLabFailureProjectionModel? Failure = null,
-    Guid? ManagedRolloutId = null);
+    Guid? ManagedRolloutId = null,
+    int PlanRevision = 0);
 
 public sealed record TeamLabRuntimeEventModel(
     long Cursor,

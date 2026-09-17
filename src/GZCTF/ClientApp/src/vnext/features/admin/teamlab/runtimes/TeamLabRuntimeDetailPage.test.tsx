@@ -4,10 +4,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TeamLabRuntime } from '../api'
 import { TeamLabRuntimeDetailPage } from './TeamLabRuntimeDetailPage'
 import { useRuntimeEvents } from './useRuntimeEvents'
+import { useRuntimeUpdatePreview } from './useRuntimeUpdatePreview'
 import { useTeamLabRuntime } from './useTeamLabRuntime'
 import { useTrafficObservability } from './useTrafficObservability'
 
 vi.mock('./useTeamLabRuntime', () => ({ useTeamLabRuntime: vi.fn() }))
+vi.mock('./useRuntimeUpdatePreview', () => ({ useRuntimeUpdatePreview: vi.fn() }))
 vi.mock('./useRuntimeEvents', () => ({
   useRuntimeEvents: vi.fn(),
   emptyTeamLabEventFilters: () => ({ generation: null, stage: '' }),
@@ -53,6 +55,12 @@ const runtime: TeamLabRuntime = {
 
 describe('TeamLabRuntimeDetailPage', () => {
   beforeEach(() => {
+    vi.mocked(useRuntimeUpdatePreview).mockReturnValue({
+      latestRelease: undefined,
+      preview: undefined,
+      error: undefined,
+      isLoading: false,
+    })
     vi.mocked(useTeamLabRuntime).mockReturnValue({
       runtime,
       error: undefined,

@@ -330,6 +330,12 @@ shard、路由、capture 和镜像运行引用。
 
 `GET /teamlab/runtimes` 支持按 `controlScopeId`、精确 `externalReference`、数字状态和 cursor 分页找回当前 token 可管理的 runtime。`GET /teamlab/runtimes/{id}/access-grants` 只返回当前代未撤销的授权元数据，不返回私钥、配置正文、一次性 token 或下载 URL。
 
+运行中的环境可先调用 `GET /teamlab/runtimes/{id}/updates/preview?releaseId=...`
+比较目标发布版本。预览会列出新增、移除和替换的资产；只有网段、路由、基础设施、
+现场连接器和资产节点归属均未改变时，才允许调用
+`POST /teamlab/runtimes/{id}/updates` 在线更新。写接口需要 `Idempotency-Key`，返回的
+operation 继续使用原部署队列执行。结构变化必须使用 reset，不会在热更新中重建整场。
+
 ## 8. 自动化建议
 
 ### 附件资产上传与练习绑定

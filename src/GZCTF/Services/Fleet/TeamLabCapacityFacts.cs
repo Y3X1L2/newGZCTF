@@ -37,9 +37,11 @@ public static class TeamLabCapacityFacts
                 .Select(shard => new TeamLabShardSlotCount(
                     shard.WorkerNodeId,
                     shard.Assets.Count(asset =>
-                        asset.Generation == runtime.Value && asset.Kind == TeamLabResourceKind.Docker),
+                        asset.Generation == runtime.Value && asset.Status != TeamLabRuntimeStatus.Destroyed &&
+                        asset.Kind == TeamLabResourceKind.Docker),
                     shard.Assets.Count(asset =>
-                        asset.Generation == runtime.Value && asset.Kind == TeamLabResourceKind.Vm)))
+                        asset.Generation == runtime.Value && asset.Status != TeamLabRuntimeStatus.Destroyed &&
+                        asset.Kind == TeamLabResourceKind.Vm)))
                 .Where(item => item.DockerSlots > 0 || item.VmSlots > 0)
                 .OrderBy(item => item.WorkerNodeId)
                 .ToArray());

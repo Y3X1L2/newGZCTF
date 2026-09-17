@@ -307,6 +307,10 @@ public class DeploymentExecutionService
                 runtimeId, ticket.Id, ticket.ProtectedPayload, token) is { } result && result.Success
                 ? DeploymentExecutionResult.Completed()
                 : DeploymentExecutionResult.Failed("TeamLab reset deployment failed."),
+            RuntimeOperationKind.Update => await _teamLabRuntime.ExecuteQueuedUpdateAsync(
+                runtimeId, ticket.Id, ticket.ProtectedPayload, token) is { Success: true }
+                ? DeploymentExecutionResult.Completed()
+                : DeploymentExecutionResult.Failed("TeamLab runtime update failed."),
             RuntimeOperationKind.Stop or RuntimeOperationKind.Destroy =>
                 (await _teamLabRuntime.ExecuteQueuedDestroyAsync(runtimeId, token)).Success
                     ? DeploymentExecutionResult.Completed()

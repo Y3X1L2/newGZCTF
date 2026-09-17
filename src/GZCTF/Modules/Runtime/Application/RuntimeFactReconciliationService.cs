@@ -224,8 +224,9 @@ public sealed partial class RuntimeFactReconciliationService(
                            item.TeamLabRuntimeId != null &&
                            (item.Operation == RuntimeOperationKind.Create ||
                             item.Operation == RuntimeOperationKind.Reset ||
-                            item.Operation == RuntimeOperationKind.Destroy ||
-                            item.Operation == RuntimeOperationKind.AssetControl) &&
+                             item.Operation == RuntimeOperationKind.Destroy ||
+                             item.Operation == RuntimeOperationKind.Update ||
+                             item.Operation == RuntimeOperationKind.AssetControl) &&
                            (item.Status == DeploymentQueueTicketStatus.Pending ||
                             item.Status == DeploymentQueueTicketStatus.Scheduling ||
                             item.Status == DeploymentQueueTicketStatus.Scheduled ||
