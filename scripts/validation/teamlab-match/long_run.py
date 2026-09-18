@@ -203,7 +203,7 @@ class Match:
             "updatedAt": datetime.now(timezone.utc).isoformat(),
         }, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    def cleanup(self):
+    def cleanup(self, final_status: str = "completed", error: str | None = None):
         errors = []
         for resource in reversed(self.resources):
             runtime_id = resource["runtimeId"]
@@ -224,7 +224,8 @@ class Match:
                 self.request("POST", f"/api/open/v1/teamlab/scopes/{self.scope_id}/archive")
             except Exception as exc:
                 errors.append(f"scope: {exc}")
-        self.write_lifecycle("cleanup_failed" if errors else "completed", "; ".join(errors) or None)
+        details = "; ".join(filter(None, [error, *errors])) or None
+        self.write_lifecycle("cleanup_failed" if errors else final_status, details)
 
 
 async def run_load(match: Match, teams: list[dict], duration: int, state: runner.State):
@@ -302,6 +303,8 @@ async def run_match(match: Match, args: argparse.Namespace) -> None:
     server = await runner.serve(state, args.listen)
     publisher = asyncio.create_task(runner.periodic_publish(state, match.output))
     print(f"看板: http://{args.listen}/", flush=True)
+    final_status = "completed"
+    failure = None
     try:
         scope = await asyncio.to_thread(match.request, "POST", "/api/open/v1/teamlab/scopes", {
             "key": f"match-{match.marker.lower()}", "displayName": f"双队比赛仿真 {match.marker}"})
@@ -311,13 +314,15 @@ async def run_match(match: Match, args: argparse.Namespace) -> None:
         blue = await asyncio.to_thread(match.provision, "blue", 170)
         await run_load(match, [red, blue], args.duration, state)
     except Exception as exc:
+        final_status = "failed"
+        failure = str(exc)
         state.phase = "测试失败"
         state.finished = True
-        state.failure("framework", "provisioning", str(exc))
-        match.write_lifecycle("failed", str(exc))
+        state.failure("framework", "provisioning", failure)
+        match.write_lifecycle(final_status, failure)
         raise
     finally:
-        await asyncio.to_thread(match.cleanup)
+        await asyncio.to_thread(match.cleanup, final_status, failure)
         publisher.cancel()
         await asyncio.gather(publisher, return_exceptions=True)
         await server.cleanup()
