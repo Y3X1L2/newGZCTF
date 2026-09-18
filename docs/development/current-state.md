@@ -8,14 +8,15 @@
 ## TeamLab HostGateway 回程修复（2026-09-18）
 
 - 双队仿真中蓝队 Web 的 4188 次 `asset_access` 超时确认由 HostGateway 的 OVN 端口 MAC 与 Linux internal 接口 MAC 不一致导致。Agent 现在把计划 MAC 持久写入 OVS Interface，并在现有状态探测中核对 Linux 接口 MAC。
-- `10.24.0.27`、`.30`、`.31` 已同步 Agent，SHA-256 均为 `ba007cc32bac8250abca342928c699a7340fa88a0c19aa0096f776637626d47e`，服务均为 active。现有蓝队网关已收敛到计划 MAC，`203.195.157.191:30002` 返回 HTTP 200；随后 20 秒内蓝队成功请求增加 283，失败数保持 4188，最后故障时间停留在 15:06:38。此次仅更新 Agent，无数据库迁移或主站切换。
+- `10.24.0.27`、`.30`、`.31` 已同步 Agent，SHA-256 均为 `51d9dab2504a5ee5dad26455da26ea85eafe61cddf01148dd561ba5e1cd4dc8a`，服务均为 active。现有蓝队网关已收敛到计划 MAC，修复后 20 秒内蓝队成功请求增加 283，失败数保持 4188，最后故障时间停留在 15:06:38。Agent 同时修复 TeamLab VM 文件接口误用通用 KVM 身份规则的问题；真实 SFTP 回归尚未完成。此次仅更新 Agent，无数据库迁移或主站切换。
+- 正式两小时仿真已执行：两队各 20 个混合资产，共 169,670 次请求，成功 165,482 次，P50 11.08 ms、P95 56.82 ms。4,188 次失败全部来自上述蓝队 HostGateway MAC 问题。红队 20 资产 35.48 秒进入 Ready；蓝队等待节点容量 453.30 秒，容量可用后的实际部署用时 33.84 秒；两队销毁分别用时 7.81 秒和 9.15 秒。完整数据与覆盖边界见 [生产仿真与容量测试汇总](test-reports/2026-09-18-teamlab-production-and-capacity-summary.md)。
 
 ## TeamLab Fabric 与比赛仿真准备（2026-09-17）
 
 - `10.24.0.27` 已发布 `2c1e14ed5f94cbdb795c473662c8c08b1ff1e1f1`，目录为 `/opt/gzctf/releases/teamlab-fabric-check-2c1e14e-20260917/publish`。兼容性检测现在使用本次 Agent 返回的 Fabric 结果，不再把刚写入的 `Probing` 状态误判为不可调度。
 - `.27`、`.30`、`.31` 均 Online、可调度且 Fabric Healthy；三台 Agent SHA-256 均为 `f2ea24f472b71997afa3c3c191fa55350f76defe0cf7a266a7e4526e5d4da5a2`。`.27`、`.31` 可承载 Docker 与 VM；`.30` 没有 `/dev/kvm`，只承载 Docker。
 - 生产调用兼容性检测后 `.27` 仍保持 Tunnel/Fabric Healthy，Docker 与 VM 均可调度。回归单测 1/1、前端测试 347/347、完整发布包构建通过。
-- 双队比赛仿真测试计划及轻量框架位于 `docs/development/teamlab-competition-simulation-test-plan.md` 和 `scripts/validation/teamlab-match/`。生产短流程已通过正式 Open API 部署 Modbus Docker、Linux VM 和 Windows VM，公网端点 `203.195.157.191:30000` 实际读回寄存器 `12/34/56/78`，状态检查一致；销毁后活动服务映射和容量租约均为 0。公网网关现有端口表现在包含 TeamLab TCP 服务开放映射。正式两小时测试尚未执行。
+- 双队比赛仿真测试计划及轻量框架位于 `docs/development/teamlab-competition-simulation-test-plan.md` 和 `scripts/validation/teamlab-match/`。生产短流程已通过正式 Open API 部署 Modbus Docker、Linux VM 和 Windows VM，Modbus 实际读回寄存器 `12/34/56/78`，状态检查一致；正式两小时仿真也已完成并清理。高并发数据面后续只使用 10.24 内网入口，不再使用临时公网网关作为容量测试路径。
 
 ## TeamLab 热更新生产发布（2026-09-17）
 

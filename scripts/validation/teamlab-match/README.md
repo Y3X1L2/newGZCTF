@@ -19,6 +19,15 @@ docker run --rm -p 19090:19090 \
 
 打开 `http://localhost:19090` 查看实时进度。首次接线时可追加 `--duration 120` 做两分钟短流程检查。
 
+高并发数据面测试必须显式指定 Worker 的内网地址，不使用临时公网网关：
+
+```bash
+python stress_run.py \
+  --base-url http://10.24.0.27:8080 \
+  --data-plane-host 10.24.0.27 \
+  --phases 500x30,1000x30,1500x30,2000x210
+```
+
 ## 场景配置
 
 - `teams` 定义两队常态/突发并发人数和实际 HTTP、TCP、Modbus、API 动作。每 15 分钟的前 60 秒使用 `burstUsers`，其余时间使用 `virtualUsers`。

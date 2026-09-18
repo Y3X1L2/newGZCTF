@@ -14,6 +14,7 @@ from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import urlsplit
 import requests
 from aiohttp import ClientSession, ClientTimeout, TCPConnector
 
@@ -39,11 +40,12 @@ def percentile(values: list[float], fraction: float) -> float:
 
 
 class StressRun:
-    def __init__(self, base_url: str, token: str, output: Path, file_size_mib: int):
+    def __init__(self, base_url: str, token: str, output: Path, file_size_mib: int, data_plane_host: str):
         self.base = base_url.rstrip("/")
         self.token = token
         self.output = output
         self.file_size = file_size_mib * 1024 * 1024
+        self.data_plane_host = data_plane_host
         self.match = Match(self.base, token, output)
         self.report: dict = {
             "name": "TeamLab Docker/VM high-concurrency stress",
@@ -206,9 +208,8 @@ class StressRun:
     async def stress(self, teams: list[dict], phases: list[tuple[int, int]]) -> None:
         targets = []
         for resource in teams:
-            web = resource["web"]
-            if not web.startswith("http"):
-                web = "http://" + web
+            endpoint = urlsplit(resource["web"] if "://" in resource["web"] else "tcp://" + resource["web"])
+            web = f"http://{self.data_plane_host}:{endpoint.port}"
             targets.append({"url": web.rstrip("/") + "/", "weight": 1})
         connector = TCPConnector(limit=0, ttl_dns_cache=300, keepalive_timeout=30)
         timeout = ClientTimeout(total=5)
@@ -269,11 +270,12 @@ def main() -> None:
     parser.add_argument("--output", default="artifacts/teamlab-match/stress-latest")
     parser.add_argument("--phases", default="500x30,1000x30,1500x30,2000x210")
     parser.add_argument("--file-size-mib", type=int, default=64)
+    parser.add_argument("--data-plane-host", required=True)
     args = parser.parse_args()
     token = os.environ.get("GZCTF_API_TOKEN", "")
     if not token:
         raise RuntimeError("GZCTF_API_TOKEN is required")
-    test = StressRun(args.base_url, token, Path(args.output), args.file_size_mib)
+    test = StressRun(args.base_url, token, Path(args.output), args.file_size_mib, args.data_plane_host)
     asyncio.run(test.run(parse_phases(args.phases)))
 
 
