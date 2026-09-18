@@ -16024,9 +16024,6 @@
             "type": "integer",
             "format": "int32"
           },
-          "executionModel": {
-            "$ref": "#/components/schemas/TeamLabExecutionModel"
-          },
           "status": {
             "$ref": "#/components/schemas/TeamLabRuntimeStatus"
           },
@@ -16046,18 +16043,6 @@
             "nullable": true
           }
         }
-      },
-      "TeamLabExecutionModel": {
-        "type": "integer",
-        "description": "",
-        "x-enumNames": [
-          "V1",
-          "V2"
-        ],
-        "enum": [
-          0,
-          1
-        ]
       },
       "CreateTeamLabRuntimeModel": {
         "type": "object",
@@ -16135,9 +16120,6 @@
           "generation": {
             "type": "integer",
             "format": "int32"
-          },
-          "executionModel": {
-            "$ref": "#/components/schemas/TeamLabExecutionModel"
           },
           "status": {
             "$ref": "#/components/schemas/TeamLabRuntimeStatus"
