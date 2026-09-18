@@ -227,7 +227,7 @@ class Match:
         self.write_lifecycle("cleanup_failed" if errors else "completed", "; ".join(errors) or None)
 
 
-async def run_load(match: Match, teams: list[dict], duration: int, listen: str):
+async def run_load(match: Match, teams: list[dict], duration: int, state: runner.State):
     recover_at = (datetime.now(timezone.utc) + timedelta(seconds=2220)).isoformat()
     config = {"name": "TeamLab 双队 40 资产比赛仿真", "baseUrl": match.base,
               "auth": {"bearerToken": match.session.headers["Authorization"].split(" ", 1)[1]},
@@ -288,14 +288,36 @@ async def run_load(match: Match, teams: list[dict], duration: int, listen: str):
             {"name": item["team"], "method": "GET", "path": f"/api/open/v1/teamlab/runtimes/{item['runtimeId']}"}
             for item in teams]},
     ]
-    state = runner.State(config["name"], duration)
+    state.name = config["name"]
+    state.duration = duration
+    state.started = time.monotonic()
     state.stages = [{"name": stage["name"], "status": "pending"} for stage in config["stages"]]
-    server = await runner.serve(state, listen)
-    publisher = asyncio.create_task(runner.periodic_publish(state, match.output))
     match.write_lifecycle("running")
+    await runner.orchestrate(config, state, match.output)
+
+
+async def run_match(match: Match, args: argparse.Namespace) -> None:
+    state = runner.State("TeamLab 双队 40 资产比赛仿真", args.duration)
+    state.phase = "环境准备中"
+    server = await runner.serve(state, args.listen)
+    publisher = asyncio.create_task(runner.periodic_publish(state, match.output))
+    print(f"看板: http://{args.listen}/", flush=True)
     try:
-        await runner.orchestrate(config, state, match.output)
+        scope = await asyncio.to_thread(match.request, "POST", "/api/open/v1/teamlab/scopes", {
+            "key": f"match-{match.marker.lower()}", "displayName": f"双队比赛仿真 {match.marker}"})
+        match.scope_id = scope["id"]
+        match.write_lifecycle("provisioning")
+        red = await asyncio.to_thread(match.provision, "red", 160)
+        blue = await asyncio.to_thread(match.provision, "blue", 170)
+        await run_load(match, [red, blue], args.duration, state)
+    except Exception as exc:
+        state.phase = "测试失败"
+        state.finished = True
+        state.failure("framework", "provisioning", str(exc))
+        match.write_lifecycle("failed", str(exc))
+        raise
     finally:
+        await asyncio.to_thread(match.cleanup)
         publisher.cancel()
         await asyncio.gather(publisher, return_exceptions=True)
         await server.cleanup()
@@ -312,20 +334,7 @@ def main():
     if not token:
         raise RuntimeError("GZCTF_API_TOKEN is required")
     match = Match(args.base_url, token, Path(args.output))
-    error = None
-    try:
-        scope = match.request("POST", "/api/open/v1/teamlab/scopes", {
-            "key": f"match-{match.marker.lower()}", "displayName": f"双队比赛仿真 {match.marker}"})
-        match.scope_id = scope["id"]
-        match.write_lifecycle("provisioning")
-        teams = [match.provision("red", 160), match.provision("blue", 170)]
-        asyncio.run(run_load(match, teams, args.duration, args.listen))
-    except Exception as exc:
-        error = str(exc)
-        match.write_lifecycle("failed", error)
-        raise
-    finally:
-        match.cleanup()
+    asyncio.run(run_match(match, args))
 
 
 if __name__ == "__main__":
