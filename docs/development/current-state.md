@@ -5,6 +5,11 @@
 
 本文件仅保留最新已知基线、功能边界、未解决事项和接手入口。生产信息是上述核验时点的记录，不能代替下一次操作前的现场检查。长期协作规则见 [AGENTS.md](../../AGENTS.md)。
 
+## TeamLab HostGateway 回程修复（2026-09-18）
+
+- 双队仿真中蓝队 Web 的 4188 次 `asset_access` 超时确认由 HostGateway 的 OVN 端口 MAC 与 Linux internal 接口 MAC 不一致导致。Agent 现在把计划 MAC 持久写入 OVS Interface，并在现有状态探测中核对 Linux 接口 MAC。
+- `10.24.0.27`、`.30`、`.31` 已同步 Agent，SHA-256 均为 `ba007cc32bac8250abca342928c699a7340fa88a0c19aa0096f776637626d47e`，服务均为 active。现有蓝队网关已收敛到计划 MAC，`203.195.157.191:30002` 返回 HTTP 200；随后 20 秒内蓝队成功请求增加 283，失败数保持 4188，最后故障时间停留在 15:06:38。此次仅更新 Agent，无数据库迁移或主站切换。
+
 ## TeamLab Fabric 与比赛仿真准备（2026-09-17）
 
 - `10.24.0.27` 已发布 `2c1e14ed5f94cbdb795c473662c8c08b1ff1e1f1`，目录为 `/opt/gzctf/releases/teamlab-fabric-check-2c1e14e-20260917/publish`。兼容性检测现在使用本次 Agent 返回的 Fabric 结果，不再把刚写入的 `Probing` 状态误判为不可调度。

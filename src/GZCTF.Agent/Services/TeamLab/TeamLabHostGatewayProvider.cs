@@ -22,6 +22,7 @@ public sealed class TeamLabHostGatewayProvider(
         {
             $"ovs-vsctl --may-exist add-port {config.OvsIntegrationBridgeName} {gateway.InterfaceName} -- " +
             $"set Interface {gateway.InterfaceName} type=internal " +
+            $"mac='\"{gateway.MacAddress}\"' " +
             $"external_ids:iface-id={logicalPort} external_ids:gzctf-runtime={plan.RuntimePublicId:D} " +
             $"external_ids:gzctf-generation={plan.Generation} external_ids:gzctf-network-key={network.Key}",
             $"ip link set dev {gateway.InterfaceName} address {gateway.MacAddress}",
@@ -46,6 +47,7 @@ public sealed class TeamLabHostGatewayProvider(
         var prefix = network.Cidr[(network.Cidr.LastIndexOf('/') + 1)..];
         var logicalPort = TeamLabOvnNaming.LogicalPortId(plan, network.Key, gateway.PortKey);
         var command = $"test \"$(ovs-vsctl --data=bare --no-heading get Interface {gateway.InterfaceName} external_ids:iface-id)\" = {logicalPort} && " +
+                      $"test \"$(cat /sys/class/net/{gateway.InterfaceName}/address)\" = {gateway.MacAddress.ToLowerInvariant()} && " +
                       $"ip -o -4 addr show dev {gateway.InterfaceName} | grep -F ' {gateway.IpAddress}/{prefix} ' >/dev/null";
         var result = await runner.RunAsync(command, token);
         return result.Success
