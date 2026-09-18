@@ -65,13 +65,16 @@ public sealed class TeamLabVmFilesController(KvmService kvm, IOptions<AgentTeamL
 
     async Task<IPAddress> ResolveManagementAddressAsync(TeamLabVmFileRequest request, CancellationToken token)
     {
-        var guest = await kvm.ExecuteWithIdentityAsync(request.DomainName, request.Generation, request.NativeId.ToString("D"),
-            ct => kvm.GetIpAddressWithDiagnosticAsync(request.DomainName, ct), token);
-        if (!IPAddress.TryParse(guest.IpAddress, out var actual) || !IPAddress.TryParse(request.GuestAddress, out var expected) || !actual.Equals(expected))
+        var identity = new TeamLabVmDiagnosticsRequest(request.DomainName, request.Generation, request.NativeId);
+        var addresses = await kvm.ExecuteWithTeamLabIdentityAsync(identity, async ct =>
+        {
+            var guest = await kvm.GetIpAddressWithDiagnosticAsync(request.DomainName, ct);
+            var management = await kvm.GetManagementIpAddressWithDiagnosticAsync(request.DomainName, ct);
+            return (Guest: guest.IpAddress, Management: management.IpAddress);
+        }, token);
+        if (!IPAddress.TryParse(addresses.Guest, out var actual) || !IPAddress.TryParse(request.GuestAddress, out var expected) || !actual.Equals(expected))
             throw new AgentOperationException("Conflict", "files.identity_mismatch", "VM guest address does not match its bound identity.", false, 409);
-        var management = await kvm.ExecuteWithIdentityAsync(request.DomainName, request.Generation, request.NativeId.ToString("D"),
-            ct => kvm.GetManagementIpAddressWithDiagnosticAsync(request.DomainName, ct), token);
-        return IPAddress.TryParse(management.IpAddress, out var address)
+        return IPAddress.TryParse(addresses.Management, out var address)
             ? address
             : throw new AgentOperationException("FileAccess", "files.management_unavailable", "VM management address is unavailable.", false, 409);
     }

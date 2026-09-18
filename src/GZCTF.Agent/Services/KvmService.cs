@@ -575,6 +575,21 @@ public class KvmService
         return await action(token);
     }
 
+    public async Task<T> ExecuteWithTeamLabIdentityAsync<T>(
+        GZCTF.TeamLab.Contracts.TeamLabVmDiagnosticsRequest identity,
+        Func<CancellationToken, Task<T>> action,
+        CancellationToken token)
+    {
+        if (!SafeNamePattern.IsMatch(identity.DomainName) || identity.Generation <= 0 || identity.NativeId == Guid.Empty)
+            throw new AgentOperationException(
+                "Conflict", "runtime.identity_conflict", "VM identity is invalid.", false,
+                StatusCodes.Status409Conflict);
+
+        await using var identityLock = await _resourceLock.AcquireAsync($"vm:{identity.DomainName}", token);
+        RequireDiagnosticIdentity(await RunVmDiagnosticCommandAsync("dumpxml", identity.DomainName, token), identity);
+        return await action(token);
+    }
+
     public async Task<int> GetVmCountAsync(CancellationToken token)
     {
         var result = await RunCommandAsync("virsh list --name 2>/dev/null", token, throwOnError: false);
