@@ -14,8 +14,6 @@ from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
-from urllib.parse import urlsplit
-
 import requests
 from aiohttp import ClientSession, ClientTimeout, TCPConnector
 
@@ -38,13 +36,6 @@ def percentile(values: list[float], fraction: float) -> float:
         return 0.0
     ordered = sorted(values)
     return ordered[min(len(ordered) - 1, int((len(ordered) - 1) * fraction))]
-
-
-def endpoint(value: str) -> tuple[str, int]:
-    parsed = urlsplit(value if "://" in value else f"tcp://{value}")
-    if not parsed.hostname or not parsed.port:
-        raise ValueError(f"Invalid endpoint: {value}")
-    return parsed.hostname, parsed.port
 
 
 class StressRun:
@@ -70,16 +61,6 @@ class StressRun:
         temporary.write_text(json.dumps(self.report, ensure_ascii=False, indent=2), encoding="utf-8")
         temporary.replace(self.output / "stress-report.json")
 
-    def service_access(self, resource: dict, asset_id: int, port: int) -> str:
-        model = self.match.request(
-            "POST",
-            f"/api/open/v1/teamlab/runtimes/{resource['runtimeId']}/assets/{asset_id}/service-access",
-            {"protocol": "tcp", "internalPort": port, "publicPort": None, "networkKey": "core"},
-        )
-        if str(model.get("status", "")).lower() != "active":
-            raise RuntimeError(model.get("lastError") or f"Service access for port {port} is not active")
-        return model["endpoint"]
-
     def prepare_team(self, resource: dict) -> dict:
         runtime = self.match.request("GET", f"/api/open/v1/teamlab/runtimes/{resource['runtimeId']}")
         assets = {asset["key"]: asset for asset in runtime["assets"]}
@@ -87,8 +68,6 @@ class StressRun:
             "dockerAssetId": assets["service-1"]["id"],
             "linuxVmId": assets["linux-vm"]["id"],
             "windowsVmId": assets["windows-vm"]["id"],
-            "ssh": self.service_access(resource, assets["linux-vm"]["id"], 22),
-            "rdp": self.service_access(resource, assets["windows-vm"]["id"], 3389),
         })
         return resource
 
@@ -157,20 +136,14 @@ class StressRun:
     async def request_once(self, session: ClientSession, target: dict, sequence: int) -> tuple[bool, float, str, int]:
         started = time.monotonic()
         try:
-            if target["kind"] == "http":
-                path = SCAN_PATHS[sequence % len(SCAN_PATHS)]
-                suffix = f"?scan={sequence}" if "?" not in path else f"&scan={sequence}"
-                async with session.get(target["url"] + path.lstrip("/") + suffix) as response:
-                    body = await response.read()
-                    return response.status < 500, (time.monotonic() - started) * 1000, f"http:{response.status}", len(body)
-            reader, writer = await asyncio.wait_for(
-                asyncio.open_connection(target["host"], target["port"]), timeout=3)
-            writer.close()
-            await writer.wait_closed()
-            return True, (time.monotonic() - started) * 1000, target["kind"], 0
+            path = SCAN_PATHS[sequence % len(SCAN_PATHS)]
+            suffix = f"?scan={sequence}" if "?" not in path else f"&scan={sequence}"
+            async with session.get(target["url"] + path.lstrip("/") + suffix) as response:
+                body = await response.read()
+                return response.status < 500, (time.monotonic() - started) * 1000, f"http:{response.status}", len(body)
         except Exception as error:
             return (False, (time.monotonic() - started) * 1000,
-                    f"{target['kind']}:{type(error).__name__}", 0)
+                    f"http:{type(error).__name__}", 0)
 
     async def phase(self, session: ClientSession, targets: list[dict], rate: int, seconds: int) -> dict:
         queue: asyncio.Queue[int] = asyncio.Queue(maxsize=max(rate * 2, 2000))
@@ -236,10 +209,7 @@ class StressRun:
             web = resource["web"]
             if not web.startswith("http"):
                 web = "http://" + web
-            targets.append({"kind": "http", "url": web.rstrip("/") + "/", "weight": 7})
-            for kind in ("ssh", "rdp"):
-                host, port = endpoint(resource[kind])
-                targets.append({"kind": kind, "host": host, "port": port, "weight": 2 if kind == "ssh" else 1})
+            targets.append({"url": web.rstrip("/") + "/", "weight": 1})
         connector = TCPConnector(limit=0, ttl_dns_cache=300, keepalive_timeout=30)
         timeout = ClientTimeout(total=5)
         transfer_task = asyncio.create_task(asyncio.to_thread(self.large_transfers, teams))
