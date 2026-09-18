@@ -10,6 +10,7 @@ import styles from './NodeCapacitySettings.module.css'
 
 export interface NodeCapacitySettingsValue {
   isSchedulable: boolean
+  automaticCapacity: boolean
   maxContainers: number
   maxVms: number
 }
@@ -33,11 +34,12 @@ export function validateNodeCapacitySettings(
   maxContainers: string,
   maxVms: string,
   isSchedulable: boolean,
+  automaticCapacity: boolean,
   allocatedContainers: number,
   allocatedVms: number
 ): CapacityValidationResult {
-  const containerError = capacityError(maxContainers, allocatedContainers, 10000, '容器上限')
-  const vmError = capacityError(maxVms, allocatedVms, 1000, 'VM 上限')
+  const containerError = automaticCapacity ? null : capacityError(maxContainers, allocatedContainers, 10000, '容器上限')
+  const vmError = automaticCapacity ? null : capacityError(maxVms, allocatedVms, 1000, 'VM 上限')
   return {
     containerError,
     vmError,
@@ -46,6 +48,7 @@ export function validateNodeCapacitySettings(
         ? null
         : {
             isSchedulable,
+            automaticCapacity,
             maxContainers: Number(maxContainers),
             maxVms: Number(maxVms),
           },
@@ -64,6 +67,7 @@ export function NodeCapacitySettings({
   const [maxContainers, setMaxContainers] = useState(String(node.maxContainers))
   const [maxVms, setMaxVms] = useState(String(node.maxVms))
   const [isSchedulable, setIsSchedulable] = useState(node.isSchedulable)
+  const [automaticCapacity, setAutomaticCapacity] = useState(node.automaticCapacity)
   const [saving, setSaving] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [feedback, setFeedback] = useState<{ tone: 'danger' | 'success'; message: string } | null>(null)
@@ -72,21 +76,24 @@ export function NodeCapacitySettings({
     setMaxContainers(String(node.maxContainers))
     setMaxVms(String(node.maxVms))
     setIsSchedulable(node.isSchedulable)
+    setAutomaticCapacity(node.automaticCapacity)
     setSubmitted(false)
     setFeedback(null)
-  }, [node.id, node.isSchedulable, node.maxContainers, node.maxVms])
+  }, [node.id, node.isSchedulable, node.automaticCapacity, node.maxContainers, node.maxVms])
 
   const validation = validateNodeCapacitySettings(
     maxContainers,
     maxVms,
     isSchedulable,
+    automaticCapacity,
     node.allocatedContainers,
     node.allocatedVms
   )
   const unchanged =
     validation.value?.maxContainers === node.maxContainers &&
     validation.value.maxVms === node.maxVms &&
-    validation.value.isSchedulable === node.isSchedulable
+    validation.value.isSchedulable === node.isSchedulable &&
+    validation.value.automaticCapacity === node.automaticCapacity
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -113,7 +120,7 @@ export function NodeCapacitySettings({
           <span>SCHEDULING POLICY</span>
           <h3>调度容量配置</h3>
         </div>
-        <p>Docker 与 KVM 能力由 Agent 自动上报；这里仅控制平台允许分配的工作负载数量。</p>
+        <p>自动模式按节点上报的 CPU、内存和当前占用安排任务；需要限制节点时再切换到人工上限。</p>
       </header>
 
       <div className={styles.capabilityFacts}>
@@ -129,9 +136,17 @@ export function NodeCapacitySettings({
         onChange={setIsSchedulable}
       />
 
+      <ToggleField
+        checked={automaticCapacity}
+        description="开启后不使用人工数量上限，调度仍沿用当前资源预留和部署队列。"
+        disabled={disabled || saving}
+        label="自动规划容量"
+        onChange={setAutomaticCapacity}
+      />
+
       <div className={styles.fields}>
         <TextField
-          disabled={disabled || saving}
+          disabled={disabled || saving || automaticCapacity}
           error={submitted ? validation.containerError : null}
           hint={`已分配 ${node.allocatedContainers}，其中预留 ${node.reservedContainers}`}
           inputMode="numeric"
@@ -144,7 +159,7 @@ export function NodeCapacitySettings({
           value={maxContainers}
         />
         <TextField
-          disabled={disabled || saving}
+          disabled={disabled || saving || automaticCapacity}
           error={submitted ? validation.vmError : null}
           hint={`已分配 ${node.allocatedVms}，其中预留 ${node.reservedVms}`}
           inputMode="numeric"

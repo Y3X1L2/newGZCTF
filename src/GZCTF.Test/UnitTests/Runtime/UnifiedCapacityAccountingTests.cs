@@ -55,6 +55,46 @@ public sealed class UnifiedCapacityAccountingTests
         Assert.Null(reason);
     }
 
+    [Fact]
+    public async Task AutomaticCapacity_UsesReportedResourcesInsteadOfManualSlotLimits()
+    {
+        await using var context = CreateContext();
+        var node = CreateNode(NodeCapability.Docker | NodeCapability.Kvm);
+        node.AutomaticCapacity = true;
+        node.MaxContainers = 0;
+        node.MaxVms = 0;
+        context.WorkerNodes.Add(node);
+        await context.SaveChangesAsync();
+        var snapshot = Assert.Single(await new NodeCapacitySnapshotService(context)
+            .LoadAsync(CancellationToken.None));
+        var evaluator = new NodeEligibilityEvaluator(Options.Create(new RuntimeSchedulingOptions()));
+
+        Assert.Null(evaluator.GetReason(snapshot, NodeCapability.Docker,
+            new WorkloadResourceVector(10, 512, 256, 1, 0), requireTeamLab: false));
+        Assert.Null(evaluator.GetReason(snapshot, NodeCapability.Kvm,
+            new WorkloadResourceVector(10, 512, 256, 0, 1), requireTeamLab: false));
+    }
+
+    [Fact]
+    public async Task ManualCapacity_StillAppliesOperatorSlotLimits()
+    {
+        await using var context = CreateContext();
+        var node = CreateNode(NodeCapability.Docker | NodeCapability.Kvm);
+        node.AutomaticCapacity = false;
+        node.MaxContainers = 0;
+        node.MaxVms = 0;
+        context.WorkerNodes.Add(node);
+        await context.SaveChangesAsync();
+        var snapshot = Assert.Single(await new NodeCapacitySnapshotService(context)
+            .LoadAsync(CancellationToken.None));
+        var evaluator = new NodeEligibilityEvaluator(Options.Create(new RuntimeSchedulingOptions()));
+
+        Assert.Equal("node_docker_slots_exhausted", evaluator.GetReason(snapshot, NodeCapability.Docker,
+            new WorkloadResourceVector(10, 512, 256, 1, 0), requireTeamLab: false));
+        Assert.Equal("node_vm_slots_exhausted", evaluator.GetReason(snapshot, NodeCapability.Kvm,
+            new WorkloadResourceVector(10, 512, 256, 0, 1), requireTeamLab: false));
+    }
+
     static FleetCapacityReservation Reservation(
         Guid ticketId,
         Guid nodeId,

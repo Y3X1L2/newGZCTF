@@ -9,6 +9,8 @@ namespace GZCTF.Models.Data;
 public class WorkerNode
 {
     public static readonly TimeSpan DefaultHeartbeatTimeout = TimeSpan.FromSeconds(120);
+    public const int MaximumContainerLimit = 10000;
+    public const int MaximumVmLimit = 1000;
 
     [Key] public Guid Id { get; set; } = Guid.NewGuid();
     [Required, MaxLength(128)] public string Name { get; set; } = string.Empty;
@@ -22,6 +24,7 @@ public class WorkerNode
     public int MaxContainers { get; set; } = 20;
     public int CurrentVms { get; set; }
     public int MaxVms { get; set; } = 5;
+    public bool AutomaticCapacity { get; set; } = true;
     public int UsedPorts { get; set; }
     public int TotalPorts { get; set; } = 28231;
     public long LiveMetricSequence { get; set; }
@@ -57,6 +60,9 @@ public class WorkerNode
     public DateTimeOffset? AgentUpdateCompletedAt { get; set; }
 
     [Timestamp] public uint ConcurrencyToken { get; set; }
+
+    [NotMapped] public int EffectiveMaxContainers => AutomaticCapacity ? MaximumContainerLimit : MaxContainers;
+    [NotMapped] public int EffectiveMaxVms => AutomaticCapacity ? MaximumVmLimit : MaxVms;
 
     public NodeStatus GetEffectiveStatus(DateTimeOffset utcNow)
     {

@@ -26,14 +26,14 @@ public sealed record NodeCapacitySnapshot(
     public int CurrentVm => Math.Max(LiveVm, FactVm);
     public int AllocatedDocker => CurrentDocker + ReservedDocker;
     public int AllocatedVm => CurrentVm + ReservedVm;
-    public int AvailableDocker => Math.Max(0, Node.MaxContainers - AllocatedDocker);
-    public int AvailableVm => Math.Max(0, Node.MaxVms - AllocatedVm);
+    public int AvailableDocker => Math.Max(0, Node.EffectiveMaxContainers - AllocatedDocker);
+    public int AvailableVm => Math.Max(0, Node.EffectiveMaxVms - AllocatedVm);
     public WorkloadResourceVector Total => new(
         ResourceTotal.CpuUnits,
         ResourceTotal.MemoryMiB,
         ResourceTotal.StorageMiB,
-        Math.Max(0, Node.MaxContainers),
-        Math.Max(0, Node.MaxVms));
+        Math.Max(0, Node.EffectiveMaxContainers),
+        Math.Max(0, Node.EffectiveMaxVms));
     public WorkloadResourceVector Actual => new(
         ResourceActual.CpuUnits,
         ResourceActual.MemoryMiB,

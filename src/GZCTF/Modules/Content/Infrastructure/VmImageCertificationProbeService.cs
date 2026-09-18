@@ -54,7 +54,7 @@ public sealed class VmImageCertificationProbeService(
         var nodes = (await context.WorkerNodes.AsNoTracking()
                 .Where(item => item.Status == NodeStatus.Online && item.IsSchedulable &&
                                (item.Capabilities & NodeCapability.Kvm) != 0 &&
-                               item.CurrentVms < item.MaxVms)
+                               (item.AutomaticCapacity || item.CurrentVms < item.MaxVms))
                 .ToArrayAsync(cancellationToken))
             .Select(item => (Node: item, Manifest: AgentCapabilityEvaluator.Parse(item.CapabilityManifestJson)))
             .Where(item => item.Node.GetEffectiveStatus(now) == NodeStatus.Online &&
@@ -65,7 +65,9 @@ public sealed class VmImageCertificationProbeService(
                            AgentCapabilityEvaluator.Supports(item.Node, AgentFeatureIds.VmConfigDriveV2) &&
                            AgentCapabilityEvaluator.Supports(item.Node, AgentFeatureIds.VmPreparedImage) &&
                            AgentCapabilityEvaluator.Supports(item.Node, AgentFeatureIds.RuntimeSignals))
-            .OrderBy(item => item.Node.MaxVms <= 0 ? 1d : (double)item.Node.CurrentVms / item.Node.MaxVms)
+            .OrderBy(item => item.Node.EffectiveMaxVms <= 0
+                ? 1d
+                : (double)item.Node.CurrentVms / item.Node.EffectiveMaxVms)
             .ThenBy(item => item.Node.CpuLoad)
             .ThenBy(item => item.Node.MemoryLoad)
             .ThenBy(item => item.Node.Name, StringComparer.Ordinal)

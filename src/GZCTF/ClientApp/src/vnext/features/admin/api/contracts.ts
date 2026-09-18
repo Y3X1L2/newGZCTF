@@ -79,6 +79,7 @@ export interface NodeSummary {
   capabilities: NodeCapability
   cpuLoad: number
   memoryLoad: number
+  automaticCapacity: boolean
   currentContainers: number
   maxContainers: number
   reservedContainers: number
@@ -87,6 +88,12 @@ export interface NodeSummary {
   maxVms: number
   reservedVms: number
   allocatedVms: number
+  totalCpuUnits: number
+  usedCpuUnits: number
+  availableCpuUnits: number
+  totalMemoryMiB: number
+  usedMemoryMiB: number
+  availableMemoryMiB: number
   usedPorts: number
   totalPorts: number
   portPoolStart: number
@@ -170,6 +177,7 @@ export interface NodeUpdateResult {
   id: string
   isSchedulable: boolean
   isLocal: boolean
+  automaticCapacity: boolean
   maxContainers: number
   maxVms: number
 }

@@ -164,6 +164,7 @@ public sealed class TeamLabRuntimeUpdateService(
             oldPlans[asset.TopologyKey] = await LoadAssetPlanAsync(runtime, asset, token);
 
         var newAssets = new List<TeamLabRuntimeAsset>();
+        var replacementAssets = new Dictionary<int, TeamLabRuntimeAsset>();
         var created = new List<(TeamLabRuntimeAsset Asset, TeamLabExecutionPlanV2 Plan)>();
         var removed = new List<(TeamLabRuntimeAsset Asset, TeamLabExecutionPlanV2 Plan, string? ResourceId, string? NativeIdentity)>();
         TeamLabExecutionPlanV2? currentNetworkPlan = null;
@@ -232,7 +233,8 @@ public sealed class TeamLabRuntimeUpdateService(
                     if (existing is null || !oldPlans.TryGetValue(change.AssetKey, out var oldPlan))
                         throw new TeamLabApiContractException("runtime_update_asset_missing", $"运行资产 {change.AssetKey} 不存在。", 409);
                     removed.Add((existing, oldPlan, existing.RuntimeResourceId, existing.NativeIdentity));
-                    CopyDesiredAsset(desired, existing);
+                    existing.Status = TeamLabRuntimeStatus.Destroying;
+                    replacementAssets[existing.Id] = desired;
                 }
                 else if (existing is { Status: TeamLabRuntimeStatus.Destroyed })
                 {
@@ -245,18 +247,17 @@ public sealed class TeamLabRuntimeUpdateService(
                 }
             }
 
-            foreach (var change in changes.Where(item => item.Action == "remove"))
-            {
-                var asset = removed.Single(item => item.Asset.TopologyKey == change.AssetKey).Asset;
-                asset.Status = TeamLabRuntimeStatus.Destroyed;
-            }
-            runtime.TopologyReleaseId = targetRelease.Id;
-            runtime.ControlScopeId = targetRelease.ControlScopeId;
+            runtime.Status = TeamLabRuntimeStatus.Deploying;
             runtime.UpdatedAt = DateTimeOffset.UtcNow;
             await context.SaveChangesAsync(token);
 
+            foreach (var replacement in replacementAssets)
+                CopyDesiredAsset(replacement.Value, runtime.Assets.Single(item => item.Id == replacement.Key));
+
             var activeAssets = runtime.Assets
-                .Where(item => item.Generation == runtime.Generation && item.Status != TeamLabRuntimeStatus.Destroyed)
+                .Where(item => item.Generation == runtime.Generation &&
+                               targetAssets.ContainsKey(item.TopologyKey) &&
+                               item.Status != TeamLabRuntimeStatus.Destroyed)
                 .ToArray();
             var targetPlans = await deployment.CompileExecutionPlansAsync(
                 runtime, targetDefinition, activeAssets, templates, overlayValues, token);
@@ -328,6 +329,8 @@ public sealed class TeamLabRuntimeUpdateService(
                 asset.ExecutionPlanJson = null;
                 asset.LastError = null;
             }
+
+            SyncWorkloadObservationPoints(runtime, changes);
 
             foreach (var snapshot in runtime.ExecutionPlanSnapshots.Where(item =>
                          item.Generation == runtime.Generation && targetPlans.ContainsKey(item.ShardId)))
@@ -726,6 +729,69 @@ public sealed class TeamLabRuntimeUpdateService(
         target.LastError = null;
     }
 
+    internal static void SyncWorkloadObservationPoints(
+        TeamLabRuntime runtime,
+        IReadOnlyCollection<TeamLabRuntimeUpdateChangeModel> changes)
+    {
+        var changedKeys = changes.Select(item => item.AssetKey).ToHashSet(StringComparer.Ordinal);
+        var now = DateTimeOffset.UtcNow;
+        foreach (var point in runtime.ObservationPoints.Where(item =>
+                     item.Generation == runtime.Generation &&
+                     item.Kind == TeamLabObservationPointKind.WorkloadEndpoint &&
+                     changedKeys.Contains(item.TopologyKey)))
+        {
+            point.Enabled = false;
+            point.UpdatedAt = now;
+        }
+
+        var networks = runtime.Networks
+            .Where(item => item.Generation == runtime.Generation)
+            .ToDictionary(item => item.TopologyKey, StringComparer.Ordinal);
+        foreach (var asset in runtime.Assets.Where(item =>
+                     item.Generation == runtime.Generation &&
+                     item.Status == TeamLabRuntimeStatus.Running &&
+                     changedKeys.Contains(item.TopologyKey)))
+        {
+            var interfaces = JsonSerializer.Deserialize<RuntimeInterfaceIntent[]>(asset.InterfaceSummaryJson) ?? [];
+            foreach (var iface in interfaces)
+            {
+                var interfaceToken = asset.Kind == TeamLabResourceKind.Vm
+                    ? TeamLabExecutionIdentityV2.VmTapName(
+                        runtime.PublicId, runtime.Generation, asset.TopologyKey, iface.NetworkKey)
+                    : TeamLabExecutionIdentityV2.WorkloadHostInterface(
+                        runtime.PublicId, runtime.Generation, asset.TopologyKey, iface.NetworkKey);
+                var point = runtime.ObservationPoints.FirstOrDefault(item =>
+                    item.Generation == runtime.Generation &&
+                    item.Kind == TeamLabObservationPointKind.WorkloadEndpoint &&
+                    item.AssetId == asset.Id &&
+                    item.InterfaceToken == interfaceToken);
+                if (point is null)
+                {
+                    runtime.ObservationPoints.Add(new TeamLabObservationPoint
+                    {
+                        RuntimeId = runtime.Id,
+                        Generation = runtime.Generation,
+                        WorkerNodeId = asset.WorkerNodeId!.Value,
+                        ShardId = asset.ShardId,
+                        NetworkId = networks[iface.NetworkKey].Id,
+                        AssetId = asset.Id,
+                        Kind = TeamLabObservationPointKind.WorkloadEndpoint,
+                        TopologyKey = asset.TopologyKey,
+                        InterfaceToken = interfaceToken
+                    });
+                }
+                else
+                {
+                    point.Enabled = true;
+                    point.WorkerNodeId = asset.WorkerNodeId!.Value;
+                    point.ShardId = asset.ShardId;
+                    point.NetworkId = networks[iface.NetworkKey].Id;
+                    point.UpdatedAt = now;
+                }
+            }
+        }
+    }
+
     async Task StopAffectedCapturesAsync(
         TeamLabRuntime runtime,
         IReadOnlyCollection<int> assetIds,
@@ -751,3 +817,5 @@ file static class TeamLabRuntimeUpdateStringExtensions
     public static string Truncate(this string value, int length) =>
         value.Length <= length ? value : value[..length];
 }
+
+file sealed record RuntimeInterfaceIntent(string NetworkKey);

@@ -1294,7 +1294,9 @@ public class ImageDistributionService(
         return await context.WorkerNodes.AsNoTracking()
             .Where(n => n.Status == NodeStatus.Online &&
                         n.IsSchedulable &&
-                        (template.ImageType == ImageType.Docker ? n.MaxContainers > 0 : n.MaxVms > 0) &&
+                        (template.ImageType == ImageType.Docker
+                            ? n.AutomaticCapacity || n.MaxContainers > 0
+                            : n.AutomaticCapacity || n.MaxVms > 0) &&
                         (n.Capabilities & capability) == capability)
             .OrderBy(n => n.Name)
             .ThenBy(n => n.Id)
@@ -1306,7 +1308,9 @@ public class ImageDistributionService(
         var capability = template.ImageType == ImageType.Docker ? DockerCapability : VmCapability;
         return node.Status == NodeStatus.Online &&
                node.IsSchedulable &&
-               (template.ImageType == ImageType.Docker ? node.MaxContainers > 0 : node.MaxVms > 0) &&
+               (template.ImageType == ImageType.Docker
+                   ? node.EffectiveMaxContainers > 0
+                   : node.EffectiveMaxVms > 0) &&
                (node.Capabilities & capability) == capability;
     }
 

@@ -1,8 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Text.Json;
 using GZCTF.Modules.TeamLab.Application;
 using GZCTF.Modules.TeamLab.Contracts;
 using GZCTF.Modules.TeamLab.Domain;
+using GZCTF.Modules.TeamLab.Domain.Runtime;
+using GZCTF.TeamLab.Contracts.Execution;
 using Xunit;
 
 namespace GZCTF.Test.UnitTests.TeamLab;
@@ -69,6 +73,58 @@ public sealed class TeamLabRuntimeUpdateDiffTests
                 changes));
         Assert.Equal("runtime_update_overlay_not_applicable", exception.Code);
     }
+
+    [Fact]
+    public void SyncWorkloadObservationPoints_CoversDockerVmAndRemovedAssets()
+    {
+        var nodeId = Guid.NewGuid();
+        var runtime = new TeamLabRuntime
+        {
+            Id = 42,
+            PublicId = Guid.NewGuid(),
+            Generation = 3,
+            Networks = [new TeamLabRuntimeNetwork { Id = 7, Generation = 3, TopologyKey = "lan" }]
+        };
+        runtime.Assets.AddRange(
+        [
+            RuntimeAsset(1, "docker", TeamLabResourceKind.Docker, nodeId),
+            RuntimeAsset(2, "vm", TeamLabResourceKind.Vm, nodeId)
+        ]);
+        runtime.ObservationPoints.Add(new TeamLabObservationPoint
+        {
+            AssetId = 9,
+            Generation = 3,
+            Kind = TeamLabObservationPointKind.WorkloadEndpoint,
+            TopologyKey = "removed",
+            InterfaceToken = "old",
+            Enabled = true
+        });
+
+        TeamLabRuntimeUpdateService.SyncWorkloadObservationPoints(runtime,
+        [
+            new("docker", "Docker", TeamLabAssetKind.Docker, "add"),
+            new("vm", "VM", TeamLabAssetKind.Vm, "replace"),
+            new("removed", "Removed", TeamLabAssetKind.Docker, "remove")
+        ]);
+
+        Assert.False(runtime.ObservationPoints.Single(item => item.TopologyKey == "removed").Enabled);
+        Assert.Contains(runtime.ObservationPoints, item => item.AssetId == 1 && item.Enabled &&
+            item.InterfaceToken == TeamLabExecutionIdentityV2.WorkloadHostInterface(runtime.PublicId, 3, "docker", "lan"));
+        Assert.Contains(runtime.ObservationPoints, item => item.AssetId == 2 && item.Enabled &&
+            item.InterfaceToken == TeamLabExecutionIdentityV2.VmTapName(runtime.PublicId, 3, "vm", "lan"));
+    }
+
+    static TeamLabRuntimeAsset RuntimeAsset(int id, string key, TeamLabResourceKind kind, Guid nodeId) => new()
+    {
+        Id = id,
+        Generation = 3,
+        ShardId = 5,
+        WorkerNodeId = nodeId,
+        Kind = kind,
+        TopologyKey = key,
+        Status = TeamLabRuntimeStatus.Running,
+        InterfaceSummaryJson = JsonSerializer.Serialize(new[] { new { NetworkKey = "lan" } })
+    };
 
     static TeamLabExecutionTopology Topology(params TeamLabExecutionAsset[] assets) => new(
         2,

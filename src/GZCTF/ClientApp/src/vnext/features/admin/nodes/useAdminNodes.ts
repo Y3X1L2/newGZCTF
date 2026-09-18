@@ -77,8 +77,12 @@ export function tunnelStatusMeta(status: TeamLabTunnelStatus) {
   return { label: '未知', tone: 'neutral' as const }
 }
 
-export function formatLoad(value: number) {
-  return `${Math.round(value * 100)}%`
+export function formatCpuUnits(value: number) {
+  return `${(value / 10).toLocaleString('zh-CN', { maximumFractionDigits: 1 })} 核`
+}
+
+export function formatMemoryMiB(value: number) {
+  return `${(value / 1024).toLocaleString('zh-CN', { maximumFractionDigits: 1 })} GiB`
 }
 
 export function formatHeartbeat(value: number | null) {

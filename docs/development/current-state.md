@@ -5,6 +5,13 @@
 
 本文件仅保留最新已知基线、功能边界、未解决事项和接手入口。生产信息是上述核验时点的记录，不能代替下一次操作前的现场检查。长期协作规则见 [AGENTS.md](../../AGENTS.md)。
 
+## TeamLab 自动容量与热更新修正（2026-09-18）
+
+- 候选分支 `codex/teamlab-auto-capacity-hot-update` 为 Worker 增加自动容量模式。现有容量快照、候选筛选、容量预留和 `DeploymentQueueTicket` 流程保持不变；自动模式取消人工 Docker/VM 数量上限，由 Agent 上报的 CPU、总内存、实时负载以及数据库中的实际占用和预留决定是否可放置。普通题目容器、VM 和 TeamLab 继续共用同一容量事实。人工数量上限保留，关闭自动模式后生效，再次开启即回到自动模式。
+- 节点详情把 CPU、内存百分比改为已用/总量的核数和 GiB，现有实例数量与页面布局保持不变。迁移 `20260918115451_AddWorkerNodeAutomaticCapacity` 将既有节点直接设为自动模式。
+- 运行中资产热更新现在先持久化部署中/销毁中状态，现场删除成功后才提交新身份或销毁终态；Docker 与 VM 新增、替换会同步工作负载观测点，移除资产会停用旧观测点。Agent 批量停止抓包分段改为并行执行，仍使用原控制操作额度。
+- 已通过主站 Release 构建、Agent Release 构建、容量/节点/镜像/热更新定向测试 70/70、前端测试 348/348、类型检查、架构检查、生产构建和迁移 SQL 生成。本次未部署生产，也未执行真实 Docker/VM 热更新和抓包停止性能复测。
+
 ## TeamLab HostGateway 回程修复（2026-09-18）
 
 - 双队仿真中蓝队 Web 的 4188 次 `asset_access` 超时确认由 HostGateway 的 OVN 端口 MAC 与 Linux internal 接口 MAC 不一致导致。Agent 现在把计划 MAC 持久写入 OVS Interface，并在现有状态探测中核对 Linux 接口 MAC。

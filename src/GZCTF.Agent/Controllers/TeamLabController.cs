@@ -208,10 +208,7 @@ public class TeamLabController(
         CancellationToken token)
     {
         await using var permit = await gate.EnterAsync(AgentOperationCategory.Control, token);
-        var results = new TeamLabCaptureResponse[requests.Length];
-        for (var index = 0; index < requests.Length; index++)
-            results[index] = await pcap.StopAsync(requests[index], token);
-        return Ok(results);
+        return Ok(await Task.WhenAll(requests.Select(request => pcap.StopAsync(request, token))));
     }
 
     [HttpPost("capture/status")]

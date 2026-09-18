@@ -18,7 +18,14 @@ import {
 import styles from './AdminNodeDetailPage.module.css'
 import { NodeResourceTab } from './NodeResourceTab'
 import { NodeCapacitySettings, type NodeCapacitySettingsValue } from './NodeCapacitySettings'
-import { formatHeartbeat, formatLoad, nodeStatusMeta, tunnelStatusMeta, useAdminNode } from './useAdminNodes'
+import {
+  formatCpuUnits,
+  formatHeartbeat,
+  formatMemoryMiB,
+  nodeStatusMeta,
+  tunnelStatusMeta,
+  useAdminNode,
+} from './useAdminNodes'
 
 const tabs = [
   { id: 'resources', label: '资源' },
@@ -78,8 +85,18 @@ function CapacityPanel({
           max={node.maxVms}
           value={node.allocatedVms}
         />
-        <ResourceMeter label="CPU 负载" max={100} value={Math.round(node.cpuLoad * 100)} />
-        <ResourceMeter label="内存负载" max={100} value={Math.round(node.memoryLoad * 100)} />
+        <ResourceMeter
+          detail={`${formatCpuUnits(node.usedCpuUnits)} / ${formatCpuUnits(node.totalCpuUnits)}`}
+          label="CPU"
+          max={node.totalCpuUnits}
+          value={node.usedCpuUnits}
+        />
+        <ResourceMeter
+          detail={`${formatMemoryMiB(node.usedMemoryMiB)} / ${formatMemoryMiB(node.totalMemoryMiB)}`}
+          label="内存"
+          max={node.totalMemoryMiB}
+          value={node.usedMemoryMiB}
+        />
         <ResourceMeter
           detail={`${node.portPoolStart}-${node.portPoolEnd}`}
           label="公网端口池"
@@ -90,8 +107,8 @@ function CapacityPanel({
       <Facts>
         <Fact label="当前容器" value={node.currentContainers} />
         <Fact label="当前虚拟机" value={node.currentVms} />
-        <Fact label="CPU" value={formatLoad(node.cpuLoad)} />
-        <Fact label="内存" value={formatLoad(node.memoryLoad)} />
+        <Fact label="CPU" value={`${formatCpuUnits(node.usedCpuUnits)} / ${formatCpuUnits(node.totalCpuUnits)}`} />
+        <Fact label="内存" value={`${formatMemoryMiB(node.usedMemoryMiB)} / ${formatMemoryMiB(node.totalMemoryMiB)}`} />
       </Facts>
       <NodeCapacitySettings disabled={disabled} node={node} onSave={onSave} />
     </section>

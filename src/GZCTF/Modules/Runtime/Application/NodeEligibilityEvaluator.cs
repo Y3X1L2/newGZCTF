@@ -82,11 +82,13 @@ public sealed class NodeEligibilityEvaluator(IOptions<RuntimeSchedulingOptions> 
         var node = snapshot.Node;
         var dockerAfter = snapshot.AllocatedDocker + requested.DockerSlots;
         var vmAfter = snapshot.AllocatedVm + requested.VmSlots;
-        var dockerUtilization = node.MaxContainers == 0 ? (dockerAfter == 0 ? 0 : 1) :
-            (double)dockerAfter / node.MaxContainers;
-        var vmUtilization = node.MaxVms == 0 ? (vmAfter == 0 ? 0 : 1) : (double)vmAfter / node.MaxVms;
-        var absoluteHeadroom = Math.Min(32, Math.Max(0, node.MaxContainers - dockerAfter)) +
-                               Math.Min(8, Math.Max(0, node.MaxVms - vmAfter)) * 4;
+        var dockerLimit = node.EffectiveMaxContainers;
+        var vmLimit = node.EffectiveMaxVms;
+        var dockerUtilization = dockerLimit == 0 ? (dockerAfter == 0 ? 0 : 1) :
+            (double)dockerAfter / dockerLimit;
+        var vmUtilization = vmLimit == 0 ? (vmAfter == 0 ? 0 : 1) : (double)vmAfter / vmLimit;
+        var absoluteHeadroom = Math.Min(32, Math.Max(0, dockerLimit - dockerAfter)) +
+                               Math.Min(8, Math.Max(0, vmLimit - vmAfter)) * 4;
         return 1000 * (1 - Math.Clamp(node.CpuLoad, 0, 1)) +
                500 * (1 - Math.Clamp(node.MemoryLoad, 0, 1)) +
                200 * (1 - Math.Clamp(dockerUtilization, 0, 1)) +

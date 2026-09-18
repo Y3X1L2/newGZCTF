@@ -31,6 +31,7 @@ public class WorkerNodeTests
         Assert.Equal(NodeStatus.Unknown, node.Status);
         Assert.Equal(20, node.MaxContainers);
         Assert.Equal(5, node.MaxVms);
+        Assert.True(node.AutomaticCapacity);
         Assert.Equal(28231, node.TotalPorts);
     }
 

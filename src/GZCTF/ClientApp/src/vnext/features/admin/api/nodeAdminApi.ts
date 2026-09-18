@@ -1,4 +1,4 @@
-import type { EnableTeamLabNetworkRequest, NodeDeployRequest, UpdateNodeRequest } from '@Api'
+import type { EnableTeamLabNetworkRequest, NodeDeployRequest } from '@Api'
 import {
   contractFailure,
   isBoolean,
@@ -17,6 +17,13 @@ export interface NodeResourceQuery {
   status?: string
   page?: number
   pageSize?: number
+}
+
+export interface UpdateNodeRequest {
+  isSchedulable?: boolean
+  automaticCapacity?: boolean
+  maxContainers?: number
+  maxVms?: number
 }
 
 function isCapabilityAvailability(value: unknown) {
@@ -53,6 +60,7 @@ function isNodeSummary(value: unknown): value is NodeSummary {
     isNumber(value.capabilities) &&
     isNumber(value.cpuLoad) &&
     isNumber(value.memoryLoad) &&
+    isBoolean(value.automaticCapacity) &&
     isNumber(value.currentContainers) &&
     isNumber(value.maxContainers) &&
     isNumber(value.reservedContainers) &&
@@ -61,6 +69,12 @@ function isNodeSummary(value: unknown): value is NodeSummary {
     isNumber(value.maxVms) &&
     isNumber(value.reservedVms) &&
     isNumber(value.allocatedVms) &&
+    isNumber(value.totalCpuUnits) &&
+    isNumber(value.usedCpuUnits) &&
+    isNumber(value.availableCpuUnits) &&
+    isNumber(value.totalMemoryMiB) &&
+    isNumber(value.usedMemoryMiB) &&
+    isNumber(value.availableMemoryMiB) &&
     isNumber(value.usedPorts) &&
     isNumber(value.totalPorts) &&
     isNumber(value.portPoolStart) &&
@@ -172,6 +186,7 @@ function parseUpdateResult(value: unknown): NodeUpdateResult {
     !isString(value.id) ||
     !isBoolean(value.isSchedulable) ||
     !isBoolean(value.isLocal) ||
+    !isBoolean(value.automaticCapacity) ||
     !isNumber(value.maxContainers) ||
     !isNumber(value.maxVms)
   ) {

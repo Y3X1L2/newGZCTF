@@ -140,12 +140,18 @@ public class NodesController : ControllerBase
             return new
             {
             n.Id, n.Name, n.HostAddress, Status = n.GetEffectiveStatus(now), n.Capabilities,
-            n.CpuLoad, n.MemoryLoad, n.CurrentContainers, n.MaxContainers,
+            n.CpuLoad, n.MemoryLoad, n.CurrentContainers, n.MaxContainers, n.AutomaticCapacity,
             ReservedContainers = snapshot.ReservedDocker,
             AllocatedContainers = snapshot.AllocatedDocker,
             n.CurrentVms, n.MaxVms,
             ReservedVms = snapshot.ReservedVm,
             AllocatedVms = snapshot.AllocatedVm,
+            TotalCpuUnits = snapshot.Total.CpuUnits,
+            UsedCpuUnits = snapshot.Actual.CpuUnits,
+            AvailableCpuUnits = Math.Max(0, snapshot.Available.CpuUnits),
+            TotalMemoryMiB = snapshot.Total.MemoryMiB,
+            UsedMemoryMiB = snapshot.Actual.MemoryMiB,
+            AvailableMemoryMiB = Math.Max(0, snapshot.Available.MemoryMiB),
             UsedPorts = publicPortUsage,
             TotalPorts = portPool.Total,
             PortPoolStart = portPool.Start,
@@ -194,12 +200,18 @@ public class NodesController : ControllerBase
         return Ok(new
         {
             node.Id, node.Name, node.HostAddress, Status = node.GetEffectiveStatus(now), node.Capabilities,
-            node.CpuLoad, node.MemoryLoad, node.CurrentContainers, node.MaxContainers,
+            node.CpuLoad, node.MemoryLoad, node.CurrentContainers, node.MaxContainers, node.AutomaticCapacity,
             ReservedContainers = snapshot.ReservedDocker,
             AllocatedContainers = snapshot.AllocatedDocker,
             node.CurrentVms, node.MaxVms,
             ReservedVms = snapshot.ReservedVm,
             AllocatedVms = snapshot.AllocatedVm,
+            TotalCpuUnits = snapshot.Total.CpuUnits,
+            UsedCpuUnits = snapshot.Actual.CpuUnits,
+            AvailableCpuUnits = Math.Max(0, snapshot.Available.CpuUnits),
+            TotalMemoryMiB = snapshot.Total.MemoryMiB,
+            UsedMemoryMiB = snapshot.Actual.MemoryMiB,
+            AvailableMemoryMiB = Math.Max(0, snapshot.Available.MemoryMiB),
             UsedPorts = publicPortUsage,
             TotalPorts = portPool.Total,
             PortPoolStart = portPool.Start,
@@ -612,19 +624,29 @@ public class NodesController : ControllerBase
         if (request.IsSchedulable.HasValue)
             node.IsSchedulable = request.IsSchedulable.Value;
 
+        var automaticCapacity = request.AutomaticCapacity ?? node.AutomaticCapacity;
+
         if (request.MaxContainers.HasValue)
         {
-            if (request.MaxContainers.Value < snapshot.AllocatedDocker || request.MaxContainers.Value > 10000)
-                return BadRequest(new { message = $"容器开启上限不能小于当前占用数 {snapshot.AllocatedDocker}，且不能超过 10000。" });
+            if (request.MaxContainers.Value < 0 || request.MaxContainers.Value > WorkerNode.MaximumContainerLimit)
+                return BadRequest(new { message = $"容器开启上限必须在 0 到 {WorkerNode.MaximumContainerLimit} 之间。" });
             node.MaxContainers = request.MaxContainers.Value;
         }
 
         if (request.MaxVms.HasValue)
         {
-            if (request.MaxVms.Value < snapshot.AllocatedVm || request.MaxVms.Value > 1000)
-                return BadRequest(new { message = $"虚拟机开启上限不能小于当前占用数 {snapshot.AllocatedVm}，且不能超过 1000。" });
+            if (request.MaxVms.Value < 0 || request.MaxVms.Value > WorkerNode.MaximumVmLimit)
+                return BadRequest(new { message = $"虚拟机开启上限必须在 0 到 {WorkerNode.MaximumVmLimit} 之间。" });
             node.MaxVms = request.MaxVms.Value;
         }
+
+        if (!automaticCapacity &&
+            (node.MaxContainers < snapshot.AllocatedDocker || node.MaxVms < snapshot.AllocatedVm))
+            return BadRequest(new
+            {
+                message = $"人工容量不能低于当前占用：容器 {snapshot.AllocatedDocker}，虚拟机 {snapshot.AllocatedVm}。"
+            });
+        node.AutomaticCapacity = automaticCapacity;
 
         if (request.IsStorageNode.HasValue || request.RegistryPort.HasValue)
             return BadRequest(new { message = "镜像仓库已固定为 10.24.0.28:5000，节点管理不再支持切换存储服务器。" });
@@ -650,7 +672,7 @@ public class NodesController : ControllerBase
         }
         await _context.SaveChangesAsync(token);
         _logger.SystemLog(
-            $"Worker node updated: node={node.Name}, id={node.Id}, schedulable={node.IsSchedulable}, maxContainers={node.MaxContainers}, maxVms={node.MaxVms}.",
+            $"Worker node updated: node={node.Name}, id={node.Id}, schedulable={node.IsSchedulable}, automaticCapacity={node.AutomaticCapacity}, maxContainers={node.MaxContainers}, maxVms={node.MaxVms}.",
             TaskStatus.Success, LogLevel.Information);
 
         return Ok(new
@@ -658,6 +680,7 @@ public class NodesController : ControllerBase
             node.Id,
             node.IsSchedulable,
             node.IsLocal,
+            node.AutomaticCapacity,
             node.MaxContainers,
             node.MaxVms
         });
@@ -1169,6 +1192,7 @@ public class NodeDeployRequest
 public class UpdateNodeRequest
 {
     public bool? IsSchedulable { get; set; }
+    public bool? AutomaticCapacity { get; set; }
     public int? MaxContainers { get; set; }
     public int? MaxVms { get; set; }
     public bool? IsStorageNode { get; set; }
