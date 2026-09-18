@@ -72,18 +72,27 @@ public sealed class TeamLabServiceAccessService(
             throw new TeamLabApiContractException("service_access_invalid", "协议或内部端口无效", 422);
         if (string.IsNullOrWhiteSpace(gateway.PublicEndpoint))
             throw new TeamLabApiContractException("service_access_unavailable", "服务器尚未配置公网入口地址", 409);
-        var runtime = await context.TeamLabRuntimes.Include(item => item.Assets)
+        var runtime = await context.TeamLabRuntimes
+            .Include(item => item.Assets)
+            .Include(item => item.Shards)
             .SingleOrDefaultAsync(item => item.PublicId == runtimeId, token)
             ?? throw new TeamLabApiContractException("runtime_not_found", "未找到 TeamLab 运行时", 404);
         var asset = runtime.Assets.SingleOrDefault(item => item.Id == assetId && item.Generation == runtime.Generation)
             ?? throw new TeamLabApiContractException("runtime_asset_not_found", "未找到运行资产", 404);
-        if (runtime.Status != TeamLabRuntimeStatus.Running || asset.WorkerNodeId is null || string.IsNullOrWhiteSpace(asset.IpAddress))
+        if (runtime.Status != TeamLabRuntimeStatus.Running || string.IsNullOrWhiteSpace(asset.IpAddress))
             throw new TeamLabApiContractException("service_access_unavailable", "资产尚未运行或没有可访问地址", 409);
         var networkKeys = TeamLabLinkPolicyService.AssetNetworkKeys(asset);
         var networkKey = string.IsNullOrWhiteSpace(command.NetworkKey) ? networkKeys.FirstOrDefault() : command.NetworkKey.Trim();
         if (networkKey is null || !networkKeys.Contains(networkKey))
             throw new TeamLabApiContractException("service_access_network_invalid", "资产未连接所选网段", 422);
-        var worker = await context.WorkerNodes.AsNoTracking().SingleAsync(item => item.Id == asset.WorkerNodeId, token);
+        var ownerNodeId = runtime.Shards
+            .Where(item => item.Generation == runtime.Generation)
+            .OrderBy(item => item.Id)
+            .Select(item => item.WorkerNodeId)
+            .FirstOrDefault();
+        if (ownerNodeId == Guid.Empty)
+            throw new TeamLabApiContractException("service_access_unavailable", "运行环境没有网络执行节点", 409);
+        var worker = await context.WorkerNodes.AsNoTracking().SingleAsync(item => item.Id == ownerNodeId, token);
         if (string.IsNullOrWhiteSpace(worker.TeamLabTunnelIp))
             throw new TeamLabApiContractException("service_access_unavailable", "节点尚未配置 TeamLab 隧道地址", 409);
 

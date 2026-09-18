@@ -67,7 +67,6 @@ services:
       GuacamoleSettings__GuacamoleApiUrl: http://guacd:4822
       TeamLab__Enable: "true"
       TeamLab__DryRun: "false"
-      TeamLab__ExecutionModel: V2
       TeamLab__ReservedCidrs__0: 172.16.0.0/12
       ContainerProvider__PublicEntry: 127.0.0.1
       ContainerProvider__DockerConfig__PublicPortStart: 32100
@@ -126,7 +125,6 @@ services:
       Docker__PublicEntry: 127.0.0.1
       TeamLab__Enable: "true"
       TeamLab__DryRun: "false"
-      TeamLab__ExecutionModel: V2
       TeamLab__RuntimeStateRoot: /var/lib/gzctf/teamlab
       TeamLab__FabricInterfaceName: eth0
       TeamLab__OvnNorthboundEndpoint: unix:/var/run/ovn/ovnnb_db.sock

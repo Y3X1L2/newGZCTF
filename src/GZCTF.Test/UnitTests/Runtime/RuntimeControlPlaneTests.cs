@@ -607,7 +607,6 @@ public sealed class RuntimeControlPlaneTests
         {
             Id = 900,
             TopologyReleaseId = releaseId,
-            ExecutionModel = GZCTF.TeamLab.Contracts.TeamLabExecutionModel.V1,
             Status = TeamLabRuntimeStatus.Scheduled,
             Networks =
             [
@@ -652,7 +651,7 @@ public sealed class RuntimeControlPlaneTests
         Assert.Contains(await context.TeamLabRuntimeShards.Select(item => item.WorkerNodeId).ToArrayAsync(),
             id => id == second.Id);
         Assert.Equal(2, await context.TeamLabFabricLinkLeases.CountAsync());
-        Assert.Equal(4, await context.TeamLabObservationPoints.CountAsync());
+        Assert.Empty(await context.TeamLabObservationPoints.ToArrayAsync());
     }
 
     [Fact]
@@ -817,7 +816,6 @@ public sealed class RuntimeControlPlaneTests
         {
             Id = 901,
             TopologyReleaseId = releaseId,
-            ExecutionModel = GZCTF.TeamLab.Contracts.TeamLabExecutionModel.V1,
             Status = TeamLabRuntimeStatus.Scheduled,
             Networks =
             [
@@ -872,7 +870,7 @@ public sealed class RuntimeControlPlaneTests
         Assert.NotEqual(placements["core"], placements["data"]);
         Assert.Equal(2, await context.TeamLabRuntimeInfrastructureFragments.CountAsync());
         Assert.Equal(2, await context.TeamLabFabricLinkLeases.CountAsync());
-        Assert.Equal(7, await context.TeamLabObservationPoints.CountAsync());
+        Assert.Empty(await context.TeamLabObservationPoints.ToArrayAsync());
     }
 
     static TeamLabRuntimeNetwork RuntimeNetwork(string key, bool entry) => new()

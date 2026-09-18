@@ -52,13 +52,8 @@ internal static class ServicesExtension
             builder.AddConfig<ContainerProvider>();
             builder.AddConfig<TeamLabNetworkConfig>();
             // Compatibility: older appsettings used the shorter "TeamLabNetwork" section name.
-            // Keep both bindings so operators can switch execution model without silent no-ops.
             builder.Services.Configure<TeamLabNetworkConfig>(
                 builder.Configuration.GetSection("TeamLabNetwork"));
-            builder.Services.AddOptions<TeamLabNetworkConfig>()
-                .Validate(config => Enum.IsDefined(config.ExecutionModel),
-                    "TeamLabNetworkConfig.ExecutionModel must be a valid execution model.")
-                .ValidateOnStart();
             builder.AddConfig<PublicUdpGatewayConfig>();
             builder.AddConfig<KvmSettings>();
             builder.AddConfig<GuacamoleSettings>();

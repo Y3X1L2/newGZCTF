@@ -118,15 +118,25 @@ public sealed class TeamLabServiceAccessTests
 
     private static async Task<(TeamLabRuntime Runtime, TeamLabRuntimeAsset Asset, WorkerNode Node)> SeedAsync(AppDbContext context)
     {
-        var node = new WorkerNode { Name = "worker-a", HostAddress = "10.0.0.10", TeamLabTunnelIp = "10.250.0.10" };
+        var node = new WorkerNode { Name = "network-owner", HostAddress = "10.0.0.10", TeamLabTunnelIp = "10.250.0.10" };
+        var assetNode = new WorkerNode { Name = "asset-worker", HostAddress = "10.0.0.11", TeamLabTunnelIp = "10.250.0.11" };
         var runtime = new TeamLabRuntime { Status = TeamLabRuntimeStatus.Running };
+        runtime.Shards.Add(new TeamLabRuntimeShard
+        {
+            Id = 100,
+            Runtime = runtime,
+            Generation = runtime.Generation,
+            WorkerNode = node,
+            WorkerNodeId = node.Id,
+            Status = TeamLabRuntimeStatus.Running
+        });
         var asset = new TeamLabRuntimeAsset
         {
             Runtime = runtime, Generation = runtime.Generation, Name = "Web", TopologyKey = "web",
-            NetworkKey = "office", IpAddress = "10.96.0.10", WorkerNodeId = node.Id, WorkerNode = node,
+            NetworkKey = "office", IpAddress = "10.96.0.10", WorkerNodeId = assetNode.Id, WorkerNode = assetNode,
             Status = TeamLabRuntimeStatus.Running
         };
-        context.AddRange(node, runtime, asset);
+        context.AddRange(node, assetNode, runtime, asset);
         await context.SaveChangesAsync();
         return (runtime, asset, node);
     }

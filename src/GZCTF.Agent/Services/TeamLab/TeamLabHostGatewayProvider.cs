@@ -4,7 +4,7 @@ using Microsoft.Extensions.Options;
 
 namespace GZCTF.Agent.Services.TeamLab;
 
-public sealed class TeamLabPlayerGatewayProvider(
+public sealed class TeamLabHostGatewayProvider(
     TeamLabCommandRunner runner,
     IOptions<AgentTeamLabConfig> options)
 {
@@ -15,7 +15,7 @@ public sealed class TeamLabPlayerGatewayProvider(
         TeamLabNetworkIntentV2 network,
         CancellationToken token)
     {
-        var gateway = network.PlayerGateway!;
+        var gateway = network.HostGateway!;
         var prefix = network.Cidr[(network.Cidr.LastIndexOf('/') + 1)..];
         var logicalPort = TeamLabOvnNaming.LogicalPortId(plan, network.Key, gateway.PortKey);
         var commands = new[]
@@ -34,7 +34,7 @@ public sealed class TeamLabPlayerGatewayProvider(
             if (!result.Success)
                 return TeamLabAttachmentResult.Failed("network", result.Output);
         }
-        return new TeamLabAttachmentResult(true, "Player gateway attached.");
+        return new TeamLabAttachmentResult(true, "Host gateway attached.");
     }
 
     public async Task<TeamLabAttachmentResult> ProbeAsync(
@@ -42,15 +42,15 @@ public sealed class TeamLabPlayerGatewayProvider(
         TeamLabNetworkIntentV2 network,
         CancellationToken token)
     {
-        var gateway = network.PlayerGateway!;
+        var gateway = network.HostGateway!;
         var prefix = network.Cidr[(network.Cidr.LastIndexOf('/') + 1)..];
         var logicalPort = TeamLabOvnNaming.LogicalPortId(plan, network.Key, gateway.PortKey);
         var command = $"test \"$(ovs-vsctl --data=bare --no-heading get Interface {gateway.InterfaceName} external_ids:iface-id)\" = {logicalPort} && " +
                       $"ip -o -4 addr show dev {gateway.InterfaceName} | grep -F ' {gateway.IpAddress}/{prefix} ' >/dev/null";
         var result = await runner.RunAsync(command, token);
         return result.Success
-            ? new TeamLabAttachmentResult(true, "Player gateway is present.")
-            : TeamLabAttachmentResult.Failed("network", "Player gateway is missing from the datapath.");
+            ? new TeamLabAttachmentResult(true, "Host gateway is present.")
+            : TeamLabAttachmentResult.Failed("network", "Host gateway is missing from the datapath.");
     }
 
     public async Task<TeamLabAttachmentResult> RemoveAsync(
@@ -58,9 +58,9 @@ public sealed class TeamLabPlayerGatewayProvider(
         CancellationToken token)
     {
         var result = await runner.RunAsync(
-            $"ovs-vsctl --if-exists del-port {config.OvsIntegrationBridgeName} {network.PlayerGateway!.InterfaceName}", token);
+            $"ovs-vsctl --if-exists del-port {config.OvsIntegrationBridgeName} {network.HostGateway!.InterfaceName}", token);
         return result.Success
-            ? new TeamLabAttachmentResult(true, "Player gateway removed.")
+            ? new TeamLabAttachmentResult(true, "Host gateway removed.")
             : TeamLabAttachmentResult.Failed("cleanup", result.Output);
     }
 }

@@ -19,7 +19,6 @@ public sealed record AgentVmControlPlaneSyncConfig(
 
 public sealed record TeamLabDataPlaneSyncConfig(
     bool Enabled,
-    TeamLabExecutionModel ExecutionModel,
     bool ControlPlane,
     string? NorthboundEndpoint,
     string? SouthboundEndpoint,

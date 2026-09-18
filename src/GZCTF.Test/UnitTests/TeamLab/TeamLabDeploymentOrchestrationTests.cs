@@ -110,9 +110,9 @@ public sealed class TeamLabDeploymentOrchestrationTests
         nodes.VerifyNoOtherCalls();
         nodes.Setup(item => item.ChangeAssetLifecycleBatchAsync(
                 It.IsAny<Guid>(), It.IsAny<IReadOnlyList<TeamLabNodeAssetLifecycleRequest>>(), runtime.Generation,
-                It.IsAny<TeamLabExecutionModel>(), true, It.IsAny<CancellationToken>()))
+                true, It.IsAny<CancellationToken>()))
             .ReturnsAsync((Guid _, IReadOnlyList<TeamLabNodeAssetLifecycleRequest> assets, int _,
-                TeamLabExecutionModel _, bool _, CancellationToken _) => assets.Select(asset =>
+                bool _, CancellationToken _) => assets.Select(asset =>
                 new TeamLabNodeAssetLifecycleResult(asset.AssetId, true, "OK")).ToArray());
         var result = await orchestrator.ExecuteQueuedLifecycleAsync(runtime.Id, runtime.Generation, true, default, submitted.ProtectedPayload);
         Assert.True(result.Success);
@@ -170,9 +170,9 @@ public sealed class TeamLabDeploymentOrchestrationTests
         var attempts = 0;
         nodes.Setup(item => item.ChangeAssetLifecycleBatchAsync(
                 It.IsAny<Guid>(), It.IsAny<IReadOnlyList<TeamLabNodeAssetLifecycleRequest>>(), 1,
-                It.IsAny<TeamLabExecutionModel>(), true, It.IsAny<CancellationToken>()))
+                true, It.IsAny<CancellationToken>()))
             .ReturnsAsync((Guid _, IReadOnlyList<TeamLabNodeAssetLifecycleRequest> assets, int _,
-                TeamLabExecutionModel _, bool _, CancellationToken _) =>
+                bool _, CancellationToken _) =>
             {
                 attempts++;
                 return assets.Select(asset => new TeamLabNodeAssetLifecycleResult(
@@ -202,68 +202,6 @@ public sealed class TeamLabDeploymentOrchestrationTests
                 null, null, null, null, null, null, null, null, null).Object);
 
     [Fact]
-    public async Task DeployAsync_PersistsAllSuccessfulCreateIdentitiesBeforeReportingBatchFailure()
-    {
-        await using var context = CreateContext();
-        var (runtime, _) = await SeedRuntimeAsync(context,
-            RuntimeAsset("a-fail", TeamLabAssetExecutionStage.Pending, null),
-            RuntimeAsset("m-success", TeamLabAssetExecutionStage.Pending, null),
-            RuntimeAsset("z-fail", TeamLabAssetExecutionStage.Pending, null));
-        var executor = new Mock<ITeamLabNodeExecutor>();
-        executor.Setup(item => item.ApplyInfrastructureAsync(
-                It.IsAny<Guid>(), It.IsAny<TeamLabNodeInfrastructureApplyRequest>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(TeamLabNodeInfrastructureResult.Applied("sha256:infrastructure"));
-        executor.Setup(item => item.CreateAssetAsync(
-                It.IsAny<Guid>(), It.Is<TeamLabNodeAssetCreateRequest>(request => request.AssetKey == "a-fail"),
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync(TeamLabNodeAssetCreateResult.Failed("create failed"));
-        executor.Setup(item => item.CreateAssetAsync(
-                It.IsAny<Guid>(), It.Is<TeamLabNodeAssetCreateRequest>(request =>
-                    request.AssetKey == "m-success"),
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync(TeamLabNodeAssetCreateResult.Created("container-m-success"));
-        executor.Setup(item => item.CreateAssetAsync(
-                It.IsAny<Guid>(), It.Is<TeamLabNodeAssetCreateRequest>(request => request.AssetKey == "z-fail"),
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync(TeamLabNodeAssetCreateResult.Failed("second create failed"));
-        var writer = new Mock<IOperationalEventWriter>();
-        var eventRecorder = new TeamLabEventRecorder(context, writer.Object, new OperationalCorrelation());
-        var routes = new TeamLabRouteApplicationService(context, executor.Object, eventRecorder);
-        var artifacts = new Mock<ITeamLabArtifactDistribution>();
-        var services = new ServiceCollection();
-        services.AddSingleton(artifacts.Object);
-        await using var provider = services.BuildServiceProvider();
-        var deployment = new TeamLabShardDeploymentService(
-            context,
-            provider.GetRequiredService<IServiceScopeFactory>(),
-            executor.Object,
-            CreateImageRegistry(),
-            routes,
-            eventRecorder,
-            Mock.Of<ITeamLabDeploymentProgress>(),
-            NullLogger<TeamLabShardDeploymentService>.Instance);
-
-        runtime.ExecutionModel = TeamLabExecutionModel.V1;
-
-        var exception = await Assert.ThrowsAsync<TeamLabRuntimeExecutionException>(() =>
-            deployment.DeployAsync(runtime, Topology([
-                    Asset("a-fail"),
-                    Asset("m-success"),
-                    Asset("z-fail")
-                ]),
-                new Dictionary<string, TeamLabRuntimeOverlayModel>(), CancellationToken.None));
-
-        Assert.Contains("create failed", exception.Message, StringComparison.Ordinal);
-        Assert.Contains("second create failed", exception.Message, StringComparison.Ordinal);
-        context.ChangeTracker.Clear();
-        var assets = await context.TeamLabRuntimeAssets.OrderBy(item => item.TopologyKey).ToArrayAsync();
-        Assert.Equal(TeamLabAssetExecutionStage.Failed, assets[0].ExecutionStage);
-        Assert.Equal("container-m-success", assets[1].RuntimeResourceId);
-        Assert.Equal(TeamLabAssetExecutionStage.GuestReady, assets[1].ExecutionStage);
-        Assert.Equal(TeamLabAssetExecutionStage.Failed, assets[2].ExecutionStage);
-    }
-
-    [Fact]
     public void Capabilities_AdvertiseTheImplementedWindowsVmRuntime()
     {
         var service = new TeamLabTopologyApplicationService(null!, null!, null!, null!,
@@ -273,177 +211,21 @@ public sealed class TeamLabDeploymentOrchestrationTests
     }
 
     [Fact]
-    public async Task CleanupAsync_IncludesDeterministicCurrentGenerationVmNameWhenIdentityWasNotPersisted()
-    {
-        await using var context = CreateContext();
-        var vm = RuntimeAsset("database-node", TeamLabAssetExecutionStage.Pending, null);
-        vm.Kind = TeamLabResourceKind.Vm;
-        var (runtime, _) = await SeedRuntimeAsync(context, vm);
-        runtime.ExecutionModel = TeamLabExecutionModel.V1;
-        TeamLabNodeCleanupRequest? cleanupRequest = null;
-        var executor = new Mock<ITeamLabNodeExecutor>();
-        executor.Setup(item => item.GetRuntimeInventoryAsync(
-                It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(EmptyInventory());
-        executor.Setup(item => item.CleanupShardAsync(
-                It.IsAny<Guid>(), It.IsAny<TeamLabNodeCleanupRequest>(), It.IsAny<CancellationToken>()))
-            .Callback<Guid, TeamLabNodeCleanupRequest, CancellationToken>((_, request, _) => cleanupRequest = request)
-            .ReturnsAsync(TeamLabNodeResult.Ok());
-        var writer = new Mock<IOperationalEventWriter>();
-        var eventRecorder = new TeamLabEventRecorder(context, writer.Object, new OperationalCorrelation());
-        var traffic = new TeamLabTrafficApplicationService(
-            context,
-            executor.Object,
-            Mock.Of<IDistributedLeaseProvider>(),
-            Mock.Of<ITeamLabTrafficIngestor>(),
-            eventRecorder,
-            NullLogger<TeamLabTrafficApplicationService>.Instance);
-        var cleanup = new TeamLabRuntimeCleanupService(
-            context,
-            executor.Object,
-            traffic,
-            CaptureCleanup(),
-            Mock.Of<IPublicUdpGatewayProvider>(),
-            eventRecorder,
-            RemoteAccess(),
-            ServiceAccessCleanup(),
-            Preparation(context));
-
-        var result = await cleanup.CleanupAsync(runtime, CancellationToken.None);
-
-        Assert.True(result.Success, result.Message);
-        Assert.NotNull(cleanupRequest);
-        Assert.Contains(
-            TeamLabResourceNameFactory.LinuxName($"tl{runtime.Id}-{vm.TopologyKey}"),
-            cleanupRequest.VmNames);
-    }
-
-    [Fact]
-    public async Task CleanupAsync_UsesInventoryOnlyForTheCurrentRuntimeGeneration()
-    {
-        await using var context = CreateContext();
-        var container = RuntimeAsset("worker", TeamLabAssetExecutionStage.Pending, null);
-        var (runtime, _) = await SeedRuntimeAsync(context, container);
-        runtime.ExecutionModel = TeamLabExecutionModel.V1;
-        TeamLabNodeCleanupRequest? cleanupRequest = null;
-        var executor = new Mock<ITeamLabNodeExecutor>();
-        executor.Setup(item => item.CleanupShardAsync(
-                It.IsAny<Guid>(), It.IsAny<TeamLabNodeCleanupRequest>(), It.IsAny<CancellationToken>()))
-            .Callback<Guid, TeamLabNodeCleanupRequest, CancellationToken>((_, request, _) => cleanupRequest = request)
-            .ReturnsAsync(TeamLabNodeResult.Ok());
-        var writer = new Mock<IOperationalEventWriter>();
-        var eventRecorder = new TeamLabEventRecorder(context, writer.Object, new OperationalCorrelation());
-        var traffic = new TeamLabTrafficApplicationService(
-            context,
-            executor.Object,
-            Mock.Of<IDistributedLeaseProvider>(),
-            Mock.Of<ITeamLabTrafficIngestor>(),
-            eventRecorder,
-            NullLogger<TeamLabTrafficApplicationService>.Instance);
-        var inventory = new TeamLabNodeRuntimeInventory(
-            [
-                new TeamLabNodeInventoryResource(
-                    "container-current", ContainerStableName(runtime.Id, container.TopologyKey, "current"),
-                    runtime.Generation, "running"),
-                new TeamLabNodeInventoryResource(
-                    "container-old-generation", ContainerStableName(runtime.Id, container.TopologyKey, "old"),
-                    runtime.Generation - 1, "running"),
-                new TeamLabNodeInventoryResource(
-                    "container-other-runtime", ContainerStableName(runtime.Id + 1, container.TopologyKey, "other"),
-                    runtime.Generation, "running")
-            ],
-            [],
-            [],
-            DateTimeOffset.UtcNow);
-        executor.Setup(item => item.GetRuntimeInventoryAsync(
-                It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(inventory);
-        var cleanup = new TeamLabRuntimeCleanupService(
-            context,
-            executor.Object,
-            traffic,
-            CaptureCleanup(),
-            Mock.Of<IPublicUdpGatewayProvider>(),
-            eventRecorder,
-            RemoteAccess(),
-            ServiceAccessCleanup(),
-            Preparation(context));
-
-        var result = await cleanup.CleanupAsync(runtime, CancellationToken.None);
-
-        Assert.True(result.Success, result.Message);
-        Assert.NotNull(cleanupRequest);
-        Assert.Contains("container-current", cleanupRequest.ContainerIds);
-        Assert.DoesNotContain("container-old-generation", cleanupRequest.ContainerIds);
-        Assert.DoesNotContain("container-other-runtime", cleanupRequest.ContainerIds);
-    }
-
-
-    [Fact]
-    public async Task CleanupAsync_V2WithoutSnapshotFallsBackToLegacyPath()
-    {
-        await using var context = CreateContext();
-        var (runtime, _) = await SeedRuntimeAsync(
-            context,
-            RuntimeAsset("entry", TeamLabAssetExecutionStage.GuestReady, "teamlab-entry"));
-        runtime.ExecutionModel = TeamLabExecutionModel.V2;
-        TeamLabNodeCleanupRequest? cleanupRequest = null;
-        var executor = new Mock<ITeamLabNodeExecutor>();
-        executor.Setup(item => item.GetRuntimeInventoryAsync(
-                It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(EmptyInventory());
-        executor.Setup(item => item.CleanupShardAsync(
-                It.IsAny<Guid>(), It.IsAny<TeamLabNodeCleanupRequest>(), It.IsAny<CancellationToken>()))
-            .Callback<Guid, TeamLabNodeCleanupRequest, CancellationToken>((_, request, _) => cleanupRequest = request)
-            .ReturnsAsync(TeamLabNodeResult.Ok());
-        var writer = new Mock<IOperationalEventWriter>();
-        var eventRecorder = new TeamLabEventRecorder(context, writer.Object, new OperationalCorrelation());
-        var traffic = new TeamLabTrafficApplicationService(
-            context,
-            executor.Object,
-            Mock.Of<IDistributedLeaseProvider>(),
-            Mock.Of<ITeamLabTrafficIngestor>(),
-            eventRecorder,
-            NullLogger<TeamLabTrafficApplicationService>.Instance);
-        var cleanup = new TeamLabRuntimeCleanupService(
-            context,
-            executor.Object,
-            traffic,
-            CaptureCleanup(),
-            Mock.Of<IPublicUdpGatewayProvider>(),
-            eventRecorder,
-            RemoteAccess(),
-            ServiceAccessCleanup(),
-            Preparation(context));
-
-        var result = await cleanup.CleanupAsync(runtime, CancellationToken.None);
-
-        Assert.True(result.Success, result.Message);
-        Assert.NotNull(cleanupRequest);
-        executor.Verify(item => item.CleanupExecutionPlanAsync(
-            It.IsAny<Guid>(), It.IsAny<GZCTF.TeamLab.Contracts.Execution.TeamLabExecutionPlanV2>(),
-            It.IsAny<CancellationToken>()), Times.Never);
-    }
-
-    [Fact]
     public async Task CleanupAsync_PersistsCleanupPendingBeforePhysicalRollback()
     {
         await using var context = CreateContext();
         var (runtime, _) = await SeedRuntimeAsync(
             context,
             RuntimeAsset("entry", TeamLabAssetExecutionStage.GuestReady, "teamlab-entry"));
-        runtime.ExecutionModel = TeamLabExecutionModel.V1;
         var observedPersistedTransition = false;
         var executor = new Mock<ITeamLabNodeExecutor>();
-        executor.Setup(item => item.GetRuntimeInventoryAsync(
-                It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+        var captureCleanup = new Mock<ITeamLabCaptureCleanup>();
+        captureCleanup.Setup(item => item.ExpireGenerationAsync(
+                runtime.Id, runtime.Generation, It.IsAny<CancellationToken>()))
             .Callback(() => observedPersistedTransition =
                 runtime.Status == TeamLabRuntimeStatus.CleanupPending &&
                 context.Entry(runtime).State == EntityState.Unchanged)
-            .ReturnsAsync(EmptyInventory());
-        executor.Setup(item => item.CleanupShardAsync(
-                It.IsAny<Guid>(), It.IsAny<TeamLabNodeCleanupRequest>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(TeamLabNodeResult.Ok());
+            .ReturnsAsync([]);
         var writer = new Mock<IOperationalEventWriter>();
         var eventRecorder = new TeamLabEventRecorder(context, writer.Object, new OperationalCorrelation());
         var traffic = new TeamLabTrafficApplicationService(
@@ -457,7 +239,7 @@ public sealed class TeamLabDeploymentOrchestrationTests
             context,
             executor.Object,
             traffic,
-            CaptureCleanup(),
+            captureCleanup.Object,
             Mock.Of<IPublicUdpGatewayProvider>(),
             eventRecorder,
             RemoteAccess(),
@@ -477,14 +259,7 @@ public sealed class TeamLabDeploymentOrchestrationTests
         var (runtime, _) = await SeedRuntimeAsync(
             context,
             RuntimeAsset("entry", TeamLabAssetExecutionStage.GuestReady, "teamlab-entry"));
-        runtime.ExecutionModel = TeamLabExecutionModel.V1;
         var executor = new Mock<ITeamLabNodeExecutor>();
-        executor.Setup(item => item.GetRuntimeInventoryAsync(
-                It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(EmptyInventory());
-        executor.Setup(item => item.CleanupShardAsync(
-                It.IsAny<Guid>(), It.IsAny<TeamLabNodeCleanupRequest>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(TeamLabNodeResult.Ok());
         var captureCleanup = new Mock<ITeamLabCaptureCleanup>();
         captureCleanup.Setup(item => item.ExpireGenerationAsync(
                 runtime.Id, runtime.Generation, It.IsAny<CancellationToken>()))
@@ -517,21 +292,6 @@ public sealed class TeamLabDeploymentOrchestrationTests
         Assert.Contains("Object-storage capture cleanup is pending", runtime.LastError, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public void DeploymentGraph_StartsAssetsIndependently()
-    {
-        var topology = Topology(
-            [Asset("entry", TeamLabHealthCheckKind.Http), Asset("dependent"), Asset("independent")]);
-        var graph = TeamLabDeploymentGraph.Compile(topology);
-        var completed = new HashSet<string>(StringComparer.Ordinal);
-        var scheduled = new HashSet<string>(StringComparer.Ordinal);
-
-        Assert.True(graph.TryTakeReadyBatch(completed, scheduled, out var initial));
-        Assert.Equal(
-            ["dependent:create", "entry:create", "independent:create"],
-            initial.Select(item => item.Key).ToArray());
-    }
-
     private static ITeamLabCaptureCleanup CaptureCleanup()
     {
         var cleanup = new Mock<ITeamLabCaptureCleanup>();
@@ -548,48 +308,6 @@ public sealed class TeamLabDeploymentOrchestrationTests
                 It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([]);
         return cleanup.Object;
-    }
-
-    [Fact]
-    public void DeploymentGraph_RestoresOnlyDurableCompletedStages()
-    {
-        var completed = TeamLabDeploymentGraph.RestoreCompletedNodes(
-        [
-            RuntimeAsset("ready", TeamLabAssetExecutionStage.ServiceReady, "container-ready"),
-            RuntimeAsset("guest", TeamLabAssetExecutionStage.GuestReady, "vm-guest"),
-            RuntimeAsset("missing", TeamLabAssetExecutionStage.GuestReady, null),
-            RuntimeAsset("failed", TeamLabAssetExecutionStage.Failed, "container-failed")
-        ]);
-
-        Assert.Equal(
-        [
-            "guest:create",
-            "ready:create",
-            "ready:health"
-        ], completed.Order(StringComparer.Ordinal).ToArray());
-    }
-
-    [Fact]
-    public void DeploymentGraph_SeparatesVmDomainCreationFromGuestReadiness()
-    {
-        var topology = Topology(
-            [Asset("vm") with { Kind = TeamLabAssetKind.Vm }, Asset("container")]);
-        var graph = TeamLabDeploymentGraph.Compile(topology);
-        var completed = new HashSet<string>(StringComparer.Ordinal);
-        var scheduled = new HashSet<string>(StringComparer.Ordinal);
-
-        Assert.True(graph.TryTakeReadyBatch(completed, scheduled, out var create));
-        Assert.Equal(["container:create", "vm:create"], create.Select(item => item.Key).ToArray());
-
-        completed.UnionWith(create.Select(item => item.Key));
-        Assert.True(graph.TryTakeReadyBatch(completed, scheduled, out var next));
-        Assert.Contains(next, item => item.Key == "vm:guestready");
-
-        var vm = RuntimeAsset("vm", TeamLabAssetExecutionStage.Pending, "tl-vm");
-        vm.Kind = TeamLabResourceKind.Vm;
-        var restored = TeamLabDeploymentGraph.RestoreCompletedNodes([vm]);
-        Assert.Contains("vm:create", restored);
-        Assert.DoesNotContain("vm:guestready", restored);
     }
 
     [Fact]

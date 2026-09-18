@@ -232,7 +232,6 @@ public class AgentMaintenanceService(
 
     internal static bool ApplyTeamLabDataPlaneConfig(JsonObject teamLab, TeamLabDataPlaneSyncConfig desired) =>
         Set(teamLab, "Enable", desired.Enabled) |
-        Set(teamLab, "ExecutionModel", desired.ExecutionModel.ToString()) |
         Set(teamLab, "OvnNorthboundEndpoint", desired.NorthboundEndpoint) |
         Set(teamLab, "OvnSouthboundEndpoint", desired.SouthboundEndpoint) |
         Set(teamLab, "OvsIntegrationBridgeName", desired.IntegrationBridgeName) |

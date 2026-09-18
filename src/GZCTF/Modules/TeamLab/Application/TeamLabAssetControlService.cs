@@ -304,8 +304,8 @@ public sealed class TeamLabAssetControlService(AppDbContext context, TeamLabAuth
     async Task RequireRuntimeAsync(TeamLabRuntimeAsset asset, int generation, CancellationToken token)
     {
         if (asset.Generation != generation || asset.Runtime.Generation != generation || asset.Runtime.Status is not (TeamLabRuntimeStatus.Running or TeamLabRuntimeStatus.Failed) ||
-            asset.Runtime.ExecutionModel != TeamLabExecutionModel.V2 || asset.WorkerNodeId is null)
-            throw new TeamLabApiContractException("asset_control.unavailable", "仅可操作当前代运行环境内、已分配节点的 V2 资产。", 409);
+            asset.WorkerNodeId is null)
+            throw new TeamLabApiContractException("asset_control.unavailable", "仅可操作当前代运行环境内、已分配节点的资产。", 409);
         if (await lifecycle.IsRolloutManagedAsync(asset.Runtime.PublicId, token))
             throw new TeamLabApiContractException("runtime_managed_by_rollout", "此环境由批量部署单管理，不能绕过部署单控制资产。", 409);
     }

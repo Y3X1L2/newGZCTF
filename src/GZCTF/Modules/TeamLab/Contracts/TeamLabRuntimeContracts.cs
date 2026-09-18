@@ -87,7 +87,6 @@ public sealed record TeamLabRuntimeProjectionModel(
     Guid Id,
     Guid ReleaseId,
     int Generation,
-    TeamLabExecutionModel ExecutionModel,
     TeamLabRuntimeStatus Status,
     string Stage,
     bool OpenForAccess,

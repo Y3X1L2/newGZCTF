@@ -269,36 +269,9 @@ public sealed partial class RuntimeFactReconciliationService(
         IReadOnlyCollection<int> activeTeamLabOwners,
         CancellationToken token)
     {
-        var networks = await context.TeamLabRuntimeNetworks.AsNoTracking()
-            .Include(item => item.Runtime)
-            .Where(item => item.WorkerNodeId != null && item.Generation == item.Runtime.Generation &&
-                           !activeTeamLabOwners.Contains(item.RuntimeId) &&
-                           ActiveTeamLabRuntimeStatuses.Contains(item.Runtime.Status))
-            .ToArrayAsync(token);
-        var fragments = await context.TeamLabRuntimeInfrastructureFragments.AsNoTracking()
-            .Include(item => item.Infrastructure)
-            .ThenInclude(item => item.Runtime)
-            .Where(item => item.Infrastructure.Generation == item.Infrastructure.Runtime.Generation &&
-                           !activeTeamLabOwners.Contains(item.Infrastructure.RuntimeId) &&
-                           item.Infrastructure.Kind == TeamLabInfrastructureKind.ManagedRouter &&
-                           ActiveTeamLabRuntimeStatuses.Contains(item.Infrastructure.Runtime.Status))
-            .ToArrayAsync(token);
-        var fabric = await context.TeamLabFabricLinkLeases.AsNoTracking()
-            .Include(item => item.Runtime)
-            .Where(item => item.ReleasedAt == null && item.Generation == item.Runtime.Generation &&
-                           !activeTeamLabOwners.Contains(item.RuntimeId) &&
-                           ActiveTeamLabRuntimeStatuses.Contains(item.Runtime.Status))
-            .ToArrayAsync(token);
         var observations = await context.TeamLabObservationPoints.AsNoTracking()
             .Include(item => item.Runtime)
             .Where(item => item.Enabled && item.Generation == item.Runtime.Generation &&
-                           !activeTeamLabOwners.Contains(item.RuntimeId) &&
-                           ActiveTeamLabRuntimeStatuses.Contains(item.Runtime.Status))
-            .ToArrayAsync(token);
-        var assets = await context.TeamLabRuntimeAssets.AsNoTracking()
-            .Include(item => item.Runtime)
-            .Where(item => item.WorkerNodeId != null && item.RuntimeResourceId != null &&
-                           item.Generation == item.Runtime.Generation &&
                            !activeTeamLabOwners.Contains(item.RuntimeId) &&
                            ActiveTeamLabRuntimeStatuses.Contains(item.Runtime.Status))
             .ToArrayAsync(token);
@@ -313,40 +286,14 @@ public sealed partial class RuntimeFactReconciliationService(
                            item.Status != TeamLabTrafficCaptureSegmentStatus.Expired)
             .ToArrayAsync(token);
 
-        return networks.SelectMany(item => new[]
-            {
-                new ExpectedTeamLabControlFact(
-                    item.WorkerNodeId!.Value, item.RuntimeId, item.Generation, "managed-switch",
-                    item.TopologyKey, item.BridgeName, null),
-                new ExpectedTeamLabControlFact(
-                    item.WorkerNodeId.Value, item.RuntimeId, item.Generation, "dhcp-dns",
-                    item.TopologyKey, TeamLabResourceNameFactory.DhcpDnsService(item.RuntimeId, item.TopologyKey), null)
-            })
-            .Concat(fragments.Select(item => new ExpectedTeamLabControlFact(
-                item.WorkerNodeId,
-                item.Infrastructure.RuntimeId,
-                item.Infrastructure.Generation,
-                "managed-router-fragment",
-                item.Infrastructure.TopologyKey,
-                item.NativeResourceId ?? TeamLabResourceNameFactory.RouterNamespace(
-                    item.Infrastructure.RuntimeId, item.ShardId),
-                item.DesiredStateDigest)))
-            .Concat(fabric.Select(item => new ExpectedTeamLabControlFact(
-                item.WorkerNodeId,
-                item.RuntimeId,
-                item.Generation,
-                "fabric-uplink",
-                "fabric",
-                TeamLabResourceNameFactory.FabricHostInterface(item.RuntimeId),
-                null)))
-            .Concat(observations.Select(item => new ExpectedTeamLabControlFact(
+        return observations.Select(item => new ExpectedTeamLabControlFact(
                 item.WorkerNodeId,
                 item.RuntimeId,
                 item.Generation,
                 "observation-point",
                 item.PublicId.ToString("D"),
                 item.InterfaceToken,
-                item.DesiredStateDigest)))
+                item.DesiredStateDigest))
             .Concat(captures.Select(item => new ExpectedTeamLabControlFact(
                 item.WorkerNodeId,
                 item.CaptureJob.RuntimeId,

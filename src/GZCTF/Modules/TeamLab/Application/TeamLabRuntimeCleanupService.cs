@@ -67,9 +67,6 @@ public sealed class TeamLabRuntimeCleanupService(
         {
             try
             {
-                // A persisted plan is the only evidence V2 was applied. Rows without one
-                // (legacy deployments or destroy-before-apply) use the inventory-based path;
-                // failing on a missing snapshot would strand the runtime and its capacity.
                 if (planSnapshots.TryGetValue(shard.Id, out var snapshot))
                 {
                     var plan = DeserializeSnapshot(snapshot, runtime, generation);
@@ -79,11 +76,7 @@ public sealed class TeamLabRuntimeCleanupService(
                         ? TeamLabNodeResult.Ok(cleanup.Message ?? "Execution plan cleaned.")
                         : TeamLabNodeResult.Failed(cleanup.Message ?? "Execution-plan cleanup failed.");
                 }
-                var inventory = await executor.GetRuntimeInventoryAsync(shard.WorkerNodeId, cancellationToken);
-                return await executor.CleanupShardAsync(
-                    shard.WorkerNodeId,
-                    BuildCleanupRequest(runtime, shard, inventory),
-                    cancellationToken);
+                return TeamLabNodeResult.Ok("No execution plan was applied for this shard.");
             }
             catch (Exception exception) when (!cancellationToken.IsCancellationRequested &&
                                               exception is IOperationalFailureException or HttpRequestException or TaskCanceledException)
@@ -162,12 +155,6 @@ public sealed class TeamLabRuntimeCleanupService(
         TeamLabRuntime runtime,
         CancellationToken cancellationToken)
     {
-        // V1 host WireGuard lives in the per-runtime namespace and is already covered by the
-        // shard cleanup inventory path. V2 host WireGuard is created outside the execution-plan
-        // snapshot, so a failed/unapplied grant can otherwise leave a stale tlwgXXX interface
-        // behind after destroy and cause duplicate gateway-IP conflicts for the next runtime.
-        if (runtime.ExecutionModel != TeamLabExecutionModel.V2)
-            return null;
         var entryShard = runtime.Shards.SingleOrDefault(item =>
             item.Id == runtime.EntryShardId && item.Generation == runtime.Generation);
         if (entryShard is null)
@@ -181,9 +168,7 @@ public sealed class TeamLabRuntimeCleanupService(
             new TeamLabNodeAccessRemoveRequest(
                 runtime.Id,
                 runtime.Generation,
-                string.Empty,
                 TeamLabResourceNameFactory.WireGuardInterface(runtime.Id),
-                runtime.ExecutionModel,
                 runtime.PublicId,
                 entryNetwork.TopologyKey),
             cancellationToken);

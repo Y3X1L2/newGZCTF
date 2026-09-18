@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using GZCTF.Agent.Models;
 using GZCTF.Agent.Services.Observation;
+using GZCTF.TeamLab.Contracts.Execution;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using PacketDotNet;
@@ -65,6 +66,37 @@ public sealed class TeamLabObservationTests
         Assert.Contains(registrations, item => item.InterfaceName == "tlr42h0");
         Assert.Contains(registrations, item => item.InterfaceName == "tlr42h1");
         Assert.Contains(registrations, item => item.InterfaceName == "tlf-host");
+    }
+
+    [Fact]
+    public async Task ObservationRegistry_ExportsRuntimeInventory()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"gzctf-observation-registry-{Guid.NewGuid():N}");
+        var registry = new ObservationPointRegistry(NullLogger<ObservationPointRegistry>.Instance)
+        {
+            DesiredStateRoot = root
+        };
+        var publicId = Guid.NewGuid();
+        var plan = new TeamLabExecutionPlanV2(
+            91, Guid.NewGuid(), 4, "node-a", "sha256:" + new string('a', 64),
+            "sha256:" + new string('b', 64), false, [], [],
+            [new TeamLabObservationIntentV2(publicId, "asset-a", "host-veth-a", true)]);
+
+        try
+        {
+            await registry.ApplyExecutionPlanAsync(plan, CancellationToken.None);
+            var item = Assert.Single(registry.SnapshotInventory());
+            Assert.Equal("host-veth-a", item.NativeId);
+            Assert.Equal(publicId.ToString("D"), item.StableName);
+            Assert.Equal(91, item.RuntimeId);
+            Assert.Equal(4, item.Generation);
+            Assert.Equal("observation-point", item.ResourceKind);
+            Assert.Equal("running", item.State);
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, true);
+        }
     }
 
     [Fact]

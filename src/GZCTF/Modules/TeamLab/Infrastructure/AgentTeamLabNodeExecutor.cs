@@ -212,24 +212,21 @@ public sealed class AgentTeamLabNodeExecutor(
         TeamLabAssetKind kind,
         string resourceId,
         int generation,
-        TeamLabExecutionModel executionModel,
         CancellationToken cancellationToken) =>
-        ChangeAssetLifecycleAsync(workerNodeId, kind, resourceId, generation, executionModel, pause: true, cancellationToken);
+        ChangeAssetLifecycleAsync(workerNodeId, kind, resourceId, generation, pause: true, cancellationToken);
 
     public Task<TeamLabNodeResult> ResumeAssetAsync(
         Guid workerNodeId,
         TeamLabAssetKind kind,
         string resourceId,
         int generation,
-        TeamLabExecutionModel executionModel,
         CancellationToken cancellationToken) =>
-        ChangeAssetLifecycleAsync(workerNodeId, kind, resourceId, generation, executionModel, pause: false, cancellationToken);
+        ChangeAssetLifecycleAsync(workerNodeId, kind, resourceId, generation, pause: false, cancellationToken);
 
     public Task<IReadOnlyList<TeamLabNodeAssetLifecycleResult>> ChangeAssetLifecycleBatchAsync(
         Guid workerNodeId,
         IReadOnlyList<TeamLabNodeAssetLifecycleRequest> assets,
         int generation,
-        TeamLabExecutionModel executionModel,
         bool pause,
         CancellationToken cancellationToken) =>
         DispatchAsync<IReadOnlyList<TeamLabNodeAssetLifecycleResult>>(
@@ -243,7 +240,6 @@ public sealed class AgentTeamLabNodeExecutor(
                         new TeamLabAssetLifecycleBatchRequest(
                             generation,
                             _config.DryRun,
-                            executionModel,
                             assets.Select(item => new TeamLabAssetLifecycleBatchItem(
                                 item.AssetId,
                                 item.Kind == TeamLabAssetKind.Docker ? "docker" : "vm",
@@ -268,7 +264,6 @@ public sealed class AgentTeamLabNodeExecutor(
         TeamLabAssetKind kind,
         string resourceId,
         int generation,
-        TeamLabExecutionModel executionModel,
         bool pause,
         CancellationToken cancellationToken) =>
         DispatchAsync(
@@ -282,8 +277,7 @@ public sealed class AgentTeamLabNodeExecutor(
                         kind == TeamLabAssetKind.Docker ? "docker" : "vm",
                         resourceId,
                         generation,
-                        _config.DryRun,
-                        executionModel);
+                        _config.DryRun);
                     var response = pause
                         ? await agent.PauseTeamLabAssetAsync(workerNodeId, request, operationToken)
                         : await agent.ResumeTeamLabAssetAsync(workerNodeId, request, operationToken);
@@ -425,7 +419,6 @@ public sealed class AgentTeamLabNodeExecutor(
                 new TeamLabWireGuardRequest(
                     request.RuntimeId,
                     request.Generation,
-                    request.RouterNamespace,
                     request.InterfaceName,
                     request.ListenPort,
                     request.ServerAddressCidr,
@@ -436,7 +429,6 @@ public sealed class AgentTeamLabNodeExecutor(
                     request.PlayerAllowedCidrs.ToArray(),
                     request.PlayerBlockedCidrs.ToArray(),
                     _config.DryRun,
-                    request.ExecutionModel,
                     request.RuntimePublicId,
                     request.NetworkKey,
                     request.PortKey,
@@ -455,10 +447,8 @@ public sealed class AgentTeamLabNodeExecutor(
                 new TeamLabWireGuardCleanupRequest(
                     request.RuntimeId,
                     request.Generation,
-                    request.RouterNamespace,
                     request.InterfaceName,
                     _config.DryRun,
-                    request.ExecutionModel,
                     request.RuntimePublicId,
                     request.NetworkKey),
                 operationToken), cancellationToken);

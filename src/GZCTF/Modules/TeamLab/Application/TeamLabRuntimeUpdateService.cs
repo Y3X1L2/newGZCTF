@@ -124,8 +124,6 @@ public sealed class TeamLabRuntimeUpdateService(
         var runtime = await LoadRuntimeAsync(runtimeId, token);
         if (runtime.Status != TeamLabRuntimeStatus.Running)
             return TeamLabNodeResult.Failed("runtime_update.runtime_not_running");
-        if (runtime.ExecutionModel != TeamLabExecutionModel.V2)
-            return TeamLabNodeResult.Failed("runtime_update.execution_model_unsupported");
 
         var preview = await PreviewCoreAsync(runtime, command.ReleaseId, token);
         if (!preview.CanApply)
@@ -437,19 +435,17 @@ public sealed class TeamLabRuntimeUpdateService(
         var target = await LoadReleaseAsync(releaseId, token);
         var currentDefinition = TeamLabReleaseCodec.DecodeExecution(current.SchemaVersion, current.CanonicalJson);
         var targetDefinition = TeamLabReleaseCodec.DecodeExecution(target.SchemaVersion, target.CanonicalJson);
-        var reason = runtime.ExecutionModel != TeamLabExecutionModel.V2
-            ? "当前运行环境不是 V2 执行模型，需要完整重置。"
-            : runtime.Status != TeamLabRuntimeStatus.Running
-                ? "只有运行中的环境可以更新资产。"
-                : current.TopologyId != target.TopologyId
-                    ? "目标版本不属于当前场景，需要完整重置。"
-                    : target.IsArchived
-                        ? "目标发布版本已归档。"
-                        : !SameTopologyStructure(currentDefinition, targetDefinition)
-                            ? "网段、路由或基础设施发生变化，需要完整重置。"
-                            : !SameConnectorBindings(currentDefinition, targetDefinition)
-                                ? "现场连接器发生变化，需要完整重置。"
-                                : PlacementChangeReason(runtime, targetDefinition);
+        var reason = runtime.Status != TeamLabRuntimeStatus.Running
+            ? "只有运行中的环境可以更新资产。"
+            : current.TopologyId != target.TopologyId
+                ? "目标版本不属于当前场景，需要完整重置。"
+                : target.IsArchived
+                    ? "目标发布版本已归档。"
+                    : !SameTopologyStructure(currentDefinition, targetDefinition)
+                        ? "网段、路由或基础设施发生变化，需要完整重置。"
+                        : !SameConnectorBindings(currentDefinition, targetDefinition)
+                            ? "现场连接器发生变化，需要完整重置。"
+                            : PlacementChangeReason(runtime, targetDefinition);
         return new TeamLabRuntimeUpdatePreviewModel(
             runtime.PublicId,
             current.Id,

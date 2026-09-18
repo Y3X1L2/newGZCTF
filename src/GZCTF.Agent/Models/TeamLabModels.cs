@@ -5,7 +5,6 @@ namespace GZCTF.Agent.Models;
 public class AgentTeamLabConfig
 {
     public bool Enable { get; set; } = true;
-    public TeamLabExecutionModel ExecutionModel { get; set; } = TeamLabExecutionModel.V2;
     public bool DryRun { get; set; }
     public string RuntimeStateRoot { get; set; } = "/var/lib/gzctf/teamlab";
     public string FabricInterfaceName { get; set; } = "gzctf-fabric";
@@ -161,7 +160,6 @@ public record TeamLabRouterRequest(
 public record TeamLabWireGuardRequest(
     int RuntimeId,
     int Generation,
-    string NamespaceName,
     string InterfaceName,
     int ListenPort,
     string AddressCidr,
@@ -172,7 +170,6 @@ public record TeamLabWireGuardRequest(
     string[] PlayerAllowedCidrs,
     string[] PlayerBlockedCidrs,
     bool DryRun = true,
-    TeamLabExecutionModel ExecutionModel = TeamLabExecutionModel.V1,
     Guid RuntimePublicId = default,
     string? NetworkKey = null,
     string? PortKey = null,
@@ -181,10 +178,8 @@ public record TeamLabWireGuardRequest(
 public record TeamLabWireGuardCleanupRequest(
     int RuntimeId,
     int Generation,
-    string NamespaceName,
     string InterfaceName,
     bool DryRun = true,
-    TeamLabExecutionModel ExecutionModel = TeamLabExecutionModel.V1,
     Guid RuntimePublicId = default,
     string? NetworkKey = null);
 
@@ -200,8 +195,7 @@ public record TeamLabAssetLifecycleRequest(
     string Kind,
     string ResourceId,
     int Generation,
-    bool DryRun = false,
-    TeamLabExecutionModel ExecutionModel = TeamLabExecutionModel.V1);
+    bool DryRun = false);
 
 public record TeamLabAssetLifecycleResponse(
     bool Success,
@@ -217,7 +211,6 @@ public record TeamLabAssetLifecycleBatchItem(
 public record TeamLabAssetLifecycleBatchRequest(
     int Generation,
     bool DryRun,
-    TeamLabExecutionModel ExecutionModel,
     TeamLabAssetLifecycleBatchItem[] Assets);
 
 public record TeamLabAssetLifecycleBatchResult(

@@ -1085,7 +1085,6 @@ Scope: teamlab.runtimes:read
   "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
   "releaseId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
   "generation": 1,
-  "executionModel": 1,
   "status": 5,
   "stage": "running",
   "openForAccess": false,
@@ -2546,8 +2545,6 @@ HTTP JSON 中未标注字符串的枚举使用数字值。以下汇总本文用�
 |  | 1 | ManagedRouter |
 | `TeamLabConnectionDirection` | 0 | FromTo |
 |  | 1 | Bidirectional |
-| `TeamLabExecutionModel` | 0 | V1 |
-|  | 1 | V2 |
 
 ### 15.2 运行时
 
@@ -2648,7 +2645,7 @@ VM 文件管理使用镜像模板中已启用的 SSH 运维账号，支持密码
 
 ## 17. 在研单资产生命周期
 
-运行详情“单资产生命周期”提供启动、停止、重启、重建、暂停和恢复。需要 LifecycleManage 权限，远程终端权限不自动授予生命周期权限。接口会复查当前代次、原节点及原生身份；V1、缺少不可变执行计划或受 rollout 托管的资产显示限制，不猜测执行资源。
+运行详情“单资产生命周期”提供启动、停止、重启、重建、暂停和恢复。需要 LifecycleManage 权限，远程终端权限不自动授予生命周期权限。接口会复查当前代次、原节点、原生身份和不可变执行计划；受 rollout 托管的资产显示限制，不猜测执行资源。
 
 - `GET /api/admin/teamlab/runtimes/{runtimeId}/assets/{assetId}/control`：当前权限和能力。
 - `POST /api/admin/teamlab/runtimes/{runtimeId}/assets/{assetId}/control`：请求字段 `generation/action/reason/confirmed`，action 为 `start/stop/restart/rebuild/pause/resume`。返回 202 和原部署队列的 `ticketId`。

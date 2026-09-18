@@ -294,7 +294,6 @@ public sealed class TeamLabRuntimeOrchestrator(
                     asset.Kind == TeamLabResourceKind.Docker ? TeamLabAssetKind.Docker : TeamLabAssetKind.Vm,
                     asset.RuntimeResourceId!)).ToArray(),
                 runtime.Generation,
-                runtime.ExecutionModel,
                 pause,
                 cancellationToken)));
         var results = nodeResults.SelectMany(item => item).ToDictionary(item => item.AssetId);

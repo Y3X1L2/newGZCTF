@@ -47,8 +47,7 @@ public sealed class AgentFleetUpdateCoordinator(
         var controlPlaneNode = await context.WorkerNodes.AsNoTracking()
             .SingleOrDefaultAsync(item => item.IsLocal && item.TeamLabNetworkEnabled, cancellationToken);
         var targetDataPlane = TeamLabDataPlaneSyncConfiguration.Create(
-            node, controlPlaneNode, teamLabNetwork.Value.ExecutionModel,
-            teamLabNetwork.Value.ManagedDhcpLeaseSeconds);
+            node, controlPlaneNode, teamLabNetwork.Value.ManagedDhcpLeaseSeconds);
         var priorSchedulable = node.AgentUpdateState == AgentUpdateState.Failed
             ? node.AgentUpdateWasSchedulable
             : node.IsSchedulable;

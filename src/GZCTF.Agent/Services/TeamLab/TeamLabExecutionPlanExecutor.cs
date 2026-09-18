@@ -13,7 +13,7 @@ namespace GZCTF.Agent.Services.TeamLab;
 public sealed partial class TeamLabExecutionPlanExecutor(
     TeamLabOvnNetworkProvider ovn,
     TeamLabOvsAttachmentProvider ovs,
-    TeamLabPlayerGatewayProvider playerGateways,
+    TeamLabHostGatewayProvider hostGateways,
     TeamLabManagedNicProvider managedNics,
     LinuxNetworkAttachmentService linuxNetwork,
     DockerService docker,
@@ -51,9 +51,9 @@ public sealed partial class TeamLabExecutionPlanExecutor(
                 if (!network.Success)
                     return Failure(plan, "network", network.Message);
                 if (plan.NetworkOwner)
-                    foreach (var intent in plan.Networks.Where(item => item.PlayerGateway is not null))
+                    foreach (var intent in plan.Networks.Where(item => item.HostGateway is not null))
                     {
-                        var gateway = await playerGateways.ProbeAsync(plan, intent, cancellationToken);
+                        var gateway = await hostGateways.ProbeAsync(plan, intent, cancellationToken);
                         if (!gateway.Success) return Failure(plan, "network", gateway.Message);
                     }
                 foreach (var intent in plan.Networks)
@@ -95,9 +95,9 @@ public sealed partial class TeamLabExecutionPlanExecutor(
             return Failure(plan, network.Stage, network.Message);
         }
         if (plan.NetworkOwner)
-            foreach (var intent in plan.Networks.Where(item => item.PlayerGateway is not null))
+            foreach (var intent in plan.Networks.Where(item => item.HostGateway is not null))
             {
-                var gateway = await playerGateways.ApplyAsync(plan, intent, cancellationToken);
+                var gateway = await hostGateways.ApplyAsync(plan, intent, cancellationToken);
                 if (gateway.Success) continue;
                 await ovn.RemoveAsync(plan, cancellationToken);
                 return Failure(plan, "network", gateway.Message);
@@ -314,10 +314,10 @@ public sealed partial class TeamLabExecutionPlanExecutor(
                 result.Success ? null : "connector_cleanup_failed", result.Message));
         }
         if (plan.NetworkOwner)
-            foreach (var intent in plan.Networks.Where(item => item.PlayerGateway is not null))
+            foreach (var intent in plan.Networks.Where(item => item.HostGateway is not null))
             {
-                var result = await playerGateways.RemoveAsync(intent, cancellationToken);
-                events.Enqueue(Event(plan, intent.PlayerGateway!.PortKey, "cleanup",
+                var result = await hostGateways.RemoveAsync(intent, cancellationToken);
+                events.Enqueue(Event(plan, intent.HostGateway!.PortKey, "cleanup",
                     result.Success ? "succeeded" : "failed",
                     result.Success ? null : "player_gateway_cleanup_failed", result.Message));
             }

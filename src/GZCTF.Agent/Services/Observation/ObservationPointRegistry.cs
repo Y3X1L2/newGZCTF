@@ -29,6 +29,16 @@ public sealed class ObservationPointRegistry(ILogger<ObservationPointRegistry> l
             .ThenBy(item => item.InterfaceName, StringComparer.Ordinal)
             .ToArray();
 
+    public IReadOnlyList<RuntimeInventoryResource> SnapshotInventory() => Snapshot()
+        .Select(item => new RuntimeInventoryResource(
+            item.InterfaceName,
+            item.PublicId.ToString("D"),
+            item.Generation,
+            "running",
+            ResourceKind: "observation-point",
+            RuntimeId: item.RuntimeId))
+        .ToArray();
+
     public async Task ApplyAsync(
         TeamLabInfrastructureApplyRequest request,
         CancellationToken cancellationToken)

@@ -70,6 +70,12 @@ public sealed class TeamLabOvnNetworkProviderTests
                     Assert.Equal("02:00:00:00:00:fe 10.0.1.254",
                         (row?["addresses"] as JsonArray)?[1]?[0]?.GetValue<string>());
                 }
+                if (string.Equals(ExternalId(row, "gzctf-asset-key"), "service-gateway", StringComparison.Ordinal))
+                {
+                    Assert.Null(row?["type"]);
+                    Assert.Equal("02:00:00:00:00:fd 10.0.1.253",
+                        (row?["addresses"] as JsonArray)?[1]?[0]?.GetValue<string>());
+                }
             }
             if (string.Equals(operation["table"]?.GetValue<string>(), "Logical_Router_Static_Route", StringComparison.Ordinal))
                 Assert.IsType<string>((operation["row"] as JsonObject)?["output_port"]?.GetValue<string>());
@@ -87,7 +93,7 @@ public sealed class TeamLabOvnNetworkProviderTests
             .Where(row => row is not null && row["type"] is null)
             .Select(row => row!["name"]?.GetValue<string>())
             .Where(name => !string.IsNullOrWhiteSpace(name));
-        Assert.Equal(2, names.Count());
+        Assert.Equal(3, names.Count());
         Assert.All(names, name => Assert.True(Guid.TryParse(name, out _), $"LSP name is not a UUID: {name}"));
     }
 
@@ -220,7 +226,8 @@ public sealed class TeamLabOvnNetworkProviderTests
                 [new TeamLabNetworkPolicyV2("10.0.1.0/24", "10.0.2.0/24", "tcp", 443, true)],
                 DhcpLeases: [new TeamLabDhcpLeaseV2("02:00:00:00:00:02", "10.0.1.20", "docker-1")],
                 DnsRecords: [new TeamLabDnsRecordV2("docker-1", "10.0.1.10")],
-                PlayerGateway: new TeamLabPlayerGatewayV2("player-gateway", "02:00:00:00:00:fe", "10.0.1.254", "tlwg-test"))],
+                PlayerGateway: new TeamLabPlayerGatewayV2("player-gateway", "02:00:00:00:00:fe", "10.0.1.254", "tlwg-test"),
+                HostGateway: new TeamLabPlayerGatewayV2("service-gateway", "02:00:00:00:00:fd", "10.0.1.253", "tlsg-test"))],
             [Asset("docker-1", "network-a", "port-a")],
             [],
             new TeamLabNetworkControlIntentV2(

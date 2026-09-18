@@ -202,7 +202,6 @@ public sealed record TeamLabNodeProbeRequest(
 public sealed record TeamLabNodeAccessApplyRequest(
     int RuntimeId,
     int Generation,
-    string RouterNamespace,
     string InterfaceName,
     int ListenPort,
     string ServerAddressCidr,
@@ -212,7 +211,6 @@ public sealed record TeamLabNodeAccessApplyRequest(
     string ClientAllowedIps,
     IReadOnlyList<string> PlayerAllowedCidrs,
     IReadOnlyList<string> PlayerBlockedCidrs,
-    TeamLabExecutionModel ExecutionModel = TeamLabExecutionModel.V1,
     Guid RuntimePublicId = default,
     string? NetworkKey = null,
     string? PortKey = null,
@@ -221,9 +219,7 @@ public sealed record TeamLabNodeAccessApplyRequest(
 public sealed record TeamLabNodeAccessRemoveRequest(
     int RuntimeId,
     int Generation,
-    string RouterNamespace,
     string InterfaceName,
-    TeamLabExecutionModel ExecutionModel = TeamLabExecutionModel.V1,
     Guid RuntimePublicId = default,
     string? NetworkKey = null);
 
@@ -354,20 +350,17 @@ public interface ITeamLabNodeExecutor
         TeamLabAssetKind kind,
         string resourceId,
         int generation,
-        TeamLabExecutionModel executionModel,
         CancellationToken cancellationToken);
     Task<TeamLabNodeResult> ResumeAssetAsync(
         Guid workerNodeId,
         TeamLabAssetKind kind,
         string resourceId,
         int generation,
-        TeamLabExecutionModel executionModel,
         CancellationToken cancellationToken);
     Task<IReadOnlyList<TeamLabNodeAssetLifecycleResult>> ChangeAssetLifecycleBatchAsync(
         Guid workerNodeId,
         IReadOnlyList<TeamLabNodeAssetLifecycleRequest> assets,
         int generation,
-        TeamLabExecutionModel executionModel,
         bool pause,
         CancellationToken cancellationToken);
     Task<TeamLabNodeResult> DestroyAssetAsync(Guid workerNodeId, TeamLabAssetKind kind, string resourceId, CancellationToken cancellationToken);

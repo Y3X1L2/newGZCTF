@@ -1,13 +1,12 @@
 using System.Net;
 using GZCTF.Models.Data;
-using GZCTF.TeamLab.Contracts;
 
 namespace GZCTF.Services.Fleet;
 
 internal static class TeamLabDataPlaneSyncConfiguration
 {
     public static TeamLabDataPlaneSyncConfig Create(WorkerNode node, WorkerNode? controlPlaneNode,
-        TeamLabExecutionModel executionModel, int managedDhcpLeaseSeconds = 3600)
+        int managedDhcpLeaseSeconds = 3600)
     {
         var controlAddress = ParseAddress(controlPlaneNode?.TeamLabTunnelIp);
         var chassisAddress = ParseAddress(node.TeamLabTunnelIp);
@@ -21,7 +20,6 @@ internal static class TeamLabDataPlaneSyncConfiguration
         var enabled = requested && (controlPlane || remoteControllerReachable);
         return new TeamLabDataPlaneSyncConfig(
             enabled,
-            executionModel,
             controlPlane,
             controlPlane ? "unix:/var/run/ovn/ovnnb_db.sock" :
             remoteControllerReachable ? Endpoint(controlAddress, 6641) : null,

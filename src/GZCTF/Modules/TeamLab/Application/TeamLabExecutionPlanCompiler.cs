@@ -86,6 +86,8 @@ public static class TeamLabExecutionPlanCompiler
                 var playerGateway = switchIntent.Network.IsEntry
                     ? PlayerGateway(runtimeId, runtimePublicId, generation, switchIntent.Network, networkPorts)
                     : null;
+                var serviceGateway = ServiceGateway(
+                    runtimeId, runtimePublicId, generation, switchIntent.Network, networkPorts, playerGateway);
                 return new TeamLabNetworkIntentV2(
                     switchIntent.Network.Key,
                     switchIntent.Network.Cidr,
@@ -106,7 +108,8 @@ public static class TeamLabExecutionPlanCompiler
                         .DistinctBy(record => (record.Hostname, record.IpAddress))
                         .ToArray(),
                     playerGateway,
-                    connectors?.GetValueOrDefault(switchIntent.Network.Key));
+                    connectors?.GetValueOrDefault(switchIntent.Network.Key),
+                    serviceGateway);
             })
             .ToArray();
 
@@ -244,10 +247,31 @@ public static class TeamLabExecutionPlanCompiler
             TeamLabResourceNameFactory.WireGuardInterface(runtimeId));
     }
 
+    static TeamLabPlayerGatewayV2 ServiceGateway(
+        int runtimeId,
+        Guid runtimePublicId,
+        int generation,
+        TeamLabNodeNetworkIntent network,
+        IReadOnlyList<TeamLabNetworkPortV2> ports,
+        TeamLabPlayerGatewayV2? playerGateway)
+    {
+        var ip = LastHost(network.Cidr, network.IsEntry ? 2 : 1);
+        if (ports.Any(port => string.Equals(port.IpAddress, ip, StringComparison.Ordinal)) ||
+            string.Equals(network.GatewayIp, ip, StringComparison.Ordinal) ||
+            string.Equals(playerGateway?.IpAddress, ip, StringComparison.Ordinal))
+            throw new InvalidOperationException(
+                $"TeamLab network {network.Key} already uses the service gateway address {ip}.");
+        return new TeamLabPlayerGatewayV2(
+            "service-gateway",
+            TeamLabResourceNameFactory.ServiceGatewayMac(runtimePublicId, generation, network.Key),
+            ip,
+            TeamLabResourceNameFactory.ServiceGatewayInterface(runtimeId, network.Key));
+    }
+
     static string PlayerGatewayMac(Guid runtimePublicId, int generation, string networkKey) =>
         TeamLabResourceNameFactory.PlayerGatewayMac(runtimePublicId, generation, networkKey);
 
-    static string LastHost(string cidr)
+    static string LastHost(string cidr, int offset = 1)
     {
         var parts = cidr.Split('/', 2);
         if (parts.Length != 2 ||
@@ -258,7 +282,7 @@ public static class TeamLabExecutionPlanCompiler
             throw new InvalidOperationException($"Network CIDR has no valid prefix: {cidr}");
         var hostBits = 32 - prefix;
         var networkValue = BitConverter.ToUInt32(address.GetAddressBytes().Reverse().ToArray());
-        var lastHost = networkValue + ((1u << hostBits) - 1) - 1;
+        var lastHost = networkValue + ((1u << hostBits) - 1) - (uint)offset;
         var bytes = BitConverter.GetBytes(lastHost).Reverse().ToArray();
         return string.Join('.', bytes.Select(value => value.ToString()));
     }

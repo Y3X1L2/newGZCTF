@@ -63,7 +63,7 @@ class State:
     started: float = field(default_factory=time.monotonic)
     phase: str = "启动"
     finished: bool = False
-    metrics: deque[Metric] = field(default_factory=lambda: deque(maxlen=200_000))
+    metrics: deque[Metric] = field(default_factory=lambda: deque(maxlen=1_000_000))
     errors: dict[str, dict[str, Any]] = field(default_factory=dict)
     monitors: dict[str, Any] = field(default_factory=dict)
     stages: list[dict[str, Any]] = field(default_factory=list)
@@ -131,11 +131,16 @@ class Platform:
     async def close(self) -> None:
         await self.session.close()
 
-    async def request(self, method: str, path: str, *, source: str, body: Any = None) -> Any:
+    async def request(
+        self, method: str, path: str, *, source: str, body: Any = None,
+        headers: dict[str, str] | None = None,
+    ) -> Any:
         started = time.monotonic()
         status = None
         try:
-            async with self.session.request(method, urljoin(self.base_url, path.lstrip("/")), json=body) as response:
+            async with self.session.request(
+                method, urljoin(self.base_url, path.lstrip("/")), json=body, headers=headers,
+            ) as response:
                 status = response.status
                 raw = await response.text()
                 if response.status >= 400:
@@ -175,6 +180,13 @@ async def modbus_probe(probe: dict[str, Any]) -> None:
         payload = await asyncio.wait_for(reader.readexactly(length - 1), 5)
         if rx_transaction != transaction or protocol != 0 or not payload or payload[0] != 3:
             raise RuntimeError("Modbus 响应与请求不匹配")
+        quantity = int(probe.get("quantity", 1))
+        if len(payload) != 2 + quantity * 2 or payload[1] != quantity * 2:
+            raise RuntimeError("Modbus 寄存器数量不匹配")
+        registers = list(struct.unpack(f">{quantity}H", payload[2:]))
+        expected = probe.get("expectedRegisters")
+        if expected is not None and registers != [int(value) for value in expected]:
+            raise RuntimeError(f"Modbus 寄存器值不匹配: {registers}")
     finally:
         writer.close()
         await writer.wait_closed()
@@ -248,7 +260,11 @@ async def execute_stage(platform: Platform, state: State, stage: dict[str, Any])
     result["startedAt"] = utcnow()
     try:
         for action in stage.get("actions", []):
-            await platform.request(action.get("method", "GET"), action["path"], source=f"stage:{stage['name']}:{action['name']}", body=action.get("body"))
+            await platform.request(
+                action.get("method", "GET"), action["path"],
+                source=f"stage:{stage['name']}:{action['name']}",
+                body=action.get("body"), headers=action.get("headers"),
+            )
         result["status"] = "passed"
     except Exception as exc:
         result["status"] = "failed"
@@ -341,9 +357,14 @@ async def main_async(args: argparse.Namespace) -> None:
         await server.cleanup()
 
 
-async def periodic_publish(state: State) -> None:
+async def periodic_publish(state: State, output: Path | None = None) -> None:
     while True:
         await state.publish()
+        if output is not None:
+            output.mkdir(parents=True, exist_ok=True)
+            temporary = output / "report.json.tmp"
+            temporary.write_text(json.dumps(state.snapshot(), ensure_ascii=False, indent=2), encoding="utf-8")
+            temporary.replace(output / "report.json")
         await asyncio.sleep(1)
 
 

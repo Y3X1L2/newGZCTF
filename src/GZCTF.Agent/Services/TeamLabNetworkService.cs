@@ -352,6 +352,7 @@ public partial class TeamLabNetworkService(
                 }
             }
         }
+        resources.AddRange(observationRegistry.SnapshotInventory());
         resources.AddRange(await pcapService.SnapshotInventoryAsync(token));
         resources.AddRange(await bootstrapService.SnapshotInventoryAsync(token));
         return resources;
@@ -684,86 +685,7 @@ public partial class TeamLabNetworkService(
     {
         if (request.RuntimeId <= 0) return Failure("Invalid RuntimeId.", request.DryRun);
         if (request.Generation <= 0) return Failure("Invalid Generation.", request.DryRun);
-        if (request.ExecutionModel == TeamLabExecutionModel.V2)
-            return await ConfigureHostWireGuardAsync(request, token);
-        var validation = ValidateLinuxName(request.NamespaceName, nameof(request.NamespaceName));
-        if (validation is not null) return Failure(validation, request.DryRun);
-
-        validation = ValidateLinuxName(request.InterfaceName, nameof(request.InterfaceName));
-        if (validation is not null) return Failure(validation, request.DryRun);
-
-        validation = ValidatePort(request.ListenPort, nameof(request.ListenPort));
-        if (validation is not null) return Failure(validation, request.DryRun);
-
-        validation = ValidateCidr(request.AddressCidr, nameof(request.AddressCidr));
-        if (validation is not null) return Failure(validation, request.DryRun);
-
-        validation = ValidateCidr(request.PeerClientAddress, nameof(request.PeerClientAddress));
-        if (validation is not null) return Failure(validation, request.DryRun);
-
-        validation = ValidateAllowedIps(request.PeerAllowedIps, nameof(request.PeerAllowedIps));
-        if (validation is not null) return Failure(validation, request.DryRun);
-
-        foreach (var cidr in request.PlayerAllowedCidrs)
-        {
-            validation = ValidateCidr(cidr, nameof(request.PlayerAllowedCidrs));
-            if (validation is not null) return Failure(validation, request.DryRun);
-        }
-
-        foreach (var cidr in request.PlayerBlockedCidrs)
-        {
-            validation = ValidateCidr(cidr, nameof(request.PlayerBlockedCidrs));
-            if (validation is not null) return Failure(validation, request.DryRun);
-        }
-
-        validation = ValidateWireGuardKey(request.InterfacePrivateKey, nameof(request.InterfacePrivateKey));
-        if (validation is not null) return Failure(validation, request.DryRun);
-
-        validation = ValidateWireGuardKey(request.PeerPublicKey, nameof(request.PeerPublicKey));
-        if (validation is not null) return Failure(validation, request.DryRun);
-
-        await using var runtimeLock = await resourceLock.AcquireAsync(RuntimeLockKey(request.RuntimeId), token);
-        if (!_config.DryRun && !request.DryRun && _config.Enable)
-        {
-            TeamLabActiveGeneration? activeGeneration;
-            try
-            {
-                activeGeneration = await generationStore.ReadAsync(request.RuntimeId, token);
-            }
-            catch (InvalidDataException exception)
-            {
-                return Failure(exception.Message, request.DryRun);
-            }
-            if (activeGeneration?.Generation != request.Generation)
-                return Failure(
-                    $"WireGuard access generation {request.Generation} is not active for runtime {request.RuntimeId}.",
-                    request.DryRun);
-        }
-
-        var commands = new[]
-        {
-            "printf '<redacted>' | wg set <interface> private-key /dev/stdin",
-            $"if ip netns exec {request.NamespaceName} ip link show dev {request.InterfaceName} >/dev/null 2>&1; then " +
-            $"ip netns exec {request.NamespaceName} wg set {request.InterfaceName} private-key /dev/stdin listen-port {request.ListenPort} peer {request.PeerPublicKey} allowed-ips {request.PeerClientAddress}; " +
-            $"else ip link delete {request.InterfaceName} 2>/dev/null || true; ip link add {request.InterfaceName} type wireguard; " +
-            $"wg set {request.InterfaceName} private-key /dev/stdin listen-port {request.ListenPort} peer {request.PeerPublicKey} allowed-ips {request.PeerClientAddress}; " +
-            $"ip link set {request.InterfaceName} netns {request.NamespaceName}; fi",
-            $"for existing_peer in $(ip netns exec {request.NamespaceName} wg show {request.InterfaceName} peers); do " +
-            $"test \"$existing_peer\" = {ShellQuote(request.PeerPublicKey)} || ip netns exec {request.NamespaceName} wg set {request.InterfaceName} peer \"$existing_peer\" remove; done",
-            TeamLabNetworkPrimitives.BuildNamespaceIpv4AddressConvergenceCommand(
-                request.NamespaceName, request.InterfaceName, request.AddressCidr),
-            $"ip netns exec {request.NamespaceName} ip link set {request.InterfaceName} up"
-        };
-
-        commands = commands.Concat(BuildPeerRouteCommands(request.NamespaceName, request.InterfaceName, request.PeerClientAddress))
-            .Concat(BuildPlayerNatCommands(request.NamespaceName, request.InterfaceName,
-                request.PeerClientAddress, request.PlayerAllowedCidrs))
-            .Concat(BuildPlayerAccessCommands(request.RuntimeId, request.Generation, request.NamespaceName,
-                request.InterfaceName, request.PeerClientAddress, request.PlayerAllowedCidrs,
-                request.PlayerBlockedCidrs))
-            .ToArray();
-
-        return await ExecuteOrPlanAsync(commands, request.DryRun, token, request.InterfacePrivateKey);
+        return await ConfigureHostWireGuardAsync(request, token);
     }
 
     public async Task<TeamLabDryRunResponse> CleanupWireGuardAsync(
@@ -772,36 +694,7 @@ public partial class TeamLabNetworkService(
     {
         if (request.RuntimeId <= 0) return Failure("Invalid RuntimeId.", request.DryRun);
         if (request.Generation <= 0) return Failure("Invalid Generation.", request.DryRun);
-        if (request.ExecutionModel == TeamLabExecutionModel.V2)
-            return await CleanupHostWireGuardAsync(request, token);
-        var validation = ValidateLinuxName(request.NamespaceName, nameof(request.NamespaceName));
-        if (validation is not null) return Failure(validation, request.DryRun);
-        validation = ValidateLinuxName(request.InterfaceName, nameof(request.InterfaceName));
-        if (validation is not null) return Failure(validation, request.DryRun);
-        await using var runtimeLock = await resourceLock.AcquireAsync(RuntimeLockKey(request.RuntimeId), token);
-        if (!_config.DryRun && !request.DryRun && _config.Enable)
-        {
-            TeamLabActiveGeneration? activeGeneration;
-            try
-            {
-                activeGeneration = await generationStore.ReadAsync(request.RuntimeId, token);
-            }
-            catch (InvalidDataException exception)
-            {
-                return Failure(exception.Message, request.DryRun);
-            }
-            if (activeGeneration?.Generation != request.Generation)
-                return Failure(
-                    $"WireGuard cleanup generation {request.Generation} is not active for runtime {request.RuntimeId}.",
-                    request.DryRun);
-        }
-        var commands = BuildPlayerAccessCleanupCommands(request.RuntimeId, request.Generation,
-                request.NamespaceName, request.InterfaceName)
-            .Concat([
-                $"ip netns exec {request.NamespaceName} ip link delete {request.InterfaceName} 2>/dev/null || true",
-                $"ip link delete {request.InterfaceName} 2>/dev/null || true"
-            ]).ToArray();
-        return await ExecuteOrPlanAsync(commands, request.DryRun, token);
+        return await CleanupHostWireGuardAsync(request, token);
     }
 
     private async Task<TeamLabDryRunResponse> ConfigureHostWireGuardAsync(
@@ -821,7 +714,7 @@ public partial class TeamLabNetworkService(
         validation ??= ValidateWireGuardKey(request.PeerPublicKey, nameof(request.PeerPublicKey));
         if (request.RuntimePublicId == Guid.Empty || string.IsNullOrWhiteSpace(request.NetworkKey) ||
             string.IsNullOrWhiteSpace(request.PortKey) || string.IsNullOrWhiteSpace(request.MacAddress))
-            validation ??= "V2 WireGuard access requires the runtime public id, network key, port key and gateway MAC address.";
+            validation ??= "WireGuard access requires the runtime public id, network key, port key and gateway MAC address.";
         if (validation is not null)
             return Failure(validation, request.DryRun);
 
@@ -838,7 +731,7 @@ public partial class TeamLabNetworkService(
             request.PortKey!,
             token);
         return attachment.Success
-            ? new TeamLabDryRunResponse(true, false, "V2 WireGuard access configured.", commands)
+            ? new TeamLabDryRunResponse(true, false, "WireGuard access configured.", commands)
             : Failure(attachment.Message, request.DryRun);
     }
 
@@ -848,7 +741,7 @@ public partial class TeamLabNetworkService(
     {
         var validation = ValidateLinuxName(request.InterfaceName, nameof(request.InterfaceName));
         if (request.RuntimePublicId == Guid.Empty || string.IsNullOrWhiteSpace(request.NetworkKey))
-            validation ??= "V2 WireGuard cleanup requires the runtime public id and network key.";
+            validation ??= "WireGuard cleanup requires the runtime public id and network key.";
         if (validation is not null)
             return Failure(validation, request.DryRun);
 

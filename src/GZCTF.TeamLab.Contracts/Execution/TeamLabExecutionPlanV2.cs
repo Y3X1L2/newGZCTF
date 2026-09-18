@@ -150,6 +150,20 @@ public sealed record TeamLabExecutionPlanV2(
             return false;
         }
 
+        if (NetworkOwner && Networks.Any(network => network.HostGateway is not { } gateway ||
+            string.IsNullOrWhiteSpace(gateway.PortKey) ||
+            !IsMacAddress(gateway.MacAddress) ||
+            !TryParseIpv4Cidr(network.Cidr, out var gatewayNetwork, out var gatewayPrefix) ||
+            !IsAddressInCidr(gateway.IpAddress, gatewayNetwork, gatewayPrefix) ||
+            network.Ports.Any(port => IsSameIpv4Address(port.IpAddress, gateway.IpAddress)) ||
+            network.PlayerGateway is { } playerGateway &&
+            IsSameIpv4Address(playerGateway.IpAddress, gateway.IpAddress) ||
+            string.IsNullOrWhiteSpace(gateway.InterfaceName)))
+        {
+            error = "The execution plan contains an invalid host gateway.";
+            return false;
+        }
+
         if (Assets.Any(item => string.IsNullOrWhiteSpace(item.AssetKey) ||
                                item.AssetKey.Length > 128 ||
                                item.AssetKey.Contains('/') ||
@@ -326,7 +340,8 @@ public sealed record TeamLabNetworkIntentV2(
     IReadOnlyList<TeamLabDhcpLeaseV2>? DhcpLeases = null,
     IReadOnlyList<TeamLabDnsRecordV2>? DnsRecords = null,
     TeamLabPlayerGatewayV2? PlayerGateway = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<TeamLabConnectorAttachmentV2>? Connectors = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<TeamLabConnectorAttachmentV2>? Connectors = null,
+    TeamLabPlayerGatewayV2? HostGateway = null);
 
 public sealed record TeamLabPlayerGatewayV2(
     string PortKey,

@@ -5,7 +5,6 @@ using GZCTF.Agent.Services.RuntimeSignals;
 using GZCTF.Agent.Services.TeamLab;
 using GZCTF.Agent.Services.Vm;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Options;
 using GZCTF.TeamLab.Contracts;
 using GZCTF.TeamLab.Contracts.Execution;
 using System.Net.NetworkInformation;
@@ -21,13 +20,11 @@ public class TeamLabController(
     TeamLabContainerNetworkFinalizeService containerNetworkFinalize,
     AgentRuntimeSignalJournal runtimeSignals,
     DockerService docker,
-    KvmService kvm,
     LibvirtTeamLabProvider libvirt,
     AgentOperationGate gate,
     TeamLabExecutionPlanExecutor executionPlans,
     TeamLabLinkPolicyService linkPolicies,
-    TeamLabServiceAccessService serviceAccess,
-    IOptions<AgentTeamLabConfig> teamLabOptions) : ControllerBase
+    TeamLabServiceAccessService serviceAccess) : ControllerBase
 {
     [HttpGet("status")]
     public async Task<IActionResult> Status(CancellationToken token) => Ok(await service.GetStatusAsync(token));
@@ -54,8 +51,6 @@ public class TeamLabController(
         [FromBody] TeamLabExecutionPlanApplyRequest? request,
         CancellationToken token)
     {
-        if (teamLabOptions.Value.ExecutionModel != TeamLabExecutionModel.V2)
-            return NotFound();
         if (request?.Plan is null) return BadRequest("Execution plan request is required.");
         await using var permit = await gate.EnterAsync(AgentOperationCategory.TeamLabExecution, token);
         return Ok(await executionPlans.ApplyAsync(request.Plan, token));
@@ -66,8 +61,6 @@ public class TeamLabController(
         [FromBody] TeamLabExecutionNetworkUpdateRequest? request,
         CancellationToken token)
     {
-        if (teamLabOptions.Value.ExecutionModel != TeamLabExecutionModel.V2)
-            return NotFound();
         if (request?.CurrentPlan is null || request.DesiredPlan is null)
             return BadRequest("Current and desired execution plans are required.");
         await using var permit = await gate.EnterAsync(AgentOperationCategory.TeamLabNetwork, token);
@@ -90,8 +83,6 @@ public class TeamLabController(
         [FromBody] TeamLabExecutionPlanCleanupRequest? request,
         CancellationToken token)
     {
-        if (teamLabOptions.Value.ExecutionModel != TeamLabExecutionModel.V2)
-            return NotFound();
         if (request?.Plan is null) return BadRequest("Execution plan request is required.");
         // Cleanup is a bounded, identity-fenced operation. It must not wait behind an unrelated
         // long-running apply; the per-plan executor lease still serializes the same shard.
@@ -374,20 +365,13 @@ public class TeamLabController(
                         await docker.ResumeContainerAsync(request.ResourceId, request.Generation, token);
                     break;
                 case "vm":
-                    if (request.ExecutionModel == TeamLabExecutionModel.V2)
-                    {
-                        var result = pause
-                            ? await libvirt.PauseAsync(request.ResourceId, request.Generation, token)
-                            : await libvirt.ResumeAsync(request.ResourceId, request.Generation, token);
-                        if (!result.Success)
-                            throw new AgentOperationException(
-                                "Compute", "runtime.vm_lifecycle_failed", result.State, false,
-                                StatusCodes.Status409Conflict);
-                    }
-                    else if (pause)
-                        await kvm.SuspendVmAsync(request.ResourceId, request.Generation, token);
-                    else
-                        await kvm.ResumeVmAsync(request.ResourceId, request.Generation, token);
+                    var result = pause
+                        ? await libvirt.PauseAsync(request.ResourceId, request.Generation, token)
+                        : await libvirt.ResumeAsync(request.ResourceId, request.Generation, token);
+                    if (!result.Success)
+                        throw new AgentOperationException(
+                            "Compute", "runtime.vm_lifecycle_failed", result.State, false,
+                            StatusCodes.Status409Conflict);
                     break;
                 default:
                     throw new AgentOperationException(
@@ -421,7 +405,7 @@ public class TeamLabController(
             try
             {
                 var result = await ChangeAssetLifecycleAsync(new TeamLabAssetLifecycleRequest(
-                    item.Kind, item.ResourceId, request.Generation, request.DryRun, request.ExecutionModel),
+                    item.Kind, item.ResourceId, request.Generation, request.DryRun),
                     pause, cancellationToken);
                 results[index] = new TeamLabAssetLifecycleBatchResult(item.AssetId, result.Success, result.Message);
             }

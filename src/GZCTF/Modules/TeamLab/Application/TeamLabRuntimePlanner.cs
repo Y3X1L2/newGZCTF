@@ -120,7 +120,6 @@ public sealed class TeamLabRuntimePlanner(
             {
                 TopologyReleaseId = release.Id,
                 IsScenarioBuild = false,
-                ExecutionModel = _network.ExecutionModel,
                 ControlScopeId = release.ControlScopeId,
                 CreatedById = runtimeOwnerUserId,
                 ExternalReference = externalReference,
@@ -267,7 +266,6 @@ public sealed class TeamLabRuntimePlanner(
         runtime.ControlScopeId = release.ControlScopeId;
         if (createRequestHash is not null) runtime.CreateRequestHash = createRequestHash;
         runtime.EntryShardId = null;
-        runtime.ExecutionModel = _network.ExecutionModel;
         runtime.Status = TeamLabRuntimeStatus.Planning;
         runtime.LastError = null;
         runtime.UpdatedAt = DateTimeOffset.UtcNow;
@@ -477,8 +475,6 @@ public sealed class TeamLabRuntimePlanner(
             .ToArray();
         foreach (var connectorId in connectorIds)
         {
-            if (runtime.ExecutionModel != TeamLabExecutionModel.V2)
-                throw new TeamLabApiContractException("connector_execution_model_unsupported", "专用网卡连接器需要 V2 执行计划。", 422);
             await connectors.AcquireAsync(connectorId, runtime.PublicId, runtime.ControlScopeId, cancellationToken);
         }
     }

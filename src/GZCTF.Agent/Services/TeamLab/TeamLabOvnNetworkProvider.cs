@@ -240,7 +240,9 @@ public sealed class TeamLabOvnNetworkProvider(
                 operations.Add(operation);
             }
             if (network.PlayerGateway is { } gateway)
-                operations.Add(MutatePlayerGatewayPort(plan, network, gateway));
+                operations.Add(MutateGatewayPort(plan, network, gateway, "player-gateway"));
+            if (network.HostGateway is { } hostGateway)
+                operations.Add(MutateGatewayPort(plan, network, hostGateway, "service-gateway"));
             if (RouterFor(network, control) is { } router)
             {
                 operations.Add(MutateRouterPort(plan, network, router));
@@ -330,6 +332,7 @@ public sealed class TeamLabOvnNetworkProvider(
             AddExpected(expected, "Logical_Switch_Port", network.Ports.Count +
                 (network.Connectors?.Count ?? 0) +
                 (network.PlayerGateway is null ? 0 : 1) +
+                (network.HostGateway is null ? 0 : 1) +
                 (RouterFor(network, control) is null ? 0 : 1));
             if (network.DhcpLeases is { Count: > 0 }) AddExpected(expected, "DHCP_Options", 1);
             if (network.DnsRecords is { Count: > 0 }) AddExpected(expected, "DNS", 1);
@@ -381,6 +384,9 @@ public sealed class TeamLabOvnNetworkProvider(
                 .Concat(network.PlayerGateway is { } gateway
                     ? [PlayerGatewayUuid(plan, network, gateway)]
                     : [])
+                .Concat(network.HostGateway is { } hostGateway
+                    ? [PlayerGatewayUuid(plan, network, hostGateway)]
+                    : [])
                 .Concat(RouterFor(network, control) is { } router
                     ? [RouterSwitchPortNamedUuid(plan, network, router)]
                     : [])),
@@ -422,8 +428,8 @@ public sealed class TeamLabOvnNetworkProvider(
             ["row"] = row
         };
     }
-    static JsonObject MutatePlayerGatewayPort(TeamLabExecutionPlanV2 plan, TeamLabNetworkIntentV2 network,
-        TeamLabPlayerGatewayV2 gateway) => new()
+    static JsonObject MutateGatewayPort(TeamLabExecutionPlanV2 plan, TeamLabNetworkIntentV2 network,
+        TeamLabPlayerGatewayV2 gateway, string gatewayKind) => new()
     {
         ["op"] = "insert",
         ["table"] = "Logical_Switch_Port",
@@ -435,7 +441,7 @@ public sealed class TeamLabOvnNetworkProvider(
             ["external_ids"] = OvsdbJsonCodec.Map(
                 ("gzctf-runtime", plan.RuntimePublicId.ToString("D")),
                 ("gzctf-generation", plan.Generation.ToString()),
-                ("gzctf-asset-key", "player-gateway"),
+                ("gzctf-asset-key", gatewayKind),
                 ("gzctf-network-key", network.Key),
                 ("gzctf-network-digest", plan.NetworkDigest))
         }

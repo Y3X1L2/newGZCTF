@@ -905,15 +905,8 @@ public sealed class TeamLabTrafficApplicationService(
                 .ToArray();
         }
 
-        // The V2 execution data plane only registers workload-endpoint observation taps
-        // (the deterministic host-side veth of each asset) on the agents. Legacy
-        // network/router/fabric observation rows carry V1-only interface tokens that do not
-        // exist on a V2 runtime, so those segments report "Observation point is not
-        // registered" from the node. Starting the capture is tolerant to that: segments that
-        // cannot start are recorded as failed while the remaining (endpoint) segments keep
-        // running and capturing, instead of the whole capture failing and stopping the ones
-        // that did start. This keeps NetworkBridge captures valid where they exist while
-        // making V2 runtimes (endpoint-only taps) fully capturable.
+        // The execution data plane registers workload endpoint taps. Capture startup keeps
+        // successful segments running and records any segment that cannot start as failed.
         selected = selected.DistinctBy(item => item.Id)
             .OrderBy(item => item.WorkerNodeId)
             .ThenBy(item => item.Kind)

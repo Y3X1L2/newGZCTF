@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Text.Json;
 using GZCTF.Agent.Services.TeamLab;
@@ -307,12 +308,18 @@ public sealed class TeamLabExecutionPlanV2Tests
             ImageReference: "registry.example/teamlab:latest");
         var infrastructure = new TeamLabNodeInfrastructureApplyRequest(
             7, 1, 1, "tlr-7-1",
-            [new TeamLabNodeManagedSwitchIntent(
-                new TeamLabNodeNetworkIntent(
-                    "network-a", "Network A", "10.0.1.0/24", "10.0.1.1", "tl-network-a",
-                    IsEntry: true),
-                "dns-7-a",
-                [new TeamLabNodeDnsRecord("Docker", "10.0.1.10", "02:00:00:00:00:01")])],
+            [
+                new TeamLabNodeManagedSwitchIntent(
+                    new TeamLabNodeNetworkIntent(
+                        "network-a", "Network A", "10.0.1.0/24", "10.0.1.1", "tl-network-a",
+                        IsEntry: true),
+                    "dns-7-a",
+                    [new TeamLabNodeDnsRecord("Docker", "10.0.1.10", "02:00:00:00:00:01")]),
+                new TeamLabNodeManagedSwitchIntent(
+                    new TeamLabNodeNetworkIntent(
+                        "network-b", "Network B", "10.0.2.0/24", "10.0.2.1", "tl-network-b"),
+                    "dns-7-b", [])
+            ],
             [new TeamLabNodeManagedRouterFragmentIntent("router-a", ["network-a"])],
             new TeamLabNodeFabricIntent("100.64.0.2", "100.64.0.1/30", "100.64.0.2/30", "fabric-host", "fabric-ns", [], []),
             [new TeamLabNodeForwardPolicy("10.0.1.0/24", "10.0.2.0/24", false)],
@@ -322,11 +329,23 @@ public sealed class TeamLabExecutionPlanV2Tests
             7, runtimePublicId, 1, "shard-a", true, infrastructure, [asset], [asset], [],
             new Dictionary<int, string> { [3] = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" });
 
-        var gateway = Assert.Single(plan.Networks).PlayerGateway;
-        Assert.NotNull(gateway);
-        Assert.Equal("player-gateway", gateway.PortKey);
-        Assert.Equal("10.0.1.254", gateway.IpAddress);
-        Assert.Equal("tlwg7", gateway.InterfaceName);
+        var entry = plan.Networks.Single(network => network.Key == "network-a");
+        Assert.NotNull(entry.PlayerGateway);
+        Assert.Equal("player-gateway", entry.PlayerGateway.PortKey);
+        Assert.Equal("10.0.1.254", entry.PlayerGateway.IpAddress);
+        Assert.Equal("tlwg7", entry.PlayerGateway.InterfaceName);
+        Assert.NotNull(entry.HostGateway);
+        Assert.Equal("service-gateway", entry.HostGateway.PortKey);
+        Assert.Equal("10.0.1.253", entry.HostGateway.IpAddress);
+        Assert.NotEqual(entry.PlayerGateway.MacAddress, entry.HostGateway.MacAddress);
+        Assert.NotEqual(entry.PlayerGateway.InterfaceName, entry.HostGateway.InterfaceName);
+        Assert.True(entry.HostGateway.InterfaceName.Length <= 15);
+
+        var secondary = plan.Networks.Single(network => network.Key == "network-b");
+        Assert.Null(secondary.PlayerGateway);
+        Assert.NotNull(secondary.HostGateway);
+        Assert.Equal("10.0.2.254", secondary.HostGateway.IpAddress);
+        Assert.True(secondary.HostGateway.InterfaceName.Length <= 15);
     }
 
     static TeamLabExecutionPlanV2 WithDigests(TeamLabExecutionPlanV2 plan)

@@ -17,11 +17,6 @@ public class TeamLabRuntime
     // Kept as a runtime fact for databases upgraded through the scenario-build branch.
     // TeamLab authoring no longer exposes this implementation detail.
     public bool IsScenarioBuild { get; set; }
-    /// <summary>
-    /// Execution model selected for this runtime generation. The value is a persisted fact used
-    /// by cleanup; it is never inferred from resource names or fragment markers.
-    /// </summary>
-    public TeamLabExecutionModel ExecutionModel { get; set; } = TeamLabExecutionModel.V2;
     [MaxLength(256)] public string? ExternalReference { get; set; }
     [MaxLength(128)] public string? CreationIdempotencyKey { get; set; }
     [MaxLength(128)] public string CreateRequestHash { get; set; } = string.Empty;

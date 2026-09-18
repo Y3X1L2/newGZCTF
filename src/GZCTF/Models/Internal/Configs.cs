@@ -605,12 +605,6 @@ public class TeamLabNetworkConfig
     public bool Enable { get; set; }
 
     /// <summary>
-    /// Execution model for TeamLab runtime deployments. V2 is the platform default; V1 is an
-    /// explicit migration mode and is never selected automatically.
-    /// </summary>
-    public TeamLabExecutionModel ExecutionModel { get; set; } = TeamLabExecutionModel.V2;
-
-    /// <summary>
     /// Returns command plans without mutating WorkerNode state when true.
     /// </summary>
     public bool DryRun { get; set; }

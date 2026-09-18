@@ -886,93 +886,6 @@ public class TeamLabCommandBuilderTests : IDisposable
         }
     }
 
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task ConfigureWireGuardAsync_DryRunBuildsPeerCommand(bool useNftables)
-    {
-        var service = CreateService(enable: false, useNftables: useNftables);
-
-        var result = await service.ConfigureWireGuardAsync(new TeamLabWireGuardRequest(
-            RuntimeId: 123,
-            Generation: 1,
-            NamespaceName: "tlr123",
-            InterfaceName: "tlwg123",
-            ListenPort: 42001,
-            AddressCidr: "10.250.0.10/32",
-            InterfacePrivateKey: ValidInterfacePrivateKey,
-            PeerPublicKey: ValidPeerPublicKey,
-            PeerClientAddress: "10.250.0.2/32",
-            PeerAllowedIps: "10.60.0.0/28",
-            PlayerAllowedCidrs: ["10.60.0.0/28"],
-            PlayerBlockedCidrs: ["10.60.0.16/28"],
-            DryRun: true), CancellationToken.None);
-
-        Assert.True(result.Success);
-        Assert.Contains(result.Commands, command => command.Contains("printf '<redacted>'"));
-        Assert.Contains(result.Commands, command => command.Contains("ip link set tlwg123 netns tlr123"));
-        Assert.Contains(result.Commands,
-            command => command.Contains("ip netns exec tlr123 ip addr add 10.250.0.10/32 dev tlwg123"));
-        Assert.Contains(result.Commands,
-            command => command.Contains("wg set tlwg123 private-key /dev/stdin"));
-        Assert.Contains(result.Commands, command => command.Contains("listen-port 42001"));
-        Assert.Contains(result.Commands, command => command.Contains("allowed-ips 10.250.0.2/32"));
-        Assert.DoesNotContain(result.Commands, command => command.Contains("allowed-ips 10.60.0.0/28"));
-        Assert.Contains(result.Commands,
-            command => command.Contains("ip netns exec tlr123 ip route replace 10.250.0.2/32 dev tlwg123"));
-        Assert.Contains(result.Commands, command => command.Contains(useNftables
-            ? "nft add rule ip gzctf_teamlab_nat TLNtlwg123 ip saddr 10.250.0.2/32 ip daddr 10.60.0.0/28 masquerade"
-            : "iptables -t nat -A TLNtlwg123 -s 10.250.0.2/32 -d 10.60.0.0/28 -j MASQUERADE"));
-        Assert.DoesNotContain(result.Commands,
-            command => command.Contains("ip route replace 10.60.0.0/28 dev tlwg123"));
-        Assert.Contains(result.Commands, command => command.Contains(useNftables
-            ? "nft add rule inet gzctf_teamlab TLA7BG1 iifname 'tlwg123' ip saddr 10.250.0.2/32 ip daddr 10.60.0.0/28 accept"
-            : "iptables -A TLA7BG1 -i tlwg123 -s 10.250.0.2/32 -d 10.60.0.0/28 -j ACCEPT"));
-        Assert.Contains(result.Commands, command => command.Contains(useNftables
-            ? "nft add rule inet gzctf_teamlab TLA7BG1 iifname 'tlwg123' ip saddr 10.250.0.2/32 ip daddr 10.60.0.16/28 reject"
-            : "iptables -A TLA7BG1 -i tlwg123 -s 10.250.0.2/32 -d 10.60.0.16/28 -j REJECT"));
-        Assert.DoesNotContain(result.Commands, command => command.Contains(useNftables ? "iptables" : " nft "));
-        var configureCommand = Assert.Single(result.Commands,
-            command => command.Contains("wg set tlwg123 private-key /dev/stdin", StringComparison.Ordinal));
-        Assert.True(
-            configureCommand.IndexOf("wg set tlwg123 private-key", StringComparison.Ordinal) <
-            configureCommand.IndexOf("ip link set tlwg123 netns tlr123", StringComparison.Ordinal));
-        Assert.DoesNotContain(result.Commands, command => command.Contains(ValidInterfacePrivateKey));
-    }
-
-    [Fact]
-    public async Task ConfigureWireGuardAsync_DryRunUpdatesExistingInterfaceWithoutDeletingIt()
-    {
-        var service = CreateService(enable: false);
-
-        var result = await service.ConfigureWireGuardAsync(new TeamLabWireGuardRequest(
-            RuntimeId: 123,
-            Generation: 1,
-            NamespaceName: "tlr123",
-            InterfaceName: "tlwg123",
-            ListenPort: 42001,
-            AddressCidr: "10.250.0.10/32",
-            InterfacePrivateKey: ValidInterfacePrivateKey,
-            PeerPublicKey: ValidPeerPublicKey,
-            PeerClientAddress: "10.250.0.2/32",
-            PeerAllowedIps: "10.250.0.2/32",
-            PlayerAllowedCidrs: ["10.60.0.0/28"],
-            PlayerBlockedCidrs: [],
-            DryRun: true), CancellationToken.None);
-
-        Assert.True(result.Success);
-        Assert.Contains(result.Commands, command => command.Contains("printf '<redacted>'", StringComparison.Ordinal));
-        Assert.Contains(result.Commands, command =>
-            command.Contains("if ip netns exec tlr123 ip link show dev tlwg123", StringComparison.Ordinal) &&
-            command.Contains("ip link add tlwg123 type wireguard", StringComparison.Ordinal));
-        Assert.DoesNotContain(result.Commands, command =>
-            command.StartsWith("ip netns exec tlr123 ip link delete tlwg123", StringComparison.Ordinal));
-        Assert.Contains(result.Commands,
-            command => command.Contains("ip netns exec tlr123 ip addr flush dev tlwg123"));
-        Assert.Contains(result.Commands,
-            command => command.Contains("ip netns exec tlr123 ip addr add 10.250.0.10/32 dev tlwg123"));
-    }
-
     [Fact]
     public async Task ConfigureHostWireGuardAsync_BringsInterfaceUpBeforeAddingRoutes()
     {
@@ -981,7 +894,6 @@ public class TeamLabCommandBuilderTests : IDisposable
         var result = await service.ConfigureWireGuardAsync(new TeamLabWireGuardRequest(
             RuntimeId: 196,
             Generation: 1,
-            NamespaceName: "unused",
             InterfaceName: "tlwg196",
             ListenPort: 32001,
             AddressCidr: "10.1.1.254/32",
@@ -992,7 +904,6 @@ public class TeamLabCommandBuilderTests : IDisposable
             PlayerAllowedCidrs: ["10.1.1.0/24"],
             PlayerBlockedCidrs: [],
             DryRun: true,
-            ExecutionModel: GZCTF.TeamLab.Contracts.TeamLabExecutionModel.V2,
             RuntimePublicId: Guid.Parse("019fa217-fcee-73af-bb45-1bc400000001"),
             NetworkKey: "network",
             PortKey: "player-gateway",
@@ -1015,7 +926,6 @@ public class TeamLabCommandBuilderTests : IDisposable
         var result = await service.ConfigureWireGuardAsync(new TeamLabWireGuardRequest(
             RuntimeId: 123,
             Generation: 1,
-            NamespaceName: "tlr123",
             InterfaceName: "tlwg123",
             ListenPort: 42001,
             AddressCidr: "10.250.0.10/32",
@@ -1338,7 +1248,7 @@ public class TeamLabCommandBuilderTests : IDisposable
     }
 
     [Fact]
-    public async Task ConfigureWireGuardAsync_RealExecutionStreamsPrivateKeyToWireGuard()
+    public async Task ConfigureWireGuardAsync_StreamsPrivateKeyBeforeReportingMissingOvsEndpoint()
     {
         using var stateRoot = new TempDirectory();
         var stateDirectory = Path.Combine(stateRoot.Path, "runtime-123");
@@ -1351,12 +1261,13 @@ public class TeamLabCommandBuilderTests : IDisposable
                 activatedAt = DateTimeOffset.UtcNow
             }));
         var runner = new PrivateKeyAwareTeamLabCommandRunner(ValidInterfacePrivateKey);
-        var service = CreateService(enable: true, runner, dryRun: false, runtimeStateRoot: stateRoot.Path);
+        var service = CreateService(
+            enable: true, runner, dryRun: false, runtimeStateRoot: stateRoot.Path,
+            ovsLocalEndpoint: string.Empty);
 
         var result = await service.ConfigureWireGuardAsync(new TeamLabWireGuardRequest(
             RuntimeId: 123,
             Generation: 1,
-            NamespaceName: "tlr123",
             InterfaceName: "tlwg123",
             ListenPort: 42001,
             AddressCidr: "10.180.1.254/32",
@@ -1366,10 +1277,15 @@ public class TeamLabCommandBuilderTests : IDisposable
             PeerAllowedIps: "10.180.1.2/32",
             PlayerAllowedCidrs: ["10.180.1.0/28"],
             PlayerBlockedCidrs: [],
-            DryRun: false), CancellationToken.None);
+            DryRun: false,
+            RuntimePublicId: Guid.Parse("019fa217-fcee-73af-bb45-1bc400000001"),
+            NetworkKey: "network",
+            PortKey: "player-gateway",
+            MacAddress: "02:42:ac:10:00:02"), CancellationToken.None);
 
-        Assert.True(result.Success);
+        Assert.False(result.Success);
         Assert.False(result.DryRun);
+        Assert.Contains("OVS", result.Message, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain(runner.Commands, command => command.Contains("printf '<redacted>'"));
         Assert.Contains(runner.Commands, command => command.Contains("wg set tlwg123 private-key /dev/stdin"));
         Assert.Contains(runner.StandardInputs, input => input == ValidInterfacePrivateKey);
@@ -1410,9 +1326,11 @@ public class TeamLabCommandBuilderTests : IDisposable
         TeamLabCommandRunner? runner = null,
         bool dryRun = true,
         string? runtimeStateRoot = null,
-        bool useNftables = false)
+        bool useNftables = false,
+        string? ovsLocalEndpoint = null)
     {
         var config = new AgentTeamLabConfig { Enable = enable, DryRun = dryRun };
+        if (ovsLocalEndpoint is not null) config.OvsLocalEndpoint = ovsLocalEndpoint;
         config.RuntimeStateRoot = runtimeStateRoot ?? RuntimeStateRoot;
         var options = Options.Create(config);
         runner ??= new TeamLabCommandRunner(NullLogger<TeamLabCommandRunner>.Instance);

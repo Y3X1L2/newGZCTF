@@ -152,12 +152,10 @@ public sealed class TeamLabAccessGrantService(
         var serverAddress = $"{LastHost(IPNetwork.Parse(entryNetwork.Cidr))}/32";
         var blocked = runtime.Networks.Where(item => item.Generation == runtime.Generation && item.Id != entryNetwork.Id)
             .Select(item => item.Cidr).ToArray();
-        var isV2 = runtime.ExecutionModel == TeamLabExecutionModel.V2;
         var applied = await executor.ConfigureAccessAsync(entryShard.WorkerNodeId,
             new TeamLabNodeAccessApplyRequest(
                 runtime.Id,
                 runtime.Generation,
-                isV2 ? string.Empty : TeamLabResourceNameFactory.RouterNamespace(runtime.Id, entryShard.Id),
                 TeamLabResourceNameFactory.WireGuardInterface(runtime.Id),
                 runtime.PublicUdpMapping.WorkerWireGuardPort,
                 serverAddress,
@@ -167,11 +165,10 @@ public sealed class TeamLabAccessGrantService(
                 entryNetwork.Cidr,
                 [entryNetwork.Cidr],
                 blocked,
-                runtime.ExecutionModel,
                 runtime.PublicId,
-                isV2 ? entryNetwork.TopologyKey : null,
-                isV2 ? "player-gateway" : null,
-                isV2 ? TeamLabResourceNameFactory.PlayerGatewayMac(runtime.PublicId, runtime.Generation, entryNetwork.TopologyKey) : null),
+                entryNetwork.TopologyKey,
+                "player-gateway",
+                TeamLabResourceNameFactory.PlayerGatewayMac(runtime.PublicId, runtime.Generation, entryNetwork.TopologyKey)),
             cancellationToken);
         if (!applied.Success)
             throw new TeamLabApiContractException(
@@ -250,16 +247,13 @@ public sealed class TeamLabAccessGrantService(
         }
         var entryShard = runtime.Shards.Single(item => item.Id == runtime.EntryShardId && item.Generation == runtime.Generation);
         var entryNetwork = ResolveEntryNetwork(runtime, entryShard);
-        var isV2 = runtime.ExecutionModel == TeamLabExecutionModel.V2;
         var cleanup = await executor.RemoveAccessAsync(entryShard.WorkerNodeId,
             new TeamLabNodeAccessRemoveRequest(
                 runtime.Id,
                 runtime.Generation,
-                isV2 ? string.Empty : TeamLabResourceNameFactory.RouterNamespace(runtime.Id, entryShard.Id),
                 TeamLabResourceNameFactory.WireGuardInterface(runtime.Id),
-                runtime.ExecutionModel,
                 runtime.PublicId,
-                isV2 ? entryNetwork.TopologyKey : null),
+                entryNetwork.TopologyKey),
             cancellationToken);
         if (!cleanup.Success)
             throw new TeamLabApiContractException(

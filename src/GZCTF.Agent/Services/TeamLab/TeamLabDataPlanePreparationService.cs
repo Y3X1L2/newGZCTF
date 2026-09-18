@@ -58,7 +58,6 @@ public sealed class TeamLabDataPlanePreparationService(
     {
         var desired = new TeamLabDataPlaneSyncConfig(
             config.Enable,
-            config.ExecutionModel,
             false,
             config.OvnNorthboundEndpoint,
             config.OvnSouthboundEndpoint,
