@@ -121,8 +121,8 @@ class Match:
             })
             offsets["industrial"] += 1
         for key, name, template_id, memory, storage in (
-            ("linux-vm", "Linux VM", 115, 1024, 8192),
-            ("windows-vm", "Windows VM", 121, 2048, 20480),
+            ("linux-vm", "Linux VM", 116, 1024, 1024),
+            ("windows-vm", "Windows VM", 1, 2048, 12288),
         ):
             assets.append({
                 "key": key, "name": name, "kind": 1, "imageTemplateId": template_id,
