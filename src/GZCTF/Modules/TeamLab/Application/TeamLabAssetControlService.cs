@@ -47,8 +47,8 @@ public sealed class TeamLabAssetControlService(AppDbContext context, TeamLabAuth
         var asset = await LoadAsync(runtimeId, assetId, token);
         try { await RequireRuntimeAsync(asset, asset.Runtime.Generation, token); }
         catch (TeamLabApiContractException error) { return new(false, error.Message); }
-        if (string.IsNullOrWhiteSpace(asset.ExecutionPlanJson) &&
-            !await context.TeamLabExecutionPlanSnapshots.AnyAsync(item => item.RuntimeId == asset.RuntimeId && item.Generation == asset.Generation && item.ShardId == asset.ShardId, token))
+        if (!await context.TeamLabExecutionPlanSnapshots.AnyAsync(item =>
+                item.RuntimeId == asset.RuntimeId && item.Generation == asset.Generation && item.ShardId == asset.ShardId, token))
             return new(false, "资产缺少原始执行计划，不能猜测重建或电源管理。");
         return new(true, null);
     }
@@ -198,7 +198,7 @@ public sealed class TeamLabAssetControlService(AppDbContext context, TeamLabAuth
         await RequireRuntimeAsync(asset, ticket.Generation, token);
         var snapshot = await context.TeamLabExecutionPlanSnapshots.AsNoTracking().SingleOrDefaultAsync(item =>
             item.RuntimeId == asset.RuntimeId && item.Generation == asset.Generation && item.ShardId == asset.ShardId, token);
-        var planJson = asset.ExecutionPlanJson ?? snapshot?.PlanJson
+        var planJson = snapshot?.CurrentPlanJson ?? snapshot?.PlanJson
             ?? throw new TeamLabApiContractException("asset_control.plan_missing", "资产缺少原始执行计划，不能猜测重建。", 409);
         var plan = JsonSerializer.Deserialize<TeamLabExecutionPlanV2>(planJson)
             ?? throw new TeamLabApiContractException("asset_control.plan_invalid", "原始执行计划不可读取。", 409);

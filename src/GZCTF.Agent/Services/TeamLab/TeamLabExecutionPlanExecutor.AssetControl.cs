@@ -12,8 +12,6 @@ public sealed partial class TeamLabExecutionPlanExecutor
             plan.Assets.SingleOrDefault(item => item.AssetKey == request.AssetKey) is not { } asset)
             return new(false, "asset_control.invalid_request", null);
         using var executionLock = await executionLocks.AcquireAsync((plan.RuntimeId, plan.Generation, plan.ShardKey), token);
-        if (journal.TryGetIdentity(plan, out var digest) && !string.Equals(digest, plan.PlanDigest, StringComparison.OrdinalIgnoreCase))
-            return new(false, "asset_control.identity_conflict", null);
         async Task<TeamLabExecutionInventoryFactV2?> Observe() =>
             (await ReadInventoryAsync(plan with { Assets = [asset] }, token)).SingleOrDefault(item => item.AssetKey == asset.AssetKey);
         var before = await Observe();

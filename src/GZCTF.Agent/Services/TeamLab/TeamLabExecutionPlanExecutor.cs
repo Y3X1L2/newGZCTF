@@ -394,7 +394,7 @@ public sealed partial class TeamLabExecutionPlanExecutor(
             .Where(item => item.RuntimeId == plan.RuntimeId && item.Generation == plan.Generation &&
                            string.Equals(item.ShardKey, plan.ShardKey, StringComparison.Ordinal))
             .Select(item => new TeamLabExecutionInventoryFactV2(
-                "docker", item.AssetKey ?? string.Empty, item.NativeId, item.State, item.Generation))
+                "docker", item.AssetKey ?? string.Empty, item.NativeId, item.State, item.Generation, item.NativeId))
             .Where(item => !string.IsNullOrWhiteSpace(item.AssetKey))
             .ToList();
         if (plan.Assets.Any(item => item.Kind.Equals("vm", StringComparison.OrdinalIgnoreCase)))

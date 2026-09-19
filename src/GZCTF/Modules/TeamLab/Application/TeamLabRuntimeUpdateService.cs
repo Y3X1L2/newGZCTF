@@ -4,6 +4,7 @@ using System.Text.Json;
 using GZCTF.Models;
 using GZCTF.Models.Data;
 using GZCTF.Models.Internal;
+using GZCTF.Modules.Audit.Contracts;
 using GZCTF.Modules.Runtime.Application;
 using GZCTF.Modules.Runtime.Domain;
 using GZCTF.Modules.TeamLab.Contracts;
@@ -160,9 +161,16 @@ public sealed class TeamLabRuntimeUpdateService(
             item => item.Id,
             item => context.Entry(item).CurrentValues.Clone());
         var oldRuntimeValues = context.Entry(runtime).CurrentValues.Clone();
-        var oldPlans = new Dictionary<string, TeamLabExecutionPlanV2>(StringComparer.Ordinal);
-        foreach (var asset in trackedAssets.Where(item => item.Status != TeamLabRuntimeStatus.Destroyed))
-            oldPlans[asset.TopologyKey] = await LoadAssetPlanAsync(runtime, asset, token);
+        var currentPlans = runtime.ExecutionPlanSnapshots
+            .Where(item => item.Generation == runtime.Generation)
+            .ToDictionary(item => item.ShardId, item => ReadPlan(item.CurrentPlanJson ?? item.PlanJson));
+        var oldPlans = trackedAssets
+            .Where(item => item.Status != TeamLabRuntimeStatus.Destroyed)
+            .ToDictionary(
+                item => item.TopologyKey,
+                item => currentPlans[item.ShardId ?? throw new TeamLabApiContractException(
+                    "runtime_update_plan_missing", $"资产 {item.Name} 缺少执行分片。", 409)],
+                StringComparer.Ordinal);
 
         var newAssets = new List<TeamLabRuntimeAsset>();
         var replacementAssets = new Dictionary<int, TeamLabRuntimeAsset>();
@@ -262,8 +270,9 @@ public sealed class TeamLabRuntimeUpdateService(
                 .ToArray();
             var targetPlans = await deployment.CompileExecutionPlansAsync(
                 runtime, targetDefinition, activeAssets, templates, overlayValues, token);
-            var currentSnapshot = await LoadNetworkSnapshotAsync(runtime, token);
-            currentNetworkPlan = ReadPlan(currentSnapshot.CurrentPlanJson ?? currentSnapshot.PlanJson);
+            var currentSnapshot = runtime.ExecutionPlanSnapshots.Single(item =>
+                item.Generation == runtime.Generation && currentPlans[item.ShardId].NetworkOwner);
+            currentNetworkPlan = currentPlans[currentSnapshot.ShardId];
             desiredNetworkPlan = targetPlans.Values.Single(item => item.NetworkOwner);
             networkOwnerNodeId = currentSnapshot.WorkerNodeId;
 
@@ -296,13 +305,12 @@ public sealed class TeamLabRuntimeUpdateService(
             {
                 var asset = runtime.Assets.Single(item => item.Generation == runtime.Generation &&
                     item.Status != TeamLabRuntimeStatus.Destroyed && item.TopologyKey == change.AssetKey);
-                var fullPlan = targetPlans[asset.ShardId!.Value];
-                var miniPlan = AssetPlan(fullPlan, asset.TopologyKey, runtime.PlanRevision + 1, asset.Id);
+                var plan = targetPlans[asset.ShardId!.Value];
                 var template = templates[asset.SourceTemplateId!.Value];
                 await artifacts.EnsureImageAsync(runtime.Id, asset.WorkerNodeId!.Value, template, token);
                 var result = await assetControl.ExecuteAsync(
                     asset.WorkerNodeId.Value,
-                    new(miniPlan, asset.TopologyKey, "create", null, null),
+                    new(plan, asset.TopologyKey, "create", null, null),
                     token);
                 if (!result.Success || result.Asset is null)
                     throw new TeamLabRuntimeExecutionException(
@@ -311,10 +319,9 @@ public sealed class TeamLabRuntimeUpdateService(
                 asset.NativeIdentity = result.Asset.NativeIdentity ?? result.Asset.ResourceId;
                 asset.Status = TeamLabRuntimeStatus.Running;
                 asset.ExecutionStage = TeamLabAssetExecutionStage.ServiceReady;
-                asset.ExecutionPlanJson = JsonSerializer.Serialize(miniPlan);
                 asset.LastError = null;
                 asset.ExecutionUpdatedAt = DateTimeOffset.UtcNow;
-                created.Add((asset, miniPlan));
+                created.Add((asset, plan));
             }
 
             foreach (var change in changes.Where(item => item.Action == "remove"))
@@ -327,7 +334,6 @@ public sealed class TeamLabRuntimeUpdateService(
                 foreach (var accessId in accessIds)
                     await serviceAccess.RemoveAsync(runtime.PublicId, accessId, token);
                 asset.Status = TeamLabRuntimeStatus.Destroyed;
-                asset.ExecutionPlanJson = null;
                 asset.LastError = null;
             }
 
@@ -426,7 +432,7 @@ public sealed class TeamLabRuntimeUpdateService(
                 rollbackErrors.Count == 0
                     ? "运行环境更新失败，本次变更已撤销。"
                     : "运行环境更新失败，部分撤销操作未完成。",
-                detail: new Dictionary<string, object?> { ["rollbackComplete"] = rollbackErrors.Count == 0 });
+                OperationalErrorClassifier.FromException(exception, "teamlab.runtime.update"));
             await context.SaveChangesAsync(CancellationToken.None);
             return TeamLabNodeResult.Failed(exception.Message);
         }
@@ -645,37 +651,6 @@ public sealed class TeamLabRuntimeUpdateService(
             .ToDictionaryAsync(item => item.Id, token);
     }
 
-    async Task<TeamLabExecutionPlanV2> LoadAssetPlanAsync(
-        TeamLabRuntime runtime,
-        TeamLabRuntimeAsset asset,
-        CancellationToken token)
-    {
-        var json = asset.ExecutionPlanJson;
-        if (string.IsNullOrWhiteSpace(json))
-            json = await context.TeamLabExecutionPlanSnapshots.AsNoTracking()
-                .Where(item => item.RuntimeId == runtime.Id && item.Generation == runtime.Generation &&
-                               item.ShardId == asset.ShardId)
-                .Select(item => item.PlanJson)
-                .SingleOrDefaultAsync(token);
-        var plan = ReadPlan(json);
-        if (!plan.Assets.Any(item => item.AssetKey == asset.TopologyKey))
-            throw new TeamLabApiContractException(
-                "runtime_update_plan_missing",
-                $"资产 {asset.Name} 缺少可执行快照。",
-                409);
-        return plan;
-    }
-
-    async Task<TeamLabExecutionPlanSnapshot> LoadNetworkSnapshotAsync(
-        TeamLabRuntime runtime,
-        CancellationToken token)
-    {
-        var snapshots = await context.TeamLabExecutionPlanSnapshots
-            .Where(item => item.RuntimeId == runtime.Id && item.Generation == runtime.Generation)
-            .ToArrayAsync(token);
-        return snapshots.Single(item => ReadPlan(item.CurrentPlanJson ?? item.PlanJson).NetworkOwner);
-    }
-
     static TeamLabExecutionPlanV2 ReadPlan(string? json)
     {
         var plan = string.IsNullOrWhiteSpace(json)
@@ -684,24 +659,6 @@ public sealed class TeamLabRuntimeUpdateService(
         if (plan is null || !plan.IsValid(out _))
             throw new TeamLabApiContractException("runtime_update_plan_invalid", "运行执行快照不可读取。", 409);
         return plan;
-    }
-
-    static TeamLabExecutionPlanV2 AssetPlan(
-        TeamLabExecutionPlanV2 fullPlan,
-        string assetKey,
-        int revision,
-        int assetId)
-    {
-        var plan = fullPlan with
-        {
-            ShardKey = $"{fullPlan.ShardKey}-r{revision}-a{assetId}",
-            PlanDigest = string.Empty,
-            NetworkOwner = false,
-            Assets = fullPlan.Assets.Where(item => item.AssetKey == assetKey).ToArray(),
-            ObservationPoints = fullPlan.ObservationPoints.Where(item => item.AssetKey == assetKey).ToArray()
-        };
-        var digest = Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(plan)));
-        return plan with { PlanDigest = $"sha256:{digest}" };
     }
 
     static void CopyDesiredAsset(TeamLabRuntimeAsset source, TeamLabRuntimeAsset target)
@@ -728,7 +685,6 @@ public sealed class TeamLabRuntimeUpdateService(
         target.Status = TeamLabRuntimeStatus.Pending;
         target.ExecutionStage = TeamLabAssetExecutionStage.Pending;
         target.DesiredPowerState = "running";
-        target.ExecutionPlanJson = null;
         target.LastError = null;
     }
 

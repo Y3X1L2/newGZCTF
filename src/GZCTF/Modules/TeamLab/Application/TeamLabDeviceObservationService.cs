@@ -100,7 +100,7 @@ public sealed class TeamLabDeviceObservationService(AppDbContext context, ITeamL
         TeamLabExecutionPlanV2? plan = null;
         try
         {
-            var planJson = asset.ExecutionPlanJson ?? snapshot?.PlanJson;
+            var planJson = snapshot?.CurrentPlanJson ?? snapshot?.PlanJson;
             if (planJson is not null) plan = JsonSerializer.Deserialize<TeamLabExecutionPlanV2>(planJson);
         }
         catch (JsonException) { }
