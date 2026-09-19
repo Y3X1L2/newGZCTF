@@ -32,7 +32,7 @@ public sealed class OpenTeamLabRuntimeStatusController(
         var actor = Actor();
         Response.Headers.CacheControl = "no-store";
         return (await deviceHealth.ReadApiAsync(
-                runtimeId, actor.TokenId, IsAdministrator(), cancellationToken))
+                runtimeId, actor.UserId, actor.TokenId, IsAdministrator(), cancellationToken))
             .Select(item => item.ToOpen())
             .ToArray();
     }
@@ -48,7 +48,7 @@ public sealed class OpenTeamLabRuntimeStatusController(
         var actor = Actor();
         Response.Headers.CacheControl = "no-store";
         return (await differences.PreviewApiAsync(
-            runtimeId, actor.TokenId, IsAdministrator(), cancellationToken)).ToOpen();
+            runtimeId, actor.UserId, actor.TokenId, IsAdministrator(), cancellationToken)).ToOpen();
     }
 
     private (Guid TokenId, Guid UserId) Actor()

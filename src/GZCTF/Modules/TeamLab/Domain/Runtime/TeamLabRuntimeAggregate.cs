@@ -14,9 +14,6 @@ public class TeamLabRuntime
     public Guid? CreatedById { get; set; }
     public int Generation { get; set; } = 1;
     public int PlanRevision { get; set; }
-    // Kept as a runtime fact for databases upgraded through the scenario-build branch.
-    // TeamLab authoring no longer exposes this implementation detail.
-    public bool IsScenarioBuild { get; set; }
     [MaxLength(256)] public string? ExternalReference { get; set; }
     [MaxLength(128)] public string? CreationIdempotencyKey { get; set; }
     [MaxLength(128)] public string CreateRequestHash { get; set; } = string.Empty;
@@ -37,6 +34,7 @@ public class TeamLabRuntime
     public List<TeamLabVpnPeerRuntime> VpnPeers { get; set; } = [];
     public List<TeamLabAccessGrant> AccessGrants { get; set; } = [];
     public List<TeamLabServiceAccess> ServiceAccesses { get; set; } = [];
+    public List<TeamLabRuntimeGrant> Grants { get; set; } = [];
     public List<TeamLabRuntimeSecretEnvelope> SecretEnvelopes { get; set; } = [];
     public TeamLabPublicUdpMapping? PublicUdpMapping { get; set; }
     public List<TeamLabEvent> Events { get; set; } = [];
@@ -46,6 +44,20 @@ public class TeamLabRuntime
     public List<TeamLabTrafficCorrelationCursor> TrafficCorrelationCursors { get; set; } = [];
     public List<TeamLabTrafficCaptureJob> TrafficCaptureJobs { get; set; } = [];
     public TeamLabControlScope? ControlScope { get; set; }
+}
+
+public sealed class TeamLabRuntimeGrant
+{
+    [Key] public long Id { get; set; }
+    public int RuntimeId { get; set; }
+    public Guid? UserId { get; set; }
+    public Guid? ApiTokenId { get; set; }
+    [MaxLength(64)] public string? AssetKey { get; set; }
+    public int Permissions { get; set; }
+    public Guid GrantedByUserId { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public TeamLabRuntime Runtime { get; set; } = null!;
 }
 
 /// <summary>

@@ -27,6 +27,20 @@ public sealed class OpenTeamLabImagePreparationsController(
     TeamLabScopeAuthorizationService scopeAuthorization,
     TeamLabRuntimeOperationApplicationService operations) : ControllerBase
 {
+    [HttpPost("templates")]
+    [OpenApiOperation("预热镜像模板", "把选定的已就绪镜像模板提前分发到具备对应能力的可调度节点。")]
+    [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabRuntimesWrite)]
+    [ProducesResponseType(typeof(TeamLabTemplatePreparationResultModel), StatusCodes.Status200OK)]
+    public async Task<TeamLabTemplatePreparationResultModel> QueueTemplates(
+        PrepareTeamLabTemplatesModel model,
+        CancellationToken cancellationToken)
+    {
+        if (!IsAdministrator())
+            throw new TeamLabApiContractException(
+                "insufficient_permission", "模板预热需要全部 TeamLab 控制范围权限。", 403);
+        return await preparation.QueueTemplatesAsync(model, cancellationToken);
+    }
+
     [HttpGet("releases/{releaseId:guid}")]
     [OpenApiOperation("获取镜像准备状态", "返回发布版本的就绪投影：planAvailable/preparing/readyToStart/blocked 与按模板统计的节点就绪计数。")]
     [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabRuntimesRead)]

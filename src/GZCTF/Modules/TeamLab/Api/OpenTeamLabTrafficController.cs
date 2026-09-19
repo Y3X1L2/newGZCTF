@@ -27,7 +27,7 @@ namespace GZCTF.Modules.TeamLab.Api;
 public sealed class OpenTeamLabTrafficController(
     TeamLabTrafficApplicationService traffic,
     TeamLabCaptureArtifactStore captureArtifacts,
-    TeamLabScopeAuthorizationService scopeAuthorization,
+    TeamLabAuthorizationService authorization,
     TeamLabRuntimeOperationApplicationService operations) : ControllerBase
 {
     [HttpGet("traffic/flows")]
@@ -44,7 +44,7 @@ public sealed class OpenTeamLabTrafficController(
         [FromQuery, Range(1, 65535)] int? port = null,
         CancellationToken cancellationToken = default)
     {
-        await AuthorizeRuntimeAsync(runtimeId, cancellationToken);
+        await AuthorizeRuntimeAsync(runtimeId, TeamLabRuntimePermission.MetadataRead, cancellationToken);
         return await traffic.GetFlowsAsync(runtimeId, after, limit, query, protocol, networkKey, port, cancellationToken);
     }
 
@@ -61,7 +61,7 @@ public sealed class OpenTeamLabTrafficController(
         [FromQuery] string? confidence = null,
         CancellationToken cancellationToken = default)
     {
-        await AuthorizeRuntimeAsync(runtimeId, cancellationToken);
+        await AuthorizeRuntimeAsync(runtimeId, TeamLabRuntimePermission.MetadataRead, cancellationToken);
         if (!TeamLabPathConfidenceFilter.TryParse(confidence, out var parsedConfidence))
             throw new TeamLabApiContractException("traffic_filter_invalid", "流量可信度筛选条件无效。", 400);
         return await traffic.GetPathsAsync(runtimeId, after, limit, query, protocol,
@@ -77,7 +77,7 @@ public sealed class OpenTeamLabTrafficController(
         Guid pathId,
         CancellationToken cancellationToken)
     {
-        await AuthorizeRuntimeAsync(runtimeId, cancellationToken);
+        await AuthorizeRuntimeAsync(runtimeId, TeamLabRuntimePermission.MetadataRead, cancellationToken);
         return await traffic.GetPathAsync(runtimeId, pathId, cancellationToken);
     }
 
@@ -91,11 +91,11 @@ public sealed class OpenTeamLabTrafficController(
         [FromHeader(Name = "Idempotency-Key"), Required] string idempotencyKey,
         CancellationToken cancellationToken)
     {
-        await AuthorizeRuntimeAsync(runtimeId, cancellationToken);
+        await AuthorizeRuntimeAsync(runtimeId, TeamLabRuntimePermission.RuntimeManage, cancellationToken);
         var actor = Actor();
-        var scopeId = await RequireRuntimeScopeAsync(runtimeId, true, cancellationToken);
         var result = await operations.SubmitCaptureStartAsync(
-            actor.TokenId, actor.UserId, idempotencyKey, runtimeId, scopeId, model, cancellationToken);
+            actor.TokenId, actor.UserId, idempotencyKey, runtimeId,
+            await authorization.GetControlScopeAsync(runtimeId, cancellationToken), model, cancellationToken);
         return AcceptedOperation(result);
     }
 
@@ -109,7 +109,7 @@ public sealed class OpenTeamLabTrafficController(
         [FromQuery, Range(1, 100)] int limit = 50,
         CancellationToken cancellationToken = default)
     {
-        await AuthorizeRuntimeAsync(runtimeId, cancellationToken);
+        await AuthorizeRuntimeAsync(runtimeId, TeamLabRuntimePermission.MetadataRead, cancellationToken);
         var page = await traffic.ListCapturesAsync(runtimeId, after, limit, cancellationToken);
         return new OpenTeamLabCapturePageModel(
             page.Items.Select(item => item.ToOpen()).ToArray(),
@@ -125,7 +125,7 @@ public sealed class OpenTeamLabTrafficController(
         Guid captureId,
         CancellationToken cancellationToken)
     {
-        await AuthorizeRuntimeAsync(runtimeId, cancellationToken);
+        await AuthorizeRuntimeAsync(runtimeId, TeamLabRuntimePermission.MetadataRead, cancellationToken);
         return (await traffic.GetCaptureAsync(runtimeId, captureId, cancellationToken)).ToOpen();
     }
 
@@ -139,11 +139,11 @@ public sealed class OpenTeamLabTrafficController(
         [FromHeader(Name = "Idempotency-Key"), Required] string idempotencyKey,
         CancellationToken cancellationToken)
     {
-        await AuthorizeRuntimeAsync(runtimeId, cancellationToken);
+        await AuthorizeRuntimeAsync(runtimeId, TeamLabRuntimePermission.RuntimeManage, cancellationToken);
         var actor = Actor();
-        var scopeId = await RequireRuntimeScopeAsync(runtimeId, true, cancellationToken);
         var result = await operations.SubmitCaptureStopAsync(
-            actor.TokenId, actor.UserId, idempotencyKey, runtimeId, scopeId, captureId, cancellationToken);
+            actor.TokenId, actor.UserId, idempotencyKey, runtimeId,
+            await authorization.GetControlScopeAsync(runtimeId, cancellationToken), captureId, cancellationToken);
         return AcceptedOperation(result);
     }
 
@@ -157,7 +157,7 @@ public sealed class OpenTeamLabTrafficController(
         Guid captureId,
         CancellationToken cancellationToken)
     {
-        await AuthorizeRuntimeAsync(runtimeId, cancellationToken);
+        await AuthorizeRuntimeAsync(runtimeId, TeamLabRuntimePermission.MetadataRead, cancellationToken);
         var descriptor = await traffic.DownloadCaptureAsync(runtimeId, captureId, cancellationToken);
         Response.ContentType = "application/x-tar";
         Response.Headers.ContentDisposition = $"attachment; filename=\"{descriptor.FileName}\"";
@@ -173,19 +173,14 @@ public sealed class OpenTeamLabTrafficController(
         }
     }
 
-    private async Task AuthorizeRuntimeAsync(Guid runtimeId, CancellationToken cancellationToken)
-    {
-        await RequireRuntimeScopeAsync(runtimeId, false, cancellationToken);
-    }
-
-    private async Task<Guid> RequireRuntimeScopeAsync(
+    private async Task AuthorizeRuntimeAsync(
         Guid runtimeId,
-        bool writable,
+        TeamLabRuntimePermission permission,
         CancellationToken cancellationToken)
     {
         var actor = Actor();
-        return await scopeAuthorization.RequireRuntimeScopeAsync(
-            runtimeId, actor.TokenId, IsAdministrator(), writable, cancellationToken);
+        await authorization.RequirePermissionAsync(runtimeId, actor.UserId, actor.TokenId,
+            IsAdministrator(), null, permission, cancellationToken);
     }
 
     private bool IsAdministrator() => User.FindAll(ApiTokenClaimTypes.Resource).Any(claim =>

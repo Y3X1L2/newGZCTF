@@ -26,6 +26,13 @@ public sealed record UpdateTeamLabRuntimeModel(
     Guid ReleaseId,
     IReadOnlyList<TeamLabRuntimeOverlayModel>? Overlays = null);
 
+public sealed record ChangeTeamLabRuntimeAssetsModel(
+    int ExpectedPlanRevision,
+    IReadOnlyList<TeamLabTopologyAssetModel>? Add = null,
+    IReadOnlyList<TeamLabTopologyAssetModel>? Replace = null,
+    IReadOnlyList<string>? Remove = null,
+    IReadOnlyList<TeamLabRuntimeOverlayModel>? Overlays = null);
+
 public sealed record TeamLabRuntimeUpdateChangeModel(
     string AssetKey,
     string AssetName,
@@ -40,6 +47,30 @@ public sealed record TeamLabRuntimeUpdatePreviewModel(
     bool CanApply,
     string? ResetRequiredReason,
     IReadOnlyList<TeamLabRuntimeUpdateChangeModel> Changes);
+
+public sealed record TeamLabRuntimeGrantWriteModel(
+    string SubjectType,
+    Guid SubjectId,
+    string? AssetKey,
+    IReadOnlyList<string> Permissions);
+
+public sealed record ReplaceTeamLabRuntimeGrantsModel(
+    IReadOnlyList<TeamLabRuntimeGrantWriteModel> Grants);
+
+public sealed record TeamLabRuntimeGrantModel(
+    long Id,
+    string SubjectType,
+    Guid SubjectId,
+    string SubjectName,
+    string? AssetKey,
+    IReadOnlyList<string> Permissions,
+    DateTimeOffset UpdatedAt);
+
+public sealed record PrepareTeamLabTemplatesModel(IReadOnlyList<int> TemplateIds);
+
+public sealed record TeamLabTemplatePreparationResultModel(
+    int TemplateCount,
+    int DistributionCount);
 
 public sealed record TeamLabRuntimeShardProjectionModel(
     Guid Id,

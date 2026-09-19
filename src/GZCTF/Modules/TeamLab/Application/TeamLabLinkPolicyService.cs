@@ -21,6 +21,14 @@ public sealed class TeamLabLinkPolicyService(AppDbContext context, ITeamLabLinkP
         TeamLabRuntimeStatus.CleanupPending, TeamLabRuntimeStatus.Destroying, TeamLabRuntimeStatus.Destroyed
     ];
 
+    public async Task<Guid> GetRuntimeIdAsync(Guid policyId, CancellationToken token) =>
+        await context.TeamLabLinkPolicies.AsNoTracking()
+            .Where(item => item.PublicId == policyId)
+            .Select(item => item.Runtime.PublicId)
+            .SingleOrDefaultAsync(token) is { } runtimeId && runtimeId != Guid.Empty
+                ? runtimeId
+                : throw new TeamLabApiContractException("link_policy_not_found", "未找到链路策略", 404);
+
     public async Task<TeamLabLinkPolicyModel> ApplyAsync(
         ApplyTeamLabLinkPolicyModel command,
         CancellationToken cancellationToken)

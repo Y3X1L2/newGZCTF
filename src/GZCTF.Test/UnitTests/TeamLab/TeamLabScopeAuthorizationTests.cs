@@ -7,6 +7,7 @@ using GZCTF.Models;
 using GZCTF.Models.Data;
 using GZCTF.Modules.TeamLab.Application;
 using GZCTF.Modules.TeamLab.Domain;
+using GZCTF.Modules.TeamLab.Domain.Runtime;
 using GZCTF.Modules.TeamLab.Infrastructure;
 using GZCTF.Utils;
 using Microsoft.EntityFrameworkCore;
@@ -177,5 +178,31 @@ public sealed class TeamLabScopeAuthorizationTests
         var readable = await service.ListReadableScopesAsync(tokenId, administrator: false, CancellationToken.None);
         Assert.Contains(first.Id, readable);
         Assert.DoesNotContain(second.Id, readable);
+    }
+
+    [Fact]
+    public async Task RuntimeGrant_DoesNotCrossFromUserToApiToken()
+    {
+        using var context = CreateContext();
+        var ownerId = Guid.NewGuid();
+        var actorId = Guid.NewGuid();
+        var runtime = new TeamLabRuntime { CreatedById = ownerId };
+        runtime.Grants.Add(new TeamLabRuntimeGrant
+        {
+            UserId = actorId,
+            Permissions = (int)TeamLabRuntimePermission.RemoteSessionOperate,
+            GrantedByUserId = Guid.NewGuid()
+        });
+        context.TeamLabRuntimes.Add(runtime);
+        await context.SaveChangesAsync();
+
+        var service = new TeamLabAuthorizationService(context);
+        var userPermissions = await service.EvaluateAsync(
+            runtime.PublicId, actorId, null, false, null, CancellationToken.None);
+        var tokenPermissions = await service.EvaluateAsync(
+            runtime.PublicId, ownerId, Guid.NewGuid(), false, null, CancellationToken.None);
+
+        Assert.Equal(TeamLabRuntimePermission.RemoteSessionOperate, userPermissions);
+        Assert.Equal(TeamLabRuntimePermission.None, tokenPermissions);
     }
 }

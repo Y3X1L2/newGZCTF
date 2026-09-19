@@ -48,6 +48,14 @@ public sealed class TeamLabRuntimeOrchestrator(
         CancellationToken cancellationToken) =>
         updates.EnqueueAsync(runtimeId, command, actorUserId, operationId, cancellationToken);
 
+    public Task<TeamLabQueueTicketResult> ChangeAssetsAndEnqueueAsync(
+        Guid runtimeId,
+        ChangeTeamLabRuntimeAssetsModel command,
+        Guid actorUserId,
+        Guid? operationId,
+        CancellationToken cancellationToken) =>
+        updates.EnqueueChangesAsync(runtimeId, command, actorUserId, operationId, cancellationToken);
+
     public Task<TeamLabNodeResult> ExecuteQueuedUpdateAsync(
         int runtimeId,
         Guid ticketId,

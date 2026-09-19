@@ -39,8 +39,7 @@ public sealed class TeamLabDeviceObservationTests
         var observer = new Observer();
         var service = new TeamLabDeviceObservationService(db, observer,
             new TeamLabEventRecorder(db, new EfOperationalEventWriter(db, NullLogger<EfOperationalEventWriter>.Instance), new OperationalCorrelation()),
-            new TeamLabAuthorizationService(db, [], []),
-            new TeamLabScopeAuthorizationService(db));
+            new TeamLabAuthorizationService(db));
         observer.Value = Healthy(10);
         await service.ObserveAsync(1, default);
         await service.ObserveAsync(1, default);

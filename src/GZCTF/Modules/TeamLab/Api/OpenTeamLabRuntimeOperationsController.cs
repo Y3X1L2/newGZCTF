@@ -35,7 +35,7 @@ public sealed class OpenTeamLabRuntimeOperationsController(
         CancellationToken cancellationToken)
     {
         var actor = Actor();
-        return (await serviceAccess.ListForApiAsync(runtimeId, actor.TokenId, cancellationToken))
+        return (await serviceAccess.ListForApiAsync(runtimeId, actor.TokenId, actor.UserId, cancellationToken))
             .Select(item => item.ToOpen())
             .ToArray();
     }
@@ -52,7 +52,7 @@ public sealed class OpenTeamLabRuntimeOperationsController(
     {
         var actor = Actor();
         var result = (await serviceAccess.CreateForApiAsync(
-            runtimeId, assetId, actor.TokenId, model.ToInternal(), cancellationToken)).ToOpen();
+            runtimeId, assetId, actor.TokenId, actor.UserId, model.ToInternal(), cancellationToken)).ToOpen();
         return Created($"/api/open/v1/teamlab/runtimes/{runtimeId:D}/service-access/{result.Id:D}", result);
     }
 
@@ -67,7 +67,7 @@ public sealed class OpenTeamLabRuntimeOperationsController(
     {
         var actor = Actor();
         return (await serviceAccess.RemoveForApiAsync(
-            runtimeId, accessId, actor.TokenId, cancellationToken)).ToOpen();
+            runtimeId, accessId, actor.TokenId, actor.UserId, cancellationToken)).ToOpen();
     }
 
     [HttpGet("assets/{assetId:int}/control")]
@@ -81,7 +81,7 @@ public sealed class OpenTeamLabRuntimeOperationsController(
     {
         var actor = Actor();
         return (await assetControl.AvailabilityForApiAsync(
-            runtimeId, assetId, actor.TokenId, cancellationToken)).ToOpen();
+            runtimeId, assetId, actor.UserId, actor.TokenId, cancellationToken)).ToOpen();
     }
 
     [HttpPost("assets/{assetId:int}/control")]
@@ -118,7 +118,7 @@ public sealed class OpenTeamLabRuntimeOperationsController(
         var actor = Actor();
         Response.Headers.CacheControl = "no-store";
         return (await assetControl.GetTaskForApiAsync(
-            runtimeId, assetId, ticketId, actor.TokenId, cancellationToken)).ToOpen();
+            runtimeId, assetId, ticketId, actor.UserId, actor.TokenId, cancellationToken)).ToOpen();
     }
 
     private (Guid TokenId, Guid UserId) Actor()

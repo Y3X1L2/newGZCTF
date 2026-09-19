@@ -3,7 +3,11 @@ import { parseAdminLogPage } from '../../api/adminLogApi'
 import type {
   CreateTeamLabCaptureRequest,
   CreateTeamLabTrialRequest,
+  ChangeTeamLabRuntimeAssetsRequest,
+  ReplaceTeamLabRuntimeGrantsRequest,
+  TeamLabGrantSubjectOption,
   ResetTeamLabRuntimeRequest,
+  TeamLabRuntimeGrant,
   UpdateTeamLabRuntimeRequest,
 } from './teamlabRuntimeContracts'
 import {
@@ -41,6 +45,26 @@ function supportsDeleteResponse(client: RuntimeJsonClient): client is RuntimeJso
   return 'deleteJson' in client && typeof client.deleteJson === 'function'
 }
 
+function parseRuntimeGrants(value: unknown): readonly TeamLabRuntimeGrant[] {
+  return parse.array(value, '运行环境授权', (entry, label) => {
+    const item = parse.record(entry, label)
+    const subjectType = parse.string(item.subjectType, `${label}.subjectType`)
+    if (subjectType !== 'user' && subjectType !== 'apiToken') {
+      throw new RuntimeApiError('授权主体类型无效。', { kind: 'contract', code: 'invalid_subject_type' })
+    }
+    return {
+      id: parse.number(item.id, `${label}.id`),
+      subjectType,
+      subjectId: parse.string(item.subjectId, `${label}.subjectId`),
+      subjectName: parse.string(item.subjectName, `${label}.subjectName`),
+      assetKey: parse.nullableString(item.assetKey, `${label}.assetKey`),
+      permissions: parse.array(item.permissions, `${label}.permissions`, (permission, permissionLabel) =>
+        parse.string(permission, permissionLabel)) as TeamLabRuntimeGrant['permissions'],
+      updatedAt: parse.number(item.updatedAt, `${label}.updatedAt`),
+    }
+  })
+}
+
 export const teamLabRuntimeKeys = {
   runtime: (runtimeId: string) => ['vnext:admin:teamlab:runtime', runtimeId] as const,
   runtimeStatus: (runtimeId: string) => ['vnext:admin:teamlab:runtime-status', runtimeId] as const,
@@ -54,6 +78,7 @@ export const teamLabRuntimeKeys = {
     ['vnext:admin:teamlab:runtime-path', runtimeId, pathId] as const,
   logs: (runtimeId: string) => ['vnext:admin:teamlab:runtime-logs', runtimeId] as const,
   linkPolicies: (runtimeId: string) => ['vnext:admin:teamlab:runtime-link-policies', runtimeId] as const,
+  grants: (runtimeId: string) => ['vnext:admin:teamlab:runtime-grants', runtimeId] as const,
   capture: (runtimeId: string, captureId: string) =>
     ['vnext:admin:teamlab:runtime-capture', runtimeId, captureId] as const,
 }
@@ -112,6 +137,29 @@ export function createTeamLabRuntimeApi(client: RuntimeJsonClient = runtimeJsonC
 
     async updateRuntime(runtimeId: string, request: UpdateTeamLabRuntimeRequest) {
       return parseTeamLabRuntime(await client.postJson(`${root}/${runtimeId}/updates`, request))
+    },
+
+    async changeAssets(runtimeId: string, request: ChangeTeamLabRuntimeAssetsRequest) {
+      return parseTeamLabRuntime(await client.postJson(`${root}/${runtimeId}/asset-changes`, request))
+    },
+
+    async listGrants(runtimeId: string): Promise<readonly TeamLabRuntimeGrant[]> {
+      return parseRuntimeGrants(await client.get(`${root}/${runtimeId}/grants`))
+    },
+
+    async replaceGrants(runtimeId: string, request: ReplaceTeamLabRuntimeGrantsRequest) {
+      return parseRuntimeGrants(await client.putJson(`${root}/${runtimeId}/grants`, request))
+    },
+
+    async listGrantTokens(): Promise<readonly TeamLabGrantSubjectOption[]> {
+      return parse.array(await client.get('/api/tokens'), 'API Token', (entry, label) => {
+        const item = parse.record(entry, label)
+        return {
+          id: parse.string(item.id, `${label}.id`),
+          name: parse.string(item.name, `${label}.name`),
+          revokedAt: item.revokedAt == null ? null : parse.number(item.revokedAt, `${label}.revokedAt`),
+        }
+      }).filter((item) => item.revokedAt === null).map(({ id, name }) => ({ id, name }))
     },
 
     async destroyRuntime(runtimeId: string) {

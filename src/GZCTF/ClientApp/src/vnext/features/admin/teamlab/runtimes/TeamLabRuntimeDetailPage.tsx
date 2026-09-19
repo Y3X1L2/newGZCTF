@@ -13,10 +13,12 @@ import { CapturePanel } from './CapturePanel'
 import { AssetDiagnosticsPanel } from './AssetDiagnosticsPanel'
 import { AssetFilesPanel } from './AssetFilesPanel'
 import { AssetControlPanel } from './AssetControlPanel'
+import { AssetCompositionPanel } from './AssetCompositionPanel'
 import { RuntimeDifferencesPanel } from './RuntimeDifferencesPanel'
 import { DeviceHealthPanel } from './DeviceHealthPanel'
 import { VmDiagnosticsPanel } from './VmDiagnosticsPanel'
 import { RuntimeAccessPanel } from './RuntimeAccessPanel'
+import { RuntimeGrantPanel } from './RuntimeGrantPanel'
 import { RuntimeEventPanel } from './RuntimeEventPanel'
 import { RuntimeLinkPolicyPanel } from './RuntimeLinkPolicyPanel'
 import { RuntimeLogPanel } from './RuntimeLogPanel'
@@ -276,6 +278,7 @@ export function TeamLabRuntimeDetailPage() {
           <>
             <RuntimeStageTimeline runtime={runtime} />
             <RuntimeAccessPanel canCreate={runtime.status === 'running'} runtimeId={runtime.id} />
+            <RuntimeGrantPanel runtime={runtime} />
             <RuntimeShardTable
               onInspectFailure={inspectFailure}
               runtime={runtime}
@@ -286,7 +289,7 @@ export function TeamLabRuntimeDetailPage() {
             />
           </>
         ) : null}
-        {tab === 'operations' ? <><DeviceHealthPanel runtimeId={runtime.id} generation={runtime.generation} /><RuntimeDifferencesPanel key={`${runtime.id}:${runtime.generation}`} runtime={runtime} /><AssetControlPanel runtime={runtime} /><AssetDiagnosticsPanel runtime={runtime} /><ServiceAccessPanel runtime={runtime} /><AssetFilesPanel runtime={runtime} /><VmDiagnosticsPanel runtime={runtime} /><RuntimeRemoteAccessPanel runtime={runtime} /><RemoteSessionsPanel runtimeId={runtime.id} /></> : null}
+        {tab === 'operations' ? <><AssetCompositionPanel runtime={runtime} onSubmitted={() => runtimeState.mutate()} /><DeviceHealthPanel runtimeId={runtime.id} generation={runtime.generation} /><RuntimeDifferencesPanel key={`${runtime.id}:${runtime.generation}`} runtime={runtime} /><AssetControlPanel runtime={runtime} /><AssetDiagnosticsPanel runtime={runtime} /><ServiceAccessPanel runtime={runtime} /><AssetFilesPanel runtime={runtime} /><VmDiagnosticsPanel runtime={runtime} /><RuntimeRemoteAccessPanel runtime={runtime} /><RemoteSessionsPanel runtimeId={runtime.id} /></> : null}
         {tab === 'link-policies' ? (
           <RuntimeLinkPolicyPanel
             assets={runtime.assets.map((asset) => ({ key: asset.key, name: asset.name, networkKeys: asset.networkKeys }))}

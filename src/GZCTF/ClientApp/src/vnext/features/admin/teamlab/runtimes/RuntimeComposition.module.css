@@ -1,0 +1,24 @@
+.panel { min-width: 0; padding-bottom: var(--yn-space-6); border-bottom: 1px solid var(--yn-color-border); }
+.header { display: flex; align-items: center; justify-content: space-between; gap: var(--yn-space-4); margin-bottom: var(--yn-space-2); }
+.header span { color: var(--yn-color-muted); font-family: var(--yn-font-mono); font-size: var(--yn-font-xs); }
+.header h3 { margin: 4px 0 0; }
+.hint { margin: 0 0 var(--yn-space-4); color: var(--yn-color-muted); font-size: var(--yn-font-sm); }
+.formGrid, .grantForm { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--yn-space-3); align-items: end; }
+.formGrid label, .grantForm > label { display: grid; gap: 6px; color: var(--yn-color-muted); font-size: var(--yn-font-sm); }
+.formGrid input, .formGrid select, .grantForm input, .grantForm select { min-width: 0; min-height: 36px; padding: 7px 9px; border: 1px solid var(--yn-color-border); border-radius: 4px; background: var(--yn-color-surface); color: var(--yn-color-text); }
+.formGrid select[multiple] { min-height: 76px; }
+.formAction { display: flex; align-items: end; min-height: 36px; }
+.changeList, .grantList { display: grid; gap: 1px; margin-top: var(--yn-space-4); border: 1px solid var(--yn-color-border); background: var(--yn-color-border); }
+.changeList > div, .grantList > div { display: grid; grid-template-columns: auto minmax(120px, 1fr) minmax(100px, auto) auto; gap: var(--yn-space-3); align-items: center; padding: 10px 12px; background: var(--yn-color-surface); }
+.changeList > button { justify-self: end; margin: var(--yn-space-3); }
+.changeList span, .grantList span { color: var(--yn-color-brand); font-size: var(--yn-font-xs); }
+.changeList span[data-action='remove'] { color: var(--yn-color-danger); }
+.changeList code, .grantList small { color: var(--yn-color-muted); font-size: var(--yn-font-xs); }
+.changeList button, .grantList button { display: grid; width: 30px; height: 30px; place-items: center; border: 0; background: transparent; color: var(--yn-color-muted); cursor: pointer; }
+.grantList > div { grid-template-columns: auto minmax(130px, 0.6fr) minmax(130px, 0.6fr) minmax(180px, 1fr) auto; }
+.grantList p { margin: 0; font-size: var(--yn-font-sm); }
+.grantForm { margin-top: var(--yn-space-4); }
+.grantForm fieldset { display: flex; grid-column: 1 / -1; flex-wrap: wrap; gap: 8px 16px; margin: 0; padding: 10px 12px; border: 1px solid var(--yn-color-border); }
+.grantForm legend { padding: 0 5px; color: var(--yn-color-muted); font-size: var(--yn-font-xs); }
+.grantForm fieldset label { display: flex; align-items: center; gap: 6px; font-size: var(--yn-font-sm); }
+@media (max-width: 700px) { .changeList > div, .grantList > div { grid-template-columns: auto 1fr auto; } .changeList code, .grantList p { grid-column: 2 / -1; } }

@@ -23,7 +23,7 @@ public interface ITeamLabServiceAccessCleanup
 
 public sealed class TeamLabServiceAccessService(
     AppDbContext context,
-    TeamLabScopeAuthorizationService scopeAuthorization,
+    TeamLabAuthorizationService authorization,
     IPortAllocationService ports,
     IPublicUdpGatewayProvider publicGateway,
     ITeamLabServiceAccessGateway nodeGateway,
@@ -35,32 +35,41 @@ public sealed class TeamLabServiceAccessService(
         Guid runtimeId,
         int assetId,
         Guid apiTokenId,
+        Guid actorUserId,
         CreateTeamLabServiceAccessModel command,
         CancellationToken token)
     {
-        await scopeAuthorization.RequireRuntimeScopeAsync(
-            runtimeId, apiTokenId, administrator: false, writable: true, token);
+        await authorization.RequireAssetPermissionAsync(runtimeId, assetId, actorUserId, apiTokenId, false,
+            TeamLabRuntimePermission.ServiceAccessManage, token);
         return await CreateAsync(runtimeId, assetId, command, token);
     }
 
     public async Task<IReadOnlyList<TeamLabServiceAccessModel>> ListForApiAsync(
         Guid runtimeId,
         Guid apiTokenId,
+        Guid actorUserId,
         CancellationToken token)
     {
-        await scopeAuthorization.RequireRuntimeScopeAsync(
-            runtimeId, apiTokenId, administrator: false, writable: false, token);
-        return await ListAsync(runtimeId, token);
+        var assetScope = await authorization.GetAssetScopeAsync(runtimeId, actorUserId, apiTokenId, false,
+            TeamLabRuntimePermission.ServiceAccessManage, token);
+        return await ListAsync(runtimeId, token, assetScope?.ToArray());
     }
 
     public async Task<TeamLabServiceAccessModel> RemoveForApiAsync(
         Guid runtimeId,
         Guid accessId,
         Guid apiTokenId,
+        Guid actorUserId,
         CancellationToken token)
     {
-        await scopeAuthorization.RequireRuntimeScopeAsync(
-            runtimeId, apiTokenId, administrator: false, writable: true, token);
+        var assetId = await context.TeamLabServiceAccesses.AsNoTracking()
+            .Where(item => item.PublicId == accessId && item.Runtime.PublicId == runtimeId)
+            .Select(item => item.RuntimeAssetId)
+            .SingleOrDefaultAsync(token);
+        if (assetId == 0)
+            throw new TeamLabApiContractException("service_access_not_found", "未找到服务开放记录", 404);
+        await authorization.RequireAssetPermissionAsync(runtimeId, assetId, actorUserId, apiTokenId, false,
+            TeamLabRuntimePermission.ServiceAccessManage, token);
         return await RemoveAsync(runtimeId, accessId, token);
     }
 
@@ -143,13 +152,19 @@ public sealed class TeamLabServiceAccessService(
         return Model(access, runtime.PublicId, asset.Name);
     }
 
-    public async Task<IReadOnlyList<TeamLabServiceAccessModel>> ListAsync(Guid runtimeId, CancellationToken token)
+    public async Task<IReadOnlyList<TeamLabServiceAccessModel>> ListAsync(
+        Guid runtimeId,
+        CancellationToken token,
+        string[]? assetKeys = null)
     {
         var runtime = await context.TeamLabRuntimes.AsNoTracking().SingleOrDefaultAsync(item => item.PublicId == runtimeId, token)
             ?? throw new TeamLabApiContractException("runtime_not_found", "未找到 TeamLab 运行时", 404);
-        var accesses = await context.TeamLabServiceAccesses.AsNoTracking()
+        var query = context.TeamLabServiceAccesses.AsNoTracking()
             .Include(item => item.RuntimeAsset)
-            .Where(item => item.RuntimeId == runtime.Id)
+            .Where(item => item.RuntimeId == runtime.Id);
+        if (assetKeys is not null)
+            query = query.Where(item => assetKeys.Contains(item.RuntimeAsset.TopologyKey));
+        var accesses = await query
             .OrderByDescending(item => item.Id)
             .ToArrayAsync(token);
         return accesses.Select(item => Model(item, runtimeId, item.RuntimeAsset.Name)).ToArray();

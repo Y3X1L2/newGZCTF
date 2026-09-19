@@ -63,9 +63,21 @@ public sealed class TeamLabScopeAuthorizationService(AppDbContext context)
         bool writable,
         CancellationToken cancellationToken)
     {
-        return await RequireScopeAsync(
-            context.TeamLabRuntimes.Where(item => item.PublicId == runtimeId).Select(item => item.ControlScopeId),
-            apiTokenId, administrator, writable, cancellationToken);
+        var scopeId = await context.TeamLabRuntimes.AsNoTracking()
+            .Where(item => item.PublicId == runtimeId)
+            .Select(item => item.ControlScopeId)
+            .SingleOrDefaultAsync(cancellationToken)
+            ?? throw NotFound();
+        var allowed = administrator ||
+            await context.ApiTokenResourceGrants.AsNoTracking().AnyAsync(grant =>
+                grant.TokenId == apiTokenId && grant.ResourceType == "teamlab-scope" &&
+                (grant.ResourceId == scopeId.ToString() || grant.ResourceId == "*"), cancellationToken);
+        if (!allowed) throw NotFound();
+        if (writable && await context.TeamLabControlScopes.AsNoTracking()
+                .AnyAsync(item => item.Id == scopeId && item.IsArchived, cancellationToken))
+            throw new TeamLabApiContractException(
+                "scope_archived", "该 TeamLab 控制范围已归档，无法执行写入操作。", 409);
+        return scopeId;
     }
 
     public async Task<Guid?> RequireConnectorScopeAsync(

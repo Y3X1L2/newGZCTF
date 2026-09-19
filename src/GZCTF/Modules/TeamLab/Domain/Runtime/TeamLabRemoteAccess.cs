@@ -42,14 +42,6 @@ public enum TeamLabRemoteSessionStatus : byte
     Failed = 6
 }
 
-[Flags]
-public enum TeamLabOperatorPermission : byte
-{
-    None = 0,
-    ViewAssets = 1,
-    OperateAssets = 2
-}
-
 public sealed class TeamLabRemoteSession
 {
     public long Id { get; set; }

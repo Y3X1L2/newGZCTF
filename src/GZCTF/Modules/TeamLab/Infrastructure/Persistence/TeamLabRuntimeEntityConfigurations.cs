@@ -25,7 +25,6 @@ public sealed class TeamLabRuntimeFoundationEntityConfiguration : IEntityTypeCon
         builder.Property(item => item.ExternalReference).HasMaxLength(256);
         builder.Property(item => item.CreationIdempotencyKey).HasMaxLength(128);
         builder.Property(item => item.CreateRequestHash).HasMaxLength(128);
-        builder.Property(item => item.IsScenarioBuild).HasDefaultValue(false);
         builder.HasOne<TeamLabTopologyRelease>()
             .WithMany()
             .HasForeignKey(item => item.TopologyReleaseId)
@@ -42,6 +41,26 @@ public sealed class TeamLabRuntimeFoundationEntityConfiguration : IEntityTypeCon
             .WithMany()
             .HasForeignKey(item => item.EntryShardId)
             .OnDelete(DeleteBehavior.SetNull);
+    }
+}
+
+public sealed class TeamLabRuntimeGrantEntityConfiguration : IEntityTypeConfiguration<TeamLabRuntimeGrant>
+{
+    public void Configure(EntityTypeBuilder<TeamLabRuntimeGrant> builder)
+    {
+        builder.ToTable("TeamLabRuntimeGrants", table => table.HasCheckConstraint(
+            "CK_TeamLabRuntimeGrants_Subject", "(\"UserId\" IS NULL) <> (\"ApiTokenId\" IS NULL)"));
+        builder.HasKey(item => item.Id);
+        builder.HasIndex(item => new { item.RuntimeId, item.UserId, item.AssetKey });
+        builder.HasIndex(item => new { item.RuntimeId, item.ApiTokenId, item.AssetKey });
+        builder.HasOne(item => item.Runtime).WithMany(item => item.Grants)
+            .HasForeignKey(item => item.RuntimeId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne<UserInfo>().WithMany().HasForeignKey(item => item.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne<GZCTF.Modules.Identity.Domain.ApiToken>().WithMany().HasForeignKey(item => item.ApiTokenId)
+            .OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne<UserInfo>().WithMany().HasForeignKey(item => item.GrantedByUserId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }
 

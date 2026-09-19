@@ -16,7 +16,7 @@ namespace GZCTF.Modules.TeamLab.Application;
 
 public sealed class TeamLabRemoteAccessService(
     AppDbContext context,
-    TeamLabRemoteAccessAuthorizationService authorization,
+    TeamLabAuthorizationService authorization,
     TeamLabScopeAuthorizationService scopeAuthorization,
     ITeamLabRemoteRelayGateway relays,
     ImageRemoteAccessService imageRemoteAccess,
@@ -40,9 +40,12 @@ public sealed class TeamLabRemoteAccessService(
             .Include(item => item.RequestedBy).AsQueryable();
         if (runtimeId.HasValue)
         {
-            await authorization.RequireAsync(runtimeId.Value, actorId, administrator,
-                TeamLabOperatorPermission.OperateAssets, cancellationToken);
+            var assetKeys = await authorization.GetAssetScopeAsync(
+                runtimeId.Value, actorId, null, administrator,
+                TeamLabRuntimePermission.RemoteSessionOperate, cancellationToken);
             sessions = sessions.Where(item => item.Runtime.PublicId == runtimeId);
+            if (assetKeys is not null)
+                sessions = sessions.Where(item => assetKeys.Contains(item.RuntimeAsset.TopologyKey));
         }
         else if (!administrator)
             sessions = sessions.Where(item => item.RequestedByUserId == actorId);
@@ -56,6 +59,7 @@ public sealed class TeamLabRemoteAccessService(
 
     public async Task<OpenTeamLabRemoteSessionPageModel> ListApiAsync(
         Guid apiTokenId,
+        Guid actorUserId,
         bool hasWildcardScopeGrant,
         Guid? runtimeId,
         string? search,
@@ -75,16 +79,27 @@ public sealed class TeamLabRemoteAccessService(
             .AsQueryable();
         if (runtimeId is { } requestedRuntime)
         {
-            await scopeAuthorization.RequireRuntimeScopeAsync(
-                requestedRuntime, apiTokenId, hasWildcardScopeGrant, writable: false, cancellationToken);
+            var assetKeys = await authorization.GetAssetScopeAsync(
+                requestedRuntime, actorUserId, apiTokenId, hasWildcardScopeGrant,
+                TeamLabRuntimePermission.RemoteSessionOperate, cancellationToken);
             sessions = sessions.Where(item => item.Runtime.PublicId == requestedRuntime);
+            if (assetKeys is not null)
+            {
+                var keys = assetKeys.ToArray();
+                sessions = sessions.Where(item => keys.Contains(item.RuntimeAsset.TopologyKey));
+            }
         }
         else
         {
             var scopeIds = (await scopeAuthorization.ListReadableScopesAsync(
                 apiTokenId, hasWildcardScopeGrant, cancellationToken)).ToArray();
-            sessions = sessions.Where(item => item.Runtime.ControlScopeId.HasValue &&
-                                               scopeIds.Contains(item.Runtime.ControlScopeId.Value));
+            if (!hasWildcardScopeGrant)
+                sessions = sessions.Where(item =>
+                    item.Runtime.ControlScopeId.HasValue && scopeIds.Contains(item.Runtime.ControlScopeId.Value) ||
+                    context.TeamLabRuntimeGrants.Any(grant =>
+                        grant.RuntimeId == item.RuntimeId && grant.ApiTokenId == apiTokenId &&
+                        (grant.AssetKey == null || grant.AssetKey == item.RuntimeAsset.TopologyKey) &&
+                        (grant.Permissions & (int)TeamLabRuntimePermission.RemoteSessionOperate) != 0));
         }
 
         sessions = ApplyListFilters(sessions, search, protocol, abnormalOnly, status, after);
@@ -157,9 +172,9 @@ public sealed class TeamLabRemoteAccessService(
     public async Task<TeamLabRemoteAccessAvailabilityModel> GetAvailabilityAsync(
         Guid runtimeId, int assetId, Guid actorId, bool administrator, CancellationToken cancellationToken)
     {
-        await authorization.RequireAsync(runtimeId, actorId, administrator,
-            TeamLabOperatorPermission.ViewAssets, cancellationToken);
         var asset = await FindAssetAsync(runtimeId, assetId, cancellationToken);
+        await authorization.RequirePermissionAsync(runtimeId, actorId, null, administrator,
+            asset.TopologyKey, TeamLabRuntimePermission.StateRead, cancellationToken);
         return await AvailabilityAsync(asset, cancellationToken);
     }
 
@@ -170,21 +185,21 @@ public sealed class TeamLabRemoteAccessService(
     public async Task<IReadOnlyList<TeamLabRemoteAccessAvailabilityModel>> GetAvailabilityBatchAsync(
         Guid runtimeId, Guid actorId, bool administrator, CancellationToken cancellationToken)
     {
-        await authorization.RequireAsync(runtimeId, actorId, administrator,
-            TeamLabOperatorPermission.ViewAssets, cancellationToken);
-        return await GetAvailabilityBatchCoreAsync(runtimeId, cancellationToken);
+        var assetKeys = await authorization.GetAssetScopeAsync(
+            runtimeId, actorId, null, administrator, TeamLabRuntimePermission.StateRead, cancellationToken);
+        return await GetAvailabilityBatchCoreAsync(runtimeId, assetKeys, cancellationToken);
     }
 
     public async Task<IReadOnlyList<TeamLabRemoteAccessAvailabilityModel>> GetAvailabilityBatchApiAsync(
-        Guid runtimeId, Guid apiTokenId, CancellationToken cancellationToken)
+        Guid runtimeId, Guid actorUserId, Guid apiTokenId, CancellationToken cancellationToken)
     {
-        await scopeAuthorization.RequireRuntimeScopeAsync(
-            runtimeId, apiTokenId, administrator: false, writable: false, cancellationToken);
-        return await GetAvailabilityBatchCoreAsync(runtimeId, cancellationToken);
+        var assetKeys = await authorization.GetAssetScopeAsync(
+            runtimeId, actorUserId, apiTokenId, false, TeamLabRuntimePermission.StateRead, cancellationToken);
+        return await GetAvailabilityBatchCoreAsync(runtimeId, assetKeys, cancellationToken);
     }
 
     private async Task<IReadOnlyList<TeamLabRemoteAccessAvailabilityModel>> GetAvailabilityBatchCoreAsync(
-        Guid runtimeId, CancellationToken cancellationToken)
+        Guid runtimeId, IReadOnlySet<string>? assetKeys, CancellationToken cancellationToken)
     {
         var runtime = await context.TeamLabRuntimes.AsNoTracking()
             .Where(item => item.PublicId == runtimeId)
@@ -192,7 +207,8 @@ public sealed class TeamLabRemoteAccessService(
             .SingleOrDefaultAsync(cancellationToken)
             ?? throw new TeamLabApiContractException("runtime_not_found", "未找到 TeamLab 运行时", 404);
         var assets = await context.TeamLabRuntimeAssets.AsNoTracking()
-            .Where(item => item.RuntimeId == runtime)
+            .Where(item => item.RuntimeId == runtime &&
+                           (assetKeys == null || assetKeys.Contains(item.TopologyKey)))
             .OrderBy(item => item.Id)
             .ToArrayAsync(cancellationToken);
         var templateIds = assets.Where(item => item.Kind == TeamLabResourceKind.Vm && item.SourceTemplateId is not null)
@@ -229,8 +245,6 @@ public sealed class TeamLabRemoteAccessService(
     {
         if (string.IsNullOrWhiteSpace(reason) || reason.Trim().Length is < 4 or > 500)
             throw new TeamLabApiContractException("remote_access_reason_invalid", "访问原因需为 4-500 个字符", 422);
-        await AuthorizeRuntimeAsync(runtimeId, actorId, administrator, apiTokenId,
-            TeamLabOperatorPermission.OperateAssets, writable: true, cancellationToken);
         if (operationId is { } stableId)
         {
             var existing = await context.TeamLabRemoteSessions.Include(item => item.Runtime).Include(item => item.RuntimeAsset)
@@ -259,6 +273,8 @@ public sealed class TeamLabRemoteAccessService(
             }
         }
         var asset = await FindAssetAsync(runtimeId, assetId, cancellationToken);
+        await AuthorizeRuntimeAsync(runtimeId, actorId, administrator, apiTokenId,
+            asset.TopologyKey, TeamLabRuntimePermission.RemoteSessionOperate, cancellationToken);
         var availability = vncConsole
             ? new TeamLabRemoteAccessAvailabilityModel(asset.Id, asset.Name, TeamLabRemoteProtocol.Vnc,
                 asset.Kind == TeamLabResourceKind.Vm && CanOpenSession(TeamLabRemoteProtocol.Vnc, asset.Runtime.Status), "当前资产不可使用 VNC 控制台。")
@@ -370,23 +386,25 @@ public sealed class TeamLabRemoteAccessService(
 
     public Task<TeamLabRemoteSessionModel> GetAsync(
         Guid sessionId, Guid actorId, bool administrator, CancellationToken cancellationToken) =>
-        GetCoreAsync(sessionId, actorId, administrator, null, writable: false, cancellationToken);
+        GetCoreAsync(sessionId, actorId, administrator, null, cancellationToken);
 
     public Task<TeamLabRemoteSessionModel> GetApiAsync(
-        Guid sessionId, Guid apiTokenId, bool writable, CancellationToken cancellationToken) =>
-        GetCoreAsync(sessionId, Guid.Empty, false, apiTokenId, writable, cancellationToken);
+        Guid sessionId, Guid actorUserId, Guid apiTokenId, CancellationToken cancellationToken) =>
+        GetCoreAsync(sessionId, actorUserId, false, apiTokenId, cancellationToken);
 
     private async Task<TeamLabRemoteSessionModel> GetCoreAsync(
-        Guid sessionId, Guid actorId, bool administrator, Guid? apiTokenId, bool writable,
+        Guid sessionId, Guid actorId, bool administrator, Guid? apiTokenId,
         CancellationToken cancellationToken)
     {
         var session = await context.TeamLabRemoteSessions.AsNoTracking()
             .Include(item => item.RuntimeAsset).Include(item => item.Runtime)
             .SingleOrDefaultAsync(item => item.PublicId == sessionId, cancellationToken)
             ?? throw new TeamLabApiContractException("remote_session_not_found", "未找到远程访问会话", 404);
-        var permission = session.RequestedByUserId == actorId ? TeamLabOperatorPermission.ViewAssets : TeamLabOperatorPermission.OperateAssets;
+        var permission = session.RequestedByUserId == actorId
+            ? TeamLabRuntimePermission.RemoteSessionOperate
+            : TeamLabRuntimePermission.MetadataRead;
         await AuthorizeRuntimeAsync(session.Runtime.PublicId, actorId, administrator, apiTokenId,
-            permission, writable, cancellationToken);
+            session.RuntimeAsset.TopologyKey, permission, cancellationToken);
         return ToModel(session, session.RuntimeAsset.Name, session.Runtime.PublicId);
     }
 
@@ -405,7 +423,7 @@ public sealed class TeamLabRemoteAccessService(
             .SingleOrDefaultAsync(item => item.PublicId == sessionId, cancellationToken)
             ?? throw new TeamLabApiContractException("remote_session_not_found", "未找到远程访问会话", 404);
         await AuthorizeRuntimeAsync(session.Runtime.PublicId, actorId, administrator, apiTokenId,
-            TeamLabOperatorPermission.OperateAssets, writable: true, cancellationToken);
+            session.RuntimeAsset.TopologyKey, TeamLabRuntimePermission.RemoteSessionOperate, cancellationToken);
         if (session.Protocol == TeamLabRemoteProtocol.ContainerTerminal)
             throw new TeamLabApiContractException("remote_session_terminal", "该会话请使用终端接口访问", 409);
         if (!cache.TryGetValue<string>(ConnectUrlKey(sessionId), out var url) || string.IsNullOrWhiteSpace(url))
@@ -437,7 +455,7 @@ public sealed class TeamLabRemoteAccessService(
             .SingleOrDefaultAsync(item => item.PublicId == sessionId, cancellationToken)
             ?? throw new TeamLabApiContractException("remote_session_not_found", "未找到远程访问会话", 404);
         await AuthorizeRuntimeAsync(session.Runtime.PublicId, actorId, administrator, apiTokenId,
-            TeamLabOperatorPermission.OperateAssets, writable: true, cancellationToken);
+            session.RuntimeAsset.TopologyKey, TeamLabRuntimePermission.RemoteSessionOperate, cancellationToken);
         if (session.Protocol != TeamLabRemoteProtocol.ContainerTerminal)
             throw new TeamLabApiContractException("remote_session_unavailable", "终端会话当前不可用", 409);
         if (!await ConnectSessionAsync(session, cancellationToken))
@@ -469,9 +487,11 @@ public sealed class TeamLabRemoteAccessService(
         var session = await context.TeamLabRemoteSessions.Include(item => item.Runtime).Include(item => item.RuntimeAsset)
             .SingleOrDefaultAsync(item => item.PublicId == sessionId, cancellationToken)
             ?? throw new TeamLabApiContractException("remote_session_not_found", "未找到远程访问会话", 404);
-        var permission = session.RequestedByUserId == actorId ? TeamLabOperatorPermission.ViewAssets : TeamLabOperatorPermission.OperateAssets;
+        var permission = session.RequestedByUserId == actorId
+            ? TeamLabRuntimePermission.StateRead
+            : TeamLabRuntimePermission.RemoteSessionOperate;
         await AuthorizeRuntimeAsync(session.Runtime.PublicId, actorId, administrator, apiTokenId,
-            permission, writable: true, cancellationToken);
+            session.RuntimeAsset.TopologyKey, permission, cancellationToken);
         if (session.Status is TeamLabRemoteSessionStatus.Ended or TeamLabRemoteSessionStatus.Failed)
             return;
         session.Status = TeamLabRemoteSessionStatus.Ending;
@@ -485,19 +505,11 @@ public sealed class TeamLabRemoteAccessService(
         Guid actorId,
         bool administrator,
         Guid? apiTokenId,
-        TeamLabOperatorPermission permission,
-        bool writable,
+        string assetKey,
+        TeamLabRuntimePermission permission,
         CancellationToken cancellationToken)
-    {
-        if (apiTokenId is { } tokenId)
-        {
-            await scopeAuthorization.RequireRuntimeScopeAsync(
-                runtimeId, tokenId, administrator: false, writable, cancellationToken);
-            return;
-        }
-
-        await authorization.RequireAsync(runtimeId, actorId, administrator, permission, cancellationToken);
-    }
+        => await authorization.RequirePermissionAsync(
+            runtimeId, actorId, apiTokenId, administrator, assetKey, permission, cancellationToken);
 
     public async Task ExpireAsync(CancellationToken cancellationToken)
     {

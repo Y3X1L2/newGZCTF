@@ -214,7 +214,7 @@ public sealed class TeamLabAssetControlTests
                 ProtectedPayload = fixture.Protector.Protect(new(null, runtime.PublicId, null) { AssetControl = new(fixture.Asset.Id, new(3, action, "test asset operation", true), "old-web", null, WorkerNodeId: shard.WorkerNodeId) }) };
             db.DeploymentQueueTickets.Add(fixture.Ticket);
             await db.SaveChangesAsync();
-            fixture.Service = new(db, new TeamLabAuthorizationService(db, [], []), new TeamLabScopeAuthorizationService(db),
+            fixture.Service = new(db, new TeamLabAuthorizationService(db),
                 new TeamLabRuntimeLifecycleGuard(db), fixture.Queue.Object, fixture.Protector,
                 fixture.Gateway.Object, Mock.Of<ITeamLabRemoteAccessService>(), new TeamLabEventRecorder(db,
                     new EfOperationalEventWriter(db, NullLogger<EfOperationalEventWriter>.Instance), new OperationalCorrelation()), new LocalDevelopmentLeaseProvider());

@@ -5,6 +5,14 @@
 
 本文件仅保留最新已知基线、功能边界、未解决事项和接手入口。生产信息是上述核验时点的记录，不能代替下一次操作前的现场检查。长期协作规则见 [AGENTS.md](../../AGENTS.md)。
 
+## TeamLab 底座收敛候选（2026-09-19）
+
+- 分支 `codex/teamlab-foundation-convergence` 已把运行中资产新增、替换和移除统一到 `POST /api/open/v1/teamlab/runtimes/{runtimeId}/asset-changes`。接口复用原部署队列、容量预留、Worker 分片及 Docker/VM/OVN 执行链；直接资产变更只递增 `planRevision`，不改变 `generation` 和来源 release。
+- 新增通用 Runtime Grant，统一支持用户、API Token、整环境和单资产权限。赛事专用授权实体、授权服务、管理接口和前端已删除；API Token 不继承创建者的管理员或运行环境所有者权限。
+- 新增模板批量预热入口 `POST /api/open/v1/teamlab/preparations/templates`，复用现有镜像分发记录和节点缓存。运行详情页已增加资产编排与运行环境授权面板，设备模板继续使用现有结构化参数编辑器。
+- 前向迁移 `20260919082706_ConvergeTeamLabRuntimeFoundation` 创建通用授权表、迁移旧赛事授权及所有者权限，然后删除旧授权表和 `TeamLabRuntimes.IsScenarioBuild`。PostgreSQL 16 Testcontainers 迁移测试已通过，模型没有待应用迁移。
+- TeamLab 定向测试 471/471、迁移专项 1/1、OpenAPI 快照生成与一致性测试 1/1 通过；主后端和集成测试项目 Release 编译均为 0 警告、0 错误，前端类型检查、lint 和架构检查通过。该候选尚未提交、推送或部署，真实 Docker/VM 资产编排尚未在本轮复测。
+
 ## TeamLab 热更新资源身份收敛（2026-09-19）
 
 - 候选分支 `codex/teamlab-auto-capacity-hot-update` 当前提交为 `597f20b`。Docker、OVS 和 libvirt 现场资源统一使用运行实例、代次、分片及资产或网络键作为稳定身份；可变的计划摘要只用于整份计划版本和执行日志，不再参与资源归属、控制或销毁。

@@ -119,7 +119,6 @@ public sealed class TeamLabRuntimePlanner(
             var runtime = new TeamLabRuntime
             {
                 TopologyReleaseId = release.Id,
-                IsScenarioBuild = false,
                 ControlScopeId = release.ControlScopeId,
                 CreatedById = runtimeOwnerUserId,
                 ExternalReference = externalReference,
@@ -531,7 +530,8 @@ public sealed class TeamLabRuntimePlanner(
                 : null,
             DevicePackageId = asset.DevicePackageId,
             DevicePackageParametersJson = asset.DeviceParametersJson,
-            ConnectorId = asset.ConnectorId
+            ConnectorId = asset.ConnectorId,
+            ExecutionPlanJson = JsonSerializer.Serialize(asset)
         };
     }
 

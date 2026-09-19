@@ -1,6 +1,9 @@
 using System.Data;
 using GZCTF.Models;
 using GZCTF.Models.Data;
+using GZCTF.Modules.Penetration.Domain;
+using GZCTF.Modules.TeamLab.Domain;
+using GZCTF.Modules.TeamLab.Domain.Runtime;
 using GZCTF.Utils;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -17,6 +20,7 @@ public sealed class TeamLabContractMigrationTests : IAsyncLifetime
     private const string FoundationMigration = "20260711144502_AddIndependentTeamLabFoundation";
     private const string ContractMigration = "20260711170329_RemovePenetrationTopologyRuntimeCompatibility";
     private const string ReliabilityMigration = "20260712054103_CompleteTeamLabRuntimeReliability";
+    private const string RuntimeFoundationPreviousMigration = "20260918115451_AddWorkerNodeAutomaticCapacity";
 
     private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:16-alpine")
         .WithDatabase("gzctf_phase_three")
@@ -49,6 +53,73 @@ public sealed class TeamLabContractMigrationTests : IAsyncLifetime
         Assert.False(await ColumnExistsAsync(migrated, "TeamLabRuntimes", "TeamId"));
         Assert.False(await ColumnExistsAsync(migrated, "TeamLabRuntimes", "WorkerNodeId"));
         Assert.True(await ColumnExistsAsync(migrated, "TeamLabTopologies", "EditorMetadataJson"));
+        Assert.Empty(await migrated.Database.GetPendingMigrationsAsync());
+    }
+
+    [Fact]
+    public async Task RuntimeFoundationMigration_MovesGrantsAndRemovesLegacySchema()
+    {
+        var ownerId = Guid.Parse("91111111-1111-4111-8111-111111111111");
+        var operatorId = Guid.Parse("92222222-2222-4222-8222-222222222222");
+        var releaseId = Guid.Parse("93333333-3333-4333-8333-333333333333");
+
+        await using (var context = CreateContext())
+        {
+            var migrator = context.Database.GetService<IMigrator>();
+            await migrator.MigrateAsync(RuntimeFoundationPreviousMigration);
+
+            var owner = CreateUser(ownerId, "grant-owner");
+            var operatorUser = CreateUser(operatorId, "grant-user");
+            var game = new Game { Id = 9101, OwnerId = ownerId, Title = "Foundation migration" };
+            var team = new Team { Id = 9102, Name = "Foundation team", CaptainId = ownerId };
+            var topology = new TeamLabTopology { Id = 9103, Name = "Foundation topology", OwnerUserId = ownerId };
+            var release = new TeamLabTopologyRelease
+            {
+                Id = releaseId,
+                TopologyId = topology.Id,
+                Version = 1,
+                SourceRevision = 1,
+                CanonicalJson = "{}",
+                ContentHash = "migration"
+            };
+            var runtime = new TeamLabRuntime
+            {
+                Id = 9104,
+                TopologyReleaseId = releaseId,
+                CreatedById = ownerId,
+                CreateRequestHash = "migration"
+            };
+
+            context.AddRange(owner, operatorUser, game, team, topology, release, runtime);
+            context.Add(new PenetrationTeamRuntimeBinding
+            {
+                GameId = game.Id,
+                TeamId = team.Id,
+                RuntimeId = runtime.Id
+            });
+            await context.SaveChangesAsync();
+            await context.Database.ExecuteSqlInterpolatedAsync($$"""
+                INSERT INTO "PenetrationTeamLabOperatorGrants"
+                    ("GameId", "UserId", "Permissions", "GrantedByUserId", "CreatedAt", "UpdatedAt")
+                VALUES
+                    ({{game.Id}}, {{operatorId}}, 3, {{ownerId}}, now(), now()),
+                    ({{game.Id}}, {{ownerId}}, 1, {{ownerId}}, now(), now());
+                """);
+
+            await migrator.MigrateAsync();
+        }
+
+        await using var migrated = CreateContext();
+        Assert.Equal(5, await ScalarAsync<int>(migrated, $$"""
+            SELECT "Permissions" FROM "TeamLabRuntimeGrants"
+            WHERE "RuntimeId" = 9104 AND "UserId" = '{{operatorId}}'
+            """));
+        Assert.Equal(255, await ScalarAsync<int>(migrated, $$"""
+            SELECT "Permissions" FROM "TeamLabRuntimeGrants"
+            WHERE "RuntimeId" = 9104 AND "UserId" = '{{ownerId}}'
+            """));
+        Assert.False(await TableExistsAsync(migrated, "PenetrationTeamLabOperatorGrants"));
+        Assert.False(await ColumnExistsAsync(migrated, "TeamLabRuntimes", "IsScenarioBuild"));
         Assert.Empty(await migrated.Database.GetPendingMigrationsAsync());
     }
 
@@ -222,6 +293,18 @@ public sealed class TeamLabContractMigrationTests : IAsyncLifetime
             .Options;
         return new AppDbContext(options) { SuppressProjectionRevisionBumps = true };
     }
+
+    private static UserInfo CreateUser(Guid id, string name) => new()
+    {
+        Id = id,
+        UserName = name,
+        NormalizedUserName = name.ToUpperInvariant(),
+        Email = $"{name}@example.test",
+        NormalizedEmail = $"{name.ToUpperInvariant()}@EXAMPLE.TEST",
+        EmailConfirmed = true,
+        Role = Role.Admin,
+        RegisterTimeUtc = DateTimeOffset.Parse("2026-09-19T00:00:00Z")
+    };
 
     private static async Task<bool> TableExistsAsync(AppDbContext context, string tableName)
     {

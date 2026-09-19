@@ -19,6 +19,24 @@ public sealed class TeamLabReleaseImagePreparationService(
     AppDbContext context,
     ImageDistributionService distribution)
 {
+    public async Task<TeamLabTemplatePreparationResultModel> QueueTemplatesAsync(
+        PrepareTeamLabTemplatesModel command,
+        CancellationToken cancellationToken)
+    {
+        var ids = command.TemplateIds.Distinct().OrderBy(item => item).ToArray();
+        if (ids.Length == 0)
+            throw new TeamLabApiContractException("image_templates_required", "请至少选择一个镜像模板。", 422);
+        var ready = await context.ImageTemplates.AsNoTracking()
+            .Where(item => ids.Contains(item.Id) && item.Status == ImageStatus.Ready && item.ImageHash != null)
+            .Select(item => item.Id)
+            .ToArrayAsync(cancellationToken);
+        if (ready.Length != ids.Length)
+            throw new TeamLabApiContractException("image_template_unavailable", "所选镜像模板中存在未就绪项。", 422);
+        var records = await distribution.DistributeTemplatesAsync(
+            ids, ImageDistributionReferenceKey.TeamLabTemplatePreparation(), cancellationToken);
+        return new(ids.Length, records.Count);
+    }
+
     public async Task QueueAsync(Guid releaseId, CancellationToken cancellationToken)
     {
         var release = await context.TeamLabTopologyReleases.AsNoTracking()

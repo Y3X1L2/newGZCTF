@@ -33,10 +33,34 @@ public sealed class OpenTeamLabRuntimesController(
     TeamLabOpenDiscoveryService discovery,
     TeamLabRuntimeOperationApplicationService operations,
     TeamLabScopeAuthorizationService scopeAuthorization,
+    TeamLabAuthorizationService authorization,
+    TeamLabRuntimeGrantService runtimeGrants,
     TeamLabRuntimeLifecycleGuard lifecycleGuard,
     TeamLabAccessGrantService access,
     TeamLabProtocolEventService protocolEvents) : ControllerBase
 {
+    [HttpGet("{runtimeId:guid}/grants")]
+    [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabRuntimesRead)]
+    [ProducesResponseType(typeof(IReadOnlyList<TeamLabRuntimeGrantModel>), StatusCodes.Status200OK)]
+    public async Task<IReadOnlyList<TeamLabRuntimeGrantModel>> ListRuntimeGrants(
+        Guid runtimeId, CancellationToken cancellationToken)
+    {
+        var actor = Actor();
+        return await runtimeGrants.ListAsync(
+            runtimeId, actor.UserId, actor.TokenId, IsAdministrator(), cancellationToken);
+    }
+
+    [HttpPut("{runtimeId:guid}/grants")]
+    [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabRuntimesWrite)]
+    [ProducesResponseType(typeof(IReadOnlyList<TeamLabRuntimeGrantModel>), StatusCodes.Status200OK)]
+    public async Task<IReadOnlyList<TeamLabRuntimeGrantModel>> ReplaceRuntimeGrants(
+        Guid runtimeId, ReplaceTeamLabRuntimeGrantsModel model, CancellationToken cancellationToken)
+    {
+        var actor = Actor();
+        return await runtimeGrants.ReplaceAsync(
+            runtimeId, model, actor.UserId, actor.TokenId, IsAdministrator(), cancellationToken);
+    }
+
     [HttpGet]
     [OpenApiOperation("列出运行时", "按当前 token 的 TeamLab 控制范围授权返回可继续管理的运行时。")]
     [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabRuntimesRead)]
@@ -85,7 +109,7 @@ public sealed class OpenTeamLabRuntimesController(
     [ProducesResponseType(typeof(OpenTeamLabRuntimeModel), StatusCodes.Status200OK)]
     public async Task<OpenTeamLabRuntimeModel> Get(Guid runtimeId, CancellationToken cancellationToken)
     {
-        await AuthorizeRuntimeAsync(runtimeId, cancellationToken);
+        await RequirePermissionAsync(runtimeId, TeamLabRuntimePermission.StateRead, cancellationToken);
         return (await runtimes.GetAsync(runtimeId, cancellationToken)).ToOpen();
     }
 
@@ -100,7 +124,7 @@ public sealed class OpenTeamLabRuntimesController(
         var actor = Actor();
         Response.Headers.CacheControl = "no-store";
         return await discovery.GetRuntimeStatusAsync(
-            runtimeId, actor.TokenId, IsAdministrator(), cancellationToken);
+            runtimeId, actor.TokenId, actor.UserId, IsAdministrator(), cancellationToken);
     }
 
     [HttpGet("{runtimeId:guid}/assets")]
@@ -117,7 +141,7 @@ public sealed class OpenTeamLabRuntimesController(
         var actor = Actor();
         Response.Headers.CacheControl = "no-store";
         return await discovery.ListRuntimeAssetsAsync(
-            runtimeId, actor.TokenId, IsAdministrator(), cursor, limit, status, cancellationToken);
+            runtimeId, actor.TokenId, actor.UserId, IsAdministrator(), cursor, limit, status, cancellationToken);
     }
 
     [HttpPost("{runtimeId:guid}/reset")]
@@ -130,12 +154,12 @@ public sealed class OpenTeamLabRuntimesController(
         [FromHeader(Name = "Idempotency-Key"), Required] string idempotencyKey,
         CancellationToken cancellationToken)
     {
-        await AuthorizeRuntimeAsync(runtimeId, cancellationToken);
+        await RequirePermissionAsync(runtimeId, TeamLabRuntimePermission.RuntimeManage, cancellationToken);
         var actor = Actor();
         await RequireDirectLifecycleControlAsync(runtimeId, cancellationToken);
         var result = await operations.SubmitResetAsync(actor.TokenId, actor.UserId, idempotencyKey,
             $"POST:/api/open/v1/teamlab/runtimes/{runtimeId:D}/reset", runtimeId,
-            await RequireRuntimeScopeAsync(runtimeId, true, cancellationToken), model, cancellationToken);
+            await GetRuntimeScopeAsync(runtimeId, cancellationToken), model, cancellationToken);
         var operation = ApiOperationModel.FromEntity(result.Operation);
         return Accepted($"/api/open/v1/operations/{operation.Id}", operation);
     }
@@ -149,7 +173,7 @@ public sealed class OpenTeamLabRuntimesController(
         [FromQuery, Required] Guid releaseId,
         CancellationToken cancellationToken)
     {
-        await AuthorizeRuntimeAsync(runtimeId, cancellationToken);
+        await RequirePermissionAsync(runtimeId, TeamLabRuntimePermission.StateRead, cancellationToken);
         Response.Headers.CacheControl = "no-store";
         return await runtimes.PreviewUpdateAsync(runtimeId, releaseId, cancellationToken);
     }
@@ -164,7 +188,7 @@ public sealed class OpenTeamLabRuntimesController(
         [FromHeader(Name = "Idempotency-Key"), Required] string idempotencyKey,
         CancellationToken cancellationToken)
     {
-        await AuthorizeRuntimeAsync(runtimeId, cancellationToken);
+        await RequirePermissionAsync(runtimeId, TeamLabRuntimePermission.AssetCompose, cancellationToken);
         await RequireDirectLifecycleControlAsync(runtimeId, cancellationToken);
         var actor = Actor();
         var result = await operations.SubmitUpdateAsync(
@@ -173,9 +197,29 @@ public sealed class OpenTeamLabRuntimesController(
             idempotencyKey,
             $"POST:/api/open/v1/teamlab/runtimes/{runtimeId:D}/updates",
             runtimeId,
-            await RequireRuntimeScopeAsync(runtimeId, true, cancellationToken),
+            await GetRuntimeScopeAsync(runtimeId, cancellationToken),
             model,
             cancellationToken);
+        var operation = ApiOperationModel.FromEntity(result.Operation);
+        return Accepted($"/api/open/v1/operations/{operation.Id}", operation);
+    }
+
+    [HttpPost("{runtimeId:guid}/asset-changes")]
+    [OpenApiOperation("变更运行资产", "在既有网段中一次性新增、替换或移除资产，继续使用当前运行代次。")]
+    [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabRuntimesWrite)]
+    [ProducesResponseType(typeof(ApiOperationModel), StatusCodes.Status202Accepted)]
+    public async Task<IActionResult> ChangeAssets(
+        Guid runtimeId,
+        ChangeTeamLabRuntimeAssetsModel model,
+        [FromHeader(Name = "Idempotency-Key"), Required] string idempotencyKey,
+        CancellationToken cancellationToken)
+    {
+        await RequirePermissionAsync(runtimeId, TeamLabRuntimePermission.AssetCompose, cancellationToken);
+        await RequireDirectLifecycleControlAsync(runtimeId, cancellationToken);
+        var actor = Actor();
+        var result = await operations.SubmitAssetChangesAsync(
+            actor.TokenId, actor.UserId, idempotencyKey, runtimeId,
+            await GetRuntimeScopeAsync(runtimeId, cancellationToken), model, cancellationToken);
         var operation = ApiOperationModel.FromEntity(result.Operation);
         return Accepted($"/api/open/v1/operations/{operation.Id}", operation);
     }
@@ -189,12 +233,12 @@ public sealed class OpenTeamLabRuntimesController(
         [FromHeader(Name = "Idempotency-Key"), Required] string idempotencyKey,
         CancellationToken cancellationToken)
     {
-        await AuthorizeRuntimeAsync(runtimeId, cancellationToken);
+        await RequirePermissionAsync(runtimeId, TeamLabRuntimePermission.RuntimeManage, cancellationToken);
         var actor = Actor();
         await RequireDirectLifecycleControlAsync(runtimeId, cancellationToken);
         var result = await operations.SubmitDestroyAsync(actor.TokenId, actor.UserId, idempotencyKey,
             $"DELETE:/api/open/v1/teamlab/runtimes/{runtimeId:D}", runtimeId,
-            await RequireRuntimeScopeAsync(runtimeId, true, cancellationToken), cancellationToken);
+            await GetRuntimeScopeAsync(runtimeId, cancellationToken), cancellationToken);
         var operation = ApiOperationModel.FromEntity(result.Operation);
         return Accepted($"/api/open/v1/operations/{operation.Id}", operation);
     }
@@ -208,12 +252,12 @@ public sealed class OpenTeamLabRuntimesController(
         [FromHeader(Name = "Idempotency-Key"), Required] string idempotencyKey,
         CancellationToken cancellationToken)
     {
-        await AuthorizeRuntimeAsync(runtimeId, cancellationToken);
+        await RequirePermissionAsync(runtimeId, TeamLabRuntimePermission.RuntimeManage, cancellationToken);
         await RequireDirectLifecycleControlAsync(runtimeId, cancellationToken);
         var actor = Actor();
         var result = await operations.SubmitPauseAsync(
             actor.TokenId, actor.UserId, idempotencyKey, runtimeId,
-            await RequireRuntimeScopeAsync(runtimeId, true, cancellationToken), cancellationToken);
+            await GetRuntimeScopeAsync(runtimeId, cancellationToken), cancellationToken);
         var operation = ApiOperationModel.FromEntity(result.Operation);
         return Accepted($"/api/open/v1/operations/{operation.Id}", operation);
     }
@@ -227,12 +271,12 @@ public sealed class OpenTeamLabRuntimesController(
         [FromHeader(Name = "Idempotency-Key"), Required] string idempotencyKey,
         CancellationToken cancellationToken)
     {
-        await AuthorizeRuntimeAsync(runtimeId, cancellationToken);
+        await RequirePermissionAsync(runtimeId, TeamLabRuntimePermission.RuntimeManage, cancellationToken);
         await RequireDirectLifecycleControlAsync(runtimeId, cancellationToken);
         var actor = Actor();
         var result = await operations.SubmitResumeAsync(
             actor.TokenId, actor.UserId, idempotencyKey, runtimeId,
-            await RequireRuntimeScopeAsync(runtimeId, true, cancellationToken), cancellationToken);
+            await GetRuntimeScopeAsync(runtimeId, cancellationToken), cancellationToken);
         var operation = ApiOperationModel.FromEntity(result.Operation);
         return Accepted($"/api/open/v1/operations/{operation.Id}", operation);
     }
@@ -247,8 +291,8 @@ public sealed class OpenTeamLabRuntimesController(
         CancellationToken cancellationToken)
     {
         var actor = Actor();
-        await scopeAuthorization.RequireRuntimeScopeAsync(
-            runtimeId, actor.TokenId, IsAdministrator(), writable: true, cancellationToken);
+        await authorization.RequirePermissionAsync(runtimeId, actor.UserId, actor.TokenId,
+            IsAdministrator(), null, TeamLabRuntimePermission.RuntimeManage, cancellationToken);
         var result = await protocolEvents.RecordAsync(runtimeId, model, cancellationToken);
         return Ok(new { runtimeId = result.RuntimeId, stage = result.Stage, type = result.Type, source = result.Source });
     }
@@ -265,7 +309,7 @@ public sealed class OpenTeamLabRuntimesController(
         [FromQuery] string? stage = null,
         CancellationToken cancellationToken = default)
     {
-        await AuthorizeRuntimeAsync(runtimeId, cancellationToken);
+        await RequirePermissionAsync(runtimeId, TeamLabRuntimePermission.MetadataRead, cancellationToken);
         return await projections.GetEventsAsync(runtimeId, after, limit, generation, stage, cancellationToken);
     }
 
@@ -281,11 +325,11 @@ public sealed class OpenTeamLabRuntimesController(
     {
         if (!string.Equals(model.Type, "WireGuard", StringComparison.OrdinalIgnoreCase))
             throw new TeamLabApiContractException("topology_invalid", "仅支持 WireGuard 访问授权。", 422);
-        await AuthorizeRuntimeAsync(runtimeId, cancellationToken);
+        await RequirePermissionAsync(runtimeId, TeamLabRuntimePermission.RuntimeManage, cancellationToken);
         var actor = Actor();
         var result = await operations.SubmitAccessGrantCreateAsync(
             actor.TokenId, actor.UserId, idempotencyKey, runtimeId,
-            await RequireRuntimeScopeAsync(runtimeId, true, cancellationToken), model, cancellationToken);
+            await GetRuntimeScopeAsync(runtimeId, cancellationToken), model, cancellationToken);
         var operation = ApiOperationModel.FromEntity(result.Operation);
         return Accepted($"/api/open/v1/operations/{operation.Id}", operation);
     }
@@ -298,9 +342,8 @@ public sealed class OpenTeamLabRuntimesController(
         Guid runtimeId,
         CancellationToken cancellationToken)
     {
-        var actor = Actor();
-        return await discovery.ListAccessGrantsAsync(
-            runtimeId, actor.TokenId, IsAdministrator(), cancellationToken);
+        await RequirePermissionAsync(runtimeId, TeamLabRuntimePermission.RuntimeManage, cancellationToken);
+        return await discovery.ListAccessGrantsAsync(runtimeId, cancellationToken);
     }
 
     [HttpGet("{runtimeId:guid}/access-grants/{grantId:guid}/download")]
@@ -314,7 +357,7 @@ public sealed class OpenTeamLabRuntimesController(
         [FromQuery, Required] string token,
         CancellationToken cancellationToken)
     {
-        await AuthorizeRuntimeAsync(runtimeId, cancellationToken);
+        await RequirePermissionAsync(runtimeId, TeamLabRuntimePermission.RuntimeManage, cancellationToken);
         var result = await access.ConsumeConfigurationAsync(runtimeId, grantId, token, cancellationToken);
         return File(System.Text.Encoding.UTF8.GetBytes(result.Configuration), "application/x-wireguard-profile", result.FileName);
     }
@@ -329,31 +372,29 @@ public sealed class OpenTeamLabRuntimesController(
         [FromHeader(Name = "Idempotency-Key"), Required] string idempotencyKey,
         CancellationToken cancellationToken)
     {
-        await AuthorizeRuntimeAsync(runtimeId, cancellationToken);
+        await RequirePermissionAsync(runtimeId, TeamLabRuntimePermission.RuntimeManage, cancellationToken);
         var actor = Actor();
         var result = await operations.SubmitAccessGrantRevokeAsync(
             actor.TokenId, actor.UserId, idempotencyKey, runtimeId,
-            await RequireRuntimeScopeAsync(runtimeId, true, cancellationToken), grantId, cancellationToken);
+            await GetRuntimeScopeAsync(runtimeId, cancellationToken), grantId, cancellationToken);
         var operation = ApiOperationModel.FromEntity(result.Operation);
         return Accepted($"/api/open/v1/operations/{operation.Id}", operation);
     }
 
-    private async Task AuthorizeRuntimeAsync(Guid runtimeId, CancellationToken cancellationToken)
-    {
-        var actor = Actor();
-        await scopeAuthorization.RequireRuntimeScopeAsync(
-            runtimeId, actor.TokenId, IsAdministrator(), false, cancellationToken);
-    }
-
-    private async Task<Guid> RequireRuntimeScopeAsync(
+    private async Task RequirePermissionAsync(
         Guid runtimeId,
-        bool writable,
+        TeamLabRuntimePermission permission,
         CancellationToken cancellationToken)
     {
         var actor = Actor();
-        return await scopeAuthorization.RequireRuntimeScopeAsync(
-            runtimeId, actor.TokenId, IsAdministrator(), writable, cancellationToken);
+        await authorization.RequirePermissionAsync(runtimeId, actor.UserId, actor.TokenId,
+            IsAdministrator(), null, permission, cancellationToken);
     }
+
+    private Task<Guid?> GetRuntimeScopeAsync(
+        Guid runtimeId,
+        CancellationToken cancellationToken) =>
+        authorization.GetControlScopeAsync(runtimeId, cancellationToken);
 
     private bool IsAdministrator() => User.FindAll(ApiTokenClaimTypes.Resource).Any(claim =>
         ApiTokenResourceClaim.TryParse(claim.Value, out var type, out var id) &&

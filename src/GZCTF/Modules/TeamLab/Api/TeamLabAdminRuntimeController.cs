@@ -27,12 +27,31 @@ public sealed class TeamLabAdminRuntimeController(
     TeamLabTrafficApplicationService traffic,
     TeamLabCaptureArtifactStore captureArtifacts,
     TeamLabAuthorizationService authorization,
+    TeamLabRuntimeGrantService runtimeGrants,
     TeamLabAccessGrantService access,
     TeamLabLinkPolicyService linkPolicies,
     ILogRepository logs,
     UserManager<UserInfo> users,
     TeamLabAssetDiagnosticsService diagnostics) : ControllerBase
 {
+    [HttpGet("{runtimeId:guid}/grants")]
+    public async Task<IReadOnlyList<TeamLabRuntimeGrantModel>> ListRuntimeGrants(
+        Guid runtimeId, CancellationToken cancellationToken)
+    {
+        var actor = await ActorAsync();
+        return await runtimeGrants.ListAsync(
+            runtimeId, actor.Id, null, actor.Role >= Role.Admin, cancellationToken);
+    }
+
+    [HttpPut("{runtimeId:guid}/grants")]
+    public async Task<IReadOnlyList<TeamLabRuntimeGrantModel>> ReplaceRuntimeGrants(
+        Guid runtimeId, ReplaceTeamLabRuntimeGrantsModel model, CancellationToken cancellationToken)
+    {
+        var actor = await ActorAsync();
+        return await runtimeGrants.ReplaceAsync(
+            runtimeId, model, actor.Id, null, actor.Role >= Role.Admin, cancellationToken);
+    }
+
     [HttpGet("search")]
     public async Task<TeamLabRuntimeSearchPage> Search([FromQuery] TeamLabRuntimeSearchQuery query, CancellationToken token)
     {
@@ -151,7 +170,7 @@ public sealed class TeamLabAdminRuntimeController(
         ResetTeamLabRuntimeModel model,
         CancellationToken cancellationToken)
     {
-        await RequireAsync(runtimeId, TeamLabRuntimePermission.LifecycleManage, cancellationToken);
+        await RequireAsync(runtimeId, TeamLabRuntimePermission.RuntimeManage, cancellationToken);
         await runtimes.ResetAndEnqueueAsync(runtimeId, model, null, cancellationToken);
         return Accepted($"/api/admin/teamlab/runtimes/{runtimeId:D}",
             await runtimes.GetAsync(runtimeId, cancellationToken));
@@ -174,9 +193,22 @@ public sealed class TeamLabAdminRuntimeController(
         UpdateTeamLabRuntimeModel model,
         CancellationToken cancellationToken)
     {
-        await RequireAsync(runtimeId, TeamLabRuntimePermission.LifecycleManage, cancellationToken);
+        await RequireAsync(runtimeId, TeamLabRuntimePermission.AssetCompose, cancellationToken);
         var actor = await ActorAsync();
         await runtimes.UpdateAndEnqueueAsync(runtimeId, model, actor.Id, null, cancellationToken);
+        return Accepted($"/api/admin/teamlab/runtimes/{runtimeId:D}",
+            await runtimes.GetAsync(runtimeId, cancellationToken));
+    }
+
+    [HttpPost("{runtimeId:guid}/asset-changes")]
+    public async Task<ActionResult<TeamLabRuntimeProjectionModel>> ChangeAssets(
+        Guid runtimeId,
+        ChangeTeamLabRuntimeAssetsModel model,
+        CancellationToken cancellationToken)
+    {
+        await RequireAsync(runtimeId, TeamLabRuntimePermission.AssetCompose, cancellationToken);
+        var actor = await ActorAsync();
+        await runtimes.ChangeAssetsAndEnqueueAsync(runtimeId, model, actor.Id, null, cancellationToken);
         return Accepted($"/api/admin/teamlab/runtimes/{runtimeId:D}",
             await runtimes.GetAsync(runtimeId, cancellationToken));
     }
@@ -184,7 +216,7 @@ public sealed class TeamLabAdminRuntimeController(
     [HttpPost("{runtimeId:guid}/pause")]
     public async Task<ActionResult<TeamLabRuntimeProjectionModel>> Pause(Guid runtimeId, CancellationToken cancellationToken)
     {
-        await RequireAsync(runtimeId, TeamLabRuntimePermission.LifecycleManage, cancellationToken);
+        await RequireAsync(runtimeId, TeamLabRuntimePermission.RuntimeManage, cancellationToken);
         var actor = await ActorAsync();
         return Accepted($"/api/admin/teamlab/runtimes/{runtimeId:D}",
             await runtimes.EnqueueLifecycleAsync(runtimeId, true, actor.Id, cancellationToken));
@@ -193,7 +225,7 @@ public sealed class TeamLabAdminRuntimeController(
     [HttpPost("{runtimeId:guid}/resume")]
     public async Task<ActionResult<TeamLabRuntimeProjectionModel>> Resume(Guid runtimeId, CancellationToken cancellationToken)
     {
-        await RequireAsync(runtimeId, TeamLabRuntimePermission.LifecycleManage, cancellationToken);
+        await RequireAsync(runtimeId, TeamLabRuntimePermission.RuntimeManage, cancellationToken);
         var actor = await ActorAsync();
         return Accepted($"/api/admin/teamlab/runtimes/{runtimeId:D}",
             await runtimes.EnqueueLifecycleAsync(runtimeId, false, actor.Id, cancellationToken));
@@ -207,7 +239,7 @@ public sealed class TeamLabAdminRuntimeController(
         var actor = await ActorAsync();
         await authorization.RequirePermissionAsync(
             runtimeId, actor.Id, actor.Role >= Role.Admin,
-            TeamLabRuntimePermission.LifecycleManage, cancellationToken);
+            TeamLabRuntimePermission.RuntimeManage, cancellationToken);
         await runtimes.DestroyAndEnqueueAsync(runtimeId, null, actor.Id, cancellationToken);
         return Accepted($"/api/admin/teamlab/runtimes/{runtimeId:D}",
             await runtimes.GetAsync(runtimeId, cancellationToken));
@@ -235,7 +267,7 @@ public sealed class TeamLabAdminRuntimeController(
         [FromQuery] string? after = null,
         CancellationToken cancellationToken = default)
     {
-        await RequireAsync(runtimeId, TeamLabRuntimePermission.LifecycleManage, cancellationToken);
+        await RequireAsync(runtimeId, TeamLabRuntimePermission.RuntimeManage, cancellationToken);
         return await linkPolicies.ListByRuntimeAsync(runtimeId, status, after, limit, cancellationToken);
     }
 
@@ -245,7 +277,7 @@ public sealed class TeamLabAdminRuntimeController(
         ApplyTeamLabLinkPolicyModel model,
         CancellationToken cancellationToken)
     {
-        await RequireAsync(runtimeId, TeamLabRuntimePermission.LifecycleManage, cancellationToken);
+        await RequireAsync(runtimeId, TeamLabRuntimePermission.RuntimeManage, cancellationToken);
         var policy = await linkPolicies.ApplyAsync(model, cancellationToken);
         return Created($"/api/admin/teamlab/runtimes/{runtimeId:D}/link-policies", policy);
     }
@@ -256,7 +288,7 @@ public sealed class TeamLabAdminRuntimeController(
         Guid policyId,
         CancellationToken cancellationToken)
     {
-        await RequireAsync(runtimeId, TeamLabRuntimePermission.LifecycleManage, cancellationToken);
+        await RequireAsync(runtimeId, TeamLabRuntimePermission.RuntimeManage, cancellationToken);
         return await linkPolicies.RecoverAsync(policyId, cancellationToken);
     }
 
@@ -311,7 +343,7 @@ public sealed class TeamLabAdminRuntimeController(
     {
         if (!string.Equals(model.Type, "WireGuard", StringComparison.OrdinalIgnoreCase))
             throw new TeamLabApiContractException("topology_invalid", "仅支持 WireGuard 访问授权。", 422);
-        await RequireAsync(runtimeId, TeamLabRuntimePermission.LifecycleManage, cancellationToken);
+        await RequireAsync(runtimeId, TeamLabRuntimePermission.RuntimeManage, cancellationToken);
         var grant = await access.CreateAsync(runtimeId, cancellationToken);
         return Created($"/api/admin/teamlab/runtimes/{runtimeId:D}/access-grants/{grant.Id:D}",
             grant with { ConfigurationDownloadUrl = AdminDownloadUrl(grant.ConfigurationDownloadUrl) });
@@ -334,7 +366,7 @@ public sealed class TeamLabAdminRuntimeController(
         Guid grantId,
         CancellationToken cancellationToken)
     {
-        await RequireAsync(runtimeId, TeamLabRuntimePermission.LifecycleManage, cancellationToken);
+        await RequireAsync(runtimeId, TeamLabRuntimePermission.RuntimeManage, cancellationToken);
         await access.RevokeAsync(runtimeId, grantId, cancellationToken);
         return NoContent();
     }
@@ -346,7 +378,7 @@ public sealed class TeamLabAdminRuntimeController(
         [FromQuery, Required] string token,
         CancellationToken cancellationToken)
     {
-        await RequireAsync(runtimeId, TeamLabRuntimePermission.LifecycleManage, cancellationToken);
+        await RequireAsync(runtimeId, TeamLabRuntimePermission.RuntimeManage, cancellationToken);
         var result = await access.ConsumeConfigurationAsync(runtimeId, grantId, token, cancellationToken);
         return File(System.Text.Encoding.UTF8.GetBytes(result.Configuration),
             "application/x-wireguard-profile", result.FileName);
@@ -358,7 +390,7 @@ public sealed class TeamLabAdminRuntimeController(
         CreateTeamLabCaptureModel model,
         CancellationToken cancellationToken)
     {
-        await RequireAsync(runtimeId, TeamLabRuntimePermission.LifecycleManage, cancellationToken);
+        await RequireAsync(runtimeId, TeamLabRuntimePermission.RuntimeManage, cancellationToken);
         var capture = await traffic.StartCaptureAsync(runtimeId, model, cancellationToken);
         return Created($"/api/admin/teamlab/runtimes/{runtimeId:D}/captures/{capture.Id:D}", capture);
     }
@@ -390,7 +422,7 @@ public sealed class TeamLabAdminRuntimeController(
         Guid captureId,
         CancellationToken cancellationToken)
     {
-        await RequireAsync(runtimeId, TeamLabRuntimePermission.LifecycleManage, cancellationToken);
+        await RequireAsync(runtimeId, TeamLabRuntimePermission.RuntimeManage, cancellationToken);
         return await traffic.StopCaptureAsync(runtimeId, captureId, cancellationToken);
     }
 

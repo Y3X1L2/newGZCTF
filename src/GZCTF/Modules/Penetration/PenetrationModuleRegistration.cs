@@ -14,11 +14,6 @@ public static class PenetrationModuleRegistration
         services.AddScoped<PenetrationTeamLabAdapter>();
         services.AddScoped<ITeamLabRolloutTargetProvider>(provider =>
             provider.GetRequiredService<PenetrationTeamLabAdapter>());
-        services.AddScoped<PenetrationTeamLabRemoteAccessAuthorizationProvider>();
-        services.AddScoped<ITeamLabRuntimeManagerAuthorizationProvider>(provider =>
-            provider.GetRequiredService<PenetrationTeamLabRemoteAccessAuthorizationProvider>());
-        services.AddScoped<ITeamLabRemoteAccessAuthorizationProvider>(provider =>
-            provider.GetRequiredService<PenetrationTeamLabRemoteAccessAuthorizationProvider>());
         services.AddScoped<IRuntimeTicketLifecycleObserver, PenetrationTeamLabLifecycleObserver>();
         services.AddScoped<ITeamLabUsageProjectionProvider, PenetrationUsageProjectionProvider>();
         return services;

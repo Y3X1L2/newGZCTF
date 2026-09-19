@@ -31,7 +31,7 @@ public sealed class OpenTeamLabRemoteAuditController(TeamLabRemoteAuditService a
         CancellationToken cancellationToken)
     {
         var actor = Actor();
-        await audit.GenerateApiAsync(sessionId, actor.TokenId, cancellationToken);
+        await audit.GenerateApiAsync(sessionId, actor.TokenId, actor.UserId, cancellationToken);
         Response.Headers.CacheControl = "no-store";
         return NoContent();
     }
@@ -46,7 +46,7 @@ public sealed class OpenTeamLabRemoteAuditController(TeamLabRemoteAuditService a
     {
         var actor = Actor();
         Response.Headers.CacheControl = "no-store";
-        return (await audit.ListApiAsync(sessionId, actor.TokenId, cancellationToken)).ToOpen();
+        return (await audit.ListApiAsync(sessionId, actor.TokenId, actor.UserId, cancellationToken)).ToOpen();
     }
 
     [HttpGet("evidence/{evidenceId:long}/download")]

@@ -140,7 +140,7 @@ public sealed class TeamLabRemoteReconciliationTests
     }
 
     private static TeamLabRemoteAccessService Service(AppDbContext context, ITeamLabRemoteRelayGateway relay, IMemoryCache cache) =>
-        new(context, new TeamLabRemoteAccessAuthorizationService(new TeamLabAuthorizationService(context, [], [])),
+        new(context, new TeamLabAuthorizationService(context),
             new TeamLabScopeAuthorizationService(context), relay, null!, null!,
             new TeamLabEventRecorder(context, Mock.Of<IOperationalEventWriter>(), new OperationalCorrelation()),
             cache, NullLogger<TeamLabRemoteAccessService>.Instance);

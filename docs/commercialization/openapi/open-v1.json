@@ -2372,6 +2372,105 @@
         ]
       }
     },
+    "/api/open/v1/teamlab/preparations/templates": {
+      "post": {
+        "tags": [
+          "TeamLab - Image Preparation"
+        ],
+        "summary": "预热镜像模板",
+        "description": "把选定的已就绪镜像模板提前分发到具备对应能力的可调度节点。",
+        "operationId": "OpenTeamLabImagePreparations_QueueTemplates",
+        "requestBody": {
+          "x-name": "model",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PrepareTeamLabTemplatesModel"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "400": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamLabTemplatePreparationResultModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
     "/api/open/v1/teamlab/preparations/releases/{releaseId}": {
       "get": {
         "tags": [
@@ -6685,6 +6784,216 @@
         ]
       }
     },
+    "/api/open/v1/teamlab/runtimes/{runtimeId}/grants": {
+      "get": {
+        "tags": [
+          "TeamLab - Runtimes"
+        ],
+        "operationId": "OpenTeamLabRuntimes_ListRuntimeGrants",
+        "parameters": [
+          {
+            "name": "runtimeId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TeamLabRuntimeGrantModel"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "TeamLab - Runtimes"
+        ],
+        "operationId": "OpenTeamLabRuntimes_ReplaceRuntimeGrants",
+        "parameters": [
+          {
+            "name": "runtimeId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          }
+        ],
+        "requestBody": {
+          "x-name": "model",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplaceTeamLabRuntimeGrantsModel"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 2
+        },
+        "responses": {
+          "400": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TeamLabRuntimeGrantModel"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
     "/api/open/v1/teamlab/runtimes": {
       "get": {
         "tags": [
@@ -7647,6 +7956,127 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/UpdateTeamLabRuntimeModel"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 2
+        },
+        "responses": {
+          "400": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalApiProblemDetailsModel"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiOperationModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "GzctfApiToken": []
+          }
+        ]
+      }
+    },
+    "/api/open/v1/teamlab/runtimes/{runtimeId}/asset-changes": {
+      "post": {
+        "tags": [
+          "TeamLab - Runtimes"
+        ],
+        "summary": "变更运行资产",
+        "description": "在既有网段中一次性新增、替换或移除资产，继续使用当前运行代次。",
+        "operationId": "OpenTeamLabRuntimes_ChangeAssets",
+        "parameters": [
+          {
+            "name": "runtimeId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            },
+            "x-position": 1
+          },
+          {
+            "name": "Idempotency-Key",
+            "x-originalName": "idempotencyKey",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "x-position": 3
+          }
+        ],
+        "requestBody": {
+          "x-name": "model",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeTeamLabRuntimeAssetsModel"
               }
             }
           },
@@ -14890,6 +15320,33 @@
           }
         }
       },
+      "TeamLabTemplatePreparationResultModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "templateCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "distributionCount": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "PrepareTeamLabTemplatesModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "templateIds": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        }
+      },
       "TeamLabReleasePreparationModel": {
         "type": "object",
         "description": "Release-level preparation state for external callers.",
@@ -15984,6 +16441,75 @@
           }
         }
       },
+      "TeamLabRuntimeGrantModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "subjectType": {
+            "type": "string"
+          },
+          "subjectId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "subjectName": {
+            "type": "string"
+          },
+          "assetKey": {
+            "type": "string",
+            "nullable": true
+          },
+          "permissions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "updatedAt": {
+            "type": "integer",
+            "format": "uint64"
+          }
+        }
+      },
+      "ReplaceTeamLabRuntimeGrantsModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "grants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TeamLabRuntimeGrantWriteModel"
+            }
+          }
+        }
+      },
+      "TeamLabRuntimeGrantWriteModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "subjectType": {
+            "type": "string"
+          },
+          "subjectId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "assetKey": {
+            "type": "string",
+            "nullable": true
+          },
+          "permissions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
       "OpenTeamLabRuntimePageModel": {
         "type": "object",
         "additionalProperties": false,
@@ -16527,6 +17053,168 @@
           }
         }
       },
+      "ChangeTeamLabRuntimeAssetsModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "expectedPlanRevision": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "add": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/TeamLabTopologyAssetModel"
+            }
+          },
+          "replace": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/TeamLabTopologyAssetModel"
+            }
+          },
+          "remove": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "type": "string"
+            }
+          },
+          "overlays": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/TeamLabRuntimeOverlayModel"
+            }
+          }
+        }
+      },
+      "TeamLabTopologyAssetModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/TeamLabAssetKind"
+          },
+          "imageTemplateId": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "resources": {
+            "$ref": "#/components/schemas/TeamLabAssetResourceModel"
+          },
+          "interfaces": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TeamLabTopologyInterfaceModel"
+            }
+          },
+          "exposePort": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "healthCheck": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/TeamLabHealthCheckModel"
+              }
+            ]
+          },
+          "orderIndex": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "devicePackageId": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "deviceParameters": {
+            "nullable": true
+          },
+          "connectorId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          }
+        }
+      },
+      "TeamLabAssetResourceModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "cpuUnits": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "memoryMiB": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "storageMiB": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "TeamLabTopologyInterfaceModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "networkKey": {
+            "type": "string"
+          },
+          "hostOffset": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "primary": {
+            "type": "boolean"
+          },
+          "orderIndex": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "TeamLabHealthCheckModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/TeamLabHealthCheckKind"
+          },
+          "port": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "TeamLabHealthCheckKind": {
+        "type": "integer",
+        "description": "",
+        "x-enumNames": [
+          "Tcp",
+          "Http"
+        ],
+        "enum": [
+          0,
+          1
+        ]
+      },
       "TeamLabProtocolEventReportModel": {
         "type": "object",
         "additionalProperties": false,
@@ -16989,130 +17677,6 @@
             "format": "int32"
           }
         }
-      },
-      "TeamLabTopologyAssetModel": {
-        "type": "object",
-        "additionalProperties": false,
-        "properties": {
-          "key": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "kind": {
-            "$ref": "#/components/schemas/TeamLabAssetKind"
-          },
-          "imageTemplateId": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "resources": {
-            "$ref": "#/components/schemas/TeamLabAssetResourceModel"
-          },
-          "interfaces": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/TeamLabTopologyInterfaceModel"
-            }
-          },
-          "exposePort": {
-            "type": "integer",
-            "format": "int32",
-            "nullable": true
-          },
-          "healthCheck": {
-            "nullable": true,
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/TeamLabHealthCheckModel"
-              }
-            ]
-          },
-          "orderIndex": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "devicePackageId": {
-            "type": "integer",
-            "format": "int32",
-            "nullable": true
-          },
-          "deviceParameters": {
-            "nullable": true
-          },
-          "connectorId": {
-            "type": "string",
-            "format": "guid",
-            "nullable": true
-          }
-        }
-      },
-      "TeamLabAssetResourceModel": {
-        "type": "object",
-        "additionalProperties": false,
-        "properties": {
-          "cpuUnits": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "memoryMiB": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "storageMiB": {
-            "type": "integer",
-            "format": "int32"
-          }
-        }
-      },
-      "TeamLabTopologyInterfaceModel": {
-        "type": "object",
-        "additionalProperties": false,
-        "properties": {
-          "key": {
-            "type": "string"
-          },
-          "networkKey": {
-            "type": "string"
-          },
-          "hostOffset": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "primary": {
-            "type": "boolean"
-          },
-          "orderIndex": {
-            "type": "integer",
-            "format": "int32"
-          }
-        }
-      },
-      "TeamLabHealthCheckModel": {
-        "type": "object",
-        "additionalProperties": false,
-        "properties": {
-          "kind": {
-            "$ref": "#/components/schemas/TeamLabHealthCheckKind"
-          },
-          "port": {
-            "type": "integer",
-            "format": "int32"
-          }
-        }
-      },
-      "TeamLabHealthCheckKind": {
-        "type": "integer",
-        "description": "",
-        "x-enumNames": [
-          "Tcp",
-          "Http"
-        ],
-        "enum": [
-          0,
-          1
-        ]
       },
       "TeamLabTopologyConnectionModel": {
         "type": "object",

@@ -10,8 +10,7 @@ using Microsoft.Extensions.Options;
 namespace GZCTF.Modules.TeamLab.Application;
 
 public sealed class TeamLabRemoteAuditService(AppDbContext context, IBlobStorage storage,
-    TeamLabAuthorizationService authorization, TeamLabScopeAuthorizationService scopeAuthorization,
-    IDistributedLeaseProvider leases,
+    TeamLabAuthorizationService authorization, IDistributedLeaseProvider leases,
     IOptions<TeamLabRemoteAuditOptions> options, TeamLabEventRecorder events, ILogger<TeamLabRemoteAuditService> logger)
 {
     private readonly TeamLabRemoteAuditOptions policy = options.Value;
@@ -24,8 +23,9 @@ public sealed class TeamLabRemoteAuditService(AppDbContext context, IBlobStorage
     public Task<TeamLabRemoteAuditPage> ListApiAsync(
         Guid sessionId,
         Guid apiTokenId,
+        Guid actorId,
         CancellationToken token) =>
-        ListCoreAsync(sessionId, ScopeAuthorization(apiTokenId), token);
+        ListCoreAsync(sessionId, ApiAuthorization(apiTokenId, actorId), token);
 
     private async Task<TeamLabRemoteAuditPage> ListCoreAsync(
         Guid sessionId,
@@ -48,8 +48,8 @@ public sealed class TeamLabRemoteAuditService(AppDbContext context, IBlobStorage
     public Task GenerateAsync(Guid sessionId, Guid actorId, bool administrator, CancellationToken token) =>
         GenerateAuthorizedAsync(sessionId, BusinessAuthorization(actorId, administrator), token);
 
-    public Task GenerateApiAsync(Guid sessionId, Guid apiTokenId, CancellationToken token) =>
-        GenerateAuthorizedAsync(sessionId, ScopeAuthorization(apiTokenId, writable: true), token);
+    public Task GenerateApiAsync(Guid sessionId, Guid apiTokenId, Guid actorId, CancellationToken token) =>
+        GenerateAuthorizedAsync(sessionId, ApiAuthorization(apiTokenId, actorId), token);
 
     private async Task GenerateAuthorizedAsync(
         Guid sessionId,
@@ -120,7 +120,7 @@ public sealed class TeamLabRemoteAuditService(AppDbContext context, IBlobStorage
         Guid apiTokenId,
         Guid actorId,
         CancellationToken token) =>
-        DownloadCoreAsync(sessionId, fileId, actorId, ScopeAuthorization(apiTokenId), token);
+        DownloadCoreAsync(sessionId, fileId, actorId, ApiAuthorization(apiTokenId, actorId), token);
 
     private async Task<TeamLabRemoteAuditDownload> DownloadCoreAsync(
         Guid sessionId,
@@ -217,7 +217,9 @@ public sealed class TeamLabRemoteAuditService(AppDbContext context, IBlobStorage
         Func<TeamLabRemoteSession, CancellationToken, Task> authorize,
         CancellationToken token)
     {
-        var session = await context.TeamLabRemoteSessions.AsNoTracking().Include(item => item.Runtime)
+        var session = await context.TeamLabRemoteSessions.AsNoTracking()
+            .Include(item => item.Runtime)
+            .Include(item => item.RuntimeAsset)
             .SingleOrDefaultAsync(item => item.PublicId == sessionId, token)
             ?? throw new TeamLabApiContractException("remote_session_not_found", "未找到远程会话。", 404);
         await authorize(session, token);
@@ -230,22 +232,25 @@ public sealed class TeamLabRemoteAuditService(AppDbContext context, IBlobStorage
         (session, token) => authorization.RequirePermissionAsync(
             session.Runtime.PublicId,
             actorId,
+            null,
             administrator,
+            session.RuntimeAsset.TopologyKey,
             session.RequestedByUserId == actorId
                 ? TeamLabRuntimePermission.RemoteSessionOperate
                 : TeamLabRuntimePermission.MetadataRead,
             token);
 
-    private Func<TeamLabRemoteSession, CancellationToken, Task> ScopeAuthorization(
+    private Func<TeamLabRemoteSession, CancellationToken, Task> ApiAuthorization(
         Guid apiTokenId,
-        bool writable = false) =>
-        async (session, token) =>
-        {
-            await scopeAuthorization.RequireRuntimeScopeAsync(
-                session.Runtime.PublicId,
-                apiTokenId,
-                administrator: false,
-                writable,
-                token);
-        };
+        Guid actorId) =>
+        (session, token) => authorization.RequirePermissionAsync(
+            session.Runtime.PublicId,
+            actorId,
+            apiTokenId,
+            false,
+            session.RuntimeAsset.TopologyKey,
+            session.RequestedByUserId == actorId
+                ? TeamLabRuntimePermission.RemoteSessionOperate
+                : TeamLabRuntimePermission.MetadataRead,
+            token);
 }

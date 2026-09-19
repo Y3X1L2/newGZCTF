@@ -15,7 +15,6 @@ public interface ITeamLabDeviceObserver
 
 public sealed class TeamLabDeviceObservationService(AppDbContext context, ITeamLabDeviceObserver observer,
     TeamLabEventRecorder events, TeamLabAuthorizationService authorization,
-    TeamLabScopeAuthorizationService scopeAuthorization,
     IServiceScopeFactory? scopeFactory = null)
 {
     public async Task<IReadOnlyList<TeamLabDeviceHealthModel>> ReadAsync(Guid runtimeId, Guid actorId, bool administrator, CancellationToken token)
@@ -26,12 +25,13 @@ public sealed class TeamLabDeviceObservationService(AppDbContext context, ITeamL
 
     public async Task<IReadOnlyList<TeamLabDeviceHealthModel>> ReadApiAsync(
         Guid runtimeId,
+        Guid actorUserId,
         Guid apiTokenId,
         bool hasWildcardScopeGrant,
         CancellationToken token)
     {
-        await scopeAuthorization.RequireRuntimeScopeAsync(
-            runtimeId, apiTokenId, hasWildcardScopeGrant, writable: false, token);
+        await authorization.RequirePermissionAsync(runtimeId, actorUserId, apiTokenId, hasWildcardScopeGrant,
+            null, TeamLabRuntimePermission.StateRead, token);
         return await ReadCoreAsync(runtimeId, token);
     }
 

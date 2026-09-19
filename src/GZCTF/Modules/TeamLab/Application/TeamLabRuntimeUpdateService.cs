@@ -21,6 +21,7 @@ namespace GZCTF.Modules.TeamLab.Application;
 public sealed class TeamLabRuntimeUpdateService(
     AppDbContext context,
     TeamLabRuntimeOperationPayloadProtector payloads,
+    TeamLabTopologyValidator topologyValidator,
     ITeamLabRuntimeQueue queue,
     FleetCapacityReservationService capacity,
     TeamLabRuntimeLifecycleGuard lifecycleGuard,
@@ -50,7 +51,7 @@ public sealed class TeamLabRuntimeUpdateService(
                 "runtime_managed_by_rollout",
                 "此运行时由比赛 rollout 管理，请使用比赛生命周期 API。",
                 409);
-        return await PreviewCoreAsync(runtime, releaseId, token);
+        return (await BuildReleaseUpdateAsync(runtime, releaseId, token)).Preview;
     }
 
     public async Task<TeamLabQueueTicketResult> EnqueueAsync(
@@ -71,7 +72,8 @@ public sealed class TeamLabRuntimeUpdateService(
                 "runtime_managed_by_rollout",
                 "此运行时由比赛 rollout 管理，请使用比赛生命周期 API。",
                 409);
-        var preview = await PreviewCoreAsync(runtime, command.ReleaseId, token);
+        var plan = await BuildReleaseUpdateAsync(runtime, command.ReleaseId, token);
+        var preview = plan.Preview;
         if (!preview.CanApply)
             throw new TeamLabApiContractException(
                 "runtime_update_requires_reset",
@@ -102,6 +104,54 @@ public sealed class TeamLabRuntimeUpdateService(
             PayloadHash: payloadHash), token);
     }
 
+    public async Task<TeamLabQueueTicketResult> EnqueueChangesAsync(
+        Guid runtimeId,
+        ChangeTeamLabRuntimeAssetsModel command,
+        Guid actorUserId,
+        Guid? operationId,
+        CancellationToken token)
+    {
+        var runtime = await context.TeamLabRuntimes.AsNoTracking()
+            .Include(item => item.Shards)
+            .Include(item => item.Networks)
+            .Include(item => item.Assets)
+            .SingleOrDefaultAsync(item => item.PublicId == runtimeId, token)
+            ?? throw new TeamLabApiContractException("runtime_not_found", "未找到 TeamLab 运行时", 404);
+        if (await lifecycleGuard.IsRolloutManagedAsync(runtimeId, token))
+            throw new TeamLabApiContractException(
+                "runtime_managed_by_rollout",
+                "此运行时由 rollout 管理，请通过 rollout 更新资产。",
+                409);
+        var plan = await BuildAssetChangesAsync(runtime, command, token);
+        if (!plan.Preview.CanApply)
+            throw new TeamLabApiContractException(
+                "runtime_update_not_applicable",
+                plan.Preview.ResetRequiredReason ?? "本次资产变更不能应用。",
+                409);
+
+        var payload = new TeamLabRuntimeOperationPayload(null, runtimeId, null)
+        {
+            ControlScopeId = runtime.ControlScopeId,
+            AssetChanges = command
+        };
+        var protectedPayload = payloads.Protect(payload);
+        var payloadHash = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(protectedPayload)));
+        return await queue.EnqueueAsync(new TeamLabQueueRequest(
+            runtime.Id,
+            plan.Preview.Changes.Count(item => item.Kind == TeamLabAssetKind.Docker && item.Action is "add" or "replace"),
+            plan.Preview.Changes.Count(item => item.Kind == TeamLabAssetKind.Vm && item.Action is "add" or "replace"),
+            actorUserId,
+            operationId,
+            runtime.PublicId,
+            WorkloadSchedulingIdentity.ForRuntime(runtime.Id, $"teamlab-runtime:{runtime.Id}", runtime.CreatedById),
+            runtime.ExternalReference ?? runtime.PublicId.ToString("D"),
+            $"运行修订 {runtime.PlanRevision + 1}",
+            runtime.Generation,
+            RuntimeOperationKind.Update,
+            ProtectedPayload: protectedPayload,
+            PayloadHash: payloadHash), token);
+    }
+
     public async Task<TeamLabNodeResult> ExecuteAsync(
         int runtimeId,
         Guid ticketId,
@@ -111,8 +161,7 @@ public sealed class TeamLabRuntimeUpdateService(
         if (string.IsNullOrWhiteSpace(protectedPayload))
             return TeamLabNodeResult.Failed("runtime_update.payload_missing");
         var payload = payloads.Unprotect(protectedPayload);
-        var command = payload.Update;
-        if (command is null)
+        if ((payload.Update is null) == (payload.AssetChanges is null))
             return TeamLabNodeResult.Failed("runtime_update.payload_invalid");
 
         var ticket = await context.DeploymentQueueTickets.SingleOrDefaultAsync(
@@ -126,24 +175,25 @@ public sealed class TeamLabRuntimeUpdateService(
         if (runtime.Status != TeamLabRuntimeStatus.Running)
             return TeamLabNodeResult.Failed("runtime_update.runtime_not_running");
 
-        var preview = await PreviewCoreAsync(runtime, command.ReleaseId, token);
+        var updatePlan = payload.Update is { } update
+            ? await BuildReleaseUpdateAsync(runtime, update.ReleaseId, token)
+            : await BuildAssetChangesAsync(runtime, payload.AssetChanges!, token);
+        var preview = updatePlan.Preview;
         if (!preview.CanApply)
             return TeamLabNodeResult.Failed(preview.ResetRequiredReason ?? "runtime_update.requires_reset");
 
-        var currentRelease = await LoadReleaseAsync(runtime.TopologyReleaseId, token);
-        var targetRelease = await LoadReleaseAsync(command.ReleaseId, token);
-        var currentDefinition = TeamLabReleaseCodec.DecodeExecution(
-            currentRelease.SchemaVersion, currentRelease.CanonicalJson);
-        var targetDefinition = TeamLabReleaseCodec.DecodeExecution(
-            targetRelease.SchemaVersion, targetRelease.CanonicalJson);
+        var currentDefinition = updatePlan.Current;
+        var targetDefinition = updatePlan.Target;
         var currentAssets = currentDefinition.Assets.ToDictionary(item => item.Key, StringComparer.Ordinal);
         var targetAssets = targetDefinition.Assets.ToDictionary(item => item.Key, StringComparer.Ordinal);
-        var changes = BuildChanges(currentDefinition, targetDefinition);
-        var overlayValues = BuildOverlayValues(command.Overlays, changes);
+        var changes = preview.Changes;
+        var overlayValues = BuildOverlayValues(payload.Update?.Overlays ?? payload.AssetChanges?.Overlays, changes);
         if (changes.Count == 0)
         {
-            runtime.TopologyReleaseId = targetRelease.Id;
-            runtime.ControlScopeId = targetRelease.ControlScopeId;
+            if (updatePlan.TargetRelease is null)
+                return TeamLabNodeResult.Failed("runtime_update.no_changes");
+            runtime.TopologyReleaseId = updatePlan.TargetRelease.Id;
+            runtime.ControlScopeId = updatePlan.TargetRelease.ControlScopeId;
             runtime.UpdatedAt = DateTimeOffset.UtcNow;
             events.Record(runtime, "update", TeamLabEventLevel.Success,
                 GZCTF.Modules.Audit.Domain.OperationalEventCodes.TeamLab.RuntimeUpdateSucceeded,
@@ -174,6 +224,7 @@ public sealed class TeamLabRuntimeUpdateService(
 
         var newAssets = new List<TeamLabRuntimeAsset>();
         var replacementAssets = new Dictionary<int, TeamLabRuntimeAsset>();
+        var replacedAddresses = new HashSet<int>();
         var created = new List<(TeamLabRuntimeAsset Asset, TeamLabExecutionPlanV2 Plan)>();
         var removed = new List<(TeamLabRuntimeAsset Asset, TeamLabExecutionPlanV2 Plan, string? ResourceId, string? NativeIdentity)>();
         TeamLabExecutionPlanV2? currentNetworkPlan = null;
@@ -244,6 +295,8 @@ public sealed class TeamLabRuntimeUpdateService(
                     removed.Add((existing, oldPlan, existing.RuntimeResourceId, existing.NativeIdentity));
                     existing.Status = TeamLabRuntimeStatus.Destroying;
                     replacementAssets[existing.Id] = desired;
+                    if (!string.Equals(existing.IpAddress, desired.IpAddress, StringComparison.Ordinal))
+                        replacedAddresses.Add(existing.Id);
                 }
                 else if (existing is { Status: TeamLabRuntimeStatus.Destroyed })
                 {
@@ -324,6 +377,16 @@ public sealed class TeamLabRuntimeUpdateService(
                 created.Add((asset, plan));
             }
 
+            foreach (var assetId in replacedAddresses)
+            {
+                var accessIds = await context.TeamLabServiceAccesses.AsNoTracking()
+                    .Where(item => item.RuntimeAssetId == assetId && item.RevokedAt == null)
+                    .Select(item => item.PublicId)
+                    .ToArrayAsync(token);
+                foreach (var accessId in accessIds)
+                    await serviceAccess.RemoveAsync(runtime.PublicId, accessId, token);
+            }
+
             foreach (var change in changes.Where(item => item.Action == "remove"))
             {
                 var asset = removed.Single(item => item.Asset.TopologyKey == change.AssetKey).Asset;
@@ -342,8 +405,11 @@ public sealed class TeamLabRuntimeUpdateService(
             foreach (var snapshot in runtime.ExecutionPlanSnapshots.Where(item =>
                          item.Generation == runtime.Generation && targetPlans.ContainsKey(item.ShardId)))
                 snapshot.CurrentPlanJson = JsonSerializer.Serialize(targetPlans[snapshot.ShardId]);
-            runtime.TopologyReleaseId = targetRelease.Id;
-            runtime.ControlScopeId = targetRelease.ControlScopeId;
+            if (updatePlan.TargetRelease is not null)
+            {
+                runtime.TopologyReleaseId = updatePlan.TargetRelease.Id;
+                runtime.ControlScopeId = updatePlan.TargetRelease.ControlScopeId;
+            }
             runtime.PlanRevision++;
             runtime.Status = TeamLabRuntimeStatus.Running;
             runtime.LastError = null;
@@ -431,35 +497,173 @@ public sealed class TeamLabRuntimeUpdateService(
         }
     }
 
-    async Task<TeamLabRuntimeUpdatePreviewModel> PreviewCoreAsync(
+    async Task<RuntimeUpdatePlan> BuildReleaseUpdateAsync(
         TeamLabRuntime runtime,
         Guid releaseId,
         CancellationToken token)
     {
-        var current = await LoadReleaseAsync(runtime.TopologyReleaseId, token);
-        var target = await LoadReleaseAsync(releaseId, token);
-        var currentDefinition = TeamLabReleaseCodec.DecodeExecution(current.SchemaVersion, current.CanonicalJson);
-        var targetDefinition = TeamLabReleaseCodec.DecodeExecution(target.SchemaVersion, target.CanonicalJson);
+        var currentRelease = await LoadReleaseAsync(runtime.TopologyReleaseId, token);
+        var targetRelease = await LoadReleaseAsync(releaseId, token);
+        var source = TeamLabReleaseCodec.DecodeExecution(currentRelease.SchemaVersion, currentRelease.CanonicalJson);
+        var current = CurrentDefinition(runtime, source);
+        var target = TeamLabReleaseCodec.DecodeExecution(targetRelease.SchemaVersion, targetRelease.CanonicalJson);
         var reason = runtime.Status != TeamLabRuntimeStatus.Running
             ? "只有运行中的环境可以更新资产。"
-            : current.TopologyId != target.TopologyId
+            : currentRelease.TopologyId != targetRelease.TopologyId
                 ? "目标版本不属于当前场景，需要完整重置。"
-                : target.IsArchived
+                : targetRelease.IsArchived
                     ? "目标发布版本已归档。"
-                    : !SameTopologyStructure(currentDefinition, targetDefinition)
+                    : !SameTopologyStructure(current, target)
                         ? "网段、路由或基础设施发生变化，需要完整重置。"
-                        : !SameConnectorBindings(currentDefinition, targetDefinition)
+                        : !SameConnectorBindings(current, target)
                             ? "现场连接器发生变化，需要完整重置。"
-                            : PlacementChangeReason(runtime, targetDefinition);
-        return new TeamLabRuntimeUpdatePreviewModel(
+                            : PlacementChangeReason(runtime, target);
+        var preview = new TeamLabRuntimeUpdatePreviewModel(
             runtime.PublicId,
-            current.Id,
-            target.Id,
+            currentRelease.Id,
+            targetRelease.Id,
             runtime.PlanRevision,
             reason is null,
             reason,
-            BuildChanges(currentDefinition, targetDefinition));
+            BuildChanges(current, target));
+        return new(current, target, targetRelease, preview);
     }
+
+    async Task<RuntimeUpdatePlan> BuildAssetChangesAsync(
+        TeamLabRuntime runtime,
+        ChangeTeamLabRuntimeAssetsModel command,
+        CancellationToken token)
+    {
+        if (command.ExpectedPlanRevision != runtime.PlanRevision)
+            throw new TeamLabApiContractException(
+                "runtime_plan_revision_conflict",
+                $"运行计划已经更新，当前修订为 {runtime.PlanRevision}。",
+                409);
+        var release = await LoadReleaseAsync(runtime.TopologyReleaseId, token);
+        var source = TeamLabReleaseCodec.DecodeExecution(release.SchemaVersion, release.CanonicalJson);
+        var current = CurrentDefinition(runtime, source);
+        var target = ApplyAssetChanges(current, command);
+        var validation = topologyValidator.Validate(ToDefinition(target), target.SchemaVersion);
+        if (!validation.Valid)
+            throw TeamLabTopologyApplicationService.InvalidTopology(validation);
+        await TeamLabTopologyApplicationService.ValidateImageTemplatesAsync(context, target, token);
+        await TeamLabTopologyApplicationService.ValidateCapabilityResourcesAsync(context, ToDefinition(target), token);
+        var changes = BuildChanges(current, target);
+        if (changes.Count == 0)
+            throw new TeamLabApiContractException("runtime_update_no_changes", "本次没有资产变更。", 422);
+        BuildOverlayValues(command.Overlays, changes);
+        var reason = runtime.Status != TeamLabRuntimeStatus.Running
+            ? "只有运行中的环境可以更新资产。"
+            : PlacementChangeReason(runtime, target);
+        var preview = new TeamLabRuntimeUpdatePreviewModel(
+            runtime.PublicId,
+            release.Id,
+            release.Id,
+            runtime.PlanRevision,
+            reason is null,
+            reason,
+            changes);
+        return new(current, target, null, preview);
+    }
+
+    static TeamLabExecutionTopology CurrentDefinition(
+        TeamLabRuntime runtime,
+        TeamLabExecutionTopology source)
+    {
+        var assets = runtime.Assets
+            .Where(item => item.Generation == runtime.Generation && item.Status != TeamLabRuntimeStatus.Destroyed)
+            .OrderBy(item => item.Id)
+            .Select(item => string.IsNullOrWhiteSpace(item.ExecutionPlanJson)
+                ? throw new TeamLabApiContractException(
+                    "runtime_asset_plan_missing",
+                    $"运行资产 {item.Name} 缺少执行定义。",
+                    409)
+                : JsonSerializer.Deserialize<TeamLabExecutionAsset>(item.ExecutionPlanJson)
+                  ?? throw new TeamLabApiContractException(
+                      "runtime_asset_plan_invalid",
+                      $"运行资产 {item.Name} 的执行定义无效。",
+                      409))
+            .ToArray();
+        return source with { Assets = assets };
+    }
+
+    static TeamLabExecutionTopology ApplyAssetChanges(
+        TeamLabExecutionTopology current,
+        ChangeTeamLabRuntimeAssetsModel command)
+    {
+        var assets = current.Assets.ToDictionary(item => item.Key, StringComparer.Ordinal);
+        var requested = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var asset in command.Add ?? [])
+        {
+            RequireUniqueChange(requested, asset.Key);
+            if (assets.ContainsKey(asset.Key))
+                throw new TeamLabApiContractException("runtime_asset_exists", $"资产 {asset.Key} 已存在。", 409);
+            assets.Add(asset.Key, TeamLabTopologyV1Normalizer.ToExecution(asset));
+        }
+        foreach (var asset in command.Replace ?? [])
+        {
+            RequireUniqueChange(requested, asset.Key);
+            if (!assets.ContainsKey(asset.Key))
+                throw new TeamLabApiContractException("runtime_asset_not_found", $"未找到资产 {asset.Key}。", 404);
+            assets[asset.Key] = TeamLabTopologyV1Normalizer.ToExecution(asset);
+        }
+        foreach (var key in command.Remove ?? [])
+        {
+            RequireUniqueChange(requested, key);
+            if (!assets.Remove(key))
+                throw new TeamLabApiContractException("runtime_asset_not_found", $"未找到资产 {key}。", 404);
+        }
+        if (requested.Count == 0)
+            throw new TeamLabApiContractException("runtime_update_no_changes", "请至少新增、替换或移除一个资产。", 422);
+        return current with
+        {
+            Assets = assets.Values
+                .OrderBy(item => item.DisplayOrder)
+                .ThenBy(item => item.Key, StringComparer.Ordinal)
+                .ToArray()
+        };
+    }
+
+    static void RequireUniqueChange(ISet<string> requested, string key)
+    {
+        if (string.IsNullOrWhiteSpace(key) || !requested.Add(key))
+            throw new TeamLabApiContractException(
+                "runtime_asset_change_duplicated",
+                $"资产 {key} 在同一次变更中重复出现。",
+                422);
+    }
+
+    static TeamLabTopologyDefinitionModel ToDefinition(TeamLabExecutionTopology topology) => new(
+        topology.Name,
+        topology.Networks.Select(item => new TeamLabTopologyNetworkModel(
+            item.Key, item.Name, new TeamLabAddressPoolModel(item.AddressPoolCidr, item.RuntimePrefixLength),
+            item.IsEntry, item.DisplayOrder)).ToArray(),
+        topology.Assets.Select(item => new TeamLabTopologyAssetModel(
+            item.Key, item.Name, item.Kind, item.ImageTemplateId,
+            new TeamLabAssetResourceModel(item.CpuUnits, item.MemoryMiB, item.StorageMiB),
+            item.Interfaces.Select(iface => new TeamLabTopologyInterfaceModel(
+                iface.Key, iface.NetworkKey, iface.HostOffset, iface.Primary, iface.DisplayOrder)).ToArray(),
+            item.ExposePort,
+            item.HealthCheckKind is { } kind && item.HealthCheckPort is { } port
+                ? new TeamLabHealthCheckModel(kind, port)
+                : null,
+            item.DisplayOrder,
+            item.DevicePackageId,
+            string.IsNullOrWhiteSpace(item.DeviceParametersJson)
+                ? null
+                : JsonDocument.Parse(item.DeviceParametersJson).RootElement.Clone(),
+            item.ConnectorId)).ToArray(),
+        topology.Connections.Select(item => new TeamLabTopologyConnectionModel(
+            item.Key, item.FromNetworkKey, item.ToNetworkKey, item.ViaAssetKey,
+            item.ViaNodeKey, item.Direction)).ToArray(),
+        topology.Infrastructure.Select(item => new TeamLabTopologyInfrastructureModel(
+            item.Key, item.Name, item.Kind,
+            item.Interfaces.Select(iface => new TeamLabTopologyInterfaceModel(
+                iface.Key, iface.NetworkKey, iface.HostOffset, iface.Primary, iface.DisplayOrder)).ToArray(),
+            item.NetworkKey)).ToArray(),
+        new TeamLabObservationPolicyModel(
+            topology.Observation.FlowMetadataEnabled,
+            topology.Observation.OnDemandPcapEnabled));
 
     internal static IReadOnlyList<TeamLabRuntimeUpdateChangeModel> BuildChanges(
         TeamLabExecutionTopology current,
@@ -669,6 +873,7 @@ public sealed class TeamLabRuntimeUpdateService(
         target.DevicePackageId = source.DevicePackageId;
         target.DevicePackageParametersJson = source.DevicePackageParametersJson;
         target.ConnectorId = source.ConnectorId;
+        target.ExecutionPlanJson = source.ExecutionPlanJson;
         target.ShardId = source.ShardId;
         target.WorkerNodeId = source.WorkerNodeId;
         target.AgentOperationId = source.AgentOperationId;
@@ -771,3 +976,9 @@ file static class TeamLabRuntimeUpdateStringExtensions
 }
 
 file sealed record RuntimeInterfaceIntent(string NetworkKey);
+
+internal sealed record RuntimeUpdatePlan(
+    TeamLabExecutionTopology Current,
+    TeamLabExecutionTopology Target,
+    TeamLabTopologyRelease? TargetRelease,
+    TeamLabRuntimeUpdatePreviewModel Preview);

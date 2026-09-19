@@ -43,7 +43,6 @@ using AgentRuntimeSignal = GZCTF.Modules.Runtime.Domain.AgentRuntimeSignal;
 using TeamLabRemoteSessionEntity = GZCTF.Modules.TeamLab.Domain.Runtime.TeamLabRemoteSession;
 using TeamLabRemoteAuditFileEntity = GZCTF.Modules.TeamLab.Domain.Runtime.TeamLabRemoteAuditFile;
 using ImageTemplateRemoteAccessEntity = GZCTF.Modules.Content.Domain.ImageTemplateRemoteAccess;
-using PenetrationTeamLabOperatorGrantEntity = GZCTF.Modules.Penetration.Domain.PenetrationTeamLabOperatorGrant;
 
 namespace GZCTF.Models;
 
@@ -133,7 +132,7 @@ public partial class AppDbContext(DbContextOptions<AppDbContext> options) :
     public DbSet<PenetrationObjectiveEntity> PenetrationObjectives => Set<PenetrationObjectiveEntity>();
     public DbSet<PenetrationGameLabBindingEntity> PenetrationGameLabBindings => Set<PenetrationGameLabBindingEntity>();
     public DbSet<PenetrationTeamRuntimeBindingEntity> PenetrationTeamRuntimeBindings => Set<PenetrationTeamRuntimeBindingEntity>();
-    public DbSet<PenetrationTeamLabOperatorGrantEntity> PenetrationTeamLabOperatorGrants => Set<PenetrationTeamLabOperatorGrantEntity>();
+    public DbSet<TeamLabRuntimeGrant> TeamLabRuntimeGrants => Set<TeamLabRuntimeGrant>();
     public DbSet<TrainingCourse> TrainingCourses { get; set; } = null!;
     public DbSet<TrainingCourseTeacher> TrainingCourseTeachers { get; set; } = null!;
     public DbSet<TrainingCourseEnrollment> TrainingCourseEnrollments { get; set; } = null!;

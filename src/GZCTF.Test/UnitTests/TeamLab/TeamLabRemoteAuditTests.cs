@@ -112,7 +112,7 @@ public class TeamLabRemoteAuditTests
         var leases = new Mock<IDistributedLeaseProvider>();
         leases.Setup(item => item.AcquireAsync(It.IsAny<string>(), It.IsAny<TimeSpan?>(), It.IsAny<TimeSpan?>(), It.IsAny<CancellationToken>()))
             .Returns(new ValueTask<IDistributedLease>(Mock.Of<IDistributedLease>()));
-        return new(db, storage.Object, new TeamLabAuthorizationService(db, [], []), new TeamLabScopeAuthorizationService(db), leases.Object,
+        return new(db, storage.Object, new TeamLabAuthorizationService(db), leases.Object,
             Options.Create(new TeamLabRemoteAuditOptions { MaxStorageBytes = quota }),
             new TeamLabEventRecorder(db, Mock.Of<IOperationalEventWriter>(), new OperationalCorrelation()),
             NullLogger<TeamLabRemoteAuditService>.Instance);
@@ -121,7 +121,18 @@ public class TeamLabRemoteAuditTests
     private static async Task<TeamLabRemoteSession> Seed(AppDbContext db)
     {
         var actor = Guid.NewGuid();
-        var session = new TeamLabRemoteSession { Runtime = new TeamLabRuntime { CreatedById = actor }, RequestedByUserId = actor,
+        var runtime = new TeamLabRuntime { Id = 1, CreatedById = actor, Generation = 1 };
+        var asset = new TeamLabRuntimeAsset
+        {
+            Id = 1,
+            Runtime = runtime,
+            RuntimeId = runtime.Id,
+            Generation = runtime.Generation,
+            Name = "web",
+            TopologyKey = "web"
+        };
+        var session = new TeamLabRemoteSession { Runtime = runtime, RuntimeId = runtime.Id, RuntimeAsset = asset,
+            RuntimeAssetId = asset.Id, RequestedByUserId = actor,
             Status = TeamLabRemoteSessionStatus.Ended, EndedAt = DateTimeOffset.UtcNow.AddMinutes(-1), Reason = "support request" };
         db.TeamLabRemoteSessions.Add(session);
         await db.SaveChangesAsync();

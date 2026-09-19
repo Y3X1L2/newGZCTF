@@ -102,7 +102,7 @@ public sealed class TeamLabServiceAccessTests
 
     private static TeamLabServiceAccessService Service(AppDbContext context, IPortAllocationService ports,
         IPublicUdpGatewayProvider gateway, ITeamLabServiceAccessGateway worker) =>
-        new(context, new TeamLabScopeAuthorizationService(context), ports, gateway, worker,
+        new(context, new TeamLabAuthorizationService(context), ports, gateway, worker,
             Options.Create(new PublicUdpGatewayConfig { PublicEndpoint = "gateway.example" }));
 
     private static Mock<IPublicUdpGatewayProvider> Gateway(bool success)

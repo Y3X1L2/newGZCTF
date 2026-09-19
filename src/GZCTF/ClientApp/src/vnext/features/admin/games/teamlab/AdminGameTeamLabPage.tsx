@@ -13,7 +13,6 @@ import { TeamLabRolloutControls } from './TeamLabRolloutControls'
 import { TeamLabRolloutSummary } from './TeamLabRolloutSummary'
 import { TeamLabTargetDrawer } from './TeamLabTargetDrawer'
 import { TeamLabTargetTable } from './TeamLabTargetTable'
-import { TeamLabOperatorGrants } from './TeamLabOperatorGrants'
 import { useGameTeamLab } from './useGameTeamLab'
 import styles from './TeamLabGame.module.css'
 
@@ -107,8 +106,6 @@ export function AdminGameTeamLabPage() {
         onPrepare={() => updateRollout(() => teamLabGameAdminApi.prepare(gameId))}
         rollout={data.state.rollout}
       />
-      <TeamLabOperatorGrants gameId={gameId} />
-
       {data.state.rollout ? (
         <>
           <TeamLabRolloutSummary rollout={data.state.rollout} />

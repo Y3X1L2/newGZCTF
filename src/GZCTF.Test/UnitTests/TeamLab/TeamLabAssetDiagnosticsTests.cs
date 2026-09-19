@@ -155,7 +155,7 @@ public sealed class TeamLabAssetDiagnosticsTests
         var writer = new Mock<IOperationalEventWriter>();
         writer.Setup(item => item.Append(It.IsAny<OperationalEventDraft>()))
             .Callback<OperationalEventDraft>(draft => recorded = draft);
-        var service = new TeamLabAssetDiagnosticsService(db, new TeamLabAuthorizationService(db, [], []), gateway.Object,
+        var service = new TeamLabAssetDiagnosticsService(db, new TeamLabAuthorizationService(db), gateway.Object,
             new TeamLabEventRecorder(db, writer.Object, new OperationalCorrelation()));
         await service.ReadAsync(asset.Runtime.PublicId, asset.Id, asset.Runtime.CreatedById!.Value, false, 200, default);
         Assert.NotNull(recorded);
@@ -169,7 +169,7 @@ public sealed class TeamLabAssetDiagnosticsTests
     }
     private static AppDbContext Context() => new(new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
     private static TeamLabAssetDiagnosticsService Service(AppDbContext db, ITeamLabAssetDiagnosticsGateway gateway) =>
-        new(db, new TeamLabAuthorizationService(db, [], []), gateway,
+        new(db, new TeamLabAuthorizationService(db), gateway,
             new TeamLabEventRecorder(db, new EfOperationalEventWriter(db, NullLogger<EfOperationalEventWriter>.Instance), new OperationalCorrelation()));
     private static async Task<TeamLabRuntimeAsset> Seed(AppDbContext db)
     {

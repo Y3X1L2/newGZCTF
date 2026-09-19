@@ -48,7 +48,7 @@ public static class TeamLabModuleRegistration
         services.AddScoped<TeamLabAdminQueryService>();
         services.AddScoped<ITeamLabUsageProjectionProvider, TeamLabEmptyUsageProjectionProvider>();
         services.AddScoped<TeamLabAuthorizationService>();
-        services.AddScoped<TeamLabRemoteAccessAuthorizationService>();
+        services.AddScoped<TeamLabRuntimeGrantService>();
         services.AddScoped<TeamLabAssetDiagnosticsService>();
         services.AddScoped<ITeamLabAssetDiagnosticsGateway, AgentTeamLabAssetDiagnosticsGateway>();
         services.AddScoped<ITeamLabRemoteRelayGateway, AgentTeamLabRemoteRelayGateway>();

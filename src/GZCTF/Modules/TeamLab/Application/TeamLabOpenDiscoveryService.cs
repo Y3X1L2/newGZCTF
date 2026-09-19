@@ -9,22 +9,25 @@ namespace GZCTF.Modules.TeamLab.Application;
 
 public sealed class TeamLabOpenDiscoveryService(
     AppDbContext context,
-    TeamLabScopeAuthorizationService scopeAuthorization)
+    TeamLabScopeAuthorizationService scopeAuthorization,
+    TeamLabAuthorizationService authorization)
 {
     public async Task<OpenTeamLabRuntimeStatusModel> GetRuntimeStatusAsync(
         Guid runtimeId,
         Guid apiTokenId,
+        Guid actorUserId,
         bool hasWildcardScopeGrant,
         CancellationToken cancellationToken)
     {
-        await scopeAuthorization.RequireRuntimeScopeAsync(
-            runtimeId, apiTokenId, hasWildcardScopeGrant, writable: false, cancellationToken);
-        return await GetRuntimeStatusProjectionAsync(runtimeId, cancellationToken);
+        var assetScope = await authorization.GetAssetScopeAsync(runtimeId, actorUserId, apiTokenId,
+            hasWildcardScopeGrant, TeamLabRuntimePermission.StateRead, cancellationToken);
+        return await GetRuntimeStatusProjectionAsync(runtimeId, cancellationToken, assetScope?.ToArray());
     }
 
     public async Task<OpenTeamLabRuntimeStatusModel> GetRuntimeStatusProjectionAsync(
         Guid runtimeId,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string[]? assetKeys = null)
     {
         var runtime = await context.TeamLabRuntimes.AsNoTracking()
             .Where(item => item.PublicId == runtimeId)
@@ -36,22 +39,28 @@ public sealed class TeamLabOpenDiscoveryService(
                 item.Status,
                 item.UpdatedAt,
                 Total = item.Assets.Count(asset => asset.Generation == item.Generation &&
+                    (assetKeys == null || assetKeys.Contains(asset.TopologyKey)) &&
                     (asset.Kind == TeamLabResourceKind.Docker || asset.Kind == TeamLabResourceKind.Vm)),
                 Pending = item.Assets.Count(asset => asset.Generation == item.Generation &&
+                    (assetKeys == null || assetKeys.Contains(asset.TopologyKey)) &&
                     (asset.Kind == TeamLabResourceKind.Docker || asset.Kind == TeamLabResourceKind.Vm) &&
                     (asset.Status == TeamLabRuntimeStatus.Pending || asset.Status == TeamLabRuntimeStatus.Planning ||
                      asset.Status == TeamLabRuntimeStatus.Scheduled || asset.Status == TeamLabRuntimeStatus.Deploying ||
                      asset.Status == TeamLabRuntimeStatus.Probing)),
                 Running = item.Assets.Count(asset => asset.Generation == item.Generation &&
+                    (assetKeys == null || assetKeys.Contains(asset.TopologyKey)) &&
                     (asset.Kind == TeamLabResourceKind.Docker || asset.Kind == TeamLabResourceKind.Vm) &&
                     asset.Status == TeamLabRuntimeStatus.Running),
                 Paused = item.Assets.Count(asset => asset.Generation == item.Generation &&
+                    (assetKeys == null || assetKeys.Contains(asset.TopologyKey)) &&
                     (asset.Kind == TeamLabResourceKind.Docker || asset.Kind == TeamLabResourceKind.Vm) &&
                     asset.Status == TeamLabRuntimeStatus.Paused),
                 Stopped = item.Assets.Count(asset => asset.Generation == item.Generation &&
+                    (assetKeys == null || assetKeys.Contains(asset.TopologyKey)) &&
                     (asset.Kind == TeamLabResourceKind.Docker || asset.Kind == TeamLabResourceKind.Vm) &&
                     asset.Status == TeamLabRuntimeStatus.Stopped),
                 Failed = item.Assets.Count(asset => asset.Generation == item.Generation &&
+                    (assetKeys == null || assetKeys.Contains(asset.TopologyKey)) &&
                     (asset.Kind == TeamLabResourceKind.Docker || asset.Kind == TeamLabResourceKind.Vm) &&
                     asset.Status == TeamLabRuntimeStatus.Failed)
             })
@@ -79,6 +88,7 @@ public sealed class TeamLabOpenDiscoveryService(
     public async Task<OpenTeamLabRuntimeAssetPageModel> ListRuntimeAssetsAsync(
         Guid runtimeId,
         Guid apiTokenId,
+        Guid actorUserId,
         bool hasWildcardScopeGrant,
         string? cursor,
         int limit,
@@ -87,8 +97,8 @@ public sealed class TeamLabOpenDiscoveryService(
     {
         if (limit is < 1 or > 100 || status.HasValue && !Enum.IsDefined(status.Value))
             throw new TeamLabApiContractException("runtime_asset_filter_invalid", "运行资产筛选条件无效。", 400);
-        await scopeAuthorization.RequireRuntimeScopeAsync(
-            runtimeId, apiTokenId, hasWildcardScopeGrant, writable: false, cancellationToken);
+        var assetScope = await authorization.GetAssetScopeAsync(runtimeId, actorUserId, apiTokenId,
+            hasWildcardScopeGrant, TeamLabRuntimePermission.StateRead, cancellationToken);
         var runtime = await context.TeamLabRuntimes.AsNoTracking()
             .Where(item => item.PublicId == runtimeId)
             .Select(item => new { item.Id, item.Generation, item.Status })
@@ -106,6 +116,11 @@ public sealed class TeamLabOpenDiscoveryService(
         var query = context.TeamLabRuntimeAssets.AsNoTracking()
             .Where(item => item.RuntimeId == runtime.Id && item.Generation == runtime.Generation &&
                            (item.Kind == TeamLabResourceKind.Docker || item.Kind == TeamLabResourceKind.Vm));
+        if (assetScope is not null)
+        {
+            var assetKeys = assetScope.ToArray();
+            query = query.Where(item => assetKeys.Contains(item.TopologyKey));
+        }
         if (decoded is { } value)
             query = query.Where(item => item.Id > value.Id);
         if (status is { } requestedStatus)
@@ -158,8 +173,6 @@ public sealed class TeamLabOpenDiscoveryService(
         IReadOnlySet<Guid> readableScopes;
         if (controlScopeId is { } requestedScope)
         {
-            await scopeAuthorization.RequireReadableAsync(
-                requestedScope, apiTokenId, hasWildcardScopeGrant, cancellationToken);
             readableScopes = new HashSet<Guid> { requestedScope };
         }
         else
@@ -170,7 +183,13 @@ public sealed class TeamLabOpenDiscoveryService(
 
         var scopeIds = readableScopes.ToArray();
         var query = context.TeamLabRuntimes.AsNoTracking()
-            .Where(item => item.ControlScopeId.HasValue && scopeIds.Contains(item.ControlScopeId.Value));
+            .Where(item => item.ControlScopeId.HasValue && (
+                scopeIds.Contains(item.ControlScopeId.Value) ||
+                context.TeamLabRuntimeGrants.Any(grant => grant.RuntimeId == item.Id &&
+                    grant.ApiTokenId == apiTokenId &&
+                    (grant.Permissions & (int)TeamLabRuntimePermission.StateRead) != 0)));
+        if (controlScopeId is { } scopeId)
+            query = query.Where(item => item.ControlScopeId == scopeId);
         if (normalizedReference is not null)
             query = query.Where(item => item.ExternalReference == normalizedReference);
         if (status is { } requestedStatus)
@@ -203,12 +222,8 @@ public sealed class TeamLabOpenDiscoveryService(
 
     public async Task<IReadOnlyList<OpenTeamLabAccessGrantMetadataModel>> ListAccessGrantsAsync(
         Guid runtimeId,
-        Guid apiTokenId,
-        bool hasWildcardScopeGrant,
         CancellationToken cancellationToken)
     {
-        await scopeAuthorization.RequireRuntimeScopeAsync(
-            runtimeId, apiTokenId, hasWildcardScopeGrant, writable: false, cancellationToken);
         var runtime = await context.TeamLabRuntimes.AsNoTracking()
             .Where(item => item.PublicId == runtimeId)
             .Select(item => new { item.Id, item.Generation })

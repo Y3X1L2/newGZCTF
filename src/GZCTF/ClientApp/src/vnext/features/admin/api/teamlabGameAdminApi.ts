@@ -137,20 +137,6 @@ export interface TeamLabGameTargetPage {
   nextCursor: string | null
 }
 
-export interface TeamLabOperatorGrant {
-  userId: string
-  userName: string
-  displayName: string | null
-  viewAssets: boolean
-  operateAssets: boolean
-  updatedAt: number
-}
-
-export interface TeamLabOperatorGrantWrite {
-  viewAssets: boolean
-  operateAssets: boolean
-}
-
 export interface TeamLabTeamRebuildResult {
   runtimeId: string
   reused: boolean
@@ -298,20 +284,6 @@ export function parseTeamLabGameTargetPage(value: unknown): TeamLabGameTargetPag
   }
 }
 
-export function parseTeamLabOperatorGrants(value: unknown): readonly TeamLabOperatorGrant[] {
-  return parse.array(value, 'TeamLab operator grants', (entry, label) => {
-    const item = parse.record(entry, label)
-    return {
-      userId: parse.string(item.userId, `${label}.userId`),
-      userName: parse.string(item.userName, `${label}.userName`),
-      displayName: parse.nullableString(item.displayName, `${label}.displayName`),
-      viewAssets: parse.boolean(item.viewAssets, `${label}.viewAssets`),
-      operateAssets: parse.boolean(item.operateAssets, `${label}.operateAssets`),
-      updatedAt: parse.number(item.updatedAt, `${label}.updatedAt`),
-    }
-  })
-}
-
 function parseRebuild(value: unknown): TeamLabTeamRebuildResult {
   const item = parse.record(value, 'TeamLab team rebuild')
   return {
@@ -325,7 +297,6 @@ export const teamLabGameAdminKeys = {
   releases: (gameId: number) => ['vnext:admin:game-teamlab-releases', gameId] as const,
   targets: (gameId: number, cursor: string | null, limit: number) =>
     ['vnext:admin:game-teamlab-targets', gameId, cursor ?? '', limit] as const,
-  operators: (gameId: number) => ['vnext:admin:game-teamlab-operators', gameId] as const,
 }
 
 export function createTeamLabGameAdminApi(client: RuntimeJsonClient = runtimeJsonClient) {
@@ -363,15 +334,6 @@ export function createTeamLabGameAdminApi(client: RuntimeJsonClient = runtimeJso
     },
     async cleanupTeam(gameId: number, teamId: number) {
       await client.postJson(`${root(gameId)}/teams/${teamId}/cleanup`)
-    },
-    async operators(gameId: number) {
-      return parseTeamLabOperatorGrants(await client.get(`${root(gameId)}/teamlab/operators`))
-    },
-    async setOperator(gameId: number, userId: string, request: TeamLabOperatorGrantWrite) {
-      await client.putJson(`${root(gameId)}/teamlab/operators/${userId}`, request)
-    },
-    async deleteOperator(gameId: number, userId: string) {
-      await client.delete(`${root(gameId)}/teamlab/operators/${userId}`)
     },
   }
 }

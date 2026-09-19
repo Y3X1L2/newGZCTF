@@ -14,6 +14,7 @@ public sealed record TeamLabRuntimeOperationPayload(
     ResetTeamLabRuntimeModel? Reset)
 {
     public UpdateTeamLabRuntimeModel? Update { get; init; }
+    public ChangeTeamLabRuntimeAssetsModel? AssetChanges { get; init; }
     public Guid? ControlScopeId { get; init; }
     public CreateTeamLabRolloutModel? CreateRollout { get; init; }
     public ReplaceTeamLabRolloutTargetsModel? ReplaceRolloutTargets { get; init; }
@@ -44,7 +45,7 @@ public sealed record TeamLabRuntimeOperationPayload(
 public sealed record TeamLabRuntimeOperationSubmission(
     Guid? ApiTokenId,
     Guid ActorUserId,
-    Guid ControlScopeId,
+    Guid? ControlScopeId,
     string RouteKey,
     string IdempotencyKey,
     string RequestHash,
@@ -99,7 +100,7 @@ public sealed class TeamLabRuntimeOperationApplicationService(
     public const string OperationKind = "teamlab.runtime.v1";
 
     public Task<IdempotencyBeginResult> SubmitRemoteSessionCreateAsync(
-        Guid apiTokenId, Guid actorUserId, string idempotencyKey, Guid runtimeId, Guid controlScopeId,
+        Guid apiTokenId, Guid actorUserId, string idempotencyKey, Guid runtimeId, Guid? controlScopeId,
         int assetId, string reason, CancellationToken cancellationToken, bool vncConsole = false)
     {
         if (assetId <= 0 || string.IsNullOrWhiteSpace(reason) || reason.Trim().Length is < 4 or > 500)
@@ -114,7 +115,7 @@ public sealed class TeamLabRuntimeOperationApplicationService(
     }
 
     public Task<IdempotencyBeginResult> SubmitRemoteSessionEndAsync(
-        Guid apiTokenId, Guid actorUserId, string idempotencyKey, Guid runtimeId, Guid controlScopeId,
+        Guid apiTokenId, Guid actorUserId, string idempotencyKey, Guid runtimeId, Guid? controlScopeId,
         Guid sessionId, CancellationToken cancellationToken) =>
         SubmitAsync(apiTokenId, actorUserId, idempotencyKey,
             $"DELETE:/api/open/v1/teamlab/remote-sessions/{sessionId:D}",
@@ -129,7 +130,7 @@ public sealed class TeamLabRuntimeOperationApplicationService(
         Guid actorUserId,
         string idempotencyKey,
         string routeKey,
-        Guid controlScopeId,
+        Guid? controlScopeId,
         CreateTeamLabRuntimeModel command,
         CancellationToken cancellationToken) =>
         SubmitAsync(apiTokenId, actorUserId, idempotencyKey, routeKey, TeamLabRuntimeOperationKind.Create,
@@ -141,7 +142,7 @@ public sealed class TeamLabRuntimeOperationApplicationService(
         string idempotencyKey,
         string routeKey,
         Guid runtimeId,
-        Guid controlScopeId,
+        Guid? controlScopeId,
         ResetTeamLabRuntimeModel command,
         CancellationToken cancellationToken) =>
         SubmitAsync(apiTokenId, actorUserId, idempotencyKey, routeKey, TeamLabRuntimeOperationKind.Reset,
@@ -153,7 +154,7 @@ public sealed class TeamLabRuntimeOperationApplicationService(
         string idempotencyKey,
         string routeKey,
         Guid runtimeId,
-        Guid controlScopeId,
+        Guid? controlScopeId,
         UpdateTeamLabRuntimeModel command,
         CancellationToken cancellationToken) =>
         SubmitAsync(apiTokenId, actorUserId, idempotencyKey, routeKey, TeamLabRuntimeOperationKind.Update,
@@ -163,13 +164,30 @@ public sealed class TeamLabRuntimeOperationApplicationService(
                 Update = command
             }, cancellationToken);
 
+    public Task<IdempotencyBeginResult> SubmitAssetChangesAsync(
+        Guid apiTokenId,
+        Guid actorUserId,
+        string idempotencyKey,
+        Guid runtimeId,
+        Guid? controlScopeId,
+        ChangeTeamLabRuntimeAssetsModel command,
+        CancellationToken cancellationToken) =>
+        SubmitAsync(apiTokenId, actorUserId, idempotencyKey,
+            $"POST:/api/open/v1/teamlab/runtimes/{runtimeId:D}/asset-changes",
+            TeamLabRuntimeOperationKind.Update,
+            new TeamLabRuntimeOperationPayload(null, runtimeId, null)
+            {
+                ControlScopeId = controlScopeId,
+                AssetChanges = command
+            }, cancellationToken);
+
     public Task<IdempotencyBeginResult> SubmitDestroyAsync(
         Guid? apiTokenId,
         Guid actorUserId,
         string idempotencyKey,
         string routeKey,
         Guid runtimeId,
-        Guid controlScopeId,
+        Guid? controlScopeId,
         CancellationToken cancellationToken) =>
         SubmitAsync(apiTokenId, actorUserId, idempotencyKey, routeKey, TeamLabRuntimeOperationKind.Destroy,
             new TeamLabRuntimeOperationPayload(null, runtimeId, null) { ControlScopeId = controlScopeId }, cancellationToken);
@@ -179,7 +197,7 @@ public sealed class TeamLabRuntimeOperationApplicationService(
         Guid actorUserId,
         string idempotencyKey,
         Guid runtimeId,
-        Guid controlScopeId,
+        Guid? controlScopeId,
         CancellationToken cancellationToken) =>
         SubmitAsync(apiTokenId, actorUserId, idempotencyKey,
             $"POST:/api/open/v1/teamlab/runtimes/{runtimeId:D}/pause", TeamLabRuntimeOperationKind.RuntimePause,
@@ -190,7 +208,7 @@ public sealed class TeamLabRuntimeOperationApplicationService(
         Guid actorUserId,
         string idempotencyKey,
         Guid runtimeId,
-        Guid controlScopeId,
+        Guid? controlScopeId,
         CancellationToken cancellationToken) =>
         SubmitAsync(apiTokenId, actorUserId, idempotencyKey,
             $"POST:/api/open/v1/teamlab/runtimes/{runtimeId:D}/resume", TeamLabRuntimeOperationKind.RuntimeResume,
@@ -258,7 +276,7 @@ public sealed class TeamLabRuntimeOperationApplicationService(
         Guid actorUserId,
         string idempotencyKey,
         Guid topologyId,
-        Guid controlScopeId,
+        Guid? controlScopeId,
         UpdateTeamLabTopologyModel command,
         CancellationToken cancellationToken) =>
         SubmitAsync(apiTokenId, actorUserId, idempotencyKey,
@@ -275,7 +293,7 @@ public sealed class TeamLabRuntimeOperationApplicationService(
         Guid actorUserId,
         string idempotencyKey,
         Guid topologyId,
-        Guid controlScopeId,
+        Guid? controlScopeId,
         CancellationToken cancellationToken) =>
         SubmitAsync(apiTokenId, actorUserId, idempotencyKey,
             $"DELETE:/api/open/v1/teamlab/topologies/{topologyId:D}", TeamLabRuntimeOperationKind.TopologyDelete,
@@ -290,7 +308,7 @@ public sealed class TeamLabRuntimeOperationApplicationService(
         Guid actorUserId,
         string idempotencyKey,
         Guid topologyId,
-        Guid controlScopeId,
+        Guid? controlScopeId,
         PublishTeamLabTopologyModel command,
         CancellationToken cancellationToken) =>
         SubmitAsync(apiTokenId, actorUserId, idempotencyKey,
@@ -308,7 +326,7 @@ public sealed class TeamLabRuntimeOperationApplicationService(
         Guid actorUserId,
         string idempotencyKey,
         Guid runtimeId,
-        Guid controlScopeId,
+        Guid? controlScopeId,
         TeamLabAccessGrantCreateModel command,
         CancellationToken cancellationToken) =>
         SubmitAsync(apiTokenId, actorUserId, idempotencyKey,
@@ -326,7 +344,7 @@ public sealed class TeamLabRuntimeOperationApplicationService(
         Guid actorUserId,
         string idempotencyKey,
         Guid runtimeId,
-        Guid controlScopeId,
+        Guid? controlScopeId,
         Guid grantId,
         CancellationToken cancellationToken) =>
         SubmitAsync(apiTokenId, actorUserId, idempotencyKey,
@@ -344,7 +362,7 @@ public sealed class TeamLabRuntimeOperationApplicationService(
         Guid actorUserId,
         string idempotencyKey,
         Guid runtimeId,
-        Guid controlScopeId,
+        Guid? controlScopeId,
         CreateTeamLabCaptureModel command,
         CancellationToken cancellationToken) =>
         SubmitAsync(apiTokenId, actorUserId, idempotencyKey,
@@ -362,7 +380,7 @@ public sealed class TeamLabRuntimeOperationApplicationService(
         Guid actorUserId,
         string idempotencyKey,
         Guid runtimeId,
-        Guid controlScopeId,
+        Guid? controlScopeId,
         Guid captureId,
         CancellationToken cancellationToken) =>
         SubmitAsync(apiTokenId, actorUserId, idempotencyKey,
@@ -601,9 +619,9 @@ public sealed class TeamLabRuntimeOperationApplicationService(
         CancellationToken cancellationToken)
     {
         var normalizedKey = ExternalIdempotencyKey.Normalize(idempotencyKey);
-        var scopeId = payload.ControlScopeId
-            ?? throw new TeamLabApiContractException(
-                "teamlab_scope_missing", "TeamLab 控制范围缺失。", 422);
+        var identity = payload.ControlScopeId is { } scopeId
+            ? $"scope:{scopeId:D}"
+            : $"runtime:{payload.RuntimeId:D}";
         var payloadBytes = JsonSerializer.SerializeToUtf8Bytes(new { kind, payload });
         var requestHash = Convert.ToHexStringLower(SHA256.HashData(payloadBytes));
         var job = new TeamLabRuntimeOperationJob
@@ -615,7 +633,7 @@ public sealed class TeamLabRuntimeOperationApplicationService(
         };
         var (resourceType, resourceId) = ResolveResource(kind, payload);
         return submissions.SubmitAsync(new TeamLabRuntimeOperationSubmission(
-            apiTokenId, actorUserId, scopeId, $"{routeKey.Trim()}#scope:{scopeId:D}", normalizedKey, requestHash,
+            apiTokenId, actorUserId, payload.ControlScopeId, $"{routeKey.Trim()}#{identity}", normalizedKey, requestHash,
             resourceType, resourceId, job), cancellationToken);
     }
 

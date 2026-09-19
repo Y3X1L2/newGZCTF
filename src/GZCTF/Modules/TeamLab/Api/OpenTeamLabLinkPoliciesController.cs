@@ -23,7 +23,7 @@ namespace GZCTF.Modules.TeamLab.Api;
 [ProducesResponseType(typeof(ExternalApiProblemDetailsModel), StatusCodes.Status422UnprocessableEntity, "application/problem+json")]
 public sealed class OpenTeamLabLinkPoliciesController(
     TeamLabLinkPolicyService policies,
-    TeamLabScopeAuthorizationService scopeAuthorization) : ControllerBase
+    TeamLabAuthorizationService authorization) : ControllerBase
 {
     [HttpPost]
     [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabLinkPoliciesWrite)]
@@ -33,8 +33,7 @@ public sealed class OpenTeamLabLinkPoliciesController(
         ApplyTeamLabLinkPolicyModel model,
         CancellationToken cancellationToken)
     {
-        await scopeAuthorization.RequireRuntimeScopeAsync(
-            model.RuntimeId, Actor().TokenId, IsAdministrator(), writable: true, cancellationToken);
+        await AuthorizeAsync(model.RuntimeId, cancellationToken);
         var policy = await policies.ApplyAsync(model, cancellationToken);
         return Created($"/api/open/v1/teamlab/link-policies/{policy.Id:D}", policy);
     }
@@ -50,8 +49,7 @@ public sealed class OpenTeamLabLinkPoliciesController(
         [FromQuery] string? after = null,
         CancellationToken cancellationToken = default)
     {
-        await scopeAuthorization.RequireRuntimeScopeAsync(
-            runtimeId, Actor().TokenId, IsAdministrator(), writable: false, cancellationToken);
+        await AuthorizeAsync(runtimeId, cancellationToken);
         return await policies.ListByRuntimeAsync(runtimeId, status, after, limit, cancellationToken);
     }
 
@@ -61,9 +59,15 @@ public sealed class OpenTeamLabLinkPoliciesController(
     [ProducesResponseType(typeof(TeamLabLinkPolicyModel), StatusCodes.Status200OK)]
     public async Task<TeamLabLinkPolicyModel> Recover(Guid policyId, CancellationToken cancellationToken)
     {
-        await scopeAuthorization.RequireLinkPolicyScopeAsync(
-            policyId, Actor().TokenId, IsAdministrator(), writable: true, cancellationToken);
+        await AuthorizeAsync(await policies.GetRuntimeIdAsync(policyId, cancellationToken), cancellationToken);
         return await policies.RecoverAsync(policyId, cancellationToken);
+    }
+
+    private async Task AuthorizeAsync(Guid runtimeId, CancellationToken token)
+    {
+        var actor = Actor();
+        await authorization.RequirePermissionAsync(runtimeId, actor.UserId, actor.TokenId,
+            IsAdministrator(), null, TeamLabRuntimePermission.RuntimeManage, token);
     }
 
     private (Guid TokenId, Guid UserId) Actor()

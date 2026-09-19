@@ -24,7 +24,7 @@ public interface ITeamLabAssetFileGateway
 }
 
 public sealed class TeamLabAssetFileService(AppDbContext context, TeamLabAuthorizationService authorization,
-    TeamLabScopeAuthorizationService scopeAuthorization, ITeamLabAssetFileGateway gateway,
+    ITeamLabAssetFileGateway gateway,
     TeamLabEventRecorder events, ImageRemoteAccessService imageAccess,
     IDistributedLeaseProvider leases, TeamLabRuntimeOperationPayloadProtector operationPayloads,
     IOptions<TeamLabNetworkConfig>? options = null)
@@ -34,14 +34,9 @@ public sealed class TeamLabAssetFileService(AppDbContext context, TeamLabAuthori
     public Task<TeamLabFileResult> ExecuteAsync(Guid runtimeId, int assetId, Guid actorId, bool administrator,
         TeamLabAssetFileCommand command, CancellationToken token) =>
         ExecuteCoreAsync(runtimeId, assetId, actorId, command,
-            cancellationToken => authorization.RequirePermissionAsync(
-                runtimeId,
-                actorId,
-                administrator,
-                command.Operation == "reset-ssh-identity"
-                    ? TeamLabRuntimePermission.LifecycleManage
-                    : TeamLabRuntimePermission.RemoteSessionOperate,
-                cancellationToken),
+            cancellationToken => authorization.RequireAssetPermissionAsync(
+                runtimeId, assetId, actorId, null, administrator,
+                TeamLabRuntimePermission.FileTransfer, cancellationToken),
             token);
 
     public Task<TeamLabFileResult> ExecuteApiAsync(Guid runtimeId, int assetId, Guid apiTokenId, Guid actorId,
@@ -49,42 +44,38 @@ public sealed class TeamLabAssetFileService(AppDbContext context, TeamLabAuthori
         ExecuteCoreAsync(runtimeId, assetId, actorId, command,
             async cancellationToken =>
             {
-                await scopeAuthorization.RequireRuntimeScopeAsync(
-                    runtimeId,
-                    apiTokenId,
-                    administrator: false,
-                    writable: command.Operation is not ("list" or "download"),
-                    cancellationToken);
+                await authorization.RequireAssetPermissionAsync(runtimeId, assetId, actorId, apiTokenId,
+                    false, TeamLabRuntimePermission.FileTransfer, cancellationToken);
             },
             token);
 
     public Task DownloadAsync(Guid runtimeId, int assetId, Guid actorId, bool administrator,
         int generation, string path, Stream destination, CancellationToken token) =>
         ExecuteCoreAsync(runtimeId, assetId, actorId, new(generation, "download", path),
-            cancellationToken => authorization.RequirePermissionAsync(runtimeId, actorId, administrator,
-                TeamLabRuntimePermission.RemoteSessionOperate, cancellationToken), token, destination: destination);
+            cancellationToken => authorization.RequireAssetPermissionAsync(runtimeId, assetId, actorId, null,
+                administrator, TeamLabRuntimePermission.FileTransfer, cancellationToken), token, destination: destination);
 
     public Task DownloadApiAsync(Guid runtimeId, int assetId, Guid apiTokenId, Guid actorId,
         int generation, string path, Stream destination, CancellationToken token) =>
         ExecuteCoreAsync(runtimeId, assetId, actorId, new(generation, "download", path),
-            cancellationToken => scopeAuthorization.RequireRuntimeScopeAsync(runtimeId, apiTokenId,
-                administrator: false, writable: false, cancellationToken), token, destination: destination);
+            cancellationToken => authorization.RequireAssetPermissionAsync(runtimeId, assetId, actorId, apiTokenId,
+                false, TeamLabRuntimePermission.FileTransfer, cancellationToken), token, destination: destination);
 
     public Task UploadAsync(Guid runtimeId, int assetId, Guid actorId, bool administrator,
         int generation, string path, Stream source, long contentLength, bool overwrite, bool confirmed,
         CancellationToken token) =>
         ExecuteCoreAsync(runtimeId, assetId, actorId,
             new(generation, "upload", path, Overwrite: overwrite, Confirmed: confirmed),
-            cancellationToken => authorization.RequirePermissionAsync(runtimeId, actorId, administrator,
-                TeamLabRuntimePermission.RemoteSessionOperate, cancellationToken), token, source, contentLength);
+            cancellationToken => authorization.RequireAssetPermissionAsync(runtimeId, assetId, actorId, null,
+                administrator, TeamLabRuntimePermission.FileTransfer, cancellationToken), token, source, contentLength);
 
     public Task UploadApiAsync(Guid runtimeId, int assetId, Guid apiTokenId, Guid actorId,
         int generation, string path, Stream source, long contentLength, bool overwrite, bool confirmed,
         CancellationToken token) =>
         ExecuteCoreAsync(runtimeId, assetId, actorId,
             new(generation, "upload", path, Overwrite: overwrite, Confirmed: confirmed),
-            cancellationToken => scopeAuthorization.RequireRuntimeScopeAsync(runtimeId, apiTokenId,
-                administrator: false, writable: true, cancellationToken), token, source, contentLength);
+            cancellationToken => authorization.RequireAssetPermissionAsync(runtimeId, assetId, actorId, apiTokenId,
+                false, TeamLabRuntimePermission.FileTransfer, cancellationToken), token, source, contentLength);
 
     private async Task<TeamLabFileResult> ExecuteCoreAsync(Guid runtimeId, int assetId, Guid actorId,
         TeamLabAssetFileCommand command, Func<CancellationToken, Task> authorize, CancellationToken token,

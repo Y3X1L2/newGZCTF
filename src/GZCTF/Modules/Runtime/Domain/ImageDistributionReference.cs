@@ -21,6 +21,7 @@ public enum ImageDistributionReferenceKind : byte
     TeamLabRollout = 5,
     TeamLabTopology = 6,
     TeamLabRelease = 7,
+    TeamLabTemplatePreparation = 8,
 
     // Purpose aliases retain the persisted values used by existing TeamLab references while
     // making the cache lifetime explicit to new execution-plane callers.
@@ -58,6 +59,9 @@ public readonly record struct ImageDistributionReferenceKey(
 
     public static ImageDistributionReferenceKey TeamLabRelease(Guid releaseId) =>
         new(ImageDistributionReferenceKind.TeamLabRelease, 0, releaseId);
+
+    public static ImageDistributionReferenceKey TeamLabTemplatePreparation() =>
+        new(ImageDistributionReferenceKind.TeamLabTemplatePreparation, 0);
 
     public static ImageDistributionReferenceKey Runtime(int runtimeId) => TeamLabRuntime(runtimeId);
 

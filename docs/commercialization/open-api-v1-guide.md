@@ -314,6 +314,9 @@ Flag 模板）”条件的题会被禁用或跳过。
 | 能力查询 | `/teamlab/capabilities` | `teamlab.topologies:read` |
 | 拓扑与发布 | `/teamlab/topologies` | `teamlab.topologies:read/write` |
 | Runtime 生命周期 | `/teamlab/runtimes` | `teamlab.runtimes:read/write` |
+| 运行资产编排 | `/teamlab/runtimes/{id}/asset-changes` | `teamlab.runtimes:write` + `AssetCompose` |
+| 运行环境授权 | `/teamlab/runtimes/{id}/grants` | `teamlab.runtimes:read/write` + `RuntimeManage` |
+| 模板批量预热 | `/teamlab/preparations/templates` | `teamlab.runtimes:write` + 全部 TeamLab 控制范围 |
 | 流量与路径 | `/teamlab/runtimes/{id}/traffic` | `teamlab.traffic:read` |
 | PCAP | `/teamlab/runtimes/{id}/captures` | `teamlab.capture:read/write` |
 
@@ -335,6 +338,34 @@ shard、路由、capture 和镜像运行引用。
 现场连接器和资产节点归属均未改变时，才允许调用
 `POST /teamlab/runtimes/{id}/updates` 在线更新。写接口需要 `Idempotency-Key`，返回的
 operation 继续使用原部署队列执行。结构变化必须使用 reset，不会在热更新中重建整场。
+
+不切换发布版本时，调用 `POST /teamlab/runtimes/{id}/asset-changes`，携带当前
+`expectedPlanRevision` 和一组 `add`、`replace`、`remove`。新增或替换资产使用拓扑资产
+结构，只能选择已登记模板和该环境已有网段。成功后运行代次不变，计划修订号加一：
+
+```json
+{
+  "expectedPlanRevision": 3,
+  "add": [{
+    "key": "analysis-01",
+    "name": "Analysis 01",
+    "kind": "Docker",
+    "imageTemplateId": 42,
+    "resources": { "cpuUnits": 10, "memoryMiB": 512, "storageMiB": 2048 },
+    "interfaces": [{ "key": "eth0", "networkKey": "core", "hostOffset": 31, "primary": true, "orderIndex": 0 }],
+    "orderIndex": 30
+  }],
+  "replace": [],
+  "remove": []
+}
+```
+
+`GET/PUT /teamlab/runtimes/{id}/grants` 统一管理用户和 API Token 的运行权限。`PUT`
+每次提交完整授权集合；`assetKey` 为空表示整个环境，填写后只作用于该资产。API Token
+不会继承创建者的管理员或环境所有者权限。
+
+活动开始前可以调用 `POST /teamlab/preparations/templates` 批量预热镜像模板。请求只含
+`templateIds`，平台继续使用现有镜像分发记录和 Worker 缓存，不创建新的资源池。
 
 ## 8. 自动化建议
 

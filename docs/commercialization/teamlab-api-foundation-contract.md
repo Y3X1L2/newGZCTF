@@ -55,6 +55,7 @@ TeamLab 不负责：
 - topology 记录 `OwnerUserId`，由 API token 的 creator user 决定。
 - release 继承 topology 所有权，发布后不可修改。
 - runtime 记录 `CreatedById`、`TopologyReleaseId` 和可选 `ExternalReference`。
+- 同一 release 可以创建多个彼此隔离的 runtime；`ExternalReference` 只由调用方赋予业务含义，TeamLab 不解析队伍、比赛或项目编号。
 - `(CreatedById, ExternalReference)` 在 ExternalReference 非空时唯一；相同 request hash 的重复 create 返回既有 runtime，不同 request hash 返回 `external_reference_conflict`。
 - Penetration 的 Game/Team 关系只存在于 `PenetrationGameLabBinding` 和 `PenetrationTeamRuntimeBinding`。
 - 每个 runtime network 持有独立 `TeamLabNetworkLease`；所有未释放 lease 的 CIDR 在整套 TeamLab Fabric 内不得重叠，销毁完成后才写入 ReleasedAt。
@@ -250,7 +251,33 @@ Plan response 包含：
 
 plan preview 返回候选 CIDR，不写 lease；create runtime 在数据库 transaction 中分配 lease。PostgreSQL 使用 `cidr` 列和 GiST exclusion constraint 阻止 active CIDR 重叠，并发冲突时重试下一个子网；不能只依赖进程内计数或 runtime ID 取模。
 
-## 9. Access grant
+## 9. Runtime 授权
+
+```text
+GET /runtimes/{runtimeId}/grants
+PUT /runtimes/{runtimeId}/grants
+```
+
+- Open API scope 决定 Token 可以调用哪类接口，Runtime Grant 决定它能操作哪个运行环境或资产，两项必须同时满足。
+- 授权主体可以是登录用户或 API Token，范围可以是整个运行环境或一个资产 key。
+- 权限固定为 `StateRead`、`MetadataRead`、`RemoteSessionOperate`、`FileTransfer`、`AssetOperate`、`AssetCompose`、`ServiceAccessManage` 和 `RuntimeManage`。
+- `PUT` 提交该运行环境的完整授权集合，不提供多套零散授权入口。
+- API Token 不继承创建者的管理员身份或运行环境所有者身份；撤销 Runtime Grant 后立即失去对应权限。
+- 管理员、运行环境所有者、Control Scope 授权和 Runtime Grant 统一由 `TeamLabAuthorizationService` 判定。
+
+## 10. 运行中资产编排
+
+```text
+POST /runtimes/{runtimeId}/asset-changes
+```
+
+请求携带当前 `expectedPlanRevision`，并一次性提交 `add`、`replace`、`remove` 与可选 overlay。资产只能引用已登记的镜像模板或设备模板，网卡只能接入运行环境现有网段；接口不接受任意镜像地址、启动命令或脚本。
+
+资产变更继续使用原 `DeploymentQueueTicket`、容量预留、Worker 分片、Docker/libvirt 和 OVN/OVS 执行链。成功后 `planRevision` 加一，`generation` 和 `TopologyReleaseId` 保持不变。目标发布版本更新也使用同一执行链，但成功后会更新 `TopologyReleaseId`。当前运行资产及其执行计划快照是现场事实，发布版本只记录环境来源。
+
+运行中不能修改网段、路由、基础设施或现场连接器。需要修改这些结构时使用完整 reset。
+
+## 11. Access grant
 
 ```text
 POST   /runtimes/{runtimeId}/access-grants
@@ -265,7 +292,7 @@ DELETE /runtimes/{runtimeId}/access-grants/{grantId}
 - runtime reset/destroy 自动撤销全部 grant。
 - Penetration 选手入口由 Penetration adapter 创建 grant，并执行比赛参与权限检查。
 
-## 10. Traffic 与 PCAP
+## 12. Traffic 与 PCAP
 
 ```text
 GET    /runtimes/{runtimeId}/traffic/flows?after={cursor}&limit=100
@@ -285,7 +312,7 @@ GET    /runtimes/{runtimeId}/captures/{captureId}/download
 - download 返回 tar 流，包含 `manifest.json` 和所有可用 segment；主服务不能把完整 PCAP 载入内存。
 - capture 下载需要 `teamlab.capture:read` 和 runtime 所有权授权，并写入敏感下载审计事件。
 
-## 11. Endpoint 清单
+## 13. Endpoint 清单
 
 ```text
 GET    /capabilities
@@ -299,9 +326,13 @@ POST   /topologies/{topologyId}/releases
 GET    /topologies/{topologyId}/releases
 GET    /topologies/{topologyId}/releases/{releaseId}
 POST   /topologies/{topologyId}/releases/{releaseId}/plan
+POST   /preparations/templates
 POST   /runtimes
 GET    /runtimes
 GET    /runtimes/{runtimeId}
+GET    /runtimes/{runtimeId}/grants
+PUT    /runtimes/{runtimeId}/grants
+POST   /runtimes/{runtimeId}/asset-changes
 POST   /runtimes/{runtimeId}/reset
 DELETE /runtimes/{runtimeId}
 GET    /runtimes/{runtimeId}/events
@@ -333,14 +364,14 @@ POST   /runtimes/{runtimeId}/captures/{captureId}/stop
 GET    /runtimes/{runtimeId}/captures/{captureId}/download
 ```
 
-所有写接口使用 Idempotency-Key；异步接口返回 operation。
+所有异步写接口使用 Idempotency-Key 并返回 operation。同步的授权全量替换和模板批量预热直接返回结果。
 
 `status-check` 只返回调用方能理解的资产状态差异，不暴露 WorkerNode、宿主资源名或
 Agent 地址。返回的 `suggestedAction` 直接用于现有单资产控制接口，不建立第二套修复任务。
 远程会话列表按 token 的 `teamlab-scope` 资源授权过滤，用于在调用方遗失会话 ID 后继续
 查询、关闭和取得操作审计。
 
-## 12. Capabilities
+## 14. Capabilities
 
 `GET /capabilities` 返回平台当前可接受的契约能力，而不是单个硬编码协议阈值：
 
@@ -369,7 +400,7 @@ Agent 地址。返回的 `suggestedAction` 直接用于现有单资产控制接�
 
 在现有 v1 中启用已支持的 `windowsVm` 不需要发布 v2。删除 asset kind、改变 network model 或收紧已发布 topology schema 需要新 API 主版本。
 
-## 13. 稳定错误码
+## 15. 稳定错误码
 
 | Code | HTTP | 含义 |
 | --- | --- | --- |
@@ -380,12 +411,14 @@ Agent 地址。返回的 `suggestedAction` 直接用于现有单资产控制接�
 | `address_pool_exhausted` | 409 | 至少一个 topology network 没有可分配的 runtime 子网。 |
 | `capability_unavailable` | 409 | 当前节点集合不满足计划能力。 |
 | `external_reference_conflict` | 409 | 同一 creator 的 external reference 已用于不同请求。 |
+| `runtime_plan_revision_conflict` | 409 | 资产编排基于的计划修订已经过期。 |
+| `runtime_grant_permission_invalid` | 422 | Runtime Grant 没有有效权限。 |
 | `runtime_not_ready` | 409 | 当前状态不允许访问或抓包。 |
 | `runtime_cleanup_pending` | 409 | 清理未完成，不能创建下一 generation。 |
 | `capture_limit_exceeded` | 422 | 抓包时间、大小或并发超过上限。 |
 | `operation_failed` | 500 | operation 执行失败，detail 已脱敏。 |
 
-## 14. 外部基座验收
+## 16. 外部基座验收
 
 外部基座必须先在没有 Penetration Game/Team 实体参与的独立测试中完成：
 

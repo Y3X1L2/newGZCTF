@@ -1,4 +1,4 @@
-import type { TeamLabAssetKind, TeamLabRuntimeStatus } from './teamlabContracts'
+import type { TeamLabAssetKind, TeamLabRuntimeStatus, TeamLabTopologyAsset } from './teamlabContracts'
 
 export type TeamLabEventLevel = 'info' | 'success' | 'warning' | 'error'
 export type TeamLabPathConfidence = 'packet-exact'
@@ -135,6 +135,48 @@ export interface ResetTeamLabRuntimeRequest {
 export interface UpdateTeamLabRuntimeRequest {
   releaseId: string
   overlays: readonly TeamLabRuntimeOverlay[] | null
+}
+
+export interface ChangeTeamLabRuntimeAssetsRequest {
+  expectedPlanRevision: number
+  add: readonly TeamLabTopologyAsset[]
+  replace: readonly TeamLabTopologyAsset[]
+  remove: readonly string[]
+  overlays: readonly TeamLabRuntimeOverlay[] | null
+}
+
+export type TeamLabRuntimePermission =
+  | 'StateRead'
+  | 'MetadataRead'
+  | 'RemoteSessionOperate'
+  | 'FileTransfer'
+  | 'AssetOperate'
+  | 'AssetCompose'
+  | 'ServiceAccessManage'
+  | 'RuntimeManage'
+
+export interface TeamLabRuntimeGrant {
+  id: number
+  subjectType: 'user' | 'apiToken'
+  subjectId: string
+  subjectName: string
+  assetKey: string | null
+  permissions: readonly TeamLabRuntimePermission[]
+  updatedAt: number
+}
+
+export interface TeamLabGrantSubjectOption {
+  id: string
+  name: string
+}
+
+export interface ReplaceTeamLabRuntimeGrantsRequest {
+  grants: readonly {
+    subjectType: TeamLabRuntimeGrant['subjectType']
+    subjectId: string
+    assetKey: string | null
+    permissions: readonly TeamLabRuntimePermission[]
+  }[]
 }
 
 export interface TeamLabRuntimeUpdateChange {

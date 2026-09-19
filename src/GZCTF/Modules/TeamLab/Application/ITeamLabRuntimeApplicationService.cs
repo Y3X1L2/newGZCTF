@@ -47,6 +47,12 @@ public interface ITeamLabRuntimeApplicationService
         Guid actorUserId,
         Guid? operationId,
         CancellationToken cancellationToken);
+    Task<TeamLabQueueTicketResult> ChangeAssetsAndEnqueueAsync(
+        Guid runtimeId,
+        ChangeTeamLabRuntimeAssetsModel command,
+        Guid actorUserId,
+        Guid? operationId,
+        CancellationToken cancellationToken);
     Task<TeamLabNodeResult> ExecuteQueuedUpdateAsync(
         int runtimeId,
         Guid ticketId,

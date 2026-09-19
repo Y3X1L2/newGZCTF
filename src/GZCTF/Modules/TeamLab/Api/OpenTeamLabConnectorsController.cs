@@ -22,7 +22,8 @@ namespace GZCTF.Modules.TeamLab.Api;
 [ProducesResponseType(typeof(ExternalApiProblemDetailsModel), StatusCodes.Status422UnprocessableEntity, "application/problem+json")]
 public sealed class OpenTeamLabConnectorsController(
     TeamLabConnectorService connectors,
-    TeamLabScopeAuthorizationService scopeAuthorization) : ControllerBase
+    TeamLabScopeAuthorizationService scopeAuthorization,
+    TeamLabAuthorizationService authorization) : ControllerBase
 {
     [HttpGet]
     [Authorize(Policy = "scope:" + ApiTokenScopes.TeamLabConnectorsRead)]
@@ -132,8 +133,10 @@ public sealed class OpenTeamLabConnectorsController(
         AcquireTeamLabConnectorLeaseModel model,
         CancellationToken cancellationToken)
     {
-        var runtimeScopeId = await scopeAuthorization.RequireRuntimeScopeAsync(
-            model.RuntimeId, Actor().TokenId, IsAdministrator(), writable: true, cancellationToken);
+        var actor = Actor();
+        await authorization.RequirePermissionAsync(model.RuntimeId, actor.UserId, actor.TokenId,
+            IsAdministrator(), null, TeamLabRuntimePermission.RuntimeManage, cancellationToken);
+        var runtimeScopeId = await authorization.GetControlScopeAsync(model.RuntimeId, cancellationToken);
         var lease = await connectors.AcquireAsync(connectorId, model.RuntimeId, runtimeScopeId, cancellationToken);
         return Created($"/api/open/v1/teamlab/connectors/{connectorId:D}", lease);
     }
@@ -147,8 +150,9 @@ public sealed class OpenTeamLabConnectorsController(
         ReleaseTeamLabConnectorLeaseModel model,
         CancellationToken cancellationToken)
     {
-        await scopeAuthorization.RequireRuntimeScopeAsync(
-            model.RuntimeId, Actor().TokenId, IsAdministrator(), writable: true, cancellationToken);
+        var actor = Actor();
+        await authorization.RequirePermissionAsync(model.RuntimeId, actor.UserId, actor.TokenId,
+            IsAdministrator(), null, TeamLabRuntimePermission.RuntimeManage, cancellationToken);
         return await connectors.ReleaseAsync(
             connectorId, model.RuntimeId, Domain.TeamLabConnectorLeaseReleaseReason.ManualRelease, cancellationToken);
     }

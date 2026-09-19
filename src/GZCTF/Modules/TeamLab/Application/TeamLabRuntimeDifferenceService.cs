@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore;
 namespace GZCTF.Modules.TeamLab.Application;
 
 public sealed class TeamLabRuntimeDifferenceService(AppDbContext context, TeamLabAuthorizationService authorization,
-    TeamLabScopeAuthorizationService scopeAuthorization, RuntimeFactReconciliationService reconciliation,
+    RuntimeFactReconciliationService reconciliation,
     TeamLabAssetControlService controls)
 {
     public async Task<RuntimeDifferencePreview> PreviewAsync(Guid runtimeId, Guid actorId, bool administrator, CancellationToken token)
@@ -19,14 +19,15 @@ public sealed class TeamLabRuntimeDifferenceService(AppDbContext context, TeamLa
 
     public async Task<RuntimeDifferencePreview> PreviewApiAsync(
         Guid runtimeId,
+        Guid actorId,
         Guid apiTokenId,
         bool hasWildcardScopeGrant,
         CancellationToken token)
     {
-        await scopeAuthorization.RequireRuntimeScopeAsync(
-            runtimeId, apiTokenId, hasWildcardScopeGrant, writable: false, token);
+        await authorization.RequirePermissionAsync(runtimeId, actorId, apiTokenId, hasWildcardScopeGrant,
+            null, TeamLabRuntimePermission.StateRead, token);
         return await PreviewCoreAsync(runtimeId,
-            assetId => controls.AvailabilityForApiAsync(runtimeId, assetId, apiTokenId, token), token);
+            assetId => controls.AvailabilityForApiAsync(runtimeId, assetId, actorId, apiTokenId, token), token);
     }
 
     private async Task<RuntimeDifferencePreview> PreviewCoreAsync(
@@ -50,7 +51,7 @@ public sealed class TeamLabRuntimeDifferenceService(AppDbContext context, TeamLa
     public async Task<TeamLabQueueTicketResult> RepairAsync(Guid runtimeId, int assetId, Guid actorId, bool administrator,
         TeamLabAssetControlCommand command, CancellationToken token)
     {
-        await authorization.RequirePermissionAsync(runtimeId, actorId, administrator, TeamLabRuntimePermission.LifecycleManage, token);
+        await authorization.RequirePermissionAsync(runtimeId, actorId, administrator, TeamLabRuntimePermission.AssetOperate, token);
         var preview = await PreviewAsync(runtimeId, actorId, administrator, token);
         var item = preview.Items.SingleOrDefault(item => item.AssetId == assetId);
         if (preview.Generation != command.Generation || preview.OperationInProgress || item?.SuggestedAction is null ||

@@ -88,10 +88,9 @@ public sealed class TeamLabOpenDiscoveryTests
             CancellationToken.None);
         Assert.Equal(expected.PublicId, Assert.Single(page.Items).Id);
 
-        var exception = await Assert.ThrowsAsync<TeamLabApiContractException>(() =>
-            service.ListRuntimesAsync(
-                tokenId, false, otherScope.Id, null, null, null, 50, CancellationToken.None));
-        Assert.Equal("scope_not_found", exception.Code);
+        var inaccessible = await service.ListRuntimesAsync(
+            tokenId, false, otherScope.Id, null, null, null, 50, CancellationToken.None);
+        Assert.Empty(inaccessible.Items);
     }
 
     [Fact]
@@ -119,8 +118,7 @@ public sealed class TeamLabOpenDiscoveryTests
         await context.SaveChangesAsync();
 
         var service = Service(context);
-        var grants = await service.ListAccessGrantsAsync(
-            runtime.PublicId, tokenId, false, CancellationToken.None);
+        var grants = await service.ListAccessGrantsAsync(runtime.PublicId, CancellationToken.None);
         var grant = Assert.Single(grants);
         Assert.Equal(expected.PublicId, grant.Id);
         var json = JsonSerializer.Serialize(grant);
@@ -130,10 +128,6 @@ public sealed class TeamLabOpenDiscoveryTests
         Assert.DoesNotContain("DownloadTokenHash", json, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("ConfigurationDownloadUrl", json, StringComparison.OrdinalIgnoreCase);
 
-        var exception = await Assert.ThrowsAsync<TeamLabApiContractException>(() =>
-            service.ListAccessGrantsAsync(
-                runtime.PublicId, Guid.CreateVersion7(), false, CancellationToken.None));
-        Assert.Equal("scope_not_found", exception.Code);
     }
 
     private static AppDbContext CreateContext()
@@ -145,7 +139,7 @@ public sealed class TeamLabOpenDiscoveryTests
     }
 
     private static TeamLabOpenDiscoveryService Service(AppDbContext context) =>
-        new(context, new TeamLabScopeAuthorizationService(context));
+        new(context, new TeamLabScopeAuthorizationService(context), new TeamLabAuthorizationService(context));
 
     private static TeamLabControlScope Scope(string key) => new()
     {
