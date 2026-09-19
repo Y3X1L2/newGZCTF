@@ -314,6 +314,38 @@ public sealed class DatabaseGovernanceMigrationTests : IAsyncLifetime
         Assert.All(await context.DataGovernanceRuns
                 .Where(item => item.Operation == "drop-partition").ToArrayAsync(),
             item => Assert.False(string.IsNullOrWhiteSpace(item.PartitionName)));
+
+        var flowPartitions = await partitions.GetExpiredPartitionsAsync(
+            "teamlab-flow", DateTimeOffset.Parse("2026-02-01T00:00:00Z"), CancellationToken.None);
+        foreach (var partition in flowPartitions)
+        {
+            var rows = await context.TeamLabTrafficFlows.LongCountAsync(
+                item => item.CapturedAt >= partition.Lower && item.CapturedAt < partition.Upper);
+            context.DataGovernanceRuns.Add(new DataGovernanceRun
+            {
+                DataSet = "teamlab-flow",
+                Operation = "aggregate-partition",
+                Status = DataGovernanceRunStatus.Completed,
+                LeaseOwner = "phase4-test",
+                Cutoff = partition.Upper,
+                RowsRead = rows,
+                PartitionName = partition.Name,
+                CompletedAt = DateTimeOffset.UtcNow
+            });
+        }
+
+        var runtime = await context.TeamLabRuntimes.SingleAsync(item => item.Id == seed.RuntimeId);
+        runtime.Status = TeamLabRuntimeStatus.Running;
+        await context.SaveChangesAsync();
+        Assert.Equal(0, (await partitions.DropExpiredPartitionsAsync(
+            "teamlab-flow", DateTimeOffset.Parse("2026-02-01T00:00:00Z"),
+            "phase4-test", CancellationToken.None)).PartitionCount);
+
+        runtime.Status = TeamLabRuntimeStatus.Destroyed;
+        await context.SaveChangesAsync();
+        Assert.Equal(1, (await partitions.DropExpiredPartitionsAsync(
+            "teamlab-flow", DateTimeOffset.Parse("2026-02-01T00:00:00Z"),
+            "phase4-test", CancellationToken.None)).PartitionCount);
     }
 
     private AppDbContext CreateContext()

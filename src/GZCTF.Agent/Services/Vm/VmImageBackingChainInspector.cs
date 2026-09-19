@@ -65,6 +65,7 @@ public sealed class VmImageBackingChainInspector(ILogger<VmImageBackingChainInsp
             CreateNoWindow = true
         };
         info.ArgumentList.Add("info");
+        info.ArgumentList.Add("--force-share");
         info.ArgumentList.Add("--output=json");
         info.ArgumentList.Add(overlayPath);
 
