@@ -13,7 +13,8 @@
 - 前向迁移 `20260919082706_ConvergeTeamLabRuntimeFoundation` 创建通用授权表、迁移旧赛事授权及所有者权限，然后删除旧授权表和 `TeamLabRuntimes.IsScenarioBuild`。PostgreSQL 16 Testcontainers 迁移测试已通过，模型没有待应用迁移。
 - 提交 `609f635` 已推送到远端分支 `codex/teamlab-foundation-convergence`，并部署到 `10.24.0.27` 的 `/opt/gzctf/releases/teamlab-foundation-609f635-20260919/publish`。发布前完整数据库和共享文件备份位于 `/opt/gzctf/backups/teamlab-foundation-609f635-20260919-pre`；迁移头为 `20260919082706_ConvergeTeamLabRuntimeFoundation`，主站维护窗口 8 秒，主站和 Agent 均为 active 且 `NRestarts=0`。
 - TeamLab 定向测试 471/471、迁移专项 1/1、OpenAPI 快照生成与一致性测试 1/1 通过；主后端和集成测试项目 Release 编译均为 0 警告、0 错误，前端类型检查、lint、架构检查、347/347 测试和生产构建通过。生产环境使用同一发布版本真实创建 Modbus Docker 与 Linux VM，随后同批新增、替换、移除 Docker/VM，再销毁整场；五个任务分别耗时 6.72、5.24、10.08、7.88、9.30 秒，运行代次始终为 1，计划修订从 0 递增到 3。销毁后容量、网络租约、服务映射、抓包、队列、Docker、libvirt、OVN 和 OVS 活动残留均为 0，临时 Runtime Grant 已清空，验收 Token 已撤销。
-- 模板批量预热已对镜像模板 116 和 487 实际调用，2 个模板生成 5 条节点分发记录，现场记录均为完成且无错误。发布前已经存在的两个运维问题仍未解决：节点 `.31` 删除旧 VM 镜像模板 115、121 时 Agent 返回 500；`teamlab-flow` 分区保留任务的 SQL 在 PostgreSQL 报语法错误。两项均可在旧发布日志中复现，不是本次底座收敛改动引入。
+- 模板批量预热已对镜像模板 116 和 487 实际调用，2 个模板生成 5 条节点分发记录，现场记录均为完成且无错误。
+- 提交 `ed03d20` 修复 VM 镜像引用检查与 `teamlab-flow` 分区保留 SQL，并已部署到 `/opt/gzctf/releases/teamlab-maintenance-ed03d20-20260919/publish`。`.27/.30/.31` Agent 摘要均为 `b5843af94fd977f384dc9550de9e71b42753de25bb7c78aecaed85356652f6f9`；`.31` 对模板 115、121 的清理请求均返回 200，主站数据治理周期不再出现 PostgreSQL `42601`。主站与三台 Agent 均为 active、`NRestarts=0`。
 
 ## TeamLab 热更新资源身份收敛（2026-09-19）
 
@@ -163,7 +164,6 @@ H03 最新专项（2026-09-08）：真实 OVN/OVS＋QEMU Linux 来宾＋namespac
 
 ## 4. 未解决事项
 
-- **数据保留 SQL**：`teamlab-flow` 分区清理存在 PostgreSQL `42601` 语法错误，最近核验仍按小时发生；需要独立修复及定向回归，不能用删除生产数据绕过。
 - **指标并发**：2026-09-08 观察到一次指标持久化 `DbUpdateConcurrencyException`，后续心跳/指标恢复；仍需并发和失败批次重试回归，不能将自动恢复等同于根因已修复。
 - **迁移来源**：`20260604165857_AddTheoryExamEntities`、`20260604193010_SyncTheoryExam` 的来源仍未恢复，导致 134 条数据库历史与 132 条可发现迁移存在差异。另有 `20260802023000_RemoveDestroyedTeamLabUdpMappings.cs` 缺少迁移元数据，不能按源码文件数认定 bundle 会执行。禁止伪造或删除历史；后续迁移须在新鲜生产备份副本验证。详见 [迁移交接](handoffs/2026-09-02-migration-drift-reconciliation.md) 与 [发布核验](handoffs/2026-09-08-pr9-production-rollout.md)。
 - **依赖与存储回收**：SSH.NET 已知依赖风险和 Blob 自动 GC 缺口仍未处理；风险范围见 [PR 审计](handoffs/2026-09-07-pr9-review-merge.md)。
