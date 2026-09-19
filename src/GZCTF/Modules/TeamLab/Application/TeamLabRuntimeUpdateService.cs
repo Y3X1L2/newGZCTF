@@ -357,14 +357,7 @@ public sealed class TeamLabRuntimeUpdateService(
             events.Record(runtime, "update", TeamLabEventLevel.Success,
                 GZCTF.Modules.Audit.Domain.OperationalEventCodes.TeamLab.RuntimeUpdateSucceeded,
                 GZCTF.Modules.Audit.Domain.OperationalEventOutcome.Succeeded,
-                $"运行环境修订 {runtime.PlanRevision} 已完成，共处理 {changes.Count} 个资产。",
-                detail: new Dictionary<string, object?>
-                {
-                    ["planRevision"] = runtime.PlanRevision,
-                    ["added"] = changes.Count(item => item.Action == "add"),
-                    ["removed"] = changes.Count(item => item.Action == "remove"),
-                    ["replaced"] = changes.Count(item => item.Action == "replace")
-                });
+                $"运行环境修订 {runtime.PlanRevision} 已完成，共处理 {changes.Count} 个资产。");
             await context.SaveChangesAsync(token);
             return TeamLabNodeResult.Ok("Runtime assets updated.");
         }
