@@ -151,6 +151,8 @@ public static class OperationalEventCodes
         public const string ResetStarted = "teamlab.reset.started";
         public const string ResetSucceeded = "teamlab.reset.succeeded";
         public const string ResetFailed = "teamlab.reset.failed";
+        public const string RuntimeUpdateSucceeded = "teamlab.runtime.update.succeeded";
+        public const string RuntimeUpdateFailed = "teamlab.runtime.update.failed";
         public const string PauseStarted = "teamlab.pause.started";
         public const string PauseSucceeded = "teamlab.pause.succeeded";
         public const string PauseFailed = "teamlab.pause.failed";

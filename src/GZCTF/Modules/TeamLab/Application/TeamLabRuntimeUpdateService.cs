@@ -145,7 +145,8 @@ public sealed class TeamLabRuntimeUpdateService(
             runtime.ControlScopeId = targetRelease.ControlScopeId;
             runtime.UpdatedAt = DateTimeOffset.UtcNow;
             events.Record(runtime, "update", TeamLabEventLevel.Success,
-                "teamlab.runtime.update.succeeded", GZCTF.Modules.Audit.Domain.OperationalEventOutcome.Succeeded,
+                GZCTF.Modules.Audit.Domain.OperationalEventCodes.TeamLab.RuntimeUpdateSucceeded,
+                GZCTF.Modules.Audit.Domain.OperationalEventOutcome.Succeeded,
                 "运行环境已切换到内容相同的新发布版本。");
             await context.SaveChangesAsync(token);
             return TeamLabNodeResult.Ok("Runtime release updated without execution changes.");
@@ -348,7 +349,8 @@ public sealed class TeamLabRuntimeUpdateService(
                 shard.UpdatedAt = runtime.UpdatedAt;
             }
             events.Record(runtime, "update", TeamLabEventLevel.Success,
-                "teamlab.runtime.update.succeeded", GZCTF.Modules.Audit.Domain.OperationalEventOutcome.Succeeded,
+                GZCTF.Modules.Audit.Domain.OperationalEventCodes.TeamLab.RuntimeUpdateSucceeded,
+                GZCTF.Modules.Audit.Domain.OperationalEventOutcome.Succeeded,
                 $"运行环境修订 {runtime.PlanRevision} 已完成，共处理 {changes.Count} 个资产。",
                 detail: new Dictionary<string, object?>
                 {
@@ -419,7 +421,8 @@ public sealed class TeamLabRuntimeUpdateService(
                 : string.Join("; ", rollbackErrors).Truncate(1024);
             runtime.UpdatedAt = DateTimeOffset.UtcNow;
             events.Record(runtime, "update", TeamLabEventLevel.Error,
-                "teamlab.runtime.update.failed", GZCTF.Modules.Audit.Domain.OperationalEventOutcome.Failed,
+                GZCTF.Modules.Audit.Domain.OperationalEventCodes.TeamLab.RuntimeUpdateFailed,
+                GZCTF.Modules.Audit.Domain.OperationalEventOutcome.Failed,
                 rollbackErrors.Count == 0
                     ? "运行环境更新失败，本次变更已撤销。"
                     : "运行环境更新失败，部分撤销操作未完成。",
