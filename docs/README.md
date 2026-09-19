@@ -72,6 +72,7 @@
 
 ## 6. 交接与状态维护
 
+- 联赛开发准备：[三阶段评估与路线](development/league/roadmap-20260919.md)、[多人并行与合并规范](development/league/parallel-development-20260919.md)、[Word 合并版](development/league/数字攻防联赛开发路线与并行规范V0.2.docx)。按已确认的四人分工和 9 月底自动 KO 目标安排，业务实现尚待开展。
 - 当前事实只写入 [`development/current-state.md`](development/current-state.md)。
 - 新 AI 或新成员接手项目先阅读 [`development/current-handoff.md`](development/current-handoff.md)。
 - 并行开发和 AI 会话规范见 [`development/ai-development-playbook.md`](development/ai-development-playbook.md)。
