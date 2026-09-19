@@ -27,7 +27,7 @@ public sealed partial class TeamLabExecutionPlanExecutor
             if (before is not null)
             {
                 if (asset.Kind == "docker")
-                    await docker.ControlTeamLabPowerAsync(before.ResourceId, plan.RuntimeId, plan.Generation, plan.PlanDigest, "inspect", token);
+                    await docker.ControlTeamLabPowerAsync(before.ResourceId, plan.RuntimeId, plan.Generation, "inspect", token);
                 else if (!(await libvirt.ChangePowerAsync(plan, asset, "inspect", request.ExpectedNativeIdentity, token)).Success)
                     return new(false, "asset_control.identity_conflict", before);
             }
@@ -50,14 +50,14 @@ public sealed partial class TeamLabExecutionPlanExecutor
                     if (asset.Kind == "docker")
                     {
                         if (before?.State == "paused")
-                            await docker.ControlTeamLabPowerAsync(before.ResourceId, plan.RuntimeId, plan.Generation, plan.PlanDigest, "resume", token);
+                            await docker.ControlTeamLabPowerAsync(before.ResourceId, plan.RuntimeId, plan.Generation, "resume", token);
                         await ApplyDockerAsync(plan, asset, events, token, preserveContainer: before is not null);
                     }
                     else await ApplyVmAsync(plan, asset, events, token);
                     break;
                 default:
                     if (asset.Kind == "docker")
-                        await docker.ControlTeamLabPowerAsync(before!.ResourceId, plan.RuntimeId, plan.Generation, plan.PlanDigest, request.Action, token);
+                        await docker.ControlTeamLabPowerAsync(before!.ResourceId, plan.RuntimeId, plan.Generation, request.Action, token);
                     else
                     {
                         var response = await libvirt.ChangePowerAsync(plan, asset, request.Action, request.ExpectedNativeIdentity, token);

@@ -357,7 +357,7 @@ public sealed partial class TeamLabExecutionPlanExecutor(
             {
                 var item = beforeCleanup.FirstOrDefault(item => item.AssetKey == asset.AssetKey);
                 if (item is not null)
-                    await docker.DestroyContainerAsync(item.ResourceId, token, plan.Generation, plan.PlanDigest);
+                    await docker.DestroyContainerAsync(item.ResourceId, token, plan.Generation);
             }
             else if (asset.Kind.Equals("vm", StringComparison.OrdinalIgnoreCase))
             {
@@ -423,7 +423,6 @@ public sealed partial class TeamLabExecutionPlanExecutor(
             StartImmediately = true,
             MemoryLimit = Math.Max(64, asset.MemoryMiB),
             CPUCount = Math.Max(1, asset.Cpu),
-            TeamLabPlanDigest = plan.PlanDigest,
             TeamLabShardKey = plan.ShardKey,
             EnvironmentVariables = asset.Device is { } device
                 ? new Dictionary<string, string> { ["GZCTF_DEVICE_PARAMETERS"] = device.ParametersJson }
@@ -476,8 +475,7 @@ public sealed partial class TeamLabExecutionPlanExecutor(
                 {
                     try
                     {
-                        await docker.DestroyContainerAsync(container.ContainerId, CancellationToken.None, plan.Generation,
-                            plan.PlanDigest);
+                        await docker.DestroyContainerAsync(container.ContainerId, CancellationToken.None, plan.Generation);
                     }
                     catch (Exception exception) when (exception is not OperationCanceledException)
                     {

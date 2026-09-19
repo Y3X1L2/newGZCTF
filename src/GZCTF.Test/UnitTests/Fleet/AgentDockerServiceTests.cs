@@ -40,7 +40,7 @@ public class AgentDockerServiceTests
     }
 
     [Fact]
-    public void MatchesExpectedGeneration_AcceptsManagedLegacyContainerAsGenerationOne()
+    public void MatchesExpectedGeneration_RejectsContainerWithoutGeneration()
     {
         var labels = new Dictionary<string, string>
         {
@@ -48,23 +48,9 @@ public class AgentDockerServiceTests
             ["ChallengeId"] = "39"
         };
 
-        var matches = DockerService.MatchesExpectedGeneration(labels, 1, out var legacyGeneration);
-
-        Assert.True(matches);
-        Assert.True(legacyGeneration);
-    }
-
-    [Theory]
-    [InlineData(2)]
-    [InlineData(7)]
-    public void MatchesExpectedGeneration_RejectsManagedLegacyContainerForLaterGeneration(int generation)
-    {
-        var labels = new Dictionary<string, string> { ["ManagedBy"] = "GZCTF" };
-
-        var matches = DockerService.MatchesExpectedGeneration(labels, generation, out var legacyGeneration);
+        var matches = DockerService.MatchesExpectedGeneration(labels, 1);
 
         Assert.False(matches);
-        Assert.False(legacyGeneration);
     }
 
     [Fact]
@@ -72,10 +58,9 @@ public class AgentDockerServiceTests
     {
         var labels = new Dictionary<string, string> { ["ManagedBy"] = "other" };
 
-        var matches = DockerService.MatchesExpectedGeneration(labels, 1, out var legacyGeneration);
+        var matches = DockerService.MatchesExpectedGeneration(labels, 1);
 
         Assert.False(matches);
-        Assert.False(legacyGeneration);
     }
 
     [Fact]
@@ -87,9 +72,7 @@ public class AgentDockerServiceTests
             ["GZCTF.Generation"] = "2"
         };
 
-        Assert.False(DockerService.MatchesExpectedGeneration(labels, 1, out var legacyGeneration));
-        Assert.False(legacyGeneration);
-        Assert.True(DockerService.MatchesExpectedGeneration(labels, 2, out legacyGeneration));
-        Assert.False(legacyGeneration);
+        Assert.False(DockerService.MatchesExpectedGeneration(labels, 1));
+        Assert.True(DockerService.MatchesExpectedGeneration(labels, 2));
     }
 }

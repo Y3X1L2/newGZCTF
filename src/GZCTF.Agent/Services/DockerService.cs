@@ -96,7 +96,6 @@ public class DockerService
                 ["GZCTF.RuntimeId"] = request.RuntimeId.ToString(),
                 ["GZCTF.Generation"] = Math.Max(1, request.Generation).ToString(),
                 ["GZCTF.AssetKey"] = request.AssetKey ?? string.Empty,
-                ["GZCTF.TeamLabPlanDigest"] = request.TeamLabPlanDigest ?? string.Empty,
                 ["GZCTF.TeamLabShardKey"] = request.TeamLabShardKey ?? string.Empty
             },
             HostConfig = new HostConfig
@@ -174,10 +173,6 @@ public class DockerService
                             existing.Config.Labels.TryGetValue("GZCTF.RuntimeId", out var runtimeLabel)
                 ? runtimeLabel
                 : null;
-            var planDigest = existing.Config.Labels is not null &&
-                             existing.Config.Labels.TryGetValue("GZCTF.TeamLabPlanDigest", out var digestLabel)
-                ? digestLabel
-                : null;
             var shardKey = existing.Config.Labels is not null &&
                            existing.Config.Labels.TryGetValue("GZCTF.TeamLabShardKey", out var shardLabel)
                 ? shardLabel
@@ -186,7 +181,6 @@ public class DockerService
                 !string.Equals(generation, Math.Max(1, request.Generation).ToString(), StringComparison.Ordinal) ||
                 gateForTeamLabNetwork &&
                 !string.Equals(runtimeId, request.RuntimeId.ToString(), StringComparison.Ordinal) ||
-                !string.Equals(planDigest, request.TeamLabPlanDigest ?? string.Empty, StringComparison.Ordinal) ||
                 !string.Equals(shardKey, request.TeamLabShardKey ?? string.Empty, StringComparison.Ordinal))
                 throw new InvalidOperationException(
                     $"runtime_identity_conflict: container {containerName} exists with a different image or generation.");
@@ -268,14 +262,13 @@ public class DockerService
     }
 
     public async Task ControlTeamLabPowerAsync(string containerId, int runtimeId, int generation,
-        string planDigest, string action, CancellationToken token)
+        string action, CancellationToken token)
     {
         var inspect = await _client.Containers.InspectContainerAsync(containerId, token);
         var labels = inspect.Config.Labels;
         if (labels is null || !labels.TryGetValue("ManagedBy", out var owner) || owner != "GZCTF" ||
             !labels.TryGetValue("GZCTF.RuntimeId", out var runtime) || runtime != runtimeId.ToString(System.Globalization.CultureInfo.InvariantCulture) ||
-            !labels.TryGetValue("GZCTF.Generation", out var actualGeneration) || actualGeneration != generation.ToString(System.Globalization.CultureInfo.InvariantCulture) ||
-            !labels.TryGetValue("GZCTF.TeamLabPlanDigest", out var digest) || !string.Equals(digest, planDigest, StringComparison.OrdinalIgnoreCase))
+            !labels.TryGetValue("GZCTF.Generation", out var actualGeneration) || actualGeneration != generation.ToString(System.Globalization.CultureInfo.InvariantCulture))
             throw new AgentOperationException("Conflict", "asset_control.identity_conflict", "Container execution identity changed.", false, 409);
         switch (action)
         {
@@ -300,7 +293,7 @@ public class DockerService
         CancellationToken token)
     {
         var inspect = await _client.Containers.InspectContainerAsync(containerId, token);
-        if (!MatchesExpectedGeneration(inspect.Config.Labels, expectedGeneration, out _))
+        if (!MatchesExpectedGeneration(inspect.Config.Labels, expectedGeneration))
             throw new AgentOperationException(
                 "Conflict", "runtime.identity_conflict",
                 "Container generation does not match the requested runtime identity.", false,
@@ -313,10 +306,9 @@ public class DockerService
     public async Task DestroyContainerAsync(
         string containerId,
         CancellationToken token,
-        int? expectedGeneration = null,
-        string? expectedTeamLabPlanDigest = null)
+        int? expectedGeneration = null)
     {
-        if (expectedGeneration is not null || !string.IsNullOrWhiteSpace(expectedTeamLabPlanDigest))
+        if (expectedGeneration is not null)
         {
             ContainerInspectResponse existing;
             try
@@ -332,26 +324,14 @@ public class DockerService
                 return;
             }
 
-            var legacyGeneration = false;
             if (expectedGeneration is { } requiredGeneration)
             {
-                if (!MatchesExpectedGeneration(existing.Config.Labels, requiredGeneration, out legacyGeneration))
+                if (!MatchesExpectedGeneration(existing.Config.Labels, requiredGeneration))
                     throw new AgentOperationException(
                         "Conflict", "runtime.identity_conflict",
                         "Container generation does not match the requested runtime identity.", false,
                         StatusCodes.Status409Conflict);
             }
-            if (expectedGeneration is not null && legacyGeneration)
-                _logger.LogWarning(
-                    "Destroying legacy GZCTF container {ContainerId} without a generation label as generation 1",
-                    containerId);
-            if (!string.IsNullOrWhiteSpace(expectedTeamLabPlanDigest) &&
-                (!existing.Config.Labels!.TryGetValue("GZCTF.TeamLabPlanDigest", out var existingPlanDigest) ||
-                 !string.Equals(existingPlanDigest, expectedTeamLabPlanDigest, StringComparison.OrdinalIgnoreCase)))
-                throw new AgentOperationException(
-                    "Conflict", "runtime.execution_plan_conflict",
-                    "Container does not belong to the requested execution plan.", false,
-                    StatusCodes.Status409Conflict);
         }
 
         try
@@ -438,7 +418,7 @@ public class DockerService
                 StatusCodes.Status409Conflict);
         }
 
-        if (!MatchesExpectedGeneration(inspect.Config.Labels, expectedGeneration, out _))
+        if (!MatchesExpectedGeneration(inspect.Config.Labels, expectedGeneration))
             throw new AgentOperationException(
                 "Conflict", "runtime.identity_conflict",
                 "Container generation does not match the requested runtime identity.", false,
@@ -448,20 +428,14 @@ public class DockerService
 
     internal static bool MatchesExpectedGeneration(
         IDictionary<string, string>? labels,
-        int requiredGeneration,
-        out bool legacyGeneration)
+        int requiredGeneration)
     {
-        legacyGeneration = false;
         if (labels is null)
             return false;
 
-        if (labels.TryGetValue("GZCTF.Generation", out var value))
-            return int.TryParse(value, out var generation) && generation == requiredGeneration;
-
-        legacyGeneration = requiredGeneration == 1 &&
-                           labels.TryGetValue("ManagedBy", out var managedBy) &&
-                           string.Equals(managedBy, "GZCTF", StringComparison.Ordinal);
-        return legacyGeneration;
+        return labels.TryGetValue("GZCTF.Generation", out var value) &&
+               int.TryParse(value, out var generation) &&
+               generation == requiredGeneration;
     }
 
     public async Task<AgentCommandResult> ExecuteContainerCommandAsync(string containerId,

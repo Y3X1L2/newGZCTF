@@ -25,11 +25,11 @@ public sealed class TeamLabOvsAttachmentProvider(
                  ("Interface", Where("name", interfaceName)), ("Port", Where("name", interfaceName))], cancellationToken);
             // libvirt owns VM TAP rows and stamps vm-id/iface-id instead of Agent ownership tags.
             var iface = vmIdentity is null
-                ? ExistingUuid(state[1], plan.RuntimePublicId, plan.Generation, networkKey, plan.PlanDigest, "interface")
+                ? ExistingUuid(state[1], plan.RuntimePublicId, plan.Generation, networkKey, "interface")
                 : state[1].Count == 1 && OvsdbJsonCodec.GetMapValue(state[1][0]?["external_ids"], "vm-id") == vmIdentity
                     ? state[1][0]?["_uuid"]?[1]?.GetValue<string>() : null;
             var port = vmIdentity is null
-                ? ExistingUuid(state[2], plan.RuntimePublicId, plan.Generation, networkKey, plan.PlanDigest, "port")
+                ? ExistingUuid(state[2], plan.RuntimePublicId, plan.Generation, networkKey, "port")
                 : state[2].Count == 1 ? state[2][0]?["_uuid"]?[1]?.GetValue<string>() : null;
             if (iface is null || port is null || state[0].Count != 1 || !BridgeContainsPort(state[0][0] as JsonObject, port) ||
                 !ContainsUuid(state[2][0]?["interfaces"], iface))
@@ -62,7 +62,6 @@ public sealed class TeamLabOvsAttachmentProvider(
             interfaceName,
             networkKey,
             TeamLabOvnNaming.LogicalPortId(plan, networkKey, portKey),
-            plan.PlanDigest,
             cancellationToken);
 
     public Task<TeamLabAttachmentResult> AttachHostInterfaceAsync(
@@ -78,7 +77,6 @@ public sealed class TeamLabOvsAttachmentProvider(
             interfaceName,
             networkKey,
             TeamLabOvnNaming.LogicalPortId(runtimePublicId, generation, networkKey, portKey),
-            null,
             cancellationToken);
 
     async Task<TeamLabAttachmentResult> AttachCoreAsync(
@@ -87,7 +85,6 @@ public sealed class TeamLabOvsAttachmentProvider(
         string interfaceName,
         string networkKey,
         string logicalPortName,
-        string? planDigest,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(config.OvsLocalEndpoint))
@@ -107,9 +104,9 @@ public sealed class TeamLabOvsAttachmentProvider(
                     $"OVS integration bridge {config.OvsIntegrationBridgeName} does not exist.");
             var interfaceRows = state[1];
             var portRows = state[2];
-            var interfaceUuid = ExistingUuid(interfaceRows, runtimePublicId, generation, networkKey, planDigest, "interface");
-            var portUuid = ExistingUuid(portRows, runtimePublicId, generation, networkKey, planDigest, "port");
-            var externalIds = BuildExternalIds(runtimePublicId, generation, networkKey, logicalPortName, planDigest);
+            var interfaceUuid = ExistingUuid(interfaceRows, runtimePublicId, generation, networkKey, "interface");
+            var portUuid = ExistingUuid(portRows, runtimePublicId, generation, networkKey, "port");
+            var externalIds = BuildExternalIds(runtimePublicId, generation, networkKey, logicalPortName);
             var interfaceRef = interfaceUuid is null
                 ? NamedUuid("interface", interfaceName)
                 : Uuid(interfaceUuid);
@@ -184,7 +181,7 @@ public sealed class TeamLabOvsAttachmentProvider(
         string interfaceName,
         string networkKey,
         CancellationToken cancellationToken) =>
-        RemoveCoreAsync(plan.RuntimePublicId, plan.Generation, interfaceName, networkKey, plan.PlanDigest, cancellationToken);
+        RemoveCoreAsync(plan.RuntimePublicId, plan.Generation, interfaceName, networkKey, cancellationToken);
 
     public Task<TeamLabAttachmentResult> RemoveHostInterfaceAsync(
         Guid runtimePublicId,
@@ -192,14 +189,13 @@ public sealed class TeamLabOvsAttachmentProvider(
         string interfaceName,
         string networkKey,
         CancellationToken cancellationToken) =>
-        RemoveCoreAsync(runtimePublicId, generation, interfaceName, networkKey, null, cancellationToken);
+        RemoveCoreAsync(runtimePublicId, generation, interfaceName, networkKey, cancellationToken);
 
     async Task<TeamLabAttachmentResult> RemoveCoreAsync(
         Guid runtimePublicId,
         int generation,
         string interfaceName,
         string networkKey,
-        string? planDigest,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(config.OvsLocalEndpoint) || string.IsNullOrWhiteSpace(interfaceName))
@@ -218,10 +214,10 @@ public sealed class TeamLabOvsAttachmentProvider(
             var interfaceRows = state[2];
             var portUuid = portRows.Count == 0
                 ? null
-                : ExistingUuid(portRows, runtimePublicId, generation, networkKey, planDigest, "port");
+                : ExistingUuid(portRows, runtimePublicId, generation, networkKey, "port");
             if (portUuid is null)
                 return new TeamLabAttachmentResult(true, "Attachment is already absent.");
-            if (ExistingUuid(interfaceRows, runtimePublicId, generation, networkKey, planDigest, "interface") is null)
+            if (ExistingUuid(interfaceRows, runtimePublicId, generation, networkKey, "interface") is null)
                 return TeamLabAttachmentResult.Failed("cleanup",
                     $"OVS port {interfaceName} has no owned interface.");
             if (!BridgeContainsPort(bridgeRows[0] as JsonObject, portUuid))
@@ -239,13 +235,13 @@ public sealed class TeamLabOvsAttachmentProvider(
             {
                 ["op"] = "delete",
                 ["table"] = "Port",
-                ["where"] = OwnedWhere("name", interfaceName, runtimePublicId, generation, networkKey, planDigest)
+                ["where"] = OwnedWhere("name", interfaceName, runtimePublicId, generation, networkKey)
             });
             operations.Add(new JsonObject
             {
                 ["op"] = "delete",
                 ["table"] = "Interface",
-                ["where"] = OwnedWhere("name", interfaceName, runtimePublicId, generation, networkKey, planDigest)
+                ["where"] = OwnedWhere("name", interfaceName, runtimePublicId, generation, networkKey)
             });
             var result = await ovsdb.TransactAsync(config.OvsLocalEndpoint, config.OvsLocalDatabase,
                 operations, cancellationToken);
@@ -263,8 +259,7 @@ public sealed class TeamLabOvsAttachmentProvider(
         Guid runtimePublicId,
         int generation,
         string networkKey,
-        string logicalPortName,
-        string? planDigest)
+        string logicalPortName)
     {
         var pairs = new List<(string Key, string Value)>
         {
@@ -273,8 +268,6 @@ public sealed class TeamLabOvsAttachmentProvider(
             ("gzctf-network-key", networkKey),
             ("iface-id", logicalPortName)
         };
-        if (planDigest is not null)
-            pairs.Add(("gzctf-plan-digest", planDigest));
         return OvsdbJsonCodec.Map(pairs.ToArray());
     }
 
@@ -288,8 +281,7 @@ public sealed class TeamLabOvsAttachmentProvider(
         string value,
         Guid runtimePublicId,
         int generation,
-        string networkKey,
-        string? planDigest)
+        string networkKey)
     {
         var pairs = new List<(string Key, string Value)>
         {
@@ -297,8 +289,6 @@ public sealed class TeamLabOvsAttachmentProvider(
             ("gzctf-generation", generation.ToString()),
             ("gzctf-network-key", networkKey)
         };
-        if (planDigest is not null)
-            pairs.Add(("gzctf-plan-digest", planDigest));
         return new JsonArray
         {
             new JsonArray { column, "==", value },
@@ -325,7 +315,6 @@ public sealed class TeamLabOvsAttachmentProvider(
         Guid runtimePublicId,
         int generation,
         string networkKey,
-        string? planDigest,
         string kind)
     {
         if (rows.Count == 0) return null;
@@ -338,10 +327,7 @@ public sealed class TeamLabOvsAttachmentProvider(
             !string.Equals(OvsdbJsonCodec.GetMapValue(row["external_ids"], "gzctf-generation"),
                 generation.ToString(), StringComparison.Ordinal) ||
             !string.Equals(OvsdbJsonCodec.GetMapValue(row["external_ids"], "gzctf-network-key"),
-                networkKey, StringComparison.Ordinal) ||
-            planDigest is not null && !string.Equals(
-                OvsdbJsonCodec.GetMapValue(row["external_ids"], "gzctf-plan-digest"),
-                planDigest, StringComparison.Ordinal))
+                networkKey, StringComparison.Ordinal))
             throw new InvalidOperationException($"OVS {kind} identity conflicts with the requested runtime.");
         return value;
     }

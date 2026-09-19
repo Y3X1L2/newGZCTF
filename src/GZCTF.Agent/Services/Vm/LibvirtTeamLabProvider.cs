@@ -388,13 +388,10 @@ public sealed class LibvirtTeamLabProvider(
         teamLab.RuntimeStateRoot, plan.RuntimePublicId.ToString("N"), plan.Generation.ToString());
 
     string OverlayPath(TeamLabExecutionPlanV2 plan, TeamLabAssetExecutionSpecV2 asset) => Path.Combine(
-        RuntimeDirectory(plan), $"{asset.AssetKey}-{PlanDigestHex(plan.PlanDigest)}.qcow2");
+        RuntimeDirectory(plan), $"{asset.AssetKey}.qcow2");
 
     string NetworkSeedDirectory(TeamLabExecutionPlanV2 plan, TeamLabAssetExecutionSpecV2 asset) => Path.Combine(
-        RuntimeDirectory(plan), $"{asset.AssetKey}-{PlanDigestHex(plan.PlanDigest)}-seed");
-
-    static string PlanDigestHex(string digest) =>
-        digest.StartsWith("sha256:", StringComparison.OrdinalIgnoreCase) ? digest[7..] : digest;
+        RuntimeDirectory(plan), $"{asset.AssetKey}-seed");
 
     static bool MatchesStableUuid(nint domain, TeamLabExecutionPlanV2 plan,
         TeamLabAssetExecutionSpecV2 asset)
@@ -406,7 +403,7 @@ public sealed class LibvirtTeamLabProvider(
 
     static bool MatchesExecutionPlan(string? xml, TeamLabExecutionPlanV2 plan) =>
         !string.IsNullOrWhiteSpace(xml) && xml.Contains(
-            $"gzctf-generation={plan.Generation} gzctf-execution-plan=v2 gzctf-plan-digest={plan.PlanDigest}",
+            $"gzctf-runtime={plan.RuntimePublicId:D} gzctf-generation={plan.Generation} gzctf-shard={plan.ShardKey} gzctf-execution-plan=v2",
             StringComparison.Ordinal);
 
     string BuildDomainXml(TeamLabExecutionPlanV2 plan, TeamLabAssetExecutionSpecV2 asset,
@@ -415,7 +412,7 @@ public sealed class LibvirtTeamLabProvider(
         var domain = new XElement("domain", new XAttribute("type", "kvm"),
             new XElement("name", domainName),
             new XElement("uuid", StableUuid(plan, asset)),
-            new XElement("description", $"gzctf-generation={plan.Generation} gzctf-execution-plan=v2 gzctf-plan-digest={plan.PlanDigest}"),
+            new XElement("description", $"gzctf-runtime={plan.RuntimePublicId:D} gzctf-generation={plan.Generation} gzctf-shard={plan.ShardKey} gzctf-execution-plan=v2"),
             new XElement("memory", new XAttribute("unit", "MiB"), Math.Max(256, asset.MemoryMiB)),
             new XElement("currentMemory", new XAttribute("unit", "MiB"), Math.Max(256, asset.MemoryMiB)),
             new XElement("vcpu", Math.Clamp(asset.Cpu, 1, 64)),
