@@ -72,7 +72,8 @@
 
 ## 6. 交接与状态维护
 
-- 联赛开发准备：[三阶段评估与路线](development/league/roadmap-20260919.md)、[多人并行与合并规范](development/league/parallel-development-20260919.md)、[Word 合并版](development/league/数字攻防联赛开发路线与并行规范V0.2.docx)。按已确认的四人分工和 9 月底自动 KO 目标安排，业务实现尚待开展。
+- 联赛场景更新：[双港 Demo 验证设计与实施清单](development/league/demo-verification-20260920.md)，说明 Flag/Checker 的用途、可信目标验证、当前源码差距，以及现在必须确定和可在开发中调整的内容。完整赛制仍在讨论。
+- 联赛工程准备：[三阶段评估与路线](development/league/roadmap-20260919.md)、[多人并行与合并规范](development/league/parallel-development-20260919.md)、[9 月 19 日 Word 快照](development/league/数字攻防联赛开发路线与并行规范V0.2.docx)。人员与协作约定继续使用，新赛制以最新 Demo 讨论记录为准，业务实现尚待开展。
 - 当前事实只写入 [`development/current-state.md`](development/current-state.md)。
 - 新 AI 或新成员接手项目先阅读 [`development/current-handoff.md`](development/current-handoff.md)。
 - 并行开发和 AI 会话规范见 [`development/ai-development-playbook.md`](development/ai-development-playbook.md)。
