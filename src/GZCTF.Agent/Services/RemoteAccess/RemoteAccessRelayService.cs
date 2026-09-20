@@ -42,15 +42,18 @@ public sealed class RemoteAccessRelayService(
         {
             if (request.TargetPort is < 1 or > 65535 || !IPAddress.TryParse(request.TargetAddress, out var targetAddress))
                 throw new AgentOperationException("RemoteAccess", "remote_access.invalid_request", "The remote access relay target is invalid.", false);
-            var verified = await kvm.ExecuteWithIdentityAsync(
-                request.VmName, request.Generation, request.NativeId,
-                token => kvm.GetIpAddressWithDiagnosticAsync(request.VmName, token), cancellationToken);
+            if (!Guid.TryParse(request.NativeId, out var nativeId))
+                throw new AgentOperationException("RemoteAccess", "remote_access.invalid_request", "The VM identity is invalid.", false);
+            var identity = new GZCTF.TeamLab.Contracts.TeamLabVmDiagnosticsRequest(
+                request.VmName, request.Generation, nativeId);
+            var endpoints = await kvm.ExecuteWithTeamLabIdentityAsync(identity, async token => (
+                Player: await kvm.GetIpAddressWithDiagnosticAsync(request.VmName, token),
+                Management: await kvm.GetManagementIpAddressWithDiagnosticAsync(request.VmName, token)), cancellationToken);
+            var verified = endpoints.Player;
             if (!IPAddress.TryParse(verified.IpAddress, out var guestAddress) || !guestAddress.Equals(targetAddress))
                 throw new AgentOperationException("RemoteAccess", "remote_access.asset_identity_mismatch", "The requested target does not match the active VM identity.", false);
 
-            var management = await kvm.ExecuteWithIdentityAsync(
-                request.VmName, request.Generation, request.NativeId,
-                token => kvm.GetManagementIpAddressWithDiagnosticAsync(request.VmName, token), cancellationToken);
+            var management = endpoints.Management;
             if (!IPAddress.TryParse(management.IpAddress, out var resolvedManagementAddress))
                 throw new AgentOperationException("RemoteAccess", "remote_access.management_address_unavailable",
                     "The VM management address is unavailable; remote operations cannot use the player network.", false);

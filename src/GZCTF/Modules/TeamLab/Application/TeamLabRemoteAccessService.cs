@@ -374,12 +374,15 @@ public sealed class TeamLabRemoteAccessService(
             await context.SaveChangesAsync(cancellationToken);
             return ToModel(session, asset.Name, runtimeId);
         }
-        catch
+        catch (Exception exception)
         {
             session.Status = TeamLabRemoteSessionStatus.Ending;
             session.EndReason = "creation_failed";
             await context.SaveChangesAsync(CancellationToken.None);
             await CompleteEndingAsync(session, "creation_failed", actorId, CancellationToken.None);
+            if (exception is GuacamoleUnavailableException)
+                throw new TeamLabApiContractException("remote_access.gateway_unavailable",
+                    "远程访问网关拒绝了会话创建，请联系管理员检查 Guacamole 服务账号权限。", 503);
             throw;
         }
     }

@@ -8,7 +8,8 @@ namespace GZCTF.Services;
 
 public sealed record GuacamoleRemoteSession(string ConnectionId, string UserId, string ConnectUrl);
 
-public sealed class GuacamoleUnavailableException() : Exception("Guacamole administration is unavailable.") { }
+public sealed class GuacamoleUnavailableException(Exception? innerException = null)
+    : Exception("Guacamole administration is unavailable.", innerException) { }
 
 public sealed class GuacamoleRemoteSessionService(
     IHttpClientFactory clients,
@@ -63,11 +64,13 @@ public sealed class GuacamoleRemoteSessionService(
             var userToken = await LoginAsync(client, temporaryUser, temporaryPassword, cancellationToken);
             return new GuacamoleRemoteSession(connectionId, userId, BuildConnectUrl(connectionId, userToken));
         }
-        catch
+        catch (Exception exception)
         {
             using var cleanupTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
             try { await DeleteSessionAsync(sessionId, connectionId, userId, cleanupTimeout.Token); }
             catch { logger.LogWarning("Guacamole creation compensation pending for session {SessionId}", sessionId); }
+            if (exception is HttpRequestException)
+                throw new GuacamoleUnavailableException(exception);
             throw;
         }
     }

@@ -77,6 +77,26 @@ public sealed class GuacamoleRemoteSessionServiceTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => Create(handler).DeleteAsync("connection", "user", source.Token));
     }
 
+    [Fact]
+    public async Task CreateVnc_UserPermissionDenied_IsGatewayUnavailableAndCleansConnection()
+    {
+        var sessionId = Guid.NewGuid();
+        using var handler = new Handler(request =>
+        {
+            if (request.Method == HttpMethod.Post && request.RequestUri!.AbsolutePath.EndsWith("/connections"))
+                return new(HttpStatusCode.OK) { Content = new StringContent("{\"identifier\":\"connection\"}") };
+            if (request.Method == HttpMethod.Post && request.RequestUri!.AbsolutePath.EndsWith("/users"))
+                return new(HttpStatusCode.Forbidden);
+            return new(HttpStatusCode.NoContent);
+        });
+
+        await Assert.ThrowsAsync<GuacamoleUnavailableException>(() =>
+            Create(handler).CreateVncAsync(sessionId, "worker", 47000, default));
+
+        Assert.Contains($"/api/session/data/postgresql/users/tlops_{sessionId:N}", handler.Paths);
+        Assert.Contains("/api/session/data/postgresql/connections/connection", handler.Paths);
+    }
+
     private static GuacamoleRemoteSessionService Create(Handler handler, bool authenticated = true)
     {
         var factory = new Mock<IHttpClientFactory>();
