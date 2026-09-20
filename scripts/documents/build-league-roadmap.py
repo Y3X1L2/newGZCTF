@@ -1,5 +1,6 @@
 """Generate the roadmap and parallel-development agreement as one Word document."""
 
+import argparse
 from datetime import datetime, timezone
 from pathlib import Path
 import re
@@ -77,6 +78,7 @@ def add_table(doc, lines, source):
             "目录范围": [8.2, 5.0, 3.2], "共享位置": [7.5, 2.6, 6.3],
             "批次": [1.3, 8.0, 7.1], "环境": [3.8, 6.0, 6.6],
             "情况": [5.5, 4.2, 6.7], "PR 示例": [5.1, 5.3, 6.0],
+            "负责人": [1.8, 8.0, 6.6], "时间": [2.6, 7.0, 6.8],
         }.get(rows[0][0], [4.0, 5.0, 7.4])
     table = doc.add_table(rows=0, cols=len(rows[0]))
     table.alignment = WD_TABLE_ALIGNMENT.CENTER
@@ -118,7 +120,10 @@ def add_table(doc, lines, source):
     gap.add_run().font.size = Pt(1)
 
 
-def build():
+def build(sources=SOURCES, output=OUTPUT,
+          title="数字攻防联赛开发路线与并行规范",
+          subject="三阶段评估、开发任务、责任边界与分支合并安排",
+          date="2026-09-19"):
     doc = Document()
     section = doc.sections[0]
     section.page_width, section.page_height = Cm(21), Cm(29.7)
@@ -158,7 +163,7 @@ def build():
     field.set(qn("w:instr"), "PAGE")
     footer._p.append(field)
     footer.add_run(" 页").font.size = Pt(9)
-    for source_index, filename in enumerate(SOURCES):
+    for source_index, filename in enumerate(sources):
         source = DIRECTORY / filename
         lines = source.read_text(encoding="utf-8").splitlines()
         i = 0
@@ -198,13 +203,20 @@ def build():
                     paragraph.paragraph_format.page_break_before = True
                     pending_break = False
     props = doc.core_properties
-    props.title = "数字攻防联赛开发路线与并行规范"
+    props.title = title
     props.author = "YINYU"
-    props.subject = "三阶段评估、开发任务、责任边界与分支合并安排"
-    props.created = props.modified = datetime(2026, 9, 19, tzinfo=timezone.utc)
-    doc.save(OUTPUT)
-    print(OUTPUT)
+    props.subject = subject
+    props.created = props.modified = datetime.fromisoformat(date).replace(tzinfo=timezone.utc)
+    doc.save(output)
+    print(output)
 
 
 if __name__ == "__main__":
-    build()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--source", action="append", help="Markdown filename under docs/development/league")
+    parser.add_argument("--output", type=Path, default=OUTPUT)
+    parser.add_argument("--title", default="数字攻防联赛开发路线与并行规范")
+    parser.add_argument("--subject", default="三阶段评估、开发任务、责任边界与分支合并安排")
+    parser.add_argument("--date", default="2026-09-19")
+    args = parser.parse_args()
+    build(args.source or SOURCES, args.output, args.title, args.subject, args.date)
