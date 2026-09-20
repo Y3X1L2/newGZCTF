@@ -1,9 +1,16 @@
 # YINYU 当前开发状态
 
-文档整理日期：2026-09-19
-最近一次生产核验：2026-09-19 18:26（北京时间）
+文档整理日期：2026-09-20
+最近一次生产核验：2026-09-20（北京时间）
 
 本文件仅保留最新已知基线、功能边界、未解决事项和接手入口。生产信息是上述核验时点的记录，不能代替下一次操作前的现场检查。长期协作规则见 [AGENTS.md](../../AGENTS.md)。
+
+## TeamLab 远程运维修复（2026-09-20）
+
+- `10.24.0.27` 主站已发布到 `/opt/gzctf/releases/remote-access-6be5cf7-20260920/publish`，主站与 Agent 均为 active，`/api/Config` 返回 200。本次没有数据库迁移。
+- VM 远程会话已统一按 TeamLab 的 libvirt 域身份校验。带管理网卡的 VM 继续使用管理地址；没有管理网卡的 VM 使用运行资产的场景地址，并将 Agent 中继连接绑定到对应场景接口，避免同网段 WireGuard 路由选错出口。
+- Guacamole 服务账号仅增加临时会话创建所需的 `CREATE_USER`，与既有 `CREATE_CONNECTION` 配合使用，没有授予管理权限。
+- 生产 Linux VM 的 SSH 与 VNC 均已通过创建会话、取得连接地址和关闭会话；会话最终状态为已关闭，Guacamole 临时 connection 和 user 均为 0。生产暂无合适的 Windows VM，RDP 未做 Windows 实机画面验证。
 
 ## TeamLab 底座收敛候选（2026-09-19）
 

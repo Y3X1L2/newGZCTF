@@ -1,6 +1,8 @@
 using System.Collections.Concurrent;
 using System.Net;
+using System.Net.NetworkInformation;
 using System.Net.Sockets;
+using System.Text;
 using GZCTF.Agent.Models;
 using GZCTF.Agent.Services.Vm;
 using Microsoft.Extensions.Options;
@@ -16,6 +18,8 @@ public sealed class RemoteAccessRelayService(
 {
     private const int FirstPort = 47000;
     private const int PortCount = 1000;
+    private const int SocketLevel = 1; // Linux SOL_SOCKET.
+    private const int BindToDevice = 25; // Linux SO_BINDTODEVICE.
     private readonly ConcurrentDictionary<Guid, Relay> _relays = new();
 
     public Guid[] ActiveSessionIds() => _relays.Where(item => item.Value.ExpiresAt > DateTimeOffset.UtcNow)
@@ -31,6 +35,7 @@ public sealed class RemoteAccessRelayService(
             request.ExpiresAt <= DateTimeOffset.UtcNow || request.ExpiresAt > DateTimeOffset.UtcNow.AddHours(2))
             throw new AgentOperationException("RemoteAccess", "remote_access.invalid_request", "The remote access relay request is invalid.", false);
         IPAddress managementAddress;
+        string? sourceInterface = null;
         var targetPort = request.TargetPort;
         if (request.VncConsole)
         {
@@ -46,19 +51,14 @@ public sealed class RemoteAccessRelayService(
                 throw new AgentOperationException("RemoteAccess", "remote_access.invalid_request", "The VM identity is invalid.", false);
             var identity = new GZCTF.TeamLab.Contracts.TeamLabVmDiagnosticsRequest(
                 request.VmName, request.Generation, nativeId);
-            var endpoints = await kvm.ExecuteWithTeamLabIdentityAsync(identity, async token => (
-                Player: await kvm.GetIpAddressWithDiagnosticAsync(request.VmName, token),
-                Management: await kvm.GetManagementIpAddressWithDiagnosticAsync(request.VmName, token)), cancellationToken);
-            var verified = endpoints.Player;
-            if (!IPAddress.TryParse(verified.IpAddress, out var guestAddress) || !guestAddress.Equals(targetAddress))
-                throw new AgentOperationException("RemoteAccess", "remote_access.asset_identity_mismatch", "The requested target does not match the active VM identity.", false);
-
-            var management = endpoints.Management;
-            if (!IPAddress.TryParse(management.IpAddress, out var resolvedManagementAddress))
-                throw new AgentOperationException("RemoteAccess", "remote_access.management_address_unavailable",
-                    "The VM management address is unavailable; remote operations cannot use the player network.", false);
-            managementAddress = resolvedManagementAddress;
-            await EnsureTargetReachableAsync(managementAddress, request.TargetPort, cancellationToken);
+            var management = await kvm.ExecuteWithTeamLabIdentityAsync(identity,
+                token => kvm.GetManagementIpAddressWithDiagnosticAsync(request.VmName, token), cancellationToken);
+            if (!IPAddress.TryParse(management.IpAddress, out managementAddress!))
+            {
+                managementAddress = targetAddress;
+                sourceInterface = FindSourceInterface(targetAddress);
+            }
+            await EnsureTargetReachableAsync(managementAddress, request.TargetPort, sourceInterface, cancellationToken);
         }
 
         if (_relays.TryGetValue(request.SessionId, out var existing))
@@ -73,7 +73,7 @@ public sealed class RemoteAccessRelayService(
                 var listener = new TcpListener(IPAddress.Any, port);
                 listener.Start(16);
                 var relay = new Relay(request.SessionId, port, managementAddress, targetPort, request.ExpiresAt,
-                    listener, _sourcePolicy, _relays, logger);
+                    listener, sourceInterface, _sourcePolicy, _relays, logger);
                 if (_relays.TryAdd(request.SessionId, relay))
                 {
                     relay.Start();
@@ -118,11 +118,13 @@ public sealed class RemoteAccessRelayService(
     internal static bool IsVncBanner(byte[] bytes) => bytes.Length == 12 &&
         System.Text.Encoding.ASCII.GetString(bytes) is "RFB 003.003\n" or "RFB 003.007\n" or "RFB 003.008\n";
 
-    private static async Task EnsureTargetReachableAsync(IPAddress address, int port, CancellationToken cancellationToken)
+    private static async Task EnsureTargetReachableAsync(
+        IPAddress address, int port, string? sourceInterface, CancellationToken cancellationToken)
     {
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         deadline.CancelAfter(TimeSpan.FromSeconds(5));
-        using var client = new TcpClient();
+        using var client = new TcpClient(address.AddressFamily);
+        BindToInterface(client.Client, sourceInterface);
         try
         {
             await client.ConnectAsync(address, port, deadline.Token);
@@ -134,9 +136,39 @@ public sealed class RemoteAccessRelayService(
         }
     }
 
+    private static string? FindSourceInterface(IPAddress target) =>
+        NetworkInterface.GetAllNetworkInterfaces()
+            .SelectMany(network => network.GetIPProperties().UnicastAddresses
+                .Select(address => (network.Name, Address: address)))
+            .Where(item => item.Address.Address.AddressFamily == target.AddressFamily &&
+                           SharesPrefix(item.Address.Address, target, item.Address.PrefixLength))
+            .OrderByDescending(item => item.Address.PrefixLength)
+            .Select(item => item.Name)
+            .FirstOrDefault();
+
+    private static void BindToInterface(Socket socket, string? interfaceName)
+    {
+        if (interfaceName is not null)
+            socket.SetRawSocketOption(SocketLevel, BindToDevice,
+                Encoding.UTF8.GetBytes($"{interfaceName}\0"));
+    }
+
+    private static bool SharesPrefix(IPAddress left, IPAddress right, int prefixLength)
+    {
+        var leftBytes = left.GetAddressBytes();
+        var rightBytes = right.GetAddressBytes();
+        var wholeBytes = prefixLength / 8;
+        if (!leftBytes.AsSpan(0, wholeBytes).SequenceEqual(rightBytes.AsSpan(0, wholeBytes)))
+            return false;
+        var remainingBits = prefixLength % 8;
+        return remainingBits == 0 ||
+               (leftBytes[wholeBytes] >> (8 - remainingBits)) == (rightBytes[wholeBytes] >> (8 - remainingBits));
+    }
+
     private sealed class Relay(
         Guid sessionId, int port, IPAddress targetAddress, int targetPort, DateTimeOffset expiresAt,
-        TcpListener listener, RdpProxyAccessPolicy sourcePolicy, ConcurrentDictionary<Guid, Relay> owner,
+        TcpListener listener, string? sourceInterface, RdpProxyAccessPolicy sourcePolicy,
+        ConcurrentDictionary<Guid, Relay> owner,
         ILogger logger) : IDisposable
     {
         private readonly CancellationTokenSource _stop = new();
@@ -180,7 +212,8 @@ public sealed class RemoteAccessRelayService(
         {
             using (client)
             {
-                using var target = new TcpClient();
+                using var target = new TcpClient(targetAddress.AddressFamily);
+                BindToInterface(target.Client, sourceInterface);
                 try
                 {
                     await target.ConnectAsync(targetAddress, targetPort, token);
