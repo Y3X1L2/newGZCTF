@@ -1,11 +1,6 @@
 using System;
-using System.Net;
-using System.Net.Sockets;
-using System.Text;
-using System.Threading.Tasks;
 using GZCTF.Agent.Models;
 using GZCTF.Agent.Services;
-using GZCTF.Agent.Services.RemoteAccess;
 using GZCTF.Modules.TeamLab.Application;
 using GZCTF.Modules.TeamLab.Domain.Runtime;
 using GZCTF.Services;
@@ -28,28 +23,6 @@ public class TeamLabVncConsoleTests
         if (accepted) Assert.Equal(5902, KvmService.ParseVncConsolePort(xml, identity));
         else Assert.Throws<AgentOperationException>(() => KvmService.ParseVncConsolePort(xml, identity));
         Assert.Throws<AgentOperationException>(() => KvmService.ParseVncConsolePort(xml, identity with { NativeId = Guid.NewGuid() }));
-    }
-
-    [Theory]
-    [InlineData("RFB 003.008\n", true)]
-    [InlineData("SSH-2.0-test", false)]
-    public async Task ConsoleProbeChecksRealTcpBanner(string banner, bool accepted)
-    {
-        var listener = new TcpListener(IPAddress.Loopback, 0);
-        listener.Start();
-        try
-        {
-            var server = Task.Run(async () =>
-            {
-                using var peer = await listener.AcceptTcpClientAsync();
-                await peer.GetStream().WriteAsync(Encoding.ASCII.GetBytes(banner));
-            });
-            var probe = RemoteAccessRelayService.EnsureVncConsoleAsync(((IPEndPoint)listener.LocalEndpoint).Port, default);
-            if (accepted) await probe;
-            else await Assert.ThrowsAsync<AgentOperationException>(() => probe);
-            await server;
-        }
-        finally { listener.Stop(); }
     }
 
     [Fact]

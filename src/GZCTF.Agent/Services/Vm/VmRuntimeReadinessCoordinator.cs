@@ -111,7 +111,8 @@ public sealed class VmRuntimeReadinessCoordinator(
             return true;
         if (latest.Stage != AgentRuntimeSignalStage.DomainRunning || latest.Facts is null ||
             !latest.Facts.TryGetValue("nativeId", out var nativeId) ||
-            !TryGetWarningAfterSeconds(latest.Facts, out var warningAfterSeconds))
+            !latest.Facts.TryGetValue("warningAfterSeconds", out var warningValue) ||
+            !int.TryParse(warningValue, out var warningAfterSeconds))
             throw new InvalidDataException("The VM readiness journal does not contain resumable domain facts.");
 
         VmGuestStatusResponse status;
@@ -198,15 +199,4 @@ public sealed class VmRuntimeReadinessCoordinator(
             _scheduled.TryRemove(operationId, out _);
     }
 
-    private static bool TryGetWarningAfterSeconds(
-        IReadOnlyDictionary<string, string> facts,
-        out int warningAfterSeconds)
-    {
-        warningAfterSeconds = 0;
-        if (facts.TryGetValue("warningAfterSeconds", out var warningValue) &&
-            int.TryParse(warningValue, out warningAfterSeconds))
-            return true;
-        return facts.TryGetValue("deadlineSeconds", out var legacyValue) &&
-               int.TryParse(legacyValue, out warningAfterSeconds);
-    }
 }

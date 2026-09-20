@@ -17,7 +17,7 @@ public sealed class RemoteAccessController(
 
     [HttpPost("relays")]
     public Task<RemoteRelayResponse> CreateRelay(CreateRemoteRelayRequest request, CancellationToken cancellationToken) =>
-        relays.CreateAsync(request, cancellationToken);
+        relays.CreateAsync(request, HttpContext.Connection.RemoteIpAddress!, cancellationToken);
 
     [HttpDelete("relays/{sessionId:guid}")]
     public async Task<IActionResult> DeleteRelay(Guid sessionId)

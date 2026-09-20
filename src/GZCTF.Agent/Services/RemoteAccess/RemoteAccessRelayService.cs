@@ -5,14 +5,11 @@ using System.Net.Sockets;
 using System.Text;
 using GZCTF.Agent.Models;
 using GZCTF.Agent.Services.Vm;
-using Microsoft.Extensions.Options;
 
 namespace GZCTF.Agent.Services.RemoteAccess;
 
 public sealed class RemoteAccessRelayService(
     KvmService kvm,
-    IOptions<AgentConfig> agentConfig,
-    IOptions<KvmConfig> kvmConfig,
     TeamLabTerminalSessionRegistry terminals,
     ILogger<RemoteAccessRelayService> logger)
 {
@@ -24,13 +21,11 @@ public sealed class RemoteAccessRelayService(
 
     public Guid[] ActiveSessionIds() => _relays.Where(item => item.Value.ExpiresAt > DateTimeOffset.UtcNow)
         .Select(item => item.Key).Concat(terminals.ActiveSessionIds()).Distinct().ToArray();
-    // Reuse the operator-configured console source policy. ServerUrl is only an additional
-    // literal-address convenience and must not become the sole path to authorize Guacamole.
-    private readonly RdpProxyAccessPolicy _sourcePolicy = RdpProxyAccessPolicy.Create(
-        kvmConfig.Value.RdpProxyAllowedSources, agentConfig.Value.ServerUrl);
 
-    public async Task<RemoteRelayResponse> CreateAsync(CreateRemoteRelayRequest request, CancellationToken cancellationToken)
+    public async Task<RemoteRelayResponse> CreateAsync(
+        CreateRemoteRelayRequest request, IPAddress sourceAddress, CancellationToken cancellationToken)
     {
+        if (sourceAddress.IsIPv4MappedToIPv6) sourceAddress = sourceAddress.MapToIPv4();
         if (request.SessionId == Guid.Empty || request.RuntimeId <= 0 || request.Generation <= 0 ||
             request.ExpiresAt <= DateTimeOffset.UtcNow || request.ExpiresAt > DateTimeOffset.UtcNow.AddHours(2))
             throw new AgentOperationException("RemoteAccess", "remote_access.invalid_request", "The remote access relay request is invalid.", false);
@@ -41,7 +36,6 @@ public sealed class RemoteAccessRelayService(
         {
             managementAddress = IPAddress.Loopback;
             targetPort = await kvm.GetVncConsolePortAsync(request.VmName, request.Generation, request.NativeId, cancellationToken);
-            await EnsureVncConsoleAsync(targetPort, cancellationToken);
         }
         else
         {
@@ -58,7 +52,6 @@ public sealed class RemoteAccessRelayService(
                 managementAddress = targetAddress;
                 sourceInterface = FindSourceInterface(targetAddress);
             }
-            await EnsureTargetReachableAsync(managementAddress, request.TargetPort, sourceInterface, cancellationToken);
         }
 
         if (_relays.TryGetValue(request.SessionId, out var existing))
@@ -73,7 +66,7 @@ public sealed class RemoteAccessRelayService(
                 var listener = new TcpListener(IPAddress.Any, port);
                 listener.Start(16);
                 var relay = new Relay(request.SessionId, port, managementAddress, targetPort, request.ExpiresAt,
-                    listener, sourceInterface, _sourcePolicy, _relays, logger);
+                    listener, sourceInterface, sourceAddress, _relays, logger);
                 if (_relays.TryAdd(request.SessionId, relay))
                 {
                     relay.Start();
@@ -95,46 +88,6 @@ public sealed class RemoteAccessRelayService(
     }
 
     public Task CancelTerminalAsync(Guid sessionId) => terminals.CancelAndWaitAsync(sessionId);
-
-    internal static async Task EnsureVncConsoleAsync(int port, CancellationToken token)
-    {
-        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(token);
-        deadline.CancelAfter(TimeSpan.FromSeconds(5));
-        using var client = new TcpClient();
-        try
-        {
-            await client.ConnectAsync(IPAddress.Loopback, port, deadline.Token);
-            var banner = new byte[12];
-            await client.GetStream().ReadExactlyAsync(banner, deadline.Token);
-            if (!IsVncBanner(banner))
-                throw new IOException("Invalid VNC protocol banner.");
-        }
-        catch (Exception exception) when (!token.IsCancellationRequested && exception is SocketException or IOException or OperationCanceledException)
-        {
-            throw new AgentOperationException("RemoteAccess", "remote_access.console_unavailable", "The VNC console did not complete its protocol probe.", true);
-        }
-    }
-
-    internal static bool IsVncBanner(byte[] bytes) => bytes.Length == 12 &&
-        System.Text.Encoding.ASCII.GetString(bytes) is "RFB 003.003\n" or "RFB 003.007\n" or "RFB 003.008\n";
-
-    private static async Task EnsureTargetReachableAsync(
-        IPAddress address, int port, string? sourceInterface, CancellationToken cancellationToken)
-    {
-        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        deadline.CancelAfter(TimeSpan.FromSeconds(5));
-        using var client = new TcpClient(address.AddressFamily);
-        BindToInterface(client.Client, sourceInterface);
-        try
-        {
-            await client.ConnectAsync(address, port, deadline.Token);
-        }
-        catch (Exception exception) when (exception is SocketException or OperationCanceledException && !cancellationToken.IsCancellationRequested)
-        {
-            throw new AgentOperationException("RemoteAccess", "remote_access.target_unreachable",
-                $"The VM management service at {address}:{port} is not reachable.", false);
-        }
-    }
 
     private static string? FindSourceInterface(IPAddress target) =>
         NetworkInterface.GetAllNetworkInterfaces()
@@ -167,7 +120,7 @@ public sealed class RemoteAccessRelayService(
 
     private sealed class Relay(
         Guid sessionId, int port, IPAddress targetAddress, int targetPort, DateTimeOffset expiresAt,
-        TcpListener listener, string? sourceInterface, RdpProxyAccessPolicy sourcePolicy,
+        TcpListener listener, string? sourceInterface, IPAddress sourceAddress,
         ConcurrentDictionary<Guid, Relay> owner,
         ILogger logger) : IDisposable
     {
@@ -189,7 +142,7 @@ public sealed class RemoteAccessRelayService(
                     try
                     { client = await listener.AcceptTcpClientAsync(linked.Token); }
                     catch (OperationCanceledException) { break; }
-                    if (!sourcePolicy.IsAllowed(((IPEndPoint?)client.Client.RemoteEndPoint)?.Address))
+                    if (!sourceAddress.Equals(((IPEndPoint?)client.Client.RemoteEndPoint)?.Address))
                     {
                         client.Dispose();
                         continue;

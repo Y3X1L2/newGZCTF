@@ -285,15 +285,6 @@ public sealed class TeamLabRemoteAccessService(
             (asset.Kind == TeamLabResourceKind.Vm && (string.IsNullOrWhiteSpace(asset.NativeIdentity) || !vncConsole && string.IsNullOrWhiteSpace(asset.IpAddress))))
             throw new TeamLabApiContractException("remote_access_asset_unresolved", "运行时资源缺少稳定的节点、资源标识或地址", 409);
 
-        if (availability.Protocol != TeamLabRemoteProtocol.ContainerTerminal)
-        {
-            try { await guacamole.EnsureAvailableAsync(cancellationToken); }
-            catch (GuacamoleUnavailableException)
-            {
-                throw new TeamLabApiContractException("remote_access.gateway_unavailable", "远程访问网关未配置或暂时不可用，请联系管理员检查 Guacamole。", 503);
-            }
-        }
-
         var runtime = await context.TeamLabRuntimes.SingleAsync(item => item.PublicId == runtimeId, cancellationToken);
         var session = new TeamLabRemoteSession
         {

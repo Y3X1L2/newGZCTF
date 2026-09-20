@@ -20,22 +20,16 @@ public sealed class GuacamoleRemoteSessionService(
     private readonly GuacamoleSettings _settings = options.Value;
     private static readonly JsonSerializerOptions Json = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
-    public async Task EnsureAvailableAsync(CancellationToken token)
-    {
-        if (await guacamole.GetAuthTokenAsync(token) is null)
-            throw new GuacamoleUnavailableException();
-    }
-
     public Task<GuacamoleRemoteSession> CreateVncAsync(Guid sessionId, string host, int port, CancellationToken token) =>
         CreateAsync(sessionId, "vnc", host, port, string.Empty, string.Empty, token);
 
-    public async Task<GuacamoleRemoteSession> CreateRdpAsync(
+    public Task<GuacamoleRemoteSession> CreateRdpAsync(
         Guid sessionId, string host, int port, string username, string password, CancellationToken cancellationToken)
-        => await CreateAsync(sessionId, "rdp", host, port, username, password, cancellationToken);
+        => CreateAsync(sessionId, "rdp", host, port, username, password, cancellationToken);
 
-    public async Task<GuacamoleRemoteSession> CreateSshAsync(
+    public Task<GuacamoleRemoteSession> CreateSshAsync(
         Guid sessionId, string host, int port, string username, string password, CancellationToken cancellationToken)
-        => await CreateAsync(sessionId, "ssh", host, port, username, password, cancellationToken);
+        => CreateAsync(sessionId, "ssh", host, port, username, password, cancellationToken);
 
     private async Task<GuacamoleRemoteSession> CreateAsync(
         Guid sessionId, string protocol, string host, int port, string username, string password, CancellationToken cancellationToken)
