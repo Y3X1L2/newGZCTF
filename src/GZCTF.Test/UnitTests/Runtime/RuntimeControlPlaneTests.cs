@@ -692,6 +692,7 @@ public sealed class RuntimeControlPlaneTests
             Id = Guid.NewGuid(),
             MaxContainers = 1,
             MaxVms = 1,
+            AutomaticCapacity = false,
             LastHeartbeat = DateTimeOffset.UtcNow.AddSeconds(-10)
         };
         var cleanupCompletedAt = DateTimeOffset.UtcNow;
@@ -1012,7 +1013,8 @@ public sealed class RuntimeControlPlaneTests
             Status = NodeStatus.Online,
             Capabilities = NodeCapability.Docker,
             MaxContainers = maxContainers,
-            MaxVms = 0
+            MaxVms = 0,
+            AutomaticCapacity = false
         };
         context.WorkerNodes.Add(node);
         context.SaveChanges();
@@ -1032,6 +1034,7 @@ public sealed class RuntimeControlPlaneTests
             Status = NodeStatus.Online,
             Capabilities = NodeCapability.Docker,
             MaxContainers = maxContainers,
+            AutomaticCapacity = false,
             TeamLabNetworkEnabled = true,
             TeamLabTunnelStatus = TeamLabTunnelStatus.Healthy,
             TeamLabFabricStatus = TeamLabFabricStatus.Healthy,

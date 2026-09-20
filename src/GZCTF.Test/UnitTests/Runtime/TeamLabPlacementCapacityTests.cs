@@ -284,6 +284,7 @@ public sealed class TeamLabPlacementCapacityTests
             Status = NodeStatus.Online,
             Capabilities = NodeCapability.Docker,
             MaxContainers = maxContainers,
+            AutomaticCapacity = false,
             TeamLabNetworkEnabled = true,
             TeamLabTunnelStatus = TeamLabTunnelStatus.Healthy,
             TeamLabFabricStatus = TeamLabFabricStatus.Healthy,
