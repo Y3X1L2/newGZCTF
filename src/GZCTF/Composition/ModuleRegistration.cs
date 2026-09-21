@@ -4,6 +4,7 @@ using GZCTF.Modules.Ctf;
 using GZCTF.Modules.Exercise;
 using GZCTF.Modules.Provisioning;
 using GZCTF.Modules.Identity;
+using GZCTF.Modules.League;
 using GZCTF.Modules.TeamLab;
 using GZCTF.Modules.Penetration;
 using GZCTF.Modules.Theory;
@@ -38,6 +39,7 @@ public static class ModuleRegistration
         services.AddScoped<DataRetentionExecutor>();
         services.AddHostedService<DataGovernanceWorker>();
         services.AddIdentityModule(configuration);
+        services.AddLeagueModule(configuration);
         services.AddAuditModule();
         services.AddContentModule();
         services.AddCtfModule();

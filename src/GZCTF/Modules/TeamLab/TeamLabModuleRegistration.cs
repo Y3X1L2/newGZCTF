@@ -13,6 +13,7 @@ public static class TeamLabModuleRegistration
 {
     public static IServiceCollection AddTeamLabModule(this IServiceCollection services)
     {
+        services.AddScoped<GZCTF.Modules.TeamLab.Contracts.ITeamLabReleaseCatalog, GZCTF.Modules.TeamLab.Infrastructure.EfTeamLabReleaseCatalog>();
         // Built from configuration so tenant addressing stays inside the range the platform owns and
         // clear of the networks its nodes already route; either overlap would replace host routes on
         // the WorkerNode and break unrelated games running there.

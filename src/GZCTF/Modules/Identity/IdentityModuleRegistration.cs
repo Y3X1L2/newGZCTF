@@ -12,6 +12,7 @@ public static class IdentityModuleRegistration
         IConfiguration configuration)
     {
         _ = configuration;
+        services.AddScoped<Contracts.ITeamMembershipQuery, EfTeamMembershipQuery>();
         services.AddScoped<IApiTokenStore, EfApiTokenStore>();
         services.AddSingleton<ApiTokenSecretHasher>();
         services.AddSingleton<IApiTokenSecretHasher>(provider =>

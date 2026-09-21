@@ -12,6 +12,7 @@
 | Ctf | `commercialization/open-api-v1-guide.md`、vNext 页面/API 规格 | 赛事入口和接口可查 | Flag、Submission、Scoreboard 数据流和出题操作规范 |
 | Exercise | vNext 页面/API 规格、总纲、Open API | 已实现且入口清晰 | 生产验收、内容运营、来源导入和实例生命周期总览 |
 | Identity | 总纲、Open API、认证页面/API 规格 | 入口和边界可查 | Portal SSO、角色权限、账号生命周期和故障排查手册 |
+| League | [第一阶段契约](../development/league/phase1-contract.md) | T0/T1/T4、数据/权限、HTTP、恢复和事务接入已定义 | yhr/lmr/lcx 真实提供者与页面联调、整场验收 |
 | Penetration | `teamlab-api-foundation-contract.md`、`teamlab-networking-feature-guide.md`、页面/API 规格 | 边界和组网契约可查 | objective/submission/score/reset 的独立玩法说明 |
 | Runtime | Agent 能力协议、调度/恢复手册、节点部署文档 | 较完整 | 面向业务模块的 command/query 速查表 |
 | TeamLab | TeamLab 契约、功能说明、基础验收手册、页面/API 规格 | 较完整 | 双 Worker 故障、长期流量和规模验收手册 |

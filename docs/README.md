@@ -43,6 +43,7 @@
 | 主题 | 现行文档 |
 | --- | --- |
 | Open API 调用 | [`commercialization/open-api-v1-guide.md`](commercialization/open-api-v1-guide.md) |
+| 联赛第一阶段接口与交接 | [`development/league/phase1-contract.md`](development/league/phase1-contract.md) |
 | OpenAPI 快照 | [`commercialization/openapi/open-v1.json`](commercialization/openapi/open-v1.json) |
 | TeamLab API 基础契约 | [`commercialization/teamlab-api-foundation-contract.md`](commercialization/teamlab-api-foundation-contract.md) |
 | TeamLab 外部控制面 | [`commercialization/teamlab-external-control-plane-contract.md`](commercialization/teamlab-external-control-plane-contract.md) |

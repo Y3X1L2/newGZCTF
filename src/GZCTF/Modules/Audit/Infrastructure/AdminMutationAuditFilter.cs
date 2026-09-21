@@ -123,10 +123,12 @@ public sealed class AdminMutationAuditFilter(
             Guid.TryParse(value.RouteData.Values[name]?.ToString(), out var parsed) ? parsed : null;
 
         var subjectId = context.RouteData.Values["id"]?.ToString()
+                        ?? context.RouteData.Values["matchId"]?.ToString()
                         ?? context.RouteData.Values["challengeId"]?.ToString()
                         ?? context.RouteData.Values["templateId"]?.ToString()
                         ?? context.RouteData.Values["nodeId"]?.ToString();
-        var resourceType = context.RouteData.Values.ContainsKey("challengeId") ? "challenge"
+        var resourceType = context.RouteData.Values.ContainsKey("matchId") ? "league-match"
+            : context.RouteData.Values.ContainsKey("challengeId") ? "challenge"
             : context.RouteData.Values.ContainsKey("templateId") ? "image-template"
             : context.RouteData.Values.ContainsKey("nodeId") ? "worker-node"
             : null;

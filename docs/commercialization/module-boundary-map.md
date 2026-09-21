@@ -65,6 +65,7 @@ src/GZCTF/
 | Identity | UserInfo、Team、API token、token grant、actor context | 用户查询、角色策略、token 签发与校验 | 比赛参与、课程报名、节点调度 |
 | Content | Challenge 基础、QuestionPool、ImageTemplate、Attachment、FlagContext、镜像绑定查询 | 题目资产、镜像目录、附件和导入任务 | 比赛计分、课程进度、runtime 调度 |
 | Ctf | Game、Participation、GameChallenge、Submission、Scoreboard | 比赛生命周期、参赛、普通 CTF 提交与计分 | Agent 调用、TeamLab 拓扑 |
+| League | LeagueMatch、LeagueRegistration、固定名单/席位、终局、流程意图 | 双队报名审核、准备/开赛/中止、事务内确认 KO | TeamLab 执行、第二套部署队列、其他模块实体写入；Flag/金币经公开端口接入 |
 | Exercise | ExerciseChallenge、ExerciseInstance、练习进度 | 常态练习生命周期 | 使用 Participation 表达练习状态 |
 | Training | TrainingCourse、Chapter、Enrollment、课程题绑定、课程提交、课程进度 | 课程管理和学习流程 | 持有 ImageTemplate 主副本；恢复已删除的旧课程聚合 |
 | Theory | 理论题库、tag、试卷、答题卡、答案 | 理论题检索、组卷、判题 | 用题库名代替 tag |
@@ -84,6 +85,7 @@ src/GZCTF/
 | Identity | Audit |
 | Content | Identity、Audit |
 | Ctf | Identity、Content、Runtime、VM、Audit |
+| League | Identity query contracts、TeamLab release query contract、Audit；运行/Flag/金币通过 League Contracts 端口 |
 | Exercise | Identity、Content、Runtime、VM、Audit |
 | Training | Identity、Content、Exercise、Runtime、VM、Audit |
 | Theory | Identity、Content、Audit |
