@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using System.ComponentModel;
 using System.Diagnostics;
 using System.Net;
 using GZCTF.Agent.Models;
@@ -23,7 +22,7 @@ public sealed partial class TeamLabExecutionPlanExecutor(
     IOptions<AgentConfig> agentOptions,
     ILogger<TeamLabExecutionPlanExecutor> logger)
 {
-    static readonly TimeSpan HealthProbeTimeout = TimeSpan.FromSeconds(30);
+    static readonly TimeSpan HealthProbeTimeout = TimeSpan.FromSeconds(10);
     static readonly int AssetParallelism = Math.Clamp(Environment.ProcessorCount, 2, 8);
     readonly AgentConfig agent = agentOptions.Value;
     readonly KeyedSemaphoreRegistry<(int RuntimeId, int Generation, string ShardKey)> executionLocks = new();
@@ -461,9 +460,6 @@ public sealed partial class TeamLabExecutionPlanExecutor(
                     return;
                 }
             }
-            var containerPid = await docker.GetContainerPidAsync(container.ContainerId, token);
-            if (!await RunHealthChecksAsync(plan, asset, events, token, containerPid: containerPid))
-                return;
             events.Enqueue(Event(plan, asset.AssetKey, "compute", "succeeded", null, container.ContainerId));
             completed = true;
         }
@@ -526,64 +522,6 @@ public sealed partial class TeamLabExecutionPlanExecutor(
             return;
         }
         events.Enqueue(Event(plan, asset.AssetKey, "compute", "succeeded", null, result.ResourceId));
-        await RunHealthChecksAsync(plan, asset, events, token);
-    }
-
-    async Task<bool> RunHealthChecksAsync(
-        TeamLabExecutionPlanV2 plan,
-        TeamLabAssetExecutionSpecV2 asset,
-        ConcurrentQueue<TeamLabExecutionEventV2> events,
-        CancellationToken cancellationToken,
-        long? containerPid = null)
-    {
-        foreach (var check in asset.HealthChecks)
-        {
-            using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            deadline.CancelAfter(HealthProbeTimeout);
-            try
-            {
-                if (check.Port is < 1 or > 65535 || !IPAddress.TryParse(check.Host, out _))
-                    throw new InvalidOperationException("Health check target is invalid.");
-                if (asset.Kind == "vm")
-                    await RunVmHealthProbeAsync(check, deadline.Token);
-                else if (containerPid is not > 0)
-                    throw new InvalidOperationException("Container health checks require a running container process.");
-                else await WaitForContainerHealthAsync(containerPid.Value, check, deadline.Token);
-                events.Enqueue(Event(plan, asset.AssetKey, "service", "succeeded", null,
-                    $"{check.Protocol.ToUpperInvariant()} health check passed."));
-            }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                throw;
-            }
-            catch (Exception exception) when (exception is Win32Exception or IOException or
-                                                InvalidOperationException or OperationCanceledException)
-            {
-                events.Enqueue(Event(plan, asset.AssetKey, "service", "failed", "health_check_failed",
-                    $"{check.Protocol.ToUpperInvariant()} health check failed."));
-                return false;
-            }
-        }
-        return true;
-    }
-
-    async Task WaitForContainerHealthAsync(long pid, TeamLabHealthCheckV2 check, CancellationToken token)
-    {
-        Exception? lastFailure = null;
-        while (!token.IsCancellationRequested)
-        {
-            try
-            {
-                await RunContainerHealthProbeAsync(pid, check, token);
-                return;
-            }
-            catch (Exception exception) when (exception is Win32Exception or IOException or InvalidOperationException)
-            {
-                lastFailure = exception;
-                await Task.Delay(TimeSpan.FromMilliseconds(500), token);
-            }
-        }
-        throw new IOException("Container health check did not become ready within the probe window.", lastFailure);
     }
 
     async Task RunContainerHealthProbeAsync(long pid, TeamLabHealthCheckV2 check, CancellationToken token)
