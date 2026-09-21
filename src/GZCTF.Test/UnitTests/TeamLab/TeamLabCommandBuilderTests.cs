@@ -902,11 +902,7 @@ public class TeamLabCommandBuilderTests : IDisposable
             PeerClientAddress: "10.1.1.2/32",
             PlayerAllowedCidrs: ["10.1.1.0/24"],
             PlayerBlockedCidrs: [],
-            DryRun: true,
-            RuntimePublicId: Guid.Parse("019fa217-fcee-73af-bb45-1bc400000001"),
-            NetworkKey: "network",
-            PortKey: "player-gateway",
-            MacAddress: "02:42:ac:10:00:02"), CancellationToken.None);
+            DryRun: true), CancellationToken.None);
 
         Assert.True(result.Success);
         var upIndex = Array.FindIndex(result.Commands, command => command.Contains("ip link set tlwg196 up", StringComparison.Ordinal));
@@ -1246,7 +1242,7 @@ public class TeamLabCommandBuilderTests : IDisposable
     }
 
     [Fact]
-    public async Task ConfigureWireGuardAsync_StreamsPrivateKeyBeforeReportingMissingOvsEndpoint()
+    public async Task ConfigureWireGuardAsync_DoesNotDependOnOvsEndpoint()
     {
         using var stateRoot = new TempDirectory();
         var stateDirectory = Path.Combine(stateRoot.Path, "runtime-123");
@@ -1274,15 +1270,10 @@ public class TeamLabCommandBuilderTests : IDisposable
             PeerClientAddress: "10.180.1.2/32",
             PlayerAllowedCidrs: ["10.180.1.0/28"],
             PlayerBlockedCidrs: [],
-            DryRun: false,
-            RuntimePublicId: Guid.Parse("019fa217-fcee-73af-bb45-1bc400000001"),
-            NetworkKey: "network",
-            PortKey: "player-gateway",
-            MacAddress: "02:42:ac:10:00:02"), CancellationToken.None);
+            DryRun: false), CancellationToken.None);
 
-        Assert.False(result.Success);
+        Assert.True(result.Success);
         Assert.False(result.DryRun);
-        Assert.Contains("OVS", result.Message, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain(runner.Commands, command => command.Contains("printf '<redacted>'"));
         Assert.Contains(runner.Commands, command => command.Contains("wg set tlwg123 private-key /dev/stdin"));
         Assert.Contains(runner.StandardInputs, input => input == ValidInterfacePrivateKey);
@@ -1379,7 +1370,6 @@ public class TeamLabCommandBuilderTests : IDisposable
             pcap,
             bootstrap,
             new TeamLabRuntimeGenerationStore(options),
-            new TeamLabOvsAttachmentProvider(new OvsdbJsonRpcClient(), options),
             new AgentResourceLock(),
             NullLogger<TeamLabNetworkService>.Instance)
         {

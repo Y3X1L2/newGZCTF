@@ -2293,19 +2293,13 @@ public record TeamLabWireGuardRequest(
     string PeerClientAddress,
     string[] PlayerAllowedCidrs,
     string[] PlayerBlockedCidrs,
-    bool DryRun = true,
-    Guid RuntimePublicId = default,
-    string? NetworkKey = null,
-    string? PortKey = null,
-    string? MacAddress = null);
+    bool DryRun = true);
 
 public record TeamLabWireGuardCleanupRequest(
     int RuntimeId,
     int Generation,
     string InterfaceName,
-    bool DryRun = true,
-    Guid RuntimePublicId = default,
-    string? NetworkKey = null);
+    bool DryRun = true);
 
 public record TeamLabCleanupRequest(
     int RuntimeId,

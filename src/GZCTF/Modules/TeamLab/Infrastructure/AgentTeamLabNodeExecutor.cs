@@ -427,11 +427,7 @@ public sealed class AgentTeamLabNodeExecutor(
                     request.ClientAddress,
                     request.PlayerAllowedCidrs.ToArray(),
                     request.PlayerBlockedCidrs.ToArray(),
-                    _config.DryRun,
-                    request.RuntimePublicId,
-                    request.NetworkKey,
-                    request.PortKey,
-                    request.MacAddress),
+                    _config.DryRun),
                 operationToken), cancellationToken);
         return RequireMutation(response, "Failed to configure TeamLab WireGuard access.");
     }
@@ -447,9 +443,7 @@ public sealed class AgentTeamLabNodeExecutor(
                     request.RuntimeId,
                     request.Generation,
                     request.InterfaceName,
-                    _config.DryRun,
-                    request.RuntimePublicId,
-                    request.NetworkKey),
+                    _config.DryRun),
                 operationToken), cancellationToken);
         return RequireMutation(response, "Failed to remove TeamLab WireGuard access.");
     }

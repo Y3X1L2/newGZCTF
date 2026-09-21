@@ -26,7 +26,6 @@ public partial class TeamLabNetworkService(
     TeamLabPcapService pcapService,
     VmBootstrapService bootstrapService,
     TeamLabRuntimeGenerationStore generationStore,
-    TeamLabOvsAttachmentProvider ovs,
     AgentResourceLock resourceLock,
     ILogger<TeamLabNetworkService> logger)
 {
@@ -711,27 +710,15 @@ public partial class TeamLabNetworkService(
             validation ??= ValidateCidr(cidr, nameof(request.PlayerBlockedCidrs));
         validation ??= ValidateWireGuardKey(request.InterfacePrivateKey, nameof(request.InterfacePrivateKey));
         validation ??= ValidateWireGuardKey(request.PeerPublicKey, nameof(request.PeerPublicKey));
-        if (request.RuntimePublicId == Guid.Empty || string.IsNullOrWhiteSpace(request.NetworkKey) ||
-            string.IsNullOrWhiteSpace(request.PortKey) || string.IsNullOrWhiteSpace(request.MacAddress))
-            validation ??= "WireGuard access requires the runtime public id, network key, port key and gateway MAC address.";
         if (validation is not null)
             return Failure(validation, request.DryRun);
 
         await using var runtimeLock = await resourceLock.AcquireAsync(RuntimeLockKey(request.RuntimeId), token);
         var commands = BuildHostWireGuardCommands(request);
         var executed = await ExecuteOrPlanAsync(commands, request.DryRun, token, request.InterfacePrivateKey);
-        if (!executed.Success || executed.DryRun)
-            return executed;
-        var attachment = await ovs.AttachHostInterfaceAsync(
-            request.RuntimePublicId,
-            request.Generation,
-            request.InterfaceName,
-            request.NetworkKey!,
-            request.PortKey!,
-            token);
-        return attachment.Success
+        return executed.Success && !executed.DryRun
             ? new TeamLabDryRunResponse(true, false, "WireGuard access configured.", commands)
-            : Failure(attachment.Message, request.DryRun);
+            : executed;
     }
 
     private async Task<TeamLabDryRunResponse> CleanupHostWireGuardAsync(
@@ -739,24 +726,11 @@ public partial class TeamLabNetworkService(
         CancellationToken token)
     {
         var validation = ValidateLinuxName(request.InterfaceName, nameof(request.InterfaceName));
-        if (request.RuntimePublicId == Guid.Empty || string.IsNullOrWhiteSpace(request.NetworkKey))
-            validation ??= "WireGuard cleanup requires the runtime public id and network key.";
         if (validation is not null)
             return Failure(validation, request.DryRun);
 
         await using var runtimeLock = await resourceLock.AcquireAsync(RuntimeLockKey(request.RuntimeId), token);
         var commands = BuildHostWireGuardCleanupCommands(request);
-        if (!request.DryRun && !_config.DryRun)
-        {
-            var attachment = await ovs.RemoveHostInterfaceAsync(
-                request.RuntimePublicId,
-                request.Generation,
-                request.InterfaceName,
-                request.NetworkKey!,
-                token);
-            if (!attachment.Success)
-                return Failure(attachment.Message, request.DryRun);
-        }
         return await ExecuteOrPlanAsync(commands, request.DryRun, token);
     }
 

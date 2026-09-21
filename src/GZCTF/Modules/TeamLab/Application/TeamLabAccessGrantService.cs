@@ -163,11 +163,7 @@ public sealed class TeamLabAccessGrantService(
                 grant.PublicKey,
                 grant.ClientAddress,
                 [entryNetwork.Cidr],
-                blocked,
-                runtime.PublicId,
-                entryNetwork.TopologyKey,
-                "player-gateway",
-                TeamLabResourceNameFactory.PlayerGatewayMac(runtime.PublicId, runtime.Generation, entryNetwork.TopologyKey)),
+                blocked),
             cancellationToken);
         if (!applied.Success)
             throw new TeamLabApiContractException(
@@ -245,14 +241,11 @@ public sealed class TeamLabAccessGrantService(
             return;
         }
         var entryShard = runtime.Shards.Single(item => item.Id == runtime.EntryShardId && item.Generation == runtime.Generation);
-        var entryNetwork = ResolveEntryNetwork(runtime, entryShard);
         var cleanup = await executor.RemoveAccessAsync(entryShard.WorkerNodeId,
             new TeamLabNodeAccessRemoveRequest(
                 runtime.Id,
                 runtime.Generation,
-                TeamLabResourceNameFactory.WireGuardInterface(runtime.Id),
-                runtime.PublicId,
-                entryNetwork.TopologyKey),
+                TeamLabResourceNameFactory.WireGuardInterface(runtime.Id)),
             cancellationToken);
         if (!cleanup.Success)
             throw new TeamLabApiContractException(

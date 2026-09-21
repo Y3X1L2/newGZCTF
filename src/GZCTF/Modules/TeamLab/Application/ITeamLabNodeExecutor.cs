@@ -209,18 +209,12 @@ public sealed record TeamLabNodeAccessApplyRequest(
     string ClientPublicKey,
     string ClientAddress,
     IReadOnlyList<string> PlayerAllowedCidrs,
-    IReadOnlyList<string> PlayerBlockedCidrs,
-    Guid RuntimePublicId = default,
-    string? NetworkKey = null,
-    string? PortKey = null,
-    string? MacAddress = null);
+    IReadOnlyList<string> PlayerBlockedCidrs);
 
 public sealed record TeamLabNodeAccessRemoveRequest(
     int RuntimeId,
     int Generation,
-    string InterfaceName,
-    Guid RuntimePublicId = default,
-    string? NetworkKey = null);
+    string InterfaceName);
 
 public sealed record TeamLabNodeObservationRecord(
     long Sequence,

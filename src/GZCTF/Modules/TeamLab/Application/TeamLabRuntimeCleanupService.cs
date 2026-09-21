@@ -159,18 +159,12 @@ public sealed class TeamLabRuntimeCleanupService(
             item.Id == runtime.EntryShardId && item.Generation == runtime.Generation);
         if (entryShard is null)
             return null;
-        var entryNetwork = runtime.Networks.SingleOrDefault(item =>
-            item.Generation == runtime.Generation && item.IsEntry && item.ShardId == entryShard.Id);
-        if (entryNetwork is null)
-            return null;
 
         var cleanup = await executor.RemoveAccessAsync(entryShard.WorkerNodeId,
             new TeamLabNodeAccessRemoveRequest(
                 runtime.Id,
                 runtime.Generation,
-                TeamLabResourceNameFactory.WireGuardInterface(runtime.Id),
-                runtime.PublicId,
-                entryNetwork.TopologyKey),
+                TeamLabResourceNameFactory.WireGuardInterface(runtime.Id)),
             cancellationToken);
         return cleanup.Success
             ? TeamLabNodeResult.Ok(cleanup.Message ?? "Host WireGuard access cleaned.")
