@@ -75,6 +75,7 @@
 
 ## 6. 交接与状态维护
 
+- 联赛产品背景：[双港调度争夺比赛背景与总流程](development/league/dual-port-competition-flow.md)、[同版 Word](development/league/双港调度争夺比赛背景与总流程V1.0.docx)。说明首个场景的故事、双方目标、报名至 Flag KO 的过程和结局，区分首期范围与后续玩法设想。
 - 当前事实只写入 [`development/current-state.md`](development/current-state.md)。
 - 新 AI 或新成员接手项目先阅读 [`development/current-handoff.md`](development/current-handoff.md)。
 - 并行开发和 AI 会话规范见 [`development/ai-development-playbook.md`](development/ai-development-playbook.md)。
