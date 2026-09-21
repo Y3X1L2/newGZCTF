@@ -74,7 +74,10 @@ export function RuntimeGrantPanel({ runtime }: { runtime: TeamLabRuntime }) {
       <label>授权对象<select value={subjectType} onChange={(event) => { setSubjectType(event.currentTarget.value as TeamLabRuntimeGrant['subjectType']); setSubjectId('') }}><option value="user">用户</option><option value="apiToken">API Token</option></select></label>
       <label>{subjectType === 'user' ? '用户' : 'API Token'}<select value={subjectId} onChange={(event) => setSubjectId(event.currentTarget.value)}><option value="">请选择</option>{(subjectType === 'user' ? users : tokens).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
       <label>资产范围<select value={assetKey} onChange={(event) => setAssetKey(event.currentTarget.value)}><option value="">整个运行环境</option>{runtime.assets.map((asset) => <option key={asset.key} value={asset.key}>{asset.name}</option>)}</select></label>
-      <fieldset><legend>允许操作</legend>{permissionOptions.map((item) => <label key={item.value}><input checked={permissions.includes(item.value)} onChange={(event) => setPermissions((values) => event.currentTarget.checked ? [...values, item.value] : values.filter((value) => value !== item.value))} type="checkbox" />{item.label}</label>)}</fieldset>
+      <fieldset><legend>允许操作</legend>{permissionOptions.map((item) => <label key={item.value}><input checked={permissions.includes(item.value)} onChange={(event) => {
+        const checked = event.currentTarget.checked
+        setPermissions((values) => checked ? [...values, item.value] : values.filter((value) => value !== item.value))
+      }} type="checkbox" />{item.label}</label>)}</fieldset>
       <ActionButton disabled={busy || !subjectId.trim() || permissions.length === 0} icon={<Plus size={16} />} onClick={() => void add()} tone="primary" type="button">添加授权</ActionButton>
     </div>
   </section>
