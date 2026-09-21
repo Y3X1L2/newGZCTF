@@ -208,7 +208,6 @@ public sealed record TeamLabNodeAccessApplyRequest(
     string ServerPrivateKey,
     string ClientPublicKey,
     string ClientAddress,
-    string ClientAllowedIps,
     IReadOnlyList<string> PlayerAllowedCidrs,
     IReadOnlyList<string> PlayerBlockedCidrs,
     Guid RuntimePublicId = default,

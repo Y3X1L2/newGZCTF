@@ -2291,7 +2291,6 @@ public record TeamLabWireGuardRequest(
     string InterfacePrivateKey,
     string PeerPublicKey,
     string PeerClientAddress,
-    string PeerAllowedIps,
     string[] PlayerAllowedCidrs,
     string[] PlayerBlockedCidrs,
     bool DryRun = true,

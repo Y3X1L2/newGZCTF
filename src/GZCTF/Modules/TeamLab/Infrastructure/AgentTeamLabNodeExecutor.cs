@@ -425,7 +425,6 @@ public sealed class AgentTeamLabNodeExecutor(
                     request.ServerPrivateKey,
                     request.ClientPublicKey,
                     request.ClientAddress,
-                    request.ClientAllowedIps,
                     request.PlayerAllowedCidrs.ToArray(),
                     request.PlayerBlockedCidrs.ToArray(),
                     _config.DryRun,
