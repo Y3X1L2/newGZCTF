@@ -23,7 +23,7 @@ public sealed partial class TeamLabExecutionPlanExecutor(
     IOptions<AgentConfig> agentOptions,
     ILogger<TeamLabExecutionPlanExecutor> logger)
 {
-    static readonly TimeSpan HealthProbeTimeout = TimeSpan.FromSeconds(10);
+    static readonly TimeSpan HealthProbeTimeout = TimeSpan.FromSeconds(30);
     static readonly int AssetParallelism = Math.Clamp(Environment.ProcessorCount, 2, 8);
     readonly AgentConfig agent = agentOptions.Value;
     readonly KeyedSemaphoreRegistry<(int RuntimeId, int Generation, string ShardKey)> executionLocks = new();
