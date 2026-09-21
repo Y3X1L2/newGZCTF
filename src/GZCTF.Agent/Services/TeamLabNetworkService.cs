@@ -705,7 +705,6 @@ public partial class TeamLabNetworkService(
         validation ??= ValidatePort(request.ListenPort, nameof(request.ListenPort));
         validation ??= ValidateCidr(request.AddressCidr, nameof(request.AddressCidr));
         validation ??= ValidateCidr(request.PeerClientAddress, nameof(request.PeerClientAddress));
-        validation ??= ValidateAllowedIps(request.PeerAllowedIps, nameof(request.PeerAllowedIps));
         foreach (var cidr in request.PlayerAllowedCidrs)
             validation ??= ValidateCidr(cidr, nameof(request.PlayerAllowedCidrs));
         foreach (var cidr in request.PlayerBlockedCidrs)
@@ -773,9 +772,7 @@ public partial class TeamLabNetworkService(
         };
         commands.Add($"ip address replace {request.AddressCidr} dev {iface}");
         commands.Add($"ip link set {iface} up");
-        commands.AddRange(request.PeerAllowedIps
-            .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
-            .Select(cidr => $"ip route replace {cidr} dev {iface}"));
+        commands.Add($"ip route replace {request.PeerClientAddress} dev {iface}");
         commands.AddRange(BuildHostNatCommands(iface, request.PeerClientAddress, request.PlayerAllowedCidrs));
         return commands.ToArray();
     }

@@ -162,7 +162,6 @@ public sealed class TeamLabAccessGrantService(
                 _protector.Unprotect(grant.ProtectedServerPrivateKey),
                 grant.PublicKey,
                 grant.ClientAddress,
-                entryNetwork.Cidr,
                 [entryNetwork.Cidr],
                 blocked,
                 runtime.PublicId,

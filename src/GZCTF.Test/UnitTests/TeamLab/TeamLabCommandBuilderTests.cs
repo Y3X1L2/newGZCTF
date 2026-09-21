@@ -900,7 +900,6 @@ public class TeamLabCommandBuilderTests : IDisposable
             InterfacePrivateKey: ValidInterfacePrivateKey,
             PeerPublicKey: ValidPeerPublicKey,
             PeerClientAddress: "10.1.1.2/32",
-            PeerAllowedIps: "10.1.1.0/24",
             PlayerAllowedCidrs: ["10.1.1.0/24"],
             PlayerBlockedCidrs: [],
             DryRun: true,
@@ -911,7 +910,7 @@ public class TeamLabCommandBuilderTests : IDisposable
 
         Assert.True(result.Success);
         var upIndex = Array.FindIndex(result.Commands, command => command.Contains("ip link set tlwg196 up", StringComparison.Ordinal));
-        var routeIndex = Array.FindIndex(result.Commands, command => command.Contains("ip route replace 10.1.1.0/24 dev tlwg196", StringComparison.Ordinal));
+        var routeIndex = Array.FindIndex(result.Commands, command => command.Contains("ip route replace 10.1.1.2/32 dev tlwg196", StringComparison.Ordinal));
         Assert.True(upIndex >= 0, "Expected a WireGuard interface up command.");
         Assert.True(routeIndex > upIndex, "WireGuard routes must be added after the interface is up.");
         Assert.DoesNotContain(result.Commands,
@@ -932,7 +931,6 @@ public class TeamLabCommandBuilderTests : IDisposable
             InterfacePrivateKey: "test-peer-key",
             PeerPublicKey: "test-peer-key",
             PeerClientAddress: "10.180.1.2/32",
-            PeerAllowedIps: "10.180.1.2/32",
             PlayerAllowedCidrs: [],
             PlayerBlockedCidrs: [],
             DryRun: true), CancellationToken.None);
@@ -1274,7 +1272,6 @@ public class TeamLabCommandBuilderTests : IDisposable
             InterfacePrivateKey: ValidInterfacePrivateKey,
             PeerPublicKey: ValidPeerPublicKey,
             PeerClientAddress: "10.180.1.2/32",
-            PeerAllowedIps: "10.180.1.2/32",
             PlayerAllowedCidrs: ["10.180.1.0/28"],
             PlayerBlockedCidrs: [],
             DryRun: false,
