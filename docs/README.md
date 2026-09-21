@@ -75,6 +75,7 @@
 
 ## 6. 交接与状态维护
 
+- 联赛第一阶段按[开发分工手册](development/league/phase1-team-handbook.md)安排任务，另有[同版 Word](development/league/联赛第一阶段开发分工手册V1.0.docx)。范围为双队报名、配置、启动、核心 Flag KO、金币加减与清理；手册说明接口交接、并行依赖和验收，业务实现尚待开展。
 - 当前事实只写入 [`development/current-state.md`](development/current-state.md)。
 - 新 AI 或新成员接手项目先阅读 [`development/current-handoff.md`](development/current-handoff.md)。
 - 并行开发和 AI 会话规范见 [`development/ai-development-playbook.md`](development/ai-development-playbook.md)。
