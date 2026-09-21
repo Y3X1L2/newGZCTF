@@ -4,8 +4,10 @@
 
 - T0、T1、T4 独立实现；起点为 `origin/main 9999e6b1`。
 - 分支：`codex/league-phase1-lxy-20260921`；worktree：`D:/Work/newGZCTF-league-lxy-20260921`。
+- 实现提交：`32595796635a504e08c9989b4c816aef4d9cce96`。后续交接记录提交仅修改文档；分支最新 SHA 以 `git log -1` 为准。
 - 不合并 main、不部署。yhr/lmr/lcx 的真实实现和整场验收仍待接入；没有把测试替身注册到主站。
 - 用户已确认独立报名事实、队长报名、准备时冻结成员、通用席位 1/2、必填中止原因，以及有效提交与终局使用同一本地事务。
+- 独立代码状态：`complete / VERIFIED`；跨角色整场联调：`NOT_RUN`。任务 worktree 保留；临时主线对照 worktree 已在确认干净后移除，原工作区未修改。
 
 ## 已实现
 
