@@ -5,6 +5,11 @@
 
 本文件仅保留最新已知基线、功能边界、未解决事项和接手入口。生产信息是上述核验时点的记录，不能代替下一次操作前的现场检查。长期协作规则见 [AGENTS.md](../../AGENTS.md)。
 
+## TeamLab 运行环境授权界面修复（2026-09-21）
+
+- 运行环境授权复选框不再在 React 状态更新回调中读取已释放的事件对象，点击“允许操作”中的任意权限不会再触发 `Cannot read properties of null (reading 'checked')`。
+- 前端 release 已切换到 `/opt/gzctf/releases/teamlab-grant-checkbox-bc7ae08-20260921/publish`，仅替换 `wwwroot`；原 release 保留为回退。主站 active、`NRestarts=0`，首页和 `/api/Config` 均返回 200；数据库和 Agent 未变更。
+
 ## TeamLab WireGuard 资产访问修复（2026-09-21）
 
 - 远端 `main` 已包含提交 `4dbcd43`。WireGuard 访问统一为 Linux 三层转发与 NAT，不再把 WireGuard 接口挂入 OVS，也不再把资产网段路由到 WireGuard 接口；WireGuard 仅承载客户端地址，资产网段继续经场景网关进入 OVN。
