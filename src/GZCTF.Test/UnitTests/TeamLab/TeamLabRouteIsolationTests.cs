@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using GZCTF.Models;
@@ -132,6 +134,74 @@ public sealed class TeamLabRouteIsolationTests
             !policy.Allow);
         Assert.Equal(1, shard.RouteVersion);
     }
+
+    [Fact]
+    public async Task BuildGlobalInfrastructureRequest_UsesOneAssetAddressPerNetwork()
+    {
+        await using var context = new AppDbContext(
+            new DbContextOptionsBuilder<AppDbContext>()
+                .UseInMemoryDatabase(Guid.NewGuid().ToString())
+                .Options);
+        var runtime = new TeamLabRuntime
+        {
+            Id = 42,
+            Generation = 1,
+            Networks =
+            [
+                Network(1, 17, Guid.NewGuid(), "entry", "10.110.0.0/24", "10.110.0.1"),
+                Network(2, 17, Guid.NewGuid(), "control", "10.111.0.0/24", "10.111.0.1")
+            ],
+            Assets =
+            [
+                Asset("grid-edge", [
+                    new("edge-entry", "entry", "10.110.0.10", 24, "02:00:00:00:00:10", true),
+                    new("edge-control", "control", "10.111.0.10", 24, "02:00:00:00:01:10", false)
+                ]),
+                Asset("grid-ems-core", [
+                    new("ems-control", "control", "10.111.0.20", 24, "02:00:00:00:01:20", true)
+                ])
+            ]
+        };
+        var service = new TeamLabRouteApplicationService(
+            context,
+            Mock.Of<ITeamLabNodeExecutor>(),
+            new TeamLabEventRecorder(
+                context,
+                new EfOperationalEventWriter(context, NullLogger<EfOperationalEventWriter>.Instance),
+                new OperationalCorrelation()));
+
+        var request = await service.BuildGlobalInfrastructureRequestAsync(
+            runtime,
+            TeamLabTopologyV2Compiler.Compile(new TeamLabTopologyDefinitionModel("multi-nic", [], [], [])),
+            CancellationToken.None);
+
+        var entry = Assert.Single(request.Switches, item => item.Network.Key == "entry");
+        Assert.Contains(entry.DnsRecords!, item =>
+            item.Hostname == "grid-edge" && item.IpAddress == "10.110.0.10");
+        Assert.Contains(entry.DnsRecords!, item =>
+            item.Hostname == "grid-ems-core" && item.IpAddress == "10.111.0.20");
+        var control = Assert.Single(request.Switches, item => item.Network.Key == "control");
+        Assert.Contains(control.DnsRecords!, item =>
+            item.Hostname == "grid-edge" && item.IpAddress == "10.111.0.10");
+        Assert.Equal(2, control.DnsRecords!.Select(item => item.Hostname).Distinct().Count());
+    }
+
+    private static TeamLabRuntimeAsset Asset(string key, TestInterface[] interfaces) => new()
+    {
+        Generation = 1,
+        Kind = TeamLabResourceKind.Docker,
+        TopologyKey = key,
+        Name = key,
+        InterfaceSummaryJson = JsonSerializer.Serialize(interfaces)
+    };
+
+    private sealed record TestInterface(
+        string Key,
+        string NetworkKey,
+        string IpAddress,
+        int PrefixLength,
+        string MacAddress,
+        bool Primary);
 
     private static TeamLabRuntimeNetwork Network(
         int id,
