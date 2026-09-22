@@ -1,5 +1,6 @@
 import api from '@Api'
 import { teamLabAdminApi } from '../../admin/teamlab/api/teamlabAdminApi'
+import { parseTeamLabReleaseList } from '../../admin/teamlab/api/teamlabParsers'
 
 export const leagueCatalogApi = {
   async teams() {
@@ -8,7 +9,8 @@ export const leagueCatalogApi = {
   scenes(after?: string) {
     return teamLabAdminApi.listTopologies({ cursor: after, limit: 30 })
   },
-  releases(topologyId: string) {
-    return teamLabAdminApi.listReleases(topologyId)
+  async releases(topologyId: string) {
+    const { data } = await api.teamLabAdminTopology.teamLabAdminTopologyReleases(topologyId)
+    return parseTeamLabReleaseList(data.filter((release) => !release.archived))
   },
 }

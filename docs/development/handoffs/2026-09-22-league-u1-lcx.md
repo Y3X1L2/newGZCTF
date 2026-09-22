@@ -52,3 +52,25 @@
 - **未部署**，未修改生产配置、数据库或节点；无生产冒烟或备份记录。
 - 剩余：真实身份及数据库保存回读、后端依赖合入/联调；成员名单缺口暂缓；U2–U4 后续分批。
 - 接手第一步：核对远端提交，按以上步骤在真实测试环境验收；不要将隔离浏览器结果标记为真实业务闭环。
+
+
+## 2026-09-22 提交后复测与修正
+
+复测基线为已推送的 `b61a3f2d`，前端产物 manifest 已核对该提交。只读复查发现归档场景版本仍可选：共用目录 parser 丢弃 `archived`，但 League 后端会拒绝该版本。现改为联赛 adapter 从生成客户端读取原始 release DTO，过滤归档版本后复用现有 parser；新增回归测试。未修改 TeamLab、后端或生成代码。
+
+| 本轮复测 | 结果 |
+| --- | --- |
+| 修正前完整前端 build | 112 文件、365/365 通过 |
+| 修正后完整前端 build | 113 文件、366/366 通过；locale、lint、strict、架构、Vite、manifest、bundle 门禁通过 |
+| 后端完整单元测试（Release，容器 .NET 10） | 1145/1145，0 跳过；编译存在既有测试代码警告 |
+| League PostgreSQL 专项集成 | 17/17，0 跳过，含迁移、HTTP 契约、审核/席位、生命周期 |
+| 全部后端集成 | 305 通过、12 失败、0 跳过，共 317；不能标记为通过 |
+| 真实本地 HTTP 冒烟 | 独立 PostgreSQL + 当前分支 .NET 服务：匿名列表 401，Admin 登录 200，创建 201，更新/回读 200，旧 revision 409，回读金额保持 150 |
+
+全量集成失败中，6 项 `OpenTeamLabOperationsApiTests` 和 2 项 `OpenImageApiTests` 的名称与原因匹配 lxy 已记录的主线失败（404/403、RemoteSessions Failed、镜像删除 500）。另外 `EditControllerTests.TestContainerOperations_ShouldRetrieveFlagSuccessfully`、`AdvancedGameMechanicsTests.DynamicContainerChallenge_ShouldRetrieveFlagSuccessfully` 返回 Connection refused；`TeamLabOvnPortMappingTests.NativeOvnUsesSpecificProtocolPortsAndRemovesOnlySelectedMapping`、`TeamLabHybridDatapathTests.RealOvnTrafficIsolationFailureRecoveryAndExactCleanup` 在 Docker 镜像构建中超时。后四项真实执行面验收未通过，不能用 League 专项代替。这次 UI 修正不改动这些后端路径。
+
+本轮已具备 Docker / PostgreSQL 环境，替代前文首次交付时的环境限制。真实 HTTP 覆盖了登录和配置链路，但浏览器与真实后端的整条报名/选队操作尚未执行。页面演示服务仍位于 63122/63123（内存演示 API）；新增真实后端冒烟服务独立位于 `127.0.0.1:63124`，没有将演示响应当作真实结果。未部署生产。
+
+证据在仓库外 `../league-u1-retest-b61a3f2d/`：`frontend-build.log`、`frontend-fixed-build.log`、`backend-unit.log`、`backend-league.log`、`backend-integration.log`、TRX 结果及不含 Cookie 的 `http-smoke.json`。
+
+远端复核：任务分支基线仍为 `b61a3f2d`；lxy 分支新增 `6f29c3d2`（准备前名单修正），本轮未合入，遵循用户此前暂缓该问题的范围。当前 U1 验证使用原 lxy 基线 `2ec37d8c`。
