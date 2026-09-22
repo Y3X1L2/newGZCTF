@@ -44,6 +44,7 @@
 | --- | --- |
 | Open API 调用 | [`commercialization/open-api-v1-guide.md`](commercialization/open-api-v1-guide.md) |
 | 联赛第一阶段接口与交接 | [`development/league/phase1-contract.md`](development/league/phase1-contract.md) |
+| 联赛 U1 前端初步验收 | [`development/handoffs/2026-09-22-league-u1-lcx.md`](development/handoffs/2026-09-22-league-u1-lcx.md) |
 | OpenAPI 快照 | [`commercialization/openapi/open-v1.json`](commercialization/openapi/open-v1.json) |
 | TeamLab API 基础契约 | [`commercialization/teamlab-api-foundation-contract.md`](commercialization/teamlab-api-foundation-contract.md) |
 | TeamLab 外部控制面 | [`commercialization/teamlab-external-control-plane-contract.md`](commercialization/teamlab-external-control-plane-contract.md) |

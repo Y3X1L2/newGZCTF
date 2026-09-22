@@ -1,5 +1,6 @@
 import { BookOpenCheck, Boxes, GraduationCap, Home, Network, Settings, ShieldCheck, Trophy, Users } from 'lucide-react'
 import { LucideIcon } from 'lucide-react'
+import { leagueEnabled } from '../../features/league/leagueFeature'
 
 export type ModuleGroup = '核心功能' | '学习与训练' | '组织协作' | '管理与运维'
 
@@ -117,6 +118,19 @@ export const platformModules: PlatformModule[] = [
     implemented: true,
   },
 ]
+
+if (leagueEnabled) {
+  platformModules.splice(2, 0, {
+    id: 'league',
+    label: '数字攻防联赛',
+    shortLabel: '联赛',
+    route: '/league',
+    icon: Trophy,
+    group: '核心功能',
+    description: '双队联赛报名、审核与场景配置',
+    implemented: true,
+  })
+}
 
 export const primaryModules = platformModules.filter((module) => module.primary)
 

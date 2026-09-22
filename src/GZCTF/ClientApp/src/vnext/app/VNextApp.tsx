@@ -19,6 +19,15 @@ const AuthPendingPage = lazy(() =>
 
 const HomePage = lazy(() => import('../features/home/HomePage').then((module) => ({ default: module.HomePage })))
 const GamesPage = lazy(() => import('../features/games/GamesPage').then((module) => ({ default: module.GamesPage })))
+const LeagueListPage = lazy(() =>
+  import('../features/league/LeaguePages').then((module) => ({ default: module.LeagueListPage }))
+)
+const LeagueCreatePage = lazy(() =>
+  import('../features/league/LeaguePages').then((module) => ({ default: module.LeagueCreatePage }))
+)
+const LeagueDetailPage = lazy(() =>
+  import('../features/league/LeaguePages').then((module) => ({ default: module.LeagueDetailPage }))
+)
 const GameDetailPage = lazy(() =>
   import('../features/games/GameDetailPage').then((module) => ({ default: module.GameDetailPage }))
 )
@@ -241,6 +250,9 @@ export function VNextApp() {
         <Route element={<PlatformShell />}>
           <Route index element={<HomePage />} />
           <Route path="games" element={<GamesPage />} />
+          <Route path="league" element={<LeagueListPage />} />
+          <Route path="league/new" element={<LeagueCreatePage />} />
+          <Route path="league/:matchId" element={<LeagueDetailPage />} />
           <Route path="games/:gameId">
             <Route index element={<GameDetailPage />} />
             <Route element={<GameWorkspaceShell />}>

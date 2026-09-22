@@ -1,0 +1,193 @@
+.page {
+  display: grid;
+  gap: var(--yn-space-6);
+  min-width: 0;
+  max-width: var(--yn-page-max-width);
+  margin: 0 auto;
+  padding: var(--yn-space-6) var(--yn-page-gutter) var(--yn-space-8);
+}
+.page h2 {
+  margin: 0;
+  font-size: var(--yn-font-xl);
+  overflow-wrap: anywhere;
+}
+.page h3 {
+  font-size: var(--yn-font-lg);
+}
+.page p {
+  color: var(--yn-color-muted);
+  line-height: 1.7;
+}
+.back,
+.actions,
+.primaryLink,
+.summary,
+.intro,
+.cardTop {
+  display: flex;
+  align-items: center;
+  gap: var(--yn-space-3);
+}
+.actions,
+.summary {
+  flex-wrap: wrap;
+}
+.actions {
+  margin-top: var(--yn-space-3);
+}
+.actions > span {
+  font-size: var(--yn-font-sm);
+  color: var(--yn-color-muted);
+}
+.back {
+  width: fit-content;
+  color: var(--yn-color-text-secondary);
+  font-size: var(--yn-font-md);
+  text-decoration: none;
+}
+.primaryLink {
+  min-height: 38px;
+  padding: var(--yn-space-2) var(--yn-space-4);
+  background: var(--yn-color-control-strong);
+  color: var(--yn-color-control-strong-text);
+  border-radius: var(--yn-radius-sm);
+  text-decoration: none;
+}
+.intro {
+  padding: var(--yn-space-5);
+  border-left: 3px solid var(--yn-color-brand);
+  background: var(--yn-color-surface);
+}
+.intro > svg {
+  flex: 0 0 auto;
+  color: var(--yn-color-brand);
+}
+.intro p {
+  margin: var(--yn-space-2) 0 0;
+  font-size: var(--yn-font-md);
+}
+.matches {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--yn-space-4);
+}
+.matchCard {
+  display: grid;
+  min-width: 0;
+  gap: var(--yn-space-5);
+  padding: var(--yn-space-6);
+  border: 1px solid var(--yn-color-border);
+  border-radius: var(--yn-radius-md);
+  background: var(--yn-color-surface);
+  color: var(--yn-color-text);
+  text-decoration: none;
+  transition: border-color var(--yn-motion-fast);
+}
+.matchCard:hover {
+  border-color: var(--yn-color-brand);
+}
+.matchCard p {
+  margin: 0;
+  font-size: var(--yn-font-sm);
+}
+.matchCard > span {
+  color: var(--yn-color-brand-strong);
+  font-size: var(--yn-font-md);
+}
+.cardTop {
+  justify-content: space-between;
+  flex-wrap: wrap;
+  font-size: var(--yn-font-sm);
+  color: var(--yn-color-muted);
+}
+.summary {
+  padding: var(--yn-space-4) 0;
+  border-block: 1px solid var(--yn-color-border);
+}
+.detailGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: var(--yn-space-6);
+  align-items: start;
+}
+.panel {
+  min-width: 0;
+  padding: var(--yn-space-6);
+  background: var(--yn-color-surface);
+  border: 1px solid var(--yn-color-border);
+  border-radius: var(--yn-radius-md);
+}
+.panel > p {
+  font-size: var(--yn-font-md);
+}
+.fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--yn-space-4);
+  min-width: 0;
+  margin: var(--yn-space-5) 0;
+  padding: 0;
+  border: 0;
+}
+.fields select {
+  max-width: 100%;
+  text-overflow: ellipsis;
+}
+.registrations {
+  list-style: none;
+  padding: 0;
+  margin: var(--yn-space-5) 0;
+}
+.registrations li {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--yn-space-3);
+  padding: var(--yn-space-4) 0;
+  border-bottom: 1px solid var(--yn-color-border);
+}
+.registrations li > div:first-child {
+  flex: 1;
+  min-width: 100px;
+  overflow-wrap: anywhere;
+}
+.registrations small {
+  display: block;
+  margin-top: var(--yn-space-2);
+  color: var(--yn-color-muted);
+}
+.registrationForm {
+  display: grid;
+  gap: var(--yn-space-3);
+  margin-top: var(--yn-space-5);
+}
+.page a:focus-visible {
+  outline: 2px solid var(--yn-color-brand);
+  outline-offset: 3px;
+}
+@media (max-width: 1100px) {
+  .matches {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .detailGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 600px) {
+  .matches,
+  .fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .panel,
+  .matchCard {
+    padding: var(--yn-space-4);
+  }
+  .page {
+    padding-bottom: calc(80px + var(--yn-space-8));
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .matchCard {
+    transition: none;
+  }
+}
