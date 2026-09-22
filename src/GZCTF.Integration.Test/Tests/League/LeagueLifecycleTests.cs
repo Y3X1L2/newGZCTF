@@ -12,6 +12,60 @@ public sealed class LeagueLifecycleTests(LeagueDatabase database) : IClassFixtur
     { var env = new LeagueTestEnvironment(database); await env.SeedAsync(); return env; }
 
     [Fact]
+    public async Task DraftRoster_ReflectsCurrentMembers_ThenFreezesMembershipAndVisibility()
+    {
+        var env = await EnvironmentAsync();
+        var newcomer = new GZCTF.Models.Data.UserInfo { UserName = "roster-" + Guid.NewGuid().ToString("N")[..8] };
+        var newcomerActor = new GZCTF.Modules.Identity.Application.ActorContext(newcomer.Id, newcomer.Role);
+        async Task ChangeMembersAsync(Guid remove, Guid add)
+        {
+            await using var db = database.CreateContext();
+            var team = await db.Teams.Include(x => x.Members).SingleAsync(x => x.Id == env.FirstTeamId);
+            team.Members.RemoveWhere(x => x.Id == remove);
+            team.Members.Add(await db.Users.SingleAsync(x => x.Id == add));
+            await db.SaveChangesAsync();
+        }
+        async Task AssertRosterAsync(GZCTF.Modules.Identity.Application.ActorContext actor, params Guid[] expected)
+        {
+            var detail = await env.DetailAsync(actor);
+            Assert.Equal(expected.Order(), detail.Registrations.Single(x => x.TeamId == env.FirstTeamId).MemberIds.Order());
+        }
+
+        await using (var db = database.CreateContext())
+        { db.Users.Add(newcomer); await db.SaveChangesAsync(); }
+        await ChangeMembersAsync(Guid.Empty, env.Outsider.UserId!.Value);
+        await env.ConfigureAsync();
+        foreach (var actor in new[] { env.Admin, env.First, env.Outsider })
+            await AssertRosterAsync(actor, env.First.UserId!.Value, env.Outsider.UserId.Value);
+        Assert.Null((await env.DetailAsync()).ConfigurationVersion);
+        await AssertRosterAsync(env.Second);
+
+        await ChangeMembersAsync(env.Outsider.UserId.Value, newcomer.Id);
+        foreach (var actor in new[] { env.Admin, env.First, newcomerActor })
+            await AssertRosterAsync(actor, env.First.UserId!.Value, newcomer.Id);
+        await AssertRosterAsync(env.Outsider);
+        await using (var db = database.CreateContext())
+        {
+            Assert.All(await db.Set<LeagueRegistration>().Where(x => x.MatchId == env.MatchId).ToArrayAsync(),
+                registration => Assert.Empty(registration.MemberIds));
+            Assert.Null(await env.Service(db).GetParticipantTeamAsync(env.MatchId, newcomer.Id, default));
+        }
+
+        var prepared = await env.PrepareAsync();
+        Assert.NotNull(prepared.ConfigurationVersion);
+        await ChangeMembersAsync(newcomer.Id, env.Outsider.UserId.Value);
+        foreach (var actor in new[] { env.Admin, env.First, newcomerActor })
+            await AssertRosterAsync(actor, env.First.UserId!.Value, newcomer.Id);
+        await AssertRosterAsync(env.Outsider);
+        await AssertRosterAsync(env.Second);
+        await using (var db = database.CreateContext())
+        {
+            Assert.Equal(env.FirstTeamId, await env.Service(db).GetParticipantTeamAsync(env.MatchId, newcomer.Id, default));
+            Assert.Null(await env.Service(db).GetParticipantTeamAsync(env.MatchId, env.Outsider.UserId.Value, default));
+        }
+    }
+
+    [Fact]
     public async Task Registration_Review_Selection_Freeze_PersistAndEnforcePermissions()
     {
         var env = await EnvironmentAsync();

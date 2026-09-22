@@ -232,5 +232,76 @@
       "start",
       "abort"
     ]
+  },
+  "draft": {
+    "match": {
+      "id": "10000000-0000-4000-8000-000000000001",
+      "name": "\u53CC\u6E2F\u8C03\u5EA6\u4E89\u593A\uFF08\u5F00\u53D1\u6837\u4F8B\uFF09",
+      "state": 0,
+      "revision": 7,
+      "createdAt": 1790000000000,
+      "startedAt": null,
+      "result": null
+    },
+    "topologyId": "20000000-0000-4000-8000-000000000001",
+    "releaseId": "20000000-0000-4000-8000-000000000002",
+    "initialCoins": 100,
+    "configurationVersion": null,
+    "registrations": [
+      {
+        "teamId": 11,
+        "teamName": "\u793A\u4F8B\u961F\u4E00",
+        "state": 1,
+        "selected": true,
+        "seat": 1,
+        "memberIds": [
+          "10000000-0000-4000-8000-000000000003"
+        ]
+      },
+      {
+        "teamId": 22,
+        "teamName": "\u793A\u4F8B\u961F\u4E8C",
+        "state": 1,
+        "selected": true,
+        "seat": 2,
+        "memberIds": [
+          "10000000-0000-4000-8000-000000000004"
+        ]
+      }
+    ],
+    "preparation": [
+      {
+        "teamId": 11,
+        "state": 0,
+        "binding": null,
+        "environmentReady": false,
+        "flagInjected": false,
+        "entryPrepared": false,
+        "accessClosed": false,
+        "failure": 0,
+        "retryable": true
+      },
+      {
+        "teamId": 22,
+        "state": 0,
+        "binding": null,
+        "environmentReady": false,
+        "flagInjected": false,
+        "entryPrepared": false,
+        "accessClosed": false,
+        "failure": 0,
+        "retryable": true
+      }
+    ],
+    "operation": null,
+    "cleanup": null,
+    "allowedActions": [
+      "register",
+      "edit",
+      "review",
+      "selectTeams",
+      "prepare",
+      "abort"
+    ]
   }
 }

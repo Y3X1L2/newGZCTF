@@ -49,6 +49,16 @@ public sealed class LeagueContractTests
                     failed ? LeagueFailure.EnvironmentFailed : LeagueFailure.None, true, 1), null,
                 ready ? ["start", "abort"] : failed ? ["abort", "retry"] : ["abort"]);
         }
+        var draft = examples["pending"];
+        examples["draft"] = draft with
+        {
+            Match = draft.Match with { State = LeagueMatchState.Draft, Revision = 7 },
+            ConfigurationVersion = null,
+            Operation = null,
+            Preparation = draft.Registrations.Select(x => new LeagueTeamPreparation(x.TeamId,
+                LeagueProgressState.Pending, null, false, false, false, false)).ToArray(),
+            AllowedActions = ["register", "edit", "review", "selectTeams", "prepare", "abort"]
+        };
         var options = new JsonSerializerOptions(JsonSerializerDefaults.Web) { WriteIndented = true };
         options.ConfigCustomSerializerOptions();
         options.TypeInfoResolverChain.Add(new DefaultJsonTypeInfoResolver());
@@ -62,6 +72,8 @@ public sealed class LeagueContractTests
         var roundTrip = JsonSerializer.Deserialize<Dictionary<string, LeagueMatchDetail>>(json, options)!;
         Assert.Equal(2, roundTrip["ready"].Preparation.Count(x => x.State == LeagueProgressState.Ready));
         Assert.Null(roundTrip["pending"].Match.StartedAt);
+        Assert.Null(roundTrip["draft"].ConfigurationVersion);
+        Assert.All(roundTrip["draft"].Registrations, registration => Assert.NotEmpty(registration.MemberIds));
         Assert.Equal(LeagueFailure.EnvironmentFailed, roundTrip["failed"].Operation!.Failure);
     }
 }
