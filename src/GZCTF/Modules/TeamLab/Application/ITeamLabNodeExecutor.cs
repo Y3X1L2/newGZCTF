@@ -1,5 +1,6 @@
 using GZCTF.Modules.TeamLab.Domain;
 using GZCTF.Modules.TeamLab.Domain.Runtime;
+using GZCTF.Models.Data;
 using GZCTF.TeamLab.Contracts;
 using GZCTF.TeamLab.Contracts.Execution;
 
@@ -138,7 +139,8 @@ public sealed record TeamLabNodeAssetCreateRequest(
     VmRuntimeMode? VmRuntimeMode = null,
     VmNetworkMode? VmNetworkMode = null,
     string? ImageReference = null,
-    GZCTF.TeamLab.Contracts.Execution.TeamLabDeviceExecutionV2? Device = null);
+    GZCTF.TeamLab.Contracts.Execution.TeamLabDeviceExecutionV2? Device = null,
+    OSType OperatingSystem = OSType.Linux);
 
 public sealed record TeamLabNodeHealthIntent(
     TeamLabHealthCheckKind Kind,

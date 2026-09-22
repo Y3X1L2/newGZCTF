@@ -6,6 +6,7 @@ using System.Text.Json;
 using GZCTF.Agent.Services.TeamLab;
 using GZCTF.Modules.TeamLab.Application;
 using GZCTF.Modules.TeamLab.Domain;
+using GZCTF.Models.Data;
 using GZCTF.TeamLab.Contracts.Execution;
 using Xunit;
 
@@ -242,6 +243,33 @@ public sealed class TeamLabExecutionPlanV2Tests
         };
         Assert.False(changed.IsValid(out var changedError));
         Assert.Contains("digest", changedError, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Compiler_PreservesWindowsOperatingSystem()
+    {
+        var runtimePublicId = Guid.Parse("019fa217-fcee-73af-bb45-1bc400000004");
+        var asset = new TeamLabNodeAssetCreateRequest(
+            7, 11, runtimePublicId, 1, "windows-vm", "Windows", TeamLabAssetKind.Vm,
+            1, 2, 4096, 30720, null, true, new Dictionary<string, string>(),
+            [new TeamLabNodeInterfaceIntent(
+                "eth0", "network-a", "tl-network-a", "10.0.1.10", 24,
+                "02:00:00:00:00:01", true, [], ["10.0.1.1"])],
+            OperatingSystem: OSType.Windows);
+        var infrastructure = new TeamLabNodeInfrastructureApplyRequest(
+            7, 1, 1, "tlr-7-1",
+            [new TeamLabNodeManagedSwitchIntent(
+                new TeamLabNodeNetworkIntent("network-a", "Network A", "10.0.1.0/24", "10.0.1.1", "tl-network-a"),
+                "dns-7-a", [new TeamLabNodeDnsRecord("Windows", "10.0.1.10", "02:00:00:00:00:01")])],
+            [],
+            new TeamLabNodeFabricIntent("100.64.0.2", "100.64.0.1/30", "100.64.0.2/30", "fabric-host", "fabric-ns", [], []),
+            [], []);
+
+        var plan = TeamLabExecutionPlanCompiler.Compile(
+            7, runtimePublicId, 1, "shard-a", true, infrastructure, [asset], [asset], [],
+            new Dictionary<int, string> { [1] = $"sha256:{new string('a', 64)}" });
+
+        Assert.Equal(TeamLabGuestOperatingSystem.Windows, plan.Assets.Single().OperatingSystem);
     }
 
     [Fact]

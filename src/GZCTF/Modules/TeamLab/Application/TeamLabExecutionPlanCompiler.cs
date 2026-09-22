@@ -3,6 +3,7 @@ using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using GZCTF.Models.Data;
 using GZCTF.Modules.TeamLab.Domain;
 using GZCTF.Modules.Content.Application;
 using GZCTF.TeamLab.Contracts.Execution;
@@ -151,7 +152,10 @@ public static class TeamLabExecutionPlanCompiler
                         ? [new TeamLabHealthCheckV2(device.HealthProtocol, AddressWithoutPrefix(primary?.IpAddress ?? "127.0.0.1"), device.HealthPort.Value, device.HealthPath)]
                         : []).Distinct().ToArray(),
                 asset.ImageReference,
-                asset.Device);
+                asset.Device,
+                asset.OperatingSystem == OSType.Windows
+                    ? TeamLabGuestOperatingSystem.Windows
+                    : TeamLabGuestOperatingSystem.Linux);
         }).ToArray();
 
         var assetKinds = assets.ToDictionary(item => item.AssetKey, item => item.Kind, StringComparer.Ordinal);

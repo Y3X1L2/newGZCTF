@@ -392,7 +392,14 @@ public sealed record TeamLabAssetExecutionSpecV2(
     IReadOnlyList<TeamLabAssetNetworkAttachmentV2> NetworkAttachments,
     IReadOnlyList<TeamLabHealthCheckV2> HealthChecks,
     string? ImageReference = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] TeamLabDeviceExecutionV2? Device = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] TeamLabDeviceExecutionV2? Device = null,
+    TeamLabGuestOperatingSystem OperatingSystem = TeamLabGuestOperatingSystem.Linux);
+
+public enum TeamLabGuestOperatingSystem : byte
+{
+    Linux = 0,
+    Windows = 1
+}
 
 public sealed record TeamLabAssetNetworkAttachmentV2(
     string NetworkKey,

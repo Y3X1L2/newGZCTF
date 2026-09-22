@@ -406,9 +406,10 @@ public sealed class LibvirtTeamLabProvider(
             $"gzctf-runtime={plan.RuntimePublicId:D} gzctf-generation={plan.Generation} gzctf-shard={plan.ShardKey} gzctf-execution-plan=v2",
             StringComparison.Ordinal);
 
-    string BuildDomainXml(TeamLabExecutionPlanV2 plan, TeamLabAssetExecutionSpecV2 asset,
+    internal string BuildDomainXml(TeamLabExecutionPlanV2 plan, TeamLabAssetExecutionSpecV2 asset,
         string domainName, string overlay, string? networkSeed)
     {
+        var windows = asset.OperatingSystem == TeamLabGuestOperatingSystem.Windows;
         var domain = new XElement("domain", new XAttribute("type", "kvm"),
             new XElement("name", domainName),
             new XElement("uuid", StableUuid(plan, asset)),
@@ -416,7 +417,10 @@ public sealed class LibvirtTeamLabProvider(
             new XElement("memory", new XAttribute("unit", "MiB"), Math.Max(256, asset.MemoryMiB)),
             new XElement("currentMemory", new XAttribute("unit", "MiB"), Math.Max(256, asset.MemoryMiB)),
             new XElement("vcpu", Math.Clamp(asset.Cpu, 1, 64)),
-            new XElement("os", new XElement("type", new XAttribute("arch", "x86_64"), "hvm")),
+            new XElement("os",
+                new XElement("type", new XAttribute("arch", "x86_64"), "hvm"),
+                new XElement("boot", new XAttribute("dev", "hd"))),
+            windows ? new XElement("features", new XElement("acpi"), new XElement("apic")) : null,
             asset.Device is { } device ? new XElement("sysinfo", new XAttribute("type", "fwcfg"),
                 new XElement("entry", new XAttribute("name", "opt/org.gzctf/device-parameters"), device.ParametersJson)) : null,
             new XElement("devices",
@@ -427,17 +431,18 @@ public sealed class LibvirtTeamLabProvider(
                 new XElement("disk", new XAttribute("type", "file"), new XAttribute("device", "disk"),
                     new XElement("driver", new XAttribute("name", "qemu"), new XAttribute("type", "qcow2")),
                     new XElement("source", new XAttribute("file", overlay)),
-                    new XElement("target", new XAttribute("dev", "vda"), new XAttribute("bus", "virtio"))),
+                    new XElement("target", new XAttribute("dev", windows ? "sda" : "vda"),
+                        new XAttribute("bus", windows ? "sata" : "virtio"))),
                 networkSeed is null ? null : new XElement("disk", new XAttribute("type", "file"),
                     new XAttribute("device", "cdrom"),
                     new XElement("driver", new XAttribute("name", "qemu"), new XAttribute("type", "raw")),
                     new XElement("source", new XAttribute("file", networkSeed)),
-                    new XElement("target", new XAttribute("dev", "sda"), new XAttribute("bus", "sata")),
+                    new XElement("target", new XAttribute("dev", windows ? "sdb" : "sda"), new XAttribute("bus", "sata")),
                     new XElement("readonly")),
                 new XElement("channel", new XAttribute("type", "unix"),
                     new XElement("target", new XAttribute("type", "virtio"),
                         new XAttribute("name", "org.qemu.guest_agent.0"))),
-                asset.NetworkAttachments.Select(attachment => NetworkInterface(plan, asset, attachment))));
+                asset.NetworkAttachments.Select(attachment => NetworkInterface(plan, asset, attachment, windows))));
         return domain.ToString(SaveOptions.DisableFormatting);
     }
 
@@ -556,7 +561,7 @@ public sealed class LibvirtTeamLabProvider(
     }
 
     XElement NetworkInterface(TeamLabExecutionPlanV2 plan, TeamLabAssetExecutionSpecV2 asset,
-        TeamLabAssetNetworkAttachmentV2 attachment)
+        TeamLabAssetNetworkAttachmentV2 attachment, bool windows)
     {
         var port = plan.Networks
             .FirstOrDefault(network => network.Key == attachment.NetworkKey)?
@@ -571,7 +576,7 @@ public sealed class LibvirtTeamLabProvider(
                     TeamLabOvnNaming.LogicalPortId(plan, attachment.NetworkKey, attachment.PortKey)))),
             new XElement("target", new XAttribute("dev",
                 TeamLabExecutionIdentityV2.VmTapName(plan.RuntimePublicId, plan.Generation, asset.AssetKey, attachment.NetworkKey))),
-            new XElement("model", new XAttribute("type", "virtio")),
+            new XElement("model", new XAttribute("type", windows ? "e1000e" : "virtio")),
             new XElement("alias", new XAttribute("name", attachment.InterfaceName)));
     }
 

@@ -626,7 +626,8 @@ public sealed class TeamLabShardDeploymentService(
                 topologyAsset.Kind == TeamLabAssetKind.Docker
                     ? imageReference
                     : null,
-                device);
+                device,
+                template.OSType);
     }
 
     private static IReadOnlyDictionary<string, IReadOnlyList<string>> BuildAllowedRoutes(
