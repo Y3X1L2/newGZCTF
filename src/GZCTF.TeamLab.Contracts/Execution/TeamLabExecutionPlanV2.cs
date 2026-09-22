@@ -393,7 +393,7 @@ public sealed record TeamLabAssetExecutionSpecV2(
     IReadOnlyList<TeamLabHealthCheckV2> HealthChecks,
     string? ImageReference = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] TeamLabDeviceExecutionV2? Device = null,
-    TeamLabGuestOperatingSystem OperatingSystem = TeamLabGuestOperatingSystem.Linux);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] TeamLabGuestOperatingSystem OperatingSystem = TeamLabGuestOperatingSystem.Linux);
 
 public enum TeamLabGuestOperatingSystem : byte
 {
