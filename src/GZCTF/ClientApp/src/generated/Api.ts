@@ -2184,6 +2184,23 @@ export interface LeagueAbortModel {
   reason?: string;
 }
 
+export interface LeagueAttackAccessGrant {
+  /** @format guid */
+  id?: string;
+  /** @format int32 */
+  targetTeamId?: number;
+  targetTeamName?: string;
+  clientAddress?: string;
+  endpoint?: string;
+  allowedIps?: string;
+  dns?: string;
+  /** @format uint64 */
+  createdAt?: number;
+  /** @format uint64 */
+  expiresAt?: number | null;
+  configurationDownloadUrl?: string | null;
+}
+
 export interface ApiTokenResponse {
   plainTextToken?: string;
   info?: ApiTokenModel;
@@ -13283,6 +13300,96 @@ export class Api<
         format: "json",
         ...params,
       }),
+
+    /**
+     * No description
+     *
+     * @tags LeagueMatches
+     * @name LeagueMatchesCreateAttackAccess
+     * @request POST:/api/league/matches/{matchId}/attack-access
+     */
+    leagueMatchesCreateAttackAccess: (
+      matchId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<LeagueAttackAccessGrant, any>({
+        path: `/api/league/matches/${matchId}/attack-access`,
+        method: "POST",
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags LeagueMatches
+     * @name LeagueMatchesDownloadAttackAccess
+     * @request GET:/api/league/matches/{matchId}/attack-access/{grantId}/download
+     */
+    leagueMatchesDownloadAttackAccess: (
+      matchId: string,
+      grantId: string,
+      query?: {
+        token?: string;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<Blob, any>({
+        path: `/api/league/matches/${matchId}/attack-access/${grantId}/download`,
+        method: "GET",
+        query: query,
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags LeagueMatches
+     * @name LeagueMatchesDownloadAttackAccess
+     * @request GET:/api/league/matches/{matchId}/attack-access/{grantId}/download
+     */
+    useLeagueMatchesDownloadAttackAccess: (
+      matchId: string,
+      grantId: string,
+      query?: {
+        token?: string;
+      },
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<Blob, any>(
+        doFetch
+          ? [
+              `/api/league/matches/${matchId}/attack-access/${grantId}/download`,
+              query,
+            ]
+          : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags LeagueMatches
+     * @name LeagueMatchesDownloadAttackAccess
+     * @request GET:/api/league/matches/{matchId}/attack-access/{grantId}/download
+     */
+    mutateLeagueMatchesDownloadAttackAccess: (
+      matchId: string,
+      grantId: string,
+      query?: {
+        token?: string;
+      },
+      data?: Blob | Promise<Blob>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<Blob>(
+        [
+          `/api/league/matches/${matchId}/attack-access/${grantId}/download`,
+          query,
+        ],
+        data,
+        options,
+      ),
 
     /**
      * No description

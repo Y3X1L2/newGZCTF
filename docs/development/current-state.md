@@ -11,6 +11,12 @@
 - 用户已确认队长报名、通用席位 1/2、必填中止原因；赛中重建通过中止后新建场次处理。联赛默认关闭，真实提供者未接入时返回依赖未就绪。yhr、lmr、lcx 的功能和整场验收仍待联调。
 - 接口与共同样例见[第一阶段契约](league/phase1-contract.md)，验证结果及已复现的主线回归失败见[任务交接](handoffs/2026-09-21-league-phase1-lxy.md)。本条不改变已有生产发布记录。
 
+## 联赛 TeamLab 运行接入候选（2026-09-22，未合并、未部署）
+
+- `codex/league-phase1-yhr-20260922` 已完成 T2/T6 代码：一个场次准备复用一个 TeamLab Rollout，为两队创建独立 runtime；Flag 材料通过现有 Secret overlay 注入；部署和回收继续使用统一 `DeploymentQueueTicket`。
+- 运行中的固定参赛成员可以领取对方 runtime 的 WireGuard 配置。终局按本场 Rollout 关闭访问并销毁两个 runtime，Flag 材料服务不可用不会阻断已创建环境的清理。
+- 联赛定向测试 6/6、无数据库 OpenAPI 契约测试 1/1、前端 TypeScript 与架构检查通过，全解决方案 Release 构建 0 错误。真实 Flag 提供器、双队场景、网络隔离和终局无残留尚未联调，不能记录为真实比赛链路已通过。实现与待联调项见[任务交接](handoffs/2026-09-22-league-phase1-yhr.md)。
+
 ## TeamLab 运行环境授权界面修复（2026-09-21）
 
 - 运行环境授权复选框不再在 React 状态更新回调中读取已释放的事件对象，点击“允许操作”中的任意权限不会再触发 `Cannot read properties of null (reading 'checked')`。

@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using GZCTF.Middlewares;
 using GZCTF.Modules.Identity.Application;
 using GZCTF.Modules.League.Application;
@@ -10,7 +11,10 @@ namespace GZCTF.Modules.League.Api;
 [ApiController]
 [RequireUser]
 [Route("api/league/matches")]
-public sealed class LeagueMatchesController(LeagueMatchService matches, UserManager<UserInfo> users) : ControllerBase
+public sealed class LeagueMatchesController(
+    LeagueMatchService matches,
+    ILeagueAttackAccessPort attackAccess,
+    UserManager<UserInfo> users) : ControllerBase
 {
     [HttpGet]
     public async Task<LeagueMatchPage> List([FromQuery] Guid? after = null, [FromQuery] int limit = 30, CancellationToken ct = default) =>
@@ -61,6 +65,33 @@ public sealed class LeagueMatchesController(LeagueMatchService matches, UserMana
     [HttpPost("{matchId:guid}/cleanup/retry"), RequireAdmin]
     public async Task<ActionResult<LeagueMatchDetail>> RetryCleanup(Guid matchId, CancellationToken ct) =>
         Accepted(await matches.RetryAsync(matchId, true, await ActorAsync(), ct));
+
+    [HttpPost("{matchId:guid}/attack-access")]
+    public async Task<ActionResult<LeagueAttackAccessGrant>> CreateAttackAccess(
+        Guid matchId,
+        CancellationToken ct)
+    {
+        var actor = await ActorAsync();
+        if (!attackAccess.IsAvailable)
+            throw new LeagueException("league_dependency_unavailable", "攻击接入服务尚未接入。", 503);
+        var result = await attackAccess.CreateAsync(matchId, actor.UserId!.Value, ct);
+        return Created(result.ConfigurationDownloadUrl ?? string.Empty, result);
+    }
+
+    [HttpGet("{matchId:guid}/attack-access/{grantId:guid}/download")]
+    public async Task<IActionResult> DownloadAttackAccess(
+        Guid matchId,
+        Guid grantId,
+        [FromQuery, Required] string token,
+        CancellationToken ct)
+    {
+        var actor = await ActorAsync();
+        if (!attackAccess.IsAvailable)
+            throw new LeagueException("league_dependency_unavailable", "攻击接入服务尚未接入。", 503);
+        var result = await attackAccess.ConsumeAsync(matchId, grantId, token, actor.UserId!.Value, ct);
+        return File(System.Text.Encoding.UTF8.GetBytes(result.Configuration),
+            "application/x-wireguard-profile", result.FileName);
+    }
 
     private async Task<ActorContext> ActorAsync()
     {

@@ -49,10 +49,12 @@
 | POST `/{id}/abort` | `{reason}`，1–500 字，不能全为空白 | 200，详情，终局含 `abortReason` |
 | POST `/{id}/retry` | 无 | 202，原准备/开赛操作 |
 | POST `/{id}/cleanup/retry` | 无 | 202，原清理操作 |
+| POST `/{id}/attack-access` | 无 | 201，对方运行环境的 WireGuard 授权和一次性下载地址 |
+| GET `/{id}/attack-access/{grantId}/download?token=...` | 无 | 200，WireGuard 配置文件 |
 
 草稿可暂不选择场景，此时 topologyId/releaseId 必须同时为空。配置场景时两者都必填，release 必须属于该 topology 且未归档。准备时必须已配置场景并选定两队。列表按 UUID 升序分页，以响应 `nextCursor` 继续。
 
-详情含 `match`、配置、`registrations`、两队 `preparation`、`operation`、`cleanup` 和 `allowedActions`。轮询详情即可恢复页面。`allowedActions` 是状态/角色提示，prepare 的最终条件仍由后端校验。当前接口不提供 Flag 提交、钱包或访问凭据；分别接 T5、T7 和 yhr 的访问能力。
+详情含 `match`、配置、`registrations`、两队 `preparation`、`operation`、`cleanup` 和 `allowedActions`。轮询详情即可恢复页面。`allowedActions` 是状态/角色提示，prepare 的最终条件仍由后端校验。当前接口不提供 Flag 提交或钱包；分别由 T5 和 T7 接入。攻击接入仅在场次为 Running 时开放，登录用户必须属于本场固定参赛名单，平台根据其队伍返回对方运行环境的 WireGuard 配置，不接受客户端指定目标 runtime。
 
 成功与等待/失败样例见 [phase1-examples.json](phase1-examples.json)，由 `LeagueContractTests` 使用真实 DTO 和平台序列化规则生成、校验，限开发和测试使用。示例中的姓名和 ID 都是测试值。
 
@@ -72,7 +74,7 @@ pnpm exec swagger-typescript-api generate -p <JSON路径> -t template -o src/gen
 
 ## 给 yhr：运行端口
 
-注册 `ILeagueRuntimePort`，替换默认不可用实现。输入 `LeagueFrozenMatch` 已包含两队固定名单、席位、场景、配置版本、初始金币和准备编号。
+`LeagueTeamLabAdapter` 已注册为 `ILeagueRuntimePort` 和 `ITeamLabRolloutTargetProvider`。输入 `LeagueFrozenMatch` 已包含两队固定名单、席位、场景、配置版本、初始金币和准备编号。
 
 1. `PrepareAsync(match, cores)`：按 `preparationId` 幂等准备，返回稳定 `operationId` 和恰好两队的状态。初次可返回 Pending、空 binding；runtime 确定后返回 `{teamId,runtimeId,generation}`。同一准备过程不能替换已确认的 runtime 或代次。
 2. 就绪必须同时满足环境、Flag 注入、入口准备检查和访问关闭；两队 runtime 必须不同。缺一项仍等待。单队失败返回 Failed、Failure 枚举、Retryable；保留另一队进度。
@@ -80,6 +82,10 @@ pnpm exec swagger-typescript-api generate -p <JSON路径> -t template -o src/gen
 4. `CleanupAsync(match, cleanupOperationId)`：先阻止旧准备/开放请求再次生效，再关闭访问和回收。须能按准备编号找回尚未成功回报给 lxy 的资源。清理完成返回 `completed:true`；失败返回 `failure:5` 和是否可重试。不得影响其他场次。
 
 这些方法负责快速受理/查询已有运行操作，不应等待整个部署完成。后台持有场次行锁调用，单次预算 30 秒。不得在同一 DbContext 中另开事务，不得修改 League 实体。异步运行继续使用现有部署队列。终局后的清理必须在提供者端阻止迟到的开放/创建动作；仅在 lxy 侧检查 Ended 不足以防止进程崩溃后的迟到请求。
+
+当前实现按一个 preparation 建立一个 TeamLab Rollout，以 `team:{teamId}:material:{materialId}` 标识两个 target。两队使用同一个 release 创建两个独立 runtime，运行创建、镜像准备、节点调度、网络执行和销毁全部复用 `DeploymentQueueTicket`。`materialId` 通过 `ILeagueCoreMaterialPort` 解析为资产键、Secret 名和值，再转换为 TeamLab 现有 Secret overlay；明文不写入联赛实体或 HTTP DTO。
+
+开赛时 Rollout 只开放本场两个 target 的访问许可。参赛成员调用 attack-access 接口后，主站按固定名单判断本队并为对方 runtime 创建 WireGuard 配置。终局将同一 Rollout 标记为 draining；协调器关闭访问并销毁其两个 runtime。清理不依赖 Flag 材料服务，材料服务暂时不可用不会阻止既有环境回收。
 
 ## 给 lmr：Flag、金币和终局
 
@@ -108,4 +114,4 @@ await tx.CommitAsync(ct);
 
 本分支新增一笔 `AddLeaguePhaseOne`，包含报名、场次、席位和中止原因。历史 migration 保持不变。League 报名外键阻止删除仍被引用的战队，场次外键阻止删除所选 release；没有新增删除场次接口，也没有自动删除赛果的任务。lmr 后续同步本迁移与完整快照，再生成 Flag/账户迁移。
 
-默认 DI 只返回“依赖未接入”，没有生产测试替身。T0 契约已经用户确认，仍需 yhr、lmr、lcx 各自检查具体字段；四人联调签收尚未完成。T2/T3/T6/T7 真实实现、场景内容、Flag 注入、访问隔离、真实 KO 和回收由后续接入验收。生产发布须另获授权、备份并验证迁移；应用回退时保持联赛入口关闭，不通过删除历史或降级生产库回滚。
+默认 DI 对尚未接入的 Flag、核心材料和金币能力明确返回依赖未就绪，没有生产测试替身。T2/T6 的 TeamLab 适配代码已经完成；T3/T5/T7、前端和四人联调仍待其他任务分支接入。真实场景内容、Flag 注入、双队访问隔离、KO 和回收尚未进行基础设施验收。生产发布须另获授权、备份并验证迁移；应用回退时保持联赛入口关闭，不通过删除历史或降级生产库回滚。

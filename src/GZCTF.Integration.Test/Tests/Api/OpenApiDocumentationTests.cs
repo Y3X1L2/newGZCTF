@@ -12,6 +12,33 @@ namespace GZCTF.Integration.Test.Tests.Api;
 public sealed class OpenApiDocumentationTests
 {
     [Fact]
+    public async Task Development_ExposesLeagueAttackAccessContract()
+    {
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+        {
+            ApplicationName = typeof(Program).Assembly.FullName,
+            EnvironmentName = Environments.Development
+        });
+        builder.WebHost.UseTestServer();
+        builder.Services.AddControllers().AddApplicationPart(typeof(Program).Assembly);
+        builder.AddOpenApiServices();
+
+        await using var app = builder.Build();
+        app.MapOpenApiDocumentation();
+        await app.StartAsync();
+
+        var contract = await app.GetTestClient().GetStringAsync("/openapi/v1.json");
+        using var document = JsonDocument.Parse(contract);
+        var paths = document.RootElement.GetProperty("paths");
+        Assert.True(paths.TryGetProperty("/api/league/matches/{matchId}/attack-access", out _));
+        Assert.True(paths.TryGetProperty(
+            "/api/league/matches/{matchId}/attack-access/{grantId}/download", out _));
+
+        if (Environment.GetEnvironmentVariable("LEAGUE_INTERNAL_OPENAPI_PATH") is { Length: > 0 } output)
+            await File.WriteAllTextAsync(output, contract);
+    }
+
+    [Fact]
     public async Task Production_ExposesOnlyExternalContractAndHtmlReference()
     {
         var options = new WebApplicationOptions

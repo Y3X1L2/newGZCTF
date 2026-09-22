@@ -20,7 +20,7 @@ public sealed class LeagueContractTests
     {
         var provider = new UnavailableLeagueProviders();
         Assert.False(provider.IsAvailable);
-        var error = await Assert.ThrowsAsync<LeagueException>(() => provider.CleanupAsync(null!, Guid.NewGuid(), default));
+        var error = await Assert.ThrowsAsync<LeagueException>(() => provider.GetAsync(Guid.NewGuid(), default));
         Assert.Equal(503, error.StatusCode); Assert.Equal("league_dependency_unavailable", error.Code);
         Assert.False(new LeagueOptions().Enabled);
     }

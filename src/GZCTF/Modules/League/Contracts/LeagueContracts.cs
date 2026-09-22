@@ -26,6 +26,7 @@ public sealed record LeagueRuntimeBinding(int TeamId, Guid RuntimeId, int Genera
 
 /// <summary>Opaque reference only. Flag plaintext must never enter match storage or HTTP projections.</summary>
 public sealed record LeagueCoreReference(int TeamId, string CoreKey, Guid MaterialId);
+public sealed record LeagueCoreMaterial(Guid MaterialId, string AssetKey, string SecretName, string Value);
 public sealed record LeagueTeamPreparation(int TeamId, LeagueProgressState State,
     LeagueRuntimeBinding? Binding, bool EnvironmentReady, bool FlagInjected, bool EntryPrepared,
     bool AccessClosed, LeagueFailure Failure = LeagueFailure.None, bool Retryable = true);
@@ -44,8 +45,13 @@ public sealed record LeagueMatchDetail(LeagueMatchSummary Match, Guid? TopologyI
     IReadOnlyList<LeagueTeamPreparation> Preparation, LeagueOperationModel? Operation,
     LeagueOperationModel? Cleanup, IReadOnlyList<string> AllowedActions);
 public sealed record LeagueMatchPage(IReadOnlyList<LeagueMatchSummary> Items, Guid? NextCursor);
+public sealed record LeagueAttackAccessGrant(
+    Guid Id, int TargetTeamId, string TargetTeamName, string ClientAddress, string Endpoint,
+    string AllowedIps, string Dns, DateTimeOffset CreatedAt, DateTimeOffset? ExpiresAt,
+    string? ConfigurationDownloadUrl);
+public sealed record LeagueAccessConfiguration(string FileName, string Configuration);
 
-/// <summary>yhr: calls are idempotent by caller operation ID; reuse DeploymentQueueTicket for execution.</summary>
+/// <summary>Calls reuse the caller operation ID and the existing deployment queue.</summary>
 public interface ILeagueRuntimePort
 {
     bool IsAvailable { get; }
@@ -58,7 +64,23 @@ public interface ILeagueRuntimePort
     Task<LeagueEffectResult> CleanupAsync(LeagueFrozenMatch match, Guid operationId, CancellationToken cancellationToken);
 }
 
-/// <summary>lmr: stable references per preparation/team/core, then validate actual runtime generation bindings.</summary>
+/// <summary>Resolves an opaque material reference only for runtime secret injection.</summary>
+public interface ILeagueCoreMaterialPort
+{
+    bool IsAvailable { get; }
+    Task<LeagueCoreMaterial> GetAsync(Guid materialId, CancellationToken cancellationToken);
+}
+
+/// <summary>Exposes the opponent runtime only while the match is running.</summary>
+public interface ILeagueAttackAccessPort
+{
+    bool IsAvailable { get; }
+    Task<LeagueAttackAccessGrant> CreateAsync(Guid matchId, Guid userId, CancellationToken cancellationToken);
+    Task<LeagueAccessConfiguration> ConsumeAsync(
+        Guid matchId, Guid grantId, string token, Guid userId, CancellationToken cancellationToken);
+}
+
+/// <summary>Uses stable references per preparation, team and core, then validates the runtime generation bindings.</summary>
 public interface ILeagueFlagPort
 {
     bool IsAvailable { get; }
@@ -67,7 +89,7 @@ public interface ILeagueFlagPort
         CancellationToken cancellationToken);
 }
 
-/// <summary>lmr: initialize both accounts idempotently by preparation ID; amounts are nonnegative integer coins.</summary>
+/// <summary>Initializes both accounts by preparation ID; amounts are nonnegative integer coins.</summary>
 public interface ILeagueCoinPort
 {
     bool IsAvailable { get; }

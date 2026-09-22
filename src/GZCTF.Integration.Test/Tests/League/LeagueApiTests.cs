@@ -25,6 +25,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Logging;
@@ -58,6 +59,13 @@ public sealed class LeagueApiTests(LeagueDatabase database) : IClassFixture<Leag
         builder.Services.AddScoped<ITeamMembershipQuery, EfTeamMembershipQuery>();
         builder.Services.AddScoped<ITeamLabReleaseCatalog, EfTeamLabReleaseCatalog>();
         builder.Services.AddLeagueModule(builder.Configuration);
+        builder.Services.RemoveAll<ILeagueRuntimePort>();
+        builder.Services.RemoveAll<ILeagueAttackAccessPort>();
+        builder.Services.AddScoped<LeagueUnavailableTestProvider>();
+        builder.Services.AddScoped<ILeagueRuntimePort>(provider =>
+            provider.GetRequiredService<LeagueUnavailableTestProvider>());
+        builder.Services.AddScoped<ILeagueAttackAccessPort>(provider =>
+            provider.GetRequiredService<LeagueUnavailableTestProvider>());
         builder.Services.Configure<LeagueOptions>(o => o.Enabled = true);
         // No automatic background execution in this HTTP contract test.
         var worker = builder.Services.Single(x => x.ServiceType == typeof(IHostedService) && x.ImplementationType == typeof(LeagueLifecycleWorker));
@@ -89,6 +97,42 @@ public sealed class LeagueApiTests(LeagueDatabase database) : IClassFixture<Leag
         if (Environment.GetEnvironmentVariable("LEAGUE_INTERNAL_OPENAPI_PATH") is { Length: > 0 } output)
             await File.WriteAllTextAsync(output, openapi);
     }
+}
+
+internal sealed class LeagueUnavailableTestProvider : ILeagueRuntimePort, ILeagueAttackAccessPort
+{
+    public bool IsAvailable => false;
+
+    private static LeagueException Unavailable() =>
+        new("league_dependency_unavailable", "联赛测试依赖未接入。", 503);
+
+    public Task<LeaguePreparationResult> PrepareAsync(
+        LeagueFrozenMatch match,
+        IReadOnlyList<LeagueCoreReference> cores,
+        CancellationToken cancellationToken) => throw Unavailable();
+
+    public Task<LeagueEffectResult> OpenAccessAsync(
+        LeagueFrozenMatch match,
+        Guid operationId,
+        IReadOnlyList<LeagueRuntimeBinding> bindings,
+        CancellationToken cancellationToken) => throw Unavailable();
+
+    public Task<LeagueEffectResult> CleanupAsync(
+        LeagueFrozenMatch match,
+        Guid operationId,
+        CancellationToken cancellationToken) => throw Unavailable();
+
+    public Task<LeagueAttackAccessGrant> CreateAsync(
+        Guid matchId,
+        Guid userId,
+        CancellationToken cancellationToken) => throw Unavailable();
+
+    public Task<LeagueAccessConfiguration> ConsumeAsync(
+        Guid matchId,
+        Guid grantId,
+        string token,
+        Guid userId,
+        CancellationToken cancellationToken) => throw Unavailable();
 }
 
 public sealed class LeagueTestAuthentication(IOptionsMonitor<AuthenticationSchemeOptions> options,
