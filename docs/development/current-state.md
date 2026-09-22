@@ -5,6 +5,12 @@
 
 本文件仅保留最新已知基线、功能边界、未解决事项和接手入口。生产信息是上述核验时点的记录，不能代替下一次操作前的现场检查。长期协作规则见 [AGENTS.md](../../AGENTS.md)。
 
+## TeamLab Windows VM 启动修复（2026-09-23）
+
+- 提交 `a0a3a5815ffc96314b55b41d302206ee43d59ccf` 已部署到 `10.24.0.27`，活动 release 为 `teamlab-windows-vm-a0a3a58-20260923`；`10.24.0.27/.30/.31` Agent SHA-256 均为 `9eddf4df8d61a44a5af05378780628d6a2d8cb723f7b275c9c01d6f6d1848ba4`。
+- V2 执行计划现携带来宾系统类型。Windows VM 使用 ACPI/APIC、SATA 系统盘和 `e1000e` 网卡；默认 Linux 类型不写入计划 JSON，既有计划摘要保持不变。
+- 既有运行 `01a0c9b8-3106-71bb-b931-ac539a02ed36` 已从计划摘要失败状态恢复并成功销毁。验证运行 `01a0ca00-2207-7e3e-8e52-eb7b9d67f96f` 到达 `ready`，Windows Server 进入锁屏，随后通过正式接口销毁；对应域、容器和运行文件已清理。
+
 ## TeamLab 运行环境授权界面修复（2026-09-21）
 
 - 运行环境授权复选框不再在 React 状态更新回调中读取已释放的事件对象，点击“允许操作”中的任意权限不会再触发 `Cannot read properties of null (reading 'checked')`。
