@@ -40,6 +40,12 @@ public sealed class LeagueApiTests(LeagueDatabase database) : IClassFixture<Leag
     public async Task Http_UsesRealIdentityAndProblemDetails_AndExportsFrontendContract()
     {
         var env = new LeagueTestEnvironment(database); await env.SeedAsync();
+        await using (var db = database.CreateContext())
+        {
+            var team = await db.Teams.Include(x => x.Members).SingleAsync(x => x.Id == env.FirstTeamId);
+            team.Members.Add(await db.Users.SingleAsync(x => x.Id == env.Outsider.UserId));
+            await db.SaveChangesAsync();
+        }
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions
         { ApplicationName = typeof(Program).Assembly.FullName, EnvironmentName = Environments.Development });
         builder.WebHost.UseTestServer();
@@ -72,6 +78,17 @@ public sealed class LeagueApiTests(LeagueDatabase database) : IClassFixture<Leag
         client.DefaultRequestHeaders.Add("X-League-Test-User", env.First.UserId!.Value.ToString());
         Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsJsonAsync("/api/league/matches", new LeagueDraftModel("denied", null, null, 0))).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync(route + "/registrations", new LeagueRegisterModel(env.FirstTeamId))).StatusCode);
+        foreach (var actor in new[] { env.First, env.Outsider, env.Admin, env.Second })
+        {
+            client.DefaultRequestHeaders.Remove("X-League-Test-User");
+            client.DefaultRequestHeaders.Add("X-League-Test-User", actor.UserId!.Value.ToString());
+            using var roster = JsonDocument.Parse(await client.GetStringAsync(route));
+            Assert.Equal(JsonValueKind.Null, roster.RootElement.GetProperty("configurationVersion").ValueKind);
+            var registrations = roster.RootElement.GetProperty("registrations").EnumerateArray().ToArray();
+            if (actor == env.Second) Assert.Empty(registrations);
+            else Assert.Equal(new[] { env.First.UserId.Value, env.Outsider.UserId!.Value }.Order(),
+                Assert.Single(registrations).GetProperty("memberIds").EnumerateArray().Select(x => x.GetGuid()).Order());
+        }
         client.DefaultRequestHeaders.Remove("X-League-Test-User"); client.DefaultRequestHeaders.Add("X-League-Test-User", env.Admin.UserId!.Value.ToString());
         var created = await client.PostAsJsonAsync("/api/league/matches", new LeagueDraftModel("HTTP draft", null, null, 0));
         Assert.Equal(HttpStatusCode.Created, created.StatusCode); Assert.NotNull(created.Headers.Location);

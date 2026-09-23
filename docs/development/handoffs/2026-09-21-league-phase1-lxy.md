@@ -4,7 +4,7 @@
 
 - T0、T1、T4 独立实现；起点为 `origin/main 9999e6b1`。
 - 分支：`codex/league-phase1-lxy-20260921`；worktree：`D:/Work/newGZCTF-league-lxy-20260921`。
-- 实现提交：`32595796635a504e08c9989b4c816aef4d9cce96`。后续交接记录提交仅修改文档；分支最新 SHA 以 `git log -1` 为准。
+- 首版实现提交：`32595796635a504e08c9989b4c816aef4d9cce96`；首版交接提交：`2ec37d8c`。后续修复见下节，分支最新 SHA 以 `git log -1` 为准。
 - 不合并 main、不部署。yhr/lmr/lcx 的真实实现和整场验收仍待接入；没有把测试替身注册到主站。
 - 用户已确认独立报名事实、队长报名、准备时冻结成员、通用席位 1/2、必填中止原因，以及有效提交与终局使用同一本地事务。
 - 独立代码状态：`complete / VERIFIED`；跨角色整场联调：`NOT_RUN`。任务 worktree 保留；临时主线对照 worktree 已在确认干净后移除，原工作区未修改。
@@ -25,7 +25,15 @@ League 模块提供场次创建/列表/详情/草稿修改、报名审核和两�
 
 默认 `League.Enabled=false`。开发环境启用 `League__Enabled=true` 可测试报名配置；缺少任何运行、Flag、金币提供者时准备返回 `503 league_dependency_unavailable`。前端导航和业务页面由 lcx 完成。本分支没有开放生产入口。
 
-## 验证记录
+## 2026-09-22：lcx 报名名单审查修复
+
+lcx 对 `2ec37d8c` 的判断成立。新增 PostgreSQL 回归测试先复现了草稿名单为空，再验证修复：详情准备前读取 Identity 当前成员，准备后沿用冻结名单。覆盖管理员、队长、普通成员、其他队伍、退队及新加入成员；真实 HTTP 测试也检查了管理员/本队名单和非本队不可见。
+
+lcx 使用 `configurationVersion === null` 显示“名单未冻结”，非空表示入选两队名单已冻结。权限隐藏仍返回空数组，不能用空数组判断冻结状态。补充了 `draft` 共同样例；响应字段和类型未变化，无需重新生成客户端或迁移。
+
+本次 Release 解决方案构建、后端全量单测 1145/1145、联赛专项集成 18/18、`git diff --check` 通过。报告为仓库外 `roster-before.trx`（修复前复现）、`roster-unit.trx`、`roster-league.trx`。本次未重复全量集成和前端门禁；既有全量失败及首版前端结果见下文。不合并、不部署。
+
+## 首版验证记录（2026-09-21）
 
 测试报告在仓库外 `D:/Work/league-lxy-test-results`。
 

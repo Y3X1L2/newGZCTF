@@ -63,11 +63,22 @@ public sealed class LeagueMatchService(AppDbContext db, LeagueMatchStore store, 
         var m = await db.Set<LeagueMatch>().AsNoTracking().Include(x => x.Registrations).SingleOrDefaultAsync(x => x.Id == id, ct)
             ?? throw new LeagueException("league_not_found", "场次不存在。", 404);
         var admin = actor.Role >= Role.Admin;
-        var currentTeams = m.PreparationId is null ? await teams.GetUserTeamsAsync(actor.UserId!.Value, ct) : [];
-        bool Own(LeagueRegistration r) => m.PreparationId is null ? currentTeams.Contains(r.TeamId) : r.MemberIds.Contains(actor.UserId!.Value);
+        var currentTeams = m.PreparationId is null && !admin ? await teams.GetUserTeamsAsync(actor.UserId!.Value, ct) : [];
+        var currentRosters = new Dictionary<int, IReadOnlyList<Guid>>();
+        if (m.PreparationId is null)
+        {
+            // Draft rosters are live Identity data, not the snapshot populated during preparation.
+            // Query sequentially: the Identity adapter shares this scoped DbContext.
+            foreach (var registration in m.Registrations.Where(x => admin || currentTeams.Contains(x.TeamId)))
+                currentRosters[registration.TeamId] = (await teams.GetAsync(registration.TeamId, ct))?.MemberIds ?? [];
+        }
+        IReadOnlyList<Guid> Members(LeagueRegistration r) => m.PreparationId is not null
+            ? r.MemberIds : currentRosters.GetValueOrDefault(r.TeamId) ?? [];
+        // Use the same current roster for visibility and output, even if membership changed since the team lookup.
+        bool Own(LeagueRegistration r) => Members(r).Contains(actor.UserId!.Value);
         var registrations = m.Registrations.Where(x => admin || x.Selected || Own(x))
             .OrderBy(x => x.TeamId).Select(x => new LeagueRegistrationModel(x.TeamId, x.TeamName, x.State,
-                x.Selected, x.Seat, admin || Own(x) ? x.MemberIds : [])).ToArray();
+                x.Selected, x.Seat, admin || Own(x) ? Members(x) : [])).ToArray();
         var actions = new List<string>();
         if (m.State == LeagueMatchState.Draft)
         {

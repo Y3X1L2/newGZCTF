@@ -11,6 +11,7 @@
 - 队长为未锁定战队报名；重复报名返回已有记录，拒绝后的报名也不自动变成待审。
 - 管理员审核和选择两队。`firstTeamId` 对应 `seat=1`，`secondTeamId` 对应 `seat=2`；双港场景可显示为东港/西港，平台不写死公司名称。
 - 准备时重新读取战队，冻结成员、名称、席位、release 和初始金币。队长包含在名单中；同一账号不能同时属于本场两队。之后改战队成员不改变本场权限。
+- 准备前，详情的 `registrations[].memberIds` 通过 Identity 查询当前成员，增减成员后刷新即更新，不在报名时保存副本。`configurationVersion=null` 表示名单尚未冻结；非空表示入选两队名单已冻结，详情及参赛权限均使用保存的名单。未入选报名不生成冻结名单。
 - 管理员可查全部报名和名单；选手只看自己的报名、入选队伍摘要及本队名单/runtime 标识。其他队伍的成员和 runtime 标识不返回。
 - 管理操作仅 Admin+；HTTP 使用现有网页登录身份，不从请求体接受操作者或管理员标志。
 
@@ -54,7 +55,7 @@
 
 详情含 `match`、配置、`registrations`、两队 `preparation`、`operation`、`cleanup` 和 `allowedActions`。轮询详情即可恢复页面。`allowedActions` 是状态/角色提示，prepare 的最终条件仍由后端校验。当前接口不提供 Flag 提交、钱包或访问凭据；分别接 T5、T7 和 yhr 的访问能力。
 
-成功与等待/失败样例见 [phase1-examples.json](phase1-examples.json)，由 `LeagueContractTests` 使用真实 DTO 和平台序列化规则生成、校验，限开发和测试使用。示例中的姓名和 ID 都是测试值。
+草稿当前名单（`draft`）、准备中及成功/失败样例见 [phase1-examples.json](phase1-examples.json)，由 `LeagueContractTests` 使用真实 DTO 和平台序列化规则生成、校验，限开发和测试使用。示例中的姓名和 ID 都是测试值。名单被权限隐藏时仍返回空数组，不能用数组是否为空判断冻结状态。
 
 失败使用 `application/problem+json`，例如：
 

@@ -74,3 +74,21 @@
 证据在仓库外 `../league-u1-retest-b61a3f2d/`：`frontend-build.log`、`frontend-fixed-build.log`、`backend-unit.log`、`backend-league.log`、`backend-integration.log`、TRX 结果及不含 Cookie 的 `http-smoke.json`。
 
 远端复核：任务分支基线仍为 `b61a3f2d`；lxy 分支新增 `6f29c3d2`（准备前名单修正），本轮未合入，遵循用户此前暂缓该问题的范围。当前 U1 验证使用原 lxy 基线 `2ec37d8c`。
+
+## 2026-09-23 名单修复同步与回归
+
+用户已恢复名单修复同步。以 U1 `5564f28e` 为第一父提交，正常合并 lxy `6f29c3d2`，无冲突、未改写共享历史。本次不包含远端 main `bc3599aa` 的 Windows VM 更新或 yhr `be696913` 的运行环境接入；它们需后续独立评估。
+
+后端准备前按当前 Identity 名单返回 `memberIds`，准备后使用冻结快照；没有 DTO 结构或迁移变更，现有 U1 adapter 无需兼容修改。lcx 尚需补充名单展示：区分当前名单和入选队伍的冻结名单，以 `configurationVersion` 判断冻结状态，不能把权限隐藏的空数组解读为零成员。当前契约只提供成员 ID，不提供姓名，不应猜测姓名或绕过后端名单权限。
+
+| 本次执行 | 结果 |
+| --- | --- |
+| 完整前端门禁 `VITE_LEAGUE_ENABLED=true pnpm build` | 113 文件、366/366 通过；locale、lint、TypeScript、架构、Vite、manifest、bundle 预算通过 |
+| League 前端定向回归 | 4 文件、18/18 通过，覆盖报名/审核/双队席位、配置/冲突、目录、分页、禁用及权限 |
+| `.NET 10` Release solution build | 通过，0 错误、34 警告 |
+| 后端全量单测 | 1145/1145，0 失败、0 跳过 |
+| League PostgreSQL 专项集成 | 18/18，0 失败、0 跳过；包含名单变更及冻结、可见性、HTTP 契约、迁移和生命周期 |
+
+日志位于仓库外 `../league-u1-sync-20260923/backend.log`、`frontend-build.log` 和 `../league-u1-sync-frontend-20260923.log`。前端构建发生在 merge commit 之前，manifest 记录旧 HEAD `5564f28e`，不作为新提交的部署制品。
+
+本轮未重跑全仓库后端集成，前次 12 项失败仍保留；未完成真实浏览器登录→报名→审核→选队全链路。仅复查了 63122 内存演示页的审核成功和 revision 更新，不作为真实数据库验证。没有更新本地运行服务或部署生产；U1 名单展示和 U2–U4 仍待后续实现。
