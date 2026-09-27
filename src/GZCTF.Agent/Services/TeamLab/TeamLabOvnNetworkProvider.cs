@@ -143,9 +143,7 @@ public sealed class TeamLabOvnNetworkProvider(
             if (!await AllResourcesPresentAsync(current, cancellationToken))
                 return new(false, false, "network_identity_conflict", "The active OVN network does not match the current runtime plan.");
 
-            var operations = BuildRemoveOperations(current)
-                .Concat(BuildApplyOperations(desired))
-                .ToArray();
+            var operations = await BuildRevisionOperationsAsync(current, desired, cancellationToken);
             await ovsdb.TransactAsync(
                 config.OvnNorthboundEndpoint,
                 config.OvnNorthboundDatabase,
@@ -174,12 +172,162 @@ public sealed class TeamLabOvnNetworkProvider(
             {
                 Ports = [],
                 DhcpLeases = [],
-                DnsRecords = []
+                DnsRecords = [],
+                DnsServerIp = null
             }),
             plan.NetworkControl
         });
         return string.Equals(Shape(current), Shape(desired), StringComparison.Ordinal);
     }
+
+    async Task<IReadOnlyList<JsonObject>> BuildRevisionOperationsAsync(
+        TeamLabExecutionPlanV2 current, TeamLabExecutionPlanV2 desired, CancellationToken cancellationToken)
+    {
+        var rows = await ovsdb.SelectAsync(config.OvnNorthboundEndpoint, config.OvnNorthboundDatabase,
+            [
+                ("Logical_Switch_Port", OvsdbJsonCodec.OwnedWhere(current)),
+                ("DHCP_Options", OvsdbJsonCodec.OwnedWhere(current)),
+                ("DNS", OvsdbJsonCodec.OwnedWhere(current))
+            ], cancellationToken);
+        return BuildRevisionOperations(current, desired, rows);
+    }
+
+    internal IReadOnlyList<JsonObject> BuildRevisionOperations(
+        TeamLabExecutionPlanV2 current, TeamLabExecutionPlanV2 desired, IReadOnlyList<JsonArray> rows)
+    {
+        var ports = rows[0].OfType<JsonObject>().ToDictionary(row => row["name"]!.GetValue<string>(), StringComparer.Ordinal);
+        var dhcp = rows[1].OfType<JsonObject>().ToDictionary(
+            row => OvsdbJsonCodec.GetMapValue(row["external_ids"], "gzctf-key")!, StringComparer.Ordinal);
+        var dns = rows[2].OfType<JsonObject>().ToDictionary(
+            row => OvsdbJsonCodec.GetMapValue(row["external_ids"], "gzctf-key")!, StringComparer.Ordinal);
+        var operations = new List<JsonObject>();
+        foreach (var next in desired.Networks)
+        {
+            var previous = current.Networks.Single(network => network.Key == next.Key);
+            var switchName = TeamLabOvnNaming.LogicalNetworkName(current, next.Key);
+            var oldDhcp = previous.DhcpLeases is { Count: > 0 };
+            var newDhcp = next.DhcpLeases is { Count: > 0 };
+            var dhcpChanged = oldDhcp != newDhcp ||
+                !Equals(previous.DhcpLeases, next.DhcpLeases) ||
+                previous.DnsServerIp != next.DnsServerIp;
+            var oldDns = previous.DnsRecords is { Count: > 0 };
+            var newDns = next.DnsRecords is { Count: > 0 };
+            var dnsChanged = oldDns != newDns || !Equals(previous.DnsRecords, next.DnsRecords);
+            var dhcpRow = oldDhcp ? dhcp[next.Key] : null;
+            var dnsRow = oldDns ? dns[$"{next.Key}:dns"] : null;
+
+            if (newDhcp && dhcpChanged)
+            {
+                var insert = MutateDhcpOptions(desired, next);
+                operations.Add(oldDhcp
+                    ? UpdateRow("DHCP_Options", Uuid(dhcpRow!), insert["row"]!)
+                    : insert);
+            }
+            if (newDns && dnsChanged)
+            {
+                var insert = MutateDns(desired, next);
+                operations.Add(oldDns
+                    ? UpdateRow("DNS", Uuid(dnsRow!), insert["row"]!)
+                    : insert);
+                if (!oldDns)
+                    operations.Add(MutateReferences("Logical_Switch", "name", switchName,
+                        "dns_records", "insert", NamedUuid(DnsUuid(desired, next))));
+            }
+
+            var oldPorts = previous.Ports.ToDictionary(port => port.Key, StringComparer.Ordinal);
+            var newPorts = next.Ports.ToDictionary(port => port.Key, StringComparer.Ordinal);
+            foreach (var port in previous.Ports.Where(port => !newPorts.ContainsKey(port.Key)))
+            {
+                var uuid = Uuid(ports[TeamLabOvnNaming.LogicalPortId(current, next.Key, port.Key)]);
+                operations.Add(MutateReferences("Logical_Switch", "name", switchName,
+                    "ports", "delete", UuidReference(uuid)));
+                operations.Add(DeleteRow("Logical_Switch_Port", uuid));
+            }
+            foreach (var port in next.Ports)
+            {
+                var insert = MutatePort(desired, next, port);
+                var row = insert["row"]!.AsObject();
+                if (newDhcp && oldDhcp && row.ContainsKey("dhcpv4_options"))
+                    row["dhcpv4_options"] = UuidReference(Uuid(dhcpRow!));
+                if (oldPorts.TryGetValue(port.Key, out var oldPort))
+                {
+                    var wasLeased = oldDhcp && previous.DhcpLeases!.Any(lease =>
+                        lease.MacAddress.Equals(oldPort.MacAddress, StringComparison.OrdinalIgnoreCase));
+                    var isLeased = row.ContainsKey("dhcpv4_options");
+                    if (oldPort != port || wasLeased != isLeased)
+                    {
+                        if (!isLeased) row["dhcpv4_options"] = new JsonArray { "set", new JsonArray() };
+                        operations.Add(UpdateRow("Logical_Switch_Port",
+                            Uuid(ports[TeamLabOvnNaming.LogicalPortId(current, next.Key, port.Key)]), row));
+                    }
+                }
+                else
+                {
+                    operations.Add(insert);
+                    operations.Add(MutateReferences("Logical_Switch", "name", switchName,
+                        "ports", "insert", NamedUuid(StableUuid(desired, "port", $"{next.Key}:{port.Key}"))));
+                }
+            }
+            if (oldDhcp != newDhcp && RouterFor(next, desired.NetworkControl) is { } router)
+            {
+                var routerPortName = RouterSwitchPortName(current, next, router);
+                var reference = newDhcp ? NamedUuid(DhcpUuid(desired, next))
+                    : new JsonArray { "set", new JsonArray() };
+                operations.Add(new JsonObject
+                {
+                    ["op"] = "update", ["table"] = "Logical_Switch_Port", ["where"] = Where("name", routerPortName),
+                    ["row"] = new JsonObject { ["dhcpv4_options"] = reference }
+                });
+            }
+            if (oldDns && !newDns)
+            {
+                operations.Add(MutateReferences("Logical_Switch", "name", switchName,
+                    "dns_records", "delete", UuidReference(Uuid(dnsRow!))));
+                operations.Add(DeleteRow("DNS", Uuid(dnsRow!)));
+            }
+            if (oldDhcp && !newDhcp)
+                operations.Add(DeleteRow("DHCP_Options", Uuid(dhcpRow!)));
+
+            operations.Add(new JsonObject
+            {
+                ["op"] = "update", ["table"] = "Logical_Switch", ["where"] = Where("name", switchName),
+                ["row"] = new JsonObject
+                {
+                    ["external_ids"] = MutateNetwork(desired, next, string.Empty, desired.NetworkControl)["row"]!["external_ids"]!.DeepClone()
+                }
+            });
+        }
+        return operations;
+    }
+
+    static bool Equals<T>(IReadOnlyList<T>? left, IReadOnlyList<T>? right) =>
+        JsonSerializer.Serialize(left) == JsonSerializer.Serialize(right);
+
+    static string Uuid(JsonObject row) => row["_uuid"]![1]!.GetValue<string>();
+
+    static JsonArray UuidReference(string uuid) => new() { "uuid", uuid };
+
+    static JsonArray UuidWhere(string uuid) => new() { new JsonArray { "_uuid", "==", UuidReference(uuid) } };
+
+    static JsonObject UpdateRow(string table, string uuid, JsonNode row) => new()
+    {
+        ["op"] = "update", ["table"] = table, ["where"] = UuidWhere(uuid), ["row"] = row.DeepClone()
+    };
+
+    static JsonObject DeleteRow(string table, string uuid) => new()
+    {
+        ["op"] = "delete", ["table"] = table, ["where"] = UuidWhere(uuid)
+    };
+
+    static JsonObject MutateReferences(string table, string key, string value, string column,
+        string action, JsonArray reference) => new()
+    {
+        ["op"] = "mutate", ["table"] = table, ["where"] = Where(key, value),
+        ["mutations"] = new JsonArray
+        {
+            new JsonArray { column, action, new JsonArray { "set", new JsonArray { reference } } }
+        }
+    };
 
     public async Task<TeamLabOvnApplyResult> RemoveAsync(
         TeamLabExecutionPlanV2 plan,
@@ -356,7 +504,7 @@ public sealed class TeamLabOvnNetworkProvider(
         {
             var tableRows = rows[index];
             if (tableRows.Count != expected[tables[index]] ||
-                tableRows.Any(row => row is not JsonObject json ||
+                tables[index] == "Logical_Switch" && tableRows.Any(row => row is not JsonObject json ||
                     !string.Equals(OvsdbJsonCodec.GetMapValue(json["external_ids"], "gzctf-network-digest"),
                         plan.NetworkDigest, StringComparison.Ordinal)))
                 return false;
@@ -458,6 +606,7 @@ public sealed class TeamLabOvnNetworkProvider(
                 ("server_id", network.GatewayIp ?? string.Empty),
                 ("server_mac", DhcpServerMac(plan, network)),
                 ("router", network.GatewayIp ?? string.Empty),
+                ("dns_server", network.DnsServerIp ?? network.GatewayIp ?? string.Empty),
                 ("lease_time", Math.Clamp(config.ManagedDhcpLeaseSeconds, 60, 86_400).ToString(System.Globalization.CultureInfo.InvariantCulture))),
             ["external_ids"] = Identity(plan, network.Key)
         }

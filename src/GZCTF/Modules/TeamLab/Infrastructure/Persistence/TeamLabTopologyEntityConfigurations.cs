@@ -48,6 +48,7 @@ public sealed class TeamLabTopologyNetworkEntityConfiguration : IEntityTypeConfi
         builder.Property(item => item.Key).HasMaxLength(63);
         builder.Property(item => item.Name).HasMaxLength(128);
         builder.Property(item => item.AddressPoolCidr).HasMaxLength(64);
+        builder.Property(item => item.DnsServerAssetKey).HasMaxLength(63);
         builder.HasIndex(item => new { item.TopologyId, item.Key }).IsUnique();
         builder.HasOne(item => item.Topology)
             .WithMany(item => item.Networks)

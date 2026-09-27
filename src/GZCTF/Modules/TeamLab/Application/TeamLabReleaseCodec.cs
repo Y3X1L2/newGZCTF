@@ -151,7 +151,7 @@ public static class TeamLabReleaseCodec
             execution.Name,
             execution.Networks.Select(network => new TeamLabTopologyNetworkModel(
                 network.Key, network.Name, new TeamLabAddressPoolModel(network.AddressPoolCidr, network.RuntimePrefixLength),
-                network.IsEntry, network.DisplayOrder)).ToArray(),
+                network.IsEntry, network.DisplayOrder, network.DnsServerAssetKey)).ToArray(),
             execution.Infrastructure.Select(item => new TeamLabTopologyInfrastructureModel(
                 item.Key, item.Name, item.Kind, item.Interfaces.Select(ToContract).ToArray(), item.NetworkKey)).ToArray(),
             execution.Assets.Select(asset => new TeamLabTopologyAssetV2Model(

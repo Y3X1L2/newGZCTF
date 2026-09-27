@@ -161,23 +161,23 @@ public sealed class TeamLabShardDeploymentService(
         var nodes = await context.WorkerNodes.AsNoTracking()
             .Where(item => nodeIds.Contains(item.Id))
             .ToDictionaryAsync(item => item.Id, cancellationToken);
-        var hasVm = runtimeAssets.Any(item => item.Kind == TeamLabResourceKind.Vm);
-        var required = new List<string>
-        {
-            AgentFeatureIds.TeamLabExecutionPlan,
-            AgentFeatureIds.TeamLabOvnOvs,
-            AgentFeatureIds.TeamLabArtifactCache
-        };
-        if (hasVm) required.Add(AgentFeatureIds.TeamLabNativeLibvirt);
-        if (runtimeAssets.Any(item => item.Kind == TeamLabResourceKind.Docker))
-            required.Add(AgentFeatureIds.Docker);
-        var requiredFeatures = required.Distinct().ToArray();
         foreach (var shard in shards)
         {
             if (!nodes.TryGetValue(shard.WorkerNodeId, out var node))
                 throw new TeamLabRuntimeExecutionException(
                     $"执行计划节点 {shard.WorkerNodeId} 不存在，无法部署运行环境。");
-            var missing = AgentCapabilityEvaluator.MissingFeatures(node, requiredFeatures);
+            var shardAssets = runtimeAssets.Where(item => item.ShardId == shard.Id).ToArray();
+            var requiredFeatures = new List<string>
+            {
+                AgentFeatureIds.TeamLabExecutionPlan,
+                AgentFeatureIds.TeamLabOvnOvs,
+                AgentFeatureIds.TeamLabArtifactCache
+            };
+            if (shardAssets.Any(item => item.Kind == TeamLabResourceKind.Vm))
+                requiredFeatures.Add(AgentFeatureIds.TeamLabNativeLibvirt);
+            if (shardAssets.Any(item => item.Kind == TeamLabResourceKind.Docker))
+                requiredFeatures.Add(AgentFeatureIds.Docker);
+            var missing = AgentCapabilityEvaluator.MissingFeatures(node, requiredFeatures.ToArray());
             if (missing.Length > 0)
             {
                 logger.LogWarning(
@@ -442,6 +442,10 @@ public sealed class TeamLabShardDeploymentService(
             runtime, definition, cancellationToken);
         var globalInfrastructure = await routes.BuildGlobalInfrastructureRequestAsync(
             runtime, definition, cancellationToken);
+        var dnsServers = globalInfrastructure.Switches.ToDictionary(
+            item => item.Network.Key,
+            item => item.Network.DnsServerIp ?? item.Network.GatewayIp,
+            StringComparer.Ordinal);
         var allowedRoutes = BuildAllowedRoutes(runtime, definition);
         var digests = runtimeAssets
             .Where(item => item.SourceTemplateId.HasValue)
@@ -465,6 +469,7 @@ public sealed class TeamLabShardDeploymentService(
                 templates[asset.SourceTemplateId!.Value],
                 overlays.GetValueOrDefault(asset.TopologyKey),
                 allowedRoutes,
+                dnsServers,
                 imageReady: true,
                 cancellationToken);
             allAssetRequests.Add(request.AssetKey, request);
@@ -583,6 +588,7 @@ public sealed class TeamLabShardDeploymentService(
         ImageTemplate template,
         TeamLabRuntimeOverlayModel? overlay,
         IReadOnlyDictionary<string, IReadOnlyList<string>> allowedRoutes,
+        IReadOnlyDictionary<string, string> dnsServers,
         bool imageReady,
         CancellationToken cancellationToken)
     {
@@ -592,14 +598,14 @@ public sealed class TeamLabShardDeploymentService(
         var interfaces = parsedInterfaces.Select(iface =>
         {
             var network = runtime.Networks.Single(item => item.Generation == runtime.Generation && item.TopologyKey == iface.NetworkKey);
-            IReadOnlyList<string> dnsServers = iface.Key == primaryInterface?.Key
-                ? [network.GatewayIp]
+            IReadOnlyList<string> interfaceDnsServers = iface.Key == primaryInterface?.Key
+                ? [dnsServers[iface.NetworkKey]]
                 : [];
             return new TeamLabNodeInterfaceIntent(
                 iface.Key, iface.NetworkKey, network.BridgeName, iface.IpAddress, iface.PrefixLength,
                 iface.MacAddress, iface.Primary,
                 allowedRoutes.GetValueOrDefault(iface.NetworkKey) ?? [],
-                dnsServers);
+                interfaceDnsServers);
         }).ToArray();
         var secrets = overlay?.Secrets ?? new Dictionary<string, string>();
         var imageReference = topologyAsset.Kind == TeamLabAssetKind.Docker

@@ -521,6 +521,7 @@ public sealed class LibvirtTeamLabProvider(
         TeamLabExecutionPlanV2 plan,
         TeamLabAssetExecutionSpecV2 asset)
     {
+        if (asset.OperatingSystem == TeamLabGuestOperatingSystem.Windows) return null;
         var configured = asset.NetworkAttachments
             .Select((attachment, index) =>
             {
@@ -530,6 +531,9 @@ public sealed class LibvirtTeamLabProvider(
                 return new { Attachment = attachment, Index = index, Network = network, Port = port, Prefix = prefix };
             })
             .Where(item => item.Network is not null && item.Port is not null &&
+                           item.Network.DhcpLeases?.Any(lease =>
+                               string.Equals(lease.MacAddress, item.Port.MacAddress,
+                                   StringComparison.OrdinalIgnoreCase)) == true &&
                            IPAddress.TryParse(item.Attachment.IpAddress, out _) &&
                            int.TryParse(item.Prefix, out var prefix) && prefix is >= 1 and <= 32)
             .ToArray();
@@ -546,6 +550,9 @@ public sealed class LibvirtTeamLabProvider(
             builder.AppendLine($"      - {item.Attachment.IpAddress}/{item.Prefix}");
             if (item.Attachment.Primary && IPAddress.TryParse(item.Attachment.GatewayIp, out _))
             {
+                builder.AppendLine("    nameservers:");
+                builder.AppendLine("      addresses:");
+                builder.AppendLine($"        - {item.Attachment.DnsServerIp ?? item.Attachment.GatewayIp}");
                 builder.AppendLine("    routes:");
                 builder.AppendLine("      - to: default");
                 builder.AppendLine($"        via: {item.Attachment.GatewayIp}");

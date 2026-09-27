@@ -17,7 +17,8 @@ public sealed record TeamLabExecutionNetwork(
     string AddressPoolCidr,
     int RuntimePrefixLength,
     bool IsEntry,
-    int DisplayOrder);
+    int DisplayOrder,
+    string? DnsServerAssetKey = null);
 
 public sealed record TeamLabExecutionInterface(
     string Key,

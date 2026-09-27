@@ -83,6 +83,13 @@ internal sealed partial class TeamLabTopologyStructureValidator(TeamLabAddressPo
             .GroupBy(item => item.Key, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
 
+        foreach (var (network, index) in definition.Networks.Select((value, index) => (value, index)))
+            if (network.DnsServerAssetKey is { } key &&
+                !definition.Assets.Any(asset => asset.Key == key &&
+                    asset.Interfaces.Any(iface => iface.NetworkKey == network.Key)))
+                Add(issues, "dns_asset_missing", $"networks[{index}].dnsServerAssetKey",
+                    "选择场景中提供 DNS 服务的资产。");
+
         foreach (var (asset, index) in definition.Assets.Select((value, index) => (value, index)))
             ValidateAsset(asset, index, networkByKey, issues);
         foreach (var (item, index) in infrastructure.Select((value, index) => (value, index)))

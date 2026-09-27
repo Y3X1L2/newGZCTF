@@ -194,6 +194,7 @@ export function mapTopologyDetailToDocument(
       runtimePrefixLength: network.addressPool.runtimePrefixLength,
       isEntry: network.isEntry,
       orderIndex: network.orderIndex,
+      dnsServerAssetKey: network.dnsServerAssetKey ?? null,
     }
   })
 

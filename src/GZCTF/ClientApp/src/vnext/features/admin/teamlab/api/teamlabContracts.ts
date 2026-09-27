@@ -28,6 +28,7 @@ export interface TeamLabTopologyNetwork {
   addressPool: TeamLabAddressPool
   isEntry: boolean
   orderIndex: number
+  dnsServerAssetKey?: string | null
 }
 
 export interface TeamLabTopologyInterface {

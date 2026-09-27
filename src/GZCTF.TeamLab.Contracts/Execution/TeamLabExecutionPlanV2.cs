@@ -341,7 +341,8 @@ public sealed record TeamLabNetworkIntentV2(
     IReadOnlyList<TeamLabDnsRecordV2>? DnsRecords = null,
     TeamLabPlayerGatewayV2? PlayerGateway = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<TeamLabConnectorAttachmentV2>? Connectors = null,
-    TeamLabPlayerGatewayV2? HostGateway = null);
+    TeamLabPlayerGatewayV2? HostGateway = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? DnsServerIp = null);
 
 public sealed record TeamLabPlayerGatewayV2(
     string PortKey,
@@ -407,7 +408,8 @@ public sealed record TeamLabAssetNetworkAttachmentV2(
     string InterfaceName,
     string? IpAddress,
     string? GatewayIp = null,
-    bool Primary = false);
+    bool Primary = false,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? DnsServerIp = null);
 
 public sealed record TeamLabHealthCheckV2(
     string Protocol,

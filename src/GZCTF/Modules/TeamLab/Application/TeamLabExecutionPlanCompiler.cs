@@ -110,7 +110,8 @@ public static class TeamLabExecutionPlanCompiler
                         .ToArray(),
                     playerGateway,
                     connectors?.GetValueOrDefault(switchIntent.Network.Key),
-                    serviceGateway);
+                    serviceGateway,
+                    switchIntent.Network.DnsServerIp);
             })
             .ToArray();
 
@@ -215,12 +216,13 @@ public static class TeamLabExecutionPlanCompiler
         asset.Interfaces
             .OrderBy(item => item.Key, StringComparer.Ordinal)
             .Select((item, index) => new TeamLabAssetNetworkAttachmentV2(
-                item.NetworkKey,
-                PortKey(asset.AssetKey, item.Key),
-                $"eth{index}",
-                AddressWithoutPrefix(item.IpAddress),
-                gateways.GetValueOrDefault(item.NetworkKey),
-                item.Primary))
+                 item.NetworkKey,
+                 PortKey(asset.AssetKey, item.Key),
+                 $"eth{index}",
+                 AddressWithoutPrefix(item.IpAddress),
+                 gateways.GetValueOrDefault(item.NetworkKey),
+                 item.Primary,
+                 item.DnsServers.FirstOrDefault()))
             .ToArray();
 
     static string PortKey(string assetKey, string interfaceKey) => $"{assetKey}:{interfaceKey}";
