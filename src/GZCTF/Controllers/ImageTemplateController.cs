@@ -156,7 +156,7 @@ public class ImageTemplateController : ControllerBase
         {
             t.Id, t.Name, t.OSType, t.ImageType, t.FileSize, t.Status,
             t.Description, t.ErrorMessage, t.ImageHash, t.UploadedAt, t.RegistryUrl,
-            t.SupportsInstanceCredentials,
+            t.SupportsInstanceCredentials, t.VmRuntimeMode, t.VmNetworkMode,
             RemoteAccessProtocol = RemoteAccessProtocol(t),
             CanManage = CanManageTemplate(actor, t)
         }) });
@@ -185,7 +185,7 @@ public class ImageTemplateController : ControllerBase
             template.Id, template.Name, template.OSType, template.ImageType,
             template.FileSize, template.Status, template.Description,
             template.ErrorMessage, template.ContainsMalware, template.ImageHash, template.UploadedAt,
-            template.RegistryUrl, template.SupportsInstanceCredentials,
+            template.RegistryUrl, template.SupportsInstanceCredentials, template.VmRuntimeMode, template.VmNetworkMode,
             RemoteAccessProtocol = RemoteAccessProtocol(template),
             CanManage = CanManageTemplate(actor, template),
             CapabilityCertifications = certifications
