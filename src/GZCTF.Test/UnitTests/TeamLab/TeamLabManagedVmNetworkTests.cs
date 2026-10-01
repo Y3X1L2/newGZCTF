@@ -303,6 +303,22 @@ public sealed class TeamLabManagedVmNetworkTests
         Assert.Equal("255.255.255.255", TeamLabVmNetworkService.MaskFromPrefix(32));
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void WindowsReadback_IgnoresIpv6DnsForEmptyOrNonemptyIpv4Requirements(bool ipv4Dns)
+    {
+        var plan = Plan(os: TeamLabGuestOperatingSystem.Windows);
+        var asset = plan.Assets[0] with { NetworkAttachments = [plan.Assets[0].NetworkAttachments[0] with
+            { DnsServers = ipv4Dns ? ["10.96.1.53"] : [] }] };
+        var desired = TeamLabVmNetworkService.ResolveInterfaces(plan, asset);
+        var xml = Matching.Replace("<dns ip='10.96.1.53'/>",
+            "<dns ip='fec0:0:0:ffff::1'/><dns ip='2001:db8::53'/>" + (ipv4Dns ? "<dns ip='10.96.1.53'/>" : ""));
+        var actual = TeamLabVmNetworkService.ParseSnapshot(xml);
+        Assert.Equal(ipv4Dns ? 1 : 0, Assert.Single(actual).DnsServers.Count);
+        Assert.True(TeamLabVmNetworkService.Matches(desired, actual, out _));
+    }
+
     [Fact]
     public void WindowsCommands_UseOnePs2CompatibleWmiAndNetshImplementation()
     {

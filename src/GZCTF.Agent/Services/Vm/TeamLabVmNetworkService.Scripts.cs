@@ -35,7 +35,13 @@ public sealed partial class TeamLabVmNetworkService
                   $node.SetAttribute('mask',[string]$cfg.IPSubnet[$i]); [void]$nic.AppendChild($node)
                 }
               }
-              foreach ($dns in @($cfg.DNSServerSearchOrder)) { if ($dns) { Add-Value $nic 'dns' $dns } }
+              foreach ($dns in @($cfg.DNSServerSearchOrder)) {
+                $parsedDns = [Net.IPAddress]::None
+                if ([Net.IPAddress]::TryParse([string]$dns,[ref]$parsedDns) -and
+                    $parsedDns.AddressFamily -eq [Net.Sockets.AddressFamily]::InterNetwork) {
+                  Add-Value $nic 'dns' $parsedDns.ToString()
+                }
+              }
               foreach ($route in @($routes | Where-Object { $_.InterfaceIndex -eq $cfg.InterfaceIndex })) {
                 if ($route.Destination -eq '0.0.0.0' -and $route.Mask -eq '0.0.0.0') {
                   Add-Value $nic 'gateway' $route.NextHop
@@ -78,7 +84,8 @@ public sealed partial class TeamLabVmNetworkService
               if ([IO.File]::Exists($statePath)) { [xml]$previous = [IO.File]::ReadAllText($statePath) }
               function Same-Values($left, $right) { return (@($left) -join '|') -eq (@($right) -join '|') }
               function Check-Wmi($result) {
-                if ($result.ReturnValue -ne 0) { throw ('Network WMI operation failed, return=' + $result.ReturnValue) }
+                # 1 is successful with a reboot requirement; live readback still decides readiness.
+                if ($result.ReturnValue -ne 0 -and $result.ReturnValue -ne 1) { throw ('Network WMI operation failed, return=' + $result.ReturnValue) }
               }
               function Run-Netsh($operation, $route, $index, $store) {
                 $args = @('interface','ipv4',$operation,'route',('prefix=' + $route.destination),('interface=' + $index),('nexthop=' + $route.nextHop),('store=' + $store))

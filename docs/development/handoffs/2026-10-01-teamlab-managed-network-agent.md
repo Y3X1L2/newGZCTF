@@ -59,3 +59,11 @@ Linux 脚本执行回归入口为 `scripts/validation/teamlab/test-managed-linux
 本记录与 Agent 实现同一提交。最终 SHA 使用 `git log -1 codex/teamlab-managed-network-agent` 核对；未推送、未合并 main，分支与 worktree 保留供父任务审阅和合入。
 
 下一步在父任务汇总契约、UI、OVN DHCP 端口策略和节点能力门禁后执行完整本地门禁；得到用户部署批准后，按独立 release、备份/回退和隔离实例流程验收 Linux、2022 和 2008 R2。不得对已有教学 VM直接试运行网络脚本，不以 ARP 代答或 libvirt running 代替真实来宾网络结果。
+
+## 2026-10-02 本地评审补充
+
+Windows 回读脚本现在仅输出 IPv4 DNS；宿主 XML 解析原有的 IPv4 过滤继续保留。新增空/非空 IPv4 目标并存 `fec0`、`2001:db8` DNS 的回读用例，本地 Windows WMI 模拟也验证脚本出口没有输出 IPv6 DNS。
+
+WMI 返回值 0 和 1 均作为调用成功，1 表示需要重启；平台不自动重启，仍由独立网络回读判断是否已经收敛。Windows 模拟分别以 0、1 执行应用、回读与幂等回归通过；来宾应用返回成功但实际网络未收敛的现有定向测试仍必须失败。仅本地修改与验证，真实来宾及部署仍未执行。
+
+本次 Managed VM 网络定向单元测试 38/38，Windows 三份脚本语法解析通过，`git diff --check` 通过。完整门禁由父任务整合后执行。

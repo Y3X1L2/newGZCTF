@@ -1,7 +1,8 @@
 param(
  [Parameter(Mandatory=$true)][string]$ApplyScript,
  [Parameter(Mandatory=$true)][string]$ReadScript,
- [Parameter(Mandatory=$true)][string]$StateRoot
+ [Parameter(Mandatory=$true)][string]$StateRoot,
+ [ValidateSet(0,1)][int]$WmiSuccessCode=1
 )
 $ErrorActionPreference='Stop'
 # Generated fixture: MAC ...d6:14, field0, 10.96.1.20/24, no DNS/gateway,
@@ -10,7 +11,8 @@ $script:NetshCalls = New-Object 'System.Collections.Generic.List[string]'
 $script:Cfg = New-Object PSObject -Property @{MACAddress='02:42:29:19:d6:14';Index=7;InterfaceIndex=19;DHCPEnabled=$true;IPAddress=@('10.96.1.99');IPSubnet=@('255.255.255.0');DefaultIPGateway=@('10.96.1.1');DNSServerSearchOrder=@('10.96.1.53')}
 $script:Adapter = New-Object PSObject -Property @{Index=7;NetConnectionID='ens3'}
 $script:Adapter | Add-Member ScriptMethod Put { return $null }
-$script:Cfg | Add-Member ScriptMethod SetDNSServerSearchOrder { param($dns) $script:Cfg.DNSServerSearchOrder=$dns; return (New-Object PSObject -Property @{ReturnValue=0}) }
+$script:WmiSuccessCode=$WmiSuccessCode
+$script:Cfg | Add-Member ScriptMethod SetDNSServerSearchOrder { param($dns) $script:Cfg.DNSServerSearchOrder=$dns; return (New-Object PSObject -Property @{ReturnValue=$script:WmiSuccessCode}) }
 $script:Routes = @()
 function Get-WmiObject {
  param($Class,$Filter)
@@ -50,4 +52,11 @@ if ($snapshot.network.interface.route.destination -ne '172.16.0.0/16') { throw '
 $firstCalls=$script:NetshCalls.Count
 & ([scriptblock]::Create($source))
 if ($script:NetshCalls.Count -ne $firstCalls) { throw 'Correct interfaces/routes were configured again' }
-Write-Output 'Isolated WMI/netsh mock: MAC selection, static IPv4, no gateway, empty DNS, rename, route, live XML readback, idempotence passed.'
+$readSource = [IO.File]::ReadAllText($ReadScript).Replace('[Console]::Out.Write($doc.OuterXml)','Write-Output $doc.OuterXml')
+$script:Cfg.DNSServerSearchOrder=@('fec0:0:0:ffff::1','2001:db8::53')
+[xml]$ipv6Only = & ([scriptblock]::Create($readSource))
+if ($ipv6Only.network.interface.SelectNodes('dns').Count -ne 0) { throw 'IPv6-only DNS must match an empty IPv4 DNS requirement' }
+$script:Cfg.DNSServerSearchOrder=@('fec0:0:0:ffff::1','10.96.1.53','2001:db8::53')
+[xml]$mixedDns = & ([scriptblock]::Create($readSource))
+if ($mixedDns.network.interface.SelectNodes('dns').Count -ne 1 -or $mixedDns.network.interface.dns.ip -ne '10.96.1.53') { throw 'Mixed DNS readback must contain only its IPv4 resolver' }
+Write-Output ('Isolated WMI/netsh mock: MAC selection, static IPv4, no gateway, empty/mixed IPv4 DNS with IPv6 present, rename, route, live XML readback, idempotence, WMI success code ' + $WmiSuccessCode + ' passed.')
