@@ -19,7 +19,7 @@ const runtime: TeamLabRuntime = {
 }
 function mount(value = runtime, path = '/?tab=operations') {
   return render(<MemoryRouter initialEntries={[path]}><SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
-    <AssetControlPanel runtime={value} /></SWRConfig></MemoryRouter>)
+    <AssetControlPanel runtime={value} onReplace={vi.fn()} onRemove={vi.fn()} /></SWRConfig></MemoryRouter>)
 }
 describe('AssetControlPanel', () => {
   beforeEach(() => {
@@ -28,40 +28,37 @@ describe('AssetControlPanel', () => {
     retry.mockReset().mockResolvedValue('ticket-b')
     task.mockReset().mockResolvedValue({ id: 'ticket-a', status: 'pending', stage: '等待执行', errorCode: null, canRetry: false })
   })
-  it('requires a reason and explicit confirmation before replacing one asset', async () => {
+  it('confirms a rebuild without requiring an operation reason', async () => {
     mount()
-    expect(screen.getByRole('button', { name: '重建' })).toBeDisabled()
-    fireEvent.change(screen.getByLabelText('操作原因'), { target: { value: '重新验证原始环境' } })
-    await waitFor(() => expect(screen.getByRole('button', { name: '重建' })).not.toBeDisabled())
-    fireEvent.click(screen.getByRole('button', { name: '重建' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: '重启' })).toBeEnabled())
+    fireEvent.click(screen.getByRole('button', { name: '更多资产操作' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: '重建' }))
     expect(submit).not.toHaveBeenCalled()
-    expect(screen.getByText(/可写层数据将丢失/)).toBeTruthy()
+    expect(screen.getByText(/可写数据会丢失/)).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: '确认执行' }))
-    await screen.findByText('排队中')
-    expect(submit).toHaveBeenCalledWith('runtime-a', 1, 3, 'rebuild', '重新验证原始环境')
-    expect(screen.getByRole('button', { name: '重建' })).toBeDisabled()
+    await screen.findByText('执行中')
+    expect(submit).toHaveBeenCalledWith('runtime-a', 1, 3, 'rebuild')
+    expect(screen.getByRole('button', { name: '重启' })).toBeDisabled()
   })
   it('shows stopped distinctly and offers start rather than resume', async () => {
     mount({ ...runtime, assets: [{ ...runtime.assets[0], status: 'stopped' }] })
-    fireEvent.change(screen.getByLabelText('操作原因'), { target: { value: '恢复测试服务' } })
-    expect(screen.getByText('已停止')).toBeTruthy()
     await waitFor(() => expect(screen.getByRole('button', { name: '启动' })).not.toBeDisabled())
-    expect(screen.getByRole('button', { name: '恢复' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: '启动' }))
+    await waitFor(() => expect(submit).toHaveBeenCalledWith('runtime-a', 1, 3, 'start'))
   })
   it('restores a failed task from the URL and continues its retained checkpoint', async () => {
     task.mockResolvedValueOnce({ id: 'ticket-a', status: 'failed', stage: '创建未完成', errorCode: 'asset_control.execution_failed', canRetry: true })
     mount(runtime, '/?tab=operations&asset=1&assetTask=ticket-a')
-    await waitFor(() => expect(screen.getByRole('button', { name: '继续未完成步骤' })).not.toBeDisabled())
-    fireEvent.click(screen.getByRole('button', { name: '继续未完成步骤' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: '继续执行' })).not.toBeDisabled())
+    fireEvent.click(screen.getByRole('button', { name: '继续执行' }))
     await waitFor(() => expect(retry).toHaveBeenCalledWith('runtime-a', 1, 'ticket-a'))
     expect(submit).not.toHaveBeenCalled()
   })
   it('does not turn remote-session permission into lifecycle control', async () => {
     availability.mockResolvedValue({ allowed: false, reason: '没有生命周期管理权限' })
     mount()
-    fireEvent.change(screen.getByLabelText('操作原因'), { target: { value: '尝试操作资产' } })
-    await screen.findByText('没有生命周期管理权限')
-    expect(screen.getByRole('button', { name: '重建' })).toBeDisabled()
+    await waitFor(() => expect(availability).toHaveBeenCalled())
+    expect(screen.getByRole('button', { name: '重启' })).toBeDisabled()
     expect(submit).not.toHaveBeenCalled()
   })
 })

@@ -14,6 +14,23 @@ namespace GZCTF.Test.UnitTests.TeamLab;
 public sealed class TeamLabRuntimeUpdateDiffTests
 {
     [Fact]
+    public void AssetDefinition_RoundTripsInterfacesResourcesAndServiceSettings()
+    {
+        var asset = Asset("vm") with
+        {
+            Kind = TeamLabAssetKind.Vm,
+            Interfaces = [new("nic-a", "lan", 10, true, 0), new("nic-b", "backend", 21, false, 1)],
+            ExposePort = 3389,
+            HealthCheckKind = TeamLabHealthCheckKind.Tcp,
+            HealthCheckPort = 3389,
+            DevicePackageId = 7,
+            DeviceParametersJson = "{\"port\":502}"
+        };
+        var restored = TeamLabTopologyV1Normalizer.ToExecution(TeamLabTopologyV1Normalizer.ToModel(asset));
+        Assert.Equal(JsonSerializer.Serialize(asset), JsonSerializer.Serialize(restored));
+    }
+
+    [Fact]
     public void BuildChanges_ReportsAddedRemovedAndReplacedAssets()
     {
         var current = Topology(Asset("keep"), Asset("replace", templateId: 1), Asset("remove"));

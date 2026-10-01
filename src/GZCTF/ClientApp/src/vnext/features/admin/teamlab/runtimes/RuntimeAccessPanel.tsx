@@ -48,13 +48,13 @@ export function RuntimeAccessPanel({ runtimeId, canCreate }: { runtimeId: string
   return (
     <section aria-labelledby="runtime-access-title" className={styles.panel}>
       <header className={styles.panelHeader}>
-        <div><span>调试访问</span><h3 id="runtime-access-title">调试入口</h3></div>
+        <h3 id="runtime-access-title">WireGuard 接入</h3>
         <ActionButton disabled={!canCreate || acting} icon={<KeyRound size={16} />} onClick={() => void create()} type="button">
-          创建授权
+          获取配置
         </ActionButton>
       </header>
       {!request.data && !request.error ? (
-        <DataState description="正在读取当前代的有效授权。" loading title="授权加载中" />
+        <DataState description="" loading title="配置加载中" />
       ) : request.error ? (
         <InlineFeedback tone="danger">{errorMessage(request.error, '授权读取失败。')}</InlineFeedback>
       ) : request.data?.length ? (
@@ -72,7 +72,7 @@ export function RuntimeAccessPanel({ runtimeId, canCreate }: { runtimeId: string
           ))}
         </div>
       ) : (
-        <DataState description="运行环境就绪后可创建隔离的管理员调试配置。" title="暂无有效授权" />
+        <p className={styles.muted}>暂无接入配置</p>
       )}
       {actionError ? <InlineFeedback tone="danger">{errorMessage(actionError, '授权操作失败。')}</InlineFeedback> : null}
     </section>

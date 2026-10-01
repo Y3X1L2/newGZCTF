@@ -74,7 +74,7 @@ public sealed record OpenTeamLabServiceAccessModel(
 public sealed record OpenTeamLabAssetControlCommand(
     [param: Range(1, int.MaxValue)] int Generation,
     [param: Required, RegularExpression("^(start|stop|restart|rebuild|pause|resume)$")] string Action,
-    [param: Required, StringLength(500, MinimumLength = 4)] string Reason,
+    [param: StringLength(500)] string? Reason = null,
     bool Confirmed = false);
 
 public sealed record OpenTeamLabAssetControlCapabilityModel(bool Allowed, string? Reason);

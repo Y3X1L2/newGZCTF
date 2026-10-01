@@ -670,21 +670,7 @@ public sealed class TeamLabRuntimeUpdateService(
         topology.Networks.Select(item => new TeamLabTopologyNetworkModel(
             item.Key, item.Name, new TeamLabAddressPoolModel(item.AddressPoolCidr, item.RuntimePrefixLength),
             item.IsEntry, item.DisplayOrder, item.DnsServerAssetKey)).ToArray(),
-        topology.Assets.Select(item => new TeamLabTopologyAssetModel(
-            item.Key, item.Name, item.Kind, item.ImageTemplateId,
-            new TeamLabAssetResourceModel(item.CpuUnits, item.MemoryMiB, item.StorageMiB),
-            item.Interfaces.Select(iface => new TeamLabTopologyInterfaceModel(
-                iface.Key, iface.NetworkKey, iface.HostOffset, iface.Primary, iface.DisplayOrder)).ToArray(),
-            item.ExposePort,
-            item.HealthCheckKind is { } kind && item.HealthCheckPort is { } port
-                ? new TeamLabHealthCheckModel(kind, port)
-                : null,
-            item.DisplayOrder,
-            item.DevicePackageId,
-            string.IsNullOrWhiteSpace(item.DeviceParametersJson)
-                ? null
-                : JsonDocument.Parse(item.DeviceParametersJson).RootElement.Clone(),
-            item.ConnectorId)).ToArray(),
+        topology.Assets.Select(TeamLabTopologyV1Normalizer.ToModel).ToArray(),
         topology.Connections.Select(item => new TeamLabTopologyConnectionModel(
             item.Key, item.FromNetworkKey, item.ToNetworkKey, item.ViaAssetKey,
             item.ViaNodeKey, item.Direction)).ToArray(),

@@ -6,7 +6,7 @@ import { InlineFeedback } from '../../../../shared/Interaction'
 import { DataState } from '../../../../shared/Primitives'
 import { errorMessage } from '../../../../shared/errors'
 import { useVNextPageTitle } from '../../../../shared/useVNextPageTitle'
-import { AdminPageHeader, StatusBadge } from '../../shared/AdminWorkbench'
+import { AdminPageHeader } from '../../shared/AdminWorkbench'
 import { teamLabAdminApi, teamLabAdminKeys, type TeamLabTopologyDetail } from '../api'
 import styles from './TeamLabSceneShell.module.css'
 
@@ -23,7 +23,7 @@ export function useTeamLabScene() {
 }
 
 export function TeamLabSceneShell() {
-  const { topologyId = '' } = useParams()
+  const { topologyId = '', runtimeId } = useParams()
   const request = useSWR(
     topologyId ? teamLabAdminKeys.topology(topologyId) : null,
     () => teamLabAdminApi.getTopology(topologyId),
@@ -47,21 +47,20 @@ export function TeamLabSceneShell() {
   return (
     <TeamLabSceneContext.Provider value={{ scene }}>
       <div className={styles.page}>
-        <Link className={styles.backLink} to="/admin/teamlab">
+        {!runtimeId ? <><Link className={styles.backLink} to="/admin/teamlab">
           <ArrowLeft size={16} />
           场景库
         </Link>
         <AdminPageHeader
-          actions={<StatusBadge tone="neutral">修订 {scene.revision}</StatusBadge>}
-          description={`${scene.definition.networks.length} 个网段 · ${scene.definition.assets.length} 个资产 · ${scene.definition.infrastructure.length} 个基础设施节点`}
-          eyebrow="TEAMLAB SCENE"
+          description={`${scene.definition.networks.length} 个网段 · ${scene.definition.assets.length} 个资产`}
+          eyebrow=""
           title={scene.definition.name}
         />
         <nav aria-label="场景管理" className={styles.tabs}>
           <NavLink to="design"><Network size={16} />设计</NavLink>
           <NavLink to="releases"><Boxes size={16} />发布版本</NavLink>
           <NavLink to="runtimes"><PlayCircle size={16} />试运行</NavLink>
-        </nav>
+        </nav></> : null}
         <main className={styles.content}>
           <Outlet context={{ scene }} />
         </main>

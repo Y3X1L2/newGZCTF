@@ -26,7 +26,7 @@ describe('AssetDiagnosticsPanel', () => {
     error: undefined, isLoading: false, isValidating: false, mutate: refresh })
   })
   it('renders bounded output as text and supports refresh', () => {
-    const { container } = render(<AssetDiagnosticsPanel runtime={runtime} />)
+    const { container } = render(<AssetDiagnosticsPanel runtime={runtime} assetId={1} />)
     expect(screen.getByLabelText('Web 容器输出').textContent).toContain('<script>不是 HTML</script>')
     expect(container.querySelector('script')).toBeNull()
     expect(screen.getByText(/64 KiB/)).toBeTruthy()
@@ -34,20 +34,19 @@ describe('AssetDiagnosticsPanel', () => {
     expect(refresh).toHaveBeenCalledOnce()
   })
   it('scopes requests to the selected asset and runtime generation', () => {
-    render(<AssetDiagnosticsPanel runtime={runtime} />)
-    fireEvent.change(screen.getByLabelText('资产'), { target: { value: '2' } })
+    render(<AssetDiagnosticsPanel runtime={runtime} assetId={2} />)
     fireEvent.change(screen.getByLabelText('最近日志'), { target: { value: '500' } })
     expect(read).toHaveBeenLastCalledWith('runtime-a', 3, 2, 500)
   })
   it('does not show stale output alongside a failed refresh', () => {
     read.mockReturnValue({ data: { logs: 'stale output' }, error: new Error('node unavailable'),
       isLoading: false, isValidating: false, mutate: refresh })
-    render(<AssetDiagnosticsPanel runtime={runtime} />)
+    render(<AssetDiagnosticsPanel runtime={runtime} assetId={1} />)
     expect(screen.queryByText('stale output')).toBeNull()
     expect(screen.getByText('node unavailable')).toBeTruthy()
   })
   it('does not request unsupported VM assets', () => {
-    render(<AssetDiagnosticsPanel runtime={{ ...runtime, assets: [{ ...runtime.assets[0], kind: 'vm' }] }} />)
+    render(<AssetDiagnosticsPanel runtime={{ ...runtime, assets: [{ ...runtime.assets[0], kind: 'vm' }] }} assetId={1} />)
     expect(read).toHaveBeenLastCalledWith('runtime-a', 3, undefined, 200)
     expect(screen.getByText('暂无可诊断的容器资产')).toBeTruthy()
   })
@@ -55,7 +54,7 @@ describe('AssetDiagnosticsPanel', () => {
     const result = read.getMockImplementation()!()
     read.mockReturnValue({ ...result, data: { ...result.data, logs: '', truncated: false,
       logsError: 'diagnostics.logs_unavailable' } })
-    render(<AssetDiagnosticsPanel runtime={runtime} />)
+    render(<AssetDiagnosticsPanel runtime={runtime} assetId={1} />)
     expect(screen.getByText('运行中')).toBeTruthy()
     expect(screen.getByText('容器日志读取失败，请检查节点日志驱动后重试。')).toBeTruthy()
     expect(screen.queryByText('容器暂无标准输出或错误输出')).toBeNull()

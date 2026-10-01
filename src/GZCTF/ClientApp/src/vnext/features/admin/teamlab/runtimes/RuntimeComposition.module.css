@@ -4,12 +4,17 @@
 .header h3 { margin: 4px 0 0; }
 .hint { margin: 0 0 var(--yn-space-4); color: var(--yn-color-muted); font-size: var(--yn-font-sm); }
 .formGrid, .grantForm { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--yn-space-3); align-items: end; }
+.formGrid { grid-template-columns: 1fr; }
+.advanced { display: grid; gap: var(--yn-space-3); padding: var(--yn-space-3) 0; border-top: 1px solid var(--yn-color-border); }
+.advanced summary { width: fit-content; color: var(--yn-color-text-secondary); cursor: pointer; }
+.advanced label { margin-top: var(--yn-space-3); }
 .formGrid label, .grantForm > label { display: grid; gap: 6px; color: var(--yn-color-muted); font-size: var(--yn-font-sm); }
 .formGrid input, .formGrid select, .grantForm input, .grantForm select { min-width: 0; min-height: 36px; padding: 7px 9px; border: 1px solid var(--yn-color-border); border-radius: 4px; background: var(--yn-color-surface); color: var(--yn-color-text); }
 .formGrid select[multiple] { min-height: 76px; }
 .formAction { display: flex; align-items: end; min-height: 36px; }
 .changeList, .grantList { display: grid; gap: 1px; margin-top: var(--yn-space-4); border: 1px solid var(--yn-color-border); background: var(--yn-color-border); }
 .changeList > div, .grantList > div { display: grid; grid-template-columns: auto minmax(120px, 1fr) minmax(100px, auto) auto; gap: var(--yn-space-3); align-items: center; padding: 10px 12px; background: var(--yn-color-surface); }
+.changeList > div { grid-template-columns: auto minmax(0, 1fr) auto; }
 .changeList > button { justify-self: end; margin: var(--yn-space-3); }
 .changeList span, .grantList span { color: var(--yn-color-brand); font-size: var(--yn-font-xs); }
 .changeList span[data-action='remove'] { color: var(--yn-color-danger); }

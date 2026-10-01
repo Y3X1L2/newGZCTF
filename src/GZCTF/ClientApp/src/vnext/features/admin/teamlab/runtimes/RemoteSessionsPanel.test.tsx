@@ -63,7 +63,7 @@ describe('RemoteSessionsPanel', () => {
 
     expect(auditButton).toHaveAttribute('aria-pressed', 'true')
     const drawer = screen.getByRole('dialog', { name: '操作审计 · Web 服务' })
-    expect(within(drawer).getByText('会话操作审计证据')).toBeInTheDocument()
+    expect(within(drawer).getByText('审计文件')).toBeInTheDocument()
     fireEvent.click(within(drawer).getByRole('button', { name: '关闭' }))
 
     await waitFor(() => expect(screen.queryByRole('dialog', { name: '操作审计 · Web 服务' })).not.toBeInTheDocument())

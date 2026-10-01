@@ -32,6 +32,7 @@ import {
 } from './resourcesPresentation'
 import { useConnectorRegistry, useDevicePackageCatalog, useNodeArtifactCache } from './useTeamLabResources'
 import styles from './TeamLabResourcesPage.module.css'
+import { TeamLabWorkspaceNav } from '../shared/TeamLabWorkspaceNav'
 
 type ResourcesTab = 'packages' | 'connectors' | 'cache'
 
@@ -49,12 +50,12 @@ export function TeamLabResourcesPage() {
   return (
     <div className={styles.page}>
       <AdminPageHeader
-        description="管理 TeamLab 场景可用的设备模板、现场连接器与节点镜像缓存。"
-        eyebrow="TEAMLAB RESOURCES"
-        title="组网资源"
+        eyebrow="TEAMLAB"
+        title="资源"
       />
+      <TeamLabWorkspaceNav active="resources" />
       <nav aria-label="组网资源分区" className={styles.tabs}>
-        {(Object.keys(tabLabels) as ResourcesTab[]).map((key) => (
+        {(Object.keys(tabLabels) as ResourcesTab[]).filter((key) => key !== 'cache').map((key) => (
           <button
             className={styles.tab}
             data-active={tab === key}
@@ -66,6 +67,7 @@ export function TeamLabResourcesPage() {
           </button>
         ))}
       </nav>
+      <button aria-pressed={tab === 'cache'} className={styles.cacheLink} onClick={() => setTab('cache')} type="button">节点缓存</button>
       {tab === 'packages' ? <DevicePackagesTab /> : null}
       {tab === 'connectors' ? <ConnectorsTab /> : null}
       {tab === 'cache' ? <NodeCacheTab /> : null}
@@ -173,7 +175,7 @@ function DevicePackagesTab() {
       />
 
       <DetailDrawer
-        description={selected?.description ?? '设备模板的镜像、资源、端口和启动参数。'}
+        description={selected?.description ?? undefined}
         onClose={() => setSelected(null)}
         open={Boolean(selected)}
         title={selected ? `${selected.displayName} · ${selected.version}` : ''}
@@ -208,10 +210,6 @@ function DevicePackagesTab() {
             <div>
               <dt>制品引用</dt>
               <dd className={styles.mono}>{selected.artifactReference}</dd>
-            </div>
-            <div>
-              <dt>摘要</dt>
-              <dd className={styles.mono}>{selected.digest ?? '未登记'}</dd>
             </div>
             <div>
               <dt>服务端口</dt>
@@ -318,9 +316,6 @@ function ConnectorsTab() {
   return (
     <section aria-label="现场连接器">
       <FilterToolbar>
-        <ToolbarGroup>
-          <span className={styles.toolbarHint}>独占连接器同一时间只属于一个运行环境；占用事实在节点失联期间保持。</span>
-        </ToolbarGroup>
         <ActionButton icon={<Plus size={16} />} onClick={() => setRegisterOpen(true)} tone="primary" type="button">
           登记连接器
         </ActionButton>
@@ -363,7 +358,7 @@ function ConnectorsTab() {
       />
 
       <DetailDrawer
-        description={selected?.description ?? '连接器占用和现场网卡的当前连接状态。'}
+        description={selected?.description ?? undefined}
         onClose={() => setSelected(null)}
         open={Boolean(selected)}
         title={selected?.displayName ?? ''}
@@ -440,9 +435,6 @@ function NodeCacheTab() {
   return (
     <section aria-label="节点制品缓存">
       <FilterToolbar>
-        <ToolbarGroup>
-          <span className={styles.toolbarHint}>镜像在节点的分发状态与用途引用计数；最后一个引用释放后才会物理回收。</span>
-        </ToolbarGroup>
         <RefreshIndicator active={cache.isRefreshing} label={cache.isRefreshing ? '正在同步' : '数据已同步'} />
       </FilterToolbar>
       {cache.isLoading ? (

@@ -68,6 +68,12 @@ export function TeamLabRuntimeStatusBadge({ status }: { status: TeamLabRuntimeSt
   return <StatusBadge icon={<Icon />} pulse={meta.pulse} tone={meta.tone}>{meta.label}</StatusBadge>
 }
 
+export function TeamLabAssetStatusBadge({ status }: { status: TeamLabRuntimeStatus }) {
+  const meta = runtimeMeta[status]
+  const Icon = meta.icon
+  return <StatusBadge icon={<Icon />} pulse={meta.pulse} tone={meta.tone}>{status === 'running' ? '运行中' : meta.label}</StatusBadge>
+}
+
 export function TeamLabAccessStatusBadge({ open }: { open: boolean }) {
   return <StatusBadge icon={open ? <DoorOpen /> : <Lock />} tone={open ? 'success' : 'neutral'}>{open ? '已开放' : '未开放'}</StatusBadge>
 }

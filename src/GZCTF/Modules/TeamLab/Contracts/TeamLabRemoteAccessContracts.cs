@@ -2,7 +2,7 @@ using GZCTF.Modules.TeamLab.Domain.Runtime;
 
 namespace GZCTF.Modules.TeamLab.Contracts;
 
-public sealed record CreateTeamLabRemoteSessionModel(string Reason, bool VncConsole = false);
+public sealed record CreateTeamLabRemoteSessionModel(string? Reason = null, bool VncConsole = false);
 
 public sealed record TeamLabRemoteAccessAvailabilityModel(
     int AssetId,

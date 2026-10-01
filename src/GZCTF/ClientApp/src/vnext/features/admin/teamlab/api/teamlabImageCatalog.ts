@@ -15,6 +15,7 @@ export interface TeamLabImageOption {
   id: number
   name: string
   digest?: string | null
+  artifactReference?: string | null
   deviceType: 'docker' | VmDeviceType
   remoteAccessProtocol?: 'ssh' | 'rdp' | null
 }
@@ -36,6 +37,7 @@ export async function listTeamLabImageOptions(): Promise<readonly TeamLabImageOp
       id: template.id,
       name: template.name,
       digest: template.imageHash,
+      artifactReference: template.registryUrl ?? `image-template:${template.id}`,
       deviceType:
         template.imageType === ImageType.Docker
           ? 'docker'

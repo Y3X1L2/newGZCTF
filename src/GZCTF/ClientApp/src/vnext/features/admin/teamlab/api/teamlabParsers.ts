@@ -154,7 +154,7 @@ function parseNetwork(value: unknown, label: string): TeamLabTopologyNetwork {
   }
 }
 
-function parseAsset(value: unknown, label: string): TeamLabTopologyAsset {
+export function parseAsset(value: unknown, label = '运行资产定义'): TeamLabTopologyAsset {
   const item = record(value, label)
   const resources = record(item.resources, `${label}.resources`)
   const health =

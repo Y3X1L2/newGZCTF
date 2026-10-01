@@ -9,6 +9,8 @@ import { useTeamLabRuntime } from './useTeamLabRuntime'
 import { useTrafficObservability } from './useTrafficObservability'
 
 vi.mock('./useTeamLabRuntime', () => ({ useTeamLabRuntime: vi.fn() }))
+vi.mock('../shared/TeamLabSceneShell', () => ({ useTeamLabScene: () => ({ scene: { definition: { name: '企业域演练' } } }) }))
+vi.mock('./RuntimeAccessPanel', () => ({ RuntimeAccessPanel: () => <div>访问入口</div> }))
 vi.mock('./useRuntimeUpdatePreview', () => ({ useRuntimeUpdatePreview: vi.fn() }))
 vi.mock('./useRuntimeEvents', () => ({
   useRuntimeEvents: vi.fn(),
@@ -95,7 +97,7 @@ describe('TeamLabRuntimeDetailPage', () => {
     })
   })
 
-  it('renders persisted stage, shard placement and topology without unsupported controls', () => {
+  it('shows the environment summary without identifiers or shard tables', () => {
     render(
       <MemoryRouter initialEntries={[`/admin/teamlab/topology-a/runtimes/${runtime.id}`]}>
         <Routes>
@@ -104,9 +106,9 @@ describe('TeamLabRuntimeDetailPage', () => {
       </MemoryRouter>
     )
 
-    expect(screen.getAllByText('runtime-ready')).toHaveLength(2)
-    expect(screen.getAllByText('worker-a').length).toBeGreaterThan(0)
-    expect(screen.getByText('10.10.0.10')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '企业域演练' })).toBeInTheDocument()
+    expect(screen.queryByText(runtime.id)).toBeNull()
+    expect(screen.queryByText('worker-a')).toBeNull()
     expect(screen.getByRole('button', { name: '暂停' })).toBeInTheDocument()
   })
 
@@ -118,22 +120,25 @@ describe('TeamLabRuntimeDetailPage', () => {
         </Routes>
       </MemoryRouter>
     )
-    expect(screen.queryByRole('heading', { name: '流量元数据' })).not.toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: '流量观测' }))
-    expect(screen.getByRole('heading', { name: '流量元数据' })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: '端到端路径' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: '通信记录' })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '网络与流量' }))
+    expect(screen.getByRole('heading', { name: '入口网段' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '通信流量' }))
+    expect(screen.getByRole('heading', { name: '通信记录' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: '端到端路径' })).not.toBeInTheDocument()
   })
 
-  it('disables direct lifecycle controls for rollout-managed runtimes', () => {
+  it('disables direct lifecycle controls for rollout-managed runtimes', async () => {
     vi.mocked(useTeamLabRuntime).mockReturnValue({ runtime: { ...runtime, managedRolloutId: 'rollout-a' },
       error: undefined, isLoading: false, isRefreshing: false, mutate: vi.fn() })
     render(<MemoryRouter initialEntries={[`/admin/teamlab/topology-a/runtimes/${runtime.id}?from=runtime-search`]}>
       <Routes><Route path="/admin/teamlab/:topologyId/runtimes/:runtimeId" element={<TeamLabRuntimeDetailPage />} /></Routes>
     </MemoryRouter>)
     expect(screen.getByRole('button', { name: '暂停' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: '重置' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: '销毁' })).toBeDisabled()
-    expect(screen.getByRole('link', { name: '运行实例检索' })).toHaveAttribute('href', '/admin/teamlab?view=runtimes')
+    fireEvent.click(screen.getByRole('button', { name: '更多环境操作' }))
+    expect(await screen.findByRole('menuitem', { name: '重置环境' })).toBeDisabled()
+    expect(screen.getByRole('menuitem', { name: '销毁环境' })).toBeDisabled()
+    expect(screen.getByRole('link', { name: '运行环境' })).toHaveAttribute('href', '/admin/teamlab?view=runtimes')
   })
 
   it('offers an explicit idempotent cleanup recovery action', () => {

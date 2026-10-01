@@ -15821,7 +15821,8 @@
         "additionalProperties": false,
         "properties": {
           "reason": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "vncConsole": {
             "type": "boolean"
@@ -16410,7 +16411,8 @@
             "type": "string"
           },
           "reason": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "confirmed": {
             "type": "boolean"
@@ -17662,6 +17664,10 @@
           "orderIndex": {
             "type": "integer",
             "format": "int32"
+          },
+          "dnsServerAssetKey": {
+            "type": "string",
+            "nullable": true
           }
         }
       },

@@ -43,7 +43,8 @@ describe('CapturePanel', () => {
     vi.spyOn(teamLabRuntimeApi, 'getCapture').mockResolvedValue(running)
     render(<SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}><CapturePanel networks={[{ key: 'entry', name: '入口网段', cidr: '10.10.0.0/24', gatewayIp: '10.10.0.1' }]} runtimeId={runtimeId} /></SWRConfig>)
 
-    expect(await screen.findByText('任务标识')).toBeTruthy()
+    expect(await screen.findByText('已捕获')).toBeTruthy()
+    expect(screen.queryByText(running.id)).toBeNull()
     expect(screen.getByRole('button', { name: '停止' })).toBeTruthy()
   })
 

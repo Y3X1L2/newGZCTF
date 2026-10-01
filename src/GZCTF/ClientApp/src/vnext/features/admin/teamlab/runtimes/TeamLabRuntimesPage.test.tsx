@@ -54,13 +54,14 @@ describe('TeamLabRuntimesPage', () => {
   beforeEach(() => {
     vi.mocked(useTeamLabScene).mockReturnValue({ scene })
     vi.spyOn(window, 'scrollTo').mockImplementation(() => undefined)
+    vi.spyOn(teamLabAdminApi, 'listReleases').mockResolvedValue([])
   })
 
   it('renders server-paged runtimes and opens the selected detail', async () => {
     vi.spyOn(teamLabAdminApi, 'listTrialRuntimes').mockResolvedValue({ items: [runtime], nextCursor: null })
     renderPage()
 
-    const row = await screen.findByRole('row', { name: /runtime-ready/ })
+    const row = await screen.findByRole('row', { name: /企业混合网络/ })
     expect(row).toHaveTextContent('已开放')
     const status = within(row).getByText('环境运行中').closest('span')
     expect(status).not.toHaveAttribute('data-pulse')

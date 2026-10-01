@@ -14,11 +14,13 @@ describe('RuntimeSearchPanel', () => {
   })
   it('submits combined filters and links to asset operations with a return path', () => {
     render(<MemoryRouter><RuntimeSearchPanel /></MemoryRouter>)
+    expect(screen.queryByLabelText('运行代次')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '高级筛选' }))
     fireEvent.change(screen.getByLabelText('节点名称'), { target: { value: 'worker-a' } })
     fireEvent.change(screen.getByLabelText('运行代次'), { target: { value: '2' } })
     fireEvent.click(screen.getByRole('button', { name: '查询实例' }))
     expect(submit).toHaveBeenCalledWith(expect.objectContaining({ node: 'worker-a', generation: '2' }))
-    expect(screen.getByRole('link', { name: '资产运维' }).getAttribute('href')).toContain('tab=operations&from=runtime-search')
+    expect(screen.getByRole('link', { name: '资产运维' }).getAttribute('href')).toContain('tab=assets&from=runtime-search')
   })
   it('does not expose stale results after a failed search', () => {
     const result = search.getMockImplementation()!()

@@ -7,7 +7,8 @@ public sealed record TeamLabRuntimeSearchQuery(string? Search = null, TeamLabRun
     string? Node = null, int? Generation = null, Guid? ReleaseId = null, Guid? CreatedById = null,
     bool ErrorsOnly = false, string? After = null, int Limit = 20);
 public sealed record TeamLabRuntimeSearchItem(Guid Id, Guid? TopologyId, Guid ReleaseId, string? Reference,
-    int Generation, string Status, Guid? CreatedById, DateTimeOffset CreatedAt, int AssetCount, bool HasError);
+    int Generation, string Status, Guid? CreatedById, DateTimeOffset CreatedAt, int AssetCount, bool HasError,
+    string? ScenarioName, int? ReleaseVersion, DateTimeOffset? UpdatedAt);
 public sealed record TeamLabRuntimeSearchPage(IReadOnlyList<TeamLabRuntimeSearchItem> Items, string? NextCursor);
 
 public sealed record TeamLabRuntimeTaskModel(Guid Id, int Generation, string Operation, string Status,

@@ -35,6 +35,8 @@
   background: var(--yn-color-surface-muted);
   color: var(--yn-color-text);
 }
+.cacheLink { border: 0; background: transparent; color: var(--yn-color-muted); padding: 0; font: inherit; font-size: var(--yn-font-sm); cursor: pointer; }
+.cacheLink[aria-pressed='true'] { color: var(--yn-color-text); text-decoration: underline; }
 
 .searchBox {
   display: flex;
