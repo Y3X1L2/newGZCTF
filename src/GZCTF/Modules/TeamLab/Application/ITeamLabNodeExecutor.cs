@@ -18,7 +18,8 @@ public sealed record TeamLabNodeNetworkIntent(
     string Cidr,
     string GatewayIp,
     string BridgeName,
-    bool IsEntry = false);
+    bool IsEntry = false,
+    string? DnsServerIp = null);
 
 public sealed record TeamLabNodeInterfaceIntent(
     string Key,

@@ -65,7 +65,7 @@ public sealed class TeamLabVmArtifactSafetyTests
         var network = new TeamLabNetworkIntentV2(
             "field", "10.96.1.0/24", "10.96.1.1",
             [new("vm-port", "linux-vm", "02:42:29:19:d6:14", "10.96.1.20")],
-            [], [], null, [], []);
+            [], [], null, [new("02:42:29:19:d6:14", "10.96.1.20", "linux-vm")], []);
         var asset = new TeamLabAssetExecutionSpecV2(
             "linux-vm", "vm", "domain", new string('a', 64), "domain", 79, 2, 2048,
             [new("field", "vm-port", "eth0", "10.96.1.20", "10.96.1.1", true)], []);

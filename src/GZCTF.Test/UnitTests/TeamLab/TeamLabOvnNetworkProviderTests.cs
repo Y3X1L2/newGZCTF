@@ -109,6 +109,35 @@ public sealed class TeamLabOvnNetworkProviderTests
         Assert.NotEqual(first, TeamLabOvnNaming.LogicalPortId(plan, "network-a", "port-b"));
     }
 
+    [Fact]
+    public void RevisionOperations_AddOnlyChangedPortWithoutRebuildingNetwork()
+    {
+        var current = Plan();
+        var desired = current with { Networks = [current.Networks[0] with
+        {
+            Ports = [.. current.Networks[0].Ports,
+                new("port-b", "docker-2", "02:00:00:00:00:03", "10.0.1.30")]
+        }] };
+        var portName = TeamLabOvnNaming.LogicalPortId(current, "network-a", "port-a");
+        var rows = new JsonArray[]
+        {
+            [new JsonObject { ["name"] = portName, ["_uuid"] = new JsonArray { "uuid", Guid.NewGuid().ToString() } }],
+            [new JsonObject { ["_uuid"] = new JsonArray { "uuid", Guid.NewGuid().ToString() },
+                ["external_ids"] = new JsonArray { "map", new JsonArray { new JsonArray { "gzctf-key", "network-a" } } } }],
+            [new JsonObject { ["_uuid"] = new JsonArray { "uuid", Guid.NewGuid().ToString() },
+                ["external_ids"] = new JsonArray { "map", new JsonArray { new JsonArray { "gzctf-key", "network-a:dns" } } } }]
+        };
+
+        var operations = Provider().BuildRevisionOperations(current, desired, rows);
+
+        Assert.Contains(operations, operation => operation["op"]?.GetValue<string>() == "insert" &&
+            operation["table"]?.GetValue<string>() == "Logical_Switch_Port");
+        Assert.DoesNotContain(operations, operation => operation["op"]?.GetValue<string>() == "delete");
+        Assert.DoesNotContain(operations, operation => operation["table"]?.GetValue<string>() == "Logical_Router");
+        Assert.DoesNotContain(operations, operation => operation["op"]?.GetValue<string>() == "insert" &&
+            operation["table"]?.GetValue<string>() == "Logical_Switch");
+    }
+
     static void AssertJsonUuids(JsonNode? node)
     {
         if (node is JsonArray array)
@@ -163,11 +192,9 @@ public sealed class TeamLabOvnNetworkProviderTests
             Assert.Equal("external_ids", condition?[0]?.GetValue<string>());
             Assert.Equal("includes", condition?[1]?.GetValue<string>());
             var entries = (condition?[2] as JsonArray)?[1] as JsonArray;
-            var digest = entries?.OfType<JsonArray>()
-                .FirstOrDefault(entry => string.Equals(entry[0]?.GetValue<string>(), "gzctf-network-digest",
-                    StringComparison.Ordinal));
-            Assert.NotNull(digest);
-            Assert.Equal(plan.NetworkDigest, digest![1]?.GetValue<string>());
+            Assert.Contains(entries!, entry => (entry as JsonArray)?[0]?.GetValue<string>() == "gzctf-runtime");
+            Assert.Contains(entries!, entry => (entry as JsonArray)?[0]?.GetValue<string>() == "gzctf-generation");
+            Assert.DoesNotContain(entries!, entry => (entry as JsonArray)?[0]?.GetValue<string>() == "gzctf-network-digest");
         }
         foreach (var update in operations.Where(operation => operation["op"]?.GetValue<string>() == "update"))
         {

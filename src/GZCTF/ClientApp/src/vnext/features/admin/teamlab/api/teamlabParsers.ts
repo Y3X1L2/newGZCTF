@@ -150,6 +150,7 @@ function parseNetwork(value: unknown, label: string): TeamLabTopologyNetwork {
     },
     isEntry: boolean(item.isEntry, `${label}.isEntry`),
     orderIndex: number(item.orderIndex ?? 0, `${label}.orderIndex`),
+    dnsServerAssetKey: nullableString(item.dnsServerAssetKey, `${label}.dnsServerAssetKey`),
   }
 }
 

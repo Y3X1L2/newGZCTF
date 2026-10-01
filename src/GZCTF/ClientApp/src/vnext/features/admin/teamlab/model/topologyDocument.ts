@@ -25,6 +25,7 @@ export interface TopologySwitchNode {
   runtimePrefixLength: number
   isEntry: boolean
   orderIndex: number
+  dnsServerAssetKey?: string | null
 }
 
 export interface TopologyRouterNode {

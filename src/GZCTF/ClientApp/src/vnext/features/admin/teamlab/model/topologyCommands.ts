@@ -332,6 +332,9 @@ function referencesNode(connection: TopologyConnection, deleted: ReadonlySet<str
 export function deleteTopologyItems(document: TopologyDocument, selection: TopologySelection) {
   const nodes = { ...document.nodes }
   for (const key of selection.nodeKeys) delete nodes[key]
+  for (const node of Object.values(nodes))
+    if (node.type === 'switch' && node.dnsServerAssetKey && selection.nodeKeys.has(node.dnsServerAssetKey))
+      nodes[node.key] = { ...node, dnsServerAssetKey: null }
 
   const connections = Object.fromEntries(
     Object.entries(document.connections).filter(
@@ -394,7 +397,10 @@ export function pasteTopologyFragment(
     nodes[key] = {
       ...source,
       key,
-      ...(source.type === 'switch' ? { networkKey: networkRemap.get(source.networkKey)! } : {}),
+      ...(source.type === 'switch' ? {
+        networkKey: networkRemap.get(source.networkKey)!,
+        dnsServerAssetKey: source.dnsServerAssetKey ? nodeRemap.get(source.dnsServerAssetKey) ?? null : null,
+      } : {}),
       position: { ...source.position, x: source.position.x + offset.x, y: source.position.y + offset.y },
     } as TopologyNode
   }

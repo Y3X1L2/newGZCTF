@@ -365,6 +365,7 @@ public sealed class TeamLabTopologyApplicationService(
             entity.RuntimePrefixLength = network.AddressPool.RuntimePrefixLength;
             entity.IsEntry = network.IsEntry;
             entity.OrderIndex = network.OrderIndex;
+            entity.DnsServerAssetKey = network.DnsServerAssetKey;
         }
 
         await context.SaveChangesAsync(cancellationToken);
@@ -712,7 +713,7 @@ public sealed class TeamLabTopologyApplicationService(
             topology.Networks.OrderBy(item => item.OrderIndex).ThenBy(item => item.Key, StringComparer.Ordinal)
                 .Select(item => new TeamLabTopologyNetworkModel(
                     item.Key, item.Name, new TeamLabAddressPoolModel(item.AddressPoolCidr, item.RuntimePrefixLength),
-                    item.IsEntry, item.OrderIndex)).ToArray(),
+                    item.IsEntry, item.OrderIndex, item.DnsServerAssetKey)).ToArray(),
             topology.Assets.OrderBy(item => item.OrderIndex).ThenBy(item => item.Key, StringComparer.Ordinal)
                 .Select(item => new TeamLabTopologyAssetModel(
                     item.Key,
@@ -879,7 +880,8 @@ public sealed class TeamLabTopologyApplicationService(
             AddressPoolCidr = item.AddressPool.PoolCidr,
             RuntimePrefixLength = item.AddressPool.RuntimePrefixLength,
             IsEntry = item.IsEntry,
-            OrderIndex = item.OrderIndex
+            OrderIndex = item.OrderIndex,
+            DnsServerAssetKey = item.DnsServerAssetKey
         }, StringComparer.Ordinal);
         topology.Networks.AddRange(networks.Values);
         AddDefinitionAssetsAndConnections(topology, definition, networks);

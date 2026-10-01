@@ -134,6 +134,7 @@ export function compileTopologyDocument(document: TopologyDocument): CreateTeamL
       addressPool: { poolCidr: node.poolCidr, runtimePrefixLength: node.runtimePrefixLength },
       isEntry: node.isEntry,
       orderIndex: node.orderIndex,
+      ...(node.dnsServerAssetKey ? { dnsServerAssetKey: node.dnsServerAssetKey } : {}),
     })),
     infrastructure: nodes
       .filter(

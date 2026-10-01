@@ -82,6 +82,35 @@ public sealed class TeamLabTopologyV2Tests
     }
 
     [Fact]
+    public void DnsAssetReference_SurvivesReleaseAndCannotPointToRemovedAsset()
+    {
+        var definition = CreateManagedDefinition();
+        definition = definition with
+        {
+            Networks = definition.Networks.Select(network => network.Key == "core"
+                ? network with { DnsServerAssetKey = "core-api" }
+                : network).ToArray()
+        };
+
+        var released = TeamLabReleaseCodec.DecodeExecution(2, TeamLabReleaseCodec.Encode(2, definition));
+        Assert.Equal("core-api", released.Networks.Single(network => network.Key == "core").DnsServerAssetKey);
+        Assert.True(new TeamLabTopologyValidator().Validate(definition, 2).Valid);
+
+        var removed = definition with { Assets = definition.Assets.Where(asset => asset.Key != "core-api").ToArray() };
+        Assert.Contains(new TeamLabTopologyValidator().Validate(removed, 2).Issues,
+            issue => issue.Code == "dns_asset_missing");
+
+        var disconnected = definition with
+        {
+            Networks = definition.Networks.Select(network => network.Key == "core"
+                ? network with { DnsServerAssetKey = "entry-web" }
+                : network).ToArray()
+        };
+        Assert.Contains(new TeamLabTopologyValidator().Validate(disconnected, 2).Issues,
+            issue => issue.Code == "dns_asset_missing");
+    }
+
+    [Fact]
     public void Validate_ReservesLastUsableAddressForWireGuardServer()
     {
         var source = CreateManagedDefinition();

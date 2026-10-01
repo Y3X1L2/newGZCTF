@@ -10,7 +10,8 @@ public sealed record TeamLabTopologyNetworkModel(
     string Name,
     TeamLabAddressPoolModel AddressPool,
     bool IsEntry,
-    int OrderIndex = 0);
+    int OrderIndex = 0,
+    string? DnsServerAssetKey = null);
 
 public sealed record TeamLabTopologyInterfaceModel(
     string Key,

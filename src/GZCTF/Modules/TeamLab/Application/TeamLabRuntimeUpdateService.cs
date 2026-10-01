@@ -214,6 +214,9 @@ public sealed class TeamLabRuntimeUpdateService(
         var currentPlans = runtime.ExecutionPlanSnapshots
             .Where(item => item.Generation == runtime.Generation)
             .ToDictionary(item => item.ShardId, item => ReadPlan(item.CurrentPlanJson ?? item.PlanJson));
+        var oldSnapshotJson = runtime.ExecutionPlanSnapshots
+            .Where(item => item.Generation == runtime.Generation)
+            .ToDictionary(item => item.ShardId, item => item.CurrentPlanJson);
         var oldPlans = trackedAssets
             .Where(item => item.Status != TeamLabRuntimeStatus.Destroyed)
             .ToDictionary(
@@ -227,10 +230,12 @@ public sealed class TeamLabRuntimeUpdateService(
         var replacedAddresses = new HashSet<int>();
         var created = new List<(TeamLabRuntimeAsset Asset, TeamLabExecutionPlanV2 Plan)>();
         var removed = new List<(TeamLabRuntimeAsset Asset, TeamLabExecutionPlanV2 Plan, string? ResourceId, string? NativeIdentity)>();
+        var removedOnNode = new List<(TeamLabRuntimeAsset Asset, TeamLabExecutionPlanV2 Plan, string? ResourceId, string? NativeIdentity)>();
+        var targetSnapshotSaved = false;
         TeamLabExecutionPlanV2? currentNetworkPlan = null;
         TeamLabExecutionPlanV2? desiredNetworkPlan = null;
         Guid networkOwnerNodeId = Guid.Empty;
-        var networkUpdated = false;
+        var networkUpdateAttempted = false;
         try
         {
             var templates = await LoadTemplatesAsync(targetDefinition, token);
@@ -334,6 +339,7 @@ public sealed class TeamLabRuntimeUpdateService(
             {
                 await remoteAccess.EndAssetSessionsAsync(
                     runtime.Id, item.Asset.Id, runtime.Generation, "runtime-update", token);
+                removedOnNode.Add(item);
                 var result = await assetControl.ExecuteAsync(
                     item.Asset.WorkerNodeId!.Value,
                     new(item.Plan, item.Asset.TopologyKey, "remove", item.ResourceId, item.NativeIdentity),
@@ -347,12 +353,18 @@ public sealed class TeamLabRuntimeUpdateService(
                 item.Asset.ExecutionUpdatedAt = DateTimeOffset.UtcNow;
             }
 
+            foreach (var snapshot in runtime.ExecutionPlanSnapshots.Where(item =>
+                         item.Generation == runtime.Generation && targetPlans.ContainsKey(item.ShardId)))
+                snapshot.CurrentPlanJson = JsonSerializer.Serialize(targetPlans[snapshot.ShardId]);
+            await context.SaveChangesAsync(token);
+            targetSnapshotSaved = true;
+
+            networkUpdateAttempted = true;
             var networkResult = await nodes.UpdateExecutionNetworkAsync(
                 networkOwnerNodeId, currentNetworkPlan, desiredNetworkPlan, token);
             if (!networkResult.Success)
                 throw new TeamLabRuntimeExecutionException(
                     networkResult.Message ?? networkResult.ErrorCode ?? "Network update failed.");
-            networkUpdated = true;
 
             foreach (var change in changes.Where(item => item.Action is "add" or "replace"))
             {
@@ -361,6 +373,7 @@ public sealed class TeamLabRuntimeUpdateService(
                 var plan = targetPlans[asset.ShardId!.Value];
                 var template = templates[asset.SourceTemplateId!.Value];
                 await artifacts.EnsureImageAsync(runtime.Id, asset.WorkerNodeId!.Value, template, token);
+                created.Add((asset, plan));
                 var result = await assetControl.ExecuteAsync(
                     asset.WorkerNodeId.Value,
                     new(plan, asset.TopologyKey, "create", null, null),
@@ -374,7 +387,6 @@ public sealed class TeamLabRuntimeUpdateService(
                 asset.ExecutionStage = TeamLabAssetExecutionStage.ServiceReady;
                 asset.LastError = null;
                 asset.ExecutionUpdatedAt = DateTimeOffset.UtcNow;
-                created.Add((asset, plan));
             }
 
             foreach (var assetId in replacedAddresses)
@@ -402,9 +414,6 @@ public sealed class TeamLabRuntimeUpdateService(
 
             SyncWorkloadObservationPoints(runtime, changes);
 
-            foreach (var snapshot in runtime.ExecutionPlanSnapshots.Where(item =>
-                         item.Generation == runtime.Generation && targetPlans.ContainsKey(item.ShardId)))
-                snapshot.CurrentPlanJson = JsonSerializer.Serialize(targetPlans[snapshot.ShardId]);
             if (updatePlan.TargetRelease is not null)
             {
                 runtime.TopologyReleaseId = updatePlan.TargetRelease.Id;
@@ -431,17 +440,22 @@ public sealed class TeamLabRuntimeUpdateService(
         {
             logger.LogWarning(exception, "TeamLab 运行环境 {RuntimeId} 热更新失败", runtime.PublicId);
             var rollbackErrors = new List<string>();
+            var unresolvedCreated = created.Select(item => item.Asset).ToHashSet();
             foreach (var item in created.AsEnumerable().Reverse())
                 try
                 {
-                    await assetControl.ExecuteAsync(item.Asset.WorkerNodeId!.Value,
+                    var result = await assetControl.ExecuteAsync(item.Asset.WorkerNodeId!.Value,
                         new(item.Plan, item.Asset.TopologyKey, "remove", item.Asset.RuntimeResourceId, item.Asset.NativeIdentity), token);
+                    if (!result.Success)
+                        rollbackErrors.Add(result.ErrorCode ?? $"{item.Asset.TopologyKey} rollback failed");
+                    else
+                        unresolvedCreated.Remove(item.Asset);
                 }
                 catch (Exception rollbackException)
                 {
                     rollbackErrors.Add(rollbackException.Message);
                 }
-            if (networkUpdated && currentNetworkPlan is not null && desiredNetworkPlan is not null)
+            if (rollbackErrors.Count == 0 && networkUpdateAttempted && currentNetworkPlan is not null && desiredNetworkPlan is not null)
                 try
                 {
                     var result = await nodes.UpdateExecutionNetworkAsync(
@@ -453,7 +467,7 @@ public sealed class TeamLabRuntimeUpdateService(
                     rollbackErrors.Add(rollbackException.Message);
                 }
             var restoredIdentities = new Dictionary<int, (string? ResourceId, string? NativeIdentity)>();
-            foreach (var item in removed)
+            foreach (var item in rollbackErrors.Count == 0 ? removedOnNode : [])
                 try
                 {
                     var result = await assetControl.ExecuteAsync(item.Asset.WorkerNodeId!.Value,
@@ -469,16 +483,34 @@ public sealed class TeamLabRuntimeUpdateService(
                     rollbackErrors.Add(rollbackException.Message);
                 }
 
-            foreach (var snapshot in propertySnapshots)
-                context.Entry(trackedAssets.Single(item => item.Id == snapshot.Key)).CurrentValues.SetValues(snapshot.Value);
-            foreach (var restored in restoredIdentities)
+            if (rollbackErrors.Count == 0)
             {
-                var asset = trackedAssets.Single(item => item.Id == restored.Key);
-                asset.RuntimeResourceId = restored.Value.ResourceId;
-                asset.NativeIdentity = restored.Value.NativeIdentity;
+                foreach (var snapshot in propertySnapshots)
+                    context.Entry(trackedAssets.Single(item => item.Id == snapshot.Key)).CurrentValues.SetValues(snapshot.Value);
+                foreach (var restored in restoredIdentities)
+                {
+                    var asset = trackedAssets.Single(item => item.Id == restored.Key);
+                    asset.RuntimeResourceId = restored.Value.ResourceId;
+                    asset.NativeIdentity = restored.Value.NativeIdentity;
+                }
+                if (targetSnapshotSaved)
+                    foreach (var snapshot in runtime.ExecutionPlanSnapshots.Where(item =>
+                                 item.Generation == runtime.Generation && oldSnapshotJson.ContainsKey(item.ShardId)))
+                        snapshot.CurrentPlanJson = oldSnapshotJson[snapshot.ShardId];
             }
-            foreach (var asset in newAssets)
+            foreach (var asset in newAssets.Where(asset => !unresolvedCreated.Contains(asset)))
                 context.TeamLabRuntimeAssets.Remove(asset);
+            foreach (var item in created.Where(item => !unresolvedCreated.Contains(item.Asset) &&
+                         !newAssets.Contains(item.Asset) && rollbackErrors.Count > 0))
+            {
+                item.Asset.Status = TeamLabRuntimeStatus.Destroyed;
+                item.Asset.RuntimeResourceId = null;
+                item.Asset.NativeIdentity = null;
+            }
+            if (!targetSnapshotSaved)
+                foreach (var snapshot in runtime.ExecutionPlanSnapshots.Where(item =>
+                             item.Generation == runtime.Generation && oldSnapshotJson.ContainsKey(item.ShardId)))
+                    snapshot.CurrentPlanJson = oldSnapshotJson[snapshot.ShardId];
             context.Entry(runtime).CurrentValues.SetValues(oldRuntimeValues);
             runtime.Status = rollbackErrors.Count == 0 ? TeamLabRuntimeStatus.Running : TeamLabRuntimeStatus.Failed;
             runtime.LastError = rollbackErrors.Count == 0
@@ -489,7 +521,7 @@ public sealed class TeamLabRuntimeUpdateService(
                 GZCTF.Modules.Audit.Domain.OperationalEventCodes.TeamLab.RuntimeUpdateFailed,
                 GZCTF.Modules.Audit.Domain.OperationalEventOutcome.Failed,
                 rollbackErrors.Count == 0
-                    ? "运行环境更新失败，本次变更已撤销。"
+                    ? "运行环境更新失败，资产与网络已恢复；已结束的会话、抓包及已撤销的服务开放不会恢复。"
                     : "运行环境更新失败，部分撤销操作未完成。",
                 OperationalErrorClassifier.FromException(exception, "teamlab.runtime.update"));
             await context.SaveChangesAsync(CancellationToken.None);
@@ -637,7 +669,7 @@ public sealed class TeamLabRuntimeUpdateService(
         topology.Name,
         topology.Networks.Select(item => new TeamLabTopologyNetworkModel(
             item.Key, item.Name, new TeamLabAddressPoolModel(item.AddressPoolCidr, item.RuntimePrefixLength),
-            item.IsEntry, item.DisplayOrder)).ToArray(),
+            item.IsEntry, item.DisplayOrder, item.DnsServerAssetKey)).ToArray(),
         topology.Assets.Select(item => new TeamLabTopologyAssetModel(
             item.Key, item.Name, item.Kind, item.ImageTemplateId,
             new TeamLabAssetResourceModel(item.CpuUnits, item.MemoryMiB, item.StorageMiB),

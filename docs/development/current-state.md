@@ -1,5 +1,11 @@
 # YINYU 当前开发状态
 
+## TeamLab 网络运行链部署（2026-09-27）
+
+- 分支 `codex/teamlab-windows-network`、提交 `279f259` 已推送；`10.24.0.27` 当前 release 为 `/opt/gzctf/releases/teamlab-net-279f259-20260927/publish`。本次仅上传主站 DLL、TeamLab 契约 DLL、前端静态文件和一个 Agent 程序；`.30/.31` 从 `.27` 内网取得同一 Agent。
+- `.27/.30/.31` Agent SHA-256 均为 `993f00ce4874b0e41131ca8cb596e9e3bb76997984008fca795fa9a45963f475`，服务均为 active；`.27` 主站 active，`/api/Config` 返回 200。迁移头为 `20260927121625_AddTeamLabNetworkDnsAsset`。用户要求不做整库备份，本次未备份数据库；旧 release 保留。现有运行环境未执行销毁操作。
+- TeamLab 定向测试 505/505、前端测试 348/348、前端生产构建通过。用户要求仅部署，本次未新建真实 OVN/VM 环境进行业务验收。
+
 文档整理日期：2026-09-21
 最近一次生产核验：2026-09-21（北京时间）
 

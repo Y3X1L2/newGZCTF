@@ -260,10 +260,14 @@ public sealed partial class TeamLabExecutionPlanExecutor(
         return await CleanupCoreAsync(plan, cancellationToken);
     }
 
-    public Task<TeamLabExecutionNetworkUpdateResponse> UpdateNetworkAsync(
+    public async Task<TeamLabExecutionNetworkUpdateResponse> UpdateNetworkAsync(
         TeamLabExecutionNetworkUpdateRequest request,
-        CancellationToken cancellationToken) =>
-        ovn.ReconcileAsync(request.CurrentPlan, request.DesiredPlan, cancellationToken);
+        CancellationToken cancellationToken)
+    {
+        using var executionLock = await executionLocks.AcquireAsync(
+            (request.CurrentPlan.RuntimeId, request.CurrentPlan.Generation, request.CurrentPlan.ShardKey), cancellationToken);
+        return await ovn.ReconcileAsync(request.CurrentPlan, request.DesiredPlan, cancellationToken);
+    }
 
     async Task<TeamLabExecutionPlanCleanupResponse> CleanupCoreAsync(
         TeamLabExecutionPlanV2 plan,
@@ -427,8 +431,9 @@ public sealed partial class TeamLabExecutionPlanExecutor(
                 ? new Dictionary<string, string> { ["GZCTF_DEVICE_PARAMETERS"] = device.ParametersJson }
                 : [],
             DnsServers = asset.NetworkAttachments
-                .Where(attachment => attachment.Primary && !string.IsNullOrWhiteSpace(attachment.GatewayIp))
-                .Select(attachment => attachment.GatewayIp!)
+                .Where(attachment => attachment.Primary &&
+                    !string.IsNullOrWhiteSpace(attachment.DnsServerIp ?? attachment.GatewayIp))
+                .Select(attachment => attachment.DnsServerIp ?? attachment.GatewayIp!)
                 .Distinct(StringComparer.Ordinal)
                 .ToList()
         };

@@ -57,7 +57,7 @@ public sealed class TeamLabRouteApplicationService(
         try
         {
             var tasks = shards.Select(shard => ApplyShardInfrastructureAsync(
-                runtime, shard, links[shard.Id], shards, nodes, networkModes,
+                runtime, definition, shard, links[shard.Id], shards, nodes, networkModes,
                 allowedPairs, routedPairs, cancellationToken));
             results = await Task.WhenAll(tasks);
         }
@@ -187,7 +187,7 @@ public sealed class TeamLabRouteApplicationService(
         {
             TeamLabNodeInfrastructureApplyRequest? request = null;
             var result = await ApplyShardInfrastructureAsync(
-                runtime, shard, links[shard.Id], shards, nodes, networkModes,
+                runtime, definition, shard, links[shard.Id], shards, nodes, networkModes,
                 allowedPairs, routedPairs, cancellationToken, execute: false,
                 requestBuilt: built => request = built);
             if (!result.Success || request is null)
@@ -242,7 +242,8 @@ public sealed class TeamLabRouteApplicationService(
                 network.Cidr,
                 network.GatewayIp,
                 network.BridgeName,
-                network.IsEntry),
+                network.IsEntry,
+                ResolveDnsServerIp(runtime, definition, network.TopologyKey)),
             TeamLabResourceNameFactory.DhcpDnsService(runtime.Id, network.TopologyKey),
             recordsByNetwork[network.TopologyKey],
             dnsRecordsByNetwork[network.TopologyKey])).ToArray();
@@ -274,6 +275,7 @@ public sealed class TeamLabRouteApplicationService(
 
     private async Task<TeamLabNodeInfrastructureResult> ApplyShardInfrastructureAsync(
         TeamLabRuntime runtime,
+        TeamLabExecutionTopology definition,
         TeamLabRuntimeShard shard,
         TeamLabFabricLinkLease link,
         IReadOnlyList<TeamLabRuntimeShard> shards,
@@ -333,7 +335,8 @@ public sealed class TeamLabRouteApplicationService(
                 network.Cidr,
                 network.GatewayIp,
                 network.BridgeName,
-                network.IsEntry),
+                network.IsEntry,
+                ResolveDnsServerIp(runtime, definition, network.TopologyKey)),
             TeamLabResourceNameFactory.DhcpDnsService(runtime.Id, network.TopologyKey),
             recordsByNetwork[network.TopologyKey],
             dnsRecordsByNetwork[network.TopologyKey])).ToArray();
@@ -439,6 +442,22 @@ public sealed class TeamLabRouteApplicationService(
 
     private static RuntimeInterfaceIntent[] ParseInterfaces(TeamLabRuntimeAsset asset) =>
         JsonSerializer.Deserialize<RuntimeInterfaceIntent[]>(asset.InterfaceSummaryJson) ?? [];
+
+    private static string? ResolveDnsServerIp(
+        TeamLabRuntime runtime,
+        TeamLabExecutionTopology definition,
+        string networkKey)
+    {
+        var assetKey = definition.Networks.FirstOrDefault(item => item.Key == networkKey)?.DnsServerAssetKey;
+        if (assetKey is null) return null;
+        var asset = runtime.Assets.Single(item => item.Generation == runtime.Generation &&
+            item.Status != TeamLabRuntimeStatus.Destroyed && item.TopologyKey == assetKey);
+        var iface = ParseInterfaces(asset)
+            .OrderByDescending(item => item.NetworkKey == networkKey)
+            .ThenByDescending(item => item.Primary)
+            .First();
+        return iface.IpAddress.Split('/', 2)[0];
+    }
 
     private static IReadOnlyDictionary<string, object?> InfrastructureDetail(
         TeamLabRuntime runtime,

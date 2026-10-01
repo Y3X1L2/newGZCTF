@@ -33,6 +33,7 @@ public sealed class TeamLabTopologyNetwork
     public int RuntimePrefixLength { get; set; }
     public bool IsEntry { get; set; }
     public int OrderIndex { get; set; }
+    public string? DnsServerAssetKey { get; set; }
     public TeamLabTopology Topology { get; set; } = null!;
     public List<TeamLabTopologyInterface> Interfaces { get; set; } = [];
 }

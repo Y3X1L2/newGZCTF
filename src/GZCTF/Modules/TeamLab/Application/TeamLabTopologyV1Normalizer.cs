@@ -36,7 +36,8 @@ public static class TeamLabTopologyV1Normalizer
 
     internal static TeamLabExecutionNetwork ToExecution(TeamLabTopologyNetworkModel network) =>
         new(network.Key, network.Name, network.AddressPool.PoolCidr,
-            network.AddressPool.RuntimePrefixLength, network.IsEntry, network.OrderIndex);
+            network.AddressPool.RuntimePrefixLength, network.IsEntry, network.OrderIndex,
+            network.DnsServerAssetKey);
 
     internal static TeamLabExecutionAsset ToExecution(TeamLabTopologyAssetModel asset) =>
         new(
