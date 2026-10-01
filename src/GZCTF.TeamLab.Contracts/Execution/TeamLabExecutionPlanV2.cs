@@ -394,7 +394,15 @@ public sealed record TeamLabAssetExecutionSpecV2(
     IReadOnlyList<TeamLabHealthCheckV2> HealthChecks,
     string? ImageReference = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] TeamLabDeviceExecutionV2? Device = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] TeamLabGuestOperatingSystem OperatingSystem = TeamLabGuestOperatingSystem.Linux);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] TeamLabGuestOperatingSystem OperatingSystem = TeamLabGuestOperatingSystem.Linux,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] TeamLabGuestNetworkMode NetworkMode = TeamLabGuestNetworkMode.Dhcp);
+
+public enum TeamLabGuestNetworkMode : byte
+{
+    Dhcp = 0,
+    Preconfigured = 1,
+    ManagedStatic = 2
+}
 
 public enum TeamLabGuestOperatingSystem : byte
 {
@@ -409,7 +417,16 @@ public sealed record TeamLabAssetNetworkAttachmentV2(
     string? IpAddress,
     string? GatewayIp = null,
     bool Primary = false,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? DnsServerIp = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? DnsServerIp = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? InterfaceKey = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? MacAddress = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? PrefixLength = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? GuestInterfaceName = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? UseDefaultGateway = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<string>? DnsServers = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<TeamLabGuestRouteV2>? StaticRoutes = null);
+
+public sealed record TeamLabGuestRouteV2(string DestinationCidr, string NextHop, int? Metric = null);
 
 public sealed record TeamLabHealthCheckV2(
     string Protocol,

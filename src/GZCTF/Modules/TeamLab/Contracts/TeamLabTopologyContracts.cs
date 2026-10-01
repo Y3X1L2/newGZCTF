@@ -1,4 +1,6 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
+using GZCTF.Models.Data;
 using GZCTF.Modules.TeamLab.Domain;
 
 namespace GZCTF.Modules.TeamLab.Contracts;
@@ -18,7 +20,13 @@ public sealed record TeamLabTopologyInterfaceModel(
     string NetworkKey,
     int HostOffset,
     bool Primary,
-    int OrderIndex = 0);
+    int OrderIndex = 0,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? GuestInterfaceName = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? UseDefaultGateway = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<string>? DnsServers = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<TeamLabGuestRouteModel>? StaticRoutes = null);
+
+public sealed record TeamLabGuestRouteModel(string DestinationCidr, string NextHop, int? Metric = null);
 
 public sealed record TeamLabAssetResourceModel(int CpuUnits, int MemoryMiB, int StorageMiB);
 
@@ -36,7 +44,8 @@ public sealed record TeamLabTopologyAssetModel(
     int OrderIndex = 0,
     int? DevicePackageId = null,
     JsonElement? DeviceParameters = null,
-    Guid? ConnectorId = null);
+    Guid? ConnectorId = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] VmNetworkMode? VmNetworkMode = null);
 
 public sealed record TeamLabTopologyConnectionModel(
     string Key,
