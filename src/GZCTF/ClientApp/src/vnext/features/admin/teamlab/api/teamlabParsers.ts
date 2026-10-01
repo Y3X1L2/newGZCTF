@@ -9,6 +9,7 @@ import type {
   TeamLabConnectionDirection,
   TeamLabEditorItem,
   TeamLabHealthCheckKind,
+  TeamLabVmNetworkMode,
   TeamLabInfrastructureKind,
   TeamLabObservationPolicy,
   TeamLabPlan,
@@ -38,6 +39,18 @@ const infrastructureKinds = {
 } as const
 const directions = { 0: 'from-to', 1: 'bidirectional', FromTo: 'from-to', Bidirectional: 'bidirectional' } as const
 const healthKinds = { 0: 'tcp', 1: 'http', Tcp: 'tcp', Http: 'http' } as const
+const vmNetworkModes = {
+  0: 'dhcp',
+  1: 'preconfigured',
+  2: 'managed-static',
+  Dhcp: 'dhcp',
+  Preconfigured: 'preconfigured',
+  ManagedStatic: 'managed-static',
+} as const
+
+export function parseTeamLabVmNetworkMode(value: unknown, label = 'VM network mode'): TeamLabVmNetworkMode {
+  return enumValue(value, vmNetworkModes, label)
+}
 const imageTypes = {
   0: 'docker',
   1: 'qcow2',
@@ -135,6 +148,35 @@ function parseInterface(value: unknown, label: string): TeamLabTopologyInterface
     hostOffset: number(item.hostOffset, `${label}.hostOffset`),
     primary: boolean(item.primary, `${label}.primary`),
     orderIndex: number(item.orderIndex ?? 0, `${label}.orderIndex`),
+    ...(item.guestInterfaceName !== undefined
+      ? { guestInterfaceName: nullableString(item.guestInterfaceName, `${label}.guestInterfaceName`) }
+      : {}),
+    ...(item.useDefaultGateway !== undefined
+      ? {
+          useDefaultGateway:
+            item.useDefaultGateway === null ? null : boolean(item.useDefaultGateway, `${label}.useDefaultGateway`),
+        }
+      : {}),
+    ...(item.dnsServers !== undefined
+      ? { dnsServers: item.dnsServers === null ? null : array(item.dnsServers, `${label}.dnsServers`, string) }
+      : {}),
+    ...(item.staticRoutes !== undefined
+      ? {
+          staticRoutes:
+            item.staticRoutes === null
+              ? null
+              : array(item.staticRoutes, `${label}.staticRoutes`, (value, routeLabel) => {
+                  const route = record(value, routeLabel)
+                  return {
+                    destinationCidr: string(route.destinationCidr, `${routeLabel}.destinationCidr`),
+                    nextHop: string(route.nextHop, `${routeLabel}.nextHop`),
+                    ...(route.metric !== undefined
+                      ? { metric: nullableNumber(route.metric, `${routeLabel}.metric`) }
+                      : {}),
+                  }
+                }),
+        }
+      : {}),
   }
 }
 
@@ -166,6 +208,14 @@ function parseAsset(value: unknown, label: string): TeamLabTopologyAsset {
     name: string(item.name, `${label}.name`),
     kind: enumValue(item.kind, assetKinds, `${label}.kind`),
     imageTemplateId: number(item.imageTemplateId, `${label}.imageTemplateId`),
+    ...(item.vmNetworkMode !== undefined
+      ? {
+          vmNetworkMode:
+            item.vmNetworkMode === null
+              ? null
+              : parseTeamLabVmNetworkMode(item.vmNetworkMode, `${label}.vmNetworkMode`),
+        }
+      : {}),
     resources: {
       cpuUnits: number(resources.cpuUnits, `${label}.resources.cpuUnits`),
       memoryMiB: number(resources.memoryMiB, `${label}.resources.memoryMiB`),
@@ -448,6 +498,14 @@ export function parseTeamLabPlan(value: unknown): TeamLabPlan {
         name: string(asset.name, `${label}.name`),
         kind: enumValue(asset.kind, assetKinds, `${label}.kind`),
         imageTemplateId: number(asset.imageTemplateId, `${label}.imageTemplateId`),
+        ...(asset.vmNetworkMode !== undefined
+          ? {
+              vmNetworkMode:
+                asset.vmNetworkMode === null
+                  ? null
+                  : parseTeamLabVmNetworkMode(asset.vmNetworkMode, `${label}.vmNetworkMode`),
+            }
+          : {}),
         resources: {
           cpuUnits: number(resources.cpuUnits, `${label}.resources.cpuUnits`),
           memoryMiB: number(resources.memoryMiB, `${label}.resources.memoryMiB`),
@@ -511,6 +569,7 @@ const assetKindWire: Record<TeamLabAssetKind, number> = { docker: 0, vm: 1 }
 const infrastructureKindWire: Record<TeamLabInfrastructureKind, number> = { 'managed-switch': 0, 'managed-router': 1 }
 const directionWire: Record<TeamLabConnectionDirection, number> = { 'from-to': 0, bidirectional: 1 }
 const healthWire: Record<TeamLabHealthCheckKind, number> = { tcp: 0, http: 1 }
+const vmNetworkModeWire: Record<TeamLabVmNetworkMode, number> = { dhcp: 0, preconfigured: 1, 'managed-static': 2 }
 
 export function serializeTeamLabWriteRequest(request: CreateTeamLabTopologyRequest | UpdateTeamLabTopologyRequest) {
   return {
@@ -519,6 +578,9 @@ export function serializeTeamLabWriteRequest(request: CreateTeamLabTopologyReque
     assets: request.assets.map((item) => ({
       ...item,
       kind: assetKindWire[item.kind],
+      ...(item.vmNetworkMode !== undefined
+        ? { vmNetworkMode: item.vmNetworkMode === null ? null : vmNetworkModeWire[item.vmNetworkMode] }
+        : {}),
       healthCheck: item.healthCheck ? { ...item.healthCheck, kind: healthWire[item.healthCheck.kind] } : null,
     })),
     connections: request.connections.map((item) => ({ ...item, direction: directionWire[item.direction] })),

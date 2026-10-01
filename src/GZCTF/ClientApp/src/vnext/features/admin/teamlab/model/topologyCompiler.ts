@@ -18,6 +18,7 @@ import {
   nodeSize,
   regionSizeForMembers,
 } from './topologyGeometry'
+import { copyNetworkRequirements } from './topologyNetworkRequirements'
 
 export class TopologyCompileError extends Error {
   constructor(message: string) {
@@ -83,6 +84,7 @@ function interfacesFor(document: TopologyDocument, nodeKey: string): TeamLabTopo
       hostOffset: connection.hostOffset,
       primary: connection.primary,
       orderIndex: connection.orderIndex,
+      ...copyNetworkRequirements(connection),
     }))
     .sort(byKey)
 }
@@ -99,9 +101,7 @@ function compileEditor(document: TopologyDocument): TeamLabTopologyEditor {
         .filter((key) => document.nodes[key]?.type !== 'switch')
         .map((key) => nodeSize(document.nodes[key]).height)
       const derived = regionSizeForMembers(memberHeights)
-      networks[node.networkKey] = regionEditorItem(
-        layout ?? { ...node.position, ...derived, collapsed: false }
-      )
+      networks[node.networkKey] = regionEditorItem(layout ?? { ...node.position, ...derived, collapsed: false })
       if (!node.implicit || node.name !== node.networkName) infrastructure[node.key] = nodeEditorItem(node.position)
     } else if (node.type === 'router') {
       infrastructure[node.key] = nodeEditorItem(node.position)
@@ -139,8 +139,7 @@ export function compileTopologyDocument(document: TopologyDocument): CreateTeamL
     infrastructure: nodes
       .filter(
         (node) =>
-          node.type === 'router' ||
-          (node.type === 'switch' && (!node.implicit || node.name !== node.networkName))
+          node.type === 'router' || (node.type === 'switch' && (!node.implicit || node.name !== node.networkName))
       )
       .map((node) =>
         node.type === 'switch'
@@ -164,6 +163,7 @@ export function compileTopologyDocument(document: TopologyDocument): CreateTeamL
       name: node.name,
       kind: node.type === 'docker' ? 'docker' : 'vm',
       imageTemplateId: node.imageTemplateId,
+      ...(node.vmNetworkMode !== undefined ? { vmNetworkMode: node.vmNetworkMode } : {}),
       resources: { ...node.resources },
       interfaces: interfacesFor(document, node.key),
       exposePort: node.exposePort,
@@ -177,7 +177,8 @@ export function compileTopologyDocument(document: TopologyDocument): CreateTeamL
       .filter((connection) => connection.type === 'route')
       .map((connection) => {
         const via = requireNode(document, connection.viaNodeKey)
-        if (via.type !== 'router') throw new TopologyCompileError(`Route '${connection.key}' must use a managed router.`)
+        if (via.type !== 'router')
+          throw new TopologyCompileError(`Route '${connection.key}' must use a managed router.`)
         return {
           key: connection.key,
           fromNetworkKey: switchNetworkKey(document, connection.fromSwitchKey),

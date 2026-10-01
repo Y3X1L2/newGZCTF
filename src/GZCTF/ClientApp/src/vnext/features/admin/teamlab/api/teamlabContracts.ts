@@ -3,6 +3,21 @@ export type TeamLabInfrastructureKind = 'managed-switch' | 'managed-router'
 export type TeamLabConnectionDirection = 'from-to' | 'bidirectional'
 export type TeamLabHealthCheckKind = 'tcp' | 'http'
 export type TeamLabImageType = 'docker' | 'qcow2' | 'ova' | 'vmdk'
+export type TeamLabVmNetworkMode = 'dhcp' | 'preconfigured' | 'managed-static'
+
+export interface TeamLabGuestRoute {
+  destinationCidr: string
+  nextHop: string
+  metric?: number | null
+}
+
+export interface TeamLabGuestNetworkRequirements {
+  guestInterfaceName?: string | null
+  useDefaultGateway?: boolean | null
+  /** null inherits network DNS; [] explicitly disables DNS. */
+  dnsServers?: readonly string[] | null
+  staticRoutes?: readonly TeamLabGuestRoute[] | null
+}
 export type TeamLabRuntimeStatus =
   | 'pending'
   | 'planning'
@@ -31,7 +46,7 @@ export interface TeamLabTopologyNetwork {
   dnsServerAssetKey?: string | null
 }
 
-export interface TeamLabTopologyInterface {
+export interface TeamLabTopologyInterface extends TeamLabGuestNetworkRequirements {
   key: string
   networkKey: string
   hostOffset: number
@@ -55,6 +70,7 @@ export interface TeamLabTopologyAsset {
   name: string
   kind: TeamLabAssetKind
   imageTemplateId: number
+  vmNetworkMode?: TeamLabVmNetworkMode | null
   resources: TeamLabAssetResources
   interfaces: readonly TeamLabTopologyInterface[]
   exposePort: number | null
@@ -220,6 +236,7 @@ export interface TeamLabPlan {
     name: string
     kind: TeamLabAssetKind
     imageTemplateId: number
+    vmNetworkMode?: TeamLabVmNetworkMode | null
     resources: TeamLabAssetResources
     interfaces: readonly Omit<TeamLabTopologyInterface, 'orderIndex'>[]
   }[]

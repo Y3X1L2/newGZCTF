@@ -1,12 +1,16 @@
 import { Cable } from 'lucide-react'
+import type { TeamLabImageOption } from '../../api/teamlabImageCatalog'
 import { updateTopologyConnection } from '../../model/topologyCommands'
 import type { TopologyMembershipConnection } from '../../model/topologyDocument'
+import { GuestInterfaceRequirementsEditor } from './GuestInterfaceRequirementsEditor'
 import { InspectorSection, NumberInput, SelectInput, TextInput, ToggleInput } from './InspectorFields'
-import type { InspectorDocumentProps } from './inspectorTypes'
 import styles from './TeamLabInspector.module.css'
+import type { InspectorDocumentProps } from './inspectorTypes'
 
-type NetworkInterfacesEditorProps = InspectorDocumentProps &
-  ({ nodeKey: string; connection?: never } | { connection: TopologyMembershipConnection; nodeKey?: never })
+type NetworkInterfacesEditorProps = InspectorDocumentProps & { imageOptions?: readonly TeamLabImageOption[] } & (
+    | { nodeKey: string; connection?: never }
+    | { connection: TopologyMembershipConnection; nodeKey?: never }
+  )
 
 export function NetworkInterfacesEditor(props: NetworkInterfacesEditorProps) {
   const { document, onDocumentChange, readOnly } = props
@@ -40,41 +44,82 @@ export function NetworkInterfacesEditor(props: NetworkInterfacesEditorProps) {
     <InspectorSection icon={<Cable aria-hidden="true" size={16} />} title="网络接口">
       {memberships.length === 0 ? <p className={styles.muted}>尚未连接到交换机。请在画布中创建连接。</p> : null}
       <div className={styles.interfaceList}>
-        {memberships.map((connection, index) => (
-          <div className={styles.interfaceCard} key={connection.key}>
-            <header><strong>网卡 {index + 1}</strong><code>{connection.interfaceKey ?? connection.key}</code></header>
-            {props.connection ? (
+        {memberships.map((connection, index) => {
+          const owner = document.nodes[connection.nodeKey]
+          const asset = owner && owner.type !== 'switch' && owner.type !== 'router' ? owner : null
+          const mode =
+            asset?.vmNetworkMode ??
+            props.imageOptions?.find((image) => image.id === asset?.imageTemplateId)?.vmNetworkMode
+          return (
+            <div className={styles.interfaceCard} key={connection.key}>
+              <header>
+                <strong>网卡 {index + 1}</strong>
+                <code>{connection.interfaceKey ?? connection.key}</code>
+              </header>
+              {props.connection ? (
+                <SelectInput
+                  disabled={readOnly}
+                  label="连接节点"
+                  onChange={(nodeKey) => update(connection, { nodeKey })}
+                  value={connection.nodeKey}
+                >
+                  {attachableNodes.map((node) => (
+                    <option key={node.key} value={node.key}>
+                      {node.name}
+                    </option>
+                  ))}
+                </SelectInput>
+              ) : null}
               <SelectInput
                 disabled={readOnly}
-                label="连接节点"
-                onChange={(nodeKey) => update(connection, { nodeKey })}
-                value={connection.nodeKey}
+                label="所属交换机"
+                onChange={(switchKey) => update(connection, { switchKey })}
+                value={connection.switchKey}
               >
-                {attachableNodes.map((node) => <option key={node.key} value={node.key}>{node.name}</option>)}
+                {switches.map((node) => (
+                  <option key={node.key} value={node.key}>
+                    {node.name} · {node.networkName}
+                  </option>
+                ))}
               </SelectInput>
-            ) : null}
-            <SelectInput
-              disabled={readOnly}
-              label="所属交换机"
-              onChange={(switchKey) => update(connection, { switchKey })}
-              value={connection.switchKey}
-            >
-              {switches.map((node) => <option key={node.key} value={node.key}>{node.name} · {node.networkName}</option>)}
-            </SelectInput>
-            <div className={styles.twoColumns}>
-              <NumberInput disabled={readOnly} help="hostOffset" label="主机偏移" min={1} onChange={(hostOffset) => update(connection, { hostOffset })} value={connection.hostOffset} />
-              <NumberInput disabled={readOnly} help="interfaceOrder" label="排序" min={0} onChange={(orderIndex) => update(connection, { orderIndex })} value={connection.orderIndex} />
+              <div className={styles.twoColumns}>
+                <NumberInput
+                  disabled={readOnly}
+                  help="hostOffset"
+                  label="主机偏移"
+                  min={1}
+                  onChange={(hostOffset) => update(connection, { hostOffset })}
+                  value={connection.hostOffset}
+                />
+                <NumberInput
+                  disabled={readOnly}
+                  help="interfaceOrder"
+                  label="排序"
+                  min={0}
+                  onChange={(orderIndex) => update(connection, { orderIndex })}
+                  value={connection.orderIndex}
+                />
+              </div>
+              <ToggleInput
+                checked={connection.primary}
+                disabled={readOnly}
+                description="未单独设置网关时，由主网卡承载默认网关"
+                label="主网卡"
+                onChange={(primary) => update(connection, { primary })}
+              />
+              <TextInput disabled label="接口标识" value={connection.interfaceKey ?? connection.key} />
+              {asset ? (
+                <GuestInterfaceRequirementsEditor
+                  connection={connection}
+                  onChange={(patch) => update(connection, patch)}
+                  preconfigured={asset.type !== 'docker' && mode === 'preconfigured'}
+                  managedStatic={asset.type !== 'docker' && mode === 'managed-static'}
+                  readOnly={readOnly}
+                />
+              ) : null}
             </div>
-            <ToggleInput
-              checked={connection.primary}
-              disabled={readOnly}
-              description="主网卡承载默认网关"
-              label="主网卡"
-              onChange={(primary) => update(connection, { primary })}
-            />
-            <TextInput disabled label="接口标识" value={connection.interfaceKey ?? connection.key} />
-          </div>
-        ))}
+          )
+        })}
       </div>
     </InspectorSection>
   )

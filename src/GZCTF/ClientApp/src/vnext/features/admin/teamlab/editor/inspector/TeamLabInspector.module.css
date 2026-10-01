@@ -269,6 +269,33 @@
   background: var(--yn-color-surface-muted);
 }
 
+.networkDetails > summary {
+  color: var(--yn-color-text-secondary);
+  cursor: pointer;
+  font-size: var(--yn-font-sm);
+}
+
+.networkDetails > summary:focus-visible {
+  box-shadow: var(--yn-shadow-focus);
+}
+
+.networkDetails > div {
+  margin-top: var(--yn-space-3);
+}
+
+.routeCard {
+  display: grid;
+  min-width: 0;
+  gap: var(--yn-space-2);
+  padding: var(--yn-space-2);
+  border: 1px solid var(--yn-color-border);
+  border-radius: var(--yn-radius-sm);
+}
+
+.smallHeading {
+  font-size: var(--yn-font-xs);
+}
+
 .interfaceCard > header,
 .inlineHeading {
   display: flex;
