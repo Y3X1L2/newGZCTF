@@ -1,5 +1,11 @@
 # YINYU 当前开发状态
 
+## TeamLab 管理后台改造（2026-10-01，本地）
+
+- `codex/teamlab-admin-redesign` 已完成组网导航、发布版本分栏、四视图运行详情、资产工作区、文件树、流量图及活动记录重组；代码提交为 `698335c`、`128fb04`、`20764a3`，未部署。实现与验证记录见 [管理后台改造](teamlab-admin-redesign.md)。
+- 前端完整构建及 349 项测试通过；后端新增日志、资产定义转换和端口续期定向测试 12/12，OpenAPI 契约测试 2/2，EF 模型与前向迁移一致。多宽度、主题及键盘验证使用测试数据，不代表真实资产执行验收。
+- `.27` 对象日志 500 已定位为资源筛选缺少索引导致 PostgreSQL 查询超时；新增资源日志索引迁移仅在本地，相关 SQL 在临时分区表验证，未修改生产日志表。生产主站及本机 Agent 为 active，`/api/Config` 返回 200，仍运行 `teamlab-net-279f259-20260927`。
+
 ## TeamLab 网络运行链部署（2026-09-27）
 
 - 分支 `codex/teamlab-windows-network`、提交 `279f259` 已推送；`10.24.0.27` 当前 release 为 `/opt/gzctf/releases/teamlab-net-279f259-20260927/publish`。本次仅上传主站 DLL、TeamLab 契约 DLL、前端静态文件和一个 Agent 程序；`.30/.31` 从 `.27` 内网取得同一 Agent。
