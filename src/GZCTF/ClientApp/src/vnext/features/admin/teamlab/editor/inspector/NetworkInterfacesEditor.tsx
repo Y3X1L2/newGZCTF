@@ -46,10 +46,9 @@ export function NetworkInterfacesEditor(props: NetworkInterfacesEditorProps) {
       <div className={styles.interfaceList}>
         {memberships.map((connection, index) => {
           const owner = document.nodes[connection.nodeKey]
-          const asset = owner && owner.type !== 'switch' && owner.type !== 'router' ? owner : null
+          const vm = owner?.type === 'linux-vm' || owner?.type === 'windows-vm' ? owner : null
           const mode =
-            asset?.vmNetworkMode ??
-            props.imageOptions?.find((image) => image.id === asset?.imageTemplateId)?.vmNetworkMode
+            vm?.vmNetworkMode ?? props.imageOptions?.find((image) => image.id === vm?.imageTemplateId)?.vmNetworkMode
           return (
             <div className={styles.interfaceCard} key={connection.key}>
               <header>
@@ -103,17 +102,17 @@ export function NetworkInterfacesEditor(props: NetworkInterfacesEditorProps) {
               <ToggleInput
                 checked={connection.primary}
                 disabled={readOnly}
-                description="未单独设置网关时，由主网卡承载默认网关"
+                description={vm ? '未单独设置网关时，由主网卡承载默认网关' : '主网卡承载默认网关'}
                 label="主网卡"
                 onChange={(primary) => update(connection, { primary })}
               />
               <TextInput disabled label="接口标识" value={connection.interfaceKey ?? connection.key} />
-              {asset ? (
+              {vm ? (
                 <GuestInterfaceRequirementsEditor
                   connection={connection}
                   onChange={(patch) => update(connection, patch)}
-                  preconfigured={asset.type !== 'docker' && mode === 'preconfigured'}
-                  managedStatic={asset.type !== 'docker' && mode === 'managed-static'}
+                  preconfigured={mode === 'preconfigured'}
+                  managedStatic={mode === 'managed-static'}
                   readOnly={readOnly}
                 />
               ) : null}

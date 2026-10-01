@@ -95,6 +95,50 @@ const selection = (nodeKeys: string[] = [], connectionKeys: string[] = []): Topo
 })
 
 describe('TeamLabInspector', () => {
+  it.each(['asset', 'connection'])('keeps ordinary Docker %s editing free of VM network requirements', (target) => {
+    const change = vi.fn()
+    render(
+      <TeamLabInspector
+        document={createDocument()}
+        onDocumentChange={change}
+        selection={target === 'asset' ? selection(['app']) : selection([], ['app-edge'])}
+      />
+    )
+    expect(screen.queryByText('接口网络要求')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('网络配置方式')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('DNS 配置')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('所属交换机')).toBeEnabled()
+    expect(screen.getByRole('checkbox', { name: /主网卡/ })).toBeEnabled()
+    const offset = screen.getByLabelText('主机偏移', { selector: 'input' })
+    fireEvent.change(offset, { target: { value: '15' } })
+    fireEvent.blur(offset)
+    const iface = (change.mock.calls[0][0] as TopologyDocument).connections['app-edge']
+    expect(iface).toMatchObject({ hostOffset: 15, primary: true })
+    for (const field of ['guestInterfaceName', 'useDefaultGateway', 'dnsServers', 'staticRoutes']) {
+      expect(iface).not.toHaveProperty(field)
+    }
+  })
+
+  it('still exposes and saves per-interface VM network requirements', () => {
+    const source = createDocument()
+    const asset = source.nodes.app
+    if (asset.type !== 'docker') throw new Error('invalid fixture')
+    const vmDocument: TopologyDocument = {
+      ...source,
+      nodes: { ...source.nodes, app: { ...asset, type: 'linux-vm', vmNetworkMode: 'managed-static' } },
+    }
+    const change = vi.fn()
+    render(<TeamLabInspector document={vmDocument} onDocumentChange={change} selection={selection(['app'])} />)
+    expect(screen.getByText('接口网络要求')).toBeInTheDocument()
+    expect(screen.getByLabelText('网络配置方式')).toHaveValue('managed-static')
+    fireEvent.change(screen.getByLabelText('DNS 配置'), { target: { value: 'none' } })
+    expect((change.mock.calls[0][0] as TopologyDocument).connections['app-edge']).toMatchObject({ dnsServers: [] })
+    fireEvent.change(screen.getByLabelText('默认网关'), { target: { value: 'none' } })
+    expect((change.mock.calls[1][0] as TopologyDocument).connections['app-edge']).toMatchObject({
+      useDefaultGateway: false,
+    })
+  })
+
   it('edits a switch with the immutable command and preserves advanced fields', () => {
     const source = createDocument()
     const onDocumentChange = vi.fn()
