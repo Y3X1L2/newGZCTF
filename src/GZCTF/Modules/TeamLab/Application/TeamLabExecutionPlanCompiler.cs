@@ -50,6 +50,10 @@ public static class TeamLabExecutionPlanCompiler
                 item.MacAddress, asset.AssetKey, item)))
             .GroupBy(item => item.Interface.NetworkKey, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
+        var dhcpMacs = allAssets.Where(asset => asset.Kind != TeamLabAssetKind.Vm ||
+                (asset.VmNetworkMode ?? VmNetworkMode.Dhcp) == VmNetworkMode.Dhcp)
+            .SelectMany(asset => asset.Interfaces.Select(item => item.MacAddress))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var policiesByCidr = infrastructure.ForwardPolicies
             .SelectMany(policy => new[] { policy.SourceCidr, policy.DestinationCidr }
                 .Distinct(StringComparer.Ordinal)
@@ -100,10 +104,15 @@ public static class TeamLabExecutionPlanCompiler
                             policy.SourceCidr, policy.DestinationCidr, "any", null, policy.Allow))
                         .ToArray(),
                     switchIntent.DhcpDnsServiceName,
-                    switchIntent.Records.Select(record => new TeamLabDhcpLeaseV2(
+                    switchIntent.Records.Where(record => dhcpMacs.Contains(record.MacAddress) ||
+                        !interfaceOwners.ContainsKey(record.MacAddress)).Select(record => new TeamLabDhcpLeaseV2(
                         record.MacAddress,
                         AddressWithoutPrefix(record.IpAddress),
-                        record.Hostname)).ToArray(),
+                        record.Hostname,
+                        interfaceOwners.TryGetValue(record.MacAddress, out var gatewayOwner)
+                            ? gatewayOwner.Interface.UseDefaultGateway ?? gatewayOwner.Interface.Primary : null,
+                        interfaceOwners.TryGetValue(record.MacAddress, out var dnsOwner) ? dnsOwner.Interface.DnsServers : null,
+                        interfaceOwners.TryGetValue(record.MacAddress, out var routeOwner) ? routeOwner.Interface.StaticRoutes : null)).ToArray(),
                     (switchIntent.DnsRecords ?? switchIntent.Records)
                         .Select(record => new TeamLabDnsRecordV2(record.Hostname, AddressWithoutPrefix(record.IpAddress)))
                         .DistinctBy(record => (record.Hostname, record.IpAddress))
@@ -156,7 +165,8 @@ public static class TeamLabExecutionPlanCompiler
                 asset.Device,
                 asset.OperatingSystem == OSType.Windows
                     ? TeamLabGuestOperatingSystem.Windows
-                    : TeamLabGuestOperatingSystem.Linux);
+                    : TeamLabGuestOperatingSystem.Linux,
+                (TeamLabGuestNetworkMode)(asset.VmNetworkMode ?? VmNetworkMode.Dhcp));
         }).ToArray();
 
         var assetKinds = assets.ToDictionary(item => item.AssetKey, item => item.Kind, StringComparer.Ordinal);
@@ -220,9 +230,11 @@ public static class TeamLabExecutionPlanCompiler
                  PortKey(asset.AssetKey, item.Key),
                  $"eth{index}",
                  AddressWithoutPrefix(item.IpAddress),
-                 gateways.GetValueOrDefault(item.NetworkKey),
+                 (item.UseDefaultGateway ?? item.Primary) ? gateways.GetValueOrDefault(item.NetworkKey) : null,
                  item.Primary,
-                 item.DnsServers.FirstOrDefault()))
+                 item.DnsServers.FirstOrDefault(),
+                 item.Key, item.MacAddress, item.PrefixLength, item.GuestInterfaceName,
+                 item.UseDefaultGateway, item.DnsServers, item.StaticRoutes))
             .ToArray();
 
     static string PortKey(string assetKey, string interfaceKey) => $"{assetKey}:{interfaceKey}";

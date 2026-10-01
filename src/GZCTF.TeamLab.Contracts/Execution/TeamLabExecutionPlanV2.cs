@@ -219,6 +219,41 @@ public sealed record TeamLabExecutionPlanV2(
             return false;
         }
 
+        if (Assets.Any(asset => !TeamLabGuestNetworkValidation.IsValid(asset)) ||
+            Assets.SelectMany(asset => asset.NetworkAttachments).Any(attachment => attachment.MacAddress is not null &&
+                !Networks.Single(network => network.Key == attachment.NetworkKey).Ports.Any(port =>
+                    port.Key == attachment.PortKey && string.Equals(port.MacAddress, attachment.MacAddress, StringComparison.OrdinalIgnoreCase))))
+        {
+            error = "Guest network configuration or current interface identity is invalid.";
+            return false;
+        }
+
+        foreach (var network in Networks)
+        foreach (var lease in network.DhcpLeases ?? [])
+        {
+            if (lease.DnsServers is { } dns && (dns.Count > TeamLabGuestNetworkValidation.MaxDnsServers ||
+                dns.Any(value => !TeamLabGuestNetworkValidation.IsDnsServer(value)) || dns.Distinct().Count() != dns.Count) ||
+                lease.StaticRoutes is { } routes && (routes.Count > TeamLabGuestNetworkValidation.MaxStaticRoutes ||
+                routes.Any(route => !TeamLabGuestNetworkValidation.IsRoute(route) || route.Metric is not null ||
+                    !TeamLabGuestNetworkValidation.IsNextHopOnInterface(route.NextHop, lease.IpAddress, int.Parse(network.Cidr.Split('/')[1]))) ||
+                routes.GroupBy(route => route.DestinationCidr).Any(group => group.Count() > 1)))
+            {
+                error = "DHCP interface options are invalid.";
+                return false;
+            }
+            var attachment = Assets.SelectMany(asset => asset.NetworkAttachments.Select(item => (Asset: asset, Attachment: item)))
+                .FirstOrDefault(item => item.Attachment.NetworkKey == network.Key &&
+                    string.Equals(item.Attachment.MacAddress, lease.MacAddress, StringComparison.OrdinalIgnoreCase));
+            if (attachment.Asset is not null && (attachment.Asset.NetworkMode != TeamLabGuestNetworkMode.Dhcp ||
+                lease.UseDefaultGateway is { } useGateway && useGateway != (attachment.Attachment.UseDefaultGateway ?? attachment.Attachment.Primary) ||
+                lease.DnsServers is { } leaseDns && attachment.Attachment.DnsServers is { } attachmentDns && !leaseDns.SequenceEqual(attachmentDns) ||
+                lease.StaticRoutes is { } leaseRoutes && attachment.Attachment.StaticRoutes is { } attachmentRoutes && !leaseRoutes.SequenceEqual(attachmentRoutes)))
+            {
+                error = "DHCP options do not match the declared guest interface.";
+                return false;
+            }
+        }
+
         var expectedDigest = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(
             this with { PlanDigest = string.Empty }))).ToLowerInvariant();
         if (!string.Equals(NormalizeDigest(PlanDigest), expectedDigest, StringComparison.Ordinal))
@@ -352,7 +387,10 @@ public sealed record TeamLabPlayerGatewayV2(
 public sealed record TeamLabDhcpLeaseV2(
     string MacAddress,
     string IpAddress,
-    string Hostname);
+    string Hostname,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? UseDefaultGateway = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<string>? DnsServers = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<TeamLabGuestRouteV2>? StaticRoutes = null);
 
 public sealed record TeamLabDnsRecordV2(string Hostname, string IpAddress);
 

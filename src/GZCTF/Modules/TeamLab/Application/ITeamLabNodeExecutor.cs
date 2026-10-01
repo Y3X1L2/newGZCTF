@@ -30,7 +30,10 @@ public sealed record TeamLabNodeInterfaceIntent(
     string MacAddress,
     bool Primary,
     IReadOnlyList<string> Routes,
-    IReadOnlyList<string> DnsServers);
+    IReadOnlyList<string> DnsServers,
+    string? GuestInterfaceName = null,
+    bool? UseDefaultGateway = null,
+    IReadOnlyList<TeamLabGuestRouteV2>? StaticRoutes = null);
 
 public sealed record TeamLabNodeDnsRecord(
     string Hostname,
