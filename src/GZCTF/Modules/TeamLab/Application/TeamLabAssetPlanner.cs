@@ -44,7 +44,8 @@ public static class TeamLabAssetPlanner
                 item.ImageTemplateId,
                 new TeamLabAssetResourceModel(item.CpuUnits, item.MemoryMiB, item.StorageMiB),
                 item.Interfaces.Select(iface => new TeamLabPlanInterfaceModel(
-                    iface.Key, iface.NetworkKey, iface.HostOffset, iface.Primary)).ToArray()))
+                    iface.Key, iface.NetworkKey, iface.HostOffset, iface.Primary, iface.GuestInterfaceName,
+                    iface.UseDefaultGateway, iface.DnsServers, iface.StaticRoutes)).ToArray(), item.VmNetworkMode))
             .ToArray();
 
         var rawGroups = BuildGroups(definition);

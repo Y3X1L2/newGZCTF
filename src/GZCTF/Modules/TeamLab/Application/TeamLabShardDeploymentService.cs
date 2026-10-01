@@ -594,18 +594,21 @@ public sealed class TeamLabShardDeploymentService(
     {
         var shard = runtime.Shards.Single(item => item.Id == asset.ShardId);
         var parsedInterfaces = ParseInterfaces(asset).ToArray();
-        var primaryInterface = parsedInterfaces.SingleOrDefault(iface => iface.Primary) ?? parsedInterfaces.FirstOrDefault();
         var interfaces = parsedInterfaces.Select(iface =>
         {
             var network = runtime.Networks.Single(item => item.Generation == runtime.Generation && item.TopologyKey == iface.NetworkKey);
-            IReadOnlyList<string> interfaceDnsServers = iface.Key == primaryInterface?.Key
-                ? [dnsServers[iface.NetworkKey]]
-                : [];
+            var requirements = topologyAsset.Interfaces.Single(item => item.Key == iface.Key);
+            IReadOnlyList<string> interfaceDnsServers = requirements.DnsServers ?? [dnsServers[iface.NetworkKey]];
+            if (requirements.StaticRoutes?.Any(route => !TeamLabGuestNetworkValidation.IsNextHopOnInterface(
+                    route.NextHop, iface.IpAddress, iface.PrefixLength)) == true)
+                throw new TeamLabApiContractException("guest_route_next_hop_invalid",
+                    $"资产 '{asset.TopologyKey}' 的接口 '{iface.Key}' 静态路由下一跳必须是当前运行子网中可用的其他地址。", 422);
             return new TeamLabNodeInterfaceIntent(
                 iface.Key, iface.NetworkKey, network.BridgeName, iface.IpAddress, iface.PrefixLength,
                 iface.MacAddress, iface.Primary,
                 allowedRoutes.GetValueOrDefault(iface.NetworkKey) ?? [],
-                interfaceDnsServers);
+                interfaceDnsServers, requirements.GuestInterfaceName, requirements.UseDefaultGateway,
+                requirements.StaticRoutes?.Select(route => new TeamLabGuestRouteV2(route.DestinationCidr, route.NextHop, route.Metric)).ToArray());
         }).ToArray();
         var secrets = overlay?.Secrets ?? new Dictionary<string, string>();
         var imageReference = topologyAsset.Kind == TeamLabAssetKind.Docker
@@ -618,6 +621,9 @@ public sealed class TeamLabShardDeploymentService(
                 await context.TeamLabDevicePackages.AsNoTracking().SingleAsync(item => item.Id == packageId, cancellationToken),
                 topologyAsset.Kind, template.ImageHash!, asset.DevicePackageParametersJson, cancellationToken)
             : null;
+        var frozenNetworkMode = string.IsNullOrWhiteSpace(asset.ExecutionPlanJson)
+            ? null
+            : JsonSerializer.Deserialize<TeamLabExecutionAsset>(asset.ExecutionPlanJson)?.VmNetworkMode;
         return new TeamLabNodeAssetCreateRequest(
                 runtime.Id, asset.Id, runtime.PublicId, runtime.Generation, asset.TopologyKey, asset.Name, topologyAsset.Kind,
                 asset.SourceTemplateId ?? topologyAsset.ImageTemplateId, topologyAsset.CpuUnits, topologyAsset.MemoryMiB,
@@ -628,7 +634,7 @@ public sealed class TeamLabShardDeploymentService(
                 TeamLabResourceNameFactory.RouterNamespace(runtime.Id, shard.Id),
                 asset.AgentOperationId,
                 topologyAsset.Kind == TeamLabAssetKind.Vm ? template.VmRuntimeMode : null,
-                topologyAsset.Kind == TeamLabAssetKind.Vm ? template.VmNetworkMode : null,
+                topologyAsset.Kind == TeamLabAssetKind.Vm ? topologyAsset.VmNetworkMode ?? frozenNetworkMode ?? template.VmNetworkMode : null,
                 topologyAsset.Kind == TeamLabAssetKind.Docker
                     ? imageReference
                     : null,

@@ -1,4 +1,6 @@
 using GZCTF.Modules.TeamLab.Domain;
+using GZCTF.Models.Data;
+using GZCTF.Modules.TeamLab.Contracts;
 
 namespace GZCTF.Modules.TeamLab.Application;
 
@@ -25,7 +27,11 @@ public sealed record TeamLabExecutionInterface(
     string NetworkKey,
     int HostOffset,
     bool Primary,
-    int DisplayOrder);
+    int DisplayOrder,
+    string? GuestInterfaceName = null,
+    bool? UseDefaultGateway = null,
+    IReadOnlyList<string>? DnsServers = null,
+    IReadOnlyList<TeamLabGuestRouteModel>? StaticRoutes = null);
 
 public sealed record TeamLabExecutionInfrastructure(
     string Key,
@@ -52,7 +58,8 @@ public sealed record TeamLabExecutionAsset(
     int? DevicePackageId = null,
     string? DeviceParametersJson = null,
     Guid? ConnectorId = null,
-    string? DevicePackageDigest = null)
+    string? DevicePackageDigest = null,
+    VmNetworkMode? VmNetworkMode = null)
 {
     public bool IsImageBacked => true;
 }

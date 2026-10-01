@@ -220,6 +220,8 @@ public sealed record TeamLabExecutionPlanV2(
         }
 
         if (Assets.Any(asset => !TeamLabGuestNetworkValidation.IsValid(asset)) ||
+            Assets.SelectMany(asset => asset.NetworkAttachments).Any(attachment => attachment.PrefixLength is { } prefix &&
+                prefix != int.Parse(Networks.Single(network => network.Key == attachment.NetworkKey).Cidr.Split('/')[1])) ||
             Assets.SelectMany(asset => asset.NetworkAttachments).Any(attachment => attachment.MacAddress is not null &&
                 !Networks.Single(network => network.Key == attachment.NetworkKey).Ports.Any(port =>
                     port.Key == attachment.PortKey && string.Equals(port.MacAddress, attachment.MacAddress, StringComparison.OrdinalIgnoreCase))))

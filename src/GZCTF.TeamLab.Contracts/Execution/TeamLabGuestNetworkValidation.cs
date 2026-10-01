@@ -54,6 +54,9 @@ public static class TeamLabGuestNetworkValidation
         if (asset.NetworkAttachments.Count(item => item.UseDefaultGateway ?? item.Primary) > 1) return false;
         if (asset.NetworkAttachments.Where(item => item.GuestInterfaceName is not null)
             .GroupBy(item => item.GuestInterfaceName, StringComparer.OrdinalIgnoreCase).Any(group => group.Count() > 1)) return false;
+        if (asset.NetworkMode == TeamLabGuestNetworkMode.ManagedStatic &&
+            (asset.NetworkAttachments.GroupBy(item => item.InterfaceKey, StringComparer.Ordinal).Any(group => group.Count() > 1) ||
+             asset.NetworkAttachments.GroupBy(item => item.MacAddress, StringComparer.OrdinalIgnoreCase).Any(group => group.Count() > 1))) return false;
         foreach (var item in asset.NetworkAttachments)
         {
             if (!IsInterfaceName(item.GuestInterfaceName) ||

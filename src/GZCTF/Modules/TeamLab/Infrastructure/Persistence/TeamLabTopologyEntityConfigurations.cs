@@ -67,6 +67,7 @@ public sealed class TeamLabTopologyAssetEntityConfiguration : IEntityTypeConfigu
         builder.Property(item => item.Name).HasMaxLength(128);
         builder.Property(item => item.Kind).HasConversion<byte>();
         builder.Property(item => item.HealthCheckKind).HasConversion<byte?>();
+        builder.Property(item => item.VmNetworkMode).HasConversion<byte?>();
         builder.Property(item => item.DevicePackageParametersJson).HasMaxLength(2048);
         builder.HasIndex(item => new { item.TopologyId, item.Key }).IsUnique();
         builder.HasIndex(item => item.ImageTemplateId);
@@ -97,6 +98,9 @@ public sealed class TeamLabTopologyInterfaceEntityConfiguration : IEntityTypeCon
         builder.ToTable("TeamLabTopologyInterfaces");
         builder.HasKey(item => item.Id);
         builder.Property(item => item.Key).HasMaxLength(63);
+        builder.Property(item => item.GuestInterfaceName).HasMaxLength(15);
+        builder.Property(item => item.DnsServersJson).HasColumnType("jsonb");
+        builder.Property(item => item.StaticRoutesJson).HasColumnType("jsonb");
         builder.HasIndex(item => new { item.AssetId, item.Key }).IsUnique();
         builder.HasIndex(item => new { item.NetworkId, item.AssetId });
         builder.HasOne(item => item.Asset)

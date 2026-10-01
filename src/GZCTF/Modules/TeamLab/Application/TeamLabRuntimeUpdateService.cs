@@ -674,7 +674,8 @@ public sealed class TeamLabRuntimeUpdateService(
             item.Key, item.Name, item.Kind, item.ImageTemplateId,
             new TeamLabAssetResourceModel(item.CpuUnits, item.MemoryMiB, item.StorageMiB),
             item.Interfaces.Select(iface => new TeamLabTopologyInterfaceModel(
-                iface.Key, iface.NetworkKey, iface.HostOffset, iface.Primary, iface.DisplayOrder)).ToArray(),
+                iface.Key, iface.NetworkKey, iface.HostOffset, iface.Primary, iface.DisplayOrder,
+                iface.GuestInterfaceName, iface.UseDefaultGateway, iface.DnsServers, iface.StaticRoutes)).ToArray(),
             item.ExposePort,
             item.HealthCheckKind is { } kind && item.HealthCheckPort is { } port
                 ? new TeamLabHealthCheckModel(kind, port)
@@ -684,14 +685,15 @@ public sealed class TeamLabRuntimeUpdateService(
             string.IsNullOrWhiteSpace(item.DeviceParametersJson)
                 ? null
                 : JsonDocument.Parse(item.DeviceParametersJson).RootElement.Clone(),
-            item.ConnectorId)).ToArray(),
+            item.ConnectorId, item.VmNetworkMode)).ToArray(),
         topology.Connections.Select(item => new TeamLabTopologyConnectionModel(
             item.Key, item.FromNetworkKey, item.ToNetworkKey, item.ViaAssetKey,
             item.ViaNodeKey, item.Direction)).ToArray(),
         topology.Infrastructure.Select(item => new TeamLabTopologyInfrastructureModel(
             item.Key, item.Name, item.Kind,
             item.Interfaces.Select(iface => new TeamLabTopologyInterfaceModel(
-                iface.Key, iface.NetworkKey, iface.HostOffset, iface.Primary, iface.DisplayOrder)).ToArray(),
+                iface.Key, iface.NetworkKey, iface.HostOffset, iface.Primary, iface.DisplayOrder,
+                iface.GuestInterfaceName, iface.UseDefaultGateway, iface.DnsServers, iface.StaticRoutes)).ToArray(),
             item.NetworkKey)).ToArray(),
         new TeamLabObservationPolicyModel(
             topology.Observation.FlowMetadataEnabled,

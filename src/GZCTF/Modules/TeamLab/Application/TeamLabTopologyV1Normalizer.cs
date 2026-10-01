@@ -56,10 +56,12 @@ public static class TeamLabTopologyV1Normalizer
             null,
             asset.DevicePackageId,
             asset.DeviceParameters is { } parameters ? JsonSerializer.Serialize(parameters) : null,
-            asset.ConnectorId);
+            asset.ConnectorId,
+            VmNetworkMode: asset.VmNetworkMode);
 
     internal static TeamLabExecutionInterface ToExecution(TeamLabTopologyInterfaceModel iface) =>
-        new(iface.Key, iface.NetworkKey, iface.HostOffset, iface.Primary, iface.OrderIndex);
+        new(iface.Key, iface.NetworkKey, iface.HostOffset, iface.Primary, iface.OrderIndex,
+            iface.GuestInterfaceName, iface.UseDefaultGateway, iface.DnsServers, iface.StaticRoutes);
 
     internal static string ManagedSwitchKey(string networkKey)
     {

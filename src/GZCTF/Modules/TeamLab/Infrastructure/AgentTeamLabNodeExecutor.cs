@@ -902,7 +902,7 @@ public sealed class AgentTeamLabNodeExecutor(
                 OsType = template.OSType,
                 Hostname = vmName,
                 InstanceId = $"teamlab-{request.RuntimeId}-{request.AssetKey}",
-                NetworkMode = template.VmNetworkMode
+                NetworkMode = request.VmNetworkMode ?? template.VmNetworkMode
             },
             GuestControl = new AgentVmGuestControlConfig
             {
@@ -1041,13 +1041,13 @@ public sealed class AgentTeamLabNodeExecutor(
             request.RuntimeId, request.AssetKey, iface.Key),
         MacAddress = iface.MacAddress,
         Model = template.OSType == OSType.Windows ? "e1000e" : "virtio",
-        InterfaceName = TeamLabResourceNameFactory.WorkloadGuestInterface(index),
+        InterfaceName = iface.GuestInterfaceName ?? TeamLabResourceNameFactory.WorkloadGuestInterface(index),
         IpAddress = iface.IpAddress,
         PrefixLength = iface.PrefixLength,
-        Gateway = iface.Primary ? Gateway(iface.IpAddress, iface.PrefixLength) : null,
+        Gateway = (iface.UseDefaultGateway ?? iface.Primary) ? Gateway(iface.IpAddress, iface.PrefixLength) : null,
         DnsServers = iface.DnsServers.ToList(),
         Routes = template.VmRuntimeMode == VmRuntimeMode.Managed &&
-                 template.VmNetworkMode == VmNetworkMode.Dhcp
+                 (request.VmNetworkMode ?? template.VmNetworkMode) == VmNetworkMode.Dhcp
             ? iface.Routes.Select(route => $"{route} via {Gateway(iface.IpAddress, iface.PrefixLength)}").ToList()
             : [],
         IsPrimary = iface.Primary

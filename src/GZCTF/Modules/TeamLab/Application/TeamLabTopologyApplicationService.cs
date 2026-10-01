@@ -653,7 +653,7 @@ public sealed class TeamLabTopologyApplicationService(
         => await ValidateImageTemplatesAsync(
             context,
             definition.Assets.Select(item => new TeamLabImageTemplateRequirement(
-                item.ImageTemplateId, item.Kind, item.Key, null)).ToArray(),
+                item.ImageTemplateId, item.Kind, item.Key, null, item.VmNetworkMode, item.Interfaces)).ToArray(),
             cancellationToken);
 
     internal static async Task ValidateImageTemplatesAsync(
@@ -666,7 +666,9 @@ public sealed class TeamLabTopologyApplicationService(
                 item.ImageTemplateId,
                 item.Kind,
                 item.Key,
-                item.ImageDigest)).ToArray(),
+                item.ImageDigest, item.VmNetworkMode, item.Interfaces.Select(iface => new TeamLabTopologyInterfaceModel(
+                    iface.Key, iface.NetworkKey, iface.HostOffset, iface.Primary, iface.DisplayOrder, iface.GuestInterfaceName,
+                    iface.UseDefaultGateway, iface.DnsServers, iface.StaticRoutes)).ToArray())).ToArray(),
             cancellationToken);
 
     private static async Task ValidateImageTemplatesAsync(
@@ -690,6 +692,12 @@ public sealed class TeamLabTopologyApplicationService(
                     "image_template_unavailable",
                     $"资产 '{asset.AssetKey}' 的镜像模板 {asset.ImageTemplateId} 没有不可变摘要",
                     422);
+            var networkMode = asset.VmNetworkMode ?? template.VmNetworkMode;
+            if (asset.Kind == TeamLabAssetKind.Vm && (!Enum.IsDefined(networkMode) ||
+                networkMode == VmNetworkMode.Preconfigured && asset.Interfaces.Any(GZCTF.Modules.TeamLab.Application.Validation.TeamLabTopologyStructureValidator.HasGuestRequirements) ||
+                networkMode != VmNetworkMode.ManagedStatic && asset.Interfaces.Any(iface => iface.GuestInterfaceName is not null ||
+                    iface.StaticRoutes?.Any(route => route.Metric is not null) == true)))
+                throw new TeamLabApiContractException("guest_network_mode_invalid", $"资产 '{asset.AssetKey}' 的网络要求与镜像/资产网络模式不兼容", 422);
             var kindMatches = asset.Kind == TeamLabAssetKind.Docker
                 ? template.ImageType == ImageType.Docker
                 : template.ImageType != ImageType.Docker;
@@ -723,7 +731,9 @@ public sealed class TeamLabTopologyApplicationService(
                     new TeamLabAssetResourceModel(item.CpuUnits, item.MemoryMiB, item.StorageMiB),
                     item.Interfaces.OrderBy(iface => iface.OrderIndex).ThenBy(iface => iface.Key, StringComparer.Ordinal)
                         .Select(iface => new TeamLabTopologyInterfaceModel(
-                            iface.Key, iface.Network.Key, iface.HostOffset, iface.IsPrimary, iface.OrderIndex)).ToArray(),
+                            iface.Key, iface.Network.Key, iface.HostOffset, iface.IsPrimary, iface.OrderIndex,
+                            iface.GuestInterfaceName, iface.UseDefaultGateway,
+                            Deserialize<string[]>(iface.DnsServersJson), Deserialize<TeamLabGuestRouteModel[]>(iface.StaticRoutesJson))).ToArray(),
                     item.ExposePort,
                     item.HealthCheckKind is { } kind && item.HealthCheckPort is { } port
                         ? new TeamLabHealthCheckModel(kind, port)
@@ -731,7 +741,7 @@ public sealed class TeamLabTopologyApplicationService(
                     item.OrderIndex,
                     item.DevicePackageId,
                     ParseDeviceParameters(item.DevicePackageParametersJson),
-                    item.ConnectorId)).ToArray(),
+                    item.ConnectorId, item.VmNetworkMode)).ToArray(),
             topology.Connections.OrderBy(item => item.Key, StringComparer.Ordinal)
                 .Select(item => new TeamLabTopologyConnectionModel(
                     item.Key, item.FromNetworkKey, item.ToNetworkKey, item.ViaAssetKey,
@@ -909,6 +919,7 @@ public sealed class TeamLabTopologyApplicationService(
                     ? JsonSerializer.Serialize(parameters)
                     : null,
                 ConnectorId = model.ConnectorId,
+                VmNetworkMode = model.VmNetworkMode,
                 CpuUnits = model.Resources.CpuUnits,
                 MemoryMiB = model.Resources.MemoryMiB,
                 StorageMiB = model.Resources.StorageMiB,
@@ -926,7 +937,11 @@ public sealed class TeamLabTopologyApplicationService(
                     Key = iface.Key,
                     HostOffset = iface.HostOffset,
                     IsPrimary = iface.Primary,
-                    OrderIndex = iface.OrderIndex
+                    OrderIndex = iface.OrderIndex,
+                    GuestInterfaceName = iface.GuestInterfaceName,
+                    UseDefaultGateway = iface.UseDefaultGateway,
+                    DnsServersJson = iface.DnsServers is null ? null : Serialize(iface.DnsServers),
+                    StaticRoutesJson = iface.StaticRoutes is null ? null : Serialize(iface.StaticRoutes)
                 });
             }
             topology.Assets.Add(asset);
@@ -1163,5 +1178,7 @@ public sealed class TeamLabTopologyApplicationService(
         int ImageTemplateId,
         TeamLabAssetKind Kind,
         string AssetKey,
-        string? ImageDigest);
+        string? ImageDigest,
+        VmNetworkMode? VmNetworkMode,
+        IReadOnlyList<TeamLabTopologyInterfaceModel> Interfaces);
 }
