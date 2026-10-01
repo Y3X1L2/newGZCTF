@@ -593,7 +593,8 @@ public sealed class TeamLabTopologyApplicationService(
                 LoadPlanningNodesAsync,
                 PlanningCapacityCacheOptions,
                 cancellationToken: cancellationToken);
-        return TeamLabAssetPlanner.Build(source.TopologyId, source.ReleaseId, source.Execution, nodes);
+        var requiredFeatures = await TeamLabGuestNetworkCapabilityPolicy.LoadDeclaredAsync(context, source.Execution, cancellationToken);
+        return TeamLabAssetPlanner.Build(source.TopologyId, source.ReleaseId, source.Execution, nodes, requiredFeatures);
     }
 
     private async ValueTask<TeamLabPlanSource> LoadPlanSourceAsync(
@@ -635,7 +636,7 @@ public sealed class TeamLabTopologyApplicationService(
                 item.AvailableVm,
                 item.Node.CpuLoad,
                 item.Node.MemoryLoad,
-                item.Available))
+                item.Available, TeamLabGuestNetworkCapabilityPolicy.AdvertisedFeatures(item.Node)))
             .ToArray();
 
     private sealed record TeamLabPlanSource(

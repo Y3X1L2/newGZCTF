@@ -29,6 +29,7 @@ public static class AgentFeatureIds
     public const string TeamLabOvnOvs = "teamlab.ovs-ovn.v1";
     public const string TeamLabNativeLibvirt = "teamlab.libvirt.native.v1";
     public const string TeamLabArtifactCache = "teamlab.artifact-cache.v2";
+    public const string TeamLabManagedGuestNetwork = "teamlab.guest-network.managed-static.v1";
 }
 
 public sealed record AgentExecutionLimits(

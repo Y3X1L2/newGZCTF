@@ -239,6 +239,8 @@ public sealed class TeamLabRuntimeUpdateService(
         try
         {
             var templates = await LoadTemplatesAsync(targetDefinition, token);
+            if (await GuestNetworkCapabilityReasonAsync(runtime, targetDefinition, token) is { } capabilityReason)
+                throw new TeamLabApiContractException("teamlab_guest_network_capability_unavailable", capabilityReason, 409);
             var networks = runtime.Networks
                 .Where(item => item.Generation == runtime.Generation)
                 .ToDictionary(item => item.TopologyKey, StringComparer.Ordinal);
@@ -550,6 +552,7 @@ public sealed class TeamLabRuntimeUpdateService(
                         : !SameConnectorBindings(current, target)
                             ? "现场连接器发生变化，需要完整重置。"
                             : PlacementChangeReason(runtime, target);
+        reason ??= await GuestNetworkCapabilityReasonAsync(runtime, target, token);
         var preview = new TeamLabRuntimeUpdatePreviewModel(
             runtime.PublicId,
             currentRelease.Id,
@@ -587,6 +590,7 @@ public sealed class TeamLabRuntimeUpdateService(
         var reason = runtime.Status != TeamLabRuntimeStatus.Running
             ? "只有运行中的环境可以更新资产。"
             : PlacementChangeReason(runtime, target);
+        reason ??= await GuestNetworkCapabilityReasonAsync(runtime, target, token);
         var preview = new TeamLabRuntimeUpdatePreviewModel(
             runtime.PublicId,
             release.Id,
@@ -770,6 +774,25 @@ public sealed class TeamLabRuntimeUpdateService(
                     400);
         }
         return values;
+    }
+
+    internal async Task<string?> GuestNetworkCapabilityReasonAsync(TeamLabRuntime runtime, TeamLabExecutionTopology target, CancellationToken token)
+    {
+        var required = await TeamLabGuestNetworkCapabilityPolicy.LoadDeclaredAsync(context, target, token);
+        var networkNodes = runtime.Networks.Where(network => network.Generation == runtime.Generation)
+            .ToDictionary(network => network.TopologyKey, network => network.WorkerNodeId);
+        var nodeIds = networkNodes.Values.Where(id => id.HasValue).Select(id => id!.Value).Distinct().ToArray();
+        var workers = await context.WorkerNodes.AsNoTracking().Where(node => nodeIds.Contains(node.Id)).ToDictionaryAsync(node => node.Id, token);
+        foreach (var asset in target.Assets)
+        {
+            var features = required.GetValueOrDefault(asset.Key) ?? [];
+            if (features.Length == 0) continue;
+            var nodeId = asset.Interfaces.Select(iface => networkNodes.GetValueOrDefault(iface.NetworkKey)).FirstOrDefault(id => id.HasValue);
+            if (nodeId is not { } assigned || !workers.TryGetValue(assigned, out var node))
+                return $"teamlab_guest_network_capability_unavailable: 资产 {asset.Name} 缺少可验证的已分配节点。";
+            if (TeamLabGuestNetworkCapabilityPolicy.MissingReason(node, features) is { } reason) return reason;
+        }
+        return null;
     }
 
     static string? PlacementChangeReason(TeamLabRuntime runtime, TeamLabExecutionTopology target)

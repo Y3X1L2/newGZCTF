@@ -177,7 +177,11 @@ public sealed class TeamLabShardDeploymentService(
                 requiredFeatures.Add(AgentFeatureIds.TeamLabNativeLibvirt);
             if (shardAssets.Any(item => item.Kind == TeamLabResourceKind.Docker))
                 requiredFeatures.Add(AgentFeatureIds.Docker);
-            var missing = AgentCapabilityEvaluator.MissingFeatures(node, requiredFeatures.ToArray());
+            foreach (var asset in shardAssets)
+                if (asset.SourceTemplateId is { } templateId && templates.TryGetValue(templateId, out var template))
+                    requiredFeatures.AddRange(TeamLabGuestNetworkCapabilityPolicy.ForAsset(
+                        definition.Assets.FirstOrDefault(item => item.Key == asset.TopologyKey), asset, template));
+            var missing = AgentCapabilityEvaluator.MissingFeatures(node, requiredFeatures.Distinct(StringComparer.Ordinal).ToArray());
             if (missing.Length > 0)
             {
                 logger.LogWarning(
@@ -498,12 +502,27 @@ public sealed class TeamLabShardDeploymentService(
                 bindings.Add(binding);
         }
         var plans = new Dictionary<int, TeamLabExecutionPlanV2>();
+        var managedNetworkNodes = allAssetRequests.Values.Any(request => request.Kind == TeamLabAssetKind.Vm &&
+                request.VmNetworkMode == VmNetworkMode.ManagedStatic)
+            ? await context.WorkerNodes.AsNoTracking().Where(node => orderedShards.Select(shard => shard.WorkerNodeId).Contains(node.Id))
+                .ToDictionaryAsync(node => node.Id, cancellationToken)
+            : new Dictionary<Guid, WorkerNode>();
         foreach (var shard in orderedShards)
         {
             var shardAssets = runtimeAssets.Where(item => item.ShardId == shard.Id)
                 .OrderBy(item => item.TopologyKey, StringComparer.Ordinal)
                 .Select(item => allAssetRequests[item.TopologyKey])
                 .ToArray();
+            var managedFeatures = shardAssets.Where(asset => asset.Kind == TeamLabAssetKind.Vm)
+                .SelectMany(asset => TeamLabGuestNetworkCapabilityPolicy.RequiredFeatures(
+                    asset.VmNetworkMode ?? VmNetworkMode.Dhcp, asset.OperatingSystem)).Distinct(StringComparer.Ordinal).ToArray();
+            if (managedFeatures.Length > 0)
+            {
+                if (!managedNetworkNodes.TryGetValue(shard.WorkerNodeId, out var node))
+                    throw new TeamLabApiContractException("teamlab_guest_network_capability_unavailable", "ManagedStatic 目标节点不存在。", 409);
+                if (TeamLabGuestNetworkCapabilityPolicy.MissingReason(node, managedFeatures) is { } reason)
+                    throw new TeamLabApiContractException("teamlab_guest_network_capability_unavailable", reason, 409);
+            }
             plans.Add(shard.Id, TeamLabExecutionPlanCompiler.Compile(
                 runtime.Id,
                 runtime.PublicId,

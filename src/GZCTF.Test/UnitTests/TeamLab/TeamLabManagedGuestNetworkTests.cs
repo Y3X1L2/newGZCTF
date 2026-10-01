@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using GZCTF.Models;
 using GZCTF.Models.Data;
 using GZCTF.Modules.Runtime.Application;
+using GZCTF.Modules.Runtime.Contracts;
 using GZCTF.Modules.TeamLab.Application;
 using GZCTF.Modules.TeamLab.Contracts;
 using GZCTF.Modules.TeamLab.Domain;
@@ -14,12 +15,62 @@ using GZCTF.Modules.TeamLab.Domain.Runtime;
 using GZCTF.TeamLab.Contracts.Execution;
 using GZCTF.Services.Fleet;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace GZCTF.Test.UnitTests.TeamLab;
 
 public sealed class TeamLabManagedGuestNetworkTests
 {
+    [Fact]
+    public async Task AssetChanges_RejectOldAgentAndAcceptAdvertisedWindowsSupport()
+    {
+        await using var context = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
+        var node = new WorkerNode { Name = "old-agent" };
+        context.WorkerNodes.Add(node);
+        context.ImageTemplates.Add(new ImageTemplate { Id = 1, Name = "windows", OSType = OSType.Windows, VmNetworkMode = VmNetworkMode.ManagedStatic });
+        await context.SaveChangesAsync();
+        var runtime = new TeamLabRuntime { Generation = 1, Networks = [
+            new() { TopologyKey = "entry", WorkerNodeId = node.Id }, new() { TopologyKey = "core", WorkerNodeId = node.Id }] };
+        var service = new TeamLabRuntimeUpdateService(context, payloads: null!, topologyValidator: null!, queue: null!, capacity: null!,
+            lifecycleGuard: null!, deployment: null!, nodes: null!, assetControl: null!, artifacts: null!, remoteAccess: null!,
+            serviceAccess: null!, traffic: null!, events: null!, logger: NullLogger<TeamLabRuntimeUpdateService>.Instance);
+        var target = TeamLabTopologyV2Compiler.Compile(Definition());
+        var reason = await service.GuestNetworkCapabilityReasonAsync(runtime, target, CancellationToken.None);
+        Assert.Contains(AgentFeatureIds.TeamLabManagedGuestNetwork, reason!);
+        node.CapabilityManifestJson = AgentCapabilityEvaluator.Normalize(new AgentCapabilityManifest("new", null, 1,
+            [AgentFeatureIds.TeamLabManagedGuestNetwork], new(1, 1, 1, 1), new(4, 4L * 1024 * 1024 * 1024), DateTimeOffset.UtcNow)).Json;
+        await context.SaveChangesAsync();
+        Assert.Null(await service.GuestNetworkCapabilityReasonAsync(runtime, target, CancellationToken.None));
+    }
+
+    [Fact]
+    public void DeploymentPolicy_UsesResolvedModeAndTemplateOs_WithoutGatingLegacyModes()
+    {
+        var declared = TeamLabTopologyV2Compiler.Compile(Definition()).Assets[0];
+        var runtime = new TeamLabRuntimeAsset { Kind = TeamLabResourceKind.Vm, ExecutionPlanJson = JsonSerializer.Serialize(declared) };
+        var template = new ImageTemplate { VmNetworkMode = VmNetworkMode.Dhcp, OSType = OSType.Windows };
+        Assert.Equal([AgentFeatureIds.TeamLabManagedGuestNetwork], TeamLabGuestNetworkCapabilityPolicy.ForAsset(declared with { VmNetworkMode = null }, runtime, template));
+        Assert.Empty(TeamLabGuestNetworkCapabilityPolicy.ForAsset(declared with { VmNetworkMode = VmNetworkMode.Dhcp }, runtime, template));
+        Assert.Empty(TeamLabGuestNetworkCapabilityPolicy.RequiredFeatures(VmNetworkMode.Preconfigured, OSType.Linux));
+        Assert.Contains(AgentFeatureIds.CloudInit, TeamLabGuestNetworkCapabilityPolicy.RequiredFeatures(VmNetworkMode.ManagedStatic, OSType.Linux));
+    }
+
+    [Fact]
+    public void PlanningPreview_RejectsOldAgentAndAcceptsExplicitCapabilities()
+    {
+        var definition = TeamLabTopologyV2Compiler.Compile(Definition());
+        var requirements = new Dictionary<string, string[]> { ["vm"] = [AgentFeatureIds.TeamLabManagedGuestNetwork, AgentFeatureIds.CloudInit] };
+        var old = new TeamLabPlanningNodeSnapshot(Guid.NewGuid(), "old", false, true, 0, 2, 0, 0);
+        var error = Assert.Throws<TeamLabApiContractException>(() => TeamLabAssetPlanner.Build(Guid.NewGuid(), Guid.NewGuid(), definition, [old], requirements));
+        Assert.Equal("teamlab_guest_network_capability_unavailable", error.Code);
+        var capable = old with { Features = [AgentFeatureIds.TeamLabManagedGuestNetwork, AgentFeatureIds.CloudInit] };
+        var plan = TeamLabAssetPlanner.Build(Guid.NewGuid(), Guid.NewGuid(), definition, [capable], requirements);
+        Assert.Single(plan.Shards);
+        Assert.Contains(AgentFeatureIds.TeamLabManagedGuestNetwork, plan.RequiredCapabilities);
+    }
+
     [Fact]
     public void LegacyExecutionJson_ReencodesWithoutNewFields()
     {

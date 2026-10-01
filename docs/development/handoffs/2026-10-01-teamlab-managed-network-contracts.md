@@ -45,3 +45,11 @@ PostgreSQL 16 Testcontainers 已验证从 `20260927121625_AddTeamLabNetworkDnsAs
 - 日志与 TRX 在仓库外 `D:/Work/YINYU-Managed-Network-20261001/contracts`。
 
 本任务未运行全量解决方案、全量后端单测/集成或前端门禁；父任务汇总代码后执行。未进行真实 Linux/Windows、QGA、cloud-init、OVN、重置与替换运行验收。Agent 新阶段由 Agent 任务维护 `TeamLabExecutionProtocolV2.cs`。父任务还需生成并审查 OpenAPI、合入 OVN 逐端口 DHCP 选项及 Agent/前端提交，然后按计划准备部署材料与请求用户批准。
+
+## 能力门禁增量
+
+ManagedStatic 要求 Agent 声明 `teamlab.guest-network.managed-static.v1`；Linux 还要求现有 `runtime.vm.cloud-init.v1` 宿主配置盘工具能力，Windows 不要求宿主 seed 工具。模式按明确意图、运行资产冻结定义、模板继承解析，OS 取实际模板。旧 DHCP、Preconfigured 没有新增要求。
+
+能力要求接入预览计划、实际逻辑组放置与重校验、旧代次放置复用、已有分配/票据恢复、运行资产新增/替换预览与执行前验证、部署前和执行计划编译。缺少能力报告 `teamlab_guest_network_capability_unavailable` 或节点缺失特征；阻止旧 Agent 忽略新模式后仅凭 QEMU running 报成功。
+
+宿主 feature 只表示执行实现与宿主工具，不证明镜像中的 QGA、驱动、cloud-init 已准备；Agent 必须继续执行来宾验证。这次增量没有迁移。TeamLab 与放置定向测试 522/522 通过，覆盖旧 Agent 拒绝、新 Agent 可放置、Linux 缺 seed 拒绝、Windows 无 seed 可放置、继承模式与模板 OS、已有节点资产变更门禁。日志为仓库外 `contracts/capability-unit.log` 与 `managed-capability.trx`，全量门禁仍由父任务执行。
