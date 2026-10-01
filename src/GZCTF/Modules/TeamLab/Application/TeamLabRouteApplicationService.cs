@@ -224,9 +224,7 @@ public sealed class TeamLabRouteApplicationService(
                 .Where(asset => asset.Generation == runtime.Generation &&
                                 asset.Status != TeamLabRuntimeStatus.Destroyed &&
                                 (asset.Kind != TeamLabResourceKind.Vm ||
-                                 !asset.SourceTemplateId.HasValue ||
-                                 networkModes.GetValueOrDefault(asset.SourceTemplateId.Value) !=
-                                 VmNetworkMode.Preconfigured))
+                                 ResolveAssetNetworkMode(asset, definition, networkModes) == VmNetworkMode.Dhcp))
                 .SelectMany(asset => ParseInterfaces(asset)
                     .Where(iface => string.Equals(iface.NetworkKey, network.TopologyKey, StringComparison.Ordinal))
                     .Select(iface => new TeamLabNodeDnsRecord(
@@ -317,9 +315,7 @@ public sealed class TeamLabRouteApplicationService(
                 .Where(asset => asset.Generation == runtime.Generation &&
                                 asset.Status != TeamLabRuntimeStatus.Destroyed &&
                                 (asset.Kind != TeamLabResourceKind.Vm ||
-                                 !asset.SourceTemplateId.HasValue ||
-                                 networkModes.GetValueOrDefault(asset.SourceTemplateId.Value) !=
-                                 VmNetworkMode.Preconfigured))
+                                 ResolveAssetNetworkMode(asset, definition, networkModes) == VmNetworkMode.Dhcp))
                 .SelectMany(asset => ParseInterfaces(asset)
                     .Where(iface => string.Equals(iface.NetworkKey, network.TopologyKey, StringComparison.Ordinal))
                     .Select(iface => new TeamLabNodeDnsRecord(
@@ -442,6 +438,19 @@ public sealed class TeamLabRouteApplicationService(
 
     private static RuntimeInterfaceIntent[] ParseInterfaces(TeamLabRuntimeAsset asset) =>
         JsonSerializer.Deserialize<RuntimeInterfaceIntent[]>(asset.InterfaceSummaryJson) ?? [];
+
+    internal static VmNetworkMode ResolveAssetNetworkMode(TeamLabRuntimeAsset asset,
+        TeamLabExecutionTopology definition, IReadOnlyDictionary<int, VmNetworkMode> templateModes)
+    {
+        if (definition.Assets.SingleOrDefault(item => item.Key == asset.TopologyKey)?.VmNetworkMode is { } declared)
+            return declared;
+        if (!string.IsNullOrWhiteSpace(asset.ExecutionPlanJson) &&
+            JsonSerializer.Deserialize<TeamLabExecutionAsset>(asset.ExecutionPlanJson)?.VmNetworkMode is { } frozen)
+            return frozen;
+        return asset.SourceTemplateId is { } templateId
+            ? templateModes.GetValueOrDefault(templateId)
+            : VmNetworkMode.Dhcp;
+    }
 
     private static string? ResolveDnsServerIp(
         TeamLabRuntime runtime,

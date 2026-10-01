@@ -207,20 +207,20 @@ public sealed class TeamLabOvnNetworkProvider(
             var switchName = TeamLabOvnNaming.LogicalNetworkName(current, next.Key);
             var oldDhcp = previous.DhcpLeases is { Count: > 0 };
             var newDhcp = next.DhcpLeases is { Count: > 0 };
-            var dhcpChanged = oldDhcp != newDhcp ||
-                !Equals(previous.DhcpLeases, next.DhcpLeases) ||
-                previous.DnsServerIp != next.DnsServerIp;
             var oldDns = previous.DnsRecords is { Count: > 0 };
             var newDns = next.DnsRecords is { Count: > 0 };
             var dnsChanged = oldDns != newDns || !Equals(previous.DnsRecords, next.DnsRecords);
-            var dhcpRow = oldDhcp ? dhcp[next.Key] : null;
             var dnsRow = oldDns ? dns[$"{next.Key}:dns"] : null;
-
-            if (newDhcp && dhcpChanged)
+            var previousDhcpKeys = BuildDhcpOptionOperations(current, previous)
+                .Select(operation => OvsdbJsonCodec.GetMapValue(operation["row"]?["external_ids"], "gzctf-key")!)
+                .ToHashSet(StringComparer.Ordinal);
+            var desiredDhcp = BuildDhcpOptionOperations(desired, next).ToDictionary(
+                operation => OvsdbJsonCodec.GetMapValue(operation["row"]?["external_ids"], "gzctf-key")!,
+                StringComparer.Ordinal);
+            foreach (var (key, insert) in desiredDhcp)
             {
-                var insert = MutateDhcpOptions(desired, next);
-                operations.Add(oldDhcp
-                    ? UpdateRow("DHCP_Options", Uuid(dhcpRow!), insert["row"]!)
+                operations.Add(dhcp.TryGetValue(key, out var existingOptions)
+                    ? UpdateRow("DHCP_Options", Uuid(existingOptions), insert["row"]!)
                     : insert);
             }
             if (newDns && dnsChanged)
@@ -247,14 +247,15 @@ public sealed class TeamLabOvnNetworkProvider(
             {
                 var insert = MutatePort(desired, next, port);
                 var row = insert["row"]!.AsObject();
-                if (newDhcp && oldDhcp && row.ContainsKey("dhcpv4_options"))
-                    row["dhcpv4_options"] = UuidReference(Uuid(dhcpRow!));
+                var desiredDhcpKey = PortDhcpKey(next, port);
+                if (desiredDhcpKey is not null && dhcp.TryGetValue(desiredDhcpKey, out var existingOptions))
+                    row["dhcpv4_options"] = UuidReference(Uuid(existingOptions));
                 if (oldPorts.TryGetValue(port.Key, out var oldPort))
                 {
-                    var wasLeased = oldDhcp && previous.DhcpLeases!.Any(lease =>
-                        lease.MacAddress.Equals(oldPort.MacAddress, StringComparison.OrdinalIgnoreCase));
+                    var previousDhcpKey = PortDhcpKey(previous, oldPort);
+                    var wasLeased = previousDhcpKey is not null;
                     var isLeased = row.ContainsKey("dhcpv4_options");
-                    if (oldPort != port || wasLeased != isLeased)
+                    if (oldPort != port || wasLeased != isLeased || previousDhcpKey != desiredDhcpKey)
                     {
                         if (!isLeased) row["dhcpv4_options"] = new JsonArray { "set", new JsonArray() };
                         operations.Add(UpdateRow("Logical_Switch_Port",
@@ -285,8 +286,9 @@ public sealed class TeamLabOvnNetworkProvider(
                     "dns_records", "delete", UuidReference(Uuid(dnsRow!))));
                 operations.Add(DeleteRow("DNS", Uuid(dnsRow!)));
             }
-            if (oldDhcp && !newDhcp)
-                operations.Add(DeleteRow("DHCP_Options", Uuid(dhcpRow!)));
+            foreach (var key in previousDhcpKeys.Where(key => !desiredDhcp.ContainsKey(key)))
+                if (dhcp.TryGetValue(key, out var obsoleteOptions))
+                    operations.Add(DeleteRow("DHCP_Options", Uuid(obsoleteOptions)));
 
             operations.Add(new JsonObject
             {
@@ -372,8 +374,7 @@ public sealed class TeamLabOvnNetworkProvider(
             operations.Add(MutateRouter(plan, router, plan.Networks, control));
         foreach (var network in plan.Networks)
         {
-            if (network.DhcpLeases is { Count: > 0 })
-                operations.Add(MutateDhcpOptions(plan, network));
+            operations.AddRange(BuildDhcpOptionOperations(plan, network));
             if (network.DnsRecords is { Count: > 0 })
                 operations.Add(MutateDns(plan, network));
             var switchUuid = StableUuid(plan, "switch", network.Key);
@@ -482,7 +483,8 @@ public sealed class TeamLabOvnNetworkProvider(
                 (network.PlayerGateway is null ? 0 : 1) +
                 (network.HostGateway is null ? 0 : 1) +
                 (RouterFor(network, control) is null ? 0 : 1));
-            if (network.DhcpLeases is { Count: > 0 }) AddExpected(expected, "DHCP_Options", 1);
+            if (network.DhcpLeases is { Count: > 0 })
+                AddExpected(expected, "DHCP_Options", BuildDhcpOptionOperations(plan, network).Count);
             if (network.DnsRecords is { Count: > 0 }) AddExpected(expected, "DNS", 1);
             AddExpected(expected, "ACL", network.Policies.Count);
             if (RouterFor(network, control) is not null)
@@ -550,7 +552,7 @@ public sealed class TeamLabOvnNetworkProvider(
                 ("gzctf-network-digest", plan.NetworkDigest))
         }
     };
-    static JsonObject MutatePort(TeamLabExecutionPlanV2 plan, TeamLabNetworkIntentV2 network,
+    JsonObject MutatePort(TeamLabExecutionPlanV2 plan, TeamLabNetworkIntentV2 network,
         TeamLabNetworkPortV2 port)
     {
         var row = new JsonObject
@@ -564,10 +566,8 @@ public sealed class TeamLabOvnNetworkProvider(
                 ("gzctf-network-key", network.Key),
                 ("gzctf-network-digest", plan.NetworkDigest))
         };
-        if (network.DhcpLeases is { } leases && leases.Any(lease =>
-                string.Equals(lease.MacAddress, port.MacAddress, StringComparison.OrdinalIgnoreCase) &&
-                string.Equals(lease.IpAddress, port.IpAddress, StringComparison.OrdinalIgnoreCase)))
-            row["dhcpv4_options"] = NamedUuid(DhcpUuid(plan, network));
+        if (PortDhcpKey(network, port) is { } dhcpKey)
+            row["dhcpv4_options"] = NamedUuid(StableUuid(plan, "dhcp", dhcpKey));
         return new JsonObject
         {
             ["op"] = "insert",
@@ -594,23 +594,74 @@ public sealed class TeamLabOvnNetworkProvider(
                 ("gzctf-network-digest", plan.NetworkDigest))
         }
     };
-    JsonObject MutateDhcpOptions(TeamLabExecutionPlanV2 plan, TeamLabNetworkIntentV2 network) => new()
+    JsonObject MutateDhcpOptions(TeamLabExecutionPlanV2 plan, TeamLabNetworkIntentV2 network,
+        TeamLabDhcpLeaseV2? policy = null) => new()
     {
         ["op"] = "insert",
         ["table"] = "DHCP_Options",
-        ["uuid-name"] = DhcpUuid(plan, network),
+        ["uuid-name"] = StableUuid(plan, "dhcp", policy is null ? network.Key : LeaseDhcpKey(network, policy)),
         ["row"] = new JsonObject
         {
             ["cidr"] = network.Cidr,
-            ["options"] = OvsdbJsonCodec.Map(
-                ("server_id", network.GatewayIp ?? string.Empty),
-                ("server_mac", DhcpServerMac(plan, network)),
-                ("router", network.GatewayIp ?? string.Empty),
-                ("dns_server", network.DnsServerIp ?? network.GatewayIp ?? string.Empty),
-                ("lease_time", Math.Clamp(config.ManagedDhcpLeaseSeconds, 60, 86_400).ToString(System.Globalization.CultureInfo.InvariantCulture))),
-            ["external_ids"] = Identity(plan, network.Key)
+            ["options"] = BuildDhcpOptions(plan, network, policy),
+            ["external_ids"] = Identity(plan, policy is null ? network.Key : LeaseDhcpKey(network, policy))
         }
     };
+
+    IReadOnlyList<JsonObject> BuildDhcpOptionOperations(TeamLabExecutionPlanV2 plan, TeamLabNetworkIntentV2 network)
+    {
+        if (network.DhcpLeases is not { Count: > 0 } leases) return [];
+        var operations = new List<JsonObject> { MutateDhcpOptions(plan, network) };
+        operations.AddRange(leases.Where(lease => RequiresDedicatedDhcpOptions(network, lease))
+            .OrderBy(lease => lease.MacAddress, StringComparer.OrdinalIgnoreCase)
+            .Select(lease => MutateDhcpOptions(plan, network, lease)));
+        return operations;
+    }
+
+    string? PortDhcpKey(TeamLabNetworkIntentV2 network, TeamLabNetworkPortV2 port)
+    {
+        var lease = network.DhcpLeases?.SingleOrDefault(lease =>
+            lease.MacAddress.Equals(port.MacAddress, StringComparison.OrdinalIgnoreCase) &&
+            lease.IpAddress.Equals(port.IpAddress, StringComparison.OrdinalIgnoreCase));
+        if (lease is null) return null;
+        // Values equal to the network default share its row. Missing new fields keep old saved plans valid.
+        return RequiresDedicatedDhcpOptions(network, lease) ? LeaseDhcpKey(network, lease) : network.Key;
+    }
+
+    static bool RequiresDedicatedDhcpOptions(TeamLabNetworkIntentV2 network, TeamLabDhcpLeaseV2 lease) =>
+        lease.UseDefaultGateway == false ||
+        lease.DnsServers is { } dns && !dns.SequenceEqual([network.DnsServerIp ?? network.GatewayIp ?? string.Empty]) ||
+        lease.StaticRoutes is { Count: > 0 };
+
+    JsonArray BuildDhcpOptions(TeamLabExecutionPlanV2 plan, TeamLabNetworkIntentV2 network,
+        TeamLabDhcpLeaseV2? policy)
+    {
+        var values = new List<(string, string)>
+        {
+            ("server_id", network.GatewayIp ?? string.Empty),
+            ("server_mac", DhcpServerMac(plan, network))
+        };
+        var useGateway = policy?.UseDefaultGateway ?? true;
+        if (useGateway) values.Add(("router", network.GatewayIp ?? string.Empty));
+        var dns = policy?.DnsServers ?? [network.DnsServerIp ?? network.GatewayIp ?? string.Empty];
+        if (dns.Count > 0)
+            values.Add(("dns_server", dns.Count == 1 ? dns[0] : "{" + string.Join(",", dns) + "}"));
+        values.Add(("lease_time", Math.Clamp(config.ManagedDhcpLeaseSeconds, 60, 86_400)
+            .ToString(System.Globalization.CultureInfo.InvariantCulture)));
+        if (policy?.StaticRoutes is { Count: > 0 } routes)
+        {
+            var pairs = new List<string>();
+            // DHCP clients that accept RFC121 ignore option 3, so include the intended default explicitly.
+            if (useGateway && !string.IsNullOrWhiteSpace(network.GatewayIp))
+                pairs.Add($"0.0.0.0/0,{network.GatewayIp}");
+            pairs.AddRange(routes.Select(route => $"{route.DestinationCidr},{route.NextHop}"));
+            values.Add(("classless_static_route", "{" + string.Join(",", pairs) + "}"));
+        }
+        return OvsdbJsonCodec.Map(values.ToArray());
+    }
+
+    static string LeaseDhcpKey(TeamLabNetworkIntentV2 network, TeamLabDhcpLeaseV2 lease) =>
+        $"{network.Key}:dhcp:{lease.MacAddress.ToLowerInvariant()}";
 
     internal static bool TryValidateDnsHostnames(IReadOnlyList<TeamLabNetworkIntentV2> networks, out string? error)
     {
