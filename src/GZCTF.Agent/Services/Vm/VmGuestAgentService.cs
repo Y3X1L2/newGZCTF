@@ -6,7 +6,7 @@ using GZCTF.Agent.Models;
 
 namespace GZCTF.Agent.Services.Vm;
 
-public sealed partial class VmGuestAgentService(ILogger<VmGuestAgentService> logger)
+public sealed partial class VmGuestAgentService(ILogger<VmGuestAgentService> logger) : IVmGuestAgentClient
 {
     private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(500);
     private const int QgaRpcTimeoutSeconds = 30;
@@ -134,10 +134,19 @@ public sealed partial class VmGuestAgentService(ILogger<VmGuestAgentService> log
         }
     }
 
-    public async Task<VmGuestCommandResponse> ExecuteAsync(
+    public Task<VmGuestCommandResponse> ExecuteAsync(
         string vmName,
         VmGuestCommandRequest command,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken) => ExecuteCoreAsync(vmName, command, false, cancellationToken, null);
+
+    Task<VmGuestCommandResponse> IVmGuestAgentClient.ExecuteAsync(string vmName,
+        VmGuestCommandRequest command, CancellationToken cancellationToken,
+        Func<CancellationToken, Task<bool>>? verifyIdentity) =>
+        ExecuteCoreAsync(vmName, command, true, cancellationToken, verifyIdentity);
+
+    async Task<VmGuestCommandResponse> ExecuteCoreAsync(string vmName,
+        VmGuestCommandRequest command, bool terminateOnDeadline, CancellationToken cancellationToken,
+        Func<CancellationToken, Task<bool>>? verifyIdentity)
     {
         ValidateVmName(vmName);
         if (string.IsNullOrWhiteSpace(command.StepId) || string.IsNullOrWhiteSpace(command.Path) ||
@@ -183,8 +192,51 @@ public sealed partial class VmGuestAgentService(ILogger<VmGuestAgentService> log
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
+            if (terminateOnDeadline) await TryTerminateAsync(vmName, pid, command.Path, verifyIdentity);
             logger.LogWarning("Guest command timed out: VM={VmName}, Step={StepId}", vmName, command.StepId);
             return new VmGuestCommandResponse(false, true, null, "timeout", null, null);
+        }
+        catch (OperationCanceledException)
+        {
+            if (terminateOnDeadline) await TryTerminateAsync(vmName, pid, command.Path, verifyIdentity);
+            throw;
+        }
+    }
+
+    async Task TryTerminateAsync(string vmName, long pid, string commandPath,
+        Func<CancellationToken, Task<bool>>? verifyIdentity)
+    {
+        if (pid <= 0) return;
+        using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var windows = commandPath.StartsWith("C:\\Windows\\", StringComparison.OrdinalIgnoreCase);
+        try
+        {
+            if (verifyIdentity is not null && !await verifyIdentity(cleanup.Token))
+            {
+                logger.LogWarning("Guest command cleanup skipped because VM native identity changed: VM={VmName}", vmName);
+                return;
+            }
+            using var result = await TrySendAsync(vmName, "guest-exec", new Dictionary<string, object?>
+            {
+                ["path"] = windows ? @"C:\Windows\System32\taskkill.exe" : "/bin/kill",
+                ["arg"] = windows ? new[] { "/PID", pid.ToString(System.Globalization.CultureInfo.InvariantCulture), "/T", "/F" }
+                    : new[] { "-TERM", pid.ToString(System.Globalization.CultureInfo.InvariantCulture) },
+                ["capture-output"] = false
+            }, cleanup.Token);
+            while (!cleanup.IsCancellationRequested)
+            {
+                using var status = await TrySendAsync(vmName, "guest-exec-status", new Dictionary<string, object?>
+                {
+                    ["pid"] = pid
+                }, cleanup.Token);
+                if (status is not null && status.RootElement.TryGetProperty("return", out var body) &&
+                    body.TryGetProperty("exited", out var exited) && exited.GetBoolean()) return;
+                await Task.Delay(PollInterval, cleanup.Token);
+            }
+        }
+        catch (Exception)
+        {
+            logger.LogWarning("Unable to confirm timed-out guest network command termination: VM={VmName}", vmName);
         }
     }
 

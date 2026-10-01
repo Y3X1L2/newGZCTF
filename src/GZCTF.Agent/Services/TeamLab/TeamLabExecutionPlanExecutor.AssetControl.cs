@@ -68,8 +68,11 @@ public sealed partial class TeamLabExecutionPlanExecutor
             var after = await Observe();
             var expected = request.Action switch { "stop" => "stopped", "pause" => "paused", "remove" => "missing", _ => "running" };
             var observed = after?.State switch { null => "missing", "shutoff" or "exited" => "stopped", var value => value };
+            var guestFailure = events.FirstOrDefault(item => item.Outcome == "failed" &&
+                item.Stage is "guest-ready" or "guest-network-apply" or "guest-network-verify");
             return new(expected == observed && events.All(item => item.Outcome != "failed"),
-                expected == observed && events.All(item => item.Outcome != "failed") ? null : "asset_control.state_not_reached", after);
+                expected == observed && events.All(item => item.Outcome != "failed") ? null :
+                    guestFailure?.ErrorCode ?? "asset_control.state_not_reached", after);
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { throw; }
         catch (Exception error) when (error is not OperationCanceledException)

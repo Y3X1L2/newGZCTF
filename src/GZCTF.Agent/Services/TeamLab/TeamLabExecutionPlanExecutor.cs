@@ -17,6 +17,7 @@ public sealed partial class TeamLabExecutionPlanExecutor(
     LinuxNetworkAttachmentService linuxNetwork,
     DockerService docker,
     LibvirtTeamLabProvider libvirt,
+    TeamLabVmNetworkService vmNetwork,
     ObservationPointRegistry observations,
     TeamLabExecutionEventJournal journal,
     IOptions<AgentConfig> agentOptions,
@@ -75,7 +76,24 @@ public sealed partial class TeamLabExecutionPlanExecutor(
                     if (!actual.Success)
                         return Failure(plan, "network", actual.Message);
                 }
-                return existing with { AlreadyApplied = true, Inventory = inventory };
+                var guestNetworkEvents = new List<TeamLabExecutionEventV2>();
+                foreach (var asset in plan.Assets.Where(item => item.Kind.Equals("vm", StringComparison.OrdinalIgnoreCase) &&
+                             item.NetworkMode == TeamLabGuestNetworkMode.ManagedStatic))
+                {
+                    var actual = await vmNetwork.ApplyAsync(plan, asset, verifyOnly: true, cancellationToken,
+                        progress => guestNetworkEvents.Add(Event(plan, asset.AssetKey, progress.Stage,
+                            progress.Outcome, null, progress.Message)),
+                        async token => (await libvirt.ChangePowerAsync(plan, asset, "inspect", null, token)).Success);
+                    if (!actual.Success)
+                    {
+                        journal.Remove(plan);
+                        return new TeamLabExecutionPlanApplyResponse(false, false, plan.PlanDigest,
+                            guestNetworkEvents.Append(Event(plan, asset.AssetKey, actual.Stage, "failed", actual.ErrorCode, actual.Message)).ToArray(), inventory,
+                            actual.Stage, actual.ErrorCode, actual.Message);
+                    }
+                }
+                return existing with { AlreadyApplied = true, Inventory = inventory,
+                    Events = existing.Events.Concat(guestNetworkEvents).ToArray() };
             }
             journal.Remove(plan);
         }
@@ -233,14 +251,16 @@ public sealed partial class TeamLabExecutionPlanExecutor(
             }
         }
         var eventArray = events.ToArray();
+        var guestFailure = eventArray.FirstOrDefault(item => item.Outcome == "failed" &&
+            item.Stage is "guest-ready" or "guest-network-apply" or "guest-network-verify");
         var response = new TeamLabExecutionPlanApplyResponse(
             success,
             false,
             plan.PlanDigest,
             eventArray,
             inventory,
-            success ? null : "compute",
-            success ? null : "asset_execution_failed",
+            success ? null : guestFailure?.Stage ?? "compute",
+            success ? null : guestFailure?.ErrorCode ?? "asset_execution_failed",
             success ? "Execution plan applied." : FailureSummary(eventArray));
         if (success) journal.Save(plan, response);
         else journal.Remove(plan);
@@ -527,6 +547,14 @@ public sealed partial class TeamLabExecutionPlanExecutor(
             return;
         }
         events.Enqueue(Event(plan, asset.AssetKey, "compute", "succeeded", null, result.ResourceId));
+        if (asset.NetworkMode == TeamLabGuestNetworkMode.ManagedStatic)
+        {
+            var network = await vmNetwork.ApplyAsync(plan, asset, verifyOnly: false, token,
+                progress => events.Enqueue(Event(plan, asset.AssetKey, progress.Stage, progress.Outcome, null, progress.Message)),
+                async identityToken => (await libvirt.ChangePowerAsync(plan, asset, "inspect", null, identityToken)).Success);
+            if (!network.Success)
+                events.Enqueue(Event(plan, asset.AssetKey, network.Stage, "failed", network.ErrorCode, network.Message));
+        }
     }
 
     async Task RunContainerHealthProbeAsync(long pid, TeamLabHealthCheckV2 check, CancellationToken token)
