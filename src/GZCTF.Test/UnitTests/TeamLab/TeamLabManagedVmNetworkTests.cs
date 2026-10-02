@@ -461,6 +461,65 @@ public sealed class TeamLabManagedVmNetworkTests
     }
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task WindowsFreshOrUnspecifiedMetric_DoesNotRequireUnrelatedOsRouteCosts(bool requestedRouteWithoutMetric)
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        var plan = Plan(os: TeamLabGuestOperatingSystem.Windows);
+        var asset = plan.Assets[0] with { NetworkAttachments = [plan.Assets[0].NetworkAttachments[0] with
+            { UseDefaultGateway = false, GatewayIp = null, DnsServers = [], StaticRoutes = requestedRouteWithoutMetric ? [new("172.16.0.0/16", "10.96.1.1")] : [] }] };
+        plan = plan with { Assets = [asset] };
+        var desired = TeamLabVmNetworkService.ResolveInterfaces(plan, asset);
+        var apply = Convert.ToBase64String(Encoding.UTF8.GetBytes(TeamLabVmNetworkService.BuildWindowsApplyScript(desired)));
+        var read = Convert.ToBase64String(Encoding.UTF8.GetBytes(TeamLabVmNetworkService.BuildWindowsReadScript(desired)));
+        var fixture = $$"""
+            $ErrorActionPreference='Stop'
+            $stateDir=Join-Path $env:TEMP ('gzctf-apipa-metric-' + [Guid]::NewGuid().ToString('N'))
+            $script:Cfg=New-Object PSObject -Property @{MACAddress='02:42:29:19:d6:14';Index=7;InterfaceIndex=19;IPConnectionMetric=$null;DHCPEnabled={{(requestedRouteWithoutMetric ? "$false" : "$true")}};IPAddress=@('{{(requestedRouteWithoutMetric ? "10.96.1.20" : "169.254.10.20")}}');IPSubnet=@('{{(requestedRouteWithoutMetric ? "255.255.255.0" : "255.255.0.0")}}');DefaultIPGateway=@();DNSServerSearchOrder=@()}
+            $script:Adapter=New-Object PSObject -Property @{Index=7;NetConnectionID='ens3'}
+            $script:Routes=@(New-Object PSObject -Property @{InterfaceIndex=19;Destination='169.254.0.0';Mask='255.255.0.0';NextHop='0.0.0.0';Metric1=4294967295})
+            if ({{(requestedRouteWithoutMetric ? "$true" : "$false")}}) { $script:Routes+=New-Object PSObject -Property @{InterfaceIndex=19;Destination='172.16.0.0';Mask='255.255.0.0';NextHop='10.96.1.1';Metric1=$null} }
+            function Get-WmiObject {
+              param($Class,$Filter)
+              switch ($Class) {
+                'Win32_NetworkAdapterConfiguration' { return $script:Cfg }
+                'Win32_NetworkAdapter' { return $script:Adapter }
+                'Win32_IP4RouteTable' { return $script:Routes }
+                default { throw 'Unexpected WMI class' }
+              }
+            }
+            function Invoke-Netsh-Test { throw 'Existing unspecified route cost must not cause a netsh change' }
+            $apply=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('{{apply}}'))
+            $apply=$apply.Replace('$stateRoot = Join-Path $env:ProgramData ''GZCTF\TeamLab''', '$stateRoot = $stateDir').Replace('& "$env:SystemRoot\System32\netsh.exe"','Invoke-Netsh-Test')
+            $read=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('{{read}}'))
+            $read=$read.Replace('$stateRoot = Join-Path $env:ProgramData ''GZCTF\TeamLab''', '$stateRoot = $stateDir').Replace('& "$env:SystemRoot\System32\netsh.exe"','Invoke-Netsh-Test').Replace('[Console]::Out.Write($doc.OuterXml)','Write-Output $doc.OuterXml')
+            try {
+              if ({{(requestedRouteWithoutMetric ? "$true" : "$false")}}) { & ([scriptblock]::Create($apply)); & ([scriptblock]::Create($apply)) }
+              & ([scriptblock]::Create($read))
+            } finally { if (Test-Path -LiteralPath $stateDir) { Remove-Item -LiteralPath $stateDir -Recurse -Force } }
+            """;
+        var result = await RunPowerShellFixtureAsync(fixture);
+        Assert.True(result.ExitCode == 0, result.Error);
+        var snapshot = TeamLabVmNetworkService.ParseSnapshot(result.Output);
+        if (requestedRouteWithoutMetric)
+        {
+            Assert.Null(Assert.Single(Assert.Single(snapshot).Routes).Metric);
+            Assert.True(TeamLabVmNetworkService.Matches(desired, snapshot, out var mismatch), mismatch);
+        }
+        else
+        {
+            Assert.True(Assert.Single(snapshot).Dhcp);
+            Assert.Empty(Assert.Single(snapshot).Routes);
+            var guest = new FakeGuest(); guest.Reads.Enqueue(result.Output);
+            guest.Reads.Enqueue(Matching.Replace("<gateway ip='10.96.1.1'/>", "").Replace("<dns ip='10.96.1.53'/>", ""));
+            var initialized = await Service(guest).ApplyAsync(plan, asset, false, CancellationToken.None);
+            Assert.True(initialized.Success, initialized.Message);
+            Assert.Equal(new[] { "teamlab-network-read", "teamlab-network-apply", "teamlab-network-read" }, guest.Commands.Select(command => command.StepId));
+        }
+    }
+
+    [Theory]
     [InlineData("active")]
     [InlineData("persistent")]
     [InlineData("both")]

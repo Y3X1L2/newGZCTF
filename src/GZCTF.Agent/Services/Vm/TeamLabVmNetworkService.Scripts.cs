@@ -39,7 +39,8 @@ public sealed partial class TeamLabVmNetworkService
             new XAttribute("gateway", item.Gateway ?? ""),
             item.DnsServers.Select(dns => new XElement("dns", new XAttribute("ip", dns))),
             item.Routes.Select(route => new XElement("route", new XAttribute("destination", route.DestinationCidr),
-                new XAttribute("nextHop", route.NextHop), new XAttribute("metric", route.Metric ?? 1)))))).ToString(SaveOptions.DisableFormatting)));
+                new XAttribute("nextHop", route.NextHop), new XAttribute("metric", route.Metric ?? 1),
+                new XAttribute("verifyMetric", route.Metric is not null ? "true" : "false")))))).ToString(SaveOptions.DisableFormatting)));
 
     internal static string BuildWindowsReadScript(IReadOnlyList<GuestInterfaceRequirement> desired)
     {
@@ -70,8 +71,8 @@ public sealed partial class TeamLabVmNetworkService
               $nic.SetAttribute('mac', $cfg.MACAddress.Replace('-',':').ToLowerInvariant())
               $nic.SetAttribute('name', [string]$adapter.NetConnectionID)
               $nic.SetAttribute('dhcp', ([bool]$cfg.DHCPEnabled).ToString().ToLowerInvariant())
+              $expected = @($desired.network.interface | Where-Object { $_.mac -eq $cfg.MACAddress.Replace('-',':').ToLowerInvariant() })[0]
               if ($previous) {
-                $expected = @($desired.network.interface | Where-Object { $_.mac -eq $cfg.MACAddress.Replace('-',':').ToLowerInvariant() })[0]
                 $owned = @($previous.network.interface | Where-Object { $_.mac -eq $expected.mac })
                 foreach ($oldRoute in @($owned | ForEach-Object { $_.SelectNodes('route') })) {
                   if (@($expected.route | Where-Object { $_.destination -eq $oldRoute.destination -and $_.nextHop -eq $oldRoute.nextHop }).Count -ne 0) { continue }
@@ -96,13 +97,18 @@ public sealed partial class TeamLabVmNetworkService
                 if ($route.Destination -eq '0.0.0.0' -and $route.Mask -eq '0.0.0.0') {
                   Add-Value $nic 'gateway' $route.NextHop
                 } else {
+                  # Fresh DHCP/APIPA devices can lack usable metrics for unrelated OS routes.
+                  # Only declared routes need readback; ownership drift is checked separately.
+                  $requested = @($expected.SelectNodes('route') | Where-Object { $_.nextHop -eq $route.NextHop -and $_.destination.Split('/')[0] -eq $route.Destination })
+                  if ($requested.Count -eq 0) { continue }
                   $prefix = 0
                   foreach ($part in $route.Mask.Split('.')) {
                     $bits = [Convert]::ToString([int]$part,2).PadLeft(8,'0')
                     foreach ($bit in $bits.ToCharArray()) { if ($bit -eq '1') { $prefix++ } }
                   }
                   $node = $doc.CreateElement('route'); $node.SetAttribute('destination',($route.Destination + '/' + $prefix))
-                  $node.SetAttribute('nextHop',[string]$route.NextHop); $node.SetAttribute('metric',[string](Get-RouteMetric $route $cfg))
+                  $node.SetAttribute('nextHop',[string]$route.NextHop)
+                  if (@($requested | Where-Object { $_.destination -eq ($route.Destination + '/' + $prefix) -and $_.verifyMetric -eq 'true' }).Count -ne 0) { $node.SetAttribute('metric',[string](Get-RouteMetric $route $cfg)) }
                   [void]$nic.AppendChild($node)
                 }
               }
@@ -190,7 +196,7 @@ public sealed partial class TeamLabVmNetworkService
                   $routeMask = $mask -join '.'
                   $existing = @(Get-WmiObject -Class Win32_IP4RouteTable | Where-Object { $_.InterfaceIndex -eq $cfg.InterfaceIndex -and $_.Destination -eq $parts[0] -and $_.Mask -eq $routeMask -and $_.NextHop -eq $route.nextHop })
                   if ($existing.Count -eq 0) { Run-Netsh 'add' $route $cfg.InterfaceIndex 'persistent' }
-                  elseif (@($existing | Where-Object { (Get-RouteMetric $_ $cfg) -eq [int]$route.metric }).Count -eq 0) {
+                  elseif ($route.verifyMetric -eq 'true' -and @($existing | Where-Object { (Get-RouteMetric $_ $cfg) -eq [int]$route.metric }).Count -eq 0) {
                     Remove-OwnedRoute $route $cfg.InterfaceIndex
                     Run-Netsh 'add' $route $cfg.InterfaceIndex 'persistent'
                   }
