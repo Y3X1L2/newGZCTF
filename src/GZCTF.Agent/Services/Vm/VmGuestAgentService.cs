@@ -153,13 +153,16 @@ public sealed partial class VmGuestAgentService(ILogger<VmGuestAgentService> log
             command.TimeoutSeconds is < 1 or > 3600)
             throw new ArgumentException("Guest command is invalid.", nameof(command));
 
-        using var execute = await SendAsync(vmName, "guest-exec", new Dictionary<string, object?>
+        JsonDocument executeResponse;
+        try
         {
-            ["path"] = command.Path,
-            ["arg"] = command.Arguments,
-            ["env"] = command.Environment?.Select(item => $"{item.Key}={item.Value}").ToArray() ?? [],
-            ["capture-output"] = true
-        }, cancellationToken);
+            executeResponse = await SendAsync(vmName, "guest-exec", BuildGuestExecArguments(command), cancellationToken);
+        }
+        catch (InvalidOperationException exception) when (command.StandardInput is not null && IsInputDataUnsupportedError(exception.Message))
+        {
+            return new(false, false, null, "stdin-unavailable", null, "GZCTF_GUEST_STDIN_UNAVAILABLE");
+        }
+        using var execute = executeResponse;
         var pid = ReadInt64(execute.RootElement.GetProperty("return"), "pid")
                   ?? throw new InvalidOperationException("QGA guest-exec returned no process id.");
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -366,6 +369,31 @@ public sealed partial class VmGuestAgentService(ILogger<VmGuestAgentService> log
             ["execute"] = command,
             ["arguments"] = arguments
         }.Where(item => item.Value is not null).ToDictionary());
+
+    internal const int MaxStandardInputBytes = 64 * 1024;
+
+    internal static IReadOnlyDictionary<string, object?> BuildGuestExecArguments(VmGuestCommandRequest command)
+    {
+        var arguments = new Dictionary<string, object?>
+        {
+            ["path"] = command.Path, ["arg"] = command.Arguments,
+            ["env"] = command.Environment?.Select(item => $"{item.Key}={item.Value}").ToArray() ?? [],
+            ["capture-output"] = true
+        };
+        if (command.StandardInput is { } input)
+        {
+            if (Encoding.UTF8.GetByteCount(input) > MaxStandardInputBytes)
+                throw new ArgumentException("Guest command standard input exceeds its byte limit.", nameof(command));
+            arguments["input-data"] = Convert.ToBase64String(Encoding.UTF8.GetBytes(input));
+        }
+        return arguments;
+    }
+
+    internal static bool IsInputDataUnsupportedError(string message) =>
+        message.Contains("input-data", StringComparison.OrdinalIgnoreCase) &&
+        (message.Contains("unexpected", StringComparison.OrdinalIgnoreCase) ||
+         message.Contains("unsupported", StringComparison.OrdinalIgnoreCase) ||
+         message.Contains("not supported", StringComparison.OrdinalIgnoreCase));
 
     static string? DecodeCapturedOutput(JsonElement element, string property)
     {

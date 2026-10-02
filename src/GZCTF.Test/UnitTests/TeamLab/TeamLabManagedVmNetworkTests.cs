@@ -588,6 +588,107 @@ public sealed class TeamLabManagedVmNetworkTests
         finally { File.Delete(path); }
     }
 
+    [Fact]
+    public async Task WindowsNetworkTransport_ExecutesEightNicsWithMaximumRoutesThroughBoundedStdin()
+    {
+        var plan = Plan(os: TeamLabGuestOperatingSystem.Windows);
+        var networks = Enumerable.Range(0, 8).Select(i => new TeamLabNetworkIntentV2("net" + i,
+            $"10.96.{i}.0/24", $"10.96.{i}.1", [new("port" + i, "linux-vm", $"02:42:29:19:d6:{20 + i:x2}", $"10.96.{i}.20")], [], [])).ToArray();
+        var attachments = Enumerable.Range(0, 8).Select(i => new TeamLabAssetNetworkAttachmentV2("net" + i,
+            "port" + i, "eth" + i, $"10.96.{i}.20", null, false, InterfaceKey: "nic" + i,
+            MacAddress: $"02:42:29:19:d6:{20 + i:x2}", PrefixLength: 24, UseDefaultGateway: false,
+            DnsServers: ["192.0.2.53", "192.0.2.54", "192.0.2.55"],
+            StaticRoutes: Enumerable.Range(0, 8).Select(r => new TeamLabGuestRouteV2($"172.16.{r}.0/24", $"10.96.{i}.1", 25)).ToArray())).ToArray();
+        var asset = plan.Assets[0] with { NetworkAttachments = attachments };
+        plan = plan with { Assets = [asset], Networks = networks };
+        var desired = TeamLabVmNetworkService.ResolveInterfaces(plan, asset);
+        foreach (var command in new[] { TeamLabVmNetworkService.BuildApplyCommand(asset, desired), TeamLabVmNetworkService.BuildReadCommand(asset, desired) })
+        {
+            Assert.True(command.Arguments.Sum(value => value.Length) + command.Path.Length < 2000);
+            Assert.True(Encoding.UTF8.GetByteCount(command.StandardInput!) < VmGuestAgentService.MaxStandardInputBytes);
+            Assert.Contains("input-data", VmGuestAgentService.BuildGuestExecArguments(command));
+        }
+        if (!OperatingSystem.IsWindows()) return;
+        var setup = """
+            $script:Configs=@(); $script:Adapters=@(); $script:Routes=@()
+            for ($i=0;$i -lt 8;$i++) {
+              $script:Configs+=New-Object PSObject -Property @{MACAddress=('02:42:29:19:d6:' + (20+$i).ToString('x2'));Index=(7+$i);InterfaceIndex=(19+$i);IPConnectionMetric=5;DHCPEnabled=$false;IPAddress=@('10.96.'+$i+'.20');IPSubnet=@('255.255.255.0');DefaultIPGateway=@();DNSServerSearchOrder=@('192.0.2.53','192.0.2.54','192.0.2.55')}
+              $script:Adapters+=New-Object PSObject -Property @{Index=(7+$i);NetConnectionID=('ens'+(3+$i))}
+              for ($r=0;$r -lt 8;$r++) { $script:Routes+=New-Object PSObject -Property @{InterfaceIndex=(19+$i);Destination=('172.16.'+$r+'.0');Mask='255.255.255.0';NextHop=('10.96.'+$i+'.1');Metric1=30} }
+            }
+            function Get-WmiObject {
+              param($Class,$Filter)
+              switch($Class) {
+                'Win32_NetworkAdapterConfiguration' { return $script:Configs }
+                'Win32_NetworkAdapter' { if ($Filter) { return @($script:Adapters | Where-Object { ('Index='+$_.Index) -eq $Filter }) }; return $script:Adapters }
+                'Win32_IP4RouteTable' { return $script:Routes }
+                default { throw 'Unexpected WMI class' }
+              }
+            }
+            function Invoke-Netsh-Test { throw 'Correct maximum-size topology should need no netsh changes' }
+            """;
+        foreach (var command in new[] { TeamLabVmNetworkService.BuildApplyCommand(asset, desired), TeamLabVmNetworkService.BuildReadCommand(asset, desired) })
+        {
+            var stateDir = Path.Combine(Path.GetTempPath(), "gzctf-stdin-max-" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                var source = command.StandardInput!.Replace("$stateRoot = Join-Path $env:ProgramData 'GZCTF\\TeamLab'",
+                    "$stateRoot = '" + stateDir.Replace("'", "''", StringComparison.Ordinal) + "'")
+                    .Replace("& \"$env:SystemRoot\\System32\\netsh.exe\"", "Invoke-Netsh-Test");
+                Assert.DoesNotContain("netsh.exe", source);
+                var result = await RunPowerShellStdinAsync(command, setup + "\n" + source);
+                Assert.True(result.ExitCode == 0, result.Error);
+                if (command.StepId == "teamlab-network-read")
+                {
+                    var actual = TeamLabVmNetworkService.ParseSnapshot(result.Output);
+                    Assert.Equal(8, actual.Count);
+                    Assert.True(TeamLabVmNetworkService.Matches(desired, actual, out var mismatch), mismatch);
+                }
+            }
+            finally { if (Directory.Exists(stateDir)) Directory.Delete(stateDir, true); }
+        }
+    }
+
+    [Fact]
+    public async Task WindowsStdinUnavailable_FailsClearlyWithoutFallback()
+    {
+        var plan = Plan(os: TeamLabGuestOperatingSystem.Windows);
+        var guest = new FakeGuest { ReadFailure = new(false, false, 78, "stdin-unavailable", null, "GZCTF_GUEST_STDIN_UNAVAILABLE") };
+        var result = await Service(guest).ApplyAsync(plan, plan.Assets[0], false, CancellationToken.None);
+        Assert.False(result.Success);
+        Assert.Equal("guest_qga_stdin_unavailable", result.ErrorCode);
+        Assert.Single(guest.Commands);
+        if (!OperatingSystem.IsWindows()) return;
+        var command = TeamLabVmNetworkService.BuildReadCommand(plan.Assets[0], TeamLabVmNetworkService.ResolveInterfaces(plan, plan.Assets[0]));
+        var launched = await RunPowerShellStdinAsync(command, "");
+        Assert.Equal(78, launched.ExitCode);
+        Assert.Contains("GZCTF_GUEST_STDIN_UNAVAILABLE", launched.Error);
+    }
+
+    static async Task<(int ExitCode, string Output, string Error)> RunPowerShellStdinAsync(VmGuestCommandRequest command, string input)
+    {
+        using var process = new Process { StartInfo = new ProcessStartInfo
+        {
+            FileName = "powershell.exe", UseShellExecute = false, RedirectStandardInput = true,
+            RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true,
+            StandardInputEncoding = new UTF8Encoding(false)
+        } };
+        foreach (var argument in command.Arguments) process.StartInfo.ArgumentList.Add(argument);
+        process.Start();
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        var output = process.StandardOutput.ReadToEndAsync(deadline.Token);
+        var error = process.StandardError.ReadToEndAsync(deadline.Token);
+        await process.StandardInput.WriteAsync(input.AsMemory(), deadline.Token);
+        process.StandardInput.Close();
+        try { await process.WaitForExitAsync(deadline.Token); }
+        catch (OperationCanceledException)
+        {
+            if (!process.HasExited) process.Kill(entireProcessTree: true);
+            throw;
+        }
+        return (process.ExitCode, await output, await error);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -612,7 +713,9 @@ public sealed class TeamLabManagedVmNetworkTests
         var command = TeamLabVmNetworkService.BuildApplyCommand(plan.Assets[0], desired);
         Assert.Equal(VmBootstrapService.WindowsPowerShellPath, command.Path);
         Assert.Contains("-EncodedCommand", command.Arguments);
-        var script = Encoding.Unicode.GetString(Convert.FromBase64String(command.Arguments.Last()));
+        Assert.Equal(TeamLabVmNetworkService.WindowsStdinLauncher,
+            Encoding.Unicode.GetString(Convert.FromBase64String(command.Arguments.Last())));
+        var script = command.StandardInput!;
         Assert.Contains("Get-WmiObject", script);
         Assert.Contains("netsh.exe", script);
         Assert.Contains("gateway = 'none'", script);

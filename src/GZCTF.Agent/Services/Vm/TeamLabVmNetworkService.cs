@@ -59,6 +59,8 @@ public sealed partial class TeamLabVmNetworkService(IVmGuestAgentClient guest)
             var apply = await guest.ExecuteAsync(expectedName, BuildApplyCommand(asset, desired), token, verifyIdentity);
             if (!apply.Success)
             {
+                if (apply.StandardError?.Contains("GZCTF_GUEST_STDIN_UNAVAILABLE", StringComparison.Ordinal) == true)
+                    throw new GuestInputException();
                 if (apply.StandardError?.Contains("GZCTF_NETWORK_ROLLBACK_FAILED", StringComparison.Ordinal) == true)
                     return new(false, stage, "guest_network_rollback_failed",
                         "Guest network configuration failed and rollback could not be confirmed; inspect the preserved /var/lib/gzctf/teamlab/network-backups files before retrying.");
@@ -103,6 +105,11 @@ public sealed partial class TeamLabVmNetworkService(IVmGuestAgentClient guest)
             return new(false, stage, "guest_network_tools_unavailable",
                 "Managed Linux network readback requires Python, iproute2 JSON output and systemd-resolved/resolvectl; install the missing components, then retry.");
         }
+        catch (GuestInputException)
+        {
+            return new(false, stage, "guest_qga_stdin_unavailable",
+                "QEMU guest agent cannot deliver script input; upgrade QGA to a version supporting guest-exec input-data, then retry.");
+        }
         catch (GuestIdentityException)
         {
             return new(false, stage, "guest_identity_conflict", "VM native identity changed during guest network control.");
@@ -123,6 +130,8 @@ public sealed partial class TeamLabVmNetworkService(IVmGuestAgentClient guest)
         await RequireIdentityAsync(verifyIdentity, token);
         var result = await guest.ExecuteAsync(asset.ResourceId, BuildReadCommand(asset, desired), token, verifyIdentity);
         await RequireIdentityAsync(verifyIdentity, token);
+        if (result.StandardError?.Contains("GZCTF_GUEST_STDIN_UNAVAILABLE", StringComparison.Ordinal) == true)
+            throw new GuestInputException();
         if (result.StandardError?.Contains("GZCTF_NETWORK_TOOLS_MISSING", StringComparison.Ordinal) == true)
             throw new GuestNetworkToolsException();
         if (!result.Success || string.IsNullOrWhiteSpace(result.StandardOutput))
@@ -176,9 +185,18 @@ public sealed partial class TeamLabVmNetworkService(IVmGuestAgentClient guest)
         ? WindowsCommand("teamlab-network-apply", BuildWindowsApplyScript(desired), 120)
         : new("teamlab-network-apply", "/usr/bin/timeout", ["--signal=TERM", "240", "/usr/bin/python3", "-c", BuildLinuxApplyScript(desired)], 250);
 
+    internal const string WindowsStdinLauncher = """
+        $ErrorActionPreference='Stop'
+        [Console]::InputEncoding=New-Object Text.UTF8Encoding
+        $source=[Console]::In.ReadToEnd()
+        if ([string]::IsNullOrEmpty($source)) { [Console]::Error.Write('GZCTF_GUEST_STDIN_UNAVAILABLE'); exit 78 }
+        & ([scriptblock]::Create($source))
+        """;
+
     static VmGuestCommandRequest WindowsCommand(string id, string script, int timeout) => new(id,
         VmBootstrapService.WindowsPowerShellPath,
-        ["-NoProfile", "-NonInteractive", "-EncodedCommand", Convert.ToBase64String(Encoding.Unicode.GetBytes(script))], timeout);
+        ["-NoProfile", "-NonInteractive", "-EncodedCommand", Convert.ToBase64String(Encoding.Unicode.GetBytes(WindowsStdinLauncher))], timeout)
+        { StandardInput = script };
 
     internal static IReadOnlyList<GuestInterfaceSnapshot> ParseSnapshot(string xml)
     {
@@ -238,6 +256,7 @@ public sealed partial class TeamLabVmNetworkService(IVmGuestAgentClient guest)
     static string PsQuote(string value) => "'" + value.Replace("'", "''") + "'";
 
     sealed class GuestNetworkToolsException : Exception;
+    sealed class GuestInputException : Exception;
     sealed class GuestIdentityException : Exception;
 }
 

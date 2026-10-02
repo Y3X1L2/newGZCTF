@@ -133,6 +133,26 @@ public sealed class VmGuestControlTests
     }
 
     [Fact]
+    public void GuestAgentStandardInput_IsBoundedAndAbsentFromPublicCommandWireFormat()
+    {
+        var command = new VmGuestCommandRequest("network", "powershell.exe", ["-Command", "-"]);
+        Assert.False(VmGuestAgentService.BuildGuestExecArguments(command).ContainsKey("input-data"));
+        var input = "Write-Output '网络初始化'";
+        command = command with { StandardInput = input };
+        var payload = VmGuestAgentService.BuildCommandPayload("guest-exec", VmGuestAgentService.BuildGuestExecArguments(command));
+        using var json = JsonDocument.Parse(payload);
+        Assert.Equal(input, Encoding.UTF8.GetString(Convert.FromBase64String(
+            json.RootElement.GetProperty("arguments").GetProperty("input-data").GetString()!)));
+        Assert.DoesNotContain("网络初始化", JsonSerializer.Serialize(command));
+        Assert.DoesNotContain("StandardInput", JsonSerializer.Serialize(command));
+        Assert.DoesNotContain(input, command.ToString());
+        Assert.Throws<ArgumentException>(() => VmGuestAgentService.BuildGuestExecArguments(
+            command with { StandardInput = new string('中', VmGuestAgentService.MaxStandardInputBytes / 3 + 1) }));
+        Assert.True(VmGuestAgentService.IsInputDataUnsupportedError("Parameter 'input-data' is unexpected"));
+        Assert.False(VmGuestAgentService.IsInputDataUnsupportedError("A different QGA command failed"));
+    }
+
+    [Fact]
     public void BootstrapArtifactPaths_RejectTraversalAndTemplatesFailClosed()
     {
         Assert.Equal("bin/install.sh", VmBootstrapService.NormalizeArtifactPath("./bin/install.sh"));
