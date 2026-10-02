@@ -1,14 +1,25 @@
 # TeamLab 自动网络配置：本次部署与回退
 
-2026-10-02。此文件是可审阅的执行方案，**不是已部署记录**。只有用户明确批准后执行服务器步骤。通用发布规则仍以 [维护窗口手册](vnext-maintenance-window-rollout.md) 为准。
+2026-10-02。用户已明确批准部署10.24.0.27；本次部署及限定实机验收已完成。通用发布规则仍以 [维护窗口手册](vnext-maintenance-window-rollout.md) 为准。下方步骤保留供复现，执行下一次服务器变更须核对当时授权与现场，不能照搬旧基线。
 
-## 范围和现状
+## 本次实际完成记录
+
+- 活动目录 `/opt/gzctf/releases/teamlab-managed-fa97187c-20261002/publish`，主站源码fa97187c、Agent bb09393c、前端4fccca67。主站和Agent active、NRestarts=0，首页/Config200；末次核对磁盘约85GiB可用。
+- 完整主库、Guacamole库、附件、原Agent和受保护配置备份位于 `/opt/gzctf/backups/teamlab-managed-4fccca67-20261002`；备份全文可读取，独立生产结构副本完成迁移测试。正式迁移头已为 `20261001145237_AddTeamLabManagedGuestNetwork`。
+- 首次切换遗漏apphost执行权限，自动回退后补齐755，再正常切换。后续主站/Agent修复使用GitHub prerelease附件传输并验签，未把二进制加入Git。
+- 只有`.27`升级，`.30/.31`未升级；临时调度限制已恢复。承载新网络策略的网络owner及Worker仍明确选择`.27`，尤其不能把进阶逐卡DHCP发送到旧Agent。
+- Windows双卡及路由、Ubuntu24双卡、DHCP/AD核心访问、Docker HTTP、新建/重置/不同地址段隔离/销毁均通过。Server2008R2缺QGA负例已正确分类。图形RDP登录、同CIDR/VRF及跨Worker未测。
+- 本次9个验收runtime已按平台正常流程销毁并审计无归属残留；原8台VM保留且关机，源镜像/PVE/快照/旧release/备份保留。
+
+发布物摘要、逐项结果和限制以 [实际交接](../development/handoffs/2026-10-02-teamlab-managed-network.md) 为准。
+
+## 发布前基线（历史预检，不是当前版本）
 
 - 本地任务分支：`codex/teamlab-managed-network`，基于 `origin/main bc3599aa` 并合入实际在用的 Windows 网络分支；不合并 main。
 - 主站：`10.24.0.27`。2026-10-02只读复核仍为 `/opt/gzctf/releases/teamlab-net-279f259-20260927/publish`，主站和本机 Agent active，Config API 200，约92GiB可用，.NET10.0.8；KVM、virsh、QEMU和xorriso存在。
 - 本机 Agent 实际入口 `/usr/local/bin/gzctf-agent`，旧摘要 `993f00ce4874b0e41131ca8cb596e9e3bb76997984008fca795fa9a45963f475`。
-- 同步相关 Worker Agent；逐节点确认 inventory、二进制摘要和 Fabric 健康。`.30/.31`本轮直接免密SSH未连通，不能把先前版本/容量当成新核验。批准后优先使用现有平台 Agent 同步流程，失败节点保持不可调度，不宣称更新成功；如流程需要额外现场操作，再使用已有管理方式。
-- 保留全部原教学实例、PVE VM、模板、快照和备份，不清理镜像或日志，不修改公网网关，不进行题解/攻击测试。
+- 原方案包括同步相关Worker；本次实际只升级`.27`并限定测试在本节点。`.30/.31`保持旧Agent，末次平台心跳在线且可调度，不代表新策略验收通过。
+- 保留原教学实例定义和磁盘、PVE VM、模板、快照和备份。用户允许关闭测试实例，原8台VM已通过正常操作关机；不清理源镜像/日志，不修改公网网关，不进行题解/攻击测试。
 
 ## 发布物
 
@@ -20,12 +31,12 @@
 | `release/<完整SHA>/main/agent/gzctf-agent` | Linux x64自包含Agent，主站和Worker使用同一文件 |
 | `release/<完整SHA>/manifest.json` | 文件长度/摘要、源提交、迁移身份 |
 | `release/<完整SHA>/release.tar.gz` | 不含运行凭据及本地配置的传输包 |
-| `managed-network-migration.sql` | 从既有DNS资产迁移头到新迁移的幂等前向SQL；只是生成，未执行 |
+| `managed-network-migration.sql` | 从既有DNS资产迁移头到新迁移的幂等前向SQL；本次已验证并执行 |
 | `tests/`、`ui/` | 原始本地门禁及界面fixture证据，不上传到Git |
 
 打包时排除 `appsettings*.json`，部署从原运行位置保留受保护配置和现有环境变量；不在本地发布物保存服务器连接串、Cookie或密码。前端最终制品摘要必须对应发布SHA；已有完整门禁后，只有制品身份变化时单独重建制品，不借机跳过源码门禁。
 
-## 批准后的步骤
+## 可复现步骤（本次已按限定范围执行）
 
 1. **确认现场和维护窗口。** 读取软链接、服务参数、当前迁移头、节点库存、排队及执行任务；核对存储和镜像分布。暂停新的部署操作，等待无法中断的任务结束。已有QEMU/Docker业务进程不自动销毁。
 2. **保留可恢复事实。** 在服务器独立备份目录保存完整数据库备份、迁移版本、当前配置/附件和原Agent；检查非零大小、摘要及备份可读取。配置备份采用受限权限，不把秘密写进报告。旧release继续保留。
@@ -49,7 +60,7 @@
 
 本轮不实现固定IP原样多副本的VRF/地址池重设计；如当前地址池无法原样并行复制，记录限制，不换成只看进程的验收。域信任与业务文件权限属于网络完成后的业务检查，不由网络执行器自动重新加域。
 
-本轮发布要求主站和承载新场景的全部Agent同步升级。ManagedStatic有明确能力门禁；进阶逐卡DHCP策略没有单独的旧Agent能力标记，因此不能在未更新的网络owner/Worker上发布该类新场景。相关节点未确认新摘要时，保持新场景验收暂停，不能把混用版本记录为已支持。
+主站和承载新场景的全部Agent需要相应版本。ManagedStatic有明确能力门禁；进阶逐卡DHCP策略没有单独的旧Agent能力标记，因此不能在未更新的网络owner/Worker上发布该类新场景。本次已在`.27`完成验收，相关新场景仍限定该节点；混用版本不记录为已支持。
 
 ## 回退
 
@@ -61,4 +72,4 @@
 
 ## 当前证据边界
 
-本地源码、PostgreSQL迁移、真实隔离OVN/OVS/模拟VM测试与前端fixture已分别验证；尚未把本版本部署到 `.27/.30/.31`，未进行真实Linux/Windows QGA初始化和Server2008R2验收。服务器变更前的用户批准来自本次任务的明确要求，而不是自动批准或默认授权。
+`.27`部署及真实Linux/Windows网络、DHCP/AD、Docker生命周期验收已完成；`.30/.31`未升级。旧2008R2镜像只完成缺QGA负例，未证明正向支持。前端尺寸/主题证据来自fixture，未做服务器完整页面视觉验收。详情与安全回退边界见实际交接；服务器变更批准来自用户本次明确要求。

@@ -1,12 +1,13 @@
 # YINYU 当前开发状态
 
-## TeamLab 自动网络配置：本地开发完成，尚未部署（2026-10-02）
+## TeamLab 自动网络配置：已部署并完成限定实机验收（2026-10-02）
 
 - 分支 `codex/teamlab-managed-network` 从 `origin/main bc3599aa` 建立并合入当前服务器在用的 Windows 网络分支；主工作区和本地教学问答分支保留，未合并 main。实现 DHCP/平台静态两种新建方式、VM逐网卡IP/DNS/网关/路由、发布冻结/重置/更新、QGA应用与真实回读；新要求仅用于VM，Docker保持既有行为。旧预配置模式只保留存量读取，不增加复杂修补系统。
-- 源码验证截止 `8959fad8`：完整单元1241/1241、完整集成302/302、前端110文件373测试及完整门禁、Release解决方案构建通过；PostgreSQL迁移前向/旧数据/恢复和原生隔离OVN/OVS/模拟VM数据面通过。本地脚本及界面fixture验证不能代替真实Windows/Linux、主站完整链路验收。
-- 新迁移 `20261001145237_AddTeamLabManagedGuestNetwork` 添加五个可空列；前向SQL和SHA命名发布物在仓库外准备，未操作服务器数据库。真实QGA初始化、Server2008R2、域登录、重置/双实例/销毁验收尚未进行。进阶DHCP须相关Agent共同升级，不承诺混用旧Agent；固定IP多副本VRF/地址池设计不在本轮。
-- 2026-10-02只读复核 `.27` 仍运行 `teamlab-net-279f259-20260927`，主站/Agent active，Config200；实际Agent `/usr/local/bin/gzctf-agent` SHA256为 `993f00ce4874b0e41131ca8cb596e9e3bb76997984008fca795fa9a45963f475`，根盘约92GiB可用，KVM/virsh/QEMU/xorriso存在。`.30/.31`本轮直接免密SSH未连通，不能引用旧空间/版本作为本次核验。
-- 用户明确要求部署前询问；目前未部署、未修改原教学runtime或PVE模板。统一交接、实际证据和部署/回退入口见 [自动网络交接](handoffs/2026-10-02-teamlab-managed-network.md)。
+- 用户明确批准部署 `.27` 并允许关闭测试实例。活动目录为 `/opt/gzctf/releases/teamlab-managed-fa97187c-20261002/publish`：主站源码 `fa97187c`、Agent `bb09393c`、前端 `4fccca67`；实际与内置Agent SHA256均为 `c7b66c3408e3328bcc56f2577a9e363abc06f129c597d6c7acd4009ebb52ede8`。服务active、NRestarts=0，首页/Config200，根盘约85GiB可用。
+- 完整数据库及附件备份保留在 `/opt/gzctf/backups/teamlab-managed-4fccca67-20261002`；压缩备份全文可读取，生产结构及迁移历史已恢复到独立验证库并验证前向升级。迁移 `20261001145237_AddTeamLabManagedGuestNetwork` 已应用，添加五个可空列；旧release、原模板、PVE虚拟机和快照保留。
+- 最终源码门禁：后端单元1251/1251、集成302/302，前端110文件373测试及完整门禁通过，Release构建通过（已有警告保留）。真实 `.27` 验收通过现代Windows双卡/明确路由、Ubuntu24双卡、DHCP/AD域解析与普通用户系统认证/共享读取、Docker HTTP，以及新建/重置/不同地址段双实例隔离/销毁。未做图形RDP登录；Linux测试DNS只验证配置，未验证解析服务；同地址段多副本VRF不在范围内。
+- Server2008R2原镜像缺QGA，已验证明确返回 `guest_qga_unavailable / guest-ready`，不能列为旧系统正例。Linux新模板518已Ready并通过实测；v1清理时删除machine-id导致网络服务不能初始化，v2仅修正镜像准备状态后通过。
+- 本次9个专用验收runtime全部销毁；原8台VM定义和磁盘保留、已关机。`.27/.30/.31`心跳在线并恢复可调度，只有`.27`升级；`.30/.31`仍为旧Agent，不在它们上运行进阶逐卡DHCP新策略。后续新场景应明确选择`.27`作为网络owner及Worker。统一证据、限制和回退见 [自动网络交接](handoffs/2026-10-02-teamlab-managed-network.md)。
 
 ## TeamLab 网络运行链部署（2026-09-27）
 
