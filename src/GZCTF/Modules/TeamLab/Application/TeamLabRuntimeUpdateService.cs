@@ -714,13 +714,30 @@ public sealed class TeamLabRuntimeUpdateService(
         {
             if (!currentByKey.TryGetValue(asset.Key, out var existing))
                 changes.Add(new(asset.Key, asset.Name, asset.Kind, "add"));
-            else if (!AssetEquals(existing, asset))
+            else if (!AssetEquals(existing, asset) || InheritedStaticDnsChanged(current, target, asset))
                 changes.Add(new(asset.Key, asset.Name, asset.Kind, "replace"));
         }
         foreach (var asset in current.Assets.Where(item => !targetByKey.ContainsKey(item.Key))
                      .OrderBy(item => item.DisplayOrder).ThenBy(item => item.Key, StringComparer.Ordinal))
             changes.Add(new(asset.Key, asset.Name, asset.Kind, "remove"));
         return changes;
+    }
+
+    static bool InheritedStaticDnsChanged(TeamLabExecutionTopology current, TeamLabExecutionTopology target,
+        TeamLabExecutionAsset asset)
+    {
+        if (asset.Kind != TeamLabAssetKind.Vm || asset.VmNetworkMode != VmNetworkMode.ManagedStatic) return false;
+        return asset.Interfaces.Where(iface => iface.DnsServers is null).Any(iface =>
+            DnsAddressIntent(current, iface.NetworkKey) != DnsAddressIntent(target, iface.NetworkKey));
+    }
+
+    // Runtime subnets are unchanged by asset updates; a different offset on the DNS asset changes the inherited resolver.
+    static (string? NetworkKey, int? HostOffset) DnsAddressIntent(TeamLabExecutionTopology topology, string networkKey)
+    {
+        var assetKey = topology.Networks.FirstOrDefault(network => network.Key == networkKey)?.DnsServerAssetKey;
+        var iface = topology.Assets.FirstOrDefault(asset => asset.Key == assetKey)?.Interfaces
+            .FirstOrDefault(item => item.NetworkKey == networkKey);
+        return (iface?.NetworkKey, iface?.HostOffset);
     }
 
     static bool AssetEquals(TeamLabExecutionAsset left, TeamLabExecutionAsset right) =>

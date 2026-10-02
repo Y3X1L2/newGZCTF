@@ -28,7 +28,7 @@
 
 共享附件包含稳定 interface key、本次 MAC 与 prefix。ManagedStatic 必须齐全，MAC 必须匹配同一个网络端口，prefix 必须匹配运行网段。DHCP 的逐接口网关、DNS、静态路由还写入租约，因此 DNS 或网关编辑会改变 NetworkDigest；静态和预配置 VM 不产生 DHCP 租约。旧 JSON 新字段默认省略，保留旧冻结计划摘要读取。
 
-运行更新比较完整资产执行定义。新模式、名称、DNS、网关和路由变化会产生 `replace`，沿原部署票据清理并重建该来宾；这是有中断的资产替换，不能称为无损网络热更新。没有增加第二套队列，Controller 没有来宾命令编排。
+运行更新比较完整资产执行定义。新模式、名称、DNS、网关和路由变化会产生 `replace`，沿原部署票据清理并重建该来宾；这是有中断的资产替换，不能称为无损网络热更新。提供网段 DNS 的资产地址变化时，继承该 DNS 的 ManagedStatic VM 也列入替换，预览与执行使用同一变更列表；明确 DNS/无 DNS、其它网段和 DHCP 来宾不因此替换。没有增加第二套队列，Controller 没有来宾命令编排。
 
 ## 迁移与恢复
 
@@ -53,3 +53,11 @@ ManagedStatic 要求 Agent 声明 `teamlab.guest-network.managed-static.v1`；Li
 能力要求接入预览计划、实际逻辑组放置与重校验、旧代次放置复用、已有分配/票据恢复、运行资产新增/替换预览与执行前验证、部署前和执行计划编译。缺少能力报告 `teamlab_guest_network_capability_unavailable` 或节点缺失特征；阻止旧 Agent 忽略新模式后仅凭 QEMU running 报成功。
 
 宿主 feature 只表示执行实现与宿主工具，不证明镜像中的 QGA、驱动、cloud-init 已准备；Agent 必须继续执行来宾验证。这次增量没有迁移。TeamLab 与放置定向测试 522/522 通过，覆盖旧 Agent 拒绝、新 Agent 可放置、Linux 缺 seed 拒绝、Windows 无 seed 可放置、继承模式与模板 OS、已有节点资产变更门禁。日志为仓库外 `contracts/capability-unit.log` 与 `managed-capability.trx`，全量门禁仍由父任务执行。
+
+## 2026-10-02 契约审查修正
+
+基线为整合提交 `d28559aa`，审查分支为 `codex/teamlab-managed-review-contracts`。Docker 草稿（含非发布的保存）拒绝新 VM 模式与接口策略，共享计划也拒绝 Docker 附件及租约中的新策略；正常 Docker 编译恢复既有网关和主网卡 DNS 行为。
+
+DNS 提供者的地址变化通过现有 `BuildChanges` 同时更新预览与执行的替换名单，无新增依赖维护子系统。测试覆盖 DNS 提供者 `.10 → .20` 后的实际预览以及部署执行计划编译：成员机被列为替换，最终 DNS 明确为 `.20`；另外覆盖多网卡 DNS 提供者、明确 DNS、无 DNS、其它网段、DHCP 和 Docker 的排除规则。这里的执行计划测试不代表真实来宾验收。
+
+TeamLab 单元测试 **581/581** 通过，`git diff --check` 通过。证据位于仓库外 `D:/Work/YINYU-Managed-Network-20261001/tests/contracts-review/teamlab.log` 与 `contracts-review-teamlab.trx`。本轮未增添迁移，未部署；父任务负责整合后的全量门禁与获批后的真实基础设施验收。
