@@ -113,7 +113,7 @@ public sealed class TeamLabOvnNetworkProviderTests
     public void RevisionOperations_AddOnlyChangedPortWithoutRebuildingNetwork()
     {
         var current = Plan();
-        var desired = current with { Networks = [current.Networks[0] with
+        var desired = current with { NetworkDigest = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", Networks = [current.Networks[0] with
         {
             Ports = [.. current.Networks[0].Ports,
                 new("port-b", "docker-2", "02:00:00:00:00:03", "10.0.1.30")]
@@ -133,7 +133,29 @@ public sealed class TeamLabOvnNetworkProviderTests
         Assert.Contains(operations, operation => operation["op"]?.GetValue<string>() == "insert" &&
             operation["table"]?.GetValue<string>() == "Logical_Switch_Port");
         Assert.DoesNotContain(operations, operation => operation["op"]?.GetValue<string>() == "delete");
-        Assert.DoesNotContain(operations, operation => operation["table"]?.GetValue<string>() == "Logical_Router");
+        var routerMetadata = operations.Where(operation => operation["table"]?.GetValue<string>() is
+            "Logical_Router" or "Logical_Router_Port").ToArray();
+        Assert.Equal(2, routerMetadata.Length);
+        foreach (var operation in routerMetadata)
+        {
+            Assert.Equal("mutate", operation["op"]!.GetValue<string>());
+            var where = operation["where"]!.AsArray();
+            Assert.Equal(current.RuntimePublicId.ToString("D"),
+                OvsdbJsonCodec.GetMapValue(where[0]![2], "gzctf-runtime"));
+            Assert.Equal(current.Generation.ToString(),
+                OvsdbJsonCodec.GetMapValue(where[0]![2], "gzctf-generation"));
+            Assert.Equal("name", where[1]![0]!.GetValue<string>());
+            var mutation = operation["mutations"]!.AsArray();
+            Assert.Equal(2, mutation.Count);
+            Assert.Equal("delete", mutation[0]![1]!.GetValue<string>());
+            Assert.Equal("gzctf-network-digest", mutation[0]![2]![1]![0]!.GetValue<string>());
+            Assert.Equal("insert", mutation[1]![1]!.GetValue<string>());
+            Assert.Equal(desired.NetworkDigest,
+                OvsdbJsonCodec.GetMapValue(mutation[1]![2], "gzctf-network-digest"));
+            // Only the revision key changes: chassis/ownership metadata needed by NAT is preserved.
+            Assert.Single(mutation[1]![2]![1]!.AsArray());
+            Assert.Null(operation["row"]);
+        }
         Assert.DoesNotContain(operations, operation => operation["op"]?.GetValue<string>() == "insert" &&
             operation["table"]?.GetValue<string>() == "Logical_Switch");
     }

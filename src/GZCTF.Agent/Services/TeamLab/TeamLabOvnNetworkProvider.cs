@@ -299,7 +299,36 @@ public sealed class TeamLabOvnNetworkProvider(
                 }
             });
         }
+        // NAT lookup requires the router and its ports to carry the same revision as the switches.
+        // Mutate only the digest key so chassis and other execution metadata remain intact.
+        foreach (var router in desired.NetworkControl?.Routers ?? [])
+        {
+            operations.Add(RefreshNetworkDigest("Logical_Router", RouterName(current, router), current, desired));
+            foreach (var networkKey in router.NetworkKeys)
+            {
+                var network = current.Networks.Single(item => item.Key == networkKey);
+                operations.Add(RefreshNetworkDigest("Logical_Router_Port",
+                    RouterPortName(current, network, router), current, desired));
+            }
+        }
         return operations;
+    }
+
+    static JsonObject RefreshNetworkDigest(string table, string name,
+        TeamLabExecutionPlanV2 current, TeamLabExecutionPlanV2 desired)
+    {
+        var where = OvsdbJsonCodec.OwnedWhere(current);
+        where.Add(new JsonArray { "name", "==", name });
+        return new JsonObject
+        {
+            ["op"] = "mutate", ["table"] = table, ["where"] = where,
+            ["mutations"] = new JsonArray
+            {
+                new JsonArray { "external_ids", "delete", Set(["gzctf-network-digest"]) },
+                new JsonArray { "external_ids", "insert",
+                    OvsdbJsonCodec.Map(("gzctf-network-digest", desired.NetworkDigest)) }
+            }
+        };
     }
 
     static bool Equals<T>(IReadOnlyList<T>? left, IReadOnlyList<T>? right) =>
