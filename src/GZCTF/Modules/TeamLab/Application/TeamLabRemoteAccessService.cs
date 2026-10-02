@@ -7,6 +7,7 @@ using GZCTF.Modules.TeamLab.Contracts;
 using GZCTF.Modules.TeamLab.Domain.Runtime;
 using GZCTF.Services;
 using GZCTF.Modules.Audit.Domain;
+using GZCTF.Modules.Audit.Contracts;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using Npgsql;
@@ -782,6 +783,9 @@ public sealed class TeamLabRemoteAccessService(
             events.Record(session.Runtime, "remote-access", TeamLabEventLevel.Warning,
                 OperationalEventCodes.TeamLab.RemoteSessionEnded, OperationalEventOutcome.Failed,
                 $"{session.RuntimeAsset.Name} 的 {session.Protocol} 远程会话清理未完成，系统将继续重试",
+                new OperationalError(OperationalErrorCategory.Unknown, OperationalErrorCodes.RecoveryDeferred,
+                    "Remote session infrastructure cleanup is pending.", true,
+                    WorkerNodeId: session.WorkerNodeId, Operation: "teamlab.remote-session.cleanup"),
                 workerNodeId: session.WorkerNodeId, detail: RemoteDetail(session, session.RuntimeAsset, actorId));
             return;
         }

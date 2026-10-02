@@ -73,3 +73,9 @@ TeamLab 单元测试 **581/581** 通过，`git diff --check` 通过。证据位�
 另外，Open API 远程会话创建/关闭已有执行分支，却未进入对应操作分发，异步任务被拒绝为 `teamlab_operation_invalid`。修正只接通这两种任务；会话执行器继续重新校验运行授权，不要求仅获 Runtime Grant 的 Token 额外取得控制范围授权。回归覆盖 scope 授权与 runtime-only 授权两条创建/读取/关闭链路、异范围管理员所签 Token 仍被拒绝。
 
 `OpenTeamLabOperationsApiTests` 与 `OpenImageApiTests` 合计 **20/20** 通过，证据为仓库外 `tests/contracts-review/fixed-api.log` 与 `fixed-api.trx`。这是本地 PostgreSQL/Redis 与 API 集成验证，远程节点连接使用测试替身；不表述为真实桌面会话验收。没有生产数据库或服务器变更。
+
+## 远程会话失败清理记录修正
+
+父任务全量运行的一次会话关闭未在十秒内完成，原始 TRX 显示它反复执行失败，并非队列轮询慢：清理失败分支记录 `Failed` 事件时没有必需的错误分类及代码，真实事件写入器抛错，覆盖了原本应保留的“等待清理”状态。现在记录可重试的 `recovery.deferred` 错误，保留 `Ending/cleanup_pending` 状态；真实节点/网关失败的原因仍由已有异常日志记录，通用事件不会猜测是哪个基础设施失败。
+
+使用真实 `EfOperationalEventWriter` 的回归确认第一次清理失败可持久化有效错误事件，下一次清理成功后到达 `Ended`。远程会话协调测试 **9/9** 通过，证据为仓库外 `tests/contracts-review/cleanup-error-regression.log` 与 `cleanup-error-regression.trx`。
