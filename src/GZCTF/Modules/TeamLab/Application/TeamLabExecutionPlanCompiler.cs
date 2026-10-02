@@ -36,7 +36,7 @@ public static class TeamLabExecutionPlanCompiler
 
         var interfaceOwners = allAssets
             .SelectMany(asset => asset.Interfaces.Select(item => new InterfaceOwner(
-                item.MacAddress, asset.AssetKey, item)))
+                item.MacAddress, asset.AssetKey, item, asset.Kind == TeamLabAssetKind.Vm)))
             .GroupBy(item => item.MacAddress, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(
                 group => group.Key,
@@ -47,7 +47,7 @@ public static class TeamLabExecutionPlanCompiler
                 StringComparer.OrdinalIgnoreCase);
         var interfacesByNetwork = allAssets
             .SelectMany(asset => asset.Interfaces.Select(item => new InterfaceOwner(
-                item.MacAddress, asset.AssetKey, item)))
+                item.MacAddress, asset.AssetKey, item, asset.Kind == TeamLabAssetKind.Vm)))
             .GroupBy(item => item.Interface.NetworkKey, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
         var dhcpMacs = allAssets.Where(asset => asset.Kind != TeamLabAssetKind.Vm ||
@@ -109,10 +109,10 @@ public static class TeamLabExecutionPlanCompiler
                         record.MacAddress,
                         AddressWithoutPrefix(record.IpAddress),
                         record.Hostname,
-                        interfaceOwners.TryGetValue(record.MacAddress, out var gatewayOwner)
+                        interfaceOwners.TryGetValue(record.MacAddress, out var gatewayOwner) && gatewayOwner.IsVm
                             ? gatewayOwner.Interface.UseDefaultGateway ?? gatewayOwner.Interface.Primary : null,
-                        interfaceOwners.TryGetValue(record.MacAddress, out var dnsOwner) ? dnsOwner.Interface.DnsServers : null,
-                        interfaceOwners.TryGetValue(record.MacAddress, out var routeOwner) ? routeOwner.Interface.StaticRoutes : null)).ToArray(),
+                        interfaceOwners.TryGetValue(record.MacAddress, out var dnsOwner) && dnsOwner.IsVm ? dnsOwner.Interface.DnsServers : null,
+                        interfaceOwners.TryGetValue(record.MacAddress, out var routeOwner) && routeOwner.IsVm ? routeOwner.Interface.StaticRoutes : null)).ToArray(),
                     (switchIntent.DnsRecords ?? switchIntent.Records)
                         .Select(record => new TeamLabDnsRecordV2(record.Hostname, AddressWithoutPrefix(record.IpAddress)))
                         .DistinctBy(record => (record.Hostname, record.IpAddress))
@@ -166,7 +166,9 @@ public static class TeamLabExecutionPlanCompiler
                 asset.OperatingSystem == OSType.Windows
                     ? TeamLabGuestOperatingSystem.Windows
                     : TeamLabGuestOperatingSystem.Linux,
-                (TeamLabGuestNetworkMode)(asset.VmNetworkMode ?? VmNetworkMode.Dhcp));
+                asset.Kind == TeamLabAssetKind.Vm
+                    ? (TeamLabGuestNetworkMode)(asset.VmNetworkMode ?? VmNetworkMode.Dhcp)
+                    : TeamLabGuestNetworkMode.Dhcp);
         }).ToArray();
 
         var assetKinds = assets.ToDictionary(item => item.AssetKey, item => item.Kind, StringComparer.Ordinal);
@@ -230,11 +232,14 @@ public static class TeamLabExecutionPlanCompiler
                  PortKey(asset.AssetKey, item.Key),
                  $"eth{index}",
                  AddressWithoutPrefix(item.IpAddress),
-                 (item.UseDefaultGateway ?? item.Primary) ? gateways.GetValueOrDefault(item.NetworkKey) : null,
+                 asset.Kind == TeamLabAssetKind.Docker || (item.UseDefaultGateway ?? item.Primary) ? gateways.GetValueOrDefault(item.NetworkKey) : null,
                  item.Primary,
-                 item.DnsServers.FirstOrDefault(),
-                 item.Key, item.MacAddress, item.PrefixLength, item.GuestInterfaceName,
-                 item.UseDefaultGateway, item.DnsServers, item.StaticRoutes))
+                 (asset.Kind == TeamLabAssetKind.Vm || item.Primary) ? item.DnsServers.FirstOrDefault() : null,
+                 item.Key, item.MacAddress, item.PrefixLength,
+                 asset.Kind == TeamLabAssetKind.Vm ? item.GuestInterfaceName : null,
+                 asset.Kind == TeamLabAssetKind.Vm ? item.UseDefaultGateway : null,
+                 asset.Kind == TeamLabAssetKind.Vm ? item.DnsServers : null,
+                 asset.Kind == TeamLabAssetKind.Vm ? item.StaticRoutes : null))
             .ToArray();
 
     static string PortKey(string assetKey, string interfaceKey) => $"{assetKey}:{interfaceKey}";
@@ -304,6 +309,6 @@ public static class TeamLabExecutionPlanCompiler
         var bytes = BitConverter.GetBytes(lastHost).Reverse().ToArray();
         return string.Join('.', bytes.Select(value => value.ToString()));
     }
-    sealed record InterfaceOwner(string MacAddress, string AssetKey, TeamLabNodeInterfaceIntent Interface);
+    sealed record InterfaceOwner(string MacAddress, string AssetKey, TeamLabNodeInterfaceIntent Interface, bool IsVm);
 
 }

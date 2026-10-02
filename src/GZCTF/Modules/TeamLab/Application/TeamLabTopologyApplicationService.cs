@@ -111,6 +111,7 @@ public sealed class TeamLabTopologyApplicationService(
         var definition = TeamLabReleaseCodec.Normalize(new TeamLabTopologyDefinitionModel(
             model.Name, model.Networks, model.Assets, model.Connections,
             model.Infrastructure, model.Observation));
+        RequireSupportedGuestNetworkRequirements(definition);
         if (requireValid)
             await RequireValidAsync(definition, model.SchemaVersion, cancellationToken);
         var topology = BuildTopology(definition, model.SchemaVersion, actorUserId);
@@ -274,6 +275,7 @@ public sealed class TeamLabTopologyApplicationService(
         var definition = TeamLabReleaseCodec.Normalize(new TeamLabTopologyDefinitionModel(
             model.Name, model.Networks, model.Assets, model.Connections,
             model.Infrastructure, model.Observation));
+        RequireSupportedGuestNetworkRequirements(definition);
         if (requireValid)
             await RequireValidAsync(definition, model.SchemaVersion, cancellationToken);
         var current = await RequireTopologyAsync(topologyId, actorUserId, includeAll, cancellationToken);
@@ -759,6 +761,15 @@ public sealed class TeamLabTopologyApplicationService(
         if (!validation.Valid) throw InvalidTopology(validation);
         await ValidateImageTemplatesAsync(context, definition, cancellationToken);
         await ValidateCapabilityResourcesAsync(context, definition, cancellationToken);
+    }
+
+    private static void RequireSupportedGuestNetworkRequirements(TeamLabTopologyDefinitionModel definition)
+    {
+        if (definition.Assets.Any(asset => asset.Kind == TeamLabAssetKind.Docker &&
+                (asset.VmNetworkMode is not null ||
+                 asset.Interfaces.Any(GZCTF.Modules.TeamLab.Application.Validation.TeamLabTopologyStructureValidator.HasGuestRequirements))))
+            throw new TeamLabApiContractException("guest_network_vm_only",
+                "Docker 资产不能声明 VM 来宾网络要求；请清除 VM 网络模式、接口名称、默认网关开关、DNS 列表和静态路由字段。", 422);
     }
 
     /// <summary>

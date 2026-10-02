@@ -617,7 +617,9 @@ public sealed class TeamLabShardDeploymentService(
         {
             var network = runtime.Networks.Single(item => item.Generation == runtime.Generation && item.TopologyKey == iface.NetworkKey);
             var requirements = topologyAsset.Interfaces.Single(item => item.Key == iface.Key);
-            IReadOnlyList<string> interfaceDnsServers = requirements.DnsServers ?? [dnsServers[iface.NetworkKey]];
+            IReadOnlyList<string> interfaceDnsServers = topologyAsset.Kind == TeamLabAssetKind.Docker
+                ? iface.Primary ? [dnsServers[iface.NetworkKey]] : []
+                : requirements.DnsServers ?? [dnsServers[iface.NetworkKey]];
             if (requirements.StaticRoutes?.Any(route => !TeamLabGuestNetworkValidation.IsNextHopOnInterface(
                     route.NextHop, iface.IpAddress, iface.PrefixLength)) == true)
                 throw new TeamLabApiContractException("guest_route_next_hop_invalid",

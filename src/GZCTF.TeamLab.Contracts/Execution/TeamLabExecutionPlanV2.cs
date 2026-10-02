@@ -233,6 +233,16 @@ public sealed record TeamLabExecutionPlanV2(
         foreach (var network in Networks)
         foreach (var lease in network.DhcpLeases ?? [])
         {
+            var ownerPort = network.Ports.FirstOrDefault(port =>
+                string.Equals(port.MacAddress, lease.MacAddress, StringComparison.OrdinalIgnoreCase) &&
+                IsSameIpv4Address(port.IpAddress, lease.IpAddress));
+            if (Assets.Any(asset => asset.AssetKey == ownerPort?.AssetKey &&
+                asset.Kind.Equals("docker", StringComparison.OrdinalIgnoreCase)) &&
+                (lease.UseDefaultGateway is not null || lease.DnsServers is not null || lease.StaticRoutes is not null))
+            {
+                error = "Guest network policy is supported only for VM assets.";
+                return false;
+            }
             if (lease.DnsServers is { } dns && (dns.Count > TeamLabGuestNetworkValidation.MaxDnsServers ||
                 dns.Any(value => !TeamLabGuestNetworkValidation.IsDnsServer(value)) || dns.Distinct().Count() != dns.Count) ||
                 lease.StaticRoutes is { } routes && (routes.Count > TeamLabGuestNetworkValidation.MaxStaticRoutes ||

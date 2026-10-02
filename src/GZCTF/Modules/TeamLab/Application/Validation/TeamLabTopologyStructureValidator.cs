@@ -130,6 +130,8 @@ internal sealed partial class TeamLabTopologyStructureValidator(TeamLabAddressPo
         foreach (var (iface, ifaceIndex) in asset.Interfaces.Select((value, index) => (value, index)))
         {
             var ifacePath = $"{path}.interfaces[{ifaceIndex}]";
+            if (asset.Kind == TeamLabAssetKind.Docker && HasGuestRequirements(iface))
+                Add(issues, "guest_network_vm_only", ifacePath, "Platform guest network requirements are supported only for VM assets.");
             if (iface.GuestInterfaceName is not null && (asset.Kind != TeamLabAssetKind.Vm ||
                 asset.VmNetworkMode is not null and not VmNetworkMode.ManagedStatic))
                 Add(issues, "guest_interface_name_mode_invalid", $"{ifacePath}.guestInterfaceName", "A target interface name requires ManagedStatic mode.");

@@ -50,7 +50,8 @@ public static class TeamLabGuestNetworkValidation
     public static bool IsValid(TeamLabAssetExecutionSpecV2 asset)
     {
         if (!Enum.IsDefined(asset.NetworkMode) || !Enum.IsDefined(asset.OperatingSystem)) return false;
-        if (asset.Kind == "docker" && asset.NetworkMode != TeamLabGuestNetworkMode.Dhcp) return false;
+        var docker = asset.Kind.Equals("docker", StringComparison.OrdinalIgnoreCase);
+        if (docker && asset.NetworkMode != TeamLabGuestNetworkMode.Dhcp) return false;
         if (asset.NetworkAttachments.Count(item => item.UseDefaultGateway ?? item.Primary) > 1) return false;
         if (asset.NetworkAttachments.Where(item => item.GuestInterfaceName is not null)
             .GroupBy(item => item.GuestInterfaceName, StringComparer.OrdinalIgnoreCase).Any(group => group.Count() > 1)) return false;
@@ -59,6 +60,8 @@ public static class TeamLabGuestNetworkValidation
              asset.NetworkAttachments.GroupBy(item => item.MacAddress, StringComparer.OrdinalIgnoreCase).Any(group => group.Count() > 1))) return false;
         foreach (var item in asset.NetworkAttachments)
         {
+            if (docker && (item.GuestInterfaceName is not null || item.UseDefaultGateway is not null ||
+                item.DnsServers is not null || item.StaticRoutes is not null)) return false;
             if (!IsInterfaceName(item.GuestInterfaceName) ||
                 item.DnsServers is { } dns && (dns.Count > MaxDnsServers || dns.Any(value => !IsDnsServer(value)) ||
                     dns.Distinct(StringComparer.Ordinal).Count() != dns.Count) ||

@@ -122,6 +122,47 @@ public sealed class TeamLabManagedGuestNetworkTests
         Assert.Equal("lan0", iface.GuestInterfaceName);
     }
 
+    [Theory]
+    [InlineData("name")]
+    [InlineData("gateway")]
+    [InlineData("dns")]
+    [InlineData("routes")]
+    [InlineData("mode")]
+    public async Task DockerDraft_RejectsVmOnlyFields_AndAllowsExplicitRemoval(string field)
+    {
+        await using var context = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
+        var service = new TeamLabTopologyApplicationService(context, new TeamLabTopologyValidator(), null!,
+            new TeamLabControlScopeService(context), new NodeCapacitySnapshotService(context));
+        var basic = new TeamLabTopologyInterfaceModel("nic", "entry", 10, true);
+        var iface = field switch
+        {
+            "name" => basic with { GuestInterfaceName = "eth0" },
+            "gateway" => basic with { UseDefaultGateway = false },
+            "dns" => basic with { DnsServers = [] },
+            "routes" => basic with { StaticRoutes = [] },
+            _ => basic
+        };
+        var docker = Definition().Assets[0] with { Kind = TeamLabAssetKind.Docker,
+            VmNetworkMode = field == "mode" ? VmNetworkMode.ManagedStatic : null, Interfaces = [iface] };
+        var definition = Definition() with { Assets = [docker] };
+        Assert.Contains(new TeamLabTopologyValidator().Validate(definition).Issues,
+            issue => issue.Code == (field == "mode" ? "guest_network_mode_invalid" : "guest_network_vm_only"));
+        var owner = Guid.NewGuid();
+        var error = await Assert.ThrowsAsync<TeamLabApiContractException>(() => service.CreateDraftAsync(
+            new(definition.Name, definition.Networks, definition.Assets, []), owner, CancellationToken.None));
+        Assert.Equal("guest_network_vm_only", error.Code);
+        Assert.Empty(context.TeamLabTopologies);
+
+        var clean = docker with { VmNetworkMode = null, Interfaces = [basic] };
+        var draft = await service.CreateDraftAsync(new(definition.Name, definition.Networks, [clean], []), owner, CancellationToken.None);
+        error = await Assert.ThrowsAsync<TeamLabApiContractException>(() => service.UpdateDraftAsync(draft.Id,
+            new(draft.Revision, definition.Name, definition.Networks, [docker], []), owner, false, CancellationToken.None));
+        Assert.Equal("guest_network_vm_only", error.Code);
+        var unchanged = await service.GetAsync(draft.Id, owner, false, CancellationToken.None);
+        Assert.Null(unchanged.Definition.Assets[0].Interfaces[0].DnsServers);
+    }
+
     [Fact]
     public async Task Publish_FreezesInheritedTemplateMode_WithoutChangingDraft()
     {
@@ -241,6 +282,36 @@ public sealed class TeamLabManagedGuestNetworkTests
         Assert.False(TeamLabGuestNetworkValidation.IsValid(asset with { NetworkAttachments = [attachment with { MacAddress = null }] }));
         Assert.False(TeamLabGuestNetworkValidation.IsValid(asset with { NetworkAttachments = [attachment with { StaticRoutes = [new("10.49.0.0/24", "10.50.0.1")] }] }));
         Assert.False(TeamLabGuestNetworkValidation.IsValid(asset with { NetworkAttachments = [attachment with { UseDefaultGateway = true, GatewayIp = null }] }));
+    }
+
+    [Fact]
+    public void DockerCompiler_PreservesExistingNetworkBehavior_AndSharedPlanRejectsInjectedVmPolicies()
+    {
+        var request = Request(VmNetworkMode.Dhcp) with
+        {
+            Kind = TeamLabAssetKind.Docker, VmNetworkMode = null,
+            Interfaces = [Request(VmNetworkMode.Dhcp).Interfaces[0] with
+                { GuestInterfaceName = "ignored", UseDefaultGateway = false, DnsServers = ["127.0.0.1"] }]
+        };
+        var plan = Compile(request);
+        Assert.True(plan.IsValid(out var error), error);
+        var asset = Assert.Single(plan.Assets);
+        var attachment = Assert.Single(asset.NetworkAttachments);
+        Assert.Equal("10.48.0.1", attachment.GatewayIp);
+        Assert.Equal("127.0.0.1", attachment.DnsServerIp);
+        Assert.Null(attachment.GuestInterfaceName);
+        Assert.Null(attachment.UseDefaultGateway);
+        Assert.Null(attachment.DnsServers);
+        Assert.Null(attachment.StaticRoutes);
+        var lease = Assert.Single(plan.Networks[0].DhcpLeases!);
+        Assert.Null(lease.UseDefaultGateway);
+        Assert.Null(lease.DnsServers);
+        Assert.Null(lease.StaticRoutes);
+
+        Assert.False(TeamLabGuestNetworkValidation.IsValid(asset with { NetworkAttachments = [attachment with { DnsServers = [] }] }));
+        var injected = plan with { Networks = [plan.Networks[0] with { DhcpLeases = [lease with { DnsServers = [] }] }] };
+        Assert.False(injected.IsValid(out error));
+        Assert.Equal("Guest network policy is supported only for VM assets.", error);
     }
 
     static TeamLabTopologyDefinitionModel Definition() => new("Managed network",
