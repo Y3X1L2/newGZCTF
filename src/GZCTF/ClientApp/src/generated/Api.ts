@@ -153,11 +153,6 @@ export enum ContainerPortMappingType {
   PlatformProxy = "PlatformProxy",
 }
 
-export enum VmNetworkMode {
-  Dhcp = 0,
-  Preconfigured = 1,
-}
-
 export enum VmRuntimeMode {
   Managed = 0,
   Opaque = 1,
@@ -316,6 +311,7 @@ export enum RuntimeOperationKind {
   Pause = 6,
   Resume = 7,
   AssetControl = 8,
+  Update = 9,
 }
 
 export enum DeploymentQueueKind {
@@ -538,13 +534,6 @@ export enum ImageType {
   Vmdk = 3,
 }
 
-export enum TeamLabDependencyCondition {
-  NetworkReady = 0,
-  GuestReady = 1,
-  ServiceReady = 2,
-  BootstrapCompleted = 3,
-}
-
 export enum TeamLabInfrastructureKind {
   ManagedSwitch = 0,
   ManagedRouter = 1,
@@ -553,11 +542,6 @@ export enum TeamLabInfrastructureKind {
 export enum TeamLabConnectionDirection {
   FromTo = 0,
   Bidirectional = 1,
-}
-
-export enum TeamLabHealthCheckKind {
-  Tcp = 0,
-  Http = 1,
 }
 
 export enum TeamLabTrafficCaptureSegmentStatus {
@@ -580,6 +564,7 @@ export enum TeamLabTrafficCaptureStatus {
   Failed = 4,
   Expired = 5,
   CleanupPending = 6,
+  PartiallyRunning = 7,
 }
 
 export enum TeamLabObservationPointKind {
@@ -602,6 +587,17 @@ export enum TeamLabEventLevel {
   Success = 1,
   Warning = 2,
   Error = 3,
+}
+
+export enum VmNetworkMode {
+  Dhcp = 0,
+  Preconfigured = 1,
+  ManagedStatic = 2,
+}
+
+export enum TeamLabHealthCheckKind {
+  Tcp = 0,
+  Http = 1,
 }
 
 /** Task execution status */
@@ -630,11 +626,6 @@ export enum DeploymentQueueTicketStatus {
 export enum TeamLabAssetKind {
   Docker = 0,
   Vm = 1,
-}
-
-export enum TeamLabExecutionModel {
-  V1 = 0,
-  V2 = 1,
 }
 
 export enum TeamLabRuntimeStatus {
@@ -755,6 +746,13 @@ export interface TeamLabConnectorLeaseModel {
   /** @format uint64 */
   releasedAt?: number | null;
   releaseReason?: string;
+}
+
+export interface TeamLabHostInterface {
+  name?: string;
+  macAddress?: string;
+  linkUp?: boolean;
+  addresses?: string[];
 }
 
 export interface TeamLabResourcePoolSnapshotModel {
@@ -890,8 +888,10 @@ export interface TeamLabRemoteSessionListItem {
   session?: TeamLabRemoteSessionModel;
   /** @format guid */
   workerNodeId?: string;
+  workerNodeName?: string;
   /** @format guid */
   requestedByUserId?: string;
+  requestedByName?: string;
 }
 
 export interface TeamLabRemoteSessionModel {
@@ -934,6 +934,31 @@ export interface TeamLabRemoteConnectModel {
   url?: string;
   /** @format uint64 */
   expiresAt?: number;
+}
+
+export interface TeamLabRuntimeGrantModel {
+  /** @format int64 */
+  id?: number;
+  subjectType?: string;
+  /** @format guid */
+  subjectId?: string;
+  subjectName?: string;
+  assetKey?: string | null;
+  permissions?: string[];
+  /** @format uint64 */
+  updatedAt?: number;
+}
+
+export interface ReplaceTeamLabRuntimeGrantsModel {
+  grants?: TeamLabRuntimeGrantWriteModel[];
+}
+
+export interface TeamLabRuntimeGrantWriteModel {
+  subjectType?: string;
+  /** @format guid */
+  subjectId?: string;
+  assetKey?: string | null;
+  permissions?: string[];
 }
 
 export interface TeamLabRuntimeSearchPage {
@@ -1038,7 +1063,6 @@ export interface TeamLabRuntimeProjectionModel {
   releaseId?: string;
   /** @format int32 */
   generation?: number;
-  executionModel?: TeamLabExecutionModel;
   status?: TeamLabRuntimeStatus;
   stage?: string;
   openForAccess?: boolean;
@@ -1064,6 +1088,8 @@ export interface TeamLabRuntimeProjectionModel {
   failure?: TeamLabFailureProjectionModel | null;
   /** @format guid */
   managedRolloutId?: string | null;
+  /** @format int32 */
+  planRevision?: number;
 }
 
 export interface TeamLabRuntimeShardProjectionModel {
@@ -1102,6 +1128,7 @@ export interface TeamLabRuntimeAssetProjectionModel {
   key?: string;
   name?: string;
   kind?: TeamLabAssetKind;
+  networkKeys?: string[];
   runtimeResourceId?: string | null;
   primaryIp?: string | null;
   status?: TeamLabRuntimeStatus;
@@ -1131,6 +1158,37 @@ export interface TeamLabRuntimeConstraintsModel {
 export interface TeamLabRuntimeOverlayModel {
   assetKey?: string;
   secrets?: Record<string, string>;
+}
+
+export interface OpenTeamLabRuntimeStatusModel {
+  /** @format guid */
+  id?: string;
+  /** @format int32 */
+  generation?: number;
+  status?: TeamLabRuntimeStatus;
+  stage?: string;
+  /** @format guid */
+  deploymentQueueTicketId?: string | null;
+  queueStatus?: DeploymentQueueTicketStatus | null;
+  queueStage?: string | null;
+  /** @format uint64 */
+  updatedAt?: number | null;
+  assets?: OpenTeamLabRuntimeAssetSummaryModel;
+}
+
+export interface OpenTeamLabRuntimeAssetSummaryModel {
+  /** @format int32 */
+  total?: number;
+  /** @format int32 */
+  pending?: number;
+  /** @format int32 */
+  running?: number;
+  /** @format int32 */
+  paused?: number;
+  /** @format int32 */
+  stopped?: number;
+  /** @format int32 */
+  failed?: number;
 }
 
 export interface LogMessagePageModel {
@@ -1169,6 +1227,99 @@ export interface ResetTeamLabRuntimeModel {
   overlays?: TeamLabRuntimeOverlayModel[] | null;
   /** @format guid */
   releaseId?: string | null;
+}
+
+export interface TeamLabRuntimeUpdatePreviewModel {
+  /** @format guid */
+  runtimeId?: string;
+  /** @format guid */
+  currentReleaseId?: string;
+  /** @format guid */
+  targetReleaseId?: string;
+  /** @format int32 */
+  currentPlanRevision?: number;
+  canApply?: boolean;
+  resetRequiredReason?: string | null;
+  changes?: TeamLabRuntimeUpdateChangeModel[];
+}
+
+export interface TeamLabRuntimeUpdateChangeModel {
+  assetKey?: string;
+  assetName?: string;
+  kind?: TeamLabAssetKind;
+  action?: string;
+}
+
+export interface UpdateTeamLabRuntimeModel {
+  /** @format guid */
+  releaseId?: string;
+  overlays?: TeamLabRuntimeOverlayModel[] | null;
+}
+
+export interface ChangeTeamLabRuntimeAssetsModel {
+  /** @format int32 */
+  expectedPlanRevision?: number;
+  add?: TeamLabTopologyAssetModel[] | null;
+  replace?: TeamLabTopologyAssetModel[] | null;
+  remove?: string[] | null;
+  overlays?: TeamLabRuntimeOverlayModel[] | null;
+}
+
+export interface TeamLabTopologyAssetModel {
+  key?: string;
+  name?: string;
+  kind?: TeamLabAssetKind;
+  /** @format int32 */
+  imageTemplateId?: number;
+  resources?: TeamLabAssetResourceModel;
+  interfaces?: TeamLabTopologyInterfaceModel[];
+  /** @format int32 */
+  exposePort?: number | null;
+  healthCheck?: TeamLabHealthCheckModel | null;
+  /** @format int32 */
+  orderIndex?: number;
+  /** @format int32 */
+  devicePackageId?: number | null;
+  deviceParameters?: any;
+  /** @format guid */
+  connectorId?: string | null;
+  vmNetworkMode?: VmNetworkMode | null;
+}
+
+export interface TeamLabAssetResourceModel {
+  /** @format int32 */
+  cpuUnits?: number;
+  /** @format int32 */
+  memoryMiB?: number;
+  /** @format int32 */
+  storageMiB?: number;
+}
+
+export interface TeamLabTopologyInterfaceModel {
+  key?: string;
+  networkKey?: string;
+  /** @format int32 */
+  hostOffset?: number;
+  primary?: boolean;
+  /** @format int32 */
+  orderIndex?: number;
+  guestInterfaceName?: string | null;
+  useDefaultGateway?: boolean | null;
+  dnsServers?: string[] | null;
+  staticRoutes?: TeamLabGuestRouteModel[] | null;
+}
+
+export interface TeamLabGuestRouteModel {
+  destinationCidr?: string;
+  nextHop?: string;
+  /** @format int32 */
+  metric?: number | null;
+}
+
+export interface TeamLabHealthCheckModel {
+  kind?: TeamLabHealthCheckKind;
+  /** @format int32 */
+  port?: number;
 }
 
 export interface TeamLabRuntimeEventModel {
@@ -1520,7 +1671,6 @@ export interface TeamLabTopologyDefinitionModel {
   assets?: TeamLabTopologyAssetModel[];
   connections?: TeamLabTopologyConnectionModel[];
   infrastructure?: TeamLabTopologyInfrastructureModel[] | null;
-  dependencies?: TeamLabTopologyDependencyModel[] | null;
   observation?: TeamLabObservationPolicyModel | null;
 }
 
@@ -1531,57 +1681,13 @@ export interface TeamLabTopologyNetworkModel {
   isEntry?: boolean;
   /** @format int32 */
   orderIndex?: number;
+  dnsServerAssetKey?: string | null;
 }
 
 export interface TeamLabAddressPoolModel {
   poolCidr?: string;
   /** @format int32 */
   runtimePrefixLength?: number;
-}
-
-export interface TeamLabTopologyAssetModel {
-  key?: string;
-  name?: string;
-  kind?: TeamLabAssetKind;
-  /** @format int32 */
-  imageTemplateId?: number;
-  resources?: TeamLabAssetResourceModel;
-  interfaces?: TeamLabTopologyInterfaceModel[];
-  /** @format int32 */
-  exposePort?: number | null;
-  healthCheck?: TeamLabHealthCheckModel | null;
-  /** @format int32 */
-  orderIndex?: number;
-  /** @format int32 */
-  devicePackageId?: number | null;
-  deviceParameters?: any;
-  /** @format guid */
-  connectorId?: string | null;
-}
-
-export interface TeamLabAssetResourceModel {
-  /** @format int32 */
-  cpuUnits?: number;
-  /** @format int32 */
-  memoryMiB?: number;
-  /** @format int32 */
-  storageMiB?: number;
-}
-
-export interface TeamLabTopologyInterfaceModel {
-  key?: string;
-  networkKey?: string;
-  /** @format int32 */
-  hostOffset?: number;
-  primary?: boolean;
-  /** @format int32 */
-  orderIndex?: number;
-}
-
-export interface TeamLabHealthCheckModel {
-  kind?: TeamLabHealthCheckKind;
-  /** @format int32 */
-  port?: number;
 }
 
 export interface TeamLabTopologyConnectionModel {
@@ -1599,12 +1705,6 @@ export interface TeamLabTopologyInfrastructureModel {
   kind?: TeamLabInfrastructureKind;
   interfaces?: TeamLabTopologyInterfaceModel[];
   networkKey?: string | null;
-}
-
-export interface TeamLabTopologyDependencyModel {
-  assetKey?: string;
-  dependsOnKey?: string;
-  condition?: TeamLabDependencyCondition;
 }
 
 export interface TeamLabObservationPolicyModel {
@@ -1637,7 +1737,6 @@ export interface CreateTeamLabTopologyModel {
   connections?: TeamLabTopologyConnectionModel[];
   editor?: TeamLabTopologyEditorModel | null;
   infrastructure?: TeamLabTopologyInfrastructureModel[] | null;
-  dependencies?: TeamLabTopologyDependencyModel[] | null;
   observation?: TeamLabObservationPolicyModel | null;
   /** @format int32 */
   schemaVersion?: number;
@@ -1654,7 +1753,6 @@ export interface UpdateTeamLabTopologyModel {
   connections?: TeamLabTopologyConnectionModel[];
   editor?: TeamLabTopologyEditorModel | null;
   infrastructure?: TeamLabTopologyInfrastructureModel[] | null;
-  dependencies?: TeamLabTopologyDependencyModel[] | null;
   observation?: TeamLabObservationPolicyModel | null;
   /** @format int32 */
   schemaVersion?: number;
@@ -1731,6 +1829,7 @@ export interface TeamLabPlanAssetModel {
   imageTemplateId?: number;
   resources?: TeamLabAssetResourceModel;
   interfaces?: TeamLabPlanInterfaceModel[];
+  vmNetworkMode?: VmNetworkMode | null;
 }
 
 export interface TeamLabPlanInterfaceModel {
@@ -1739,6 +1838,10 @@ export interface TeamLabPlanInterfaceModel {
   /** @format int32 */
   hostOffset?: number;
   primary?: boolean;
+  guestInterfaceName?: string | null;
+  useDefaultGateway?: boolean | null;
+  dnsServers?: string[] | null;
+  staticRoutes?: TeamLabGuestRouteModel[] | null;
 }
 
 export interface TeamLabPlanShardModel {
@@ -1829,6 +1932,8 @@ export interface TeamLabAssetFileCommand {
   content?: Blob | null;
   overwrite?: boolean;
   confirmed?: boolean;
+  destinationPath?: string | null;
+  recursive?: boolean;
 }
 
 export interface TeamLabDeviceHealthModel {
@@ -1890,6 +1995,40 @@ export interface RuntimeResourceDifference {
   actualState?: string | null;
   difference?: string;
   suggestedAction?: string | null;
+}
+
+export interface TeamLabServiceAccessModel {
+  /** @format guid */
+  id?: string;
+  /** @format guid */
+  runtimeId?: string;
+  /** @format int32 */
+  generation?: number;
+  /** @format int32 */
+  assetId?: number;
+  assetName?: string;
+  networkKey?: string;
+  protocol?: string;
+  /** @format int32 */
+  internalPort?: number;
+  /** @format int32 */
+  publicPort?: number;
+  endpoint?: string;
+  status?: string;
+  lastError?: string | null;
+  /** @format uint64 */
+  createdAt?: number;
+  /** @format uint64 */
+  revokedAt?: number | null;
+}
+
+export interface CreateTeamLabServiceAccessModel {
+  protocol?: string;
+  /** @format int32 */
+  internalPort?: number;
+  /** @format int32 */
+  publicPort?: number | null;
+  networkKey?: string | null;
 }
 
 export interface ApiTokenResponse {
@@ -4596,24 +4735,46 @@ export interface BloodBonus {
   noBonus?: boolean;
 }
 
+/** Represents a user in the identity system */
 export interface IdentityUserOfGuid {
-  /** @format guid */
+  /**
+   * Gets or sets the primary key for this user.
+   * @format guid
+   */
   id?: string;
+  /** Gets or sets the user name for this user. */
   userName?: string | null;
+  /** Gets or sets the normalized user name for this user. */
   normalizedUserName?: string | null;
+  /** Gets or sets the email address for this user. */
   email?: string | null;
+  /** Gets or sets the normalized email address for this user. */
   normalizedEmail?: string | null;
+  /** Gets or sets a flag indicating if a user has confirmed their email address. */
   emailConfirmed?: boolean;
+  /** Gets or sets a salted and hashed representation of the password for this user. */
   passwordHash?: string | null;
+  /** A random value that must change whenever a users credentials change (password changed, login removed) */
   securityStamp?: string | null;
+  /** A random value that must change whenever a user is persisted to the store */
   concurrencyStamp?: string | null;
+  /** Gets or sets a telephone number for the user. */
   phoneNumber?: string | null;
+  /** Gets or sets a flag indicating if a user has confirmed their telephone address. */
   phoneNumberConfirmed?: boolean;
+  /** Gets or sets a flag indicating if two factor authentication is enabled for this user. */
   twoFactorEnabled?: boolean;
-  /** @format uint64 */
+  /**
+   * Gets or sets the date and time, in UTC, when any user lockout ends.
+   * @format uint64
+   */
   lockoutEnd?: number | null;
+  /** Gets or sets a flag indicating if the user could be locked out. */
   lockoutEnabled?: boolean;
-  /** @format int32 */
+  /**
+   * Gets or sets the number of failed login attempts for the current user.
+   * @format int32
+   */
   accessFailedCount?: number;
 }
 
@@ -4797,6 +4958,7 @@ export interface WorkerNode {
   currentVms?: number;
   /** @format int32 */
   maxVms?: number;
+  automaticCapacity?: boolean;
   /** @format int32 */
   usedPorts?: number;
   /** @format int32 */
@@ -4856,6 +5018,10 @@ export interface WorkerNode {
   /** @format uint64 */
   agentUpdateCompletedAt?: number | null;
   concurrencyToken?: number;
+  /** @format int32 */
+  effectiveMaxContainers?: number;
+  /** @format int32 */
+  effectiveMaxVms?: number;
 }
 
 export interface Challenge {
@@ -5508,6 +5674,7 @@ export interface NodeDeployRequest {
 
 export interface UpdateNodeRequest {
   isSchedulable?: boolean | null;
+  automaticCapacity?: boolean | null;
   /** @format int32 */
   maxContainers?: number | null;
   /** @format int32 */
@@ -5743,11 +5910,6 @@ export interface PenetrationObjectiveWriteModel {
   orderIndex?: number;
   /** @format int32 */
   id?: number | null;
-}
-
-export interface TeamLabOperatorGrantWriteModel {
-  viewAssets?: boolean;
-  operateAssets?: boolean;
 }
 
 export interface PenetrationSubmitModel {
@@ -6896,15 +7058,135 @@ export interface UserPrivateOverviewModel {
   submittedTheoryAssignments?: number;
 }
 
+export interface RequiredProbeModel {
+  /** @minLength 1 */
+  value: string;
+}
+
 export type ExternalApiProblemDetailsModel = ProblemDetails & {
   code?: string;
   traceId?: string;
   [key: string]: any;
 };
 
+export interface OpenTeamLabAssetFileListModel {
+  items?: OpenTeamLabAssetFileEntryModel[];
+}
+
+export interface OpenTeamLabAssetFileEntryModel {
+  name?: string;
+  kind?: string;
+  /** @format int64 */
+  size?: number;
+}
+
+export interface OpenCreateTeamLabAssetDirectoryModel {
+  /** @format int32 */
+  generation?: number;
+  path?: string;
+}
+
+export interface OpenMoveTeamLabAssetFileModel {
+  /** @format int32 */
+  generation?: number;
+  sourcePath?: string;
+  destinationPath?: string;
+  overwrite?: boolean;
+  confirmed?: boolean;
+}
+
+export interface OpenRegisterTeamLabConnectorModel {
+  name?: string;
+  displayName?: string;
+  kind?: string;
+  /** @format guid */
+  controlScopeId?: string | null;
+  supportsSharedUse?: boolean;
+  /** @format int32 */
+  capacity?: number;
+  attachmentReference?: string | null;
+  description?: string | null;
+  managedNic?: TeamLabManagedNicModel | null;
+}
+
+export interface OpenUpdateTeamLabConnectorModel {
+  name?: string;
+  displayName?: string;
+  kind?: string;
+  /** @format guid */
+  controlScopeId?: string | null;
+  supportsSharedUse?: boolean;
+  /** @format int32 */
+  capacity?: number;
+  attachmentReference?: string | null;
+  description?: string | null;
+  managedNic?: TeamLabManagedNicModel | null;
+}
+
+export interface OpenTeamLabConnectorHealthModel {
+  /** @format guid */
+  connectorId?: string;
+  health?: string;
+  /** @format uint64 */
+  observedAt?: number | null;
+}
+
 export interface AcquireTeamLabConnectorLeaseModel {
   /** @format guid */
   runtimeId?: string;
+}
+
+export interface OpenRegisterTeamLabDevicePackageModel {
+  name?: string;
+  displayName?: string;
+  version?: string;
+  artifactKind?: string;
+  artifactReference?: string;
+  digest?: string | null;
+  description?: string | null;
+  supportedAssetKinds?: string[] | null;
+  /** @format int32 */
+  cpuMillis?: number;
+  /** @format int32 */
+  memoryMib?: number;
+  /** @format int32 */
+  storageGib?: number;
+  ports?: TeamLabDevicePackagePortModel[] | null;
+  parameterSchema?: any;
+  healthDeclaration?: any;
+  protocolEventTypes?: string[] | null;
+}
+
+export interface OpenUpdateTeamLabDevicePackageModel {
+  name?: string;
+  displayName?: string;
+  version?: string;
+  artifactKind?: string;
+  artifactReference?: string;
+  digest?: string | null;
+  description?: string | null;
+  supportedAssetKinds?: string[] | null;
+  /** @format int32 */
+  cpuMillis?: number;
+  /** @format int32 */
+  memoryMib?: number;
+  /** @format int32 */
+  storageGib?: number;
+  ports?: TeamLabDevicePackagePortModel[] | null;
+  parameterSchema?: any;
+  healthDeclaration?: any;
+  protocolEventTypes?: string[] | null;
+}
+
+export interface TeamLabTemplatePreparationResultModel {
+  /** @format int32 */
+  templateCount?: number;
+  /** @format int32 */
+  distributionCount?: number;
+}
+
+export interface PrepareTeamLabTemplatesModel {
+  templateIds?: number[];
 }
 
 /** Release-level preparation state for external callers. */
@@ -6974,22 +7256,29 @@ export interface ApiOperationModel {
   completedAt?: number | null;
 }
 
-export interface OpenTeamLabRemoteAvailabilityModel {
+export interface OpenTeamLabRemoteAuditSummaryModel {
+  state?: string;
   /** @format int32 */
-  assetId?: number;
-  assetName?: string;
-  protocol?: TeamLabRemoteProtocol | null;
-  available?: boolean;
-  unavailableReason?: string | null;
+  retentionDays?: number;
+  evidence?: OpenTeamLabRemoteAuditEvidenceModel[];
 }
 
-export interface OpenCreateTeamLabRemoteSessionModel {
-  /**
-   * @minLength 4
-   * @maxLength 500
-   */
-  reason: string;
-  vncConsole?: boolean;
+export interface OpenTeamLabRemoteAuditEvidenceModel {
+  /** @format int64 */
+  id?: number;
+  /** @format int64 */
+  size?: number;
+  sha256?: string;
+  /** @format uint64 */
+  createdAt?: number;
+  /** @format uint64 */
+  expiresAt?: number | null;
+}
+
+export interface OpenTeamLabRemoteSessionPageModel {
+  items?: OpenTeamLabRemoteSessionModel[];
+  /** @format int64 */
+  nextCursor?: number | null;
 }
 
 export interface OpenTeamLabRemoteSessionModel {
@@ -7012,6 +7301,20 @@ export interface OpenTeamLabRemoteSessionModel {
   /** @format uint64 */
   endedAt?: number | null;
   endReason?: string | null;
+}
+
+export interface OpenTeamLabRemoteAvailabilityModel {
+  /** @format int32 */
+  assetId?: number;
+  assetName?: string;
+  protocol?: TeamLabRemoteProtocol | null;
+  available?: boolean;
+  unavailableReason?: string | null;
+}
+
+export interface OpenCreateTeamLabRemoteSessionModel {
+  reason?: string;
+  vncConsole?: boolean;
 }
 
 export interface TeamLabRolloutPageModel {
@@ -7114,6 +7417,90 @@ export interface ReplaceTeamLabRolloutTargetsModel {
   targets?: TeamLabRolloutTargetInputModel[];
 }
 
+export interface OpenTeamLabServiceAccessModel {
+  /** @format guid */
+  id?: string;
+  /** @format guid */
+  runtimeId?: string;
+  /** @format int32 */
+  generation?: number;
+  /** @format int32 */
+  assetId?: number;
+  assetName?: string;
+  networkKey?: string;
+  protocol?: string;
+  /** @format int32 */
+  internalPort?: number;
+  /** @format int32 */
+  publicPort?: number;
+  endpoint?: string;
+  status?: string;
+  /** @format uint64 */
+  createdAt?: number;
+  /** @format uint64 */
+  revokedAt?: number | null;
+}
+
+export interface OpenCreateTeamLabServiceAccessModel {
+  protocol?: string;
+  /** @format int32 */
+  internalPort?: number;
+  /** @format int32 */
+  publicPort?: number | null;
+  networkKey?: string | null;
+}
+
+export interface OpenTeamLabAssetControlCapabilityModel {
+  allowed?: boolean;
+  reason?: string | null;
+}
+
+export interface OpenTeamLabAssetControlTicketModel {
+  /** @format guid */
+  ticketId?: string;
+}
+
+export interface OpenTeamLabAssetControlCommand {
+  /** @format int32 */
+  generation?: number;
+  action?: string;
+  reason?: string;
+  confirmed?: boolean;
+}
+
+export interface OpenTeamLabAssetControlTaskModel {
+  /** @format guid */
+  id?: string;
+  status?: string;
+  stage?: string | null;
+  errorCode?: string | null;
+  retryable?: boolean;
+}
+
+export interface OpenTeamLabRuntimePageModel {
+  items?: OpenTeamLabRuntimeSummaryModel[];
+  nextCursor?: string | null;
+}
+
+export interface OpenTeamLabRuntimeSummaryModel {
+  /** @format guid */
+  id?: string;
+  /** @format guid */
+  releaseId?: string;
+  /** @format guid */
+  controlScopeId?: string;
+  externalReference?: string | null;
+  /** @format int32 */
+  generation?: number;
+  status?: TeamLabRuntimeStatus;
+  stage?: string;
+  openForAccess?: boolean;
+  /** @format uint64 */
+  createdAt?: number;
+  /** @format uint64 */
+  updatedAt?: number | null;
+}
+
 export interface CreateTeamLabRuntimeModel {
   /** @format guid */
   releaseId?: string;
@@ -7129,7 +7516,6 @@ export interface OpenTeamLabRuntimeModel {
   releaseId?: string;
   /** @format int32 */
   generation?: number;
-  executionModel?: TeamLabExecutionModel;
   status?: TeamLabRuntimeStatus;
   stage?: string;
   openForAccess?: boolean;
@@ -7152,6 +7538,8 @@ export interface OpenTeamLabRuntimeModel {
   /** @format int32 */
   releaseVersion?: number | null;
   recoveryActions?: string[] | null;
+  /** @format int32 */
+  planRevision?: number;
 }
 
 export interface OpenTeamLabRuntimeShardModel {
@@ -7164,6 +7552,8 @@ export interface OpenTeamLabRuntimeShardModel {
 }
 
 export interface OpenTeamLabRuntimeAssetModel {
+  /** @format int32 */
+  id?: number;
   key?: string;
   name?: string;
   kind?: TeamLabAssetKind;
@@ -7176,6 +7566,11 @@ export interface OpenTeamLabRuntimeSubStageModel {
   id?: string;
   status?: string;
   message?: string | null;
+}
+
+export interface OpenTeamLabRuntimeAssetPageModel {
+  items?: OpenTeamLabRuntimeAssetModel[];
+  nextCursor?: string | null;
 }
 
 export interface TeamLabProtocolEventReportModel {
@@ -7191,6 +7586,61 @@ export interface OpenTeamLabRuntimeEventPageModel {
   nextCursor?: string | null;
 }
 
+export interface OpenTeamLabAccessGrantMetadataModel {
+  /** @format guid */
+  id?: string;
+  /** @format int32 */
+  generation?: number;
+  type?: string;
+  clientAddress?: string;
+  endpoint?: string;
+  allowedIps?: string;
+  dns?: string;
+  /** @format uint64 */
+  createdAt?: number;
+  /** @format uint64 */
+  appliedAt?: number | null;
+  /** @format uint64 */
+  expiresAt?: number | null;
+  /** @format uint64 */
+  configurationConsumedAt?: number | null;
+}
+
+export interface OpenTeamLabDeviceHealthModel {
+  /** @format int32 */
+  assetId?: number;
+  assetName?: string;
+  /** @format int32 */
+  generation?: number;
+  status?: string;
+  /** @format uint64 */
+  observedAt?: number | null;
+  errorCode?: string | null;
+  protocolCounters?: Record<string, number>;
+  /** @format uint64 */
+  nextProbeAt?: number | null;
+}
+
+export interface OpenTeamLabRuntimeStatusCheckModel {
+  /** @format int32 */
+  generation?: number;
+  /** @format uint64 */
+  observedAt?: number;
+  operationInProgress?: boolean;
+  items?: OpenTeamLabRuntimeDifferenceModel[];
+}
+
+export interface OpenTeamLabRuntimeDifferenceModel {
+  /** @format int32 */
+  assetId?: number | null;
+  resourceKind?: string;
+  name?: string;
+  expectedState?: string;
+  actualState?: string | null;
+  difference?: string;
+  suggestedAction?: string | null;
+}
+
 export interface CreateTeamLabControlScopeModel {
   key?: string;
   displayName?: string;
@@ -7203,7 +7653,6 @@ export interface OpenCreateTeamLabTopologyModel {
   connections?: TeamLabTopologyConnectionModel[];
   editor?: TeamLabTopologyEditorModel | null;
   infrastructure?: TeamLabTopologyInfrastructureModel[] | null;
-  dependencies?: TeamLabTopologyDependencyModel[] | null;
   observation?: TeamLabObservationPolicyModel | null;
   /** @format int32 */
   schemaVersion?: number;
@@ -7258,7 +7707,6 @@ export interface OpenUpdateTeamLabTopologyModel {
   connections?: TeamLabTopologyConnectionModel[];
   editor?: TeamLabTopologyEditorModel | null;
   infrastructure?: TeamLabTopologyInfrastructureModel[] | null;
-  dependencies?: TeamLabTopologyDependencyModel[] | null;
   observation?: TeamLabObservationPolicyModel | null;
   /** @format int32 */
   schemaVersion?: number;
@@ -8227,20 +8675,9 @@ export interface BootstrapProfileModel {
   updatedAt?: number | null;
 }
 
-export interface DockerImageReferenceImportModel {
-  /**
-   * @minLength 1
-   * @maxLength 256
-   */
-  name: string;
-  /**
-   * @minLength 1
-   * @maxLength 512
-   */
-  registryUrl: string;
-  osType?: OSType;
-  /** @maxLength 128 */
-  expectedDigest?: string | null;
+export interface OpenImageTemplatePageModel {
+  items?: OpenImageTemplateModel[];
+  nextCursor?: string | null;
 }
 
 export interface OpenImageTemplateModel {
@@ -8263,10 +8700,42 @@ export interface OpenImageTemplateModel {
   uploadedAt?: number;
 }
 
+export interface DockerImageReferenceImportModel {
+  /**
+   * @minLength 1
+   * @maxLength 256
+   */
+  name: string;
+  /**
+   * @minLength 1
+   * @maxLength 512
+   */
+  registryUrl: string;
+  osType?: OSType;
+  /** @maxLength 128 */
+  expectedDigest?: string | null;
+}
+
+export interface ImageRemoteAccessModel {
+  enabled?: boolean;
+  protocol?: TeamLabRemoteProtocol;
+  /** @format int32 */
+  port?: number;
+  username?: string | null;
+  hasCredential?: boolean;
+  /** @format uint64 */
+  updatedAt?: number | null;
+}
+
 export interface ImageTemplateCertificationRequest {
   capabilities?: string[];
   evidenceDigest?: string | null;
   probeKind?: string;
+}
+
+export interface ApiOperationPageModel {
+  items?: ApiOperationModel[];
+  nextCursor?: string | null;
 }
 
 import { apiLanguage } from "@Utils/I18n";
@@ -8835,6 +9304,60 @@ export class Api<
      * No description
      *
      * @tags TeamLabAdminCapabilityResources
+     * @name TeamLabAdminCapabilityResourcesListNodeInterfaces
+     * @request GET:/api/admin/teamlab/connector-nodes/{nodeId}/interfaces
+     */
+    teamLabAdminCapabilityResourcesListNodeInterfaces: (
+      nodeId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabHostInterface[], any>({
+        path: `/api/admin/teamlab/connector-nodes/${nodeId}/interfaces`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminCapabilityResources
+     * @name TeamLabAdminCapabilityResourcesListNodeInterfaces
+     * @request GET:/api/admin/teamlab/connector-nodes/{nodeId}/interfaces
+     */
+    useTeamLabAdminCapabilityResourcesListNodeInterfaces: (
+      nodeId: string,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<TeamLabHostInterface[], any>(
+        doFetch
+          ? `/api/admin/teamlab/connector-nodes/${nodeId}/interfaces`
+          : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminCapabilityResources
+     * @name TeamLabAdminCapabilityResourcesListNodeInterfaces
+     * @request GET:/api/admin/teamlab/connector-nodes/{nodeId}/interfaces
+     */
+    mutateTeamLabAdminCapabilityResourcesListNodeInterfaces: (
+      nodeId: string,
+      data?: TeamLabHostInterface[] | Promise<TeamLabHostInterface[]>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<TeamLabHostInterface[]>(
+        `/api/admin/teamlab/connector-nodes/${nodeId}/interfaces`,
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminCapabilityResources
      * @name TeamLabAdminCapabilityResourcesRegisterConnector
      * @request POST:/api/admin/teamlab/connectors
      */
@@ -9236,10 +9759,10 @@ export class Api<
       query?: {
         /** @format guid */
         runtimeId?: string | null;
-        /** @format guid */
-        workerNodeId?: string | null;
-        /** @format guid */
-        requestedByUserId?: string | null;
+        query?: string | null;
+        protocol?: TeamLabRemoteProtocol | null;
+        /** @default false */
+        abnormalOnly?: boolean;
         status?: TeamLabRemoteSessionStatus | null;
         /** @format int64 */
         after?: number | null;
@@ -9269,10 +9792,10 @@ export class Api<
       query?: {
         /** @format guid */
         runtimeId?: string | null;
-        /** @format guid */
-        workerNodeId?: string | null;
-        /** @format guid */
-        requestedByUserId?: string | null;
+        query?: string | null;
+        protocol?: TeamLabRemoteProtocol | null;
+        /** @default false */
+        abnormalOnly?: boolean;
         status?: TeamLabRemoteSessionStatus | null;
         /** @format int64 */
         after?: number | null;
@@ -9301,10 +9824,10 @@ export class Api<
       query?: {
         /** @format guid */
         runtimeId?: string | null;
-        /** @format guid */
-        workerNodeId?: string | null;
-        /** @format guid */
-        requestedByUserId?: string | null;
+        query?: string | null;
+        protocol?: TeamLabRemoteProtocol | null;
+        /** @default false */
+        abnormalOnly?: boolean;
         status?: TeamLabRemoteSessionStatus | null;
         /** @format int64 */
         after?: number | null;
@@ -9358,6 +9881,27 @@ export class Api<
         method: "POST",
         body: data,
         type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimeChangeAssets
+     * @request POST:/api/admin/teamlab/runtimes/{runtimeId}/asset-changes
+     */
+    teamLabAdminRuntimeChangeAssets: (
+      runtimeId: string,
+      data: ChangeTeamLabRuntimeAssetsModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabRuntimeProjectionModel, any>({
+        path: `/api/admin/teamlab/runtimes/${runtimeId}/asset-changes`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
         ...params,
       }),
 
@@ -10242,6 +10786,58 @@ export class Api<
      * No description
      *
      * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimeListRuntimeGrants
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/grants
+     */
+    teamLabAdminRuntimeListRuntimeGrants: (
+      runtimeId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabRuntimeGrantModel[], any>({
+        path: `/api/admin/teamlab/runtimes/${runtimeId}/grants`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimeListRuntimeGrants
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/grants
+     */
+    useTeamLabAdminRuntimeListRuntimeGrants: (
+      runtimeId: string,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<TeamLabRuntimeGrantModel[], any>(
+        doFetch ? `/api/admin/teamlab/runtimes/${runtimeId}/grants` : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimeListRuntimeGrants
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/grants
+     */
+    mutateTeamLabAdminRuntimeListRuntimeGrants: (
+      runtimeId: string,
+      data?: TeamLabRuntimeGrantModel[] | Promise<TeamLabRuntimeGrantModel[]>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<TeamLabRuntimeGrantModel[]>(
+        `/api/admin/teamlab/runtimes/${runtimeId}/grants`,
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
      * @name TeamLabAdminRuntimeLogs
      * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/logs
      */
@@ -10520,6 +11116,75 @@ export class Api<
      * No description
      *
      * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimePreviewUpdate
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/updates/preview
+     */
+    teamLabAdminRuntimePreviewUpdate: (
+      runtimeId: string,
+      query?: {
+        /** @format guid */
+        releaseId?: string;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabRuntimeUpdatePreviewModel, any>({
+        path: `/api/admin/teamlab/runtimes/${runtimeId}/updates/preview`,
+        method: "GET",
+        query: query,
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimePreviewUpdate
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/updates/preview
+     */
+    useTeamLabAdminRuntimePreviewUpdate: (
+      runtimeId: string,
+      query?: {
+        /** @format guid */
+        releaseId?: string;
+      },
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<TeamLabRuntimeUpdatePreviewModel, any>(
+        doFetch
+          ? [`/api/admin/teamlab/runtimes/${runtimeId}/updates/preview`, query]
+          : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimePreviewUpdate
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/updates/preview
+     */
+    mutateTeamLabAdminRuntimePreviewUpdate: (
+      runtimeId: string,
+      query?: {
+        /** @format guid */
+        releaseId?: string;
+      },
+      data?:
+        | TeamLabRuntimeUpdatePreviewModel
+        | Promise<TeamLabRuntimeUpdatePreviewModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<TeamLabRuntimeUpdatePreviewModel>(
+        [`/api/admin/teamlab/runtimes/${runtimeId}/updates/preview`, query],
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
      * @name TeamLabAdminRuntimeRecoverLinkPolicy
      * @request POST:/api/admin/teamlab/runtimes/{runtimeId}/link-policies/{policyId}/recover
      */
@@ -10531,6 +11196,27 @@ export class Api<
       this.request<TeamLabLinkPolicyModel, any>({
         path: `/api/admin/teamlab/runtimes/${runtimeId}/link-policies/${policyId}/recover`,
         method: "POST",
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimeReplaceRuntimeGrants
+     * @request PUT:/api/admin/teamlab/runtimes/{runtimeId}/grants
+     */
+    teamLabAdminRuntimeReplaceRuntimeGrants: (
+      runtimeId: string,
+      data: ReplaceTeamLabRuntimeGrantsModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabRuntimeGrantModel[], any>({
+        path: `/api/admin/teamlab/runtimes/${runtimeId}/grants`,
+        method: "PUT",
+        body: data,
+        type: ContentType.Json,
         format: "json",
         ...params,
       }),
@@ -10712,6 +11398,60 @@ export class Api<
      * No description
      *
      * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimeStatus
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/status
+     */
+    teamLabAdminRuntimeStatus: (
+      runtimeId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<OpenTeamLabRuntimeStatusModel, any>({
+        path: `/api/admin/teamlab/runtimes/${runtimeId}/status`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimeStatus
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/status
+     */
+    useTeamLabAdminRuntimeStatus: (
+      runtimeId: string,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<OpenTeamLabRuntimeStatusModel, any>(
+        doFetch ? `/api/admin/teamlab/runtimes/${runtimeId}/status` : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimeStatus
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/status
+     */
+    mutateTeamLabAdminRuntimeStatus: (
+      runtimeId: string,
+      data?:
+        | OpenTeamLabRuntimeStatusModel
+        | Promise<OpenTeamLabRuntimeStatusModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<OpenTeamLabRuntimeStatusModel>(
+        `/api/admin/teamlab/runtimes/${runtimeId}/status`,
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
      * @name TeamLabAdminRuntimeStopCapture
      * @request POST:/api/admin/teamlab/runtimes/{runtimeId}/captures/{captureId}/stop
      */
@@ -10811,6 +11551,27 @@ export class Api<
         data,
         options,
       ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimeUpdate
+     * @request POST:/api/admin/teamlab/runtimes/{runtimeId}/updates
+     */
+    teamLabAdminRuntimeUpdate: (
+      runtimeId: string,
+      data: UpdateTeamLabRuntimeModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabRuntimeProjectionModel, any>({
+        path: `/api/admin/teamlab/runtimes/${runtimeId}/updates`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
 
     /**
      * No description
@@ -11527,6 +12288,336 @@ export class Api<
   };
   teamLabAssetFiles = {
     /**
+     * @description 在授权运行时当前代资产中创建目录。
+     *
+     * @tags TeamLab - Asset files
+     * @name OpenTeamLabAssetFilesCreateDirectory
+     * @summary 创建资产目录
+     * @request POST:/api/open/v1/teamlab/runtimes/{runtimeId}/assets/{assetId}/files/directories
+     */
+    openTeamLabAssetFilesCreateDirectory: (
+      runtimeId: string,
+      assetId: number,
+      data: OpenCreateTeamLabAssetDirectoryModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/runtimes/${runtimeId}/assets/${assetId}/files/directories`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * @description 删除授权运行时当前代资产中的文件或目录，必须显式确认。
+     *
+     * @tags TeamLab - Asset files
+     * @name OpenTeamLabAssetFilesDelete
+     * @summary 删除资产文件
+     * @request DELETE:/api/open/v1/teamlab/runtimes/{runtimeId}/assets/{assetId}/files
+     */
+    openTeamLabAssetFilesDelete: (
+      runtimeId: string,
+      assetId: number,
+      query?: {
+        /**
+         * @format int32
+         * @min 1
+         * @max 2147483647
+         */
+        generation?: number;
+        /**
+         * @minLength 1
+         * @maxLength 1024
+         */
+        path?: string;
+        recursive?: boolean;
+        confirmed?: boolean;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<void, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/runtimes/${runtimeId}/assets/${assetId}/files`,
+        method: "DELETE",
+        query: query,
+        ...params,
+      }),
+
+    /**
+     * @description 以二进制流下载授权运行时当前代资产中的单个文件。
+     *
+     * @tags TeamLab - Asset files
+     * @name OpenTeamLabAssetFilesDownload
+     * @summary 下载资产文件
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/assets/{assetId}/files/download
+     */
+    openTeamLabAssetFilesDownload: (
+      runtimeId: string,
+      assetId: number,
+      query?: {
+        /**
+         * @format int32
+         * @min 1
+         * @max 2147483647
+         */
+        generation?: number;
+        /**
+         * @minLength 1
+         * @maxLength 1024
+         */
+        path?: string;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<Blob, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/runtimes/${runtimeId}/assets/${assetId}/files/download`,
+        method: "GET",
+        query: query,
+        ...params,
+      }),
+    /**
+     * @description 以二进制流下载授权运行时当前代资产中的单个文件。
+     *
+     * @tags TeamLab - Asset files
+     * @name OpenTeamLabAssetFilesDownload
+     * @summary 下载资产文件
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/assets/{assetId}/files/download
+     */
+    useOpenTeamLabAssetFilesDownload: (
+      runtimeId: string,
+      assetId: number,
+      query?: {
+        /**
+         * @format int32
+         * @min 1
+         * @max 2147483647
+         */
+        generation?: number;
+        /**
+         * @minLength 1
+         * @maxLength 1024
+         */
+        path?: string;
+      },
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<Blob, ExternalApiProblemDetailsModel>(
+        doFetch
+          ? [
+              `/api/open/v1/teamlab/runtimes/${runtimeId}/assets/${assetId}/files/download`,
+              query,
+            ]
+          : null,
+        options,
+      ),
+
+    /**
+     * @description 以二进制流下载授权运行时当前代资产中的单个文件。
+     *
+     * @tags TeamLab - Asset files
+     * @name OpenTeamLabAssetFilesDownload
+     * @summary 下载资产文件
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/assets/{assetId}/files/download
+     */
+    mutateOpenTeamLabAssetFilesDownload: (
+      runtimeId: string,
+      assetId: number,
+      query?: {
+        /**
+         * @format int32
+         * @min 1
+         * @max 2147483647
+         */
+        generation?: number;
+        /**
+         * @minLength 1
+         * @maxLength 1024
+         */
+        path?: string;
+      },
+      data?: Blob | Promise<Blob>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<Blob>(
+        [
+          `/api/open/v1/teamlab/runtimes/${runtimeId}/assets/${assetId}/files/download`,
+          query,
+        ],
+        data,
+        options,
+      ),
+
+    /**
+     * @description 列出授权运行时当前代资产中指定目录的直接子项。
+     *
+     * @tags TeamLab - Asset files
+     * @name OpenTeamLabAssetFilesList
+     * @summary 列出资产文件
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/assets/{assetId}/files
+     */
+    openTeamLabAssetFilesList: (
+      runtimeId: string,
+      assetId: number,
+      query?: {
+        /**
+         * @format int32
+         * @min 1
+         * @max 2147483647
+         */
+        generation?: number;
+        /**
+         * @minLength 1
+         * @maxLength 1024
+         */
+        path?: string;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        OpenTeamLabAssetFileListModel,
+        ExternalApiProblemDetailsModel
+      >({
+        path: `/api/open/v1/teamlab/runtimes/${runtimeId}/assets/${assetId}/files`,
+        method: "GET",
+        query: query,
+        format: "json",
+        ...params,
+      }),
+    /**
+     * @description 列出授权运行时当前代资产中指定目录的直接子项。
+     *
+     * @tags TeamLab - Asset files
+     * @name OpenTeamLabAssetFilesList
+     * @summary 列出资产文件
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/assets/{assetId}/files
+     */
+    useOpenTeamLabAssetFilesList: (
+      runtimeId: string,
+      assetId: number,
+      query?: {
+        /**
+         * @format int32
+         * @min 1
+         * @max 2147483647
+         */
+        generation?: number;
+        /**
+         * @minLength 1
+         * @maxLength 1024
+         */
+        path?: string;
+      },
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<OpenTeamLabAssetFileListModel, ExternalApiProblemDetailsModel>(
+        doFetch
+          ? [
+              `/api/open/v1/teamlab/runtimes/${runtimeId}/assets/${assetId}/files`,
+              query,
+            ]
+          : null,
+        options,
+      ),
+
+    /**
+     * @description 列出授权运行时当前代资产中指定目录的直接子项。
+     *
+     * @tags TeamLab - Asset files
+     * @name OpenTeamLabAssetFilesList
+     * @summary 列出资产文件
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/assets/{assetId}/files
+     */
+    mutateOpenTeamLabAssetFilesList: (
+      runtimeId: string,
+      assetId: number,
+      query?: {
+        /**
+         * @format int32
+         * @min 1
+         * @max 2147483647
+         */
+        generation?: number;
+        /**
+         * @minLength 1
+         * @maxLength 1024
+         */
+        path?: string;
+      },
+      data?:
+        | OpenTeamLabAssetFileListModel
+        | Promise<OpenTeamLabAssetFileListModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<OpenTeamLabAssetFileListModel>(
+        [
+          `/api/open/v1/teamlab/runtimes/${runtimeId}/assets/${assetId}/files`,
+          query,
+        ],
+        data,
+        options,
+      ),
+
+    /**
+     * @description 在同一授权资产内移动或重命名文件；覆盖目标时必须显式确认。
+     *
+     * @tags TeamLab - Asset files
+     * @name OpenTeamLabAssetFilesMove
+     * @summary 移动资产文件
+     * @request POST:/api/open/v1/teamlab/runtimes/{runtimeId}/assets/{assetId}/files/move
+     */
+    openTeamLabAssetFilesMove: (
+      runtimeId: string,
+      assetId: number,
+      data: OpenMoveTeamLabAssetFileModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/runtimes/${runtimeId}/assets/${assetId}/files/move`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * @description 以 multipart 二进制流上传单个文件；覆盖已有文件时必须显式确认。
+     *
+     * @tags TeamLab - Asset files
+     * @name OpenTeamLabAssetFilesUpload
+     * @summary 上传资产文件
+     * @request POST:/api/open/v1/teamlab/runtimes/{runtimeId}/assets/{assetId}/files/upload
+     */
+    openTeamLabAssetFilesUpload: (
+      runtimeId: string,
+      assetId: number,
+      query?: {
+        /**
+         * @format int32
+         * @min 1
+         * @max 2147483647
+         */
+        Generation?: number;
+        /**
+         * @minLength 1
+         * @maxLength 1024
+         */
+        Path?: string;
+        Overwrite?: boolean;
+        Confirmed?: boolean;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<void, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/runtimes/${runtimeId}/assets/${assetId}/files/upload`,
+        method: "POST",
+        query: query,
+        ...params,
+      }),
+
+    /**
      * No description
      *
      * @tags TeamLabAssetFiles
@@ -11623,6 +12714,40 @@ export class Api<
         body: data,
         type: ContentType.Json,
         format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAssetFiles
+     * @name TeamLabAssetFilesUpload
+     * @request POST:/api/admin/teamlab/runtimes/{runtimeId}/assets/{assetId}/files/upload
+     */
+    teamLabAssetFilesUpload: (
+      runtimeId: string,
+      assetId: number,
+      query?: {
+        /**
+         * @format int32
+         * @min 1
+         * @max 2147483647
+         */
+        Generation?: number;
+        /**
+         * @minLength 1
+         * @maxLength 1024
+         */
+        Path?: string;
+        Overwrite?: boolean;
+        Confirmed?: boolean;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<Blob, any>({
+        path: `/api/admin/teamlab/runtimes/${runtimeId}/assets/${assetId}/files/upload`,
+        method: "POST",
+        query: query,
         ...params,
       }),
   };
@@ -11875,6 +13000,99 @@ export class Api<
         method: "POST",
         body: data,
         type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+  };
+  teamLabServiceAccess = {
+    /**
+     * No description
+     *
+     * @tags TeamLabServiceAccess
+     * @name TeamLabServiceAccessCreate
+     * @request POST:/api/admin/teamlab/runtimes/{runtimeId}/assets/{assetId}/service-access
+     */
+    teamLabServiceAccessCreate: (
+      runtimeId: string,
+      assetId: number,
+      data: CreateTeamLabServiceAccessModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabServiceAccessModel, any>({
+        path: `/api/admin/teamlab/runtimes/${runtimeId}/assets/${assetId}/service-access`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabServiceAccess
+     * @name TeamLabServiceAccessList
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/service-access
+     */
+    teamLabServiceAccessList: (runtimeId: string, params: RequestParams = {}) =>
+      this.request<TeamLabServiceAccessModel[], any>({
+        path: `/api/admin/teamlab/runtimes/${runtimeId}/service-access`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags TeamLabServiceAccess
+     * @name TeamLabServiceAccessList
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/service-access
+     */
+    useTeamLabServiceAccessList: (
+      runtimeId: string,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<TeamLabServiceAccessModel[], any>(
+        doFetch
+          ? `/api/admin/teamlab/runtimes/${runtimeId}/service-access`
+          : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabServiceAccess
+     * @name TeamLabServiceAccessList
+     * @request GET:/api/admin/teamlab/runtimes/{runtimeId}/service-access
+     */
+    mutateTeamLabServiceAccessList: (
+      runtimeId: string,
+      data?: TeamLabServiceAccessModel[] | Promise<TeamLabServiceAccessModel[]>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<TeamLabServiceAccessModel[]>(
+        `/api/admin/teamlab/runtimes/${runtimeId}/service-access`,
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabServiceAccess
+     * @name TeamLabServiceAccessRemove
+     * @request DELETE:/api/admin/teamlab/runtimes/{runtimeId}/service-access/{accessId}
+     */
+    teamLabServiceAccessRemove: (
+      runtimeId: string,
+      accessId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabServiceAccessModel, any>({
+        path: `/api/admin/teamlab/runtimes/${runtimeId}/service-access/${accessId}`,
+        method: "DELETE",
         format: "json",
         ...params,
       }),
@@ -18585,6 +19803,92 @@ export class Api<
      * No description
      *
      * @tags Operations
+     * @name OperationsList
+     * @request GET:/api/open/v1/operations
+     */
+    operationsList: (
+      query?: {
+        status?: ApiOperationStatus | null;
+        kind?: string | null;
+        /**
+         * @format int32
+         * @min 1
+         * @max 100
+         * @default 50
+         */
+        limit?: number;
+        after?: string | null;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<ApiOperationPageModel, any>({
+        path: `/api/open/v1/operations`,
+        method: "GET",
+        query: query,
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags Operations
+     * @name OperationsList
+     * @request GET:/api/open/v1/operations
+     */
+    useOperationsList: (
+      query?: {
+        status?: ApiOperationStatus | null;
+        kind?: string | null;
+        /**
+         * @format int32
+         * @min 1
+         * @max 100
+         * @default 50
+         */
+        limit?: number;
+        after?: string | null;
+      },
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<ApiOperationPageModel, any>(
+        doFetch ? [`/api/open/v1/operations`, query] : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags Operations
+     * @name OperationsList
+     * @request GET:/api/open/v1/operations
+     */
+    mutateOperationsList: (
+      query?: {
+        status?: ApiOperationStatus | null;
+        kind?: string | null;
+        /**
+         * @format int32
+         * @min 1
+         * @max 100
+         * @default 50
+         */
+        limit?: number;
+        after?: string | null;
+      },
+      data?: ApiOperationPageModel | Promise<ApiOperationPageModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<ApiOperationPageModel>(
+        [`/api/open/v1/operations`, query],
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags Operations
      * @name OperationsRecovery
      * @request GET:/api/admin/operations/recovery
      */
@@ -18839,24 +20143,6 @@ export class Api<
       this.request<Blob, any>({
         path: `/api/admin/pentest/games/${gameId}/teamlab/access/close`,
         method: "POST",
-        ...params,
-      }),
-
-    /**
-     * No description
-     *
-     * @tags PenetrationAdmin
-     * @name PenetrationAdminDeleteTeamLabOperator
-     * @request DELETE:/api/admin/pentest/games/{gameId}/teamlab/operators/{userId}
-     */
-    penetrationAdminDeleteTeamLabOperator: (
-      gameId: number,
-      userId: string,
-      params: RequestParams = {},
-    ) =>
-      this.request<Blob, any>({
-        path: `/api/admin/pentest/games/${gameId}/teamlab/operators/${userId}`,
-        method: "DELETE",
         ...params,
       }),
 
@@ -19178,57 +20464,6 @@ export class Api<
      * No description
      *
      * @tags PenetrationAdmin
-     * @name PenetrationAdminListTeamLabOperators
-     * @request GET:/api/admin/pentest/games/{gameId}/teamlab/operators
-     */
-    penetrationAdminListTeamLabOperators: (
-      gameId: number,
-      params: RequestParams = {},
-    ) =>
-      this.request<Blob, any>({
-        path: `/api/admin/pentest/games/${gameId}/teamlab/operators`,
-        method: "GET",
-        ...params,
-      }),
-    /**
-     * No description
-     *
-     * @tags PenetrationAdmin
-     * @name PenetrationAdminListTeamLabOperators
-     * @request GET:/api/admin/pentest/games/{gameId}/teamlab/operators
-     */
-    usePenetrationAdminListTeamLabOperators: (
-      gameId: number,
-      options?: SWRConfiguration,
-      doFetch: boolean = true,
-    ) =>
-      useSWR<Blob, any>(
-        doFetch ? `/api/admin/pentest/games/${gameId}/teamlab/operators` : null,
-        options,
-      ),
-
-    /**
-     * No description
-     *
-     * @tags PenetrationAdmin
-     * @name PenetrationAdminListTeamLabOperators
-     * @request GET:/api/admin/pentest/games/{gameId}/teamlab/operators
-     */
-    mutatePenetrationAdminListTeamLabOperators: (
-      gameId: number,
-      data?: Blob | Promise<Blob>,
-      options?: MutatorOptions,
-    ) =>
-      mutate<Blob>(
-        `/api/admin/pentest/games/${gameId}/teamlab/operators`,
-        data,
-        options,
-      ),
-
-    /**
-     * No description
-     *
-     * @tags PenetrationAdmin
      * @name PenetrationAdminListTeamLabReleases
      * @request GET:/api/admin/pentest/games/{gameId}/teamlab/releases
      */
@@ -19464,27 +20699,6 @@ export class Api<
       this.request<Blob, any>({
         path: `/api/admin/pentest/games/${gameId}/teamlab/resume`,
         method: "POST",
-        ...params,
-      }),
-
-    /**
-     * No description
-     *
-     * @tags PenetrationAdmin
-     * @name PenetrationAdminSetTeamLabOperator
-     * @request PUT:/api/admin/pentest/games/{gameId}/teamlab/operators/{userId}
-     */
-    penetrationAdminSetTeamLabOperator: (
-      gameId: number,
-      userId: string,
-      data: TeamLabOperatorGrantWriteModel,
-      params: RequestParams = {},
-    ) =>
-      this.request<Blob, any>({
-        path: `/api/admin/pentest/games/${gameId}/teamlab/operators/${userId}`,
-        method: "PUT",
-        body: data,
-        type: ContentType.Json,
         ...params,
       }),
 
@@ -23258,6 +24472,258 @@ export class Api<
       options?: MutatorOptions,
     ) => mutate<PublicUserProfileModel>(`/api/users/${userId}`, data, options),
   };
+  scopedApiProbe = {
+    /**
+     * No description
+     *
+     * @tags ScopedApiProbe
+     * @name ScopedApiProbeConflictProblem
+     * @request GET:/api/open/v1/test/problems/conflict
+     */
+    scopedApiProbeConflictProblem: (params: RequestParams = {}) =>
+      this.request<Blob, any>({
+        path: `/api/open/v1/test/problems/conflict`,
+        method: "GET",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags ScopedApiProbe
+     * @name ScopedApiProbeConflictProblem
+     * @request GET:/api/open/v1/test/problems/conflict
+     */
+    useScopedApiProbeConflictProblem: (
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<Blob, any>(
+        doFetch ? `/api/open/v1/test/problems/conflict` : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags ScopedApiProbe
+     * @name ScopedApiProbeConflictProblem
+     * @request GET:/api/open/v1/test/problems/conflict
+     */
+    mutateScopedApiProbeConflictProblem: (
+      data?: Blob | Promise<Blob>,
+      options?: MutatorOptions,
+    ) => mutate<Blob>(`/api/open/v1/test/problems/conflict`, data, options),
+
+    /**
+     * No description
+     *
+     * @tags ScopedApiProbe
+     * @name ScopedApiProbeExternalWrite
+     * @request POST:/api/open/v1/test/images-write
+     */
+    scopedApiProbeExternalWrite: (params: RequestParams = {}) =>
+      this.request<Blob, any>({
+        path: `/api/open/v1/test/images-write`,
+        method: "POST",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags ScopedApiProbe
+     * @name ScopedApiProbeRateLimit
+     * @request GET:/api/open/v1/test/rate-limit
+     */
+    scopedApiProbeRateLimit: (params: RequestParams = {}) =>
+      this.request<Blob, any>({
+        path: `/api/open/v1/test/rate-limit`,
+        method: "GET",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags ScopedApiProbe
+     * @name ScopedApiProbeRateLimit
+     * @request GET:/api/open/v1/test/rate-limit
+     */
+    useScopedApiProbeRateLimit: (
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<Blob, any>(
+        doFetch ? `/api/open/v1/test/rate-limit` : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags ScopedApiProbe
+     * @name ScopedApiProbeRateLimit
+     * @request GET:/api/open/v1/test/rate-limit
+     */
+    mutateScopedApiProbeRateLimit: (
+      data?: Blob | Promise<Blob>,
+      options?: MutatorOptions,
+    ) => mutate<Blob>(`/api/open/v1/test/rate-limit`, data, options),
+
+    /**
+     * No description
+     *
+     * @tags ScopedApiProbe
+     * @name ScopedApiProbeRead
+     * @request GET:/test/scopes/images-read
+     */
+    scopedApiProbeRead: (params: RequestParams = {}) =>
+      this.request<Blob, any>({
+        path: `/test/scopes/images-read`,
+        method: "GET",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags ScopedApiProbe
+     * @name ScopedApiProbeRead
+     * @request GET:/test/scopes/images-read
+     */
+    useScopedApiProbeRead: (
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<Blob, any>(doFetch ? `/test/scopes/images-read` : null, options),
+
+    /**
+     * No description
+     *
+     * @tags ScopedApiProbe
+     * @name ScopedApiProbeRead
+     * @request GET:/test/scopes/images-read
+     */
+    mutateScopedApiProbeRead: (
+      data?: Blob | Promise<Blob>,
+      options?: MutatorOptions,
+    ) => mutate<Blob>(`/test/scopes/images-read`, data, options),
+
+    /**
+     * No description
+     *
+     * @tags ScopedApiProbe
+     * @name ScopedApiProbeResource
+     * @request GET:/test/resources/{resourceId}
+     */
+    scopedApiProbeResource: (resourceId: string, params: RequestParams = {}) =>
+      this.request<Blob, any>({
+        path: `/test/resources/${resourceId}`,
+        method: "GET",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags ScopedApiProbe
+     * @name ScopedApiProbeResource
+     * @request GET:/test/resources/{resourceId}
+     */
+    useScopedApiProbeResource: (
+      resourceId: string,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<Blob, any>(
+        doFetch ? `/test/resources/${resourceId}` : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags ScopedApiProbe
+     * @name ScopedApiProbeResource
+     * @request GET:/test/resources/{resourceId}
+     */
+    mutateScopedApiProbeResource: (
+      resourceId: string,
+      data?: Blob | Promise<Blob>,
+      options?: MutatorOptions,
+    ) => mutate<Blob>(`/test/resources/${resourceId}`, data, options),
+
+    /**
+     * No description
+     *
+     * @tags ScopedApiProbe
+     * @name ScopedApiProbeUnknown
+     * @request GET:/api/open/v1/test/problems/unknown
+     */
+    scopedApiProbeUnknown: (params: RequestParams = {}) =>
+      this.request<Blob, any>({
+        path: `/api/open/v1/test/problems/unknown`,
+        method: "GET",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags ScopedApiProbe
+     * @name ScopedApiProbeUnknown
+     * @request GET:/api/open/v1/test/problems/unknown
+     */
+    useScopedApiProbeUnknown: (
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<Blob, any>(
+        doFetch ? `/api/open/v1/test/problems/unknown` : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags ScopedApiProbe
+     * @name ScopedApiProbeUnknown
+     * @request GET:/api/open/v1/test/problems/unknown
+     */
+    mutateScopedApiProbeUnknown: (
+      data?: Blob | Promise<Blob>,
+      options?: MutatorOptions,
+    ) => mutate<Blob>(`/api/open/v1/test/problems/unknown`, data, options),
+
+    /**
+     * No description
+     *
+     * @tags ScopedApiProbe
+     * @name ScopedApiProbeValidateModel
+     * @request POST:/api/open/v1/test/model-validation
+     */
+    scopedApiProbeValidateModel: (
+      data: RequiredProbeModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<Blob, any>({
+        path: `/api/open/v1/test/model-validation`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags ScopedApiProbe
+     * @name ScopedApiProbeWrite
+     * @request POST:/test/scopes/images-write
+     */
+    scopedApiProbeWrite: (params: RequestParams = {}) =>
+      this.request<Blob, any>({
+        path: `/test/scopes/images-write`,
+        method: "POST",
+        ...params,
+      }),
+  };
   teamLabConnectors = {
     /**
      * @description 为运行时申请连接器租约；独占连接器同一时间只属于一个运行时，重复申请幂等返回
@@ -23278,6 +24744,24 @@ export class Api<
         body: data,
         type: ContentType.Json,
         format: "json",
+        ...params,
+      }),
+
+    /**
+     * @description 无活动租约时归档连接器；归档后不再出现在公开目录
+     *
+     * @tags TeamLab - Connectors
+     * @name OpenTeamLabConnectorsArchive
+     * @summary 归档现场连接器
+     * @request POST:/api/open/v1/teamlab/connectors/{connectorId}/archive
+     */
+    openTeamLabConnectorsArchive: (
+      connectorId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/connectors/${connectorId}/archive`,
+        method: "POST",
         ...params,
       }),
 
@@ -23347,6 +24831,68 @@ export class Api<
     ) =>
       mutate<TeamLabConnectorModel>(
         [`/api/open/v1/teamlab/connectors/${connectorId}`, query],
+        data,
+        options,
+      ),
+
+    /**
+     * @description 按需探测受管网卡并返回当前健康状态和观测时间
+     *
+     * @tags TeamLab - Connectors
+     * @name OpenTeamLabConnectorsHealth
+     * @summary 查询现场连接器健康
+     * @request GET:/api/open/v1/teamlab/connectors/{connectorId}/health
+     */
+    openTeamLabConnectorsHealth: (
+      connectorId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        OpenTeamLabConnectorHealthModel,
+        ExternalApiProblemDetailsModel
+      >({
+        path: `/api/open/v1/teamlab/connectors/${connectorId}/health`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * @description 按需探测受管网卡并返回当前健康状态和观测时间
+     *
+     * @tags TeamLab - Connectors
+     * @name OpenTeamLabConnectorsHealth
+     * @summary 查询现场连接器健康
+     * @request GET:/api/open/v1/teamlab/connectors/{connectorId}/health
+     */
+    useOpenTeamLabConnectorsHealth: (
+      connectorId: string,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<OpenTeamLabConnectorHealthModel, ExternalApiProblemDetailsModel>(
+        doFetch
+          ? `/api/open/v1/teamlab/connectors/${connectorId}/health`
+          : null,
+        options,
+      ),
+
+    /**
+     * @description 按需探测受管网卡并返回当前健康状态和观测时间
+     *
+     * @tags TeamLab - Connectors
+     * @name OpenTeamLabConnectorsHealth
+     * @summary 查询现场连接器健康
+     * @request GET:/api/open/v1/teamlab/connectors/{connectorId}/health
+     */
+    mutateOpenTeamLabConnectorsHealth: (
+      connectorId: string,
+      data?:
+        | OpenTeamLabConnectorHealthModel
+        | Promise<OpenTeamLabConnectorHealthModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<OpenTeamLabConnectorHealthModel>(
+        `/api/open/v1/teamlab/connectors/${connectorId}/health`,
         data,
         options,
       ),
@@ -23435,6 +24981,84 @@ export class Api<
       ),
 
     /**
+     * @description 按需读取受管节点当前网卡，用于登记受管网卡连接器
+     *
+     * @tags TeamLab - Connectors
+     * @name OpenTeamLabConnectorsListNodeInterfaces
+     * @summary 列出连接器节点网卡
+     * @request GET:/api/open/v1/teamlab/connectors/nodes/{nodeId}/interfaces
+     */
+    openTeamLabConnectorsListNodeInterfaces: (
+      nodeId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabHostInterface[], ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/connectors/nodes/${nodeId}/interfaces`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * @description 按需读取受管节点当前网卡，用于登记受管网卡连接器
+     *
+     * @tags TeamLab - Connectors
+     * @name OpenTeamLabConnectorsListNodeInterfaces
+     * @summary 列出连接器节点网卡
+     * @request GET:/api/open/v1/teamlab/connectors/nodes/{nodeId}/interfaces
+     */
+    useOpenTeamLabConnectorsListNodeInterfaces: (
+      nodeId: string,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<TeamLabHostInterface[], ExternalApiProblemDetailsModel>(
+        doFetch
+          ? `/api/open/v1/teamlab/connectors/nodes/${nodeId}/interfaces`
+          : null,
+        options,
+      ),
+
+    /**
+     * @description 按需读取受管节点当前网卡，用于登记受管网卡连接器
+     *
+     * @tags TeamLab - Connectors
+     * @name OpenTeamLabConnectorsListNodeInterfaces
+     * @summary 列出连接器节点网卡
+     * @request GET:/api/open/v1/teamlab/connectors/nodes/{nodeId}/interfaces
+     */
+    mutateOpenTeamLabConnectorsListNodeInterfaces: (
+      nodeId: string,
+      data?: TeamLabHostInterface[] | Promise<TeamLabHostInterface[]>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<TeamLabHostInterface[]>(
+        `/api/open/v1/teamlab/connectors/nodes/${nodeId}/interfaces`,
+        data,
+        options,
+      ),
+
+    /**
+     * @description 登记平台级或当前 token 获授权 control scope 内的现场连接器
+     *
+     * @tags TeamLab - Connectors
+     * @name OpenTeamLabConnectorsRegister
+     * @summary 登记现场连接器
+     * @request POST:/api/open/v1/teamlab/connectors
+     */
+    openTeamLabConnectorsRegister: (
+      data: OpenRegisterTeamLabConnectorModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabConnectorModel, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/connectors`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
      * @description 释放该运行时的活动租约；重复释放幂等返回
      *
      * @tags TeamLab - Connectors
@@ -23455,8 +25079,86 @@ export class Api<
         format: "json",
         ...params,
       }),
+
+    /**
+     * @description 替换连接器登记信息；有活动租约时拒绝修改
+     *
+     * @tags TeamLab - Connectors
+     * @name OpenTeamLabConnectorsUpdate
+     * @summary 修改现场连接器
+     * @request PUT:/api/open/v1/teamlab/connectors/{connectorId}
+     */
+    openTeamLabConnectorsUpdate: (
+      connectorId: string,
+      data: OpenUpdateTeamLabConnectorModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabConnectorModel, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/connectors/${connectorId}`,
+        method: "PUT",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
   };
   teamLabDevicePackages = {
+    /**
+     * @description 归档并停用设备模板；归档后不再出现在公开目录
+     *
+     * @tags TeamLab - Device packages
+     * @name OpenTeamLabDevicePackagesArchive
+     * @summary 归档设备模板
+     * @request POST:/api/open/v1/teamlab/device-packages/{packageId}/archive
+     */
+    openTeamLabDevicePackagesArchive: (
+      packageId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/device-packages/${packageId}/archive`,
+        method: "POST",
+        ...params,
+      }),
+
+    /**
+     * @description 阻止新发布和运行使用该设备模板，既有引用保持可追溯
+     *
+     * @tags TeamLab - Device packages
+     * @name OpenTeamLabDevicePackagesDisable
+     * @summary 停用设备模板
+     * @request POST:/api/open/v1/teamlab/device-packages/{packageId}/disable
+     */
+    openTeamLabDevicePackagesDisable: (
+      packageId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabDevicePackageModel, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/device-packages/${packageId}/disable`,
+        method: "POST",
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * @description 允许新发布和运行使用该设备模板
+     *
+     * @tags TeamLab - Device packages
+     * @name OpenTeamLabDevicePackagesEnable
+     * @summary 启用设备模板
+     * @request POST:/api/open/v1/teamlab/device-packages/{packageId}/enable
+     */
+    openTeamLabDevicePackagesEnable: (
+      packageId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabDevicePackageModel, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/device-packages/${packageId}/enable`,
+        method: "POST",
+        format: "json",
+        ...params,
+      }),
+
     /**
      * @description 返回版本、制品引用、资源需求、参数 schema 与能力声明
      *
@@ -23596,6 +25298,49 @@ export class Api<
         data,
         options,
       ),
+
+    /**
+     * @description 登记由外部流水线制作的设备模板及其制品、资源和能力声明
+     *
+     * @tags TeamLab - Device packages
+     * @name OpenTeamLabDevicePackagesRegister
+     * @summary 登记设备模板
+     * @request POST:/api/open/v1/teamlab/device-packages
+     */
+    openTeamLabDevicePackagesRegister: (
+      data: OpenRegisterTeamLabDevicePackageModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabDevicePackageModel, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/device-packages`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * @description 替换设备模板登记信息；名称与版本组合仍保持唯一
+     *
+     * @tags TeamLab - Device packages
+     * @name OpenTeamLabDevicePackagesUpdate
+     * @summary 修改设备模板
+     * @request PUT:/api/open/v1/teamlab/device-packages/{packageId}
+     */
+    openTeamLabDevicePackagesUpdate: (
+      packageId: string,
+      data: OpenUpdateTeamLabDevicePackageModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabDevicePackageModel, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/device-packages/${packageId}`,
+        method: "PUT",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
   };
   teamLabImagePreparation = {
     /**
@@ -23675,6 +25420,30 @@ export class Api<
       this.request<ApiOperationModel, ExternalApiProblemDetailsModel>({
         path: `/api/open/v1/teamlab/preparations/releases/${releaseId}`,
         method: "POST",
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * @description 把选定的已就绪镜像模板提前分发到具备对应能力的可调度节点。
+     *
+     * @tags TeamLab - Image Preparation
+     * @name OpenTeamLabImagePreparationsQueueTemplates
+     * @summary 预热镜像模板
+     * @request POST:/api/open/v1/teamlab/preparations/templates
+     */
+    openTeamLabImagePreparationsQueueTemplates: (
+      data: PrepareTeamLabTemplatesModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        TeamLabTemplatePreparationResultModel,
+        ExternalApiProblemDetailsModel
+      >({
+        path: `/api/open/v1/teamlab/preparations/templates`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
         format: "json",
         ...params,
       }),
@@ -23824,6 +25593,149 @@ export class Api<
         format: "json",
         ...params,
       }),
+  };
+  teamLabRemoteSessionAudit = {
+    /**
+     * @description 下载已完成完整性校验的会话生命周期 JSON 证据。
+     *
+     * @tags TeamLab - Remote session audit
+     * @name OpenTeamLabRemoteAuditDownloadEvidence
+     * @summary 下载远程会话操作审计证据
+     * @request GET:/api/open/v1/teamlab/remote-sessions/{sessionId}/audit/evidence/{evidenceId}/download
+     */
+    openTeamLabRemoteAuditDownloadEvidence: (
+      sessionId: string,
+      evidenceId: number,
+      params: RequestParams = {},
+    ) =>
+      this.request<Blob, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/remote-sessions/${sessionId}/audit/evidence/${evidenceId}/download`,
+        method: "GET",
+        ...params,
+      }),
+    /**
+     * @description 下载已完成完整性校验的会话生命周期 JSON 证据。
+     *
+     * @tags TeamLab - Remote session audit
+     * @name OpenTeamLabRemoteAuditDownloadEvidence
+     * @summary 下载远程会话操作审计证据
+     * @request GET:/api/open/v1/teamlab/remote-sessions/{sessionId}/audit/evidence/{evidenceId}/download
+     */
+    useOpenTeamLabRemoteAuditDownloadEvidence: (
+      sessionId: string,
+      evidenceId: number,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<Blob, ExternalApiProblemDetailsModel>(
+        doFetch
+          ? `/api/open/v1/teamlab/remote-sessions/${sessionId}/audit/evidence/${evidenceId}/download`
+          : null,
+        options,
+      ),
+
+    /**
+     * @description 下载已完成完整性校验的会话生命周期 JSON 证据。
+     *
+     * @tags TeamLab - Remote session audit
+     * @name OpenTeamLabRemoteAuditDownloadEvidence
+     * @summary 下载远程会话操作审计证据
+     * @request GET:/api/open/v1/teamlab/remote-sessions/{sessionId}/audit/evidence/{evidenceId}/download
+     */
+    mutateOpenTeamLabRemoteAuditDownloadEvidence: (
+      sessionId: string,
+      evidenceId: number,
+      data?: Blob | Promise<Blob>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<Blob>(
+        `/api/open/v1/teamlab/remote-sessions/${sessionId}/audit/evidence/${evidenceId}/download`,
+        data,
+        options,
+      ),
+
+    /**
+     * @description 为已结束并完成清理的会话生成或确认生命周期审计证据。
+     *
+     * @tags TeamLab - Remote session audit
+     * @name OpenTeamLabRemoteAuditGenerate
+     * @summary 生成远程会话操作审计
+     * @request POST:/api/open/v1/teamlab/remote-sessions/{sessionId}/audit
+     */
+    openTeamLabRemoteAuditGenerate: (
+      sessionId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/remote-sessions/${sessionId}/audit`,
+        method: "POST",
+        ...params,
+      }),
+
+    /**
+     * @description 返回会话生命周期证据的就绪状态、保留期限和摘要。
+     *
+     * @tags TeamLab - Remote session audit
+     * @name OpenTeamLabRemoteAuditSummary
+     * @summary 查询远程会话操作审计
+     * @request GET:/api/open/v1/teamlab/remote-sessions/{sessionId}/audit
+     */
+    openTeamLabRemoteAuditSummary: (
+      sessionId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        OpenTeamLabRemoteAuditSummaryModel,
+        ExternalApiProblemDetailsModel
+      >({
+        path: `/api/open/v1/teamlab/remote-sessions/${sessionId}/audit`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * @description 返回会话生命周期证据的就绪状态、保留期限和摘要。
+     *
+     * @tags TeamLab - Remote session audit
+     * @name OpenTeamLabRemoteAuditSummary
+     * @summary 查询远程会话操作审计
+     * @request GET:/api/open/v1/teamlab/remote-sessions/{sessionId}/audit
+     */
+    useOpenTeamLabRemoteAuditSummary: (
+      sessionId: string,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<
+        OpenTeamLabRemoteAuditSummaryModel,
+        ExternalApiProblemDetailsModel
+      >(
+        doFetch
+          ? `/api/open/v1/teamlab/remote-sessions/${sessionId}/audit`
+          : null,
+        options,
+      ),
+
+    /**
+     * @description 返回会话生命周期证据的就绪状态、保留期限和摘要。
+     *
+     * @tags TeamLab - Remote session audit
+     * @name OpenTeamLabRemoteAuditSummary
+     * @summary 查询远程会话操作审计
+     * @request GET:/api/open/v1/teamlab/remote-sessions/{sessionId}/audit
+     */
+    mutateOpenTeamLabRemoteAuditSummary: (
+      sessionId: string,
+      data?:
+        | OpenTeamLabRemoteAuditSummaryModel
+        | Promise<OpenTeamLabRemoteAuditSummaryModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<OpenTeamLabRemoteAuditSummaryModel>(
+        `/api/open/v1/teamlab/remote-sessions/${sessionId}/audit`,
+        data,
+        options,
+      ),
   };
   teamLabRemoteSessions = {
     /**
@@ -24007,6 +25919,118 @@ export class Api<
     ) =>
       mutate<OpenTeamLabRemoteSessionModel>(
         `/api/open/v1/teamlab/remote-sessions/${sessionId}`,
+        data,
+        options,
+      ),
+
+    /**
+     * @description 按当前 token 获授权的控制范围查询会话，可按运行时、关键词、协议和状态筛选。
+     *
+     * @tags TeamLab - Remote sessions
+     * @name OpenTeamLabRemoteSessionsList
+     * @summary 列出远程会话
+     * @request GET:/api/open/v1/teamlab/remote-sessions
+     */
+    openTeamLabRemoteSessionsList: (
+      query?: {
+        /** @format guid */
+        runtimeId?: string | null;
+        query?: string | null;
+        protocol?: TeamLabRemoteProtocol | null;
+        /** @default false */
+        abnormalOnly?: boolean;
+        status?: TeamLabRemoteSessionStatus | null;
+        /** @format int64 */
+        after?: number | null;
+        /**
+         * @format int32
+         * @min 1
+         * @max 100
+         * @default 50
+         */
+        limit?: number;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        OpenTeamLabRemoteSessionPageModel,
+        ExternalApiProblemDetailsModel
+      >({
+        path: `/api/open/v1/teamlab/remote-sessions`,
+        method: "GET",
+        query: query,
+        format: "json",
+        ...params,
+      }),
+    /**
+     * @description 按当前 token 获授权的控制范围查询会话，可按运行时、关键词、协议和状态筛选。
+     *
+     * @tags TeamLab - Remote sessions
+     * @name OpenTeamLabRemoteSessionsList
+     * @summary 列出远程会话
+     * @request GET:/api/open/v1/teamlab/remote-sessions
+     */
+    useOpenTeamLabRemoteSessionsList: (
+      query?: {
+        /** @format guid */
+        runtimeId?: string | null;
+        query?: string | null;
+        protocol?: TeamLabRemoteProtocol | null;
+        /** @default false */
+        abnormalOnly?: boolean;
+        status?: TeamLabRemoteSessionStatus | null;
+        /** @format int64 */
+        after?: number | null;
+        /**
+         * @format int32
+         * @min 1
+         * @max 100
+         * @default 50
+         */
+        limit?: number;
+      },
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<OpenTeamLabRemoteSessionPageModel, ExternalApiProblemDetailsModel>(
+        doFetch ? [`/api/open/v1/teamlab/remote-sessions`, query] : null,
+        options,
+      ),
+
+    /**
+     * @description 按当前 token 获授权的控制范围查询会话，可按运行时、关键词、协议和状态筛选。
+     *
+     * @tags TeamLab - Remote sessions
+     * @name OpenTeamLabRemoteSessionsList
+     * @summary 列出远程会话
+     * @request GET:/api/open/v1/teamlab/remote-sessions
+     */
+    mutateOpenTeamLabRemoteSessionsList: (
+      query?: {
+        /** @format guid */
+        runtimeId?: string | null;
+        query?: string | null;
+        protocol?: TeamLabRemoteProtocol | null;
+        /** @default false */
+        abnormalOnly?: boolean;
+        status?: TeamLabRemoteSessionStatus | null;
+        /** @format int64 */
+        after?: number | null;
+        /**
+         * @format int32
+         * @min 1
+         * @max 100
+         * @default 50
+         */
+        limit?: number;
+      },
+      data?:
+        | OpenTeamLabRemoteSessionPageModel
+        | Promise<OpenTeamLabRemoteSessionPageModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<OpenTeamLabRemoteSessionPageModel>(
+        [`/api/open/v1/teamlab/remote-sessions`, query],
         data,
         options,
       ),
@@ -24687,7 +26711,399 @@ export class Api<
         options,
       ),
   };
+  teamLabRuntimeOperations = {
+    /**
+     * @description 检查当前代资产是否具备安全执行单资产生命周期命令所需的节点与不可变计划。
+     *
+     * @tags TeamLab - Runtime operations
+     * @name OpenTeamLabRuntimeOperationsAssetControlCapability
+     * @summary 查询单资产控制能力
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/assets/{assetId}/control
+     */
+    openTeamLabRuntimeOperationsAssetControlCapability: (
+      runtimeId: string,
+      assetId: number,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        OpenTeamLabAssetControlCapabilityModel,
+        ExternalApiProblemDetailsModel
+      >({
+        path: `/api/open/v1/teamlab/runtimes/${runtimeId}/assets/${assetId}/control`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * @description 检查当前代资产是否具备安全执行单资产生命周期命令所需的节点与不可变计划。
+     *
+     * @tags TeamLab - Runtime operations
+     * @name OpenTeamLabRuntimeOperationsAssetControlCapability
+     * @summary 查询单资产控制能力
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/assets/{assetId}/control
+     */
+    useOpenTeamLabRuntimeOperationsAssetControlCapability: (
+      runtimeId: string,
+      assetId: number,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<
+        OpenTeamLabAssetControlCapabilityModel,
+        ExternalApiProblemDetailsModel
+      >(
+        doFetch
+          ? `/api/open/v1/teamlab/runtimes/${runtimeId}/assets/${assetId}/control`
+          : null,
+        options,
+      ),
+
+    /**
+     * @description 检查当前代资产是否具备安全执行单资产生命周期命令所需的节点与不可变计划。
+     *
+     * @tags TeamLab - Runtime operations
+     * @name OpenTeamLabRuntimeOperationsAssetControlCapability
+     * @summary 查询单资产控制能力
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/assets/{assetId}/control
+     */
+    mutateOpenTeamLabRuntimeOperationsAssetControlCapability: (
+      runtimeId: string,
+      assetId: number,
+      data?:
+        | OpenTeamLabAssetControlCapabilityModel
+        | Promise<OpenTeamLabAssetControlCapabilityModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<OpenTeamLabAssetControlCapabilityModel>(
+        `/api/open/v1/teamlab/runtimes/${runtimeId}/assets/${assetId}/control`,
+        data,
+        options,
+      ),
+
+    /**
+     * @description 提交 start、stop、restart、rebuild、pause 或 resume，并返回统一部署队列的原始 ticket。
+     *
+     * @tags TeamLab - Runtime operations
+     * @name OpenTeamLabRuntimeOperationsControlAsset
+     * @summary 提交单资产生命周期命令
+     * @request POST:/api/open/v1/teamlab/runtimes/{runtimeId}/assets/{assetId}/control
+     */
+    openTeamLabRuntimeOperationsControlAsset: (
+      runtimeId: string,
+      assetId: number,
+      data: OpenTeamLabAssetControlCommand,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        OpenTeamLabAssetControlTicketModel,
+        ExternalApiProblemDetailsModel
+      >({
+        path: `/api/open/v1/teamlab/runtimes/${runtimeId}/assets/${assetId}/control`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * @description 省略 publicPort 时自动分配公网端口；指定 publicPort 时尝试保留该端口。
+     *
+     * @tags TeamLab - Runtime operations
+     * @name OpenTeamLabRuntimeOperationsCreateServiceAccess
+     * @summary 创建运行时服务映射
+     * @request POST:/api/open/v1/teamlab/runtimes/{runtimeId}/assets/{assetId}/service-access
+     */
+    openTeamLabRuntimeOperationsCreateServiceAccess: (
+      runtimeId: string,
+      assetId: number,
+      data: OpenCreateTeamLabServiceAccessModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        OpenTeamLabServiceAccessModel,
+        ExternalApiProblemDetailsModel
+      >({
+        path: `/api/open/v1/teamlab/runtimes/${runtimeId}/assets/${assetId}/service-access`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * @description 直接读取原 DeploymentQueueTicket 的状态、阶段与安全错误码。
+     *
+     * @tags TeamLab - Runtime operations
+     * @name OpenTeamLabRuntimeOperationsGetAssetControlTask
+     * @summary 查询单资产生命周期任务
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/assets/{assetId}/control/{ticketId}
+     */
+    openTeamLabRuntimeOperationsGetAssetControlTask: (
+      runtimeId: string,
+      assetId: number,
+      ticketId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        OpenTeamLabAssetControlTaskModel,
+        ExternalApiProblemDetailsModel
+      >({
+        path: `/api/open/v1/teamlab/runtimes/${runtimeId}/assets/${assetId}/control/${ticketId}`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * @description 直接读取原 DeploymentQueueTicket 的状态、阶段与安全错误码。
+     *
+     * @tags TeamLab - Runtime operations
+     * @name OpenTeamLabRuntimeOperationsGetAssetControlTask
+     * @summary 查询单资产生命周期任务
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/assets/{assetId}/control/{ticketId}
+     */
+    useOpenTeamLabRuntimeOperationsGetAssetControlTask: (
+      runtimeId: string,
+      assetId: number,
+      ticketId: string,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<OpenTeamLabAssetControlTaskModel, ExternalApiProblemDetailsModel>(
+        doFetch
+          ? `/api/open/v1/teamlab/runtimes/${runtimeId}/assets/${assetId}/control/${ticketId}`
+          : null,
+        options,
+      ),
+
+    /**
+     * @description 直接读取原 DeploymentQueueTicket 的状态、阶段与安全错误码。
+     *
+     * @tags TeamLab - Runtime operations
+     * @name OpenTeamLabRuntimeOperationsGetAssetControlTask
+     * @summary 查询单资产生命周期任务
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/assets/{assetId}/control/{ticketId}
+     */
+    mutateOpenTeamLabRuntimeOperationsGetAssetControlTask: (
+      runtimeId: string,
+      assetId: number,
+      ticketId: string,
+      data?:
+        | OpenTeamLabAssetControlTaskModel
+        | Promise<OpenTeamLabAssetControlTaskModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<OpenTeamLabAssetControlTaskModel>(
+        `/api/open/v1/teamlab/runtimes/${runtimeId}/assets/${assetId}/control/${ticketId}`,
+        data,
+        options,
+      ),
+
+    /**
+     * @description 返回运行时当前代及历史代的公网服务映射，不包含节点、Agent 或内部转发身份。
+     *
+     * @tags TeamLab - Runtime operations
+     * @name OpenTeamLabRuntimeOperationsListServiceAccess
+     * @summary 查询运行时服务映射
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/service-access
+     */
+    openTeamLabRuntimeOperationsListServiceAccess: (
+      runtimeId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        OpenTeamLabServiceAccessModel[],
+        ExternalApiProblemDetailsModel
+      >({
+        path: `/api/open/v1/teamlab/runtimes/${runtimeId}/service-access`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * @description 返回运行时当前代及历史代的公网服务映射，不包含节点、Agent 或内部转发身份。
+     *
+     * @tags TeamLab - Runtime operations
+     * @name OpenTeamLabRuntimeOperationsListServiceAccess
+     * @summary 查询运行时服务映射
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/service-access
+     */
+    useOpenTeamLabRuntimeOperationsListServiceAccess: (
+      runtimeId: string,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<OpenTeamLabServiceAccessModel[], ExternalApiProblemDetailsModel>(
+        doFetch
+          ? `/api/open/v1/teamlab/runtimes/${runtimeId}/service-access`
+          : null,
+        options,
+      ),
+
+    /**
+     * @description 返回运行时当前代及历史代的公网服务映射，不包含节点、Agent 或内部转发身份。
+     *
+     * @tags TeamLab - Runtime operations
+     * @name OpenTeamLabRuntimeOperationsListServiceAccess
+     * @summary 查询运行时服务映射
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/service-access
+     */
+    mutateOpenTeamLabRuntimeOperationsListServiceAccess: (
+      runtimeId: string,
+      data?:
+        | OpenTeamLabServiceAccessModel[]
+        | Promise<OpenTeamLabServiceAccessModel[]>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<OpenTeamLabServiceAccessModel[]>(
+        `/api/open/v1/teamlab/runtimes/${runtimeId}/service-access`,
+        data,
+        options,
+      ),
+
+    /**
+     * @description 撤销公网与节点转发规则并释放原端口租约；重复撤销返回相同终态。
+     *
+     * @tags TeamLab - Runtime operations
+     * @name OpenTeamLabRuntimeOperationsRemoveServiceAccess
+     * @summary 撤销运行时服务映射
+     * @request DELETE:/api/open/v1/teamlab/runtimes/{runtimeId}/service-access/{accessId}
+     */
+    openTeamLabRuntimeOperationsRemoveServiceAccess: (
+      runtimeId: string,
+      accessId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        OpenTeamLabServiceAccessModel,
+        ExternalApiProblemDetailsModel
+      >({
+        path: `/api/open/v1/teamlab/runtimes/${runtimeId}/service-access/${accessId}`,
+        method: "DELETE",
+        format: "json",
+        ...params,
+      }),
+  };
   teamLabRuntimes = {
+    /**
+     * @description 按游标分页返回当前代容器和虚拟机资产，可按状态筛选。
+     *
+     * @tags TeamLab - Runtimes
+     * @name OpenTeamLabRuntimesAssets
+     * @summary 列出运行资产
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/assets
+     */
+    openTeamLabRuntimesAssets: (
+      runtimeId: string,
+      query?: {
+        cursor?: string | null;
+        /**
+         * @format int32
+         * @min 1
+         * @max 100
+         * @default 50
+         */
+        limit?: number;
+        status?: TeamLabRuntimeStatus | null;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        OpenTeamLabRuntimeAssetPageModel,
+        ExternalApiProblemDetailsModel
+      >({
+        path: `/api/open/v1/teamlab/runtimes/${runtimeId}/assets`,
+        method: "GET",
+        query: query,
+        format: "json",
+        ...params,
+      }),
+    /**
+     * @description 按游标分页返回当前代容器和虚拟机资产，可按状态筛选。
+     *
+     * @tags TeamLab - Runtimes
+     * @name OpenTeamLabRuntimesAssets
+     * @summary 列出运行资产
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/assets
+     */
+    useOpenTeamLabRuntimesAssets: (
+      runtimeId: string,
+      query?: {
+        cursor?: string | null;
+        /**
+         * @format int32
+         * @min 1
+         * @max 100
+         * @default 50
+         */
+        limit?: number;
+        status?: TeamLabRuntimeStatus | null;
+      },
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<OpenTeamLabRuntimeAssetPageModel, ExternalApiProblemDetailsModel>(
+        doFetch
+          ? [`/api/open/v1/teamlab/runtimes/${runtimeId}/assets`, query]
+          : null,
+        options,
+      ),
+
+    /**
+     * @description 按游标分页返回当前代容器和虚拟机资产，可按状态筛选。
+     *
+     * @tags TeamLab - Runtimes
+     * @name OpenTeamLabRuntimesAssets
+     * @summary 列出运行资产
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/assets
+     */
+    mutateOpenTeamLabRuntimesAssets: (
+      runtimeId: string,
+      query?: {
+        cursor?: string | null;
+        /**
+         * @format int32
+         * @min 1
+         * @max 100
+         * @default 50
+         */
+        limit?: number;
+        status?: TeamLabRuntimeStatus | null;
+      },
+      data?:
+        | OpenTeamLabRuntimeAssetPageModel
+        | Promise<OpenTeamLabRuntimeAssetPageModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<OpenTeamLabRuntimeAssetPageModel>(
+        [`/api/open/v1/teamlab/runtimes/${runtimeId}/assets`, query],
+        data,
+        options,
+      ),
+
+    /**
+     * @description 在既有网段中一次性新增、替换或移除资产，继续使用当前运行代次。
+     *
+     * @tags TeamLab - Runtimes
+     * @name OpenTeamLabRuntimesChangeAssets
+     * @summary 变更运行资产
+     * @request POST:/api/open/v1/teamlab/runtimes/{runtimeId}/asset-changes
+     */
+    openTeamLabRuntimesChangeAssets: (
+      runtimeId: string,
+      data: ChangeTeamLabRuntimeAssetsModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<ApiOperationModel, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/runtimes/${runtimeId}/asset-changes`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+
     /**
      * @description 为单个队伍或自动化属主提交已发布拓扑版本的部署任务。
      *
@@ -24928,6 +27344,220 @@ export class Api<
       ),
 
     /**
+     * @description 按当前 token 的 TeamLab 控制范围授权返回可继续管理的运行时。
+     *
+     * @tags TeamLab - Runtimes
+     * @name OpenTeamLabRuntimesList
+     * @summary 列出运行时
+     * @request GET:/api/open/v1/teamlab/runtimes
+     */
+    openTeamLabRuntimesList: (
+      query?: {
+        /** @format guid */
+        controlScopeId?: string | null;
+        externalReference?: string | null;
+        status?: TeamLabRuntimeStatus | null;
+        /**
+         * @format int32
+         * @min 1
+         * @max 100
+         * @default 50
+         */
+        limit?: number;
+        after?: string | null;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<OpenTeamLabRuntimePageModel, ExternalApiProblemDetailsModel>(
+        {
+          path: `/api/open/v1/teamlab/runtimes`,
+          method: "GET",
+          query: query,
+          format: "json",
+          ...params,
+        },
+      ),
+    /**
+     * @description 按当前 token 的 TeamLab 控制范围授权返回可继续管理的运行时。
+     *
+     * @tags TeamLab - Runtimes
+     * @name OpenTeamLabRuntimesList
+     * @summary 列出运行时
+     * @request GET:/api/open/v1/teamlab/runtimes
+     */
+    useOpenTeamLabRuntimesList: (
+      query?: {
+        /** @format guid */
+        controlScopeId?: string | null;
+        externalReference?: string | null;
+        status?: TeamLabRuntimeStatus | null;
+        /**
+         * @format int32
+         * @min 1
+         * @max 100
+         * @default 50
+         */
+        limit?: number;
+        after?: string | null;
+      },
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<OpenTeamLabRuntimePageModel, ExternalApiProblemDetailsModel>(
+        doFetch ? [`/api/open/v1/teamlab/runtimes`, query] : null,
+        options,
+      ),
+
+    /**
+     * @description 按当前 token 的 TeamLab 控制范围授权返回可继续管理的运行时。
+     *
+     * @tags TeamLab - Runtimes
+     * @name OpenTeamLabRuntimesList
+     * @summary 列出运行时
+     * @request GET:/api/open/v1/teamlab/runtimes
+     */
+    mutateOpenTeamLabRuntimesList: (
+      query?: {
+        /** @format guid */
+        controlScopeId?: string | null;
+        externalReference?: string | null;
+        status?: TeamLabRuntimeStatus | null;
+        /**
+         * @format int32
+         * @min 1
+         * @max 100
+         * @default 50
+         */
+        limit?: number;
+        after?: string | null;
+      },
+      data?: OpenTeamLabRuntimePageModel | Promise<OpenTeamLabRuntimePageModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<OpenTeamLabRuntimePageModel>(
+        [`/api/open/v1/teamlab/runtimes`, query],
+        data,
+        options,
+      ),
+
+    /**
+     * @description 返回当前代仍可管理的访问授权元数据，不返回私钥、配置正文或一次性下载凭据。
+     *
+     * @tags TeamLab - Runtimes
+     * @name OpenTeamLabRuntimesListAccessGrants
+     * @summary 列出访问授权
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/access-grants
+     */
+    openTeamLabRuntimesListAccessGrants: (
+      runtimeId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        OpenTeamLabAccessGrantMetadataModel[],
+        ExternalApiProblemDetailsModel
+      >({
+        path: `/api/open/v1/teamlab/runtimes/${runtimeId}/access-grants`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * @description 返回当前代仍可管理的访问授权元数据，不返回私钥、配置正文或一次性下载凭据。
+     *
+     * @tags TeamLab - Runtimes
+     * @name OpenTeamLabRuntimesListAccessGrants
+     * @summary 列出访问授权
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/access-grants
+     */
+    useOpenTeamLabRuntimesListAccessGrants: (
+      runtimeId: string,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<
+        OpenTeamLabAccessGrantMetadataModel[],
+        ExternalApiProblemDetailsModel
+      >(
+        doFetch
+          ? `/api/open/v1/teamlab/runtimes/${runtimeId}/access-grants`
+          : null,
+        options,
+      ),
+
+    /**
+     * @description 返回当前代仍可管理的访问授权元数据，不返回私钥、配置正文或一次性下载凭据。
+     *
+     * @tags TeamLab - Runtimes
+     * @name OpenTeamLabRuntimesListAccessGrants
+     * @summary 列出访问授权
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/access-grants
+     */
+    mutateOpenTeamLabRuntimesListAccessGrants: (
+      runtimeId: string,
+      data?:
+        | OpenTeamLabAccessGrantMetadataModel[]
+        | Promise<OpenTeamLabAccessGrantMetadataModel[]>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<OpenTeamLabAccessGrantMetadataModel[]>(
+        `/api/open/v1/teamlab/runtimes/${runtimeId}/access-grants`,
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLab - Runtimes
+     * @name OpenTeamLabRuntimesListRuntimeGrants
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/grants
+     */
+    openTeamLabRuntimesListRuntimeGrants: (
+      runtimeId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabRuntimeGrantModel[], ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/runtimes/${runtimeId}/grants`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags TeamLab - Runtimes
+     * @name OpenTeamLabRuntimesListRuntimeGrants
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/grants
+     */
+    useOpenTeamLabRuntimesListRuntimeGrants: (
+      runtimeId: string,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<TeamLabRuntimeGrantModel[], ExternalApiProblemDetailsModel>(
+        doFetch ? `/api/open/v1/teamlab/runtimes/${runtimeId}/grants` : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLab - Runtimes
+     * @name OpenTeamLabRuntimesListRuntimeGrants
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/grants
+     */
+    mutateOpenTeamLabRuntimesListRuntimeGrants: (
+      runtimeId: string,
+      data?: TeamLabRuntimeGrantModel[] | Promise<TeamLabRuntimeGrantModel[]>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<TeamLabRuntimeGrantModel[]>(
+        `/api/open/v1/teamlab/runtimes/${runtimeId}/grants`,
+        data,
+        options,
+      ),
+
+    /**
      * @description 在原节点上挂起工作负载，同时保留运行时身份、网络、磁盘、地址、访问状态与容量预留。
      *
      * @tags TeamLab - Runtimes
@@ -24939,6 +27569,105 @@ export class Api<
       this.request<ApiOperationModel, ExternalApiProblemDetailsModel>({
         path: `/api/open/v1/teamlab/runtimes/${runtimeId}/pause`,
         method: "POST",
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * @description 比较当前运行版本和目标发布版本，返回资产新增、删除、替换以及是否需要完整重置。
+     *
+     * @tags TeamLab - Runtimes
+     * @name OpenTeamLabRuntimesPreviewUpdate
+     * @summary 预览运行时更新
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/updates/preview
+     */
+    openTeamLabRuntimesPreviewUpdate: (
+      runtimeId: string,
+      query?: {
+        /** @format guid */
+        releaseId?: string;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        TeamLabRuntimeUpdatePreviewModel,
+        ExternalApiProblemDetailsModel
+      >({
+        path: `/api/open/v1/teamlab/runtimes/${runtimeId}/updates/preview`,
+        method: "GET",
+        query: query,
+        format: "json",
+        ...params,
+      }),
+    /**
+     * @description 比较当前运行版本和目标发布版本，返回资产新增、删除、替换以及是否需要完整重置。
+     *
+     * @tags TeamLab - Runtimes
+     * @name OpenTeamLabRuntimesPreviewUpdate
+     * @summary 预览运行时更新
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/updates/preview
+     */
+    useOpenTeamLabRuntimesPreviewUpdate: (
+      runtimeId: string,
+      query?: {
+        /** @format guid */
+        releaseId?: string;
+      },
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<TeamLabRuntimeUpdatePreviewModel, ExternalApiProblemDetailsModel>(
+        doFetch
+          ? [
+              `/api/open/v1/teamlab/runtimes/${runtimeId}/updates/preview`,
+              query,
+            ]
+          : null,
+        options,
+      ),
+
+    /**
+     * @description 比较当前运行版本和目标发布版本，返回资产新增、删除、替换以及是否需要完整重置。
+     *
+     * @tags TeamLab - Runtimes
+     * @name OpenTeamLabRuntimesPreviewUpdate
+     * @summary 预览运行时更新
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/updates/preview
+     */
+    mutateOpenTeamLabRuntimesPreviewUpdate: (
+      runtimeId: string,
+      query?: {
+        /** @format guid */
+        releaseId?: string;
+      },
+      data?:
+        | TeamLabRuntimeUpdatePreviewModel
+        | Promise<TeamLabRuntimeUpdatePreviewModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<TeamLabRuntimeUpdatePreviewModel>(
+        [`/api/open/v1/teamlab/runtimes/${runtimeId}/updates/preview`, query],
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags TeamLab - Runtimes
+     * @name OpenTeamLabRuntimesReplaceRuntimeGrants
+     * @request PUT:/api/open/v1/teamlab/runtimes/{runtimeId}/grants
+     */
+    openTeamLabRuntimesReplaceRuntimeGrants: (
+      runtimeId: string,
+      data: ReplaceTeamLabRuntimeGrantsModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<TeamLabRuntimeGrantModel[], ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/runtimes/${runtimeId}/grants`,
+        method: "PUT",
+        body: data,
+        type: ContentType.Json,
         format: "json",
         ...params,
       }),
@@ -25024,6 +27753,216 @@ export class Api<
         format: "json",
         ...params,
       }),
+
+    /**
+     * @description 返回适合轮询的运行阶段、当前任务和资产状态汇总，不传输完整拓扑。
+     *
+     * @tags TeamLab - Runtimes
+     * @name OpenTeamLabRuntimesStatus
+     * @summary 查询运行状态
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/status
+     */
+    openTeamLabRuntimesStatus: (
+      runtimeId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        OpenTeamLabRuntimeStatusModel,
+        ExternalApiProblemDetailsModel
+      >({
+        path: `/api/open/v1/teamlab/runtimes/${runtimeId}/status`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * @description 返回适合轮询的运行阶段、当前任务和资产状态汇总，不传输完整拓扑。
+     *
+     * @tags TeamLab - Runtimes
+     * @name OpenTeamLabRuntimesStatus
+     * @summary 查询运行状态
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/status
+     */
+    useOpenTeamLabRuntimesStatus: (
+      runtimeId: string,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<OpenTeamLabRuntimeStatusModel, ExternalApiProblemDetailsModel>(
+        doFetch ? `/api/open/v1/teamlab/runtimes/${runtimeId}/status` : null,
+        options,
+      ),
+
+    /**
+     * @description 返回适合轮询的运行阶段、当前任务和资产状态汇总，不传输完整拓扑。
+     *
+     * @tags TeamLab - Runtimes
+     * @name OpenTeamLabRuntimesStatus
+     * @summary 查询运行状态
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/status
+     */
+    mutateOpenTeamLabRuntimesStatus: (
+      runtimeId: string,
+      data?:
+        | OpenTeamLabRuntimeStatusModel
+        | Promise<OpenTeamLabRuntimeStatusModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<OpenTeamLabRuntimeStatusModel>(
+        `/api/open/v1/teamlab/runtimes/${runtimeId}/status`,
+        data,
+        options,
+      ),
+
+    /**
+     * @description 在保留现有运行环境的情况下，将资产更新到指定发布版本。
+     *
+     * @tags TeamLab - Runtimes
+     * @name OpenTeamLabRuntimesUpdate
+     * @summary 更新运行时资产
+     * @request POST:/api/open/v1/teamlab/runtimes/{runtimeId}/updates
+     */
+    openTeamLabRuntimesUpdate: (
+      runtimeId: string,
+      data: UpdateTeamLabRuntimeModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<ApiOperationModel, ExternalApiProblemDetailsModel>({
+        path: `/api/open/v1/teamlab/runtimes/${runtimeId}/updates`,
+        method: "POST",
+        body: data,
+        type: ContentType.Json,
+        format: "json",
+        ...params,
+      }),
+  };
+  teamLabRuntimeStatus = {
+    /**
+     * @description 返回当前代设备模板资产的健康检查结果和下一次检查时间。
+     *
+     * @tags TeamLab - Runtime status
+     * @name OpenTeamLabRuntimeStatusDeviceHealth
+     * @summary 查询设备健康
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/device-health
+     */
+    openTeamLabRuntimeStatusDeviceHealth: (
+      runtimeId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        OpenTeamLabDeviceHealthModel[],
+        ExternalApiProblemDetailsModel
+      >({
+        path: `/api/open/v1/teamlab/runtimes/${runtimeId}/device-health`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * @description 返回当前代设备模板资产的健康检查结果和下一次检查时间。
+     *
+     * @tags TeamLab - Runtime status
+     * @name OpenTeamLabRuntimeStatusDeviceHealth
+     * @summary 查询设备健康
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/device-health
+     */
+    useOpenTeamLabRuntimeStatusDeviceHealth: (
+      runtimeId: string,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<OpenTeamLabDeviceHealthModel[], ExternalApiProblemDetailsModel>(
+        doFetch
+          ? `/api/open/v1/teamlab/runtimes/${runtimeId}/device-health`
+          : null,
+        options,
+      ),
+
+    /**
+     * @description 返回当前代设备模板资产的健康检查结果和下一次检查时间。
+     *
+     * @tags TeamLab - Runtime status
+     * @name OpenTeamLabRuntimeStatusDeviceHealth
+     * @summary 查询设备健康
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/device-health
+     */
+    mutateOpenTeamLabRuntimeStatusDeviceHealth: (
+      runtimeId: string,
+      data?:
+        | OpenTeamLabDeviceHealthModel[]
+        | Promise<OpenTeamLabDeviceHealthModel[]>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<OpenTeamLabDeviceHealthModel[]>(
+        `/api/open/v1/teamlab/runtimes/${runtimeId}/device-health`,
+        data,
+        options,
+      ),
+
+    /**
+     * @description 对比当前代资产与节点现场状态；修复时使用返回的 suggestedAction 调用单资产控制接口。
+     *
+     * @tags TeamLab - Runtime status
+     * @name OpenTeamLabRuntimeStatusStatusCheck
+     * @summary 检查运行状态
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/status-check
+     */
+    openTeamLabRuntimeStatusStatusCheck: (
+      runtimeId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        OpenTeamLabRuntimeStatusCheckModel,
+        ExternalApiProblemDetailsModel
+      >({
+        path: `/api/open/v1/teamlab/runtimes/${runtimeId}/status-check`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * @description 对比当前代资产与节点现场状态；修复时使用返回的 suggestedAction 调用单资产控制接口。
+     *
+     * @tags TeamLab - Runtime status
+     * @name OpenTeamLabRuntimeStatusStatusCheck
+     * @summary 检查运行状态
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/status-check
+     */
+    useOpenTeamLabRuntimeStatusStatusCheck: (
+      runtimeId: string,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<
+        OpenTeamLabRuntimeStatusCheckModel,
+        ExternalApiProblemDetailsModel
+      >(
+        doFetch
+          ? `/api/open/v1/teamlab/runtimes/${runtimeId}/status-check`
+          : null,
+        options,
+      ),
+
+    /**
+     * @description 对比当前代资产与节点现场状态；修复时使用返回的 suggestedAction 调用单资产控制接口。
+     *
+     * @tags TeamLab - Runtime status
+     * @name OpenTeamLabRuntimeStatusStatusCheck
+     * @summary 检查运行状态
+     * @request GET:/api/open/v1/teamlab/runtimes/{runtimeId}/status-check
+     */
+    mutateOpenTeamLabRuntimeStatusStatusCheck: (
+      runtimeId: string,
+      data?:
+        | OpenTeamLabRuntimeStatusCheckModel
+        | Promise<OpenTeamLabRuntimeStatusCheckModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<OpenTeamLabRuntimeStatusCheckModel>(
+        `/api/open/v1/teamlab/runtimes/${runtimeId}/status-check`,
+        data,
+        options,
+      ),
   };
   teamLabControlScopes = {
     /**
@@ -27539,6 +30478,153 @@ export class Api<
      * No description
      *
      * @tags OpenImages
+     * @name OpenImagesGetRemoteAccess
+     * @request GET:/api/open/v1/images/{imageTemplateId}/remote-access
+     */
+    openImagesGetRemoteAccess: (
+      imageTemplateId: number,
+      params: RequestParams = {},
+    ) =>
+      this.request<ImageRemoteAccessModel, ProblemDetails>({
+        path: `/api/open/v1/images/${imageTemplateId}/remote-access`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags OpenImages
+     * @name OpenImagesGetRemoteAccess
+     * @request GET:/api/open/v1/images/{imageTemplateId}/remote-access
+     */
+    useOpenImagesGetRemoteAccess: (
+      imageTemplateId: number,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<ImageRemoteAccessModel, ProblemDetails>(
+        doFetch ? `/api/open/v1/images/${imageTemplateId}/remote-access` : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags OpenImages
+     * @name OpenImagesGetRemoteAccess
+     * @request GET:/api/open/v1/images/{imageTemplateId}/remote-access
+     */
+    mutateOpenImagesGetRemoteAccess: (
+      imageTemplateId: number,
+      data?: ImageRemoteAccessModel | Promise<ImageRemoteAccessModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<ImageRemoteAccessModel>(
+        `/api/open/v1/images/${imageTemplateId}/remote-access`,
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags OpenImages
+     * @name OpenImagesList
+     * @request GET:/api/open/v1/images
+     */
+    openImagesList: (
+      query?: {
+        osType?: OSType | null;
+        imageType?: ImageType | null;
+        status?: ImageStatus | null;
+        /** @maxLength 256 */
+        search?: string | null;
+        /**
+         * @format int32
+         * @min 1
+         * @max 100
+         * @default 50
+         */
+        limit?: number;
+        after?: string | null;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<OpenImageTemplatePageModel, any>({
+        path: `/api/open/v1/images`,
+        method: "GET",
+        query: query,
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags OpenImages
+     * @name OpenImagesList
+     * @request GET:/api/open/v1/images
+     */
+    useOpenImagesList: (
+      query?: {
+        osType?: OSType | null;
+        imageType?: ImageType | null;
+        status?: ImageStatus | null;
+        /** @maxLength 256 */
+        search?: string | null;
+        /**
+         * @format int32
+         * @min 1
+         * @max 100
+         * @default 50
+         */
+        limit?: number;
+        after?: string | null;
+      },
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<OpenImageTemplatePageModel, any>(
+        doFetch ? [`/api/open/v1/images`, query] : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags OpenImages
+     * @name OpenImagesList
+     * @request GET:/api/open/v1/images
+     */
+    mutateOpenImagesList: (
+      query?: {
+        osType?: OSType | null;
+        imageType?: ImageType | null;
+        status?: ImageStatus | null;
+        /** @maxLength 256 */
+        search?: string | null;
+        /**
+         * @format int32
+         * @min 1
+         * @max 100
+         * @default 50
+         */
+        limit?: number;
+        after?: string | null;
+      },
+      data?: OpenImageTemplatePageModel | Promise<OpenImageTemplatePageModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<OpenImageTemplatePageModel>(
+        [`/api/open/v1/images`, query],
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags OpenImages
      * @name OpenImagesRegisterDockerArchive
      * @request POST:/api/open/v1/images/docker-archives
      */
@@ -27605,6 +30691,27 @@ export class Api<
         method: "POST",
         body: data,
         type: ContentType.FormData,
+        format: "json",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags OpenImages
+     * @name OpenImagesUpdateRemoteAccess
+     * @request PATCH:/api/open/v1/images/{imageTemplateId}/remote-access
+     */
+    openImagesUpdateRemoteAccess: (
+      imageTemplateId: number,
+      data: UpdateImageRemoteAccessModel,
+      params: RequestParams = {},
+    ) =>
+      this.request<ImageRemoteAccessModel, ProblemDetails>({
+        path: `/api/open/v1/images/${imageTemplateId}/remote-access`,
+        method: "PATCH",
+        body: data,
+        type: ContentType.Json,
         format: "json",
         ...params,
       }),
