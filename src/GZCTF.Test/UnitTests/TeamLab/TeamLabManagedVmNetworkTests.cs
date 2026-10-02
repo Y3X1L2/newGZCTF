@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading;
@@ -398,6 +399,92 @@ public sealed class TeamLabManagedVmNetworkTests
         Assert.Equal("255.255.255.0", TeamLabVmNetworkService.MaskFromPrefix(24));
         Assert.Equal("128.0.0.0", TeamLabVmNetworkService.MaskFromPrefix(1));
         Assert.Equal("255.255.255.255", TeamLabVmNetworkService.MaskFromPrefix(32));
+    }
+
+    [Theory]
+    [InlineData(5, 30L, true)]
+    [InlineData(0, 25L, true)]
+    [InlineData(null, 30L, false)]
+    [InlineData(5, 4L, false)]
+    [InlineData(5, -1L, false)]
+    [InlineData(5, 4294967295L, false)]
+    public async Task WindowsWmiRouteMetric_UsesRouteCostAndRejectsUnknownCosts(int? interfaceMetric, long totalMetric, bool valid)
+    {
+        // Windows PowerShell is a guest requirement, so this script execution gate runs on Windows hosts.
+        if (!OperatingSystem.IsWindows()) return;
+        var plan = Plan(os: TeamLabGuestOperatingSystem.Windows);
+        var asset = plan.Assets[0] with { NetworkAttachments = [plan.Assets[0].NetworkAttachments[0] with
+            { UseDefaultGateway = false, GatewayIp = null, DnsServers = [], StaticRoutes = [new("172.16.0.0/16", "10.96.1.1", 25)] }] };
+        plan = plan with { Assets = [asset] };
+        var desired = TeamLabVmNetworkService.ResolveInterfaces(plan, asset);
+        var apply = Convert.ToBase64String(Encoding.UTF8.GetBytes(TeamLabVmNetworkService.BuildWindowsApplyScript(desired)));
+        var read = Convert.ToBase64String(Encoding.UTF8.GetBytes(TeamLabVmNetworkService.BuildWindowsReadScript(desired)));
+        var fixture = $$"""
+            $ErrorActionPreference='Stop'
+            $stateDir=Join-Path $env:TEMP ('gzctf-route-metric-' + [Guid]::NewGuid().ToString('N'))
+            $script:Cfg=New-Object PSObject -Property @{MACAddress='02:42:29:19:d6:14';Index=7;InterfaceIndex=19;IPConnectionMetric={{interfaceMetric?.ToString() ?? "$null"}};DHCPEnabled=$false;IPAddress=@('10.96.1.20');IPSubnet=@('255.255.255.0');DefaultIPGateway=@();DNSServerSearchOrder=@()}
+            $script:Adapter=New-Object PSObject -Property @{Index=7;NetConnectionID='ens3'}
+            $script:Route=New-Object PSObject -Property @{InterfaceIndex=19;Destination='172.16.0.0';Mask='255.255.0.0';NextHop='10.96.1.1';Metric1={{totalMetric}}}
+            function Get-WmiObject {
+              param($Class,$Filter)
+              switch ($Class) {
+                'Win32_NetworkAdapterConfiguration' { return $script:Cfg }
+                'Win32_NetworkAdapter' { return $script:Adapter }
+                'Win32_IP4RouteTable' { return $script:Route }
+                default { throw 'Unexpected WMI class' }
+              }
+            }
+            function Invoke-Netsh-Test { throw 'A correct existing route must not be deleted or added again' }
+            $apply=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('{{apply}}'))
+            $apply=$apply.Replace('$stateRoot = Join-Path $env:ProgramData ''GZCTF\TeamLab''', '$stateRoot = $stateDir')
+            $apply=$apply.Replace('& "$env:SystemRoot\System32\netsh.exe"','Invoke-Netsh-Test')
+            $read=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('{{read}}')).Replace('[Console]::Out.Write($doc.OuterXml)','Write-Output $doc.OuterXml')
+            try {
+              & ([scriptblock]::Create($apply))
+              & ([scriptblock]::Create($apply))
+              & ([scriptblock]::Create($read))
+            } finally {
+              if (Test-Path -LiteralPath $stateDir) { Remove-Item -LiteralPath $stateDir -Recurse -Force }
+            }
+            """;
+        var result = await RunPowerShellFixtureAsync(fixture);
+        if (!valid)
+        {
+            Assert.NotEqual(0, result.ExitCode);
+            Assert.Contains("Route/interface metric", result.Error);
+            return;
+        }
+        Assert.True(result.ExitCode == 0, result.Error);
+        Assert.Contains("metric=\"25\"", result.Output);
+        Assert.True(TeamLabVmNetworkService.Matches(desired, TeamLabVmNetworkService.ParseSnapshot(result.Output), out var mismatch), mismatch);
+    }
+
+    static async Task<(int ExitCode, string Output, string Error)> RunPowerShellFixtureAsync(string fixture)
+    {
+        var path = Path.Combine(Path.GetTempPath(), "gzctf-wmi-fixture-" + Guid.NewGuid().ToString("N") + ".ps1");
+        await File.WriteAllTextAsync(path, fixture, Encoding.UTF8);
+        try
+        {
+            using var process = new Process { StartInfo = new ProcessStartInfo
+            {
+                FileName = "powershell.exe", UseShellExecute = false, RedirectStandardOutput = true,
+                RedirectStandardError = true, CreateNoWindow = true
+            } };
+            foreach (var argument in new[] { "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", path })
+                process.StartInfo.ArgumentList.Add(argument);
+            process.Start();
+            using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+            var output = process.StandardOutput.ReadToEndAsync(deadline.Token);
+            var error = process.StandardError.ReadToEndAsync(deadline.Token);
+            try { await process.WaitForExitAsync(deadline.Token); }
+            catch (OperationCanceledException)
+            {
+                if (!process.HasExited) process.Kill(entireProcessTree: true);
+                throw;
+            }
+            return (process.ExitCode, await output, await error);
+        }
+        finally { File.Delete(path); }
     }
 
     [Theory]

@@ -6,6 +6,16 @@ namespace GZCTF.Agent.Services.Vm;
 
 public sealed partial class TeamLabVmNetworkService
 {
+    const string WindowsRouteMetricFunction = """
+        function Get-RouteMetric($route, $cfg) {
+          # WMI reports the combined route and interface cost; netsh accepts route cost only.
+          if ($null -eq $route.Metric1 -or $null -eq $cfg.IPConnectionMetric) { throw 'Route/interface metric is unavailable' }
+          $total = [long]$route.Metric1; $interface = [long]$cfg.IPConnectionMetric
+          if ($total -lt 0 -or $total -ge 4294967295 -or $interface -lt 0 -or $interface -ge 4294967295 -or $total -lt $interface) { throw 'Route/interface metric is invalid' }
+          return ($total - $interface)
+        }
+        """;
+
     internal static string BuildWindowsReadScript(IReadOnlyList<GuestInterfaceRequirement> desired)
     {
         var targets = string.Join(',', desired.Select(item => PsQuote(item.MacAddress)));
@@ -18,6 +28,7 @@ public sealed partial class TeamLabVmNetworkService
             function Add-Value($parent, $kind, $value) {
               $node = $doc.CreateElement($kind); $node.SetAttribute('ip', [string]$value); [void]$parent.AppendChild($node)
             }
+            {{WindowsRouteMetricFunction}}
             $configs = @(Get-WmiObject -Class Win32_NetworkAdapterConfiguration | Where-Object {
               $_.MACAddress -and $targets -contains $_.MACAddress.Replace('-',':').ToLowerInvariant()
             })
@@ -52,7 +63,7 @@ public sealed partial class TeamLabVmNetworkService
                     foreach ($bit in $bits.ToCharArray()) { if ($bit -eq '1') { $prefix++ } }
                   }
                   $node = $doc.CreateElement('route'); $node.SetAttribute('destination',($route.Destination + '/' + $prefix))
-                  $node.SetAttribute('nextHop',[string]$route.NextHop); $node.SetAttribute('metric',[string]$route.Metric1)
+                  $node.SetAttribute('nextHop',[string]$route.NextHop); $node.SetAttribute('metric',[string](Get-RouteMetric $route $cfg))
                   [void]$nic.AppendChild($node)
                 }
               }
@@ -87,6 +98,7 @@ public sealed partial class TeamLabVmNetworkService
                 # 1 is successful with a reboot requirement; live readback still decides readiness.
                 if ($result.ReturnValue -ne 0 -and $result.ReturnValue -ne 1) { throw ('Network WMI operation failed, return=' + $result.ReturnValue) }
               }
+              {{WindowsRouteMetricFunction}}
               function Run-Netsh($operation, $route, $index, $store) {
                 $args = @('interface','ipv4',$operation,'route',('prefix=' + $route.destination),('interface=' + $index),('nexthop=' + $route.nextHop),('store=' + $store))
                 if ($operation -eq 'add') { $args += ('metric=' + $route.metric) }
@@ -138,7 +150,7 @@ public sealed partial class TeamLabVmNetworkService
                   $routeMask = $mask -join '.'
                   $existing = @(Get-WmiObject -Class Win32_IP4RouteTable | Where-Object { $_.InterfaceIndex -eq $cfg.InterfaceIndex -and $_.Destination -eq $parts[0] -and $_.Mask -eq $routeMask -and $_.NextHop -eq $route.nextHop })
                   if ($existing.Count -eq 0) { Run-Netsh 'add' $route $cfg.InterfaceIndex 'persistent' }
-                  elseif (@($existing | Where-Object { $_.Metric1 -eq [int]$route.metric }).Count -eq 0) {
+                  elseif (@($existing | Where-Object { (Get-RouteMetric $_ $cfg) -eq [int]$route.metric }).Count -eq 0) {
                     Run-Netsh 'delete' $route $cfg.InterfaceIndex 'persistent'; Run-Netsh 'delete' $route $cfg.InterfaceIndex 'active'
                     Run-Netsh 'add' $route $cfg.InterfaceIndex 'persistent'
                   }
