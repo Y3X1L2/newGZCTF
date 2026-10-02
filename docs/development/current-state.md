@@ -1,5 +1,13 @@
 # YINYU 当前开发状态
 
+## TeamLab 自动网络配置：本地开发完成，尚未部署（2026-10-02）
+
+- 分支 `codex/teamlab-managed-network` 从 `origin/main bc3599aa` 建立并合入当前服务器在用的 Windows 网络分支；主工作区和本地教学问答分支保留，未合并 main。实现 DHCP/平台静态两种新建方式、VM逐网卡IP/DNS/网关/路由、发布冻结/重置/更新、QGA应用与真实回读；新要求仅用于VM，Docker保持既有行为。旧预配置模式只保留存量读取，不增加复杂修补系统。
+- 源码验证截止 `8959fad8`：完整单元1241/1241、完整集成302/302、前端110文件373测试及完整门禁、Release解决方案构建通过；PostgreSQL迁移前向/旧数据/恢复和原生隔离OVN/OVS/模拟VM数据面通过。本地脚本及界面fixture验证不能代替真实Windows/Linux、主站完整链路验收。
+- 新迁移 `20261001145237_AddTeamLabManagedGuestNetwork` 添加五个可空列；前向SQL和SHA命名发布物在仓库外准备，未操作服务器数据库。真实QGA初始化、Server2008R2、域登录、重置/双实例/销毁验收尚未进行。进阶DHCP须相关Agent共同升级，不承诺混用旧Agent；固定IP多副本VRF/地址池设计不在本轮。
+- 2026-10-02只读复核 `.27` 仍运行 `teamlab-net-279f259-20260927`，主站/Agent active，Config200；实际Agent `/usr/local/bin/gzctf-agent` SHA256为 `993f00ce4874b0e41131ca8cb596e9e3bb76997984008fca795fa9a45963f475`，根盘约92GiB可用，KVM/virsh/QEMU/xorriso存在。`.30/.31`本轮直接免密SSH未连通，不能引用旧空间/版本作为本次核验。
+- 用户明确要求部署前询问；目前未部署、未修改原教学runtime或PVE模板。统一交接、实际证据和部署/回退入口见 [自动网络交接](handoffs/2026-10-02-teamlab-managed-network.md)。
+
 ## TeamLab 网络运行链部署（2026-09-27）
 
 - 分支 `codex/teamlab-windows-network`、提交 `279f259` 已推送；`10.24.0.27` 当前 release 为 `/opt/gzctf/releases/teamlab-net-279f259-20260927/publish`。本次仅上传主站 DLL、TeamLab 契约 DLL、前端静态文件和一个 Agent 程序；`.30/.31` 从 `.27` 内网取得同一 Agent。
