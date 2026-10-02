@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Threading;
@@ -257,6 +258,45 @@ public sealed class TeamLabManagedVmNetworkTests
     }
 
     [Theory]
+    [InlineData(0)]
+    [InlineData(2)]
+    public void DhcpLinuxSeed_LeavesPerPortDnsGatewayAndClasslessRoutesToTheLease(int dnsCount)
+    {
+        var plan = Plan(TeamLabGuestNetworkMode.Dhcp);
+        var dns = dnsCount == 0 ? Array.Empty<string>() : new[] { "192.168.20.53", "192.168.20.54" };
+        var routes = new[] { new TeamLabGuestRouteV2("172.16.0.0/16", "192.168.20.1") };
+        var first = plan.Assets[0].NetworkAttachments[0] with
+            { UseDefaultGateway = false, GatewayIp = null, DnsServers = [] };
+        var second = new TeamLabAssetNetworkAttachmentV2("core", "vm-core", "eth1", "192.168.20.20", "192.168.20.1", false,
+            InterfaceKey: "core-nic", MacAddress: "02:42:29:19:d6:15", PrefixLength: 24,
+            UseDefaultGateway: true, DnsServers: dns, StaticRoutes: routes);
+        var firstNetwork = plan.Networks[0] with
+            { DhcpLeases = [new(Mac, "10.96.1.20", "linux-vm", false, [], [])] };
+        var secondNetwork = new TeamLabNetworkIntentV2("core", "192.168.20.0/24", "192.168.20.1",
+            [new("vm-core", "linux-vm", "02:42:29:19:d6:15", "192.168.20.20")], [], [],
+            DhcpLeases: [new("02:42:29:19:d6:15", "192.168.20.20", "linux-vm", true, dns, routes)]);
+        var asset = plan.Assets[0] with { NetworkAttachments = [first, second] };
+        plan = plan with { Networks = [firstNetwork, secondNetwork], Assets = [asset] };
+
+        var config = LibvirtTeamLabProvider.BuildNoCloudNetworkConfig(plan, asset);
+
+        Assert.NotNull(config);
+        Assert.Contains("macaddress: \"" + Mac + "\"", config);
+        Assert.Contains("macaddress: \"02:42:29:19:d6:15\"", config);
+        Assert.Equal(2, config.Split("dhcp4: true", StringSplitOptions.None).Length - 1);
+        Assert.DoesNotContain("addresses:", config);
+        Assert.DoesNotContain("nameservers:", config);
+        Assert.DoesNotContain("routes:", config);
+        Assert.DoesNotContain("gateway", config);
+        Assert.DoesNotContain("192.168.20.", config);
+        Assert.DoesNotContain("172.16.0.0", config);
+        Assert.False(second.Primary);
+        Assert.True(second.UseDefaultGateway);
+        Assert.Equal(dnsCount, Assert.Single(secondNetwork.DhcpLeases!).DnsServers!.Count);
+        Assert.Equal(routes, Assert.Single(secondNetwork.DhcpLeases!).StaticRoutes);
+    }
+
+    [Theory]
     [InlineData(TeamLabGuestOperatingSystem.Linux, TeamLabGuestNetworkMode.Preconfigured)]
     [InlineData(TeamLabGuestOperatingSystem.Windows, TeamLabGuestNetworkMode.ManagedStatic)]
     public void PreconfiguredAndWindows_DoNotReceiveNoCloudSeed(TeamLabGuestOperatingSystem os, TeamLabGuestNetworkMode mode)
@@ -290,6 +330,63 @@ public sealed class TeamLabManagedVmNetworkTests
         Assert.True(TeamLabVmNetworkService.Matches(desired, TeamLabVmNetworkService.ParseSnapshot(right), out _));
         Assert.False(TeamLabVmNetworkService.Matches(desired, TeamLabVmNetworkService.ParseSnapshot(right.Replace("metric='25'", "metric='26'")), out _));
         Assert.False(TeamLabVmNetworkService.Matches(desired, TeamLabVmNetworkService.ParseSnapshot(Matching), out _));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task LinuxLiveReadback_NormalizesIpRouteHostDestinationsBeforeVerification(bool bareHostRoute)
+    {
+        var plan = Plan();
+        var asset = plan.Assets[0] with { NetworkAttachments = [plan.Assets[0].NetworkAttachments[0] with
+            { StaticRoutes = [new("172.16.100.8/32", "10.96.1.1", 25)] }] };
+        plan = plan with { Assets = [asset] };
+        var desired = TeamLabVmNetworkService.ResolveInterfaces(plan, asset);
+        var payload = Convert.ToBase64String(Encoding.UTF8.GetBytes(TeamLabVmNetworkService.BuildLinuxReadScript(desired)));
+        var fixture = $$"""
+            import base64, json, subprocess
+            from unittest import mock
+            # Simulate the OS command output, then execute the actual Agent readback script.
+            outputs = {
+                ('ip','-j','-4','address','show'): json.dumps([{'ifname':'ens3','addr_info':[{'family':'inet','local':'10.96.1.20','prefixlen':24}]}]),
+                ('ip','-j','-4','route','show','table','main'): json.dumps([
+                    {'dst':'default','dev':'ens3','gateway':'10.96.1.1'},
+                    {'dst':'{{(bareHostRoute ? "172.16.100.8" : "172.16.100.8/32")}}','dev':'ens3','gateway':'10.96.1.1','metric':25}]),
+                ('ip','-j','link','show'): json.dumps([{'ifname':'ens3','address':'02:42:29:19:d6:14'}]),
+                ('resolvectl','dns','ens3'): 'Link 3 (ens3): 10.96.1.53'
+            }
+            def output(args, **kwargs): return outputs[tuple(args)]
+            with mock.patch('subprocess.check_output',side_effect=output), mock.patch('shutil.which',return_value='/mock/tool'):
+                exec(base64.b64decode('{{payload}}').decode())
+            """;
+        using var process = new Process
+        {
+            StartInfo = new ProcessStartInfo
+            {
+                FileName = OperatingSystem.IsWindows() ? "python" : "python3",
+                UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true
+            }
+        };
+        process.StartInfo.ArgumentList.Add("-c");
+        process.StartInfo.ArgumentList.Add(fixture);
+        process.Start();
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        var read = process.StandardOutput.ReadToEndAsync(deadline.Token);
+        var error = process.StandardError.ReadToEndAsync(deadline.Token);
+        try { await process.WaitForExitAsync(deadline.Token); }
+        catch (OperationCanceledException)
+        {
+            if (!process.HasExited) process.Kill(entireProcessTree: true);
+            throw;
+        }
+        var xml = await read;
+        Assert.True(process.ExitCode == 0, await error);
+        Assert.Contains("destination=\"172.16.100.8/32\"", xml);
+        var guest = new FakeGuest();
+        guest.Reads.Enqueue(xml);
+        var result = await Service(guest).ApplyAsync(plan, asset, true, CancellationToken.None);
+        Assert.True(result.Success, result.Message);
+        Assert.Single(guest.Commands);
     }
 
     [Fact]

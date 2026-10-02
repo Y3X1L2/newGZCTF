@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Net;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -544,15 +543,12 @@ public sealed class LibvirtTeamLabProvider(
             {
                 var network = plan.Networks.SingleOrDefault(item => item.Key == attachment.NetworkKey);
                 var port = network?.Ports.SingleOrDefault(item => item.Key == attachment.PortKey);
-                var prefix = network?.Cidr.Split('/').LastOrDefault();
-                return new { Attachment = attachment, Index = index, Network = network, Port = port, Prefix = prefix };
+                return new { Attachment = attachment, Index = index, Network = network, Port = port };
             })
             .Where(item => item.Network is not null && item.Port is not null &&
                            item.Network.DhcpLeases?.Any(lease =>
                                string.Equals(lease.MacAddress, item.Port.MacAddress,
-                                   StringComparison.OrdinalIgnoreCase)) == true &&
-                           IPAddress.TryParse(item.Attachment.IpAddress, out _) &&
-                           int.TryParse(item.Prefix, out var prefix) && prefix is >= 1 and <= 32)
+                                   StringComparison.OrdinalIgnoreCase)) == true)
             .ToArray();
         if (configured.Length == 0) return null;
 
@@ -563,17 +559,7 @@ public sealed class LibvirtTeamLabProvider(
             builder.AppendLine("    match:");
             builder.AppendLine($"      macaddress: \"{item.Port!.MacAddress.ToLowerInvariant()}\"");
             builder.AppendLine($"    set-name: \"{item.Attachment.InterfaceName}\"");
-            builder.AppendLine("    addresses:");
-            builder.AppendLine($"      - {item.Attachment.IpAddress}/{item.Prefix}");
-            if (item.Attachment.Primary && IPAddress.TryParse(item.Attachment.GatewayIp, out _))
-            {
-                builder.AppendLine("    nameservers:");
-                builder.AppendLine("      addresses:");
-                builder.AppendLine($"        - {item.Attachment.DnsServerIp ?? item.Attachment.GatewayIp}");
-                builder.AppendLine("    routes:");
-                builder.AppendLine("      - to: default");
-                builder.AppendLine($"        via: {item.Attachment.GatewayIp}");
-            }
+            builder.AppendLine("    dhcp4: true");
         }
         return builder.ToString();
     }

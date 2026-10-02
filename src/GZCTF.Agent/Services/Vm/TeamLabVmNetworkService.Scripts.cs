@@ -190,7 +190,8 @@ public sealed partial class TeamLabVmNetworkService
                     if r.get('dev') != name: continue
                     if r.get('dst') == 'default': ET.SubElement(nic,'gateway',ip=r.get('gateway',''))
                     elif r.get('gateway'):
-                        ET.SubElement(nic,'route',destination=r['dst'],nextHop=r['gateway'],metric=str(r.get('metric',0)))
+                        destination = str(ipaddress.ip_network(r['dst'],strict=False))
+                        ET.SubElement(nic,'route',destination=destination,nextHop=r['gateway'],metric=str(r.get('metric',0)))
         print(ET.tostring(root,encoding='unicode'))
         """;
 
