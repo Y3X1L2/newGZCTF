@@ -439,6 +439,7 @@ public sealed class TeamLabManagedVmNetworkTests
             $apply=$apply.Replace('$stateRoot = Join-Path $env:ProgramData ''GZCTF\TeamLab''', '$stateRoot = $stateDir')
             $apply=$apply.Replace('& "$env:SystemRoot\System32\netsh.exe"','Invoke-Netsh-Test')
             $read=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('{{read}}')).Replace('[Console]::Out.Write($doc.OuterXml)','Write-Output $doc.OuterXml')
+            $read=$read.Replace('$stateRoot = Join-Path $env:ProgramData ''GZCTF\TeamLab''', '$stateRoot = $stateDir')
             try {
               & ([scriptblock]::Create($apply))
               & ([scriptblock]::Create($apply))
@@ -457,6 +458,106 @@ public sealed class TeamLabManagedVmNetworkTests
         Assert.True(result.ExitCode == 0, result.Error);
         Assert.Contains("metric=\"25\"", result.Output);
         Assert.True(TeamLabVmNetworkService.Matches(desired, TeamLabVmNetworkService.ParseSnapshot(result.Output), out var mismatch), mismatch);
+    }
+
+    [Theory]
+    [InlineData("active")]
+    [InlineData("persistent")]
+    [InlineData("both")]
+    [InlineData("already-absent")]
+    public async Task WindowsOwnedRouteRemoval_VerifiesBothStoresAndRetainsOwnershipUntilRetry(string failedStore)
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        var plan = Plan(os: TeamLabGuestOperatingSystem.Windows);
+        var asset = plan.Assets[0] with { NetworkAttachments = [plan.Assets[0].NetworkAttachments[0] with
+            { UseDefaultGateway = false, GatewayIp = null, DnsServers = [], StaticRoutes = [] }] };
+        plan = plan with { Assets = [asset] };
+        var desired = TeamLabVmNetworkService.ResolveInterfaces(plan, asset);
+        var apply = Convert.ToBase64String(Encoding.UTF8.GetBytes(TeamLabVmNetworkService.BuildWindowsApplyScript(desired)));
+        var read = Convert.ToBase64String(Encoding.UTF8.GetBytes(TeamLabVmNetworkService.BuildWindowsReadScript(desired)));
+        var fixture = $$"""
+            $ErrorActionPreference='Stop'
+            $stateDir=Join-Path $env:TEMP ('gzctf-route-removal-' + [Guid]::NewGuid().ToString('N'))
+            [void][IO.Directory]::CreateDirectory($stateDir)
+            $statePath=Join-Path $stateDir 'network.xml'
+            $previous='<network><interface mac="02:42:29:19:d6:14"><route destination="172.16.0.0/16" nextHop="10.96.1.1" metric="25"/></interface></network>'
+            [IO.File]::WriteAllText($statePath,$previous)
+            $script:ActivePresent={{(failedStore == "already-absent" ? "$false" : "$true")}}
+            $script:PersistentPresent=$script:ActivePresent
+            $script:FailStore='{{failedStore}}'; $script:FailuresEnabled=$true; $script:DeleteCalls=0
+            $script:Cfg=New-Object PSObject -Property @{MACAddress='02:42:29:19:d6:14';Index=7;InterfaceIndex=19;IPConnectionMetric=5;DHCPEnabled=$false;IPAddress=@('10.96.1.20');IPSubnet=@('255.255.255.0');DefaultIPGateway=@();DNSServerSearchOrder=@()}
+            $script:Adapter=New-Object PSObject -Property @{Index=7;NetConnectionID='ens3'}
+            function Get-WmiObject {
+              param($Class,$Filter)
+              switch ($Class) {
+                'Win32_NetworkAdapterConfiguration' { return $script:Cfg }
+                'Win32_NetworkAdapter' { return $script:Adapter }
+                'Win32_IP4RouteTable' {
+                  if ($script:ActivePresent) { New-Object PSObject -Property @{InterfaceIndex=19;Destination='172.16.0.0';Mask='255.255.0.0';NextHop='10.96.1.1';Metric1=30} }
+                  # This user route on the declared NIC must be preserved and allowed.
+                  New-Object PSObject -Property @{InterfaceIndex=19;Destination='192.0.2.0';Mask='255.255.255.0';NextHop='10.96.1.254';Metric1=30}
+                }
+                default { throw 'Unexpected WMI class' }
+              }
+            }
+            function Invoke-Netsh-Test {
+              $parts=@($args); $store='active'; if ($parts -contains 'store=persistent') { $store='persistent' }
+              if ($parts[2] -eq 'delete') {
+                if ($parts -notcontains 'prefix=172.16.0.0/16' -or $parts -notcontains 'interface=19' -or $parts -notcontains 'nexthop=10.96.1.1') { throw 'An undeclared/user route was changed' }
+                $script:DeleteCalls++
+                if ($script:FailuresEnabled -and ($script:FailStore -eq 'both' -or $script:FailStore -eq $store)) { $global:LASTEXITCODE=1; return }
+                if ($store -eq 'active') { $wasPresent=$script:ActivePresent; $script:ActivePresent=$false }
+                else { $wasPresent=$script:PersistentPresent; $script:PersistentPresent=$false }
+                $global:LASTEXITCODE=1; if ($wasPresent) { $global:LASTEXITCODE=0 }; return
+              }
+              if ($parts[2] -ne 'show') { throw 'Unexpected netsh mutation' }
+              $global:LASTEXITCODE=0
+              if (($store -eq 'active' -and $script:ActivePresent) -or ($store -eq 'persistent' -and $script:PersistentPresent)) { 'No Manual 25 172.16.0.0/16 19 10.96.1.1' }
+              # Same prefix/next-hop on an undeclared NIC does not prove target-NIC drift.
+              'No Manual 25 172.16.0.0/16 20 10.96.1.1'
+              'No Manual 25 192.0.2.0/24 19 10.96.1.254'
+            }
+            $apply=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('{{apply}}'))
+            $apply=$apply.Replace('$stateRoot = Join-Path $env:ProgramData ''GZCTF\TeamLab''', '$stateRoot = $stateDir').Replace('& "$env:SystemRoot\System32\netsh.exe"','Invoke-Netsh-Test')
+            $read=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('{{read}}'))
+            $read=$read.Replace('$stateRoot = Join-Path $env:ProgramData ''GZCTF\TeamLab''', '$stateRoot = $stateDir').Replace('& "$env:SystemRoot\System32\netsh.exe"','Invoke-Netsh-Test').Replace('[Console]::Out.Write($doc.OuterXml)','Write-Output $doc.OuterXml')
+            try {
+              $before=& ([scriptblock]::Create($read)); Write-Output ('BEFORE:' + [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($before)))
+              if ($script:FailStore -ne 'already-absent') {
+                $failed=$false
+                try { & ([scriptblock]::Create($apply)) } catch {
+                  if ($_.Exception.Message -notmatch 'Owned static route still exists') { throw }
+                  $failed=$true
+                }
+                if (!$failed -or [IO.File]::ReadAllText($statePath) -ne $previous) { throw 'Delete failure lost route ownership or reported success' }
+                Write-Output 'STATE-RETAINED'
+              }
+              $script:FailuresEnabled=$false
+              & ([scriptblock]::Create($apply))
+              if ($script:ActivePresent -or $script:PersistentPresent) { throw 'Old route survived retry' }
+              $calls=$script:DeleteCalls; & ([scriptblock]::Create($apply))
+              if ($calls -ne $script:DeleteCalls) { throw 'Already removed route was deleted again' }
+              $after=& ([scriptblock]::Create($read)); Write-Output ('AFTER:' + [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($after)))
+            } finally { Remove-Item -LiteralPath $stateDir -Recurse -Force }
+            """;
+        var result = await RunPowerShellFixtureAsync(fixture);
+        Assert.True(result.ExitCode == 0, result.Error);
+        static string Snapshot(string output, string marker) => Encoding.UTF8.GetString(Convert.FromBase64String(
+            output.Split('\n').Single(line => line.StartsWith(marker, StringComparison.Ordinal))[marker.Length..].Trim()));
+        var before = Snapshot(result.Output, "BEFORE:");
+        var after = Snapshot(result.Output, "AFTER:");
+        Assert.True(TeamLabVmNetworkService.Matches(desired, TeamLabVmNetworkService.ParseSnapshot(after), out var mismatch), mismatch);
+        if (failedStore == "already-absent")
+            Assert.True(TeamLabVmNetworkService.Matches(desired, TeamLabVmNetworkService.ParseSnapshot(before), out _));
+        else
+        {
+            Assert.Contains("STATE-RETAINED", result.Output);
+            Assert.False(TeamLabVmNetworkService.Matches(desired, TeamLabVmNetworkService.ParseSnapshot(before), out _));
+            var guest = new FakeGuest(); guest.Reads.Enqueue(before);
+            var verifyOnly = await Service(guest).ApplyAsync(plan, asset, true, CancellationToken.None);
+            Assert.False(verifyOnly.Success);
+            Assert.Equal("guest_network_drift", verifyOnly.ErrorCode);
+        }
     }
 
     static async Task<(int ExitCode, string Output, string Error)> RunPowerShellFixtureAsync(string fixture)

@@ -16,6 +16,31 @@ public sealed partial class TeamLabVmNetworkService
         }
         """;
 
+    const string WindowsRoutePresenceFunction = """
+        function Test-RoutePresent($route, $index, $store) {
+          # Numeric prefix/index/next-hop columns do not depend on localized table headings.
+          $lines = @(& "$env:SystemRoot\System32\netsh.exe" interface ipv4 show route level=verbose ('store=' + $store))
+          if ($LASTEXITCODE -ne 0) { throw 'Static route store could not be verified' }
+          foreach ($line in $lines) {
+            $fields = ([string]$line).Trim() -split '\s+'
+            $position = [Array]::IndexOf($fields,[string]$route.destination)
+            if ($position -lt 0) { continue }
+            if ($position + 2 -ge $fields.Length -or $fields[$position + 1] -notmatch '^\d+$') { throw 'Static route store output could not be verified' }
+            if ([int]$fields[$position + 1] -eq $index -and $fields[$position + 2] -eq $route.nextHop) { return $true }
+          }
+          return $false
+        }
+        """;
+
+    static string WindowsRequirementsPayload(IReadOnlyList<GuestInterfaceRequirement> desired) =>
+        Convert.ToBase64String(Encoding.UTF8.GetBytes(new XElement("network", desired.Select(item => new XElement("interface",
+            new XAttribute("mac", item.MacAddress), new XAttribute("name", item.Name ?? ""),
+            new XAttribute("ip", item.IpAddress), new XAttribute("mask", MaskFromPrefix(item.PrefixLength)),
+            new XAttribute("gateway", item.Gateway ?? ""),
+            item.DnsServers.Select(dns => new XElement("dns", new XAttribute("ip", dns))),
+            item.Routes.Select(route => new XElement("route", new XAttribute("destination", route.DestinationCidr),
+                new XAttribute("nextHop", route.NextHop), new XAttribute("metric", route.Metric ?? 1)))))).ToString(SaveOptions.DisableFormatting)));
+
     internal static string BuildWindowsReadScript(IReadOnlyList<GuestInterfaceRequirement> desired)
     {
         var targets = string.Join(',', desired.Select(item => PsQuote(item.MacAddress)));
@@ -23,12 +48,18 @@ public sealed partial class TeamLabVmNetworkService
             $ErrorActionPreference = 'Stop'
             [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding
             $targets = @({{targets}})
+            [xml]$desired = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('{{WindowsRequirementsPayload(desired)}}'))
+            $stateRoot = Join-Path $env:ProgramData 'GZCTF\TeamLab'
+            $statePath = Join-Path $stateRoot 'network.xml'
+            $previous = $null
+            if ([IO.File]::Exists($statePath)) { [xml]$previous = [IO.File]::ReadAllText($statePath) }
             $doc = New-Object System.Xml.XmlDocument
             $root = $doc.CreateElement('network'); [void]$doc.AppendChild($root)
             function Add-Value($parent, $kind, $value) {
               $node = $doc.CreateElement($kind); $node.SetAttribute('ip', [string]$value); [void]$parent.AppendChild($node)
             }
             {{WindowsRouteMetricFunction}}
+            {{WindowsRoutePresenceFunction}}
             $configs = @(Get-WmiObject -Class Win32_NetworkAdapterConfiguration | Where-Object {
               $_.MACAddress -and $targets -contains $_.MACAddress.Replace('-',':').ToLowerInvariant()
             })
@@ -39,6 +70,14 @@ public sealed partial class TeamLabVmNetworkService
               $nic.SetAttribute('mac', $cfg.MACAddress.Replace('-',':').ToLowerInvariant())
               $nic.SetAttribute('name', [string]$adapter.NetConnectionID)
               $nic.SetAttribute('dhcp', ([bool]$cfg.DHCPEnabled).ToString().ToLowerInvariant())
+              if ($previous) {
+                $expected = @($desired.network.interface | Where-Object { $_.mac -eq $cfg.MACAddress.Replace('-',':').ToLowerInvariant() })[0]
+                $owned = @($previous.network.interface | Where-Object { $_.mac -eq $expected.mac })
+                foreach ($oldRoute in @($owned | ForEach-Object { $_.SelectNodes('route') })) {
+                  if (@($expected.route | Where-Object { $_.destination -eq $oldRoute.destination -and $_.nextHop -eq $oldRoute.nextHop }).Count -ne 0) { continue }
+                  if ((Test-RoutePresent $oldRoute $cfg.InterfaceIndex 'active') -or (Test-RoutePresent $oldRoute $cfg.InterfaceIndex 'persistent')) { $nic.SetAttribute('ownedRouteDrift','true') }
+                }
+              }
               [void]$root.AppendChild($nic)
               for ($i=0; $i -lt @($cfg.IPAddress).Count; $i++) {
                 if ($cfg.IPAddress[$i] -match '^\d+\.\d+\.\d+\.\d+$') {
@@ -74,14 +113,7 @@ public sealed partial class TeamLabVmNetworkService
 
     internal static string BuildWindowsApplyScript(IReadOnlyList<GuestInterfaceRequirement> desired)
     {
-        var root = new XElement("network", desired.Select(item => new XElement("interface",
-            new XAttribute("mac", item.MacAddress), new XAttribute("name", item.Name ?? ""),
-            new XAttribute("ip", item.IpAddress), new XAttribute("mask", MaskFromPrefix(item.PrefixLength)),
-            new XAttribute("gateway", item.Gateway ?? ""),
-            item.DnsServers.Select(dns => new XElement("dns", new XAttribute("ip", dns))),
-            item.Routes.Select(route => new XElement("route", new XAttribute("destination", route.DestinationCidr),
-                new XAttribute("nextHop", route.NextHop), new XAttribute("metric", route.Metric ?? 1))))));
-        var payload = Convert.ToBase64String(Encoding.UTF8.GetBytes(root.ToString(SaveOptions.DisableFormatting)));
+        var payload = WindowsRequirementsPayload(desired);
         return $$"""
             $ErrorActionPreference = 'Stop'
             [xml]$desired = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('{{payload}}'))
@@ -99,11 +131,20 @@ public sealed partial class TeamLabVmNetworkService
                 if ($result.ReturnValue -ne 0 -and $result.ReturnValue -ne 1) { throw ('Network WMI operation failed, return=' + $result.ReturnValue) }
               }
               {{WindowsRouteMetricFunction}}
+              {{WindowsRoutePresenceFunction}}
               function Run-Netsh($operation, $route, $index, $store) {
                 $args = @('interface','ipv4',$operation,'route',('prefix=' + $route.destination),('interface=' + $index),('nexthop=' + $route.nextHop),('store=' + $store))
                 if ($operation -eq 'add') { $args += ('metric=' + $route.metric) }
                 & "$env:SystemRoot\System32\netsh.exe" @args | Out-Null
                 if ($LASTEXITCODE -ne 0 -and $operation -eq 'add') { throw 'Static route configuration failed' }
+              }
+              function Remove-OwnedRoute($route, $index) {
+                Run-Netsh 'delete' $route $index 'persistent'
+                Run-Netsh 'delete' $route $index 'active'
+                # A delete may report not-found. Accept that only after both stores prove absence.
+                foreach ($store in @('active','persistent')) {
+                  if (Test-RoutePresent $route $index $store) { throw 'Owned static route still exists after removal' }
+                }
               }
               # Reject any missing/ambiguous MAC or rename collision before changing a device.
               $allConfigs = @(Get-WmiObject -Class Win32_NetworkAdapterConfiguration)
@@ -139,8 +180,7 @@ public sealed partial class TeamLabVmNetworkService
                 foreach ($oldRoute in $oldRoutes) {
                   if (!$oldRoute) { continue }
                   if (@($item.route | Where-Object { $_.destination -eq $oldRoute.destination -and $_.nextHop -eq $oldRoute.nextHop -and $_.metric -eq $oldRoute.metric }).Count -eq 0) {
-                    Run-Netsh 'delete' $oldRoute $cfg.InterfaceIndex 'persistent'
-                    Run-Netsh 'delete' $oldRoute $cfg.InterfaceIndex 'active'
+                    Remove-OwnedRoute $oldRoute $cfg.InterfaceIndex
                   }
                 }
                 foreach ($route in @($item.route)) {
@@ -151,7 +191,7 @@ public sealed partial class TeamLabVmNetworkService
                   $existing = @(Get-WmiObject -Class Win32_IP4RouteTable | Where-Object { $_.InterfaceIndex -eq $cfg.InterfaceIndex -and $_.Destination -eq $parts[0] -and $_.Mask -eq $routeMask -and $_.NextHop -eq $route.nextHop })
                   if ($existing.Count -eq 0) { Run-Netsh 'add' $route $cfg.InterfaceIndex 'persistent' }
                   elseif (@($existing | Where-Object { (Get-RouteMetric $_ $cfg) -eq [int]$route.metric }).Count -eq 0) {
-                    Run-Netsh 'delete' $route $cfg.InterfaceIndex 'persistent'; Run-Netsh 'delete' $route $cfg.InterfaceIndex 'active'
+                    Remove-OwnedRoute $route $cfg.InterfaceIndex
                     Run-Netsh 'add' $route $cfg.InterfaceIndex 'persistent'
                   }
                 }

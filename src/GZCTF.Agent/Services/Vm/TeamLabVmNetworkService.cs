@@ -195,7 +195,8 @@ public sealed partial class TeamLabVmNetworkService(IVmGuestAgentClient guest)
             item.Elements("route").Select(route => new TeamLabGuestRouteV2(
                 (string?)route.Attribute("destination") ?? "",
                 (string?)route.Attribute("nextHop") ?? "",
-                int.TryParse((string?)route.Attribute("metric"), out var metric) ? metric : null)).ToArray())).ToArray();
+                int.TryParse((string?)route.Attribute("metric"), out var metric) ? metric : null)).ToArray(),
+            (string?)item.Attribute("ownedRouteDrift") == "true")).ToArray();
     }
 
     internal static bool Matches(IReadOnlyList<GuestInterfaceRequirement> desired,
@@ -206,6 +207,8 @@ public sealed partial class TeamLabVmNetworkService(IVmGuestAgentClient guest)
             var matches = actual.Where(item => item.MacAddress == expected.MacAddress).ToArray();
             if (matches.Length != 1) { error = "A declared MAC interface is absent or ambiguous in the guest."; return false; }
             var item = matches[0];
+            if (item.OwnedRouteDrift)
+            { error = "A previously managed static route is still present after removal from the plan."; return false; }
             if (item.Dhcp || expected.Name is not null && item.Name != expected.Name || item.Addresses.Count != 1 ||
                 item.Addresses[0] != new GuestAddress(expected.IpAddress, expected.PrefixLength))
             { error = "A declared MAC interface has an unexpected name, DHCP setting or IPv4 address/prefix."; return false; }
@@ -245,4 +248,4 @@ internal sealed record GuestInterfaceRequirement(string MacAddress, string? Name
 internal sealed record GuestAddress(string Ip, int Prefix);
 internal sealed record GuestInterfaceSnapshot(string MacAddress, string Name, bool Dhcp,
     IReadOnlyList<GuestAddress> Addresses, IReadOnlyList<string> Gateways, IReadOnlyList<string> DnsServers,
-    IReadOnlyList<TeamLabGuestRouteV2> Routes);
+    IReadOnlyList<TeamLabGuestRouteV2> Routes, bool OwnedRouteDrift = false);
