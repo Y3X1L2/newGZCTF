@@ -49,6 +49,12 @@ export function NetworkInterfacesEditor(props: NetworkInterfacesEditorProps) {
           const vm = owner?.type === 'linux-vm' || owner?.type === 'windows-vm' ? owner : null
           const mode =
             vm?.vmNetworkMode ?? props.imageOptions?.find((image) => image.id === vm?.imageTemplateId)?.vmNetworkMode
+          const unsupportedDockerRequirements =
+            owner?.type === 'docker' &&
+            (connection.guestInterfaceName != null ||
+              connection.useDefaultGateway != null ||
+              connection.dnsServers != null ||
+              connection.staticRoutes != null)
           return (
             <div className={styles.interfaceCard} key={connection.key}>
               <header>
@@ -107,6 +113,26 @@ export function NetworkInterfacesEditor(props: NetworkInterfacesEditorProps) {
                 onChange={(primary) => update(connection, { primary })}
               />
               <TextInput disabled label="接口标识" value={connection.interfaceKey ?? connection.key} />
+              {unsupportedDockerRequirements ? (
+                <>
+                  <p className={styles.muted}>Docker 不支持这条连接上已保存的 VM 专用网络配置。请明确移除后再保存。</p>
+                  <button
+                    className={styles.addButton}
+                    disabled={readOnly}
+                    type="button"
+                    onClick={() => {
+                      const cleaned = { ...connection }
+                      delete cleaned.guestInterfaceName
+                      delete cleaned.useDefaultGateway
+                      delete cleaned.dnsServers
+                      delete cleaned.staticRoutes
+                      onDocumentChange(updateTopologyConnection(document, cleaned).document)
+                    }}
+                  >
+                    移除 VM 专用网络配置
+                  </button>
+                </>
+              ) : null}
               {vm ? (
                 <GuestInterfaceRequirementsEditor
                   connection={connection}
