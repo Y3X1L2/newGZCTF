@@ -23,6 +23,7 @@ using GZCTF.Utils;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
@@ -162,7 +163,10 @@ public sealed class OpenTeamLabOperationsApiTests(GZCTFApplicationFactory factor
     [InlineData(true)]
     public async Task RemoteSessions_UseRuntimeScopeAcrossDifferentTokenActors(bool runtimeOnlyGrant)
     {
-        await using var host = CreateHost(new InMemoryAssetFileGateway());
+        // Other hosts in the collection have workers claiming from the shared database.
+        // This host owns its relay substitutes, so its queued operations need their own database.
+        await using var database = await IsolatedPostgresDatabase.CreateAsync(factory.DatabaseConnectionString);
+        await using var host = CreateHost(new InMemoryAssetFileGateway(), database.ConnectionString);
         using var client = host.CreateClient();
         var fixture = await SeedAsync(host.Services);
         var creator = await IssueTokenAsync(
@@ -241,6 +245,8 @@ public sealed class OpenTeamLabOperationsApiTests(GZCTFApplicationFactory factor
                 .Where(item => item.PublicId == sessionId)
                 .Select(item => item.Status)
                 .SingleAsync());
+        Assert.Equal(1, await endedContext.ApiOperations.Where(item => item.Id == endOperation.Id)
+            .Select(item => item.AttemptCount).SingleAsync());
     }
 
     [Fact]
@@ -392,23 +398,34 @@ public sealed class OpenTeamLabOperationsApiTests(GZCTFApplicationFactory factor
             Assert.Equal(HttpStatusCode.NotFound, noRetryEndpoint.StatusCode);
     }
 
-    private WebApplicationFactory<Program> CreateHost(InMemoryAssetFileGateway gateway) =>
-        factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+    private WebApplicationFactory<Program> CreateHost(InMemoryAssetFileGateway gateway, string? connectionString = null) =>
+        factory.WithWebHostBuilder(builder =>
         {
-            services.RemoveAll<ITeamLabAssetFileGateway>();
-            services.AddSingleton<ITeamLabAssetFileGateway>(gateway);
-            services.RemoveAll<ITeamLabRemoteRelayGateway>();
-            services.AddSingleton<ITeamLabRemoteRelayGateway, NoOpRemoteRelayGateway>();
-            services.RemoveAll<ITeamLabServiceAccessGateway>();
-            services.AddSingleton<ITeamLabServiceAccessGateway, NoOpServiceAccessGateway>();
-            services.RemoveAll<IPublicUdpGatewayProvider>();
-            services.AddSingleton<IPublicUdpGatewayProvider, NoOpPublicGateway>();
-            services.RemoveAll<IPortAllocationService>();
-            services.AddSingleton<IPortAllocationService, InMemoryPortAllocationService>();
-            services.RemoveAll<ITeamLabAssetControlGateway>();
-            services.AddSingleton<ITeamLabAssetControlGateway, NoOpAssetControlGateway>();
-            services.PostConfigure<PublicUdpGatewayConfig>(options => options.PublicEndpoint = "gateway.example");
-        }));
+            if (connectionString is not null)
+                builder.ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(
+                    new Dictionary<string, string?> { ["ConnectionStrings:Database"] = connectionString }));
+            builder.ConfigureTestServices(services =>
+            {
+                if (connectionString is not null)
+                {
+                    services.RemoveAll<DbContextOptions<AppDbContext>>();
+                    services.AddDbContext<AppDbContext>(options => options.UseNpgsql(connectionString));
+                }
+                services.RemoveAll<ITeamLabAssetFileGateway>();
+                services.AddSingleton<ITeamLabAssetFileGateway>(gateway);
+                services.RemoveAll<ITeamLabRemoteRelayGateway>();
+                services.AddSingleton<ITeamLabRemoteRelayGateway, NoOpRemoteRelayGateway>();
+                services.RemoveAll<ITeamLabServiceAccessGateway>();
+                services.AddSingleton<ITeamLabServiceAccessGateway, NoOpServiceAccessGateway>();
+                services.RemoveAll<IPublicUdpGatewayProvider>();
+                services.AddSingleton<IPublicUdpGatewayProvider, NoOpPublicGateway>();
+                services.RemoveAll<IPortAllocationService>();
+                services.AddSingleton<IPortAllocationService, InMemoryPortAllocationService>();
+                services.RemoveAll<ITeamLabAssetControlGateway>();
+                services.AddSingleton<ITeamLabAssetControlGateway, NoOpAssetControlGateway>();
+                services.PostConfigure<PublicUdpGatewayConfig>(options => options.PublicEndpoint = "gateway.example");
+            });
+        });
 
     private static async Task WaitForOperationAsync(IServiceProvider services, Guid operationId)
     {
@@ -425,7 +442,15 @@ public sealed class OpenTeamLabOperationsApiTests(GZCTFApplicationFactory factor
             await Task.Delay(100);
         }
 
-        Assert.Fail($"Operation {operationId:D} did not complete in time.");
+        await using var diagnosticsScope = services.CreateAsyncScope();
+        var diagnostics = diagnosticsScope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var pending = await diagnostics.ApiOperations.AsNoTracking().SingleAsync(item => item.Id == operationId);
+        var jobCompleted = await diagnostics.TeamLabRuntimeOperationJobs.AsNoTracking()
+            .Where(item => item.OperationId == operationId).Select(item => item.ResultJson != null).SingleAsync();
+        Assert.Fail($"Operation {operationId:D} did not complete within the ten-second polling budget: " +
+            $"status={pending.Status}, stage={pending.Stage}, attempts={pending.AttemptCount}, " +
+            $"error={pending.ErrorCode}, nextAttemptAt={pending.NextAttemptAt:O}, " +
+            $"leaseExpiresAt={pending.LeaseExpiresAt:O}, jobCompleted={jobCompleted}.");
     }
 
     private static async Task<Fixture> SeedAsync(IServiceProvider services)

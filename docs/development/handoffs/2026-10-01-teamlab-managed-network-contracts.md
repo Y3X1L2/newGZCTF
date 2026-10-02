@@ -79,3 +79,11 @@ TeamLab 单元测试 **581/581** 通过，`git diff --check` 通过。证据位�
 父任务全量运行的一次会话关闭未在十秒内完成，原始 TRX 显示它反复执行失败，并非队列轮询慢：清理失败分支记录 `Failed` 事件时没有必需的错误分类及代码，真实事件写入器抛错，覆盖了原本应保留的“等待清理”状态。现在记录可重试的 `recovery.deferred` 错误，保留 `Ending/cleanup_pending` 状态；真实节点/网关失败的原因仍由已有异常日志记录，通用事件不会猜测是哪个基础设施失败。
 
 使用真实 `EfOperationalEventWriter` 的回归确认第一次清理失败可持久化有效错误事件，下一次清理成功后到达 `Ended`。远程会话协调测试 **9/9** 通过，证据为仓库外 `tests/contracts-review/cleanup-error-regression.log` 与 `cleanup-error-regression.trx`。
+
+## 子主站夹具与异步 Worker 隔离
+
+同一次全量失败还暴露了夹具问题：子测试主站替换中继为测试实现，却与默认主站共用操作数据库。任一主站的 Worker 都能领取其中的任务，因此默认主站有时领取会话关闭任务，调用真实 Agent 的 `127.0.0.1:5001` 而失败。源证据摘录保存在仓库外 `tests/contracts-review/shared-worker-failure-evidence.txt`；没有通过延长超时掩盖失败。
+
+远程会话两项授权测试现在使用已有 `IsolatedPostgresDatabase` 创建独立数据库，让本次主站的真实 Worker 使用自己的中继替身。保留原有一百次、每次一百毫秒的等待上限；超时记录操作状态、阶段、次数、错误代码、重试时间和租约时间，不输出完整负载。测试还确认会话关闭在第一次执行即完成。
+
+API 操作、镜像与 Worker 集成子集 **23/23** 通过，证据为仓库外 `tests/contracts-review/isolated-operations.log` 与 `isolated-operations.trx`。未改生产队列领取规则；父任务继续执行整合后的全量验收。
