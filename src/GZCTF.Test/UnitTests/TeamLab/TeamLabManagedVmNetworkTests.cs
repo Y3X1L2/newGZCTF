@@ -724,14 +724,38 @@ public sealed class TeamLabManagedVmNetworkTests
         Assert.Contains("GZCTF_GUEST_STDIN_UNAVAILABLE", launched.Error);
     }
 
-    static async Task<(int ExitCode, string Output, string Error)> RunPowerShellStdinAsync(VmGuestCommandRequest command, string input)
+    [Fact]
+    public async Task WindowsGuestExecEnvironment_MustInheritProgramDataAndSystemRoot()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        var plan = Plan(os: TeamLabGuestOperatingSystem.Windows);
+        var command = TeamLabVmNetworkService.BuildReadCommand(plan.Assets[0], TeamLabVmNetworkService.ResolveInterfaces(plan, plan.Assets[0]));
+        const string probe = """
+            $ErrorActionPreference='Stop'
+            # This is the first filesystem-path operation in actual Windows readback.
+            $null=Join-Path $env:ProgramData 'GZCTF\TeamLab'
+            if ([string]::IsNullOrEmpty($env:SystemRoot)) { throw 'SystemRoot is absent' }
+            [Console]::Out.Write('INHERITED-SYSTEM-PATHS-OK')
+            """;
+        var inherited = await RunPowerShellStdinAsync(command, probe);
+        Assert.True(inherited.ExitCode == 0, inherited.Error);
+        Assert.Equal("INHERITED-SYSTEM-PATHS-OK", inherited.Output);
+        var empty = await RunPowerShellStdinAsync(command, probe, clearEnvironment: true);
+        Assert.NotEqual(0, empty.ExitCode);
+        // With all Windows environment removed, PowerShell may fail even before script startup.
+        Assert.NotEmpty(empty.Error);
+        Assert.DoesNotContain("INHERITED-SYSTEM-PATHS-OK", empty.Output);
+    }
+
+    static async Task<(int ExitCode, string Output, string Error)> RunPowerShellStdinAsync(VmGuestCommandRequest command, string input, bool clearEnvironment = false)
     {
         using var process = new Process { StartInfo = new ProcessStartInfo
         {
-            FileName = "powershell.exe", UseShellExecute = false, RedirectStandardInput = true,
+            FileName = VmBootstrapService.WindowsPowerShellPath, UseShellExecute = false, RedirectStandardInput = true,
             RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true,
             StandardInputEncoding = new UTF8Encoding(false)
         } };
+        if (clearEnvironment) process.StartInfo.Environment.Clear();
         foreach (var argument in command.Arguments) process.StartInfo.ArgumentList.Add(argument);
         process.Start();
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(15));

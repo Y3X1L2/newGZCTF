@@ -377,9 +377,11 @@ public sealed partial class VmGuestAgentService(ILogger<VmGuestAgentService> log
         var arguments = new Dictionary<string, object?>
         {
             ["path"] = command.Path, ["arg"] = command.Arguments,
-            ["env"] = command.Environment?.Select(item => $"{item.Key}={item.Value}").ToArray() ?? [],
             ["capture-output"] = true
         };
+        // QGA distinguishes omitted env (inherit) from [] (empty process environment).
+        if (command.Environment is { } environment)
+            arguments["env"] = environment.Select(item => $"{item.Key}={item.Value}").ToArray();
         if (command.StandardInput is { } input)
         {
             if (Encoding.UTF8.GetByteCount(input) > MaxStandardInputBytes)

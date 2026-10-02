@@ -137,6 +137,11 @@ public sealed class VmGuestControlTests
     {
         var command = new VmGuestCommandRequest("network", "powershell.exe", ["-Command", "-"]);
         Assert.False(VmGuestAgentService.BuildGuestExecArguments(command).ContainsKey("input-data"));
+        Assert.False(VmGuestAgentService.BuildGuestExecArguments(command).ContainsKey("env"));
+        Assert.Empty(Assert.IsType<string[]>(VmGuestAgentService.BuildGuestExecArguments(
+            command with { Environment = new Dictionary<string, string>() })["env"]));
+        Assert.Equal(["TEST_ONLY=value"], Assert.IsType<string[]>(VmGuestAgentService.BuildGuestExecArguments(
+            command with { Environment = new Dictionary<string, string> { ["TEST_ONLY"] = "value" } })["env"]));
         var input = "Write-Output '网络初始化'";
         command = command with { StandardInput = input };
         var payload = VmGuestAgentService.BuildCommandPayload("guest-exec", VmGuestAgentService.BuildGuestExecArguments(command));
