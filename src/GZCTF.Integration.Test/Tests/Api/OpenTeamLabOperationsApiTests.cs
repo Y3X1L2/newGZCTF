@@ -93,18 +93,16 @@ public sealed class OpenTeamLabOperationsApiTests(GZCTFApplicationFactory factor
 
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", foreign.PlainTextToken);
         using (var response = await client.GetAsync($"{basePath}?generation=1&path=%2F"))
-            await AssertProblemAsync(response, HttpStatusCode.NotFound, "scope_not_found");
+            await AssertProblemAsync(response, HttpStatusCode.Forbidden, "insufficient_permission");
 
         Assert.Equal(
             ["list", "upload-stream", "download-stream", "mkdir", "move", "delete"],
             gateway.Operations.ToArray());
 
-        await using var verificationScope = host.Services.CreateAsyncScope();
-        var context = verificationScope.ServiceProvider.GetRequiredService<AppDbContext>();
-        Assert.True(await context.ExternalApiRequestAudits.AnyAsync(item =>
+        await ExternalApiAuditAssertions.AssertPersistedAsync(host.Services, item =>
             item.ApiTokenId == allowed.TokenId &&
             item.ActorUserId == allowed.ActorUserId &&
-            EF.Functions.Like(item.RouteKey, "%/files%")));
+            EF.Functions.Like(item.RouteKey, "%/files%"));
     }
 
     [Fact]
@@ -125,7 +123,7 @@ public sealed class OpenTeamLabOperationsApiTests(GZCTFApplicationFactory factor
         var basePath = $"/api/open/v1/teamlab/remote-sessions/{fixture.SessionId:D}/audit";
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", foreign.PlainTextToken);
         using (var response = await client.PostAsync(basePath, null))
-            await AssertProblemAsync(response, HttpStatusCode.NotFound, "scope_not_found");
+            await AssertProblemAsync(response, HttpStatusCode.Forbidden, "insufficient_permission");
 
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", allowed.PlainTextToken);
         using (var response = await client.PostAsync(basePath, null))
@@ -151,14 +149,12 @@ public sealed class OpenTeamLabOperationsApiTests(GZCTFApplicationFactory factor
 
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", foreign.PlainTextToken);
         using (var response = await client.GetAsync(basePath))
-            await AssertProblemAsync(response, HttpStatusCode.NotFound, "scope_not_found");
+            await AssertProblemAsync(response, HttpStatusCode.Forbidden, "insufficient_permission");
 
-        await using var verificationScope = host.Services.CreateAsyncScope();
-        var context = verificationScope.ServiceProvider.GetRequiredService<AppDbContext>();
-        Assert.True(await context.ExternalApiRequestAudits.AnyAsync(item =>
+        await ExternalApiAuditAssertions.AssertPersistedAsync(host.Services, item =>
             item.ApiTokenId == allowed.TokenId &&
             item.ActorUserId == allowed.ActorUserId &&
-            EF.Functions.Like(item.RouteKey, "%/audit/evidence/%")));
+            EF.Functions.Like(item.RouteKey, "%/audit/evidence/%"));
     }
 
     [Fact]
@@ -221,9 +217,9 @@ public sealed class OpenTeamLabOperationsApiTests(GZCTFApplicationFactory factor
 
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", foreign.PlainTextToken);
         using (var get = await client.GetAsync(sessionPath))
-            await AssertProblemAsync(get, HttpStatusCode.NotFound, "scope_not_found");
+            await AssertProblemAsync(get, HttpStatusCode.Forbidden, "insufficient_permission");
         using (var terminal = await client.GetAsync($"{sessionPath}/terminal"))
-            await AssertProblemAsync(terminal, HttpStatusCode.NotFound, "scope_not_found");
+            await AssertProblemAsync(terminal, HttpStatusCode.Forbidden, "insufficient_permission");
 
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", peer.PlainTextToken);
         using var endRequest = new HttpRequestMessage(HttpMethod.Delete, sessionPath);
@@ -270,13 +266,13 @@ public sealed class OpenTeamLabOperationsApiTests(GZCTFApplicationFactory factor
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", foreign.PlainTextToken);
         using (var hiddenSessions = await client.GetAsync(
                    $"/api/open/v1/teamlab/remote-sessions?runtimeId={fixture.RuntimeId:D}"))
-            await AssertProblemAsync(hiddenSessions, HttpStatusCode.NotFound, "scope_not_found");
+            await AssertProblemAsync(hiddenSessions, HttpStatusCode.Forbidden, "insufficient_permission");
         using (var hiddenHealth = await client.GetAsync(
                    $"/api/open/v1/teamlab/runtimes/{fixture.RuntimeId:D}/device-health"))
-            await AssertProblemAsync(hiddenHealth, HttpStatusCode.NotFound, "scope_not_found");
+            await AssertProblemAsync(hiddenHealth, HttpStatusCode.Forbidden, "insufficient_permission");
         using (var hiddenStatus = await client.GetAsync(
                    $"/api/open/v1/teamlab/runtimes/{fixture.RuntimeId:D}/status-check"))
-            await AssertProblemAsync(hiddenStatus, HttpStatusCode.NotFound, "scope_not_found");
+            await AssertProblemAsync(hiddenStatus, HttpStatusCode.Forbidden, "insufficient_permission");
     }
 
     [Fact]
@@ -330,7 +326,7 @@ public sealed class OpenTeamLabOperationsApiTests(GZCTFApplicationFactory factor
 
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", foreign.PlainTextToken);
         using (var hidden = await client.GetAsync($"{runtimePath}/service-access"))
-            await AssertProblemAsync(hidden, HttpStatusCode.NotFound, "scope_not_found");
+            await AssertProblemAsync(hidden, HttpStatusCode.Forbidden, "insufficient_permission");
     }
 
     [Fact]
@@ -387,7 +383,7 @@ public sealed class OpenTeamLabOperationsApiTests(GZCTFApplicationFactory factor
 
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", foreign.PlainTextToken);
         using (var hidden = await client.GetAsync(taskPath))
-            await AssertProblemAsync(hidden, HttpStatusCode.NotFound, "scope_not_found");
+            await AssertProblemAsync(hidden, HttpStatusCode.Forbidden, "insufficient_permission");
         using (var noRetryEndpoint = await client.PostAsync($"{taskPath}/retry", null))
             Assert.Equal(HttpStatusCode.NotFound, noRetryEndpoint.StatusCode);
     }
@@ -464,7 +460,7 @@ public sealed class OpenTeamLabOperationsApiTests(GZCTFApplicationFactory factor
             ControlScope = controlScope,
             Version = 1,
             SourceRevision = 1,
-            CanonicalJson = "{}",
+            CanonicalJson = TeamLabReleaseCodec.Encode(new TeamLabTopologyDefinitionModel(topology.Name, [], [], [])),
             ContentHash = new string('a', 64),
             PublishedById = owner.Id
         };
