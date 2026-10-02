@@ -70,6 +70,11 @@ public static class OperationalErrorClassifier
     {
         return exception switch
         {
+            IOperationalFailureException failure => failure.Error with
+            {
+                WorkerNodeId = failure.Error.WorkerNodeId ?? workerNodeId,
+                Operation = failure.Error.Operation ?? operation
+            },
             OperationCanceledException => new OperationalError(
                 OperationalErrorCategory.AgentTransport,
                 OperationalErrorCodes.AgentTimeout,

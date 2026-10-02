@@ -279,6 +279,9 @@ public sealed class TeamLabShardDeploymentService(
             var compensationError = await CompensateExecutionPlansAsync(
                 results, cleanupTimeout.Token);
             cancellationToken.ThrowIfCancellationRequested();
+            var guestFailure = failed.Select(item => item.GuestFailure).FirstOrDefault(item => item is not null);
+            if (guestFailure is not null)
+                throw guestFailure.WithCleanupFailure(compensationError is not null);
             var failure = string.Join("; ", failed.Select(item =>
                 $"node {item.WorkerNodeId}: {item.Message}"));
             throw new TeamLabRuntimeExecutionException(
@@ -349,11 +352,15 @@ public sealed class TeamLabShardDeploymentService(
             var response = await executor.ApplyExecutionPlanAsync(workerNodeId, plan, cancellationToken);
             if (response.Success)
                 return new ExecutionPlanApplyResult(workerNodeId, plan, response, null);
-            var message = FailureDetail(response.Events) ?? response.Message ?? "Agent rejected the execution plan.";
+            var guestEvent = response.Events.FirstOrDefault(item => item.Outcome == "failed" &&
+                item.Stage is "guest-ready" or "guest-network-apply" or "guest-network-verify");
+            var guestFailure = TeamLabGuestNetworkExecutionException.FromAgent(
+                guestEvent?.Stage ?? response.ErrorCategory, guestEvent?.ErrorCode ?? response.ErrorCode, workerNodeId);
+            var message = guestFailure?.Message ?? FailureDetail(response.Events) ?? response.Message ?? "Agent rejected the execution plan.";
             logger.LogWarning("TeamLab execution plan apply failed for node {WorkerNodeId}, runtime {RuntimeId}: {Message}",
                 workerNodeId, plan.RuntimeId, message);
             return new ExecutionPlanApplyResult(workerNodeId, plan, null, message,
-                response.ErrorCategory, response.ErrorCode);
+                response.ErrorCategory, response.ErrorCode, guestFailure);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -403,7 +410,8 @@ public sealed class TeamLabShardDeploymentService(
         TeamLabExecutionPlanApplyResponse? Response,
         string? Message,
         string? ErrorCategory = null,
-        string? ErrorCode = null)
+        string? ErrorCode = null,
+        TeamLabGuestNetworkExecutionException? GuestFailure = null)
     {
         public bool Success => Response is not null;
     }

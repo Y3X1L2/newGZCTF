@@ -64,7 +64,7 @@ public sealed class AgentTeamLabNodeExecutor(
             NodeDispatchCategory.Cleanup,
             NodeDispatchLimitPolicy.Resolve(limits, NodeDispatchCategory.Cleanup),
             operationToken => agent.CleanupTeamLabExecutionPlanAsync(
-                workerNodeId, plan, operationToken, ExecutionPlanDeadline(plan, limits)),
+                workerNodeId, plan, operationToken, ExecutionPlanDeadline(plan, limits, includeGuestNetwork: false)),
             cancellationToken);
         return response ?? CleanupPlanFailure(plan, "Agent returned no execution-plan cleanup response.");
     }
@@ -608,7 +608,7 @@ public sealed class AgentTeamLabNodeExecutor(
             NodeDispatchLimitPolicy.Resolve(limits, NodeDispatchCategory.TeamLabNetwork),
             operationToken => agent.UpdateTeamLabExecutionNetworkAsync(
                 workerNodeId, new(currentPlan, desiredPlan), operationToken,
-                ExecutionPlanDeadline(desiredPlan, limits)),
+                ExecutionPlanDeadline(desiredPlan, limits, includeGuestNetwork: false)),
             cancellationToken);
         return response ?? new(false, false, "agent_empty_response", "Agent did not return a network update result.");
     }
@@ -1208,14 +1208,28 @@ public sealed class AgentTeamLabNodeExecutor(
 
     private sealed record DispatchLimitsSnapshot(AgentExecutionLimits? Limits, DateTimeOffset ExpiresAt);
 
-    private static TimeSpan ExecutionPlanDeadline(TeamLabExecutionPlanV2 plan, AgentExecutionLimits? limits)
+    internal static TimeSpan ExecutionPlanDeadline(TeamLabExecutionPlanV2 plan, AgentExecutionLimits? limits,
+        bool includeGuestNetwork = true)
     {
         var concurrency = Math.Max(1, limits?.TeamLabExecutionOperations ?? 1);
         var batches = (int)Math.Ceiling(plan.Assets.Count / (double)concurrency);
         var healthSeconds = plan.Assets.Sum(asset => asset.HealthChecks.Count) * 10;
-        // qemu-img has the plan's longest per-asset bound (120 seconds); the deadline derives
-        // from that bound and the node's declared concurrency rather than a generic timeout.
-        return TimeSpan.FromSeconds(30 + batches * 120 + healthSeconds);
+        if (!includeGuestNetwork || !plan.Assets.Any(asset => asset.Kind.Equals("vm", StringComparison.OrdinalIgnoreCase) &&
+                asset.NetworkMode == TeamLabGuestNetworkMode.ManagedStatic))
+            return TimeSpan.FromSeconds(30 + batches * 120 + healthSeconds);
+
+        // The advertised limit controls concurrent plans, not assets inside a plan. Native
+        // execution guarantees at least two asset workers; use no more than two for this bound.
+        var assetConcurrency = Math.Min(concurrency, 2);
+        batches = (int)Math.Ceiling(plan.Assets.Count / (double)assetConcurrency);
+        var assetSeconds = plan.Assets.Select(asset => 120 +
+                (asset.Kind.Equals("vm", StringComparison.OrdinalIgnoreCase) && asset.NetworkMode == TeamLabGuestNetworkMode.ManagedStatic
+                    // QGA ready 180 + initial live read 30 + OS apply + live verification 45.
+                    ? 180 + 30 + (asset.OperatingSystem == TeamLabGuestOperatingSystem.Windows ? 120 : 250) + 45
+                    : 0))
+            .OrderDescending().Take(batches).Sum();
+        // A failed apply performs its own bounded two-minute compensation before returning.
+        return TimeSpan.FromSeconds(30 + assetSeconds + healthSeconds + 120);
     }
 
     private static string Hostname(string value) => new(value.ToLowerInvariant().Where(ch => char.IsLetterOrDigit(ch) || ch == '-').ToArray());

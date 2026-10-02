@@ -697,23 +697,31 @@ public sealed class TeamLabRuntimeOrchestrator(
                 logger.LogWarning(
                     "TeamLab 运行时 {RuntimeId} 重放失败，保留 generation {Generation} 资源不变",
                     runtime.PublicId, runtime.Generation);
-                return await FailAsync(runtime,
+                var replayFailure = await FailAsync(runtime,
                     $"{exception.Message}; existing resources were kept because this was a replay of a live generation.",
                     cancellationToken,
+                    stage: exception is TeamLabGuestNetworkExecutionException replayGuest ? replayGuest.Stage : "deploy",
                     error: error);
+                if (exception is TeamLabGuestNetworkExecutionException) throw;
+                return replayFailure;
             }
 
             using var rollbackDeadline = new CancellationTokenSource(TimeSpan.FromMinutes(2));
             var cleaned = await cleanup.CleanupAsync(runtime, rollbackDeadline.Token);
             var identityConflict = exception is TeamLabRuntimeIdentityConflictException;
-            return await FailAsync(runtime,
+            var deploymentFailure = await FailAsync(runtime,
                 cleaned.Success ? exception.Message : $"{exception.Message}; cleanup: {cleaned.Message}",
                 rollbackDeadline.Token,
                 cleanupPending: !cleaned.Success,
+                stage: exception is TeamLabGuestNetworkExecutionException guestFailure ? guestFailure.Stage : "deploy",
                 error: error,
                 failureStatus: identityConflict && cleaned.Success
                     ? TeamLabRuntimeStatus.Destroyed
                     : TeamLabRuntimeStatus.Failed);
+            // The queue must receive the typed failure after cleanup/state persistence;
+            // returning only Success/Message would lose the Agent's code a second time.
+            if (exception is TeamLabGuestNetworkExecutionException) throw;
+            return deploymentFailure;
         }
     }
 
