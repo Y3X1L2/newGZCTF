@@ -61,3 +61,15 @@ ManagedStatic 要求 Agent 声明 `teamlab.guest-network.managed-static.v1`；Li
 DNS 提供者的地址变化通过现有 `BuildChanges` 同时更新预览与执行的替换名单，无新增依赖维护子系统。测试覆盖 DNS 提供者 `.10 → .20` 后的实际预览以及部署执行计划编译：成员机被列为替换，最终 DNS 明确为 `.20`；另外覆盖多网卡 DNS 提供者、明确 DNS、无 DNS、其它网段、DHCP 和 Docker 的排除规则。这里的执行计划测试不代表真实来宾验收。
 
 TeamLab 单元测试 **581/581** 通过，`git diff --check` 通过。证据位于仓库外 `D:/Work/YINYU-Managed-Network-20261001/tests/contracts-review/teamlab.log` 与 `contracts-review-teamlab.trx`。本轮未增添迁移，未部署；父任务负责整合后的全量门禁与获批后的真实基础设施验收。
+
+## 全量门禁暴露的既有 API 缺口
+
+父任务全量集成测试发现三类非网络初始化失败，均可在 `origin/main` 与已部署分支代码中找到根因：
+
+- API 测试仍期待旧控制范围的 `404 scope_not_found`，统一 Runtime Grant 现行实现拒绝权限不足的请求为 `403 insufficient_permission`。测试和外部契约已对齐，授权实现未放宽。
+- 共享 API 测试数据库中的合成 release 使用 `CanonicalJson="{}"`，镜像删除检查发布版本引用时因缺少必要数组报错。夹具改用正式 release 编码；引用检查未跳过或吞掉坏记录。
+- 请求审计已采用缓冲写入，HTTP 返回后立刻检查数据库存在竞态。测试改为最多五秒等待真实审计记录，仍检查 Token、操作者、资源及状态。
+
+另外，Open API 远程会话创建/关闭已有执行分支，却未进入对应操作分发，异步任务被拒绝为 `teamlab_operation_invalid`。修正只接通这两种任务；会话执行器继续重新校验运行授权，不要求仅获 Runtime Grant 的 Token 额外取得控制范围授权。回归覆盖 scope 授权与 runtime-only 授权两条创建/读取/关闭链路、异范围管理员所签 Token 仍被拒绝。
+
+`OpenTeamLabOperationsApiTests` 与 `OpenImageApiTests` 合计 **20/20** 通过，证据为仓库外 `tests/contracts-review/fixed-api.log` 与 `fixed-api.trx`。这是本地 PostgreSQL/Redis 与 API 集成验证，远程节点连接使用测试替身；不表述为真实桌面会话验收。没有生产数据库或服务器变更。

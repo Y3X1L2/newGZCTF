@@ -157,8 +157,10 @@ public sealed class OpenTeamLabOperationsApiTests(GZCTFApplicationFactory factor
             EF.Functions.Like(item.RouteKey, "%/audit/evidence/%"));
     }
 
-    [Fact]
-    public async Task RemoteSessions_UseRuntimeScopeAcrossDifferentTokenActors()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RemoteSessions_UseRuntimeScopeAcrossDifferentTokenActors(bool runtimeOnlyGrant)
     {
         await using var host = CreateHost(new InMemoryAssetFileGateway());
         using var client = host.CreateClient();
@@ -166,11 +168,13 @@ public sealed class OpenTeamLabOperationsApiTests(GZCTFApplicationFactory factor
         var creator = await IssueTokenAsync(
             host.Services,
             fixture.ScopeId,
-            [ApiTokenScopes.TeamLabRemoteSessionsRead, ApiTokenScopes.TeamLabRemoteSessionsWrite]);
+            [ApiTokenScopes.TeamLabRemoteSessionsRead, ApiTokenScopes.TeamLabRemoteSessionsWrite],
+            runtimeOnlyGrant ? fixture.RuntimeId : null);
         var peer = await IssueTokenAsync(
             host.Services,
             fixture.ScopeId,
-            [ApiTokenScopes.TeamLabRemoteSessionsRead, ApiTokenScopes.TeamLabRemoteSessionsWrite]);
+            [ApiTokenScopes.TeamLabRemoteSessionsRead, ApiTokenScopes.TeamLabRemoteSessionsWrite],
+            runtimeOnlyGrant ? fixture.RuntimeId : null);
         var foreign = await IssueTokenAsync(
             host.Services,
             fixture.ForeignScopeId,
@@ -416,7 +420,8 @@ public sealed class OpenTeamLabOperationsApiTests(GZCTFApplicationFactory factor
                 .SingleAsync(item => item.Id == operationId);
             if (operation.Status == ApiOperationStatus.Succeeded)
                 return;
-            Assert.NotEqual(ApiOperationStatus.Failed, operation.Status);
+            Assert.True(operation.Status != ApiOperationStatus.Failed,
+                $"Operation {operationId:D} failed with code {operation.ErrorCode}.");
             await Task.Delay(100);
         }
 
@@ -554,7 +559,8 @@ public sealed class OpenTeamLabOperationsApiTests(GZCTFApplicationFactory factor
     private static async Task<IssuedToken> IssueTokenAsync(
         IServiceProvider services,
         Guid controlScopeId,
-        IReadOnlyCollection<string> scopes)
+        IReadOnlyCollection<string> scopes,
+        Guid? runtimeId = null)
     {
         await using var scope = services.CreateAsyncScope();
         var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -568,10 +574,23 @@ public sealed class OpenTeamLabOperationsApiTests(GZCTFApplicationFactory factor
             new IssueApiTokenCommand(
                 "TeamLab open operations",
                 scopes,
-                [new ApiTokenResourceGrantSpec("teamlab-scope", controlScopeId.ToString("D"))],
+                runtimeId is null ? [new ApiTokenResourceGrantSpec("teamlab-scope", controlScopeId.ToString("D"))] : [],
                 120,
                 DateTimeOffset.UtcNow.AddHours(1)),
             CancellationToken.None);
+        if (runtimeId is { } grantedRuntimeId)
+        {
+            context.TeamLabRuntimeGrants.Add(new()
+            {
+                RuntimeId = await context.TeamLabRuntimes.Where(runtime => runtime.PublicId == grantedRuntimeId)
+                    .Select(runtime => runtime.Id).SingleAsync(),
+                ApiTokenId = issued.Token.Id,
+                GrantedByUserId = actor.Id,
+                Permissions = (int)(TeamLabRuntimePermission.StateRead | TeamLabRuntimePermission.MetadataRead |
+                    TeamLabRuntimePermission.RemoteSessionOperate)
+            });
+            await context.SaveChangesAsync();
+        }
         return new IssuedToken(issued.PlainTextToken, issued.Token.Id, actor.Id);
     }
 
