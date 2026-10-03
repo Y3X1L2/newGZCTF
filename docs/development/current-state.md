@@ -1,17 +1,19 @@
 # YINYU 当前开发状态
 
-## TeamLab网卡就绪等待：候选修正，未部署（2026-10-03）
+## TeamLab网卡就绪等待：Agent已部署，Lab2四机基础网络通过（2026-10-03）
 
 - Lab2限定重试中Server2008R2的QGA43.6秒回应，网卡62.8秒才可见，旧执行检查49.3秒已结束；Linux单/双卡和DC最终均出现本次MAC。现Agent第一次读缺MAC立即失败，证据支持设备初始化时序缺口。候选改为在原ReadyTimeout三分钟总预算内只读等待全部MAC，不增加镜像自启动代码/计划HTTP期限，保留多卡完整性、重复MAC失败、身份校验和取消。
-- 源码cc6c5737，定向82/82（包括计划期限回归）、单元1282/1282、Agent linux-x64发布及diff检查通过，制品SHA2569b2142e9731d77495322e20a100432a728cf3d86f87dc67abebf85ed58a9b3e8；无DTO/迁移/前端变化，未重复完整solution/数据库集成/前端门禁。备份/切换/回退与后续正常reset脚本已准备，未部署，按用户要求部署前确认。服务器仍8637e087，四机网络/访问仍未验收，失败runtime真实VM为0、.31已恢复true。证据与方案见[网卡就绪交接](handoffs/2026-10-03-teamlab-nic-readiness.md)。
+- 源码cc6c5737，定向82/82（包括计划期限回归）、单元1282/1282、Agent linux-x64发布及diff检查通过。用户批准后已部署.27的teamlab-nic-ready-cc6c5737-20261003，实际/内置SHA2569b2142e9731d77495322e20a100432a728cf3d86f87dc67abebf85ed58a9b3e8；主站/Agent active、NRestarts0、首页/Config成功，主站fa97187c/前端4fccca67和迁移头保持。新完整备份两dump全文可读、5项SHA通过；旧release保留。无DTO/迁移/前端变化，未重复完整solution/数据库集成/前端门禁。
+- 首正常reset gen2在placement拒绝：Agent误上报根盘余量，而非bind在images的大盘，差约100MB未到80GiB。仅本次新dump1.5GiB另存大盘，原入口/摘要保留；此容量上报缺口仍待独立修复。gen3随后在DC网卡Put改名失败，单机原IP/DNS写入成功且省略名字后退出0；正常修改草稿只省略两Windows友好名，Linuxens18/19保留，发布新场景release01a10261-890a-718f-ae86-250e4db86746，正常reset到gen4 ready。
+- runtime01a1022f-7e91-7ad3-8309-833af4771430四机仅.27，独立QGA/MAC实读IP/DNS/掩码/无默认路由全部通过；web/OA到内网SSH/RPC/RDP管理TCP路径通过，OA到入口不可达、平台关联路由器0，保持原两网段关系。诊断副本全部正常销毁，.31恢复true；最终留四机运行，原PVE/快照/镜像/旧发布/备份保留。未验收图形登录、业务、AD账号/共享、双副本或ready后再次reset，不能外推完整生命周期。证据与方案见[网卡就绪交接](handoffs/2026-10-03-teamlab-nic-readiness.md)。
 
-## Lab2 release-v2：仓库迁移与四图导入完成，组网启动仍在诊断（2026-10-03）
+## Lab2 release-v2：仓库迁移、四图导入和基础网络启动完成（2026-10-03）
 
 - PVE118–121 release-v2及实际QGA脚本前提通过，四机正常关机导出，check/compare/SHA及传输后复核通过，共约13.6GiB。用户明确批准正常销毁旧Lab2以沿用原IP，旧runtime已destroyed；原PVE/快照/旧模板/其它环境保留。四图经正常API导入为ManagedStatic模板519–522，临时导入Token已撤销。
 - 导入首图时PVE共享pve/data428.66GiB达到Data100%，112/113/114 io-error；宿主和来宾df空闲不能代表thin pool余量。已VG备份后增加8GiB缓冲、恢复三VM及fstrim，池436.66GiB且92.28%，VG仍余8GiB。主站/Agent active、Config200、Registry active/v2 200，原教学容器Up；没有文件/快照清理。
 - 用户明确批准113存储迁移：新增sdb-storage 500GiB盘，Registry工作目录与独立回退副本迁入/srv/yinyu-registry-data，原服务路径bind保留。25,049文件/111,092,947,185字节三份逐文件摘要与元数据核验通过，实际manifest/blob读取及冷开机自动挂载通过，才释放旧根盘重复数据。113根盘120→16GiB、PVE共享池92.35%→68.60%。112上传暂存仍在根盘，其它VM系统盘仍用共享池，容量监控缺口保留。
-- 新拓扑01a1021a-b3b3-7fd2-96f5-cc9aa22a2ea5/release01a1021a-b760-7d01-87d2-a3da4a190dae保持两交换机、web双卡、其它仅内网、无平台路由器；内网/23保留DC原IP。首次部署guest_network_interface_missing，自动清理资源，未通过组网验收。独立Server2008R2诊断e1000e驱动正常、QGA/WMI实际MAC与硬件一致且DHCP成功，尚不能把首次失败判为缺驱动；下一次启动限定记录网卡就绪情况。
-- .31首次启动退出已恢复可调度，后续诊断暂禁、原true，完成/退出必须恢复。原PVE、镜像、快照、备份保留；本轮没有新源码/发布/迁移变更，没有直接写业务数据库。真实证据和未完成项见同一交接。
+- 拓扑01a1021a-b3b3-7fd2-96f5-cc9aa22a2ea5原release01a1021a-b760-7d01-87d2-a3da4a190dae曾因MAC就绪和Windows改名失败；最终新release和实机结果见上节。两交换机、web双卡、其它仅内网、无平台路由器；内网/23保留DC原IP。两专用Windows写入诊断均已销毁，源机快照与四镜像不需要重导出。
+- .31最终恢复可调度。原PVE、镜像、快照、备份保留；存储迁移阶段无源码/发布变化，后续Agent修正与场景正常发布单独记录，没有直接写业务数据库。真实证据和未完成项见同一交接。
 - 本轮无源码/发布/数据库写入（指定operation只读核验），真实证据/限制/接手入口见[release-v2存储交接](handoffs/2026-10-03-lab2-release-v2-storage-block.md)。下述Agent部署事实仍有效，不能把镜像导出成功当作四机场景签收。
 
 ## 旧Windows可选网络执行宿主：Agent已部署，普通Windows回归通过（2026-10-03）

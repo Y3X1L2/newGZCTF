@@ -1,5 +1,7 @@
 # Lab2 release-v2：共享存储恢复、仓库迁移与启动诊断
 
+最终进度：四图519–522导入完成；Agent等待网卡修正已批准部署，正常场景发布省略两Windows强制显示名后，runtime01a1022f-7e91-7ad3-8309-833af4771430 generation4已ready，真实IP/DNS/路由与限定网络通信通过，四机保留运行、诊断副本销毁、.31恢复true。发布/备份及验收边界见[最终网卡就绪交接](2026-10-03-teamlab-nic-readiness.md)。以下启动诊断段保留中间历史，不代表当前仍未启动。
+
 ## 最新已证实事实（后文保留事故时的记录）
 
 用户批准113迁移后已完成：新增scsi1，sdb-storage:113/vm-113-disk-0.qcow2，500GiB，串号YINYU113REG20261003；原256GiB系统盘保留。来宾/dev/sdb/ext4，UUID9f56fbd9-520c-4af3-868b-98000c445994，挂载/srv/yinyu-registry-data。实际工作目录registry，独立回退目录rollback/registry-20261003；服务原目录/var/lib/gzctf-registry/registry通过bind继续使用，地址10.24.0.28:5000及标签/引用不变。
