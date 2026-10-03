@@ -1,10 +1,12 @@
 # YINYU 当前开发状态
 
-## Lab2 release-v2：镜像检查通过，存储事故已应急恢复（2026-10-03）
+## Lab2 release-v2：仓库迁移与四图导入完成，组网启动仍在诊断（2026-10-03）
 
-- PVE118–121 release-v2及实际QGA脚本前提通过，四机正常关机导出，check/compare/SHA及传输后复核通过，共约13.6GiB。用户明确批准正常销毁旧Lab2以沿用原IP，旧runtime已destroyed；原PVE/快照/旧模板/其它环境保留。新四图尚未完成导入，新场景未启动。
+- PVE118–121 release-v2及实际QGA脚本前提通过，四机正常关机导出，check/compare/SHA及传输后复核通过，共约13.6GiB。用户明确批准正常销毁旧Lab2以沿用原IP，旧runtime已destroyed；原PVE/快照/旧模板/其它环境保留。四图经正常API导入为ManagedStatic模板519–522，临时导入Token已撤销。
 - 导入首图时PVE共享pve/data428.66GiB达到Data100%，112/113/114 io-error；宿主和来宾df空闲不能代表thin pool余量。已VG备份后增加8GiB缓冲、恢复三VM及fstrim，池436.66GiB且92.28%，VG仍余8GiB。主站/Agent active、Config200、Registry active/v2 200，原教学容器Up；没有文件/快照清理。
-- 112 images/teamlab大盘bind仍有效，但上传两处暂存仍在根盘；113原生Registry数据104GiB仍在小池。永久迁移113到新增500GiB大盘的方案已具体落盘，等待用户批准，未执行。首导入operation终态Failed，临时身份已撤销204；.31调度为本任务暂false、原true，需完成或退出后恢复。
+- 用户明确批准113存储迁移：新增sdb-storage 500GiB盘，Registry工作目录与独立回退副本迁入/srv/yinyu-registry-data，原服务路径bind保留。25,049文件/111,092,947,185字节三份逐文件摘要与元数据核验通过，实际manifest/blob读取及冷开机自动挂载通过，才释放旧根盘重复数据。113根盘120→16GiB、PVE共享池92.35%→68.60%。112上传暂存仍在根盘，其它VM系统盘仍用共享池，容量监控缺口保留。
+- 新拓扑01a1021a-b3b3-7fd2-96f5-cc9aa22a2ea5/release01a1021a-b760-7d01-87d2-a3da4a190dae保持两交换机、web双卡、其它仅内网、无平台路由器；内网/23保留DC原IP。首次部署guest_network_interface_missing，自动清理资源，未通过组网验收。独立Server2008R2诊断e1000e驱动正常、QGA/WMI实际MAC与硬件一致且DHCP成功，尚不能把首次失败判为缺驱动；下一次启动限定记录网卡就绪情况。
+- .31首次启动退出已恢复可调度，后续诊断暂禁、原true，完成/退出必须恢复。原PVE、镜像、快照、备份保留；本轮没有新源码/发布/迁移变更，没有直接写业务数据库。真实证据和未完成项见同一交接。
 - 本轮无源码/发布/数据库写入（指定operation只读核验），真实证据/限制/接手入口见[release-v2存储交接](handoffs/2026-10-03-lab2-release-v2-storage-block.md)。下述Agent部署事实仍有效，不能把镜像导出成功当作四机场景签收。
 
 ## 旧Windows可选网络执行宿主：Agent已部署，普通Windows回归通过（2026-10-03）
