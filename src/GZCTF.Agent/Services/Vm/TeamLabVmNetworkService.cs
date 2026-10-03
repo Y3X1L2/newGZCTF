@@ -209,7 +209,7 @@ public sealed partial class TeamLabVmNetworkService(IVmGuestAgentClient guest)
         & ([scriptblock]::Create($source))
         """;
 
-    internal const string WindowsLegacyPowerShellHostPath = @"C:\YINYU-QGA\LegacyPowerShellHost.exe";
+    internal const string WindowsLegacyPowerShellHostPath = @"C:\Program Files\YINYU-GuestTools\LegacyPowerShellHost.exe";
 
     static VmGuestCommandRequest WindowsCommand(string id, string script, int timeout, bool useLegacyWindowsHost) => new(id,
         useLegacyWindowsHost ? WindowsLegacyPowerShellHostPath : VmBootstrapService.WindowsPowerShellPath,

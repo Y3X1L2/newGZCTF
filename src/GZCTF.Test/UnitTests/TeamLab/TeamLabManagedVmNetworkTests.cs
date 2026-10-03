@@ -831,7 +831,15 @@ public sealed class TeamLabManagedVmNetworkTests
             Assert.Equal(command.StepId == "teamlab-network-apply" ? 120 : 30, command.TimeoutSeconds);
             Assert.Equal(command.StepId == "teamlab-network-apply" ? TeamLabVmNetworkService.BuildWindowsApplyScript(desired) :
                 TeamLabVmNetworkService.BuildWindowsReadScript(desired), command.StandardInput);
-            if (helperPresent) Assert.Empty(command.Arguments);
+            if (helperPresent)
+            {
+                Assert.Empty(command.Arguments);
+                using var payload = System.Text.Json.JsonDocument.Parse(VmGuestAgentService.BuildCommandPayload(
+                    "guest-exec", VmGuestAgentService.BuildGuestExecArguments(command)));
+                Assert.Equal(@"C:\Program Files\YINYU-GuestTools\LegacyPowerShellHost.exe",
+                    payload.RootElement.GetProperty("arguments").GetProperty("path").GetString());
+                Assert.Equal(0, payload.RootElement.GetProperty("arguments").GetProperty("arg").GetArrayLength());
+            }
             Assert.True(VmGuestAgentService.BuildGuestExecArguments(command).ContainsKey("input-data"));
             Assert.DoesNotContain(command.StandardInput!, command.ToString());
         }
