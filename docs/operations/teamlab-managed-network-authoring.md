@@ -54,11 +54,13 @@ Windows 在“服务”窗口确认 QEMU Guest Agent 运行，在“设备管理
 
 ### 旧 Windows 的可选 PowerShell 引擎宿主（候选，尚未部署验收）
 
-部分 Server 2008 R2 的 `powershell.exe` 在 QGA 无控制台进程中会因 ConsoleHost 初始化失败而退出；脚本语法兼容不能解决这一问题。候选 Agent 仅为 TeamLab Windows 平台静态网络支持固定可选工具 `C:\YINYU-QGA\LegacyPowerShellHost.exe`。制作人员在独立副本准备并验证该工具，平台不会安装它、修改启动任务或更改 PowerShell 策略。
+部分 Server 2008 R2 的 `powershell.exe` 在 QGA 无控制台进程中会因 ConsoleHost 初始化失败而退出；脚本语法兼容不能解决这一问题。候选 Agent 仅为 TeamLab Windows 平台静态网络支持固定可选工具 `C:\Program Files\YINYU-GuestTools\LegacyPowerShellHost.exe`。制作人员在独立副本准备并验证该工具，平台不会安装它、修改启动任务或更改 PowerShell 策略。
 
 Agent 在原 `guest-ready` 准备窗口内通过 QGA 只读打开并关闭固定文件，探测最多 5 秒，取消后的句柄关闭最多 5 秒。文件缺失或 QGA 文件命令不支持时继续原 `powershell.exe`；权限或其它未知探测错误明确失败。存在时，本次回读、应用和复核全部使用同一宿主。执行失败不会再换宿主重做写操作。
 
 宿主契约：无命令参数，从标准输入接收最多 64 KiB 的 UTF-8 脚本，加载系统 PowerShell 引擎而不启动 ConsoleHost，不加载用户 profile；标准输出保留脚本原始 UTF-8/XML。空输入必须返回非零并在标准错误输出 `GZCTF_GUEST_STDIN_UNAVAILABLE`；脚本异常和 PowerShell 错误流必须返回非零。正常结束返回 0，仍须通过独立真实网络回读才能成为成功。执行与取消沿用 30 秒回读、120 秒应用和 Windows `taskkill /T /F` 清理；脚本正文仍不进入公开 DTO、日志或事件。工具文件应只允许管理员和 SYSTEM 修改，二进制和制作制品保存在仓库外。
+
+宿主必须放在标准管理员管理的 `Program Files` 目录，核验工具目录和文件仅管理员/SYSTEM 可写，普通用户不能创建该可选文件或替换宿主。不要把可选宿主放在普通用户可创建文件的 QGA 目录；QGA 自身安装路径不受本规则改变。QGA 直接传递完整可执行文件路径，路径中的空格不通过 shell 拼接或分词。
 
 工具源、编译准备与真实 2008 R2 验收由镜像制作任务记录；本段仅描述 Agent 候选契约，不能据此宣布旧系统已支持或已发布。
 

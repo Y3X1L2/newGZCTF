@@ -183,9 +183,10 @@ public sealed class VmGuestControlTests
 
     [Theory]
     [InlineData(@"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe", true)]
-    [InlineData(@"C:\YINYU-QGA\LegacyPowerShellHost.exe", true)]
-    [InlineData(@"c:\yinyu-qga\legacypowershellhost.exe", true)]
-    [InlineData(@"C:\YINYU-QGA\Other.exe", false)]
+    [InlineData(@"C:\Program Files\YINYU-GuestTools\LegacyPowerShellHost.exe", true)]
+    [InlineData(@"c:\program files\yinyu-guesttools\legacypowershellhost.exe", true)]
+    [InlineData(@"C:\Program Files\YINYU-GuestTools\Other.exe", false)]
+    [InlineData(@"C:\YINYU-QGA\LegacyPowerShellHost.exe", false)]
     [InlineData("/usr/bin/python3", false)]
     public void GuestNetworkTimeoutCleanup_UsesWindowsTaskkillForTheFixedOptionalHost(string path, bool windows) =>
         Assert.Equal(windows, VmGuestAgentService.IsWindowsCommandPath(path));
