@@ -2,6 +2,13 @@
 
 ## 主任务真实客户机补充（2026-10-03）
 
+### 用户批准后的部署准备
+
+- 用户明确批准本次部署到10.24.0.27，并要求直传慢时改走GitHub。测试制品发布于tag teamlab-legacy-agent-8637e087-20261003，只有Agent release asset，无main合并；服务器约7秒下载，SHA256为2ed4a2114d7ef0b681fe66ad6cca62aee358395a362bdf2b6ca85aa69fda5bb2，和本机构建一致。
+- 完整备份在/opt/gzctf/backups/teamlab-legacy-8637e087-20261003：gzctf.dump1608281102字节、Guacamole92146字节、附件187619398字节，两库全部压缩内容可读，5项摘要检查通过，备份后原主站启动命令成功。无迁移或数据库写入。
+- 发起切换时SSH新channel打开失败，远程命令尚未执行；之后SSH与HTTP超时。用户VPN接口与内网路由仍在，已及时告知并请求恢复，不能宣称候选已部署。部署授权继续有效；恢复后先核对现场，再以服务器独立任务切换并读取结果。临时stage为/tmp/yinyu-legacy-8637e087-20261003，备份与传输片段均保留。
+- 预备真实回归使用现代Windows模板507，正常平台新建双卡/实际QGA回读/重置/销毁；不安装兼容helper。Win10无需默认增加helper，但本轮无Win10实机正例。VM121新镜像和完整四机仍待验收。
+
 - VM121的QGA100.0.0基本回应、CMD和input-data正常；Windows错误报告明确原PowerShell CLI失败为System.ComponentModel.Win32Exception，ConsoleControl.GetActiveScreenBufferHandle。引擎组件存在，后台ConsoleHost失败不能当作QGA离线。
 - 已提交可审核的.NET2引擎宿主及build-host.cmd，位于scripts/guest-tools/windows-legacy-network；通过Runspace直接使用已有PowerShell引擎，不加载profile、注册服务、改策略或增加网络监听。空输入返回78及既有标记，输入限64KiB，异常/错误流返回非零；原生失败由实际网络脚本检查并抛出。
 - 在原VM121正式路径C:\Program Files\YINYU-GuestTools\LegacyPowerShellHost.exe通过QGA运行实际Agent生成的只读脚本，退出0，中文网卡名、172.22.1.21/24、DNS172.22.1.2均正确。目录继承Program Files受保护权限，Users为RX/GR/GE，没有写入权限；管理员/SYSTEM有完全控制。宿主5120字节，SHA256为1f644854da4837f98b4cad7b4767979d77a61eed8b8cfb7cd8411f903e121afd；编译路径不同可能改变输出摘要，不能只拿旧原型摘要判断正式构建。
