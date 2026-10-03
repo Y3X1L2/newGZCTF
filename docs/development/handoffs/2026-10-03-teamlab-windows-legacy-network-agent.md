@@ -1,5 +1,14 @@
 # TeamLab 旧 Windows 可选网络宿主：Agent 集成交接
 
+## 最终部署与回归结果
+
+- 用户恢复VPN后核对旧版本/备份/队列，再以服务器独立任务完成切换，deployment.exit=0。活动release为/opt/gzctf/releases/teamlab-legacy-8637e087-20261003/publish；实际/内置Agent摘要2ed4a2114d7ef0b681fe66ad6cca62aee358395a362bdf2b6ca85aa69fda5bb2，源码8637e087。主站fa97187c与前端4fccca67内容保留，复合manifest记录三者身份；两服务active/NRestarts0，首页与Config200，迁移头20261001145237_AddTeamLabManagedGuestNetwork未变。备份及GitHub制品见下面准备记录。
+- 通过正常Admin API创建/校验/发布独立拓扑01a100e6-04bc-7557-9a46-8a2e628c8b1c，release01a100e6-098f-788a-b30d-92b994649822，runtime01a100e6-0bb4-79fe-93c4-b8f711272e26、原资产880，仅.27部署现代Windows模板507（Server2022）。在服务器本地继续已有实例，不重复创建，凭据只经stdin进入进程内存。
+- 新建及正常重置generation1→2，两次独立QGA回读证明labentry=192.168.224.10/24无DNS、labcore=192.168.226.10/24及DNS127.0.0.1；两卡DHCP关闭、无默认网关/路由，均没有可选helper；MAC与本次libvirt接口一致。原生UUID和启动时间随重置变化。普通Windows路径实机回归通过，不等于Win10版本本身已经测试。
+- 正常DELETE后destroyed/assets为空，属于该runtime的VM定义、运行qcow2、10类OVN和OVS接口残留0；.27当前VM/占用/预留为0。运行目录的元数据仍可存在，不清理审计材料。新拓扑/release、原PVE/快照/模板、旧release/备份/未完成传输片段保留。
+- 真实旧系统新镜像写入/回读、完整四机场景、图形登录、数据面服务访问、双实例隔离和VSS不在本轮完成范围。下一主线是在制作副本整理并导出新镜像、登记新模板，再走正常场景验收；不向原题目写业务内容。
+- 仓库外最终证据：release/deployment-final-service.json、composite-release-manifest.json、smoke/final-result.json、smoke-residual-audit.json，服务器同类结果留在/tmp/yinyu-legacy-8637e087-20261003/server-smoke。上述准备阶段断网记录已被本节最终结果更新。
+
 ## 主任务真实客户机补充（2026-10-03）
 
 ### 用户批准后的部署准备

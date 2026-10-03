@@ -52,7 +52,7 @@ systemctl status qemu-guest-agent --no-pager
 
 Windows 在“服务”窗口确认 QEMU Guest Agent 运行，在“设备管理器”确认网卡和管理通道没有黄色警告。平台仍会独立验证 QGA 通道，服务正在运行不能替代通道已接通。
 
-### 旧 Windows 的可选 PowerShell 引擎宿主（候选，尚未部署验收）
+### 旧 Windows 的可选 PowerShell 引擎宿主（Agent已部署，旧系统完整验收待补）
 
 部分 Server 2008 R2 的 `powershell.exe` 在 QGA 无控制台进程中会因 ConsoleHost 初始化失败而退出；脚本语法兼容不能解决这一问题。候选 Agent 仅为 TeamLab Windows 平台静态网络支持固定可选工具 `C:\Program Files\YINYU-GuestTools\LegacyPowerShellHost.exe`。制作人员在独立副本准备并验证该工具，平台不会安装它、修改启动任务或更改 PowerShell 策略。
 
@@ -62,7 +62,7 @@ Agent 在原 `guest-ready` 准备窗口内通过 QGA 只读打开并关闭固定
 
 宿主必须放在标准管理员管理的 `Program Files` 目录，核验工具目录和文件仅管理员/SYSTEM 可写，普通用户不能创建该可选文件或替换宿主。不要把可选宿主放在普通用户可创建文件的 QGA 目录；QGA 自身安装路径不受本规则改变。QGA 直接传递完整可执行文件路径，路径中的空格不通过 shell 拼接或分词。
 
-工具源、编译准备与真实 2008 R2 验收由镜像制作任务记录；本段仅描述 Agent 候选契约，不能据此宣布旧系统已支持或已发布。
+工具源与build-host.cmd在scripts/guest-tools/windows-legacy-network。Agent集成已于2026-10-03部署到.27，真实2008R2正式路径执行平台只读脚本成功；完整旧系统新镜像网络写入/回读及生命周期仍由镜像制作任务验收，不能仅据本段宣布旧系统全部支持。正常Win10等现代Windows不要求安装此工具，使用已有PowerShell和QGA路径；同类旧系统组件布局不同仍需重新编译并实测，不把此配方当作通用Windows安装包。
 
 ### Linux封装前还要保留正确的首次启动状态
 

@@ -1,11 +1,13 @@
 # YINYU 当前开发状态
 
-## 旧Windows可选网络执行宿主：候选已验证、未部署（2026-10-03）
+## 旧Windows可选网络执行宿主：Agent已部署，普通Windows回归通过（2026-10-03）
 
 - codex/teamlab-managed-network新增固定Program Files可选宿主选择，现代Windows保持原路径；同次read/apply/verify统一执行方式，不在写失败后换程序重写。工具源和镜像制作配方在scripts/guest-tools/windows-legacy-network；无DTO/迁移/前端变更。
 - 真实VM121（Server2008R2）QGA基本功能正常，原PowerShell后台ConsoleHost的GetActiveScreenBufferHandle异常已定位。新宿主直接调用已安装引擎，正式路径执行实际平台只读脚本退出0，原IP/DNS保持；Program Files目录Users仅读取/执行。原型错误流、空输入和原生命令检查通过。
-- 子代理最终单元1276/1276、定向112/112及Agent Release构建通过；主任务集成定向112/112、linux-x64发布通过。数据库集成因本机Docker不可用未跑，前端未改未重复门禁。新Agent尚未部署；新网卡写入/回读、四机新镜像、整套新建/重置未验收，VSS仍未修复。
-- 当前服务器活动release和Agent仍为下述10月2日版本，主站/Agent active、Config200。详细证据与部署边界见[旧Windows交接](handoffs/2026-10-03-teamlab-windows-legacy-network-agent.md)。
+- 子代理最终单元1276/1276、定向112/112及Agent Release构建通过；主任务集成定向112/112、linux-x64发布通过。数据库集成因本机Docker不可用未跑，前端未改未重复门禁。四机新镜像及完整旧系统写入/回读链尚未验收，VSS仍未修复。
+- 用户批准后通过GitHub制品下载到.27，已切换到/opt/gzctf/releases/teamlab-legacy-8637e087-20261003/publish，Agent源码8637e087，实际及内置SHA256均2ed4a2114d7ef0b681fe66ad6cca62aee358395a362bdf2b6ca85aa69fda5bb2。主站fa97187c、前端4fccca67保持原内容；服务active/NRestarts0、首页/Config200、迁移头不变。完整备份在/opt/gzctf/backups/teamlab-legacy-8637e087-20261003，两个数据库全部压缩内容可读，5项摘要检查通过。
+- 普通Windows模板507（Server2022）经正常平台创建双卡runtime01a100e6-0bb4-79fe-93c4-b8f711272e26，仅在.27执行；新建与正常重置generation1→2的独立QGA回读均通过：入口192.168.224.10/24无DNS，内网192.168.226.10/24、DNS127.0.0.1，两卡无默认网关/路由，均无helper。VM原生UUID和启动时间随重置变化。正常销毁后assets为空、VM/运行qcow2/所属10类OVN及OVS接口残留0，节点VM占用和预留0。
+- VPN频繁断连，部署和回归改为服务器独立任务，结果已取回。原镜像、PVE、快照和旧release保留；本轮未验收图形登录、数据面服务访问、双实例隔离或完整四机/旧系统新镜像，不将Server2022结果当作Win10实机正例。详细证据与部署边界见[旧Windows交接](handoffs/2026-10-03-teamlab-windows-legacy-network-agent.md)。
 
 ## TeamLab 自动网络配置：已部署并完成限定实机验收（2026-10-02）
 
