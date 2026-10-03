@@ -88,6 +88,42 @@ public sealed partial class VmGuestAgentService(ILogger<VmGuestAgentService> log
         }
     }
 
+    public async Task<bool> TryFileExistsAsync(string vmName, string guestPath, CancellationToken cancellationToken)
+    {
+        ValidateVmName(vmName);
+        cancellationToken.ThrowIfCancellationRequested();
+        JsonDocument opened;
+        try
+        {
+            opened = await SendAsync(vmName, "guest-file-open", new Dictionary<string, object?>
+            {
+                ["path"] = guestPath, ["mode"] = "rb"
+            }, cancellationToken);
+        }
+        catch (InvalidOperationException exception) when (IsOptionalFileProbeUnavailableError(exception.Message))
+        {
+            return false;
+        }
+        using var open = opened;
+        var handle = ReadInt64(open.RootElement, "return")
+            ?? throw new InvalidOperationException("QGA guest-file-open returned no handle.");
+        // The probe never reads executable bytes. Always close the QGA handle, even on cancellation.
+        using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        using var close = await SendAsync(vmName, "guest-file-close", new Dictionary<string, object?>
+        {
+            ["handle"] = handle
+        }, cleanup.Token);
+        cancellationToken.ThrowIfCancellationRequested();
+        return true;
+    }
+
+    internal static bool IsOptionalFileProbeUnavailableError(string message) =>
+        message.Contains("No such file", StringComparison.OrdinalIgnoreCase) ||
+        message.Contains("cannot find the file", StringComparison.OrdinalIgnoreCase) ||
+        message.Contains("cannot find the path", StringComparison.OrdinalIgnoreCase) ||
+        message.Contains("CommandNotFound", StringComparison.OrdinalIgnoreCase) ||
+        message.Contains("CommandDisabled", StringComparison.OrdinalIgnoreCase);
+
     public async Task<byte[]> ReadFileAsync(
         string vmName,
         string guestPath,
@@ -211,7 +247,7 @@ public sealed partial class VmGuestAgentService(ILogger<VmGuestAgentService> log
     {
         if (pid <= 0) return;
         using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-        var windows = commandPath.StartsWith("C:\\Windows\\", StringComparison.OrdinalIgnoreCase);
+        var windows = IsWindowsCommandPath(commandPath);
         try
         {
             if (verifyIdentity is not null && !await verifyIdentity(cleanup.Token))
@@ -242,6 +278,10 @@ public sealed partial class VmGuestAgentService(ILogger<VmGuestAgentService> log
             logger.LogWarning("Unable to confirm timed-out guest network command termination: VM={VmName}", vmName);
         }
     }
+
+    internal static bool IsWindowsCommandPath(string commandPath) =>
+        commandPath.StartsWith("C:\\Windows\\", StringComparison.OrdinalIgnoreCase) ||
+        commandPath.Equals(TeamLabVmNetworkService.WindowsLegacyPowerShellHostPath, StringComparison.OrdinalIgnoreCase);
 
     public async Task RebootAndWaitAsync(
         string vmName,

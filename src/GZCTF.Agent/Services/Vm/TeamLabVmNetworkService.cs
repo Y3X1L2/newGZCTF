@@ -38,10 +38,12 @@ public sealed partial class TeamLabVmNetworkService(IVmGuestAgentClient guest)
             var ready = await guest.WaitReadyAsync(expectedName, ReadyTimeout, readyDeadline.Token);
             if (!ready.Ready)
                 return new(false, stage, "guest_qga_unavailable", "QEMU guest agent is unavailable; install QGA and its virtio-serial driver, then retry.");
+            var useLegacyWindowsHost = asset.OperatingSystem == TeamLabGuestOperatingSystem.Windows &&
+                await HasLegacyWindowsHostAsync(expectedName, verifyIdentity, readyDeadline.Token);
             progress?.Invoke(new(stage, "succeeded", "QEMU guest agent is ready on the VM control channel."));
 
             stage = "guest-network-verify";
-            var before = await ReadAsync(asset, desired, verifyIdentity, token);
+            var before = await ReadAsync(asset, desired, useLegacyWindowsHost, verifyIdentity, token);
             if (desired.Any(item => before.Count(actual => actual.MacAddress == item.MacAddress) != 1))
                 return new(false, stage, "guest_network_interface_missing",
                     "A declared MAC interface is absent or ambiguous in the guest; check the network driver, then retry.");
@@ -56,7 +58,7 @@ public sealed partial class TeamLabVmNetworkService(IVmGuestAgentClient guest)
 
             stage = "guest-network-apply";
             await RequireIdentityAsync(verifyIdentity, token);
-            var apply = await guest.ExecuteAsync(expectedName, BuildApplyCommand(asset, desired), token, verifyIdentity);
+            var apply = await guest.ExecuteAsync(expectedName, BuildApplyCommand(asset, desired, useLegacyWindowsHost), token, verifyIdentity);
             if (!apply.Success)
             {
                 if (apply.StandardError?.Contains("GZCTF_GUEST_STDIN_UNAVAILABLE", StringComparison.Ordinal) == true)
@@ -80,7 +82,7 @@ public sealed partial class TeamLabVmNetworkService(IVmGuestAgentClient guest)
             {
                 while (true)
                 {
-                    var actual = await ReadAsync(asset, desired, verifyIdentity, deadline.Token);
+                    var actual = await ReadAsync(asset, desired, useLegacyWindowsHost, verifyIdentity, deadline.Token);
                     if (Matches(desired, actual, out mismatch))
                     {
                         progress?.Invoke(new(stage, "succeeded", "Live guest IPv4 addresses, DNS and routes match the plan."));
@@ -124,11 +126,12 @@ public sealed partial class TeamLabVmNetworkService(IVmGuestAgentClient guest)
     }
 
     async Task<IReadOnlyList<GuestInterfaceSnapshot>> ReadAsync(TeamLabAssetExecutionSpecV2 asset,
-        IReadOnlyList<GuestInterfaceRequirement> desired, Func<CancellationToken, Task<bool>>? verifyIdentity,
+        IReadOnlyList<GuestInterfaceRequirement> desired, bool useLegacyWindowsHost,
+        Func<CancellationToken, Task<bool>>? verifyIdentity,
         CancellationToken token)
     {
         await RequireIdentityAsync(verifyIdentity, token);
-        var result = await guest.ExecuteAsync(asset.ResourceId, BuildReadCommand(asset, desired), token, verifyIdentity);
+        var result = await guest.ExecuteAsync(asset.ResourceId, BuildReadCommand(asset, desired, useLegacyWindowsHost), token, verifyIdentity);
         await RequireIdentityAsync(verifyIdentity, token);
         if (result.StandardError?.Contains("GZCTF_GUEST_STDIN_UNAVAILABLE", StringComparison.Ordinal) == true)
             throw new GuestInputException();
@@ -137,6 +140,19 @@ public sealed partial class TeamLabVmNetworkService(IVmGuestAgentClient guest)
         if (!result.Success || string.IsNullOrWhiteSpace(result.StandardOutput))
             throw new InvalidOperationException("Guest network readback failed.");
         return ParseSnapshot(result.StandardOutput);
+    }
+
+    async Task<bool> HasLegacyWindowsHostAsync(string vmName, Func<CancellationToken, Task<bool>>? verifyIdentity,
+        CancellationToken token)
+    {
+        await RequireIdentityAsync(verifyIdentity, token);
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(token);
+        deadline.CancelAfter(TimeSpan.FromSeconds(5));
+        var exists = false;
+        try { exists = await guest.TryFileExistsAsync(vmName, WindowsLegacyPowerShellHostPath, deadline.Token); }
+        catch (OperationCanceledException) when (deadline.IsCancellationRequested && !token.IsCancellationRequested) { }
+        await RequireIdentityAsync(verifyIdentity, token);
+        return exists;
     }
 
     static async Task RequireIdentityAsync(Func<CancellationToken, Task<bool>>? verifyIdentity, CancellationToken token)
@@ -176,13 +192,13 @@ public sealed partial class TeamLabVmNetworkService(IVmGuestAgentClient guest)
     }
 
     internal static VmGuestCommandRequest BuildReadCommand(TeamLabAssetExecutionSpecV2 asset,
-        IReadOnlyList<GuestInterfaceRequirement> desired) => asset.OperatingSystem == TeamLabGuestOperatingSystem.Windows
-        ? WindowsCommand("teamlab-network-read", BuildWindowsReadScript(desired), 30)
+        IReadOnlyList<GuestInterfaceRequirement> desired, bool useLegacyWindowsHost = false) => asset.OperatingSystem == TeamLabGuestOperatingSystem.Windows
+        ? WindowsCommand("teamlab-network-read", BuildWindowsReadScript(desired), 30, useLegacyWindowsHost)
         : new("teamlab-network-read", "/usr/bin/python3", ["-c", BuildLinuxReadScript(desired)], 30);
 
     internal static VmGuestCommandRequest BuildApplyCommand(TeamLabAssetExecutionSpecV2 asset,
-        IReadOnlyList<GuestInterfaceRequirement> desired) => asset.OperatingSystem == TeamLabGuestOperatingSystem.Windows
-        ? WindowsCommand("teamlab-network-apply", BuildWindowsApplyScript(desired), 120)
+        IReadOnlyList<GuestInterfaceRequirement> desired, bool useLegacyWindowsHost = false) => asset.OperatingSystem == TeamLabGuestOperatingSystem.Windows
+        ? WindowsCommand("teamlab-network-apply", BuildWindowsApplyScript(desired), 120, useLegacyWindowsHost)
         : new("teamlab-network-apply", "/usr/bin/timeout", ["--signal=TERM", "240", "/usr/bin/python3", "-c", BuildLinuxApplyScript(desired)], 250);
 
     internal const string WindowsStdinLauncher = """
@@ -193,9 +209,12 @@ public sealed partial class TeamLabVmNetworkService(IVmGuestAgentClient guest)
         & ([scriptblock]::Create($source))
         """;
 
-    static VmGuestCommandRequest WindowsCommand(string id, string script, int timeout) => new(id,
-        VmBootstrapService.WindowsPowerShellPath,
-        ["-NoProfile", "-NonInteractive", "-EncodedCommand", Convert.ToBase64String(Encoding.Unicode.GetBytes(WindowsStdinLauncher))], timeout)
+    internal const string WindowsLegacyPowerShellHostPath = @"C:\YINYU-QGA\LegacyPowerShellHost.exe";
+
+    static VmGuestCommandRequest WindowsCommand(string id, string script, int timeout, bool useLegacyWindowsHost) => new(id,
+        useLegacyWindowsHost ? WindowsLegacyPowerShellHostPath : VmBootstrapService.WindowsPowerShellPath,
+        useLegacyWindowsHost ? [] :
+            ["-NoProfile", "-NonInteractive", "-EncodedCommand", Convert.ToBase64String(Encoding.Unicode.GetBytes(WindowsStdinLauncher))], timeout)
         { StandardInput = script };
 
     internal static IReadOnlyList<GuestInterfaceSnapshot> ParseSnapshot(string xml)
