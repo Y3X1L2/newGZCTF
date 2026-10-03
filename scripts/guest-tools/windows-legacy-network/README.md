@@ -6,7 +6,7 @@ fails under QGA (for example, Server 2008 R2 reporting
 engine directly; it does not upgrade Windows, load a user profile, register a
 service, change execution policy, or open a network listener.
 
-The Agent looks for exactly `C:\YINYU-QGA\LegacyPowerShellHost.exe`. When present,
+The Agent looks for exactly `C:\Program Files\YINYU-GuestTools\LegacyPowerShellHost.exe`. When present,
 Windows ManagedStatic read/apply/verify use this host for that operation. When it
 is absent, the stock PowerShell command remains in use. Host execution failures
 are failures; the Agent does not repeat a write through a second interpreter.
@@ -19,7 +19,7 @@ The recipe targets the tested Server 2008 R2 .NET 2/PowerShell 2 SDK layout; oth
 Windows versions may have a different assembly location. Do not copy another
 system's Windows assemblies into the image.
 
-The component must reside in an administrator/SYSTEM-managed directory. Before
+The component resides beneath the standard protected Program Files parent. Before
 publishing, verify that unprivileged users cannot overwrite or replace the host,
 the directory, or its parent. Keep any ACL backup with private preparation
 evidence, not in Git. The normal platform instance access policy remains separate.

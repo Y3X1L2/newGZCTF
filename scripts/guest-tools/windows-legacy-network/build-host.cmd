@@ -1,6 +1,6 @@
 @echo off
 setlocal
-set "task_host_dir=C:\YINYU-QGA"
+set "task_host_dir=C:\Program Files\YINYU-GuestTools"
 set "task_compiler=%SystemRoot%\Microsoft.NET\Framework64\v2.0.50727\csc.exe"
 set "task_assembly=%SystemRoot%\assembly\GAC_MSIL\System.Management.Automation\1.0.0.0__31bf3856ad364e35\System.Management.Automation.dll"
 if not exist "%task_compiler%" (
