@@ -43,10 +43,27 @@ public sealed partial class TeamLabVmNetworkService(IVmGuestAgentClient guest)
             progress?.Invoke(new(stage, "succeeded", "QEMU guest agent is ready on the VM control channel."));
 
             stage = "guest-network-verify";
-            var before = await ReadAsync(asset, desired, useLegacyWindowsHost, verifyIdentity, token);
-            if (desired.Any(item => before.Count(actual => actual.MacAddress == item.MacAddress) != 1))
+            IReadOnlyList<GuestInterfaceSnapshot> before;
+            try
+            {
+                // QGA can answer before Windows PnP/WMI exposes the new NICs.
+                // Share the existing readiness budget; do not write until every MAC is unique.
+                while (true)
+                {
+                    before = await ReadAsync(asset, desired, useLegacyWindowsHost, verifyIdentity, readyDeadline.Token);
+                    if (desired.Any(item => before.Count(actual => actual.MacAddress == item.MacAddress) > 1))
+                        return new(false, stage, "guest_network_interface_missing",
+                            "A declared MAC interface is ambiguous in the guest; check the network driver, then retry.");
+                    if (desired.All(item => before.Count(actual => actual.MacAddress == item.MacAddress) == 1))
+                        break;
+                    await Task.Delay(PollInterval, readyDeadline.Token);
+                }
+            }
+            catch (OperationCanceledException) when (!token.IsCancellationRequested)
+            {
                 return new(false, stage, "guest_network_interface_missing",
-                    "A declared MAC interface is absent or ambiguous in the guest; check the network driver, then retry.");
+                    "A declared MAC interface did not appear before the guest readiness deadline; check the network driver, then retry.");
+            }
             if (Matches(desired, before, out _))
             {
                 progress?.Invoke(new("guest-network-apply", "already_applied", "The declared MAC interfaces already match the plan."));

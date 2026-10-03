@@ -87,11 +87,85 @@ public sealed class TeamLabManagedVmNetworkTests
     public async Task MissingDriverOrMac_FailsBeforeAnyConfiguration()
     {
         var plan = Plan();
-        var guest = new FakeGuest();
-        guest.Reads.Enqueue("<network/>");
-        var result = await Service(guest).ApplyAsync(plan, plan.Assets[0], false, CancellationToken.None);
+        var guest = new FakeGuest { DefaultRead = "<network/>" };
+        var result = await Service(guest, TimeSpan.FromMilliseconds(100)).ApplyAsync(plan, plan.Assets[0], false, CancellationToken.None);
         Assert.False(result.Success);
         Assert.Equal("guest_network_interface_missing", result.ErrorCode);
+        Assert.NotEmpty(guest.Commands);
+        Assert.All(guest.Commands, command => Assert.Equal("teamlab-network-read", command.StepId));
+    }
+
+    [Theory]
+    [InlineData(TeamLabGuestOperatingSystem.Windows)]
+    [InlineData(TeamLabGuestOperatingSystem.Linux)]
+    public async Task QgaReadyBeforeNic_WaitsForMacBeforeApplying(TeamLabGuestOperatingSystem os)
+    {
+        var plan = Plan(os: os);
+        var guest = new FakeGuest();
+        guest.Reads.Enqueue("<network/>");
+        guest.Reads.Enqueue(Drift);
+        guest.Reads.Enqueue(Matching);
+        var result = await Service(guest).ApplyAsync(plan, plan.Assets[0], false, CancellationToken.None);
+        Assert.True(result.Success);
+        Assert.Equal(new[] { "teamlab-network-read", "teamlab-network-read", "teamlab-network-apply", "teamlab-network-read" },
+            guest.Commands.Select(item => item.StepId));
+    }
+
+    [Fact]
+    public async Task OneOfTwoNicsDelayed_DoesNotApplyTheAvailableNicAlone()
+    {
+        const string secondMac = "02:42:29:19:d6:15";
+        var plan = Plan();
+        var second = new TeamLabNetworkIntentV2("internal", "10.97.1.0/24", "10.97.1.1",
+            [new("internal-port", "linux-vm", secondMac, "10.97.1.20")], [], []);
+        var asset = plan.Assets[0] with { NetworkAttachments = plan.Assets[0].NetworkAttachments.Concat([
+            new TeamLabAssetNetworkAttachmentV2("internal", "internal-port", "eth1", "10.97.1.20", null, false,
+                InterfaceKey: "internal-nic", MacAddress: secondMac, PrefixLength: 24, DnsServers: [], UseDefaultGateway: false)
+        ]).ToArray() };
+        plan = plan with { Networks = [plan.Networks[0], second], Assets = [asset] };
+        var matching = Matching.Replace("</network>", "<interface mac='" + secondMac +
+            "' name='ens4' dhcp='false'><address ip='10.97.1.20' prefix='24'/></interface></network>");
+        var guest = new FakeGuest();
+        guest.Reads.Enqueue(Matching);
+        guest.Reads.Enqueue(matching);
+        var result = await Service(guest).ApplyAsync(plan, asset, false, CancellationToken.None);
+        Assert.True(result.Success);
+        Assert.Equal(2, guest.Commands.Count);
+        Assert.All(guest.Commands, command => Assert.Equal("teamlab-network-read", command.StepId));
+    }
+
+    [Fact]
+    public async Task DuplicateMac_IsRejectedWithoutWaitingOrWriting()
+    {
+        var plan = Plan();
+        var guest = new FakeGuest();
+        guest.Reads.Enqueue(Matching.Replace("</network>", "<interface mac='" + Mac + "'/></network>"));
+        var result = await Service(guest).ApplyAsync(plan, plan.Assets[0], false, CancellationToken.None);
+        Assert.Equal("guest_network_interface_missing", result.ErrorCode);
+        Assert.Single(guest.Commands);
+    }
+
+    [Fact]
+    public async Task CancellationDuringNicWait_PropagatesWithoutWriting()
+    {
+        var plan = Plan();
+        using var cancellation = new CancellationTokenSource();
+        var guest = new FakeGuest { DefaultRead = "<network/>", OnRead = cancellation.Cancel };
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            Service(guest).ApplyAsync(plan, plan.Assets[0], false, cancellation.Token));
+        Assert.Single(guest.Commands);
+        Assert.Equal("teamlab-network-read", guest.Commands[0].StepId);
+    }
+
+    [Fact]
+    public async Task IdentityChangesDuringNicWait_BlocksTheNextReadAndAllWrites()
+    {
+        var plan = Plan();
+        var identityValid = true;
+        var guest = new FakeGuest { DefaultRead = "<network/>", OnRead = () => identityValid = false };
+        var result = await Service(guest).ApplyAsync(plan, plan.Assets[0], false, CancellationToken.None,
+            verifyIdentity: _ => Task.FromResult(identityValid));
+        Assert.Equal("guest_identity_conflict", result.ErrorCode);
         Assert.Single(guest.Commands);
     }
 
@@ -944,9 +1018,9 @@ public sealed class TeamLabManagedVmNetworkTests
         Assert.Equal(expected, AgentCapabilityService.SupportsManagedGuestNetwork(features, virsh));
     }
 
-    static TeamLabVmNetworkService Service(FakeGuest guest) => new(guest)
+    static TeamLabVmNetworkService Service(FakeGuest guest, TimeSpan? readyTimeout = null) => new(guest)
     {
-        VerifyTimeout = TimeSpan.FromMilliseconds(20), PollInterval = TimeSpan.FromMilliseconds(2)
+        ReadyTimeout = readyTimeout ?? TimeSpan.FromSeconds(5), VerifyTimeout = TimeSpan.FromMilliseconds(20), PollInterval = TimeSpan.FromMilliseconds(2)
     };
 
     static TeamLabExecutionPlanV2 Plan(TeamLabGuestNetworkMode mode = TeamLabGuestNetworkMode.ManagedStatic,
@@ -975,6 +1049,8 @@ public sealed class TeamLabManagedVmNetworkTests
         public Action? OnProbe { get; init; }
         public List<(string VmName, string Path)> FileProbes { get; } = [];
         public VmGuestCommandResponse? ReadFailure { get; init; }
+        public string DefaultRead { get; init; } = Drift;
+        public Action? OnRead { get; init; }
         public VmGuestCommandResponse ApplyResult { get; init; } = new(true, false, 0, "succeeded", null, null);
         public Task<bool> TryFileExistsAsync(string vmName, string guestPath, CancellationToken token)
         {
@@ -998,8 +1074,9 @@ public sealed class TeamLabManagedVmNetworkTests
             token.ThrowIfCancellationRequested();
             Commands.Add(command);
             VmNames.Add(vmName);
+            if (command.StepId != "teamlab-network-apply") OnRead?.Invoke();
             return Task.FromResult(command.StepId == "teamlab-network-apply" ? ApplyResult :
-                ReadFailure ?? new(true, false, 0, "succeeded", Reads.Count > 0 ? Reads.Dequeue() : Drift, null));
+                ReadFailure ?? new(true, false, 0, "succeeded", Reads.Count > 0 ? Reads.Dequeue() : DefaultRead, null));
         }
     }
 }
