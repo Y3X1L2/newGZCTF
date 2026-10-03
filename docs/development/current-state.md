@@ -1,5 +1,12 @@
 # YINYU 当前开发状态
 
+## 旧Windows可选网络执行宿主：候选已验证、未部署（2026-10-03）
+
+- codex/teamlab-managed-network新增固定Program Files可选宿主选择，现代Windows保持原路径；同次read/apply/verify统一执行方式，不在写失败后换程序重写。工具源和镜像制作配方在scripts/guest-tools/windows-legacy-network；无DTO/迁移/前端变更。
+- 真实VM121（Server2008R2）QGA基本功能正常，原PowerShell后台ConsoleHost的GetActiveScreenBufferHandle异常已定位。新宿主直接调用已安装引擎，正式路径执行实际平台只读脚本退出0，原IP/DNS保持；Program Files目录Users仅读取/执行。原型错误流、空输入和原生命令检查通过。
+- 子代理最终单元1276/1276、定向112/112及Agent Release构建通过；主任务集成定向112/112、linux-x64发布通过。数据库集成因本机Docker不可用未跑，前端未改未重复门禁。新Agent尚未部署；新网卡写入/回读、四机新镜像、整套新建/重置未验收，VSS仍未修复。
+- 当前服务器活动release和Agent仍为下述10月2日版本，主站/Agent active、Config200。详细证据与部署边界见[旧Windows交接](handoffs/2026-10-03-teamlab-windows-legacy-network-agent.md)。
+
 ## TeamLab 自动网络配置：已部署并完成限定实机验收（2026-10-02）
 
 - 分支 `codex/teamlab-managed-network` 从 `origin/main bc3599aa` 建立并合入当前服务器在用的 Windows 网络分支；主工作区和本地教学问答分支保留，未合并 main。实现 DHCP/平台静态两种新建方式、VM逐网卡IP/DNS/网关/路由、发布冻结/重置/更新、QGA应用与真实回读；新要求仅用于VM，Docker保持既有行为。旧预配置模式只保留存量读取，不增加复杂修补系统。

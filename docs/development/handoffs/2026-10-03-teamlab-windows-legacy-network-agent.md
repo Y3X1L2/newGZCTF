@@ -1,5 +1,15 @@
 # TeamLab 旧 Windows 可选网络宿主：Agent 集成交接
 
+## 主任务真实客户机补充（2026-10-03）
+
+- VM121的QGA100.0.0基本回应、CMD和input-data正常；Windows错误报告明确原PowerShell CLI失败为System.ComponentModel.Win32Exception，ConsoleControl.GetActiveScreenBufferHandle。引擎组件存在，后台ConsoleHost失败不能当作QGA离线。
+- 已提交可审核的.NET2引擎宿主及build-host.cmd，位于scripts/guest-tools/windows-legacy-network；通过Runspace直接使用已有PowerShell引擎，不加载profile、注册服务、改策略或增加网络监听。空输入返回78及既有标记，输入限64KiB，异常/错误流返回非零；原生失败由实际网络脚本检查并抛出。
+- 在原VM121正式路径C:\Program Files\YINYU-GuestTools\LegacyPowerShellHost.exe通过QGA运行实际Agent生成的只读脚本，退出0，中文网卡名、172.22.1.21/24、DNS172.22.1.2均正确。目录继承Program Files受保护权限，Users为RX/GR/GE，没有写入权限；管理员/SYSTEM有完全控制。宿主5120字节，SHA256为1f644854da4837f98b4cad7b4767979d77a61eed8b8cfb7cd8411f903e121afd；编译路径不同可能改变输出摘要，不能只拿旧原型摘要判断正式构建。
+- 原型真实输入/读取、空输入、throw、Write-Error、netsh只读及检查原生失败用例通过；未改网络/题目业务。正式完整网络写入、新MAC、重启恢复、平台新建/重置/销毁仍未验收；VSS/COM+未修复，不能宣称在线冻结/备份支持。
+- Agent代码合入任务分支：初始集成b1b80e51、工具源081fd83f、制作路径e8ff712a、保护路径集成8637e087。子代理最终全量单元1276/1276、定向112/112、Agent Release构建0警告0错误；主任务最终集成定向112/112及linux-x64单文件publish通过。数据库集成未执行（Docker daemon不可用、无迁移/数据库改动），前端无改动未重复门禁。
+- 10.24.0.27现场仍为teamlab-managed-fa97187c-20261002/publish，主站/Agent active、Config200；实际与内置Agent摘要仍c7b66c3408e3328bcc56f2577a9e363abc06f129c597d6c7acd4009ebb52ede8。本次候选尚未部署，部署前按用户要求确认具体发布物。原镜像506–509、PVE源机、快照、旧release和实验产物保留。
+- 仓库外证据及发布物在D:/Work/YINYU-Lab2-20260929/windows121-readiness-20261003；其中formal-host-ready.json、powershell-host-validation.json及powershell-fault-signatures.json记录上述验证。教学笔记仅在独立学习分支本地提交，不推送。实验VPN曾短暂中断，恢复后两端连通；后续连接异常应立即告知用户。
+
 ## 任务目标与基线
 
 - 用户目标：继续平台静态网络开发；服务器部署前仍须确认。
