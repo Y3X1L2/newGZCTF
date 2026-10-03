@@ -1,5 +1,12 @@
 # YINYU 当前开发状态
 
+## Lab2 release-v2：镜像检查通过，存储事故已应急恢复（2026-10-03）
+
+- PVE118–121 release-v2及实际QGA脚本前提通过，四机正常关机导出，check/compare/SHA及传输后复核通过，共约13.6GiB。用户明确批准正常销毁旧Lab2以沿用原IP，旧runtime已destroyed；原PVE/快照/旧模板/其它环境保留。新四图尚未完成导入，新场景未启动。
+- 导入首图时PVE共享pve/data428.66GiB达到Data100%，112/113/114 io-error；宿主和来宾df空闲不能代表thin pool余量。已VG备份后增加8GiB缓冲、恢复三VM及fstrim，池436.66GiB且92.28%，VG仍余8GiB。主站/Agent active、Config200、Registry active/v2 200，原教学容器Up；没有文件/快照清理。
+- 112 images/teamlab大盘bind仍有效，但上传两处暂存仍在根盘；113原生Registry数据104GiB仍在小池。永久迁移113到新增500GiB大盘的方案已具体落盘，等待用户批准，未执行。首导入operation终态Failed，临时身份已撤销204；.31调度为本任务暂false、原true，需完成或退出后恢复。
+- 本轮无源码/发布/数据库写入（指定operation只读核验），真实证据/限制/接手入口见[release-v2存储交接](handoffs/2026-10-03-lab2-release-v2-storage-block.md)。下述Agent部署事实仍有效，不能把镜像导出成功当作四机场景签收。
+
 ## 旧Windows可选网络执行宿主：Agent已部署，普通Windows回归通过（2026-10-03）
 
 - codex/teamlab-managed-network新增固定Program Files可选宿主选择，现代Windows保持原路径；同次read/apply/verify统一执行方式，不在写失败后换程序重写。工具源和镜像制作配方在scripts/guest-tools/windows-legacy-network；无DTO/迁移/前端变更。
