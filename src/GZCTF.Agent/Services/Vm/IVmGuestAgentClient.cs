@@ -6,6 +6,8 @@ namespace GZCTF.Agent.Services.Vm;
 public interface IVmGuestAgentClient
 {
     Task<VmGuestStatusResponse> WaitReadyAsync(string vmName, TimeSpan timeout, CancellationToken cancellationToken);
+    /// <summary>Read-only optional tool probe; absent files and unsupported file RPCs return false.</summary>
+    Task<bool> TryFileExistsAsync(string vmName, string guestPath, CancellationToken cancellationToken);
     Task<VmGuestCommandResponse> ExecuteAsync(string vmName, VmGuestCommandRequest command,
         CancellationToken cancellationToken, Func<CancellationToken, Task<bool>>? verifyIdentity = null);
 }

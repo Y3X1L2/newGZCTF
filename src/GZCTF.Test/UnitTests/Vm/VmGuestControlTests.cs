@@ -170,6 +170,26 @@ public sealed class VmGuestControlTests
         Assert.Equal("port=8080", rendered);
     }
 
+    [Theory]
+    [InlineData("No such file or directory", true)]
+    [InlineData("cannot find the path specified", true)]
+    [InlineData("{\"class\":\"CommandNotFound\"}", true)]
+    [InlineData("{\"class\":\"CommandDisabled\"}", true)]
+    [InlineData("permission denied", false)]
+    [InlineData("libvirt domain not found", false)]
+    [InlineData("QGA returned malformed JSON", false)]
+    public void OptionalGuestFileProbe_DistinguishesAbsentOrUnsupportedFromRealErrors(string message, bool unavailable) =>
+        Assert.Equal(unavailable, VmGuestAgentService.IsOptionalFileProbeUnavailableError(message));
+
+    [Theory]
+    [InlineData(@"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe", true)]
+    [InlineData(@"C:\YINYU-QGA\LegacyPowerShellHost.exe", true)]
+    [InlineData(@"c:\yinyu-qga\legacypowershellhost.exe", true)]
+    [InlineData(@"C:\YINYU-QGA\Other.exe", false)]
+    [InlineData("/usr/bin/python3", false)]
+    public void GuestNetworkTimeoutCleanup_UsesWindowsTaskkillForTheFixedOptionalHost(string path, bool windows) =>
+        Assert.Equal(windows, VmGuestAgentService.IsWindowsCommandPath(path));
+
     [Fact]
     public void BootstrapStepCheckpoints_RequireStableIdsAndRecognizeMissingGuestFiles()
     {

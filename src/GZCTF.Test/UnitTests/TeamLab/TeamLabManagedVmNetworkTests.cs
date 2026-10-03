@@ -812,6 +812,109 @@ public sealed class TeamLabManagedVmNetworkTests
     }
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task WindowsManagedNetwork_SelectsOneHostAndPreservesScriptInput(bool helperPresent)
+    {
+        var plan = Plan(os: TeamLabGuestOperatingSystem.Windows);
+        var guest = new FakeGuest { HelperPresent = helperPresent };
+        guest.Reads.Enqueue(Drift);
+        guest.Reads.Enqueue(Matching);
+        var result = await Service(guest).ApplyAsync(plan, plan.Assets[0], false, CancellationToken.None);
+        Assert.True(result.Success);
+        Assert.Equal([(plan.Assets[0].ResourceId, TeamLabVmNetworkService.WindowsLegacyPowerShellHostPath)], guest.FileProbes);
+        Assert.Equal(new[] { "teamlab-network-read", "teamlab-network-apply", "teamlab-network-read" }, guest.Commands.Select(item => item.StepId));
+        var desired = TeamLabVmNetworkService.ResolveInterfaces(plan, plan.Assets[0]);
+        foreach (var command in guest.Commands)
+        {
+            Assert.Equal(helperPresent ? TeamLabVmNetworkService.WindowsLegacyPowerShellHostPath : VmBootstrapService.WindowsPowerShellPath, command.Path);
+            Assert.Equal(command.StepId == "teamlab-network-apply" ? 120 : 30, command.TimeoutSeconds);
+            Assert.Equal(command.StepId == "teamlab-network-apply" ? TeamLabVmNetworkService.BuildWindowsApplyScript(desired) :
+                TeamLabVmNetworkService.BuildWindowsReadScript(desired), command.StandardInput);
+            if (helperPresent) Assert.Empty(command.Arguments);
+            Assert.True(VmGuestAgentService.BuildGuestExecArguments(command).ContainsKey("input-data"));
+            Assert.DoesNotContain(command.StandardInput!, command.ToString());
+        }
+    }
+
+    [Theory]
+    [InlineData(TeamLabGuestOperatingSystem.Linux, TeamLabGuestNetworkMode.ManagedStatic)]
+    [InlineData(TeamLabGuestOperatingSystem.Windows, TeamLabGuestNetworkMode.Dhcp)]
+    [InlineData(TeamLabGuestOperatingSystem.Windows, TeamLabGuestNetworkMode.Preconfigured)]
+    public async Task OptionalHostProbe_IsLimitedToManagedWindows(TeamLabGuestOperatingSystem os, TeamLabGuestNetworkMode mode)
+    {
+        var plan = Plan(mode, os);
+        var guest = new FakeGuest { HelperPresent = true };
+        guest.Reads.Enqueue(Matching);
+        Assert.True((await Service(guest).ApplyAsync(plan, plan.Assets[0], false, CancellationToken.None)).Success);
+        Assert.Empty(guest.FileProbes);
+    }
+
+    [Theory]
+    [InlineData(false, null, "guest_network_apply_failed")]
+    [InlineData(true, null, "guest_network_apply_timeout")]
+    [InlineData(false, "GZCTF_GUEST_STDIN_UNAVAILABLE", "guest_qga_stdin_unavailable")]
+    public async Task OptionalHostApplyFailure_PreservesTypedFailureAndNeverRetriesTheWrite(
+        bool timedOut, string? marker, string expectedCode)
+    {
+        var plan = Plan(os: TeamLabGuestOperatingSystem.Windows);
+        var guest = new FakeGuest { HelperPresent = true,
+            ApplyResult = new(false, timedOut, 1, "failed", "private payload", marker ?? "private diagnostics") };
+        guest.Reads.Enqueue(Drift);
+        var result = await Service(guest).ApplyAsync(plan, plan.Assets[0], false, CancellationToken.None);
+        Assert.False(result.Success);
+        Assert.Equal(expectedCode, result.ErrorCode);
+        Assert.Equal(2, guest.Commands.Count);
+        Assert.All(guest.Commands, command => Assert.Equal(TeamLabVmNetworkService.WindowsLegacyPowerShellHostPath, command.Path));
+        Assert.DoesNotContain("private", result.Message);
+    }
+
+    [Fact]
+    public async Task OptionalHostReadFailure_CannotReportSuccessOrFallbackToAnotherHost()
+    {
+        var plan = Plan(os: TeamLabGuestOperatingSystem.Windows);
+        var guest = new FakeGuest { HelperPresent = true, ReadFailure = new(false, false, 1, "failed", "private data", "private error") };
+        var result = await Service(guest).ApplyAsync(plan, plan.Assets[0], false, CancellationToken.None);
+        Assert.Equal("guest_network_control_failed", result.ErrorCode);
+        Assert.Equal(TeamLabVmNetworkService.WindowsLegacyPowerShellHostPath, Assert.Single(guest.Commands).Path);
+        Assert.DoesNotContain("private", result.Message);
+    }
+
+    [Fact]
+    public async Task OptionalHostProbe_UnknownFailureIsNotTreatedAsMissing()
+    {
+        var plan = Plan(os: TeamLabGuestOperatingSystem.Windows);
+        var guest = new FakeGuest { ProbeFailure = new InvalidOperationException("private QGA permission denied") };
+        var result = await Service(guest).ApplyAsync(plan, plan.Assets[0], false, CancellationToken.None);
+        Assert.Equal("guest_network_control_failed", result.ErrorCode);
+        Assert.DoesNotContain("private", result.Message);
+        Assert.Empty(guest.Commands);
+    }
+
+    [Fact]
+    public async Task OptionalHostProbe_IdentityChangePreventsGuestExecution()
+    {
+        var plan = Plan(os: TeamLabGuestOperatingSystem.Windows);
+        var guest = new FakeGuest { HelperPresent = true };
+        var checks = 0;
+        var result = await Service(guest).ApplyAsync(plan, plan.Assets[0], false, CancellationToken.None,
+            verifyIdentity: _ => Task.FromResult(++checks < 3));
+        Assert.Equal("guest_identity_conflict", result.ErrorCode);
+        Assert.Single(guest.FileProbes);
+        Assert.Empty(guest.Commands);
+    }
+
+    [Fact]
+    public async Task OptionalHostProbe_CallerCancellationPropagates()
+    {
+        var plan = Plan(os: TeamLabGuestOperatingSystem.Windows);
+        using var cancellation = new CancellationTokenSource();
+        var guest = new FakeGuest { OnProbe = cancellation.Cancel };
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => Service(guest).ApplyAsync(plan, plan.Assets[0], false, cancellation.Token));
+        Assert.Empty(guest.Commands);
+    }
+
+    [Theory]
     [InlineData("guest-ready")]
     [InlineData("guest-network-apply")]
     [InlineData("guest-network-verify")]
@@ -859,8 +962,21 @@ public sealed class TeamLabManagedVmNetworkTests
         public Queue<string> Reads { get; } = new();
         public List<VmGuestCommandRequest> Commands { get; } = [];
         public List<string> VmNames { get; } = [];
+        public bool HelperPresent { get; init; }
+        public Exception? ProbeFailure { get; init; }
+        public Action? OnProbe { get; init; }
+        public List<(string VmName, string Path)> FileProbes { get; } = [];
         public VmGuestCommandResponse? ReadFailure { get; init; }
         public VmGuestCommandResponse ApplyResult { get; init; } = new(true, false, 0, "succeeded", null, null);
+        public Task<bool> TryFileExistsAsync(string vmName, string guestPath, CancellationToken token)
+        {
+            token.ThrowIfCancellationRequested();
+            FileProbes.Add((vmName, guestPath));
+            OnProbe?.Invoke();
+            token.ThrowIfCancellationRequested();
+            if (ProbeFailure is { } error) throw error;
+            return Task.FromResult(HelperPresent);
+        }
         public Task<VmGuestStatusResponse> WaitReadyAsync(string vmName, TimeSpan timeout, CancellationToken token)
         {
             token.ThrowIfCancellationRequested();
