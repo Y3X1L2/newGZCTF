@@ -1,13 +1,13 @@
 # YINYU 当前开发状态
 
-## TeamLab 管理后台与受管网络集成候选（2026-10-04）
+## TeamLab 管理后台与受管网络：已合并 main 并部署 .27（2026-10-04）
 
-- 分支 `codex/teamlab-admin-redesign-integration` 从 `origin/main bc3599aa` 创建，正常合并 `origin/codex/teamlab-managed-network f36a491d` 和 `origin/codex/teamlab-admin-redesign bff10f0f`；合并提交为 `cb13cd45`、`263928a6`，未改写两条来源分支历史，未合并 `main`。
-- 集成保留已部署验证的 VM 受管网络链路及管理后台重设计。冲突处理中重新生成内部 API 客户端，并修正资产执行定义转换：镜像制品引用与 VM 网络默认同时保留，资产替换完整往返 `VmNetworkMode`、接口名、默认网关、DNS 和静态路由；事件工作区保留重设计详情抽屉并显示来宾网络阶段中文名称。
-- 前端完整门禁通过：locale、lint、严格 TypeScript、架构检查、113 个测试文件/376 项测试、生产构建、制品清单和体积预算。Release 解决方案构建通过，后端单元 1284/1284、PostgreSQL/Testcontainers 集成 304/304 通过；OpenAPI 由合并后 TestServer 导出并重新生成客户端。
-- 新增迁移分支专项覆盖真实升级顺序：数据库已记录 `20261001145237_AddTeamLabManagedGuestNetwork`、但缺少较早的 `20260930164900_AddSystemLogResourceIndex` 时，EF 可只补应用日志索引，受管网络 5 个列保持完整，最终无待应用迁移。日志索引在生产仍需维护窗口和新鲜备份副本验证，不能以本地 Testcontainers 代替锁表评估。
-- 本地 fixture 在 390、1366、1920、2560 宽度完成日间/夜间、键盘焦点和操作、reduced-motion、横向溢出与布局检查；覆盖场景草稿、发布就绪、逐网卡网络、资源登记、资产编排、SSH/VNC、服务开放、生命周期和运行事件。该证据不是生产 API、文件、远程会话或真实 VM 执行验收。
-- 本轮没有连接或修改 `10.24.0.27`、数据库、Agent、Registry 或网关，也没有重置或销毁保留的 Lab2 generation 4 四机。生产活动目录、源码和 Agent 摘要仍以 2026-10-03 网卡就绪交接为最近确认事实；容量上报读取根盘的缺口未扩大处理。
+- PR #11 已正常合并到 `main 3090b98a04eecb74fbe47de36d10d3e56d5c47b4`，与集成候选 b486e703 源码树相同，保留完整历史；main Quality CI 37188421017 success。候选后端单元 1284/1284、集成 304/304、Release 构建通过；本地前端 113 文件/376 测试及完整门禁通过。
+- 用户明确批准部署，`.27` 当前主站/前端活动目录 `/opt/gzctf/releases/teamlab-admin-3090b98a-20261004/publish`，前端 manifest 为 3090b98a；Main DLL SHA256 `2846d6f795a5e8796b7c3dca6997e30735ed52c62cde2f7639cc1ff68b0f332a`。Agent 保留 cc6c5737，SHA256 `9b2142e9731d77495322e20a100432a728cf3d86f87dc67abebf85ed58a9b3e8`，同一 PID 未重启；`.30/.31` 未升级。
+- 新完整备份 `/opt/gzctf/backups/teamlab-admin-3090b98a-20261004` 全文读取/五摘要通过，完整恢复到独立副本并验证仅补缺失日志资源索引：149→150 migration、pending 0、核心表行数及全列结构保持、父及五分区索引 valid/ready。副本迁移 102.09 秒，生产新增索引及原子切换维护 140.2 秒；生产不执行已暴露解析错误的全历史脚本，采用 EF 官方缺失索引 delta。只删除本任务验证库；原备份/发布/日志保留。
+- 实际服务 Main/Agent active、NRestarts 0，首页/Config 200、队列 0、节点在线及恢复可调度、519–522 镜像 Ready。真实新版 GUI 管理员登录、设计/试运行/概览/资产/网络/活动页通过；DC 与旧 Windows 的 VNC 临时会话创建/连接地址/关闭通过，未做桌面登录。
+- 原 Lab2 runtime `01a1022f-7e91-7ad3-8309-833af4771430` generation 4、四 VM 同一身份持续运行，部署前后 QGA/MAC/IP/DNS/路由与限定通信 passed；没有重置或再配置网络。独立 Docker 测试正常创建、私网 HTTP 200、测试文件上传下载删除一致、正常销毁且容器残留 0；临时拓扑/发布记录保留复用，原四机/PVE/快照/镜像/Registry/公网网关保留。学习资料只留本地。
+- 最终根盘约 77.7 GiB、images/teamlab 独立盘约 80.2 GiB 可用。真实图形登录、四机重置/双副本、跨节点故障、公网与其它业务链本轮未验收；远端旧 Agent、容量上报根盘缺口和全历史 SQL 解析缺口待独立处理。完整身份、回退、实机范围及证据见[main 发布交接](handoffs/2026-10-04-teamlab-admin-main-rollout.md)。
 
 ## TeamLab网卡就绪等待：Agent已部署，Lab2四机基础网络通过（2026-10-03）
 
