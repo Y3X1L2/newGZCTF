@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Net;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -463,7 +462,8 @@ public sealed class LibvirtTeamLabProvider(
         var iso = Path.Combine(root, "seed.iso");
         await File.WriteAllTextAsync(metaData,
             $"instance-id: {StableUuid(plan, asset)}\nlocal-hostname: {asset.AssetKey}\n", token);
-        await File.WriteAllTextAsync(userData, "#cloud-config\nmanage_etc_hosts: true\n", token);
+        await File.WriteAllTextAsync(userData, asset.NetworkMode == TeamLabGuestNetworkMode.ManagedStatic
+            ? "#cloud-config\n{}\n" : "#cloud-config\nmanage_etc_hosts: true\n", token);
         await File.WriteAllTextAsync(networkConfig, config, token);
 
         var tool = ResolveExecutable("cloud-localds", "genisoimage", "mkisofs", "xorriso")
@@ -497,8 +497,21 @@ public sealed class LibvirtTeamLabProvider(
         foreach (var argument in arguments)
             process.StartInfo.ArgumentList.Add(argument);
         process.Start();
-        var error = await process.StandardError.ReadToEndAsync(token);
-        await process.WaitForExitAsync(token);
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(token);
+        deadline.CancelAfter(TimeSpan.FromSeconds(30));
+        string error;
+        try
+        {
+            var readError = process.StandardError.ReadToEndAsync(deadline.Token);
+            await process.WaitForExitAsync(deadline.Token);
+            error = await readError;
+        }
+        catch (OperationCanceledException)
+        {
+            if (!process.HasExited) process.Kill(entireProcessTree: true);
+            await process.WaitForExitAsync(CancellationToken.None);
+            throw;
+        }
         if (process.ExitCode != 0 || !File.Exists(iso) || new FileInfo(iso).Length == 0)
             throw new InvalidOperationException($"Failed to create VM network seed: {error.Trim()}");
         return iso;
@@ -521,17 +534,21 @@ public sealed class LibvirtTeamLabProvider(
         TeamLabExecutionPlanV2 plan,
         TeamLabAssetExecutionSpecV2 asset)
     {
+        if (asset.OperatingSystem == TeamLabGuestOperatingSystem.Windows ||
+            asset.NetworkMode == TeamLabGuestNetworkMode.Preconfigured) return null;
+        if (asset.NetworkMode == TeamLabGuestNetworkMode.ManagedStatic)
+            return BuildManagedNoCloudNetworkConfig(TeamLabVmNetworkService.ResolveInterfaces(plan, asset));
         var configured = asset.NetworkAttachments
             .Select((attachment, index) =>
             {
                 var network = plan.Networks.SingleOrDefault(item => item.Key == attachment.NetworkKey);
                 var port = network?.Ports.SingleOrDefault(item => item.Key == attachment.PortKey);
-                var prefix = network?.Cidr.Split('/').LastOrDefault();
-                return new { Attachment = attachment, Index = index, Network = network, Port = port, Prefix = prefix };
+                return new { Attachment = attachment, Index = index, Network = network, Port = port };
             })
             .Where(item => item.Network is not null && item.Port is not null &&
-                           IPAddress.TryParse(item.Attachment.IpAddress, out _) &&
-                           int.TryParse(item.Prefix, out var prefix) && prefix is >= 1 and <= 32)
+                           item.Network.DhcpLeases?.Any(lease =>
+                               string.Equals(lease.MacAddress, item.Port.MacAddress,
+                                   StringComparison.OrdinalIgnoreCase)) == true)
             .ToArray();
         if (configured.Length == 0) return null;
 
@@ -542,13 +559,40 @@ public sealed class LibvirtTeamLabProvider(
             builder.AppendLine("    match:");
             builder.AppendLine($"      macaddress: \"{item.Port!.MacAddress.ToLowerInvariant()}\"");
             builder.AppendLine($"    set-name: \"{item.Attachment.InterfaceName}\"");
-            builder.AppendLine("    addresses:");
-            builder.AppendLine($"      - {item.Attachment.IpAddress}/{item.Prefix}");
-            if (item.Attachment.Primary && IPAddress.TryParse(item.Attachment.GatewayIp, out _))
+            builder.AppendLine("    dhcp4: true");
+        }
+        return builder.ToString();
+    }
+
+    internal static string BuildManagedNoCloudNetworkConfig(IReadOnlyList<GuestInterfaceRequirement> requirements)
+    {
+        var builder = new StringBuilder("version: 2\nethernets:\n");
+        foreach (var item in requirements)
+        {
+            builder.AppendLine($"  gzctf-{item.MacAddress.Replace(":", "")}:");
+            builder.AppendLine("    match:");
+            builder.AppendLine($"      macaddress: \"{item.MacAddress}\"");
+            if (item.Name is not null) builder.AppendLine($"    set-name: \"{item.Name}\"");
+            builder.AppendLine("    dhcp4: false");
+            builder.AppendLine("    dhcp6: false");
+            builder.AppendLine($"    addresses: [{item.IpAddress}/{item.PrefixLength}]");
+            builder.AppendLine("    nameservers:");
+            builder.AppendLine($"      addresses: [{string.Join(", ", item.DnsServers)}]");
+            if (item.Gateway is null && item.Routes.Count == 0) builder.AppendLine("    routes: []");
+            else
             {
                 builder.AppendLine("    routes:");
-                builder.AppendLine("      - to: default");
-                builder.AppendLine($"        via: {item.Attachment.GatewayIp}");
+                if (item.Gateway is not null)
+                {
+                    builder.AppendLine("      - to: default");
+                    builder.AppendLine($"        via: {item.Gateway}");
+                }
+                foreach (var route in item.Routes)
+                {
+                    builder.AppendLine($"      - to: {route.DestinationCidr}");
+                    builder.AppendLine($"        via: {route.NextHop}");
+                    if (route.Metric is { } metric) builder.AppendLine($"        metric: {metric}");
+                }
             }
         }
         return builder.ToString();

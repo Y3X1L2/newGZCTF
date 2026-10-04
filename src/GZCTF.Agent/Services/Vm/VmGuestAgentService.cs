@@ -6,7 +6,7 @@ using GZCTF.Agent.Models;
 
 namespace GZCTF.Agent.Services.Vm;
 
-public sealed partial class VmGuestAgentService(ILogger<VmGuestAgentService> logger)
+public sealed partial class VmGuestAgentService(ILogger<VmGuestAgentService> logger) : IVmGuestAgentClient
 {
     private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(500);
     private const int QgaRpcTimeoutSeconds = 30;
@@ -88,6 +88,42 @@ public sealed partial class VmGuestAgentService(ILogger<VmGuestAgentService> log
         }
     }
 
+    public async Task<bool> TryFileExistsAsync(string vmName, string guestPath, CancellationToken cancellationToken)
+    {
+        ValidateVmName(vmName);
+        cancellationToken.ThrowIfCancellationRequested();
+        JsonDocument opened;
+        try
+        {
+            opened = await SendAsync(vmName, "guest-file-open", new Dictionary<string, object?>
+            {
+                ["path"] = guestPath, ["mode"] = "rb"
+            }, cancellationToken);
+        }
+        catch (InvalidOperationException exception) when (IsOptionalFileProbeUnavailableError(exception.Message))
+        {
+            return false;
+        }
+        using var open = opened;
+        var handle = ReadInt64(open.RootElement, "return")
+            ?? throw new InvalidOperationException("QGA guest-file-open returned no handle.");
+        // The probe never reads executable bytes. Always close the QGA handle, even on cancellation.
+        using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        using var close = await SendAsync(vmName, "guest-file-close", new Dictionary<string, object?>
+        {
+            ["handle"] = handle
+        }, cleanup.Token);
+        cancellationToken.ThrowIfCancellationRequested();
+        return true;
+    }
+
+    internal static bool IsOptionalFileProbeUnavailableError(string message) =>
+        message.Contains("No such file", StringComparison.OrdinalIgnoreCase) ||
+        message.Contains("cannot find the file", StringComparison.OrdinalIgnoreCase) ||
+        message.Contains("cannot find the path", StringComparison.OrdinalIgnoreCase) ||
+        message.Contains("CommandNotFound", StringComparison.OrdinalIgnoreCase) ||
+        message.Contains("CommandDisabled", StringComparison.OrdinalIgnoreCase);
+
     public async Task<byte[]> ReadFileAsync(
         string vmName,
         string guestPath,
@@ -134,23 +170,35 @@ public sealed partial class VmGuestAgentService(ILogger<VmGuestAgentService> log
         }
     }
 
-    public async Task<VmGuestCommandResponse> ExecuteAsync(
+    public Task<VmGuestCommandResponse> ExecuteAsync(
         string vmName,
         VmGuestCommandRequest command,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken) => ExecuteCoreAsync(vmName, command, false, cancellationToken, null);
+
+    Task<VmGuestCommandResponse> IVmGuestAgentClient.ExecuteAsync(string vmName,
+        VmGuestCommandRequest command, CancellationToken cancellationToken,
+        Func<CancellationToken, Task<bool>>? verifyIdentity) =>
+        ExecuteCoreAsync(vmName, command, true, cancellationToken, verifyIdentity);
+
+    async Task<VmGuestCommandResponse> ExecuteCoreAsync(string vmName,
+        VmGuestCommandRequest command, bool terminateOnDeadline, CancellationToken cancellationToken,
+        Func<CancellationToken, Task<bool>>? verifyIdentity)
     {
         ValidateVmName(vmName);
         if (string.IsNullOrWhiteSpace(command.StepId) || string.IsNullOrWhiteSpace(command.Path) ||
             command.TimeoutSeconds is < 1 or > 3600)
             throw new ArgumentException("Guest command is invalid.", nameof(command));
 
-        using var execute = await SendAsync(vmName, "guest-exec", new Dictionary<string, object?>
+        JsonDocument executeResponse;
+        try
         {
-            ["path"] = command.Path,
-            ["arg"] = command.Arguments,
-            ["env"] = command.Environment?.Select(item => $"{item.Key}={item.Value}").ToArray() ?? [],
-            ["capture-output"] = true
-        }, cancellationToken);
+            executeResponse = await SendAsync(vmName, "guest-exec", BuildGuestExecArguments(command), cancellationToken);
+        }
+        catch (InvalidOperationException exception) when (command.StandardInput is not null && IsInputDataUnsupportedError(exception.Message))
+        {
+            return new(false, false, null, "stdin-unavailable", null, "GZCTF_GUEST_STDIN_UNAVAILABLE");
+        }
+        using var execute = executeResponse;
         var pid = ReadInt64(execute.RootElement.GetProperty("return"), "pid")
                   ?? throw new InvalidOperationException("QGA guest-exec returned no process id.");
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -183,10 +231,57 @@ public sealed partial class VmGuestAgentService(ILogger<VmGuestAgentService> log
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
+            if (terminateOnDeadline) await TryTerminateAsync(vmName, pid, command.Path, verifyIdentity);
             logger.LogWarning("Guest command timed out: VM={VmName}, Step={StepId}", vmName, command.StepId);
             return new VmGuestCommandResponse(false, true, null, "timeout", null, null);
         }
+        catch (OperationCanceledException)
+        {
+            if (terminateOnDeadline) await TryTerminateAsync(vmName, pid, command.Path, verifyIdentity);
+            throw;
+        }
     }
+
+    async Task TryTerminateAsync(string vmName, long pid, string commandPath,
+        Func<CancellationToken, Task<bool>>? verifyIdentity)
+    {
+        if (pid <= 0) return;
+        using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var windows = IsWindowsCommandPath(commandPath);
+        try
+        {
+            if (verifyIdentity is not null && !await verifyIdentity(cleanup.Token))
+            {
+                logger.LogWarning("Guest command cleanup skipped because VM native identity changed: VM={VmName}", vmName);
+                return;
+            }
+            using var result = await TrySendAsync(vmName, "guest-exec", new Dictionary<string, object?>
+            {
+                ["path"] = windows ? @"C:\Windows\System32\taskkill.exe" : "/bin/kill",
+                ["arg"] = windows ? new[] { "/PID", pid.ToString(System.Globalization.CultureInfo.InvariantCulture), "/T", "/F" }
+                    : new[] { "-TERM", pid.ToString(System.Globalization.CultureInfo.InvariantCulture) },
+                ["capture-output"] = false
+            }, cleanup.Token);
+            while (!cleanup.IsCancellationRequested)
+            {
+                using var status = await TrySendAsync(vmName, "guest-exec-status", new Dictionary<string, object?>
+                {
+                    ["pid"] = pid
+                }, cleanup.Token);
+                if (status is not null && status.RootElement.TryGetProperty("return", out var body) &&
+                    body.TryGetProperty("exited", out var exited) && exited.GetBoolean()) return;
+                await Task.Delay(PollInterval, cleanup.Token);
+            }
+        }
+        catch (Exception)
+        {
+            logger.LogWarning("Unable to confirm timed-out guest network command termination: VM={VmName}", vmName);
+        }
+    }
+
+    internal static bool IsWindowsCommandPath(string commandPath) =>
+        commandPath.StartsWith("C:\\Windows\\", StringComparison.OrdinalIgnoreCase) ||
+        commandPath.Equals(TeamLabVmNetworkService.WindowsLegacyPowerShellHostPath, StringComparison.OrdinalIgnoreCase);
 
     public async Task RebootAndWaitAsync(
         string vmName,
@@ -314,6 +409,33 @@ public sealed partial class VmGuestAgentService(ILogger<VmGuestAgentService> log
             ["execute"] = command,
             ["arguments"] = arguments
         }.Where(item => item.Value is not null).ToDictionary());
+
+    internal const int MaxStandardInputBytes = 64 * 1024;
+
+    internal static IReadOnlyDictionary<string, object?> BuildGuestExecArguments(VmGuestCommandRequest command)
+    {
+        var arguments = new Dictionary<string, object?>
+        {
+            ["path"] = command.Path, ["arg"] = command.Arguments,
+            ["capture-output"] = true
+        };
+        // QGA distinguishes omitted env (inherit) from [] (empty process environment).
+        if (command.Environment is { } environment)
+            arguments["env"] = environment.Select(item => $"{item.Key}={item.Value}").ToArray();
+        if (command.StandardInput is { } input)
+        {
+            if (Encoding.UTF8.GetByteCount(input) > MaxStandardInputBytes)
+                throw new ArgumentException("Guest command standard input exceeds its byte limit.", nameof(command));
+            arguments["input-data"] = Convert.ToBase64String(Encoding.UTF8.GetBytes(input));
+        }
+        return arguments;
+    }
+
+    internal static bool IsInputDataUnsupportedError(string message) =>
+        message.Contains("input-data", StringComparison.OrdinalIgnoreCase) &&
+        (message.Contains("unexpected", StringComparison.OrdinalIgnoreCase) ||
+         message.Contains("unsupported", StringComparison.OrdinalIgnoreCase) ||
+         message.Contains("not supported", StringComparison.OrdinalIgnoreCase));
 
     static string? DecodeCapturedOutput(JsonElement element, string property)
     {

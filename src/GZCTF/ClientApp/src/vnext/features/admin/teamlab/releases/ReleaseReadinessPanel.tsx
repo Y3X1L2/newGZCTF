@@ -1,89 +1,49 @@
-import { AlertTriangle, CheckCircle2, CircleDashed, Download, PlayCircle } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Download, PlayCircle } from 'lucide-react'
+import { Link } from 'react-router'
 import { ActionButton } from '../../../../shared/Interaction'
 import type { TeamLabAdminReleaseReadiness } from '../api'
-import { TeamLabReadinessStatusBadge, TeamLabRuntimeStatusBadge } from '../shared/TeamLabStatusBadge'
-import { ReleasePlanPanel } from './ReleasePlanPanel'
+import { TeamLabRuntimeStatusBadge } from '../shared/TeamLabStatusBadge'
 import styles from './TeamLabReleasesPage.module.css'
 
-export function ReleaseReadinessPanel({
-  readiness,
-  creatingTrial,
-  preparingImages,
-  onCreateTrial,
-  onPrepareImages,
-}: {
+export function ReleaseReadinessPanel({ readiness, creatingTrial, preparingImages, onCreateTrial, onPrepareImages }: {
   readiness: TeamLabAdminReleaseReadiness
   creatingTrial: boolean
   preparingImages: boolean
   onCreateTrial: () => void
   onPrepareImages: () => void
 }) {
-  return (
-    <div className={styles.readinessStack}>
-      <section aria-labelledby="release-readiness-heading" className={styles.detailSection}>
-        <header className={styles.sectionHeading}>
-          <div>
-            <span>运行准备</span>
-            <h3 id="release-readiness-heading">运行就绪度</h3>
-          </div>
-          <TeamLabReadinessStatusBadge ready={readiness.ready} />
-        </header>
-
-        {readiness.blockingReasons.length ? (
-          <ul className={styles.blockers}>
-            {readiness.blockingReasons.map((reason) => <li key={reason}><AlertTriangle size={16} />{reason}</li>)}
-          </ul>
-        ) : (
-          <p className={styles.readyMessage}><CheckCircle2 size={17} />调度能力、镜像分发与执行计划均已由服务端确认。</p>
-        )}
-
-        <div className={styles.imageTable} role="table" aria-label="镜像就绪状态">
-          <div className={styles.imageHeader} role="row">
-            <span role="columnheader">镜像模板</span>
-            <span role="columnheader">可用节点</span>
-            <span role="columnheader">已就绪</span>
-            <span role="columnheader">分发中</span>
-            <span role="columnheader">失败</span>
-          </div>
-          {readiness.images.map((image) => (
-            <div className={styles.imageRow} key={image.imageTemplateId} role="row">
-              <span role="cell"><strong>{image.name}</strong><small>{image.imageType} · #{image.imageTemplateId}</small></span>
-              <span role="cell">{image.eligibleNodeCount}</span>
-              <span role="cell">{image.readyNodeCount}</span>
-              <span role="cell">{image.pendingNodeCount}</span>
-              <span role="cell">{image.failedNodeCount}</span>
-            </div>
-          ))}
-          {!readiness.images.length ? <p className={styles.emptyImages}>该版本没有需要分发的运行镜像。</p> : null}
-        </div>
-
-        <footer className={styles.readinessActions}>
-          {readiness.latestTrialRuntime ? (
-            <span className={styles.latestTrial}>
-              <CircleDashed size={15} />最近试运行
-              <TeamLabRuntimeStatusBadge status={readiness.latestTrialRuntime.status} />
-            </span>
-          ) : <span className={styles.latestTrial}>尚未创建试运行</span>}
-          <ActionButton
-            disabled={!readiness.images.length || preparingImages}
-            icon={<Download size={16} />}
-            onClick={onPrepareImages}
-            type="button"
-          >
-            {preparingImages ? '正在准备镜像' : '准备镜像'}
-          </ActionButton>
-          <ActionButton
-            disabled={!readiness.ready || creatingTrial}
-            icon={<PlayCircle size={16} />}
-            onClick={onCreateTrial}
-            tone="primary"
-            type="button"
-          >
-            {creatingTrial ? '正在创建' : '创建试运行'}
-          </ActionButton>
-        </footer>
-      </section>
-      {readiness.plan ? <ReleasePlanPanel plan={readiness.plan} /> : null}
+  const imagesToPrepare = readiness.images.filter(image => image.pendingNodeCount || image.failedNodeCount)
+  return <section className={styles.readiness} aria-label="版本运行准备">
+    <div className={styles.readinessStatus} data-ready={readiness.ready}>
+      {readiness.ready ? <CheckCircle2 size={20} /> : <AlertTriangle size={20} />}
+      <strong>{readiness.ready ? '可以创建运行环境' : imagesToPrepare.length ? '需要准备镜像' : '暂不可创建'}</strong>
     </div>
-  )
+    {readiness.plan ? <div className={styles.releaseScale}>
+      <span>{readiness.plan.networks.length} 个网段</span>
+      <span>{readiness.plan.assets.length} 个资产</span>
+    </div> : null}
+    {readiness.blockingReasons.length ? <ul className={styles.blockers}>
+      {readiness.blockingReasons.map(reason => <li key={reason}>{reason}</li>)}
+    </ul> : null}
+    <div className={styles.readinessActions}>
+      {imagesToPrepare.length ? <ActionButton disabled={preparingImages} icon={<Download size={16} />} onClick={onPrepareImages} type="button">
+        {preparingImages ? '准备中' : '准备镜像'}
+      </ActionButton> : null}
+      <ActionButton disabled={!readiness.ready || creatingTrial} icon={<PlayCircle size={16} />} onClick={onCreateTrial} tone="primary" type="button">
+        {creatingTrial ? '正在创建' : '创建试运行'}
+      </ActionButton>
+    </div>
+    {readiness.latestTrialRuntime ? <Link className={styles.latestTrial} to={`/admin/teamlab/${readiness.topologyId}/runtimes/${readiness.latestTrialRuntime.id}`}>
+      最近试运行 <TeamLabRuntimeStatusBadge status={readiness.latestTrialRuntime.status} />
+    </Link> : null}
+    {readiness.images.length ? <details className={styles.imageDetails}>
+      <summary>镜像分发详情</summary>
+      <table><thead><tr><th>模板</th><th>已就绪</th><th>待分发</th><th>失败</th></tr></thead><tbody>
+        {readiness.images.map(image => <tr key={image.imageTemplateId}>
+          <td>{image.name}</td><td>{image.readyNodeCount}/{image.eligibleNodeCount}</td>
+          <td>{image.pendingNodeCount}</td><td>{image.failedNodeCount}</td>
+        </tr>)}
+      </tbody></table>
+    </details> : null}
+  </section>
 }

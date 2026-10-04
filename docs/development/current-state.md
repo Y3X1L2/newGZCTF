@@ -1,5 +1,54 @@
 # YINYU 当前开发状态
 
+## TeamLab 管理后台与受管网络集成候选（2026-10-04）
+
+- 分支 `codex/teamlab-admin-redesign-integration` 从 `origin/main bc3599aa` 创建，正常合并 `origin/codex/teamlab-managed-network f36a491d` 和 `origin/codex/teamlab-admin-redesign bff10f0f`；合并提交为 `cb13cd45`、`263928a6`，未改写两条来源分支历史，未合并 `main`。
+- 集成保留已部署验证的 VM 受管网络链路及管理后台重设计。冲突处理中重新生成内部 API 客户端，并修正资产执行定义转换：镜像制品引用与 VM 网络默认同时保留，资产替换完整往返 `VmNetworkMode`、接口名、默认网关、DNS 和静态路由；事件工作区保留重设计详情抽屉并显示来宾网络阶段中文名称。
+- 前端完整门禁通过：locale、lint、严格 TypeScript、架构检查、113 个测试文件/376 项测试、生产构建、制品清单和体积预算。Release 解决方案构建通过，后端单元 1284/1284、PostgreSQL/Testcontainers 集成 304/304 通过；OpenAPI 由合并后 TestServer 导出并重新生成客户端。
+- 新增迁移分支专项覆盖真实升级顺序：数据库已记录 `20261001145237_AddTeamLabManagedGuestNetwork`、但缺少较早的 `20260930164900_AddSystemLogResourceIndex` 时，EF 可只补应用日志索引，受管网络 5 个列保持完整，最终无待应用迁移。日志索引在生产仍需维护窗口和新鲜备份副本验证，不能以本地 Testcontainers 代替锁表评估。
+- 本地 fixture 在 390、1366、1920、2560 宽度完成日间/夜间、键盘焦点和操作、reduced-motion、横向溢出与布局检查；覆盖场景草稿、发布就绪、逐网卡网络、资源登记、资产编排、SSH/VNC、服务开放、生命周期和运行事件。该证据不是生产 API、文件、远程会话或真实 VM 执行验收。
+- 本轮没有连接或修改 `10.24.0.27`、数据库、Agent、Registry 或网关，也没有重置或销毁保留的 Lab2 generation 4 四机。生产活动目录、源码和 Agent 摘要仍以 2026-10-03 网卡就绪交接为最近确认事实；容量上报读取根盘的缺口未扩大处理。
+
+## TeamLab网卡就绪等待：Agent已部署，Lab2四机基础网络通过（2026-10-03）
+
+- Lab2限定重试中Server2008R2的QGA43.6秒回应，网卡62.8秒才可见，旧执行检查49.3秒已结束；Linux单/双卡和DC最终均出现本次MAC。现Agent第一次读缺MAC立即失败，证据支持设备初始化时序缺口。候选改为在原ReadyTimeout三分钟总预算内只读等待全部MAC，不增加镜像自启动代码/计划HTTP期限，保留多卡完整性、重复MAC失败、身份校验和取消。
+- 源码cc6c5737，定向82/82（包括计划期限回归）、单元1282/1282、Agent linux-x64发布及diff检查通过。用户批准后已部署.27的teamlab-nic-ready-cc6c5737-20261003，实际/内置SHA2569b2142e9731d77495322e20a100432a728cf3d86f87dc67abebf85ed58a9b3e8；主站/Agent active、NRestarts0、首页/Config成功，主站fa97187c/前端4fccca67和迁移头保持。新完整备份两dump全文可读、5项SHA通过；旧release保留。无DTO/迁移/前端变化，未重复完整solution/数据库集成/前端门禁。
+- 首正常reset gen2在placement拒绝：Agent误上报根盘余量，而非bind在images的大盘，差约100MB未到80GiB。仅本次新dump1.5GiB另存大盘，原入口/摘要保留；此容量上报缺口仍待独立修复。gen3随后在DC网卡Put改名失败，单机原IP/DNS写入成功且省略名字后退出0；正常修改草稿只省略两Windows友好名，Linuxens18/19保留，发布新场景release01a10261-890a-718f-ae86-250e4db86746，正常reset到gen4 ready。
+- runtime01a1022f-7e91-7ad3-8309-833af4771430四机仅.27，独立QGA/MAC实读IP/DNS/掩码/无默认路由全部通过；web/OA到内网SSH/RPC/RDP管理TCP路径通过，OA到入口不可达、平台关联路由器0，保持原两网段关系。诊断副本全部正常销毁，.31恢复true；最终留四机运行，原PVE/快照/镜像/旧发布/备份保留。未验收图形登录、业务、AD账号/共享、双副本或ready后再次reset，不能外推完整生命周期。证据与方案见[网卡就绪交接](handoffs/2026-10-03-teamlab-nic-readiness.md)。
+
+## Lab2 release-v2：仓库迁移、四图导入和基础网络启动完成（2026-10-03）
+
+- PVE118–121 release-v2及实际QGA脚本前提通过，四机正常关机导出，check/compare/SHA及传输后复核通过，共约13.6GiB。用户明确批准正常销毁旧Lab2以沿用原IP，旧runtime已destroyed；原PVE/快照/旧模板/其它环境保留。四图经正常API导入为ManagedStatic模板519–522，临时导入Token已撤销。
+- 导入首图时PVE共享pve/data428.66GiB达到Data100%，112/113/114 io-error；宿主和来宾df空闲不能代表thin pool余量。已VG备份后增加8GiB缓冲、恢复三VM及fstrim，池436.66GiB且92.28%，VG仍余8GiB。主站/Agent active、Config200、Registry active/v2 200，原教学容器Up；没有文件/快照清理。
+- 用户明确批准113存储迁移：新增sdb-storage 500GiB盘，Registry工作目录与独立回退副本迁入/srv/yinyu-registry-data，原服务路径bind保留。25,049文件/111,092,947,185字节三份逐文件摘要与元数据核验通过，实际manifest/blob读取及冷开机自动挂载通过，才释放旧根盘重复数据。113根盘120→16GiB、PVE共享池92.35%→68.60%。112上传暂存仍在根盘，其它VM系统盘仍用共享池，容量监控缺口保留。
+- 拓扑01a1021a-b3b3-7fd2-96f5-cc9aa22a2ea5原release01a1021a-b760-7d01-87d2-a3da4a190dae曾因MAC就绪和Windows改名失败；最终新release和实机结果见上节。两交换机、web双卡、其它仅内网、无平台路由器；内网/23保留DC原IP。两专用Windows写入诊断均已销毁，源机快照与四镜像不需要重导出。
+- .31最终恢复可调度。原PVE、镜像、快照、备份保留；存储迁移阶段无源码/发布变化，后续Agent修正与场景正常发布单独记录，没有直接写业务数据库。真实证据和未完成项见同一交接。
+- 本轮无源码/发布/数据库写入（指定operation只读核验），真实证据/限制/接手入口见[release-v2存储交接](handoffs/2026-10-03-lab2-release-v2-storage-block.md)。下述Agent部署事实仍有效，不能把镜像导出成功当作四机场景签收。
+
+## 旧Windows可选网络执行宿主：Agent已部署，普通Windows回归通过（2026-10-03）
+
+- codex/teamlab-managed-network新增固定Program Files可选宿主选择，现代Windows保持原路径；同次read/apply/verify统一执行方式，不在写失败后换程序重写。工具源和镜像制作配方在scripts/guest-tools/windows-legacy-network；无DTO/迁移/前端变更。
+- 真实VM121（Server2008R2）QGA基本功能正常，原PowerShell后台ConsoleHost的GetActiveScreenBufferHandle异常已定位。新宿主直接调用已安装引擎，正式路径执行实际平台只读脚本退出0，原IP/DNS保持；Program Files目录Users仅读取/执行。原型错误流、空输入和原生命令检查通过。
+- 子代理最终单元1276/1276、定向112/112及Agent Release构建通过；主任务集成定向112/112、linux-x64发布通过。数据库集成因本机Docker不可用未跑，前端未改未重复门禁。四机新镜像及完整旧系统写入/回读链尚未验收，VSS仍未修复。
+- 用户批准后通过GitHub制品下载到.27，已切换到/opt/gzctf/releases/teamlab-legacy-8637e087-20261003/publish，Agent源码8637e087，实际及内置SHA256均2ed4a2114d7ef0b681fe66ad6cca62aee358395a362bdf2b6ca85aa69fda5bb2。主站fa97187c、前端4fccca67保持原内容；服务active/NRestarts0、首页/Config200、迁移头不变。完整备份在/opt/gzctf/backups/teamlab-legacy-8637e087-20261003，两个数据库全部压缩内容可读，5项摘要检查通过。
+- 普通Windows模板507（Server2022）经正常平台创建双卡runtime01a100e6-0bb4-79fe-93c4-b8f711272e26，仅在.27执行；新建与正常重置generation1→2的独立QGA回读均通过：入口192.168.224.10/24无DNS，内网192.168.226.10/24、DNS127.0.0.1，两卡无默认网关/路由，均无helper。VM原生UUID和启动时间随重置变化。正常销毁后assets为空、VM/运行qcow2/所属10类OVN及OVS接口残留0，节点VM占用和预留0。
+- VPN频繁断连，部署和回归改为服务器独立任务，结果已取回。原镜像、PVE、快照和旧release保留；本轮未验收图形登录、数据面服务访问、双实例隔离或完整四机/旧系统新镜像，不将Server2022结果当作Win10实机正例。详细证据与部署边界见[旧Windows交接](handoffs/2026-10-03-teamlab-windows-legacy-network-agent.md)。
+
+## TeamLab 自动网络配置：已部署并完成限定实机验收（2026-10-02）
+
+- 分支 `codex/teamlab-managed-network` 从 `origin/main bc3599aa` 建立并合入当前服务器在用的 Windows 网络分支；主工作区和本地教学问答分支保留，未合并 main。实现 DHCP/平台静态两种新建方式、VM逐网卡IP/DNS/网关/路由、发布冻结/重置/更新、QGA应用与真实回读；新要求仅用于VM，Docker保持既有行为。旧预配置模式只保留存量读取，不增加复杂修补系统。
+- 用户明确批准部署 `.27` 并允许关闭测试实例。活动目录为 `/opt/gzctf/releases/teamlab-managed-fa97187c-20261002/publish`：主站源码 `fa97187c`、Agent `bb09393c`、前端 `4fccca67`；实际与内置Agent SHA256均为 `c7b66c3408e3328bcc56f2577a9e363abc06f129c597d6c7acd4009ebb52ede8`。服务active、NRestarts=0，首页/Config200，根盘约85GiB可用。
+- 完整数据库及附件备份保留在 `/opt/gzctf/backups/teamlab-managed-4fccca67-20261002`；压缩备份全文可读取，生产结构及迁移历史已恢复到独立验证库并验证前向升级。迁移 `20261001145237_AddTeamLabManagedGuestNetwork` 已应用，添加五个可空列；旧release、原模板、PVE虚拟机和快照保留。
+- 最终源码门禁：后端单元1251/1251、集成302/302，前端110文件373测试及完整门禁通过，Release构建通过（已有警告保留）。真实 `.27` 验收通过现代Windows双卡/明确路由、Ubuntu24双卡、DHCP/AD域解析与普通用户系统认证/共享读取、Docker HTTP，以及新建/重置/不同地址段双实例隔离/销毁。未做图形RDP登录；Linux测试DNS只验证配置，未验证解析服务；同地址段多副本VRF不在范围内。
+- Server2008R2原镜像缺QGA，已验证明确返回 `guest_qga_unavailable / guest-ready`，不能列为旧系统正例。Linux新模板518已Ready并通过实测；v1清理时删除machine-id导致网络服务不能初始化，v2仅修正镜像准备状态后通过。
+- 本次9个专用验收runtime全部销毁；原8台VM定义和磁盘保留、已关机。`.27/.30/.31`心跳在线并恢复可调度，只有`.27`升级；`.30/.31`仍为旧Agent，不在它们上运行进阶逐卡DHCP新策略。后续新场景应明确选择`.27`作为网络owner及Worker。统一证据、限制和回退见 [自动网络交接](handoffs/2026-10-02-teamlab-managed-network.md)。
+
+## TeamLab 网络运行链部署（2026-09-27）
+
+- 分支 `codex/teamlab-windows-network`、提交 `279f259` 已推送；`10.24.0.27` 当前 release 为 `/opt/gzctf/releases/teamlab-net-279f259-20260927/publish`。本次仅上传主站 DLL、TeamLab 契约 DLL、前端静态文件和一个 Agent 程序；`.30/.31` 从 `.27` 内网取得同一 Agent。
+- `.27/.30/.31` Agent SHA-256 均为 `993f00ce4874b0e41131ca8cb596e9e3bb76997984008fca795fa9a45963f475`，服务均为 active；`.27` 主站 active，`/api/Config` 返回 200。迁移头为 `20260927121625_AddTeamLabNetworkDnsAsset`。用户要求不做整库备份，本次未备份数据库；旧 release 保留。现有运行环境未执行销毁操作。
+- TeamLab 定向测试 505/505、前端测试 348/348、前端生产构建通过。用户要求仅部署，本次未新建真实 OVN/VM 环境进行业务验收。
+
 文档整理日期：2026-09-21
 最近一次生产核验：2026-09-21（北京时间）
 

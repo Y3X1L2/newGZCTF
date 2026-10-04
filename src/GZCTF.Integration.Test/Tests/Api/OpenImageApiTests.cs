@@ -293,16 +293,16 @@ public sealed class OpenImageApiTests(GZCTFApplicationFactory factory) : IAsyncL
         await using var scope = factory.Services.CreateAsyncScope();
         var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         Assert.False(await context.ImageTemplates.AnyAsync(template => template.Id == templateId));
-        Assert.True(await context.ExternalApiRequestAudits.AnyAsync(audit =>
+        await ExternalApiAuditAssertions.AssertPersistedAsync(factory.Services, audit =>
             audit.OperationId == operationId &&
             audit.ApiTokenId == issued.TokenId &&
-            audit.IdempotencyReused == false));
-        Assert.True(await context.ExternalApiRequestAudits.AnyAsync(audit =>
+            audit.IdempotencyReused == false);
+        await ExternalApiAuditAssertions.AssertPersistedAsync(factory.Services, audit =>
             audit.ApiTokenId == issued.TokenId &&
             audit.Method == "DELETE" &&
             audit.ResourceType == "image" &&
             audit.ResourceId == templateId.ToString() &&
-            audit.StatusCode == StatusCodes.Status204NoContent));
+            audit.StatusCode == StatusCodes.Status204NoContent);
     }
 
     [Fact]

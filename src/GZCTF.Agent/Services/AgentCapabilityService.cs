@@ -62,6 +62,8 @@ public sealed class AgentCapabilityService(
                 features.Add(AgentFeatureIds.TeamLabExecutionPlan);
             if (HasArtifactCacheRoot())
                 features.Add(AgentFeatureIds.TeamLabArtifactCache);
+            if (SupportsManagedGuestNetwork(features, HasAnyCommand("virsh")))
+                features.Add(AgentFeatureIds.TeamLabManagedGuestNetwork);
         }
         if (capabilities.WireGuard)
             features.Add(AgentFeatureIds.WireGuard);
@@ -110,6 +112,10 @@ public sealed class AgentCapabilityService(
 
     static int Resolve(int? configured, int automatic, bool available) =>
         available ? Math.Max(1, configured ?? automatic) : 0;
+
+    internal static bool SupportsManagedGuestNetwork(IReadOnlyCollection<string> features, bool hasVirsh) =>
+        hasVirsh && features.Contains(AgentFeatureIds.Kvm) && features.Contains(AgentFeatureIds.TeamLabExecutionPlan) &&
+        features.Contains(AgentFeatureIds.TeamLabNativeLibvirt);
 
     static bool HasAnyCommand(params string[] commands) => commands.Any(command =>
         new[] { "/sbin", "/usr/sbin", "/bin", "/usr/bin", "/usr/local/bin" }

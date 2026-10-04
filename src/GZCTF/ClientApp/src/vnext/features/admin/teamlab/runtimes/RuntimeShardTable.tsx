@@ -20,7 +20,7 @@ export const RuntimeShardTable = memo(function RuntimeShardTable({ runtime, onIn
       id: 'node',
       header: '运行节点',
       width: 'wide',
-      render: (shard) => <span className={styles.identityCell}><strong>{shard.workerNodeName}</strong><code>{shard.workerNodeId}</code></span>,
+      render: (shard) => <strong>{shard.workerNodeName}</strong>,
     },
     {
       id: 'networks',
@@ -55,8 +55,8 @@ export const RuntimeShardTable = memo(function RuntimeShardTable({ runtime, onIn
   return (
     <section className={styles.panel} aria-labelledby="runtime-shards-title">
       <header className={styles.panelHeader}>
-        <div><span>分片调度</span><h3 id="runtime-shards-title">运行分片</h3></div>
-        <strong>{runtime.shards.length} 个节点分片</strong>
+        <h3 id="runtime-shards-title">运行节点</h3>
+        <strong>{runtime.shards.length} 个节点</strong>
       </header>
       <DataTable
         caption="TeamLab 运行分片"

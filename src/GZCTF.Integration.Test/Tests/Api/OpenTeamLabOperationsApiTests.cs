@@ -23,6 +23,7 @@ using GZCTF.Utils;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
@@ -93,18 +94,16 @@ public sealed class OpenTeamLabOperationsApiTests(GZCTFApplicationFactory factor
 
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", foreign.PlainTextToken);
         using (var response = await client.GetAsync($"{basePath}?generation=1&path=%2F"))
-            await AssertProblemAsync(response, HttpStatusCode.NotFound, "scope_not_found");
+            await AssertProblemAsync(response, HttpStatusCode.Forbidden, "insufficient_permission");
 
         Assert.Equal(
             ["list", "upload-stream", "download-stream", "mkdir", "move", "delete"],
             gateway.Operations.ToArray());
 
-        await using var verificationScope = host.Services.CreateAsyncScope();
-        var context = verificationScope.ServiceProvider.GetRequiredService<AppDbContext>();
-        Assert.True(await context.ExternalApiRequestAudits.AnyAsync(item =>
+        await ExternalApiAuditAssertions.AssertPersistedAsync(host.Services, item =>
             item.ApiTokenId == allowed.TokenId &&
             item.ActorUserId == allowed.ActorUserId &&
-            EF.Functions.Like(item.RouteKey, "%/files%")));
+            EF.Functions.Like(item.RouteKey, "%/files%"));
     }
 
     [Fact]
@@ -125,7 +124,7 @@ public sealed class OpenTeamLabOperationsApiTests(GZCTFApplicationFactory factor
         var basePath = $"/api/open/v1/teamlab/remote-sessions/{fixture.SessionId:D}/audit";
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", foreign.PlainTextToken);
         using (var response = await client.PostAsync(basePath, null))
-            await AssertProblemAsync(response, HttpStatusCode.NotFound, "scope_not_found");
+            await AssertProblemAsync(response, HttpStatusCode.Forbidden, "insufficient_permission");
 
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", allowed.PlainTextToken);
         using (var response = await client.PostAsync(basePath, null))
@@ -151,30 +150,35 @@ public sealed class OpenTeamLabOperationsApiTests(GZCTFApplicationFactory factor
 
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", foreign.PlainTextToken);
         using (var response = await client.GetAsync(basePath))
-            await AssertProblemAsync(response, HttpStatusCode.NotFound, "scope_not_found");
+            await AssertProblemAsync(response, HttpStatusCode.Forbidden, "insufficient_permission");
 
-        await using var verificationScope = host.Services.CreateAsyncScope();
-        var context = verificationScope.ServiceProvider.GetRequiredService<AppDbContext>();
-        Assert.True(await context.ExternalApiRequestAudits.AnyAsync(item =>
+        await ExternalApiAuditAssertions.AssertPersistedAsync(host.Services, item =>
             item.ApiTokenId == allowed.TokenId &&
             item.ActorUserId == allowed.ActorUserId &&
-            EF.Functions.Like(item.RouteKey, "%/audit/evidence/%")));
+            EF.Functions.Like(item.RouteKey, "%/audit/evidence/%"));
     }
 
-    [Fact]
-    public async Task RemoteSessions_UseRuntimeScopeAcrossDifferentTokenActors()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RemoteSessions_UseRuntimeScopeAcrossDifferentTokenActors(bool runtimeOnlyGrant)
     {
-        await using var host = CreateHost(new InMemoryAssetFileGateway());
+        // Other hosts in the collection have workers claiming from the shared database.
+        // This host owns its relay substitutes, so its queued operations need their own database.
+        await using var database = await IsolatedPostgresDatabase.CreateAsync(factory.DatabaseConnectionString);
+        await using var host = CreateHost(new InMemoryAssetFileGateway(), database.ConnectionString);
         using var client = host.CreateClient();
         var fixture = await SeedAsync(host.Services);
         var creator = await IssueTokenAsync(
             host.Services,
             fixture.ScopeId,
-            [ApiTokenScopes.TeamLabRemoteSessionsRead, ApiTokenScopes.TeamLabRemoteSessionsWrite]);
+            [ApiTokenScopes.TeamLabRemoteSessionsRead, ApiTokenScopes.TeamLabRemoteSessionsWrite],
+            runtimeOnlyGrant ? fixture.RuntimeId : null);
         var peer = await IssueTokenAsync(
             host.Services,
             fixture.ScopeId,
-            [ApiTokenScopes.TeamLabRemoteSessionsRead, ApiTokenScopes.TeamLabRemoteSessionsWrite]);
+            [ApiTokenScopes.TeamLabRemoteSessionsRead, ApiTokenScopes.TeamLabRemoteSessionsWrite],
+            runtimeOnlyGrant ? fixture.RuntimeId : null);
         var foreign = await IssueTokenAsync(
             host.Services,
             fixture.ForeignScopeId,
@@ -221,9 +225,9 @@ public sealed class OpenTeamLabOperationsApiTests(GZCTFApplicationFactory factor
 
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", foreign.PlainTextToken);
         using (var get = await client.GetAsync(sessionPath))
-            await AssertProblemAsync(get, HttpStatusCode.NotFound, "scope_not_found");
+            await AssertProblemAsync(get, HttpStatusCode.Forbidden, "insufficient_permission");
         using (var terminal = await client.GetAsync($"{sessionPath}/terminal"))
-            await AssertProblemAsync(terminal, HttpStatusCode.NotFound, "scope_not_found");
+            await AssertProblemAsync(terminal, HttpStatusCode.Forbidden, "insufficient_permission");
 
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", peer.PlainTextToken);
         using var endRequest = new HttpRequestMessage(HttpMethod.Delete, sessionPath);
@@ -241,6 +245,8 @@ public sealed class OpenTeamLabOperationsApiTests(GZCTFApplicationFactory factor
                 .Where(item => item.PublicId == sessionId)
                 .Select(item => item.Status)
                 .SingleAsync());
+        Assert.Equal(1, await endedContext.ApiOperations.Where(item => item.Id == endOperation.Id)
+            .Select(item => item.AttemptCount).SingleAsync());
     }
 
     [Fact]
@@ -270,13 +276,13 @@ public sealed class OpenTeamLabOperationsApiTests(GZCTFApplicationFactory factor
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", foreign.PlainTextToken);
         using (var hiddenSessions = await client.GetAsync(
                    $"/api/open/v1/teamlab/remote-sessions?runtimeId={fixture.RuntimeId:D}"))
-            await AssertProblemAsync(hiddenSessions, HttpStatusCode.NotFound, "scope_not_found");
+            await AssertProblemAsync(hiddenSessions, HttpStatusCode.Forbidden, "insufficient_permission");
         using (var hiddenHealth = await client.GetAsync(
                    $"/api/open/v1/teamlab/runtimes/{fixture.RuntimeId:D}/device-health"))
-            await AssertProblemAsync(hiddenHealth, HttpStatusCode.NotFound, "scope_not_found");
+            await AssertProblemAsync(hiddenHealth, HttpStatusCode.Forbidden, "insufficient_permission");
         using (var hiddenStatus = await client.GetAsync(
                    $"/api/open/v1/teamlab/runtimes/{fixture.RuntimeId:D}/status-check"))
-            await AssertProblemAsync(hiddenStatus, HttpStatusCode.NotFound, "scope_not_found");
+            await AssertProblemAsync(hiddenStatus, HttpStatusCode.Forbidden, "insufficient_permission");
     }
 
     [Fact]
@@ -330,7 +336,7 @@ public sealed class OpenTeamLabOperationsApiTests(GZCTFApplicationFactory factor
 
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", foreign.PlainTextToken);
         using (var hidden = await client.GetAsync($"{runtimePath}/service-access"))
-            await AssertProblemAsync(hidden, HttpStatusCode.NotFound, "scope_not_found");
+            await AssertProblemAsync(hidden, HttpStatusCode.Forbidden, "insufficient_permission");
     }
 
     [Fact]
@@ -387,28 +393,39 @@ public sealed class OpenTeamLabOperationsApiTests(GZCTFApplicationFactory factor
 
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", foreign.PlainTextToken);
         using (var hidden = await client.GetAsync(taskPath))
-            await AssertProblemAsync(hidden, HttpStatusCode.NotFound, "scope_not_found");
+            await AssertProblemAsync(hidden, HttpStatusCode.Forbidden, "insufficient_permission");
         using (var noRetryEndpoint = await client.PostAsync($"{taskPath}/retry", null))
             Assert.Equal(HttpStatusCode.NotFound, noRetryEndpoint.StatusCode);
     }
 
-    private WebApplicationFactory<Program> CreateHost(InMemoryAssetFileGateway gateway) =>
-        factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+    private WebApplicationFactory<Program> CreateHost(InMemoryAssetFileGateway gateway, string? connectionString = null) =>
+        factory.WithWebHostBuilder(builder =>
         {
-            services.RemoveAll<ITeamLabAssetFileGateway>();
-            services.AddSingleton<ITeamLabAssetFileGateway>(gateway);
-            services.RemoveAll<ITeamLabRemoteRelayGateway>();
-            services.AddSingleton<ITeamLabRemoteRelayGateway, NoOpRemoteRelayGateway>();
-            services.RemoveAll<ITeamLabServiceAccessGateway>();
-            services.AddSingleton<ITeamLabServiceAccessGateway, NoOpServiceAccessGateway>();
-            services.RemoveAll<IPublicUdpGatewayProvider>();
-            services.AddSingleton<IPublicUdpGatewayProvider, NoOpPublicGateway>();
-            services.RemoveAll<IPortAllocationService>();
-            services.AddSingleton<IPortAllocationService, InMemoryPortAllocationService>();
-            services.RemoveAll<ITeamLabAssetControlGateway>();
-            services.AddSingleton<ITeamLabAssetControlGateway, NoOpAssetControlGateway>();
-            services.PostConfigure<PublicUdpGatewayConfig>(options => options.PublicEndpoint = "gateway.example");
-        }));
+            if (connectionString is not null)
+                builder.ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(
+                    new Dictionary<string, string?> { ["ConnectionStrings:Database"] = connectionString }));
+            builder.ConfigureTestServices(services =>
+            {
+                if (connectionString is not null)
+                {
+                    services.RemoveAll<DbContextOptions<AppDbContext>>();
+                    services.AddDbContext<AppDbContext>(options => options.UseNpgsql(connectionString));
+                }
+                services.RemoveAll<ITeamLabAssetFileGateway>();
+                services.AddSingleton<ITeamLabAssetFileGateway>(gateway);
+                services.RemoveAll<ITeamLabRemoteRelayGateway>();
+                services.AddSingleton<ITeamLabRemoteRelayGateway, NoOpRemoteRelayGateway>();
+                services.RemoveAll<ITeamLabServiceAccessGateway>();
+                services.AddSingleton<ITeamLabServiceAccessGateway, NoOpServiceAccessGateway>();
+                services.RemoveAll<IPublicUdpGatewayProvider>();
+                services.AddSingleton<IPublicUdpGatewayProvider, NoOpPublicGateway>();
+                services.RemoveAll<IPortAllocationService>();
+                services.AddSingleton<IPortAllocationService, InMemoryPortAllocationService>();
+                services.RemoveAll<ITeamLabAssetControlGateway>();
+                services.AddSingleton<ITeamLabAssetControlGateway, NoOpAssetControlGateway>();
+                services.PostConfigure<PublicUdpGatewayConfig>(options => options.PublicEndpoint = "gateway.example");
+            });
+        });
 
     private static async Task WaitForOperationAsync(IServiceProvider services, Guid operationId)
     {
@@ -420,11 +437,20 @@ public sealed class OpenTeamLabOperationsApiTests(GZCTFApplicationFactory factor
                 .SingleAsync(item => item.Id == operationId);
             if (operation.Status == ApiOperationStatus.Succeeded)
                 return;
-            Assert.NotEqual(ApiOperationStatus.Failed, operation.Status);
+            Assert.True(operation.Status != ApiOperationStatus.Failed,
+                $"Operation {operationId:D} failed with code {operation.ErrorCode}.");
             await Task.Delay(100);
         }
 
-        Assert.Fail($"Operation {operationId:D} did not complete in time.");
+        await using var diagnosticsScope = services.CreateAsyncScope();
+        var diagnostics = diagnosticsScope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var pending = await diagnostics.ApiOperations.AsNoTracking().SingleAsync(item => item.Id == operationId);
+        var jobCompleted = await diagnostics.TeamLabRuntimeOperationJobs.AsNoTracking()
+            .Where(item => item.OperationId == operationId).Select(item => item.ResultJson != null).SingleAsync();
+        Assert.Fail($"Operation {operationId:D} did not complete within the ten-second polling budget: " +
+            $"status={pending.Status}, stage={pending.Stage}, attempts={pending.AttemptCount}, " +
+            $"error={pending.ErrorCode}, nextAttemptAt={pending.NextAttemptAt:O}, " +
+            $"leaseExpiresAt={pending.LeaseExpiresAt:O}, jobCompleted={jobCompleted}.");
     }
 
     private static async Task<Fixture> SeedAsync(IServiceProvider services)
@@ -464,7 +490,7 @@ public sealed class OpenTeamLabOperationsApiTests(GZCTFApplicationFactory factor
             ControlScope = controlScope,
             Version = 1,
             SourceRevision = 1,
-            CanonicalJson = "{}",
+            CanonicalJson = TeamLabReleaseCodec.Encode(new TeamLabTopologyDefinitionModel(topology.Name, [], [], [])),
             ContentHash = new string('a', 64),
             PublishedById = owner.Id
         };
@@ -558,7 +584,8 @@ public sealed class OpenTeamLabOperationsApiTests(GZCTFApplicationFactory factor
     private static async Task<IssuedToken> IssueTokenAsync(
         IServiceProvider services,
         Guid controlScopeId,
-        IReadOnlyCollection<string> scopes)
+        IReadOnlyCollection<string> scopes,
+        Guid? runtimeId = null)
     {
         await using var scope = services.CreateAsyncScope();
         var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -572,10 +599,23 @@ public sealed class OpenTeamLabOperationsApiTests(GZCTFApplicationFactory factor
             new IssueApiTokenCommand(
                 "TeamLab open operations",
                 scopes,
-                [new ApiTokenResourceGrantSpec("teamlab-scope", controlScopeId.ToString("D"))],
+                runtimeId is null ? [new ApiTokenResourceGrantSpec("teamlab-scope", controlScopeId.ToString("D"))] : [],
                 120,
                 DateTimeOffset.UtcNow.AddHours(1)),
             CancellationToken.None);
+        if (runtimeId is { } grantedRuntimeId)
+        {
+            context.TeamLabRuntimeGrants.Add(new()
+            {
+                RuntimeId = await context.TeamLabRuntimes.Where(runtime => runtime.PublicId == grantedRuntimeId)
+                    .Select(runtime => runtime.Id).SingleAsync(),
+                ApiTokenId = issued.Token.Id,
+                GrantedByUserId = actor.Id,
+                Permissions = (int)(TeamLabRuntimePermission.StateRead | TeamLabRuntimePermission.MetadataRead |
+                    TeamLabRuntimePermission.RemoteSessionOperate)
+            });
+            await context.SaveChangesAsync();
+        }
         return new IssuedToken(issued.PlainTextToken, issued.Token.Id, actor.Id);
     }
 

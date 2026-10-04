@@ -1,5 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
+import { serializeTeamLabWriteRequest } from '../../api/teamlabParsers'
+import { compileTopologyDocument } from '../../model/topologyCompiler'
 import type { TopologyDocument } from '../../model/topologyDocument'
 import type { TopologySelection } from '../../model/topologySelection'
 import { TeamLabInspector } from './TeamLabInspector'
@@ -95,6 +97,118 @@ const selection = (nodeKeys: string[] = [], connectionKeys: string[] = []): Topo
 })
 
 describe('TeamLabInspector', () => {
+  it.each(['asset', 'connection'])('keeps ordinary Docker %s editing free of VM network requirements', (target) => {
+    const change = vi.fn()
+    render(
+      <TeamLabInspector
+        document={createDocument()}
+        onDocumentChange={change}
+        selection={target === 'asset' ? selection(['app']) : selection([], ['app-edge'])}
+      />
+    )
+    expect(screen.queryByText('接口网络要求')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('网络配置方式')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('DNS 配置')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '移除 VM 专用网络配置' })).not.toBeInTheDocument()
+    expect(screen.getByLabelText('所属交换机')).toBeEnabled()
+    expect(screen.getByRole('checkbox', { name: /主网卡/ })).toBeEnabled()
+    const offset = screen.getByLabelText('主机偏移', { selector: 'input' })
+    fireEvent.change(offset, { target: { value: '15' } })
+    fireEvent.blur(offset)
+    const iface = (change.mock.calls[0][0] as TopologyDocument).connections['app-edge']
+    expect(iface).toMatchObject({ hostOffset: 15, primary: true })
+    for (const field of ['guestInterfaceName', 'useDefaultGateway', 'dnsServers', 'staticRoutes']) {
+      expect(iface).not.toHaveProperty(field)
+    }
+  })
+
+  it('preserves requirements when moving a VM interface to Docker until an editable user explicitly removes them', () => {
+    const source = createDocument()
+    const connection = source.connections['app-edge']
+    if (connection.type !== 'membership') throw new Error('invalid fixture')
+    const vmDocument: TopologyDocument = {
+      ...source,
+      connections: {
+        ...source.connections,
+        'app-edge': {
+          ...connection,
+          nodeKey: 'database',
+          guestInterfaceName: 'eth0',
+          useDefaultGateway: false,
+          dnsServers: [],
+          staticRoutes: [],
+        },
+      },
+    }
+    const writeInterface = (document: TopologyDocument) =>
+      serializeTeamLabWriteRequest(compileTopologyDocument(document)).assets.find((asset) => asset.key === 'app')!
+        .interfaces[0]
+    const change = vi.fn()
+    const view = render(
+      <TeamLabInspector document={vmDocument} onDocumentChange={change} selection={selection([], ['app-edge'])} />
+    )
+    expect(screen.getByText('接口网络要求')).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('连接节点'), { target: { value: 'app' } })
+    const incompatible = change.mock.calls[0][0] as TopologyDocument
+    expect(writeInterface(incompatible)).toMatchObject({
+      guestInterfaceName: 'eth0',
+      useDefaultGateway: false,
+      dnsServers: [],
+      staticRoutes: [],
+    })
+    change.mockClear()
+    view.rerender(
+      <TeamLabInspector
+        document={incompatible}
+        onDocumentChange={change}
+        readOnly
+        selection={selection([], ['app-edge'])}
+      />
+    )
+    expect(change).not.toHaveBeenCalled()
+    expect(screen.queryByText('接口网络要求')).not.toBeInTheDocument()
+    expect(screen.getByText(/Docker 不支持这条连接上已保存的 VM 专用网络配置/)).toBeInTheDocument()
+    const remove = screen.getByRole('button', { name: '移除 VM 专用网络配置' })
+    expect(remove).toBeDisabled()
+    fireEvent.click(remove)
+    expect(change).not.toHaveBeenCalled()
+    view.rerender(
+      <TeamLabInspector document={incompatible} onDocumentChange={change} selection={selection([], ['app-edge'])} />
+    )
+    fireEvent.click(screen.getByRole('button', { name: '移除 VM 专用网络配置' }))
+    const cleaned = change.mock.calls[0][0] as TopologyDocument
+    const payload = writeInterface(cleaned)
+    expect(payload).toMatchObject({ key: 'app-edge', hostOffset: 10, primary: true, networkKey: 'entry-net' })
+    for (const field of ['guestInterfaceName', 'useDefaultGateway', 'dnsServers', 'staticRoutes'])
+      expect(payload).not.toHaveProperty(field)
+    expect(cleaned.nodes).toEqual(incompatible.nodes)
+    expect(cleaned.connections.route).toEqual(incompatible.connections.route)
+    view.rerender(
+      <TeamLabInspector document={cleaned} onDocumentChange={change} selection={selection([], ['app-edge'])} />
+    )
+    expect(screen.queryByRole('button', { name: '移除 VM 专用网络配置' })).not.toBeInTheDocument()
+  })
+
+  it('still exposes and saves per-interface VM network requirements', () => {
+    const source = createDocument()
+    const asset = source.nodes.app
+    if (asset.type !== 'docker') throw new Error('invalid fixture')
+    const vmDocument: TopologyDocument = {
+      ...source,
+      nodes: { ...source.nodes, app: { ...asset, type: 'linux-vm', vmNetworkMode: 'managed-static' } },
+    }
+    const change = vi.fn()
+    render(<TeamLabInspector document={vmDocument} onDocumentChange={change} selection={selection(['app'])} />)
+    expect(screen.getByText('接口网络要求')).toBeInTheDocument()
+    expect(screen.getByLabelText('网络配置方式')).toHaveValue('managed-static')
+    fireEvent.change(screen.getByLabelText('DNS 配置'), { target: { value: 'none' } })
+    expect((change.mock.calls[0][0] as TopologyDocument).connections['app-edge']).toMatchObject({ dnsServers: [] })
+    fireEvent.change(screen.getByLabelText('默认网关'), { target: { value: 'none' } })
+    expect((change.mock.calls[1][0] as TopologyDocument).connections['app-edge']).toMatchObject({
+      useDefaultGateway: false,
+    })
+  })
+
   it('edits a switch with the immutable command and preserves advanced fields', () => {
     const source = createDocument()
     const onDocumentChange = vi.fn()
@@ -155,7 +269,7 @@ describe('TeamLabInspector', () => {
       />
     )
 
-    expect(screen.getByRole('option', { name: 'Web service (#42) - 未配置运维接入' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Web service - 未配置运维接入' })).toBeInTheDocument()
     expect(screen.queryByRole('option', { name: 'Windows Server (#99)' })).not.toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('镜像模板'), { target: { value: '42' } })
 

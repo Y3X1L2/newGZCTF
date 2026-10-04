@@ -1,5 +1,6 @@
 using System.Text.Json;
 using GZCTF.Modules.TeamLab.Domain;
+using GZCTF.Models.Data;
 
 namespace GZCTF.Modules.TeamLab.Contracts;
 
@@ -28,7 +29,8 @@ internal sealed record TeamLabTopologyAssetV2Model(
     int? DevicePackageId = null,
     JsonElement? DeviceParameters = null,
     Guid? ConnectorId = null,
-    string? DevicePackageDigest = null);
+    string? DevicePackageDigest = null,
+    VmNetworkMode? VmNetworkMode = null);
 
 internal sealed record TeamLabTopologyConnectionV2Model(
     string Key,

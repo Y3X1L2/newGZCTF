@@ -12,6 +12,29 @@ namespace GZCTF.Integration.Test.Tests.Api;
 public sealed class OpenApiDocumentationTests
 {
     [Fact]
+    public async Task Development_ExportsInternalContract()
+    {
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+        {
+            ApplicationName = typeof(Program).Assembly.FullName,
+            EnvironmentName = Environments.Development
+        });
+        builder.WebHost.UseTestServer();
+        builder.Services.AddControllers().AddApplicationPart(typeof(Program).Assembly);
+        builder.AddOpenApiServices();
+        await using var app = builder.Build();
+        app.MapOpenApiDocumentation();
+        await app.StartAsync();
+        var response = await app.GetTestClient().GetAsync("/openapi/v1.json");
+        response.EnsureSuccessStatusCode();
+        var content = await response.Content.ReadAsStringAsync();
+        using var document = JsonDocument.Parse(content);
+        Assert.True(document.RootElement.GetProperty("paths").TryGetProperty("/api/admin/teamlab/runtimes/search", out _));
+        if (Environment.GetEnvironmentVariable("OPENAPI_INTERNAL_PATH") is { Length: > 0 } outputPath)
+            await File.WriteAllTextAsync(outputPath, content);
+    }
+
+    [Fact]
     public async Task Production_ExposesOnlyExternalContractAndHtmlReference()
     {
         var options = new WebApplicationOptions

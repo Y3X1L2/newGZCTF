@@ -47,7 +47,7 @@ describe('TeamLabReleasesPage', () => {
     render(<MemoryRouter><SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}><TeamLabReleasesPage /></SWRConfig></MemoryRouter>)
 
     expect(await screen.findByRole('heading', { name: '发布版本' })).toBeInTheDocument()
-    expect(await screen.findByText('可创建试运行')).toBeInTheDocument()
+    expect(await screen.findByText('可以创建运行环境')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '创建试运行' }))
     const dialog = await screen.findByRole('dialog', { name: '启动 TeamLab 试运行？' })
     fireEvent.click(within(dialog).getByRole('button', { name: '创建试运行' }))

@@ -4,11 +4,27 @@ using GZCTF.Infrastructure.Persistence.Queries;
 using GZCTF.Modules.TeamLab.Contracts;
 using GZCTF.Modules.TeamLab.Domain;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 
 namespace GZCTF.Modules.TeamLab.Application;
 
 public sealed class TeamLabRuntimeProjectionService(AppDbContext context)
 {
+    public async Task<TeamLabTopologyAssetModel> GetAssetDefinitionAsync(
+        Guid runtimeId, int assetId, CancellationToken token)
+    {
+        var asset = await context.TeamLabRuntimeAssets.AsNoTracking()
+            .Where(item => item.Runtime.PublicId == runtimeId && item.Id == assetId &&
+                item.Generation == item.Runtime.Generation && item.Status != TeamLabRuntimeStatus.Destroyed)
+            .Select(item => new { item.ExecutionPlanJson }).SingleOrDefaultAsync(token)
+            ?? throw new TeamLabApiContractException("runtime_asset_not_found", "未找到运行资产。", 404);
+        var definition = string.IsNullOrWhiteSpace(asset.ExecutionPlanJson) ? null
+            : JsonSerializer.Deserialize<TeamLabExecutionAsset>(asset.ExecutionPlanJson);
+        return definition is null
+            ? throw new TeamLabApiContractException("runtime_asset_plan_missing", "运行资产缺少执行定义。", 409)
+            : TeamLabTopologyV1Normalizer.ToModel(definition);
+    }
+
     public async Task<TeamLabRuntimeProjectionModel> GetAsync(Guid runtimePublicId, CancellationToken cancellationToken)
     {
         var runtime = await context.TeamLabRuntimes.AsNoTracking()

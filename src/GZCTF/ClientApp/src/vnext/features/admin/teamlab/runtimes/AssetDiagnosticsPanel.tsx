@@ -18,25 +18,20 @@ function formatContainerDate(value: string) {
   return !Number.isFinite(timestamp) || value.startsWith('0001-') ? '-' : formatAdminDate(timestamp)
 }
 
-export function AssetDiagnosticsPanel({ runtime }: { runtime: TeamLabRuntime }) {
+export function AssetDiagnosticsPanel({ runtime, assetId }: { runtime: TeamLabRuntime; assetId: number }) {
   const titleId = useId()
-  const [selected, setSelected] = useState<number>()
   const [tail, setTail] = useState(200)
-  const assets = runtime.assets.filter(asset => asset.kind === 'docker')
-  const asset = assets.find(item => item.id === selected) ?? assets[0]
+  const asset = runtime.assets.find(item => item.id === assetId && item.kind === 'docker')
   const diagnostics = useAssetDiagnostics(runtime.id, runtime.generation, asset?.id, tail)
   const data = diagnostics.data
   return <section className={styles.panel} aria-labelledby={titleId}>
     <header className={styles.panelHeader}>
-      <h3 id={titleId}>容器状态与输出</h3>
+      <h3 id={titleId}>容器诊断</h3>
       <ActionButton icon={<RefreshCw size={16} />} disabled={!asset || diagnostics.isValidating}
         onClick={() => void diagnostics.mutate()} type="button">刷新诊断</ActionButton>
     </header>
-    {!assets.length ? <DataState title="暂无可诊断的容器资产" /> : <>
+    {!asset ? <DataState title="暂无可诊断的容器资产" /> : <>
       <div className={styles.diagnosticsControls}>
-        <label>资产<select value={asset?.id} onChange={event => setSelected(Number(event.target.value))}>
-          {assets.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
-        </select></label>
         <label>最近日志<select value={tail} onChange={event => setTail(Number(event.target.value))}>
           {[100, 200, 500, 1000].map(count => <option key={count} value={count}>{count} 行</option>)}
         </select></label>

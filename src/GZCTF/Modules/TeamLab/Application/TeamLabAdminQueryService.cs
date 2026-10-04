@@ -37,6 +37,7 @@ public sealed class TeamLabAdminQueryService(
             var term = filter.Search.Trim().ToLowerInvariant();
             if (Guid.TryParse(term, out var id)) query = query.Where(item => item.PublicId == id);
             else query = query.Where(item => item.ExternalReference != null && item.ExternalReference.ToLower().Contains(term) ||
+                context.TeamLabTopologyReleases.Any(release => release.Id == item.TopologyReleaseId && release.Topology.Name.ToLower().Contains(term)) ||
                 item.Assets.Any(asset => asset.Generation == item.Generation &&
                     (asset.Name.ToLower().Contains(term) || asset.TopologyKey.ToLower().Contains(term))));
         }
@@ -52,17 +53,18 @@ public sealed class TeamLabAdminQueryService(
             .Take(filter.Limit + 1).Select(item => new
             {
                 item.PublicId, item.TopologyReleaseId, item.ExternalReference, item.Generation, item.Status,
-                item.CreatedById, item.CreatedAt,
-                TopologyId = context.TeamLabTopologyReleases.Where(release => release.Id == item.TopologyReleaseId)
-                    .Select(release => (Guid?)release.Topology.PublicId).FirstOrDefault(),
+                item.CreatedById, item.CreatedAt, item.UpdatedAt,
+                Release = context.TeamLabTopologyReleases.Where(release => release.Id == item.TopologyReleaseId)
+                    .Select(release => new { TopologyId = release.Topology.PublicId, ScenarioName = release.Topology.Name, release.Version }).FirstOrDefault(),
                 AssetCount = item.Assets.Count(asset => asset.Generation == item.Generation),
                 HasError = item.Status == TeamLabRuntimeStatus.Failed || item.Status == TeamLabRuntimeStatus.CleanupPending ||
                     item.LastError != null || item.Assets.Any(asset =>
                     asset.Generation == item.Generation && asset.Status == TeamLabRuntimeStatus.Failed)
             }).ToArrayAsync(token);
-        var items = rows.Take(filter.Limit).Select(item => new TeamLabRuntimeSearchItem(item.PublicId, item.TopologyId,
+        var items = rows.Take(filter.Limit).Select(item => new TeamLabRuntimeSearchItem(item.PublicId, item.Release?.TopologyId,
             item.TopologyReleaseId, item.ExternalReference, item.Generation, Stage(item.Status),
-            item.CreatedById, item.CreatedAt, item.AssetCount, item.HasError)).ToArray();
+            item.CreatedById, item.CreatedAt, item.AssetCount, item.HasError,
+            item.Release?.ScenarioName, item.Release?.Version, item.UpdatedAt)).ToArray();
         return new(items, rows.Length > filter.Limit ? new GuidTimeCursor(items[^1].CreatedAt, items[^1].Id).Encode() : null);
     }
 
@@ -236,6 +238,10 @@ public sealed class TeamLabAdminQueryService(
         catch (TeamLabApiContractException exception) when (exception.Code == "capability_unavailable")
         {
             planningBlocker = DescribePlanningBlocker(execution, await LoadPlanningNodesAsync(cancellationToken));
+        }
+        catch (TeamLabApiContractException exception) when (exception.Code == "teamlab_guest_network_capability_unavailable")
+        {
+            planningBlocker = exception.Message;
         }
         var requirements = execution.Assets
             .GroupBy(item => item.ImageTemplateId)

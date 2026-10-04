@@ -105,7 +105,7 @@ public sealed class TeamLabAssetControlService(AppDbContext context, TeamLabAuth
             throw new TeamLabApiContractException("asset_control.resource_missing", "资产缺少执行身份，请使用重建。", 409);
         var payload = new TeamLabRuntimeOperationPayload(null, runtimeId, null)
         {
-            AssetControl = new(assetId, command with { Reason = command.Reason.Trim() }, asset.RuntimeResourceId,
+            AssetControl = new(assetId, command with { Reason = command.Reason?.Trim() }, asset.RuntimeResourceId,
                 asset.Kind == TeamLabResourceKind.Vm ? asset.NativeIdentity : null, WorkerNodeId: asset.WorkerNodeId!.Value)
         };
         return await QueueAsync(asset, actorId, payload, token);
@@ -121,7 +121,7 @@ public sealed class TeamLabAssetControlService(AppDbContext context, TeamLabAuth
         CancellationToken token)
     {
         Validate(command);
-        var normalizedCommand = command with { Reason = command.Reason.Trim() };
+        var normalizedCommand = command with { Reason = command.Reason?.Trim() };
         var normalizedKey = ExternalIdempotencyKey.Normalize(idempotencyKey);
         await authorization.RequireAssetPermissionAsync(runtimeId, assetId, actorId, apiTokenId, false,
             TeamLabRuntimePermission.AssetOperate, token);
@@ -292,8 +292,8 @@ public sealed class TeamLabAssetControlService(AppDbContext context, TeamLabAuth
     static void Validate(TeamLabAssetControlCommand command)
     {
         if (command.Generation <= 0 || command.Action is not ("start" or "stop" or "restart" or "rebuild" or "pause" or "resume") ||
-            string.IsNullOrWhiteSpace(command.Reason) || command.Reason.Trim().Length is < 4 or > 500)
-            throw new TeamLabApiContractException("asset_control.invalid_request", "请选择操作并填写 4-500 字的操作原因。", 422);
+            command.Reason?.Length > 500)
+            throw new TeamLabApiContractException("asset_control.invalid_request", "资产操作参数无效。", 422);
         if (command.Action is not ("start" or "resume") && !command.Confirmed)
             throw new TeamLabApiContractException("asset_control.confirmation_required", "此操作会中断连接或替换磁盘，需要确认。", 422);
     }

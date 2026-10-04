@@ -74,10 +74,10 @@ export function createTeamLabRemoteAccessApi(client: RuntimeJsonClient = runtime
     async getAvailabilityBatch(runtimeId: string) {
       return availabilityList(await client.get(`${root}/runtimes/${runtimeId}/remote-access`))
     },
-    async createSession(runtimeId: string, assetId: number, reason: string) {
+    async createSession(runtimeId: string, assetId: number, reason?: string) {
       return session(await client.postJson(`${root}/runtimes/${runtimeId}/assets/${assetId}/remote-sessions`, { reason }))
     },
-    async createConsoleSession(runtimeId: string, assetId: number, reason: string) {
+    async createConsoleSession(runtimeId: string, assetId: number, reason?: string) {
       return session(await client.postJson(`${root}/runtimes/${runtimeId}/assets/${assetId}/remote-sessions`, { reason, vncConsole: true }))
     },
     async getSession(sessionId: string) {

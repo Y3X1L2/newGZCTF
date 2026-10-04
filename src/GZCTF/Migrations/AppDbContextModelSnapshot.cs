@@ -1997,6 +1997,11 @@ namespace GZCTF.Migrations
                         .IsDescending(false, true, true)
                         .HasDatabaseName("IX_Logs_Node_Time_Id");
 
+                    b.HasIndex("ResourceType", "ResourceId", "TimeUtc", "Id")
+                        .IsDescending(false, false, true, true)
+                        .HasDatabaseName("IX_Logs_Resource_Time_Id")
+                        .HasFilter("\"ResourceType\" IS NOT NULL AND \"ResourceId\" IS NOT NULL");
+
                     b.ToTable("Logs");
                 });
 
@@ -7491,6 +7496,9 @@ namespace GZCTF.Migrations
                     b.Property<int>("TopologyId")
                         .HasColumnType("integer");
 
+                    b.Property<byte?>("VmNetworkMode")
+                        .HasColumnType("smallint");
+
                     b.HasKey("Id");
 
                     b.HasIndex("ConnectorId");
@@ -7561,6 +7569,13 @@ namespace GZCTF.Migrations
                     b.Property<int>("AssetId")
                         .HasColumnType("integer");
 
+                    b.Property<string>("DnsServersJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("GuestInterfaceName")
+                        .HasMaxLength(15)
+                        .HasColumnType("character varying(15)");
+
                     b.Property<int>("HostOffset")
                         .HasColumnType("integer");
 
@@ -7577,6 +7592,12 @@ namespace GZCTF.Migrations
 
                     b.Property<int>("OrderIndex")
                         .HasColumnType("integer");
+
+                    b.Property<string>("StaticRoutesJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<bool?>("UseDefaultGateway")
+                        .HasColumnType("boolean");
 
                     b.HasKey("Id");
 
@@ -7600,6 +7621,10 @@ namespace GZCTF.Migrations
                         .IsRequired()
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
+
+                    b.Property<string>("DnsServerAssetKey")
+                        .HasMaxLength(63)
+                        .HasColumnType("character varying(63)");
 
                     b.Property<bool>("IsEntry")
                         .HasColumnType("boolean");

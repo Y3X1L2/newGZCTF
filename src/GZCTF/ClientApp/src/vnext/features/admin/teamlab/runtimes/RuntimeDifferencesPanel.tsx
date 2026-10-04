@@ -17,7 +17,6 @@ export function RuntimeDifferencesPanel({ runtime }: { runtime: TeamLabRuntime }
     <header className={styles.panelHeader}><h3 id={title}>运行状态检查</h3>
       <ActionButton type="button" disabled={controller.busy} onClick={() => void controller.check()}>{controller.busy ? '检查与处理中…' : '检查差异'}</ActionButton>
     </header>
-    <p>比较资产的期望状态与节点实际状态。检查不会修改资源；修复任务将在下方资产操作区显示进度。</p>
     {controller.error ? <InlineFeedback tone="danger">{errorMessage(controller.error, '检查或修复失败，请重试。')}</InlineFeedback> : null}
     {controller.preview?.operationInProgress ? <InlineFeedback tone="neutral">运行任务尚未结束，请完成后重新检查。</InlineFeedback> : null}
     {controller.preview ? <div className={styles.sessionTableScroll} tabIndex={0} role="region" aria-label="运行资产差异"><table className={styles.sessionTable}>

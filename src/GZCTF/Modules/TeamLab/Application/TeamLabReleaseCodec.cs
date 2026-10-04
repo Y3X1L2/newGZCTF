@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using GZCTF.Modules.TeamLab.Contracts;
 using GZCTF.Modules.TeamLab.Domain;
+using GZCTF.Models.Data;
 
 namespace GZCTF.Modules.TeamLab.Application;
 
@@ -97,7 +98,8 @@ public static class TeamLabReleaseCodec
                 Interfaces = item.Interfaces.OrderBy(iface => iface.Key, StringComparer.Ordinal).Select(iface => iface with
                 {
                     Key = iface.Key.Trim(),
-                    NetworkKey = iface.NetworkKey.Trim()
+                    NetworkKey = iface.NetworkKey.Trim(),
+                    GuestInterfaceName = TrimToNull(iface.GuestInterfaceName)
                 }).ToArray()
             }).ToArray(),
             definition.Connections.OrderBy(item => item.Key, StringComparer.Ordinal).Select(item => item with
@@ -113,7 +115,8 @@ public static class TeamLabReleaseCodec
                 Key = item.Key.Trim(), Name = item.Name.Trim(), NetworkKey = TrimToNull(item.NetworkKey),
                 Interfaces = item.Interfaces.OrderBy(iface => iface.Key, StringComparer.Ordinal).Select(iface => iface with
                 {
-                    Key = iface.Key.Trim(), NetworkKey = iface.NetworkKey.Trim()
+                    Key = iface.Key.Trim(), NetworkKey = iface.NetworkKey.Trim(),
+                    GuestInterfaceName = TrimToNull(iface.GuestInterfaceName)
                 }).ToArray()
             }).ToArray(),
             definition.Observation);
@@ -137,7 +140,7 @@ public static class TeamLabReleaseCodec
         definition.Networks,
         definition.Assets.Select(asset => new TeamLabTopologyAssetV1Model(
             asset.Key, asset.Name, asset.Kind, asset.ImageTemplateId, asset.Resources, asset.Interfaces,
-            asset.ExposePort, asset.HealthCheck, asset.OrderIndex, imageDigests?.GetValueOrDefault(asset.Key))).ToArray(),
+            asset.ExposePort, asset.HealthCheck, asset.OrderIndex, imageDigests?.GetValueOrDefault(asset.Key), asset.VmNetworkMode)).ToArray(),
         definition.Connections.Select(connection => new TeamLabTopologyConnectionV1Model(
             connection.Key, connection.FromNetworkKey, connection.ToNetworkKey, connection.ViaAssetKey ?? string.Empty)).ToArray());
 
@@ -151,7 +154,7 @@ public static class TeamLabReleaseCodec
             execution.Name,
             execution.Networks.Select(network => new TeamLabTopologyNetworkModel(
                 network.Key, network.Name, new TeamLabAddressPoolModel(network.AddressPoolCidr, network.RuntimePrefixLength),
-                network.IsEntry, network.DisplayOrder)).ToArray(),
+                network.IsEntry, network.DisplayOrder, network.DnsServerAssetKey)).ToArray(),
             execution.Infrastructure.Select(item => new TeamLabTopologyInfrastructureModel(
                 item.Key, item.Name, item.Kind, item.Interfaces.Select(ToContract).ToArray(), item.NetworkKey)).ToArray(),
             execution.Assets.Select(asset => new TeamLabTopologyAssetV2Model(
@@ -163,7 +166,7 @@ public static class TeamLabReleaseCodec
                     : null,
                 asset.DisplayOrder, imageDigests?.GetValueOrDefault(asset.Key),
                 asset.DevicePackageId, ParseParameters(asset.DeviceParametersJson), asset.ConnectorId,
-                devicePackageDigests?.GetValueOrDefault(asset.Key))).ToArray(),
+                devicePackageDigests?.GetValueOrDefault(asset.Key), asset.VmNetworkMode)).ToArray(),
             execution.Connections.Select(connection => new TeamLabTopologyConnectionV2Model(
                 connection.Key, connection.FromNetworkKey, connection.ToNetworkKey, connection.ViaNodeKey,
                 connection.ViaAssetKey, connection.Direction)).ToArray(),
@@ -176,7 +179,7 @@ public static class TeamLabReleaseCodec
         definition.Networks,
         definition.Assets.Select(asset => new TeamLabTopologyAssetModel(
             asset.Key, asset.Name, asset.Kind, asset.ImageTemplateId, asset.Resources, asset.Interfaces,
-            asset.ExposePort, asset.HealthCheck, asset.OrderIndex)).ToArray(),
+            asset.ExposePort, asset.HealthCheck, asset.OrderIndex, VmNetworkMode: asset.VmNetworkMode)).ToArray(),
         definition.Connections.Select(connection => new TeamLabTopologyConnectionModel(
             connection.Key, connection.FromNetworkKey, connection.ToNetworkKey, connection.ViaAssetKey)).ToArray()));
 
@@ -186,14 +189,15 @@ public static class TeamLabReleaseCodec
         definition.Assets.Select(asset => new TeamLabTopologyAssetModel(
             asset.Key, asset.Name, asset.Kind, asset.ImageTemplateId, asset.Resources, asset.Interfaces,
             asset.ExposePort, asset.HealthCheck, asset.OrderIndex,
-            asset.DevicePackageId, asset.DeviceParameters, asset.ConnectorId)).ToArray(),
+            asset.DevicePackageId, asset.DeviceParameters, asset.ConnectorId, asset.VmNetworkMode)).ToArray(),
         definition.Connections.Select(connection => new TeamLabTopologyConnectionModel(
             connection.Key, connection.FromNetworkKey, connection.ToNetworkKey, connection.ViaAssetKey,
             connection.ViaNodeKey, connection.Direction)).ToArray(),
         definition.Infrastructure, definition.Observation));
 
     private static TeamLabTopologyInterfaceModel ToContract(TeamLabExecutionInterface iface) =>
-        new(iface.Key, iface.NetworkKey, iface.HostOffset, iface.Primary, iface.DisplayOrder);
+        new(iface.Key, iface.NetworkKey, iface.HostOffset, iface.Primary, iface.DisplayOrder,
+            iface.GuestInterfaceName, iface.UseDefaultGateway, iface.DnsServers, iface.StaticRoutes);
 
     private static string? TrimToNull(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
@@ -220,7 +224,8 @@ public static class TeamLabReleaseCodec
     private sealed record TeamLabTopologyAssetV1Model(
         string Key, string Name, TeamLabAssetKind Kind, int ImageTemplateId,
         TeamLabAssetResourceModel Resources, IReadOnlyList<TeamLabTopologyInterfaceModel> Interfaces,
-        int? ExposePort, TeamLabHealthCheckModel? HealthCheck, int OrderIndex, string? ImageDigest = null);
+        int? ExposePort, TeamLabHealthCheckModel? HealthCheck, int OrderIndex, string? ImageDigest = null,
+        VmNetworkMode? VmNetworkMode = null);
 
     private sealed record TeamLabTopologyConnectionV1Model(
         string Key, string FromNetworkKey, string ToNetworkKey, string ViaAssetKey);

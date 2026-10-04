@@ -48,6 +48,8 @@ builder.Services.Configure<AgentTeamLabConfig>(builder.Configuration.GetSection(
 builder.Services.AddSingleton<DockerService>();
 builder.Services.AddSingleton<KvmService>();
 builder.Services.AddSingleton<VmGuestAgentService>();
+builder.Services.AddSingleton<IVmGuestAgentClient>(provider => provider.GetRequiredService<VmGuestAgentService>());
+builder.Services.AddSingleton<TeamLabVmNetworkService>();
 builder.Services.AddSingleton<VmBootstrapService>();
 builder.Services.AddSingleton<VmImageBackingChainInspector>();
 builder.Services.AddSingleton<VmRuntimeReadinessCoordinator>();

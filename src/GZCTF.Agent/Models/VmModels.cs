@@ -206,7 +206,12 @@ public sealed record VmGuestCommandRequest(
     string Path,
     IReadOnlyList<string> Arguments,
     int TimeoutSeconds = 300,
-    IReadOnlyDictionary<string, string>? Environment = null);
+    IReadOnlyDictionary<string, string>? Environment = null)
+{
+    // Internal transport only; preserve the public command API and bootstrap wire contract.
+    [System.Text.Json.Serialization.JsonIgnore]
+    internal string? StandardInput { get; init; }
+}
 
 public sealed record VmGuestCommandResponse(
     bool Success,

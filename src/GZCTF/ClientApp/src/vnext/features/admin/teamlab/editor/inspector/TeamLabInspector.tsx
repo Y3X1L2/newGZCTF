@@ -135,6 +135,7 @@ export function TeamLabInspector({
     content =
       connection.type === 'membership' ? (
         <NetworkInterfacesEditor
+          imageOptions={imageOptions}
           connection={connection}
           document={document}
           onDocumentChange={onDocumentChange}

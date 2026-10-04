@@ -1,4 +1,6 @@
 using GZCTF.Modules.TeamLab.Domain;
+using GZCTF.Models.Data;
+using System.Text.Json.Serialization;
 
 namespace GZCTF.Modules.TeamLab.Contracts;
 
@@ -12,7 +14,11 @@ public sealed record TeamLabPlanInterfaceModel(
     string Key,
     string NetworkKey,
     int HostOffset,
-    bool Primary);
+    bool Primary,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? GuestInterfaceName = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? UseDefaultGateway = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<string>? DnsServers = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<TeamLabGuestRouteModel>? StaticRoutes = null);
 
 public sealed record TeamLabPlanAssetModel(
     string Key,
@@ -20,7 +26,8 @@ public sealed record TeamLabPlanAssetModel(
     TeamLabAssetKind Kind,
     int ImageTemplateId,
     TeamLabAssetResourceModel Resources,
-    IReadOnlyList<TeamLabPlanInterfaceModel> Interfaces);
+    IReadOnlyList<TeamLabPlanInterfaceModel> Interfaces,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] VmNetworkMode? VmNetworkMode = null);
 
 public sealed record TeamLabPlanShardModel(
     string Key,

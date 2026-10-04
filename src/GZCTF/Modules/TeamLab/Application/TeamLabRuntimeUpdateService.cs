@@ -214,6 +214,9 @@ public sealed class TeamLabRuntimeUpdateService(
         var currentPlans = runtime.ExecutionPlanSnapshots
             .Where(item => item.Generation == runtime.Generation)
             .ToDictionary(item => item.ShardId, item => ReadPlan(item.CurrentPlanJson ?? item.PlanJson));
+        var oldSnapshotJson = runtime.ExecutionPlanSnapshots
+            .Where(item => item.Generation == runtime.Generation)
+            .ToDictionary(item => item.ShardId, item => item.CurrentPlanJson);
         var oldPlans = trackedAssets
             .Where(item => item.Status != TeamLabRuntimeStatus.Destroyed)
             .ToDictionary(
@@ -227,13 +230,17 @@ public sealed class TeamLabRuntimeUpdateService(
         var replacedAddresses = new HashSet<int>();
         var created = new List<(TeamLabRuntimeAsset Asset, TeamLabExecutionPlanV2 Plan)>();
         var removed = new List<(TeamLabRuntimeAsset Asset, TeamLabExecutionPlanV2 Plan, string? ResourceId, string? NativeIdentity)>();
+        var removedOnNode = new List<(TeamLabRuntimeAsset Asset, TeamLabExecutionPlanV2 Plan, string? ResourceId, string? NativeIdentity)>();
+        var targetSnapshotSaved = false;
         TeamLabExecutionPlanV2? currentNetworkPlan = null;
         TeamLabExecutionPlanV2? desiredNetworkPlan = null;
         Guid networkOwnerNodeId = Guid.Empty;
-        var networkUpdated = false;
+        var networkUpdateAttempted = false;
         try
         {
             var templates = await LoadTemplatesAsync(targetDefinition, token);
+            if (await GuestNetworkCapabilityReasonAsync(runtime, targetDefinition, token) is { } capabilityReason)
+                throw new TeamLabApiContractException("teamlab_guest_network_capability_unavailable", capabilityReason, 409);
             var networks = runtime.Networks
                 .Where(item => item.Generation == runtime.Generation)
                 .ToDictionary(item => item.TopologyKey, StringComparer.Ordinal);
@@ -334,6 +341,7 @@ public sealed class TeamLabRuntimeUpdateService(
             {
                 await remoteAccess.EndAssetSessionsAsync(
                     runtime.Id, item.Asset.Id, runtime.Generation, "runtime-update", token);
+                removedOnNode.Add(item);
                 var result = await assetControl.ExecuteAsync(
                     item.Asset.WorkerNodeId!.Value,
                     new(item.Plan, item.Asset.TopologyKey, "remove", item.ResourceId, item.NativeIdentity),
@@ -347,12 +355,18 @@ public sealed class TeamLabRuntimeUpdateService(
                 item.Asset.ExecutionUpdatedAt = DateTimeOffset.UtcNow;
             }
 
+            foreach (var snapshot in runtime.ExecutionPlanSnapshots.Where(item =>
+                         item.Generation == runtime.Generation && targetPlans.ContainsKey(item.ShardId)))
+                snapshot.CurrentPlanJson = JsonSerializer.Serialize(targetPlans[snapshot.ShardId]);
+            await context.SaveChangesAsync(token);
+            targetSnapshotSaved = true;
+
+            networkUpdateAttempted = true;
             var networkResult = await nodes.UpdateExecutionNetworkAsync(
                 networkOwnerNodeId, currentNetworkPlan, desiredNetworkPlan, token);
             if (!networkResult.Success)
                 throw new TeamLabRuntimeExecutionException(
                     networkResult.Message ?? networkResult.ErrorCode ?? "Network update failed.");
-            networkUpdated = true;
 
             foreach (var change in changes.Where(item => item.Action is "add" or "replace"))
             {
@@ -361,6 +375,7 @@ public sealed class TeamLabRuntimeUpdateService(
                 var plan = targetPlans[asset.ShardId!.Value];
                 var template = templates[asset.SourceTemplateId!.Value];
                 await artifacts.EnsureImageAsync(runtime.Id, asset.WorkerNodeId!.Value, template, token);
+                created.Add((asset, plan));
                 var result = await assetControl.ExecuteAsync(
                     asset.WorkerNodeId.Value,
                     new(plan, asset.TopologyKey, "create", null, null),
@@ -374,7 +389,6 @@ public sealed class TeamLabRuntimeUpdateService(
                 asset.ExecutionStage = TeamLabAssetExecutionStage.ServiceReady;
                 asset.LastError = null;
                 asset.ExecutionUpdatedAt = DateTimeOffset.UtcNow;
-                created.Add((asset, plan));
             }
 
             foreach (var assetId in replacedAddresses)
@@ -402,9 +416,6 @@ public sealed class TeamLabRuntimeUpdateService(
 
             SyncWorkloadObservationPoints(runtime, changes);
 
-            foreach (var snapshot in runtime.ExecutionPlanSnapshots.Where(item =>
-                         item.Generation == runtime.Generation && targetPlans.ContainsKey(item.ShardId)))
-                snapshot.CurrentPlanJson = JsonSerializer.Serialize(targetPlans[snapshot.ShardId]);
             if (updatePlan.TargetRelease is not null)
             {
                 runtime.TopologyReleaseId = updatePlan.TargetRelease.Id;
@@ -431,17 +442,22 @@ public sealed class TeamLabRuntimeUpdateService(
         {
             logger.LogWarning(exception, "TeamLab 运行环境 {RuntimeId} 热更新失败", runtime.PublicId);
             var rollbackErrors = new List<string>();
+            var unresolvedCreated = created.Select(item => item.Asset).ToHashSet();
             foreach (var item in created.AsEnumerable().Reverse())
                 try
                 {
-                    await assetControl.ExecuteAsync(item.Asset.WorkerNodeId!.Value,
+                    var result = await assetControl.ExecuteAsync(item.Asset.WorkerNodeId!.Value,
                         new(item.Plan, item.Asset.TopologyKey, "remove", item.Asset.RuntimeResourceId, item.Asset.NativeIdentity), token);
+                    if (!result.Success)
+                        rollbackErrors.Add(result.ErrorCode ?? $"{item.Asset.TopologyKey} rollback failed");
+                    else
+                        unresolvedCreated.Remove(item.Asset);
                 }
                 catch (Exception rollbackException)
                 {
                     rollbackErrors.Add(rollbackException.Message);
                 }
-            if (networkUpdated && currentNetworkPlan is not null && desiredNetworkPlan is not null)
+            if (rollbackErrors.Count == 0 && networkUpdateAttempted && currentNetworkPlan is not null && desiredNetworkPlan is not null)
                 try
                 {
                     var result = await nodes.UpdateExecutionNetworkAsync(
@@ -453,7 +469,7 @@ public sealed class TeamLabRuntimeUpdateService(
                     rollbackErrors.Add(rollbackException.Message);
                 }
             var restoredIdentities = new Dictionary<int, (string? ResourceId, string? NativeIdentity)>();
-            foreach (var item in removed)
+            foreach (var item in rollbackErrors.Count == 0 ? removedOnNode : [])
                 try
                 {
                     var result = await assetControl.ExecuteAsync(item.Asset.WorkerNodeId!.Value,
@@ -469,16 +485,34 @@ public sealed class TeamLabRuntimeUpdateService(
                     rollbackErrors.Add(rollbackException.Message);
                 }
 
-            foreach (var snapshot in propertySnapshots)
-                context.Entry(trackedAssets.Single(item => item.Id == snapshot.Key)).CurrentValues.SetValues(snapshot.Value);
-            foreach (var restored in restoredIdentities)
+            if (rollbackErrors.Count == 0)
             {
-                var asset = trackedAssets.Single(item => item.Id == restored.Key);
-                asset.RuntimeResourceId = restored.Value.ResourceId;
-                asset.NativeIdentity = restored.Value.NativeIdentity;
+                foreach (var snapshot in propertySnapshots)
+                    context.Entry(trackedAssets.Single(item => item.Id == snapshot.Key)).CurrentValues.SetValues(snapshot.Value);
+                foreach (var restored in restoredIdentities)
+                {
+                    var asset = trackedAssets.Single(item => item.Id == restored.Key);
+                    asset.RuntimeResourceId = restored.Value.ResourceId;
+                    asset.NativeIdentity = restored.Value.NativeIdentity;
+                }
+                if (targetSnapshotSaved)
+                    foreach (var snapshot in runtime.ExecutionPlanSnapshots.Where(item =>
+                                 item.Generation == runtime.Generation && oldSnapshotJson.ContainsKey(item.ShardId)))
+                        snapshot.CurrentPlanJson = oldSnapshotJson[snapshot.ShardId];
             }
-            foreach (var asset in newAssets)
+            foreach (var asset in newAssets.Where(asset => !unresolvedCreated.Contains(asset)))
                 context.TeamLabRuntimeAssets.Remove(asset);
+            foreach (var item in created.Where(item => !unresolvedCreated.Contains(item.Asset) &&
+                         !newAssets.Contains(item.Asset) && rollbackErrors.Count > 0))
+            {
+                item.Asset.Status = TeamLabRuntimeStatus.Destroyed;
+                item.Asset.RuntimeResourceId = null;
+                item.Asset.NativeIdentity = null;
+            }
+            if (!targetSnapshotSaved)
+                foreach (var snapshot in runtime.ExecutionPlanSnapshots.Where(item =>
+                             item.Generation == runtime.Generation && oldSnapshotJson.ContainsKey(item.ShardId)))
+                    snapshot.CurrentPlanJson = oldSnapshotJson[snapshot.ShardId];
             context.Entry(runtime).CurrentValues.SetValues(oldRuntimeValues);
             runtime.Status = rollbackErrors.Count == 0 ? TeamLabRuntimeStatus.Running : TeamLabRuntimeStatus.Failed;
             runtime.LastError = rollbackErrors.Count == 0
@@ -489,7 +523,7 @@ public sealed class TeamLabRuntimeUpdateService(
                 GZCTF.Modules.Audit.Domain.OperationalEventCodes.TeamLab.RuntimeUpdateFailed,
                 GZCTF.Modules.Audit.Domain.OperationalEventOutcome.Failed,
                 rollbackErrors.Count == 0
-                    ? "运行环境更新失败，本次变更已撤销。"
+                    ? "运行环境更新失败，资产与网络已恢复；已结束的会话、抓包及已撤销的服务开放不会恢复。"
                     : "运行环境更新失败，部分撤销操作未完成。",
                 OperationalErrorClassifier.FromException(exception, "teamlab.runtime.update"));
             await context.SaveChangesAsync(CancellationToken.None);
@@ -518,6 +552,7 @@ public sealed class TeamLabRuntimeUpdateService(
                         : !SameConnectorBindings(current, target)
                             ? "现场连接器发生变化，需要完整重置。"
                             : PlacementChangeReason(runtime, target);
+        reason ??= await GuestNetworkCapabilityReasonAsync(runtime, target, token);
         var preview = new TeamLabRuntimeUpdatePreviewModel(
             runtime.PublicId,
             currentRelease.Id,
@@ -555,6 +590,7 @@ public sealed class TeamLabRuntimeUpdateService(
         var reason = runtime.Status != TeamLabRuntimeStatus.Running
             ? "只有运行中的环境可以更新资产。"
             : PlacementChangeReason(runtime, target);
+        reason ??= await GuestNetworkCapabilityReasonAsync(runtime, target, token);
         var preview = new TeamLabRuntimeUpdatePreviewModel(
             runtime.PublicId,
             release.Id,
@@ -637,29 +673,16 @@ public sealed class TeamLabRuntimeUpdateService(
         topology.Name,
         topology.Networks.Select(item => new TeamLabTopologyNetworkModel(
             item.Key, item.Name, new TeamLabAddressPoolModel(item.AddressPoolCidr, item.RuntimePrefixLength),
-            item.IsEntry, item.DisplayOrder)).ToArray(),
-        topology.Assets.Select(item => new TeamLabTopologyAssetModel(
-            item.Key, item.Name, item.Kind, item.ImageTemplateId,
-            new TeamLabAssetResourceModel(item.CpuUnits, item.MemoryMiB, item.StorageMiB),
-            item.Interfaces.Select(iface => new TeamLabTopologyInterfaceModel(
-                iface.Key, iface.NetworkKey, iface.HostOffset, iface.Primary, iface.DisplayOrder)).ToArray(),
-            item.ExposePort,
-            item.HealthCheckKind is { } kind && item.HealthCheckPort is { } port
-                ? new TeamLabHealthCheckModel(kind, port)
-                : null,
-            item.DisplayOrder,
-            item.DevicePackageId,
-            string.IsNullOrWhiteSpace(item.DeviceParametersJson)
-                ? null
-                : JsonDocument.Parse(item.DeviceParametersJson).RootElement.Clone(),
-            item.ConnectorId)).ToArray(),
+            item.IsEntry, item.DisplayOrder, item.DnsServerAssetKey)).ToArray(),
+        topology.Assets.Select(TeamLabTopologyV1Normalizer.ToModel).ToArray(),
         topology.Connections.Select(item => new TeamLabTopologyConnectionModel(
             item.Key, item.FromNetworkKey, item.ToNetworkKey, item.ViaAssetKey,
             item.ViaNodeKey, item.Direction)).ToArray(),
         topology.Infrastructure.Select(item => new TeamLabTopologyInfrastructureModel(
             item.Key, item.Name, item.Kind,
             item.Interfaces.Select(iface => new TeamLabTopologyInterfaceModel(
-                iface.Key, iface.NetworkKey, iface.HostOffset, iface.Primary, iface.DisplayOrder)).ToArray(),
+                iface.Key, iface.NetworkKey, iface.HostOffset, iface.Primary, iface.DisplayOrder,
+                iface.GuestInterfaceName, iface.UseDefaultGateway, iface.DnsServers, iface.StaticRoutes)).ToArray(),
             item.NetworkKey)).ToArray(),
         new TeamLabObservationPolicyModel(
             topology.Observation.FlowMetadataEnabled,
@@ -676,13 +699,30 @@ public sealed class TeamLabRuntimeUpdateService(
         {
             if (!currentByKey.TryGetValue(asset.Key, out var existing))
                 changes.Add(new(asset.Key, asset.Name, asset.Kind, "add"));
-            else if (!AssetEquals(existing, asset))
+            else if (!AssetEquals(existing, asset) || InheritedStaticDnsChanged(current, target, asset))
                 changes.Add(new(asset.Key, asset.Name, asset.Kind, "replace"));
         }
         foreach (var asset in current.Assets.Where(item => !targetByKey.ContainsKey(item.Key))
                      .OrderBy(item => item.DisplayOrder).ThenBy(item => item.Key, StringComparer.Ordinal))
             changes.Add(new(asset.Key, asset.Name, asset.Kind, "remove"));
         return changes;
+    }
+
+    static bool InheritedStaticDnsChanged(TeamLabExecutionTopology current, TeamLabExecutionTopology target,
+        TeamLabExecutionAsset asset)
+    {
+        if (asset.Kind != TeamLabAssetKind.Vm || asset.VmNetworkMode != VmNetworkMode.ManagedStatic) return false;
+        return asset.Interfaces.Where(iface => iface.DnsServers is null).Any(iface =>
+            DnsAddressIntent(current, iface.NetworkKey) != DnsAddressIntent(target, iface.NetworkKey));
+    }
+
+    // Runtime subnets are unchanged by asset updates; a different offset on the DNS asset changes the inherited resolver.
+    static (string? NetworkKey, int? HostOffset) DnsAddressIntent(TeamLabExecutionTopology topology, string networkKey)
+    {
+        var assetKey = topology.Networks.FirstOrDefault(network => network.Key == networkKey)?.DnsServerAssetKey;
+        var iface = topology.Assets.FirstOrDefault(asset => asset.Key == assetKey)?.Interfaces
+            .FirstOrDefault(item => item.NetworkKey == networkKey);
+        return (iface?.NetworkKey, iface?.HostOffset);
     }
 
     static bool AssetEquals(TeamLabExecutionAsset left, TeamLabExecutionAsset right) =>
@@ -736,6 +776,25 @@ public sealed class TeamLabRuntimeUpdateService(
                     400);
         }
         return values;
+    }
+
+    internal async Task<string?> GuestNetworkCapabilityReasonAsync(TeamLabRuntime runtime, TeamLabExecutionTopology target, CancellationToken token)
+    {
+        var required = await TeamLabGuestNetworkCapabilityPolicy.LoadDeclaredAsync(context, target, token);
+        var networkNodes = runtime.Networks.Where(network => network.Generation == runtime.Generation)
+            .ToDictionary(network => network.TopologyKey, network => network.WorkerNodeId);
+        var nodeIds = networkNodes.Values.Where(id => id.HasValue).Select(id => id!.Value).Distinct().ToArray();
+        var workers = await context.WorkerNodes.AsNoTracking().Where(node => nodeIds.Contains(node.Id)).ToDictionaryAsync(node => node.Id, token);
+        foreach (var asset in target.Assets)
+        {
+            var features = required.GetValueOrDefault(asset.Key) ?? [];
+            if (features.Length == 0) continue;
+            var nodeId = asset.Interfaces.Select(iface => networkNodes.GetValueOrDefault(iface.NetworkKey)).FirstOrDefault(id => id.HasValue);
+            if (nodeId is not { } assigned || !workers.TryGetValue(assigned, out var node))
+                return $"teamlab_guest_network_capability_unavailable: 资产 {asset.Name} 缺少可验证的已分配节点。";
+            if (TeamLabGuestNetworkCapabilityPolicy.MissingReason(node, features) is { } reason) return reason;
+        }
+        return null;
     }
 
     static string? PlacementChangeReason(TeamLabRuntime runtime, TeamLabExecutionTopology target)

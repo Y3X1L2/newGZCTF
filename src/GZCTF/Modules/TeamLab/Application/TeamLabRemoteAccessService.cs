@@ -7,6 +7,7 @@ using GZCTF.Modules.TeamLab.Contracts;
 using GZCTF.Modules.TeamLab.Domain.Runtime;
 using GZCTF.Services;
 using GZCTF.Modules.Audit.Domain;
+using GZCTF.Modules.Audit.Contracts;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using Npgsql;
@@ -223,28 +224,29 @@ public sealed class TeamLabRemoteAccessService(
     }
 
     public Task<TeamLabRemoteSessionModel> CreateAsync(
-        Guid runtimeId, int assetId, Guid actorId, bool administrator, string reason, CancellationToken cancellationToken) =>
+        Guid runtimeId, int assetId, Guid actorId, bool administrator, string? reason, CancellationToken cancellationToken) =>
         CreateCoreAsync(runtimeId, assetId, actorId, administrator, null, reason, null, cancellationToken);
 
     public Task<TeamLabRemoteSessionModel> CreateConsoleAsync(
-        Guid runtimeId, int assetId, Guid actorId, bool administrator, string reason, CancellationToken cancellationToken) =>
+        Guid runtimeId, int assetId, Guid actorId, bool administrator, string? reason, CancellationToken cancellationToken) =>
         CreateCoreAsync(runtimeId, assetId, actorId, administrator, null, reason, null, cancellationToken, vncConsole: true);
 
     public Task<TeamLabRemoteSessionModel> CreateForOperationAsync(
-        Guid runtimeId, int assetId, Guid actorId, string reason, Guid operationId, CancellationToken cancellationToken, bool vncConsole = false) =>
+        Guid runtimeId, int assetId, Guid actorId, string? reason, Guid operationId, CancellationToken cancellationToken, bool vncConsole = false) =>
         CreateCoreAsync(runtimeId, assetId, actorId, false, null, reason, operationId, cancellationToken, vncConsole);
 
     public Task<TeamLabRemoteSessionModel> CreateForApiOperationAsync(
-        Guid runtimeId, int assetId, Guid actorId, Guid apiTokenId, string reason, Guid operationId,
+        Guid runtimeId, int assetId, Guid actorId, Guid apiTokenId, string? reason, Guid operationId,
         CancellationToken cancellationToken, bool vncConsole = false) =>
         CreateCoreAsync(runtimeId, assetId, actorId, false, apiTokenId, reason, operationId, cancellationToken, vncConsole);
 
     private async Task<TeamLabRemoteSessionModel> CreateCoreAsync(
-        Guid runtimeId, int assetId, Guid actorId, bool administrator, Guid? apiTokenId, string reason, Guid? operationId,
+        Guid runtimeId, int assetId, Guid actorId, bool administrator, Guid? apiTokenId, string? reason, Guid? operationId,
         CancellationToken cancellationToken, bool vncConsole = false)
     {
-        if (string.IsNullOrWhiteSpace(reason) || reason.Trim().Length is < 4 or > 500)
-            throw new TeamLabApiContractException("remote_access_reason_invalid", "访问原因需为 4-500 个字符", 422);
+        var normalizedReason = reason?.Trim() ?? string.Empty;
+        if (normalizedReason.Length > 500)
+            throw new TeamLabApiContractException("remote_access_reason_invalid", "访问原因不能超过 500 个字符", 422);
         if (operationId is { } stableId)
         {
             var existing = await context.TeamLabRemoteSessions.Include(item => item.Runtime).Include(item => item.RuntimeAsset)
@@ -252,7 +254,7 @@ public sealed class TeamLabRemoteAccessService(
             if (existing is not null)
             {
                 if (existing.Runtime.PublicId != runtimeId || existing.RuntimeAssetId != assetId ||
-                    existing.RequestedByUserId != actorId || existing.Reason != reason.Trim() ||
+                    existing.RequestedByUserId != actorId || existing.Reason != normalizedReason ||
                     (existing.Protocol == TeamLabRemoteProtocol.Vnc) != vncConsole)
                     throw new TeamLabApiContractException("idempotency_conflict", "会话创建操作与已有资源不一致。", 409);
                 if (existing.Status is TeamLabRemoteSessionStatus.Ready or TeamLabRemoteSessionStatus.Connected &&
@@ -295,7 +297,7 @@ public sealed class TeamLabRemoteAccessService(
             WorkerNodeId = asset.WorkerNodeId.Value,
             RequestedByUserId = actorId,
             Protocol = availability.Protocol.Value,
-            Reason = reason.Trim(),
+            Reason = normalizedReason,
             ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(SessionMinutes)
         };
         await ReserveSessionAsync(session, asset, cancellationToken);
@@ -782,6 +784,9 @@ public sealed class TeamLabRemoteAccessService(
             events.Record(session.Runtime, "remote-access", TeamLabEventLevel.Warning,
                 OperationalEventCodes.TeamLab.RemoteSessionEnded, OperationalEventOutcome.Failed,
                 $"{session.RuntimeAsset.Name} 的 {session.Protocol} 远程会话清理未完成，系统将继续重试",
+                new OperationalError(OperationalErrorCategory.Unknown, OperationalErrorCodes.RecoveryDeferred,
+                    "Remote session infrastructure cleanup is pending.", true,
+                    WorkerNodeId: session.WorkerNodeId, Operation: "teamlab.remote-session.cleanup"),
                 workerNodeId: session.WorkerNodeId, detail: RemoteDetail(session, session.RuntimeAsset, actorId));
             return;
         }

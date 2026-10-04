@@ -74,6 +74,16 @@ public sealed class TeamLabPhysicalPlacementService(
                 return FleetCapacityReservationResult.Failed("TeamLab runtime was not found.");
             if (existingRuntime.Shards.Any(item => item.Generation == existingRuntime.Generation))
             {
+                var currentAssets = existingRuntime.Assets.Where(asset => asset.Generation == existingRuntime.Generation).ToArray();
+                var existingGuestNetworkFeatures = await TeamLabGuestNetworkCapabilityPolicy.LoadRuntimeAsync(context, existingRuntime, currentAssets, token);
+                var assignedNodes = await context.WorkerNodes.AsNoTracking()
+                    .Where(node => existingReservations.Select(reservation => reservation.WorkerNodeId).Contains(node.Id))
+                    .ToDictionaryAsync(node => node.Id, token);
+                foreach (var existingAssignment in currentAssets.Where(asset => asset.WorkerNodeId.HasValue).GroupBy(asset => asset.WorkerNodeId!.Value))
+                    if (assignedNodes.TryGetValue(existingAssignment.Key, out var assignedNode) &&
+                        TeamLabGuestNetworkCapabilityPolicy.MissingReason(assignedNode,
+                            existingAssignment.SelectMany(asset => existingGuestNetworkFeatures.GetValueOrDefault(asset.TopologyKey) ?? []).Distinct().ToArray()) is { } reason)
+                        return FleetCapacityReservationResult.Failed(reason);
                 await EnsurePlacementFactsAsync(
                     existingRuntime,
                     existingRuntime.Networks.Where(item => item.Generation == existingRuntime.Generation).ToArray(),
@@ -135,6 +145,7 @@ public sealed class TeamLabPhysicalPlacementService(
         }
 
         var resourcesByAsset = await LoadAssetResourcesAsync(runtime.TopologyReleaseId, token);
+        var guestNetworkFeatures = await TeamLabGuestNetworkCapabilityPolicy.LoadRuntimeAsync(context, runtime, generationAssets, token);
         var edges = BuildPlacementEdges(runtime, generationNetworks);
         var groups = generationNetworks.GroupBy(item => item.PlacementGroupKey, StringComparer.Ordinal)
             .Select(group =>
@@ -143,7 +154,8 @@ public sealed class TeamLabPhysicalPlacementService(
                 var assets = generationAssets.Where(item => item.PlacementGroupKey == key).ToArray();
                 var resources = assets.Aggregate(WorkloadResourceVector.Zero, (sum, asset) =>
                     sum + RequiredResource(resourcesByAsset, asset.TopologyKey));
-                return new PlacementGroup(key, group.Any(item => item.IsEntry), resources);
+                return new PlacementGroup(key, group.Any(item => item.IsEntry), resources,
+                    assets.SelectMany(asset => guestNetworkFeatures.GetValueOrDefault(asset.TopologyKey) ?? []).Distinct(StringComparer.Ordinal).ToArray());
             })
             .OrderByDescending(item => item.IsEntry)
             .ThenByDescending(item => edges.Where(edge => edge.Touches(item.Key)).Sum(edge => edge.Weight))
@@ -176,6 +188,10 @@ public sealed class TeamLabPhysicalPlacementService(
         activity?.SetTag("teamlab.placement.improvement_passes", improvementPasses);
         if (assignment is null)
         {
+            var missingNetworkFeatureGroup = groups.FirstOrDefault(group => group.GuestNetworkFeatures is { Count: > 0 } &&
+                candidates.All(candidate => !AgentCapabilityEvaluator.Supports(candidate.Node, group.GuestNetworkFeatures.ToArray())));
+            if (missingNetworkFeatureGroup is not null)
+                return FleetCapacityReservationResult.Failed($"teamlab_guest_network_capability_unavailable: placement group '{missingNetworkFeatureGroup.Key}' requires {string.Join(", ", missingNetworkFeatureGroup.GuestNetworkFeatures!)}.");
             var oversized = groups.FirstOrDefault(group => !CanAnyNodeHost(group, candidates));
             return oversized is null
                 ? FleetCapacityReservationResult.Failed(
@@ -327,13 +343,18 @@ public sealed class TeamLabPhysicalPlacementService(
                     (sum, asset) => sum + RequiredResource(resourcesByAsset, asset.TopologyKey))))
             .ToArray();
         var nodeSnapshots = (await snapshots.LoadAsync(token)).ToDictionary(item => item.Node.Id);
+        var guestNetworkFeatures = await TeamLabGuestNetworkCapabilityPolicy.LoadRuntimeAsync(context, runtime, assets, token);
         foreach (var item in items)
         {
             if (!nodeSnapshots.TryGetValue(item.NodeId, out var snapshot))
                 return FleetCapacityReservationResult.Failed($"Assigned TeamLab node {item.NodeId} no longer exists.");
             var required = (item.DockerSlots > 0 ? NodeCapability.Docker : NodeCapability.None) |
                            (item.VmSlots > 0 ? NodeCapability.Kvm : NodeCapability.None);
-            if (eligibility.GetReason(snapshot, required, item.Resources, true) is { } reason)
+            var features = assets.Where(asset => asset.WorkerNodeId == item.NodeId)
+                .SelectMany(asset => guestNetworkFeatures.GetValueOrDefault(asset.TopologyKey) ?? []).Distinct(StringComparer.Ordinal).ToArray();
+            if (TeamLabGuestNetworkCapabilityPolicy.MissingReason(snapshot.Node, features) is { } networkReason)
+                return FleetCapacityReservationResult.Failed(networkReason);
+            if (eligibility.GetReason(snapshot, required, item.Resources, true, features) is { } reason)
                 return FleetCapacityReservationResult.Failed($"Assigned TeamLab node is unavailable: {reason}.");
         }
         context.FleetCapacityReservations.AddRange(items.Select(item => new FleetCapacityReservation
@@ -883,7 +904,7 @@ public sealed class TeamLabPhysicalPlacementService(
 
     static IReadOnlyCollection<string>? RequiredFeatures(PlacementGroup group)
     {
-        var features = new List<string>();
+        var features = new List<string>(group.GuestNetworkFeatures ?? []);
         if (group.IsEntry) features.Add(AgentFeatureIds.WireGuard);
         return features.Count == 0 ? null : features;
     }
@@ -891,7 +912,8 @@ public sealed class TeamLabPhysicalPlacementService(
     sealed record PlacementGroup(
         string Key,
         bool IsEntry,
-        WorkloadResourceVector Resources)
+        WorkloadResourceVector Resources,
+        IReadOnlyList<string>? GuestNetworkFeatures = null)
     {
         public int DockerSlots => Resources.DockerSlots;
         public int VmSlots => Resources.VmSlots;

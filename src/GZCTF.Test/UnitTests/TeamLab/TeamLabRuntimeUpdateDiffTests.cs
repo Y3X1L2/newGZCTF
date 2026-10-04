@@ -6,6 +6,7 @@ using GZCTF.Modules.TeamLab.Application;
 using GZCTF.Modules.TeamLab.Contracts;
 using GZCTF.Modules.TeamLab.Domain;
 using GZCTF.Modules.TeamLab.Domain.Runtime;
+using GZCTF.Models.Data;
 using GZCTF.TeamLab.Contracts.Execution;
 using Xunit;
 
@@ -13,6 +14,29 @@ namespace GZCTF.Test.UnitTests.TeamLab;
 
 public sealed class TeamLabRuntimeUpdateDiffTests
 {
+    [Fact]
+    public void AssetDefinition_RoundTripsInterfacesResourcesAndServiceSettings()
+    {
+        var asset = Asset("vm") with
+        {
+            Kind = TeamLabAssetKind.Vm,
+            VmNetworkMode = VmNetworkMode.ManagedStatic,
+            Interfaces =
+            [
+                new("nic-a", "lan", 10, true, 0, "ens18", false, [],
+                    [new TeamLabGuestRouteModel("10.30.0.0/16", "10.20.0.1", 7)]),
+                new("nic-b", "backend", 21, false, 1, null, null, ["10.20.0.2"])
+            ],
+            ExposePort = 3389,
+            HealthCheckKind = TeamLabHealthCheckKind.Tcp,
+            HealthCheckPort = 3389,
+            DevicePackageId = 7,
+            DeviceParametersJson = "{\"port\":502}"
+        };
+        var restored = TeamLabTopologyV1Normalizer.ToExecution(TeamLabTopologyV1Normalizer.ToModel(asset));
+        Assert.Equal(JsonSerializer.Serialize(asset), JsonSerializer.Serialize(restored));
+    }
+
     [Fact]
     public void BuildChanges_ReportsAddedRemovedAndReplacedAssets()
     {
@@ -25,6 +49,49 @@ public sealed class TeamLabRuntimeUpdateDiffTests
         Assert.Contains(changes, item => item is { AssetKey: "replace", Action: "replace" });
         Assert.Contains(changes, item => item is { AssetKey: "remove", Action: "remove" });
         Assert.DoesNotContain(changes, item => item.AssetKey == "keep");
+    }
+
+    [Fact]
+    public void DnsProviderAddressChange_ReplacesOnlyManagedPeersInheritingThatNetworkDns()
+    {
+        var dc = Asset("dc") with { Kind = TeamLabAssetKind.Vm, VmNetworkMode = VmNetworkMode.ManagedStatic };
+        var inherited = Asset("inherited") with { Kind = TeamLabAssetKind.Vm, VmNetworkMode = VmNetworkMode.ManagedStatic };
+        var explicitDns = inherited with { Key = "explicit", Interfaces = [inherited.Interfaces[0] with { DnsServers = ["127.0.0.1"] }] };
+        var noDns = inherited with { Key = "none", Interfaces = [inherited.Interfaces[0] with { DnsServers = [] }] };
+        var dhcp = inherited with { Key = "dhcp", VmNetworkMode = VmNetworkMode.Dhcp };
+        var preconfigured = inherited with { Key = "preconfigured", VmNetworkMode = VmNetworkMode.Preconfigured };
+        var otherNetwork = inherited with { Key = "other", Interfaces = [inherited.Interfaces[0] with { NetworkKey = "other" }] };
+        var current = Topology(dc, inherited, explicitDns, noDns, dhcp, preconfigured, otherNetwork, Asset("docker")) with
+        {
+            Networks = [Topology().Networks[0] with { DnsServerAssetKey = "dc" },
+                new("other", "Other", "10.20.0.0/16", 24, false, 1)]
+        };
+        var target = current with { Assets = current.Assets.Select(asset => asset.Key == "dc"
+            ? asset with { Interfaces = [asset.Interfaces[0] with { HostOffset = 20 }] } : asset).ToArray() };
+
+        var changes = TeamLabRuntimeUpdateService.BuildChanges(current, target);
+
+        Assert.Equal(["dc", "inherited"], changes.Select(change => change.AssetKey));
+        Assert.All(changes, change => Assert.Equal("replace", change.Action));
+        var rename = current with { Assets = current.Assets.Select(asset => asset.Key == "dc"
+            ? asset with { Name = "Renamed DNS server", ImageTemplateId = 2 } : asset).ToArray() };
+        Assert.Equal("dc", Assert.Single(TeamLabRuntimeUpdateService.BuildChanges(current, rename)).AssetKey);
+    }
+
+    [Fact]
+    public void MultiNicDnsProviderChange_OnlyUsesAddressOfTheSelectedNetwork()
+    {
+        var dc = Asset("dc") with
+        {
+            Kind = TeamLabAssetKind.Vm,
+            Interfaces = [new("a", "other", 10, true, 0), new("b", "lan", 20, false, 1)]
+        };
+        var member = Asset("member") with { Kind = TeamLabAssetKind.Vm, VmNetworkMode = VmNetworkMode.ManagedStatic };
+        var current = Topology(dc, member) with { Networks = [Topology().Networks[0] with { DnsServerAssetKey = "dc" }] };
+        var unrelatedChange = current with { Assets = [dc with { Interfaces = [dc.Interfaces[0] with { HostOffset = 11 }, dc.Interfaces[1]] }, member] };
+        Assert.Equal("dc", Assert.Single(TeamLabRuntimeUpdateService.BuildChanges(current, unrelatedChange)).AssetKey);
+        var resolverChange = current with { Assets = [dc with { Interfaces = [dc.Interfaces[0], dc.Interfaces[1] with { HostOffset = 21 }] }, member] };
+        Assert.Equal(["dc", "member"], TeamLabRuntimeUpdateService.BuildChanges(current, resolverChange).Select(change => change.AssetKey));
     }
 
     [Fact]

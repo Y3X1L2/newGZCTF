@@ -8,7 +8,7 @@
 - Token 同时包含 API scope 和资源授权。API scope 决定可执行的操作类型，`teamlab-scope:<scope-id>` 决定可访问的控制范围。
 - 管理员可签发 `teamlab-scope:*`；普通签发者只能授权仍存在且未归档的具体 scope。
 - scope 归档后资源仍可读取和排空，但禁止创建、更新、发布、准备、部署和新增 webhook。
-- 未授权资源统一按不存在处理，避免通过 `403` 枚举其他客户资源。
+- 拓扑、发布及控制范围等资源仍按 scope 授权，不可见时返回 `404 scope_not_found`。运行环境、资产和远程会话使用统一 Runtime Grant：资源不存在返回 `404`，存在但缺少所需权限返回 `403 insufficient_permission`。API Token 不继承签发者的管理员权限。
 
 TeamLab 使用以下 API scope：
 

@@ -100,6 +100,11 @@ function isImageTemplateSummary(value: unknown): value is ImageTemplateSummary {
     isNullableString(value.registryUrl) &&
     (value.containsMalware === undefined || isBoolean(value.containsMalware)) &&
     (value.supportsInstanceCredentials === undefined || isBoolean(value.supportsInstanceCredentials)) &&
+    (value.vmNetworkMode === undefined ||
+      value.vmNetworkMode === null ||
+      value.vmNetworkMode === 0 ||
+      value.vmNetworkMode === 1 ||
+      value.vmNetworkMode === 2) &&
     (value.canManage === undefined || isBoolean(value.canManage))
   )
 }
@@ -205,7 +210,13 @@ export function createImageTemplateAdminApi(client: RuntimeJsonClient = runtimeJ
       )
     },
 
-    async updateRemoteAccess(id: number, configuration: Omit<ImageRemoteAccessConfiguration, 'hasCredential' | 'updatedAt'> & { credential?: string | null; clearCredential?: boolean }) {
+    async updateRemoteAccess(
+      id: number,
+      configuration: Omit<ImageRemoteAccessConfiguration, 'hasCredential' | 'updatedAt'> & {
+        credential?: string | null
+        clearCredential?: boolean
+      }
+    ) {
       return parseRemoteAccess(
         await client.patchJson(`/api/v1/image-templates/${id}/remote-access`, {
           ...configuration,

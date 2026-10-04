@@ -4,6 +4,9 @@ using GZCTF.Models.Data;
 using GZCTF.Modules.Penetration.Domain;
 using GZCTF.Modules.TeamLab.Domain;
 using GZCTF.Modules.TeamLab.Domain.Runtime;
+using GZCTF.Modules.TeamLab.Application;
+using GZCTF.Modules.TeamLab.Contracts;
+using GZCTF.Modules.Runtime.Application;
 using GZCTF.Utils;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -16,6 +19,8 @@ namespace GZCTF.Integration.Test.Tests.Database;
 
 public sealed class TeamLabContractMigrationTests : IAsyncLifetime
 {
+    private const string SystemLogResourceIndexMigration = "20260930164900_AddSystemLogResourceIndex";
+    private const string ManagedGuestNetworkMigration = "20261001145237_AddTeamLabManagedGuestNetwork";
     private const string PreviousMigration = "20260711115423_CompletePhaseOneChallengeApi";
     private const string FoundationMigration = "20260711144502_AddIndependentTeamLabFoundation";
     private const string ContractMigration = "20260711170329_RemovePenetrationTopologyRuntimeCompatibility";
@@ -32,6 +37,114 @@ public sealed class TeamLabContractMigrationTests : IAsyncLifetime
     public Task InitializeAsync() => _postgres.StartAsync();
 
     public Task DisposeAsync() => _postgres.DisposeAsync().AsTask();
+
+    [Fact]
+    public async Task ManagedGuestNetworkMigration_PreservesLegacyRowsAndRoundTripsDraftUpdates()
+    {
+        const string previous = "20260927121625_AddTeamLabNetworkDnsAsset";
+        var owner = Guid.Parse("95555555-5555-4555-8555-555555555555");
+        await using (var context = CreateContext())
+        {
+            await context.Database.GetService<IMigrator>().MigrateAsync(previous);
+            context.Users.Add(CreateUser(owner, "managed-owner"));
+            context.TeamLabTopologies.Add(new TeamLabTopology { Id = 9551, Name = "Legacy managed network", OwnerUserId = owner, Revision = 1 });
+            context.TeamLabTopologyNetworks.Add(new TeamLabTopologyNetwork
+            {
+                Id = 9552, TopologyId = 9551, Key = "entry", Name = "Entry",
+                AddressPoolCidr = "10.48.0.0/16", RuntimePrefixLength = 24, IsEntry = true
+            });
+            context.TeamLabTopologyReleases.Add(new TeamLabTopologyRelease
+            {
+                Id = Guid.Parse("95666666-6666-4666-8666-666666666666"), TopologyId = 9551, Version = 1,
+                SourceRevision = 1, CanonicalJson = "{\"legacy\":true}", ContentHash = "legacy-hash"
+            });
+            await context.SaveChangesAsync();
+            await context.Database.ExecuteSqlRawAsync("""
+                INSERT INTO "TeamLabTopologyAssets" ("Id", "TopologyId", "Key", "Name", "Kind", "CpuUnits", "MemoryMiB", "StorageMiB", "OrderIndex")
+                VALUES (9553, 9551, 'vm', 'Legacy VM', 1, 10, 512, 512, 0);
+                INSERT INTO "TeamLabTopologyInterfaces" ("Id", "AssetId", "NetworkId", "Key", "HostOffset", "IsPrimary", "OrderIndex")
+                VALUES (9554, 9553, 9552, 'nic', 10, true, 0);
+                """);
+            await context.Database.GetService<IMigrator>().MigrateAsync();
+        }
+
+        await using (var context = CreateContext())
+        {
+            var legacy = await context.TeamLabTopologyAssets.SingleAsync(item => item.Id == 9553);
+            Assert.Null(legacy.VmNetworkMode);
+            var iface = await context.TeamLabTopologyInterfaces.SingleAsync(item => item.Id == 9554);
+            Assert.Null(iface.DnsServersJson);
+            Assert.Null(iface.UseDefaultGateway);
+            var frozen = await context.TeamLabTopologyReleases.SingleAsync(item => item.TopologyId == 9551);
+            Assert.Equal("legacy-hash", frozen.ContentHash);
+            Assert.True(System.Text.Json.JsonDocument.Parse(frozen.CanonicalJson).RootElement.GetProperty("legacy").GetBoolean());
+            context.ChangeTracker.Clear();
+            var service = new TeamLabTopologyApplicationService(context, new TeamLabTopologyValidator(), null!,
+                new TeamLabControlScopeService(context), new NodeCapacitySnapshotService(context));
+            var topologyId = await context.TeamLabTopologies.Where(item => item.Id == 9551).Select(item => item.PublicId).SingleAsync();
+            var detail = await service.GetAsync(topologyId, owner, false, CancellationToken.None);
+            var original = detail.Definition.Assets[0];
+            var requested = original with { VmNetworkMode = VmNetworkMode.ManagedStatic, Interfaces = [original.Interfaces[0] with
+            {
+                GuestInterfaceName = "lan0", UseDefaultGateway = false, DnsServers = [],
+                StaticRoutes = [new TeamLabGuestRouteModel("10.50.0.0/24", "10.48.0.1", 7)]
+            }] };
+            var update = await service.UpdateDraftAsync(topologyId, new UpdateTeamLabTopologyModel(
+                detail.Revision, detail.Definition.Name, detail.Definition.Networks, [requested], []), owner, false, CancellationToken.None);
+            Assert.Equal(2, update.Revision);
+            Assert.Equal(VmNetworkMode.ManagedStatic, update.Definition.Assets[0].VmNetworkMode);
+            Assert.Empty(update.Definition.Assets[0].Interfaces[0].DnsServers!);
+            Assert.False(update.Definition.Assets[0].Interfaces[0].UseDefaultGateway);
+            Assert.Equal(7, update.Definition.Assets[0].Interfaces[0].StaticRoutes![0].Metric);
+            context.ChangeTracker.Clear();
+            var persisted = await service.GetAsync(topologyId, owner, false, CancellationToken.None);
+            Assert.Equal("lan0", persisted.Definition.Assets[0].Interfaces[0].GuestInterfaceName);
+            var clear = requested with { VmNetworkMode = null, Interfaces = [original.Interfaces[0]] };
+            var cleared = await service.UpdateDraftAsync(topologyId, new UpdateTeamLabTopologyModel(
+                update.Revision, detail.Definition.Name, detail.Definition.Networks, [clear], []), owner, false, CancellationToken.None);
+            Assert.Null(cleared.Definition.Assets[0].VmNetworkMode);
+            Assert.Null(cleared.Definition.Assets[0].Interfaces[0].DnsServers);
+            Assert.Null(cleared.Definition.Assets[0].Interfaces[0].StaticRoutes);
+            Assert.False(context.Database.HasPendingModelChanges());
+            await context.Database.GetService<IMigrator>().MigrateAsync(previous);
+            Assert.Equal(1, await ScalarAsync<long>(context, """SELECT count(*) FROM "TeamLabTopologyAssets" WHERE "Key" = 'vm'"""));
+            await context.Database.GetService<IMigrator>().MigrateAsync();
+            Assert.Empty(await context.Database.GetPendingMigrationsAsync());
+        }
+    }
+
+    [Fact]
+    public async Task SystemLogResourceIndex_AppliesAfterManagedNetworkMigrationWasAlreadyRecorded()
+    {
+        await using var context = CreateContext();
+        await context.Database.MigrateAsync();
+        await context.Database.ExecuteSqlRawAsync($$"""
+            DROP INDEX IF EXISTS "IX_Logs_Resource_Time_Id";
+            DELETE FROM "__EFMigrationsHistory"
+            WHERE "MigrationId" = '{{SystemLogResourceIndexMigration}}';
+            """);
+
+        var pending = (await context.Database.GetPendingMigrationsAsync()).ToArray();
+        Assert.Contains(SystemLogResourceIndexMigration, pending);
+        Assert.DoesNotContain(ManagedGuestNetworkMigration, pending);
+
+        await context.Database.GetService<IMigrator>().MigrateAsync();
+
+        Assert.Empty(await context.Database.GetPendingMigrationsAsync());
+        Assert.Equal(1, await ScalarAsync<long>(context, """
+            SELECT count(*)
+            FROM pg_indexes
+            WHERE schemaname = 'public' AND indexname = 'IX_Logs_Resource_Time_Id'
+            """));
+        Assert.Equal(5, await ScalarAsync<long>(context, """
+            SELECT count(*)
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND ((table_name = 'TeamLabTopologyAssets' AND column_name = 'VmNetworkMode')
+                OR (table_name = 'TeamLabTopologyInterfaces' AND column_name IN
+                    ('GuestInterfaceName', 'UseDefaultGateway', 'DnsServersJson', 'StaticRoutesJson')))
+            """));
+    }
 
     [Fact]
     public async Task ContractMigration_RemovesLegacyRuntimeSchemaWithoutModelDrift()

@@ -36,7 +36,8 @@ public static class TeamLabTopologyV1Normalizer
 
     internal static TeamLabExecutionNetwork ToExecution(TeamLabTopologyNetworkModel network) =>
         new(network.Key, network.Name, network.AddressPool.PoolCidr,
-            network.AddressPool.RuntimePrefixLength, network.IsEntry, network.OrderIndex);
+            network.AddressPool.RuntimePrefixLength, network.IsEntry, network.OrderIndex,
+            network.DnsServerAssetKey);
 
     internal static TeamLabExecutionAsset ToExecution(TeamLabTopologyAssetModel asset) =>
         new(
@@ -55,10 +56,26 @@ public static class TeamLabTopologyV1Normalizer
             null,
             asset.DevicePackageId,
             asset.DeviceParameters is { } parameters ? JsonSerializer.Serialize(parameters) : null,
-            asset.ConnectorId);
+            asset.ConnectorId,
+            VmNetworkMode: asset.VmNetworkMode);
 
     internal static TeamLabExecutionInterface ToExecution(TeamLabTopologyInterfaceModel iface) =>
-        new(iface.Key, iface.NetworkKey, iface.HostOffset, iface.Primary, iface.OrderIndex);
+        new(iface.Key, iface.NetworkKey, iface.HostOffset, iface.Primary, iface.OrderIndex,
+            iface.GuestInterfaceName, iface.UseDefaultGateway, iface.DnsServers, iface.StaticRoutes);
+
+    internal static TeamLabTopologyAssetModel ToModel(TeamLabExecutionAsset asset) => new(
+        asset.Key, asset.Name, asset.Kind, asset.ImageTemplateId,
+        new TeamLabAssetResourceModel(asset.CpuUnits, asset.MemoryMiB, asset.StorageMiB),
+        asset.Interfaces.Select(iface => new TeamLabTopologyInterfaceModel(
+            iface.Key, iface.NetworkKey, iface.HostOffset, iface.Primary, iface.DisplayOrder,
+            iface.GuestInterfaceName, iface.UseDefaultGateway, iface.DnsServers, iface.StaticRoutes)).ToArray(),
+        asset.ExposePort,
+        asset.HealthCheckKind is { } kind && asset.HealthCheckPort is { } port
+            ? new TeamLabHealthCheckModel(kind, port) : null,
+        asset.DisplayOrder, asset.DevicePackageId,
+        string.IsNullOrWhiteSpace(asset.DeviceParametersJson)
+            ? null : JsonDocument.Parse(asset.DeviceParametersJson).RootElement.Clone(),
+        asset.ConnectorId, asset.VmNetworkMode);
 
     internal static string ManagedSwitchKey(string networkKey)
     {

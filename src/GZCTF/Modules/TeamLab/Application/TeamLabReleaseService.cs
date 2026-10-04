@@ -43,6 +43,17 @@ public sealed class TeamLabReleaseService(
             throw TeamLabTopologyApplicationService.InvalidTopology(validation);
         await TeamLabTopologyApplicationService.ValidateImageTemplatesAsync(context, definition, cancellationToken);
         await TeamLabTopologyApplicationService.ValidateCapabilityResourcesAsync(context, definition, cancellationToken);
+        var vmTemplateIds = definition.Assets.Where(asset => asset.Kind == TeamLabAssetKind.Vm)
+            .Select(asset => asset.ImageTemplateId).Distinct().ToArray();
+        var networkModes = await context.ImageTemplates.AsNoTracking()
+            .Where(template => vmTemplateIds.Contains(template.Id))
+            .ToDictionaryAsync(template => template.Id, template => template.VmNetworkMode, cancellationToken);
+        definition = definition with
+        {
+            Assets = definition.Assets.Select(asset => asset.Kind == TeamLabAssetKind.Vm
+                ? asset with { VmNetworkMode = asset.VmNetworkMode ?? networkModes[asset.ImageTemplateId] }
+                : asset).ToArray()
+        };
         var imageDigests = await LoadImageDigestsAsync(definition, cancellationToken);
         var devicePackageDigests = await LoadDevicePackageDigestsAsync(definition, imageDigests, cancellationToken);
         var canonicalJson = TeamLabReleaseCodec.Encode(topology.SchemaVersion, definition, imageDigests, devicePackageDigests);

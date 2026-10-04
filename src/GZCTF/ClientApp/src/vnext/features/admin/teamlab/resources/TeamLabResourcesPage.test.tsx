@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { MemoryRouter } from 'react-router'
 import type { TeamLabConnector, TeamLabDevicePackage } from '../api'
 import { teamLabResourcesApi } from '../api'
 import { TeamLabResourcesPage } from './TeamLabResourcesPage'
@@ -137,9 +138,9 @@ describe('TeamLabResourcesPage', () => {
   })
 
   it('renders the device package catalog with capability summary', () => {
-    render(<TeamLabResourcesPage />)
+    render(<MemoryRouter><TeamLabResourcesPage /></MemoryRouter>)
 
-    expect(screen.getByRole('heading', { name: '组网资源' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '资源' })).toBeInTheDocument()
     const row = screen.getByRole('row', { name: /PLC 模拟器/ })
     expect(row).toHaveTextContent('1.2.0')
     expect(row).toHaveTextContent('OCI 镜像')
@@ -148,7 +149,7 @@ describe('TeamLabResourcesPage', () => {
   })
 
   it('switches to the connector tab and exposes occupancy without endpoints', () => {
-    render(<TeamLabResourcesPage />)
+    render(<MemoryRouter><TeamLabResourcesPage /></MemoryRouter>)
     fireEvent.click(screen.getByRole('button', { name: '现场连接器' }))
 
     const row = screen.getByRole('row', { name: /现场 VLAN 1/ })
@@ -158,8 +159,8 @@ describe('TeamLabResourcesPage', () => {
   })
 
   it('switches to the node artifact cache tab with reference counts', () => {
-    render(<TeamLabResourcesPage />)
-    fireEvent.click(screen.getByRole('button', { name: '节点制品缓存' }))
+    render(<MemoryRouter><TeamLabResourcesPage /></MemoryRouter>)
+    fireEvent.click(screen.getByRole('button', { name: '节点缓存' }))
 
     expect(screen.getByRole('row', { name: /#7/ })).toHaveTextContent('2')
   })
@@ -168,7 +169,7 @@ describe('TeamLabResourcesPage', () => {
     vi.mocked(useDevicePackageCatalog).mockReturnValue(
       catalog({ page: { items: [], next: null } }) as ReturnType<typeof useDevicePackageCatalog>
     )
-    render(<TeamLabResourcesPage />)
+    render(<MemoryRouter><TeamLabResourcesPage /></MemoryRouter>)
 
     expect(screen.getByText('暂无设备模板')).toBeInTheDocument()
   })
@@ -177,7 +178,7 @@ describe('TeamLabResourcesPage', () => {
     const update = vi.spyOn(teamLabResourcesApi, 'setDevicePackageEnabled')
       .mockResolvedValueOnce({ ...devicePackage, enabled: false })
       .mockResolvedValueOnce({ ...devicePackage, enabled: true })
-    render(<TeamLabResourcesPage />)
+    render(<MemoryRouter><TeamLabResourcesPage /></MemoryRouter>)
     fireEvent.click(screen.getByRole('row', { name: /PLC 模拟器/ }))
     fireEvent.click(screen.getByRole('button', { name: '停用' }))
     fireEvent.click(await screen.findByRole('button', { name: '启用' }))
@@ -189,7 +190,7 @@ describe('TeamLabResourcesPage', () => {
 
   it('keeps a rejected archive open and shows the error in the confirmation', async () => {
     const archive = vi.spyOn(teamLabResourcesApi, 'archiveDevicePackage').mockRejectedValue(new Error('资源仍被引用'))
-    render(<TeamLabResourcesPage />)
+    render(<MemoryRouter><TeamLabResourcesPage /></MemoryRouter>)
     fireEvent.click(screen.getByRole('row', { name: /PLC 模拟器/ }))
     fireEvent.click(screen.getByRole('button', { name: '归档' }))
     const dialog = screen.getByRole('dialog', { name: '归档设备模板' })

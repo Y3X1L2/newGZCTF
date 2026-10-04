@@ -29,6 +29,7 @@ export interface ImageTemplateSummary {
   registryUrl: string | null
   containsMalware?: boolean
   supportsInstanceCredentials?: boolean
+  vmNetworkMode?: 0 | 1 | 2 | null
   remoteAccessProtocol?: 'containerTerminal' | 'ssh' | 'rdp' | null
   canManage?: boolean
 }

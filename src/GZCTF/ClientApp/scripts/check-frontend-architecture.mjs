@@ -62,7 +62,7 @@ for (const path of sourceFiles) {
       }
       if (/\byy-[a-z0-9-]+/i.test(content)) failures.push(`${file}: vNext may not use legacy yy-* classes`)
       if (
-        imports.some((specifier) => /(?:^|\/)(?:components|pages|styles)(?:\/|$)/.test(specifier.replaceAll('\\', '/')))
+        imports.some((specifier) => (specifier.startsWith('.') || specifier.startsWith('@')) && /(?:^|\/)(?:components|pages|styles)(?:\/|$)/.test(specifier.replaceAll('\\', '/')))
       ) {
         failures.push(`${file}: vNext may not import legacy visual components, pages, or global styles`)
       }

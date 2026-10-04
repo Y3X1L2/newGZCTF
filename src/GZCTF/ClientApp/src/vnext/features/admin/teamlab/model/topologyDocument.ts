@@ -2,6 +2,8 @@ import type {
   TeamLabAssetResources,
   TeamLabConnectionDirection,
   TeamLabHealthCheck,
+  TeamLabGuestNetworkRequirements,
+  TeamLabVmNetworkMode,
   TeamLabObservationPolicy,
 } from '../api/teamlabContracts'
 
@@ -25,6 +27,7 @@ export interface TopologySwitchNode {
   runtimePrefixLength: number
   isEntry: boolean
   orderIndex: number
+  dnsServerAssetKey?: string | null
 }
 
 export interface TopologyRouterNode {
@@ -39,6 +42,7 @@ interface TopologyAssetNodeBase {
   name: string
   position: TopologyPosition
   imageTemplateId: number
+  vmNetworkMode?: TeamLabVmNetworkMode | null
   resources: TeamLabAssetResources
   exposePort: number | null
   healthCheck: TeamLabHealthCheck | null
@@ -67,7 +71,7 @@ export type TopologyAssetNode = TopologyDockerNode | TopologyLinuxVmNode | Topol
 export type TopologyNode = TopologySwitchNode | TopologyRouterNode | TopologyAssetNode
 export type TopologyNodeType = TopologyNode['type']
 
-export interface TopologyMembershipConnection {
+export interface TopologyMembershipConnection extends TeamLabGuestNetworkRequirements {
   type: 'membership'
   key: string
   interfaceKey?: string

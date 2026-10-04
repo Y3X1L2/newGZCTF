@@ -2,21 +2,14 @@ import { useEffect, useId, useState } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
 import { ActionButton, InlineFeedback, VNextDialog } from '../../../../shared/Interaction'
 import { errorMessage } from '../../../../shared/errors'
-import { teamLabResourcesApi } from '../api'
+import { listTeamLabImageOptions, teamLabResourcesApi, type TeamLabImageOption } from '../api'
 import type {
   RegisterTeamLabConnectorRequest,
   RegisterTeamLabDevicePackageRequest,
-  TeamLabConnectorKind,
-  TeamLabDeviceArtifactKind,
 } from '../api/teamlabResourcesContracts'
 import styles from './TeamLabResourcesPage.module.css'
 import { useConnectorInterfaces, useConnectorNodes } from './useTeamLabResources'
 
-/**
- * Device packages are produced by the external artifact pipeline; this dialog
- * only registers the immutable reference and capability declaration, it never
- * uploads content.
- */
 export function DevicePackageRegisterDialog({
   open,
   onClose,
@@ -31,14 +24,13 @@ export function DevicePackageRegisterDialog({
     name: '',
     displayName: '',
     version: '',
-    artifactKind: 'oci-image' as TeamLabDeviceArtifactKind,
-    artifactReference: '',
-    digest: '',
-    supportedAssetKinds: ['docker'] as Array<'docker' | 'vm'>,
     cpuMillis: '500',
     memoryMiB: '256',
     storageGib: '4',
   })
+  const [images, setImages] = useState<readonly TeamLabImageOption[]>([])
+  const [imageId, setImageId] = useState(0)
+  const image = images.find(item => item.id === imageId)
   const [ports, setPorts] = useState([{ name: 'service', port: '502', protocol: 'tcp' }])
   const [parameters, setParameters] = useState<{ name: string; type: 'string' | 'number' | 'boolean'; required: boolean }[]>([])
   const [healthEnabled, setHealthEnabled] = useState(true)
@@ -49,13 +41,18 @@ export function DevicePackageRegisterDialog({
   const [error, setError] = useState<unknown>(null)
 
   useEffect(() => {
-    if (!open) setError(null)
+    if (!open) { setError(null); return }
+    let active = true
+    void listTeamLabImageOptions().then(items => {
+      if (active) setImages(items)
+    }).catch(reason => { if (active) setError(reason) })
+    return () => { active = false }
   }, [open])
 
   const patch = (changes: Partial<typeof form>) => setForm((current) => ({ ...current, ...changes }))
 
   const register = async () => {
-    if (submitting) return
+    if (submitting || !image) return
     setSubmitting(true)
     setError(null)
     try {
@@ -63,10 +60,10 @@ export function DevicePackageRegisterDialog({
         name: form.name.trim(),
         displayName: form.displayName.trim(),
         version: form.version.trim(),
-        artifactKind: form.artifactKind,
-        artifactReference: form.artifactReference.trim(),
-        digest: form.digest.trim() || null,
-        supportedAssetKinds: form.supportedAssetKinds,
+        artifactKind: image.deviceType === 'docker' ? 'oci-image' : 'vm-image',
+        artifactReference: image.artifactReference!,
+        digest: image.digest ?? null,
+        supportedAssetKinds: [image.deviceType === 'docker' ? 'docker' : 'vm'],
         cpuMillis: Number(form.cpuMillis) || 0,
         memoryMiB: Number(form.memoryMiB) || 0,
         storageGib: Number(form.storageGib) || 0,
@@ -83,10 +80,8 @@ export function DevicePackageRegisterDialog({
         } : undefined,
         protocolEventTypes: [],
       }
-      if (request.name && request.displayName && request.version && request.artifactReference && request.supportedAssetKinds.length) {
-        await teamLabResourcesApi.registerDevicePackage(request)
-        onRegistered()
-      }
+      await teamLabResourcesApi.registerDevicePackage(request)
+      onRegistered()
     } catch (reason) {
       setError(reason)
     } finally {
@@ -96,13 +91,12 @@ export function DevicePackageRegisterDialog({
 
   return (
     <VNextDialog
-      description="登记可在场景中复用的容器或虚拟机镜像，并说明它需要的资源、端口和启动参数。"
-      eyebrow="DEVICE TEMPLATE"
+      eyebrow=""
       footer={
         <>
           <ActionButton disabled={submitting} onClick={onClose} type="button">取消</ActionButton>
           <ActionButton
-            disabled={submitting || !form.name.trim() || !form.displayName.trim() || !form.version.trim() || !form.artifactReference.trim() || form.supportedAssetKinds.length === 0}
+            disabled={submitting || !form.name.trim() || !form.displayName.trim() || !form.version.trim() || !image}
             onClick={() => void register()}
             tone="primary"
             type="button"
@@ -121,35 +115,13 @@ export function DevicePackageRegisterDialog({
         <TextFieldRow id={`${formId}-name`} label="名称（唯一标识）" value={form.name} onChange={(value) => patch({ name: value })} placeholder="plc-simulator" />
         <TextFieldRow id={`${formId}-display`} label="显示名称" value={form.displayName} onChange={(value) => patch({ displayName: value })} placeholder="PLC 模拟器" />
         <TextFieldRow id={`${formId}-version`} label="版本" value={form.version} onChange={(value) => patch({ version: value })} placeholder="1.0.0" />
-        <label htmlFor={`${formId}-kind`}>制品类型</label>
-        <select
-          aria-label="制品类型"
-          id={`${formId}-kind`}
-          onChange={(event) => patch({ artifactKind: event.currentTarget.value as TeamLabDeviceArtifactKind })}
-          value={form.artifactKind}
-        >
-          <option value="oci-image">OCI 镜像</option>
-          <option value="vm-image">VM 镜像</option>
-        </select>
-        <TextFieldRow id={`${formId}-reference`} label="制品引用" value={form.artifactReference} onChange={(value) => patch({ artifactReference: value })} placeholder="registry.example.com/yinyu/plc-simulator:1.0.0" />
-        <TextFieldRow id={`${formId}-digest`} label="sha256 摘要（可选）" value={form.digest} onChange={(value) => patch({ digest: value })} placeholder="sha256:…" />
-        <fieldset className={styles.dialogChoices}>
-          <legend>支持的资产类型</legend>
-          {([['docker', 'Docker 容器'], ['vm', '虚拟机']] as const).map(([kind, label]) => (
-            <label className={styles.dialogToggle} key={kind}>
-              <input
-                checked={form.supportedAssetKinds.includes(kind)}
-                onChange={(event) => patch({
-                  supportedAssetKinds: event.currentTarget.checked
-                    ? [...form.supportedAssetKinds, kind]
-                    : form.supportedAssetKinds.filter(item => item !== kind),
-                })}
-                type="checkbox"
-              />
-              {label}
-            </label>
-          ))}
-        </fieldset>
+        <div className={styles.dialogField}>
+          <label htmlFor={`${formId}-image`}>镜像模板</label>
+          <select id={`${formId}-image`} value={imageId} onChange={event => setImageId(Number(event.currentTarget.value))}>
+            <option value={0}>选择镜像</option>
+            {images.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+          </select>
+        </div>
         <div className={styles.dialogFormGrid}>
           <TextFieldRow id={`${formId}-cpu`} label="CPU（毫核）" value={form.cpuMillis} onChange={(value) => patch({ cpuMillis: value })} />
           <TextFieldRow id={`${formId}-memory`} label="内存（MiB）" value={form.memoryMiB} onChange={(value) => patch({ memoryMiB: value })} />
@@ -159,15 +131,15 @@ export function DevicePackageRegisterDialog({
         {ports.map((item, index) => <div className={styles.dialogFormGrid} key={index}>
           <TextFieldRow id={`${formId}-port-name-${index}`} label="名称" value={item.name} onChange={(value) => setPorts(current => current.map((entry, offset) => offset === index ? { ...entry, name: value } : entry))} />
           <TextFieldRow id={`${formId}-port-${index}`} label="端口" value={item.port} onChange={(value) => setPorts(current => current.map((entry, offset) => offset === index ? { ...entry, port: value } : entry))} />
-          <label>协议<select value={item.protocol} onChange={(event) => setPorts(current => current.map((entry, offset) => offset === index ? { ...entry, protocol: event.currentTarget.value } : entry))}><option value="tcp">TCP</option><option value="udp">UDP</option></select></label>
+          <label>协议<select value={item.protocol} onChange={(event) => { const protocol = event.currentTarget.value; setPorts(current => current.map((entry, offset) => offset === index ? { ...entry, protocol } : entry)) }}><option value="tcp">TCP</option><option value="udp">UDP</option></select></label>
           <ActionButton aria-label="删除端口" icon={<Trash2 size={15} />} onClick={() => setPorts(current => current.filter((_, offset) => offset !== index))} type="button" />
         </div>)}
         <ActionButton icon={<Plus size={15} />} onClick={() => setPorts(current => [...current, { name: '', port: '', protocol: 'tcp' }])} type="button">添加端口</ActionButton>
         <label>启动参数</label>
         {parameters.map((item, index) => <div className={styles.dialogFormGrid} key={index}>
           <TextFieldRow id={`${formId}-parameter-${index}`} label="参数名" value={item.name} onChange={(value) => setParameters(current => current.map((entry, offset) => offset === index ? { ...entry, name: value } : entry))} />
-          <label>类型<select value={item.type} onChange={(event) => setParameters(current => current.map((entry, offset) => offset === index ? { ...entry, type: event.currentTarget.value as typeof item.type } : entry))}><option value="string">文本</option><option value="number">数字</option><option value="boolean">开关</option></select></label>
-          <label className={styles.dialogToggle}><input checked={item.required} onChange={(event) => setParameters(current => current.map((entry, offset) => offset === index ? { ...entry, required: event.currentTarget.checked } : entry))} type="checkbox" />必填</label>
+          <label>类型<select value={item.type} onChange={(event) => { const type = event.currentTarget.value as typeof item.type; setParameters(current => current.map((entry, offset) => offset === index ? { ...entry, type } : entry)) }}><option value="string">文本</option><option value="number">数字</option><option value="boolean">开关</option></select></label>
+          <label className={styles.dialogToggle}><input checked={item.required} onChange={(event) => { const required = event.currentTarget.checked; setParameters(current => current.map((entry, offset) => offset === index ? { ...entry, required } : entry)) }} type="checkbox" />必填</label>
           <ActionButton aria-label="删除参数" icon={<Trash2 size={15} />} onClick={() => setParameters(current => current.filter((_, offset) => offset !== index))} type="button" />
         </div>)}
         <ActionButton icon={<Plus size={15} />} onClick={() => setParameters(current => [...current, { name: '', type: 'string', required: false }])} type="button">添加参数</ActionButton>
@@ -195,11 +167,7 @@ export function ConnectorRegisterDialog({
   const [form, setForm] = useState({
     name: '',
     displayName: '',
-    kind: 'managed-nic' as TeamLabConnectorKind,
     controlScopeId: '',
-    supportsSharedUse: false,
-    capacity: '1',
-    attachmentReference: '',
     nodeId: '',
     interfaceName: '',
     macAddress: '',
@@ -225,11 +193,11 @@ export function ConnectorRegisterDialog({
       await teamLabResourcesApi.registerConnector({
         name: form.name.trim(),
         displayName: form.displayName.trim(),
-        kind: form.kind,
+        kind: 'managed-nic',
         controlScopeId: form.controlScopeId.trim() || null,
-        supportsSharedUse: form.supportsSharedUse,
-        capacity: Math.max(1, Number(form.capacity) || 1),
-        attachmentReference: form.attachmentReference.trim() || null,
+        supportsSharedUse: false,
+        capacity: 1,
+        attachmentReference: null,
         description: form.description.trim() || null,
         managedNic: { nodeId: form.nodeId, interfaceName: form.interfaceName.trim(), macAddress: form.macAddress.trim() },
       } satisfies RegisterTeamLabConnectorRequest)
@@ -243,8 +211,7 @@ export function ConnectorRegisterDialog({
 
   return (
     <VNextDialog
-      description="将节点上的专用网卡接入资产的主网段。网卡需已启用、接线，且没有主机 IP；设备地址按运行时网段配置。当前仅支持独占接入，同一场景的连接器需位于同一节点。"
-      eyebrow="FIELD CONNECTOR"
+      eyebrow=""
       footer={
         <>
           <ActionButton disabled={submitting} onClick={onClose} type="button">取消</ActionButton>
@@ -267,33 +234,6 @@ export function ConnectorRegisterDialog({
       <div className={styles.dialogForm}>
         <TextFieldRow id={`${formId}-name`} label="名称（唯一标识）" value={form.name} onChange={(value) => patch({ name: value })} placeholder="field-vlan-1" />
         <TextFieldRow id={`${formId}-display`} label="显示名称" value={form.displayName} onChange={(value) => patch({ displayName: value })} placeholder="现场 VLAN 1" />
-        <label htmlFor={`${formId}-kind`}>类型</label>
-        <select
-          aria-label="连接器类型"
-          id={`${formId}-kind`}
-          onChange={(event) => patch({ kind: event.currentTarget.value as TeamLabConnectorKind })}
-          value={form.kind}
-        >
-          <option value="managed-nic">受管网卡</option>
-          <option disabled value="vlan">VLAN（尚未支持执行）</option>
-          <option disabled value="segment">网段（尚未支持执行）</option>
-          <option disabled value="serial">串口（尚未支持执行）</option>
-          <option disabled value="usb-gateway">USB 设备网关（尚未支持执行）</option>
-          <option disabled value="dedicated-network">专用外部网络（尚未支持执行）</option>
-        </select>
-        <TextFieldRow id={`${formId}-scope`} label="授权控制范围 ID（留空表示平台级）" value={form.controlScopeId} onChange={(value) => patch({ controlScopeId: value })} />
-        <label className={styles.dialogToggle}>
-          <input
-            checked={form.supportsSharedUse}
-            disabled
-            onChange={(event) => patch({ supportsSharedUse: event.currentTarget.checked })}
-            type="checkbox"
-          />
-          共享使用（专用网卡不支持）
-        </label>
-        {form.supportsSharedUse ? (
-          <TextFieldRow id={`${formId}-capacity`} label="共享容量（1-64）" value={form.capacity} onChange={(value) => patch({ capacity: value })} />
-        ) : null}
         <div className={styles.dialogField}>
           <label htmlFor={`${formId}-node`}>所属节点</label>
           <select id={`${formId}-node`} value={form.nodeId} onChange={(event) => patch({ nodeId: event.currentTarget.value, interfaceName: '', macAddress: '' })}>
@@ -319,6 +259,7 @@ export function ConnectorRegisterDialog({
           <TextFieldRow id={`${formId}-mac`} label="网卡 MAC 地址" value={form.macAddress} onChange={(value) => patch({ macAddress: value })} placeholder="02:00:00:00:00:01" />
         </>}
         <TextFieldRow id={`${formId}-description`} label="描述（可选）" value={form.description} onChange={(value) => patch({ description: value })} />
+        <details><summary>授权范围</summary><TextFieldRow id={`${formId}-scope`} label="控制范围" value={form.controlScopeId} onChange={(value) => patch({ controlScopeId: value })} /></details>
         {error ? <InlineFeedback tone="danger">{errorMessage(error, '连接器登记失败。')}</InlineFeedback> : null}
       </div>
     </VNextDialog>

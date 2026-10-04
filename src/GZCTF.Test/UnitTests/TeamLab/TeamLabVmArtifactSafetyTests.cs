@@ -60,12 +60,12 @@ public sealed class TeamLabVmArtifactSafetyTests
     }
 
     [Fact]
-    public void NoCloudNetworkConfig_UsesPlanMacAddressAndStaticRoute()
+    public void NoCloudNetworkConfig_UsesPlanMacToAcquireDhcpOptions()
     {
         var network = new TeamLabNetworkIntentV2(
             "field", "10.96.1.0/24", "10.96.1.1",
             [new("vm-port", "linux-vm", "02:42:29:19:d6:14", "10.96.1.20")],
-            [], [], null, [], []);
+            [], [], null, [new("02:42:29:19:d6:14", "10.96.1.20", "linux-vm")], []);
         var asset = new TeamLabAssetExecutionSpecV2(
             "linux-vm", "vm", "domain", new string('a', 64), "domain", 79, 2, 2048,
             [new("field", "vm-port", "eth0", "10.96.1.20", "10.96.1.1", true)], []);
@@ -78,9 +78,12 @@ public sealed class TeamLabVmArtifactSafetyTests
         Assert.NotNull(config);
         Assert.Contains("macaddress: \"02:42:29:19:d6:14\"", config);
         Assert.Contains("set-name: \"eth0\"", config);
-        Assert.Contains("- 10.96.1.20/24", config);
-        Assert.Contains("to: default", config);
-        Assert.Contains("via: 10.96.1.1", config);
+        Assert.Contains("dhcp4: true", config);
+        Assert.DoesNotContain("addresses:", config);
+        Assert.DoesNotContain("nameservers:", config);
+        Assert.DoesNotContain("routes:", config);
+        Assert.DoesNotContain("10.96.1.20", config);
+        Assert.DoesNotContain("10.96.1.1", config);
     }
 
     [Fact]

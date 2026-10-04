@@ -1,3 +1,5 @@
+using GZCTF.Models.Data;
+
 namespace GZCTF.Modules.TeamLab.Domain;
 
 public sealed class TeamLabTopology
@@ -33,6 +35,7 @@ public sealed class TeamLabTopologyNetwork
     public int RuntimePrefixLength { get; set; }
     public bool IsEntry { get; set; }
     public int OrderIndex { get; set; }
+    public string? DnsServerAssetKey { get; set; }
     public TeamLabTopology Topology { get; set; } = null!;
     public List<TeamLabTopologyInterface> Interfaces { get; set; } = [];
 }
@@ -45,6 +48,7 @@ public sealed class TeamLabTopologyAsset
     public string Name { get; set; } = string.Empty;
     public TeamLabAssetKind Kind { get; set; }
     public int? ImageTemplateId { get; set; }
+    public VmNetworkMode? VmNetworkMode { get; set; }
     /// <summary>Optional device package backing this asset (industrial emulation, honeypot, ...).</summary>
     public int? DevicePackageId { get; set; }
     /// <summary>Canonical JSON of the author-facing package parameters; frozen into the release at publish.</summary>
@@ -65,6 +69,10 @@ public sealed class TeamLabTopologyAsset
 public sealed class TeamLabTopologyInterface
 {
     public int Id { get; set; }
+    public string? GuestInterfaceName { get; set; }
+    public bool? UseDefaultGateway { get; set; }
+    public string? DnsServersJson { get; set; }
+    public string? StaticRoutesJson { get; set; }
     public int AssetId { get; set; }
     public int NetworkId { get; set; }
     public string Key { get; set; } = string.Empty;

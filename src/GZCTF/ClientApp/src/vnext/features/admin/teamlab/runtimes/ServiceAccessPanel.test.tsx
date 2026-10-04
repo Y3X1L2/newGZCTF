@@ -30,8 +30,9 @@ describe('ServiceAccessPanel', () => {
   })
 
   it('creates an automatically allocated public entry for the selected asset network', async () => {
-    render(<SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}><ServiceAccessPanel runtime={runtime} /></SWRConfig>)
-    await screen.findByText('暂无服务开放记录')
+    render(<SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}><ServiceAccessPanel runtime={runtime} assetId={4} /></SWRConfig>)
+    await screen.findByText('暂无开放服务')
+    fireEvent.click(screen.getByRole('button', { name: '开放端口' }))
     fireEvent.change(screen.getByLabelText('内部端口'), { target: { value: '8080' } })
     fireEvent.click(screen.getByRole('button', { name: '开放访问' }))
     await waitFor(() => expect(teamLabServiceAccessApi.create).toHaveBeenCalledWith(runtime.id, 4, {

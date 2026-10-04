@@ -531,7 +531,10 @@ public sealed class TeamLabRuntimePlanner(
             DevicePackageId = asset.DevicePackageId,
             DevicePackageParametersJson = asset.DeviceParametersJson,
             ConnectorId = asset.ConnectorId,
-            ExecutionPlanJson = JsonSerializer.Serialize(asset)
+            ExecutionPlanJson = JsonSerializer.Serialize(asset with
+            {
+                VmNetworkMode = asset.Kind == TeamLabAssetKind.Vm ? asset.VmNetworkMode ?? template.VmNetworkMode : null
+            })
         };
     }
 

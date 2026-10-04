@@ -3,6 +3,7 @@ import type { TeamLabImageOption } from '../../api'
 import { updateTopologyNode } from '../../model/topologyCommands'
 import type { TopologyAssetNode } from '../../model/topologyDocument'
 import { CapabilityBindingEditor } from './CapabilityBindingEditor'
+import { GuestNetworkModeEditor } from './GuestNetworkModeEditor'
 import { HealthCheckEditor } from './HealthCheckEditor'
 import { InspectorSection, SelectInput, TextInput } from './InspectorFields'
 import { NetworkInterfacesEditor } from './NetworkInterfacesEditor'
@@ -45,7 +46,7 @@ export function AssetInspector({
           ) : null}
           {compatibleImages.map((option) => (
             <option key={option.id} value={option.id}>
-              {option.name} (#{option.id})
+              {option.name}
               {option.remoteAccessProtocol === 'ssh'
                 ? ' - 已配置 SSH 运维'
                 : option.remoteAccessProtocol === 'rdp'
@@ -55,6 +56,15 @@ export function AssetInspector({
           ))}
         </SelectInput>
         {node.devicePackageId ? <p>镜像由设备模板确定；解除模板绑定后可单独更换镜像。</p> : null}
+        {node.type !== 'docker' ? (
+          <GuestNetworkModeEditor
+            mode={node.vmNetworkMode}
+            inheritedMode={compatibleImages.find((image) => image.id === node.imageTemplateId)?.vmNetworkMode}
+            onChange={(vmNetworkMode) => update({ vmNetworkMode })}
+            readOnly={readOnly}
+            windows={node.type === 'windows-vm'}
+          />
+        ) : null}
       </InspectorSection>
 
       <ResourceRequirementsEditor
@@ -64,6 +74,7 @@ export function AssetInspector({
       />
       <CapabilityBindingEditor node={node} imageOptions={compatibleImages} onAssetChange={update} readOnly={readOnly} />
       <NetworkInterfacesEditor
+        imageOptions={imageOptions}
         document={document}
         nodeKey={node.key}
         onDocumentChange={onDocumentChange}

@@ -86,9 +86,7 @@ export function TeamLabReleasesPage() {
     <section className={styles.page}>
       <header className={styles.pageHeader}>
         <div>
-          <span>发布版本</span>
           <h2>发布版本</h2>
-          <p>核对不可变快照、服务端执行计划、镜像就绪度与试运行状态。</p>
         </div>
         <div className={styles.headerActions}>
           <RefreshIndicator
@@ -110,20 +108,18 @@ export function TeamLabReleasesPage() {
         </aside>
         <div className={styles.releaseDetail}>
           <header className={styles.releaseIdentity}>
-            <div><span>发布版本</span><h3>v{selectedRelease!.version}</h3></div>
+            <div><h3>v{selectedRelease!.version}</h3></div>
             <StatusBadge tone={selectedRelease!.sourceRevision === scene.revision ? 'success' : 'neutral'}>
-              {selectedRelease!.sourceRevision === scene.revision ? '当前设计版本' : `设计修订 ${selectedRelease!.sourceRevision}`}
+              {selectedRelease!.sourceRevision === scene.revision ? '当前设计' : '历史设计'}
             </StatusBadge>
           </header>
-          <dl className={styles.releaseFacts}>
-            <div><dt>发布时间</dt><dd>{formatAdminDate(selectedRelease!.publishedAt)}</dd></div>
-            <div><dt>发布人</dt><dd>{selectedRelease!.publishedBy ?? '系统记录不可用'}</dd></div>
-            <div><dt>Schema</dt><dd>v{selectedRelease!.schemaVersion}</dd></div>
-            <div><dt>内容摘要</dt><dd><code title={selectedRelease!.contentHash}>{selectedRelease!.contentHash.slice(0, 20)}</code></dd></div>
-          </dl>
+          <div className={styles.releaseFacts}>
+            <span>{formatAdminDate(selectedRelease!.publishedAt)}</span>
+            {selectedRelease!.publisherName ? <span>{selectedRelease!.publisherName}</span> : null}
+          </div>
 
           {!readinessRequest.data && !readinessRequest.error ? (
-            <DataState description="正在核对调度、镜像与最近试运行事实。" loading title="计算运行就绪度" />
+            <DataState description="" loading title="读取版本状态" />
           ) : readinessRequest.error ? (
             <InlineFeedback tone="danger">{errorMessage(readinessRequest.error, '运行就绪度加载失败。')}</InlineFeedback>
           ) : readinessRequest.data ? (

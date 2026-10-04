@@ -18,7 +18,7 @@ it('registers a dedicated NIC with the selected node and does not offer unsuppor
   fireEvent.click(screen.getByLabelText('手工填写'))
   fireEvent.change(screen.getByLabelText('专用网卡名称'), { target: { value: 'enp2s0' } })
   fireEvent.change(screen.getByLabelText('网卡 MAC 地址'), { target: { value: '02:00:00:00:00:83' } })
-  expect(screen.getByRole('option', { name: '串口（尚未支持执行）' })).toBeDisabled()
+  expect(screen.queryByRole('option', { name: /串口/ })).not.toBeInTheDocument()
   fireEvent.click(screen.getByRole('button', { name: '登记连接器' }))
   await waitFor(() => expect(completed).toHaveBeenCalledOnce())
   expect(register).toHaveBeenCalledWith(expect.objectContaining({

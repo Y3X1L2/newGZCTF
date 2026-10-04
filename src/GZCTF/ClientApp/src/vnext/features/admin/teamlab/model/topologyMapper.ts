@@ -8,6 +8,13 @@ import type {
 } from '../api/teamlabContracts'
 import { compileTopologyDocument } from './topologyCompiler'
 import {
+  type TopologyAssetNode,
+  type TopologyConnection,
+  type TopologyDocument,
+  type TopologyNode,
+  type TopologyPosition,
+} from './topologyDocument'
+import {
   ASSET_NODE_HEIGHT,
   INFRA_NODE_HEIGHT,
   MEMBER_GAP_X,
@@ -17,14 +24,8 @@ import {
   REGION_HEADER_HEIGHT,
   REGION_PADDING_X,
 } from './topologyGeometry'
-import {
-  type TopologyAssetNode,
-  type TopologyConnection,
-  type TopologyDocument,
-  type TopologyNode,
-  type TopologyPosition,
-} from './topologyDocument'
 import { nextTopologyKey } from './topologyKeys'
+import { copyNetworkRequirements } from './topologyNetworkRequirements'
 
 export type VmDeviceType = 'linux-vm' | 'windows-vm'
 export type VmDeviceTypeResolver = (asset: TeamLabTopologyAsset) => VmDeviceType
@@ -109,6 +110,7 @@ function mapAsset(
     name: asset.name,
     position: nodePosition(editor, 'asset', asset.key, index),
     imageTemplateId: asset.imageTemplateId,
+    ...(asset.vmNetworkMode !== undefined ? { vmNetworkMode: asset.vmNetworkMode } : {}),
     resources: { ...asset.resources },
     exposePort: asset.exposePort,
     healthCheck: asset.healthCheck ? { ...asset.healthCheck } : null,
@@ -151,6 +153,7 @@ function memberships(
       hostOffset: item.hostOffset,
       primary: item.primary,
       orderIndex: item.orderIndex,
+      ...copyNetworkRequirements(item),
     }
   })
 }
@@ -194,6 +197,7 @@ export function mapTopologyDetailToDocument(
       runtimePrefixLength: network.addressPool.runtimePrefixLength,
       isEntry: network.isEntry,
       orderIndex: network.orderIndex,
+      dnsServerAssetKey: network.dnsServerAssetKey ?? null,
     }
   })
 

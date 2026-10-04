@@ -213,6 +213,14 @@ public sealed class TeamLabAdminRuntimeController(
             await runtimes.GetAsync(runtimeId, cancellationToken));
     }
 
+    [HttpGet("{runtimeId:guid}/assets/{assetId:int}/definition")]
+    public async Task<TeamLabTopologyAssetModel> AssetDefinition(
+        Guid runtimeId, int assetId, CancellationToken cancellationToken)
+    {
+        await RequireAsync(runtimeId, TeamLabRuntimePermission.AssetCompose, cancellationToken);
+        return await projections.GetAssetDefinitionAsync(runtimeId, assetId, cancellationToken);
+    }
+
     [HttpPost("{runtimeId:guid}/pause")]
     public async Task<ActionResult<TeamLabRuntimeProjectionModel>> Pause(Guid runtimeId, CancellationToken cancellationToken)
     {

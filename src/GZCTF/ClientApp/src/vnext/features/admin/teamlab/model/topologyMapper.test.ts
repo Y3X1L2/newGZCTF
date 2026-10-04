@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { TeamLabTopologyDetail } from '../api/teamlabContracts'
+import { duplicateTopologyNodes, moveTopologyNode, updateTopologyConnection } from './topologyCommands'
 import { compileTopologyDocument } from './topologyCompiler'
 import { MIN_REGION_HEIGHT, MIN_REGION_WIDTH } from './topologyGeometry'
 import { mapTopologyDetailToDocument } from './topologyMapper'
@@ -96,6 +97,70 @@ function detail(): TeamLabTopologyDetail {
 }
 
 describe('topology API round trip', () => {
+  it.each([undefined, null, 'dhcp', 'preconfigured', 'managed-static'] as const)(
+    'preserves VM mode %s without adding a policy to old scenarios',
+    (mode) => {
+      const source = detail()
+      source.definition.assets = source.definition.assets.map((asset) =>
+        asset.kind === 'vm'
+          ? {
+              ...asset,
+              ...(mode !== undefined ? { vmNetworkMode: mode } : {}),
+              interfaces: asset.interfaces.map((iface) => ({
+                ...iface,
+                guestInterfaceName: null,
+                useDefaultGateway: false,
+                dnsServers: [],
+                staticRoutes: [{ destinationCidr: '10.100.0.0/16', nextHop: '172.22.0.1', metric: 15 }],
+              })),
+            }
+          : asset
+      )
+      const document = mapTopologyDetailToDocument(source, { resolveVmDeviceType: () => 'windows-vm' })
+      const compiled = compileTopologyDocument(document)
+      const original = source.definition.assets.find((asset) => asset.key === 'dc')!
+      expect(compiled.assets.find((asset) => asset.key === 'dc')).toEqual(original)
+      if (mode === undefined)
+        expect(compiled.assets.find((asset) => asset.key === 'dc')).not.toHaveProperty('vmNetworkMode')
+    }
+  )
+
+  it('keeps network intent through moving, copying and editing a copied asset', () => {
+    const source = detail()
+    source.definition.assets = source.definition.assets.map((asset) =>
+      asset.key === 'dc'
+        ? {
+            ...asset,
+            vmNetworkMode: 'managed-static',
+            interfaces: asset.interfaces.map((iface) => ({
+              ...iface,
+              useDefaultGateway: null,
+              dnsServers: ['127.0.0.1'],
+              staticRoutes: [],
+            })),
+          }
+        : asset
+    )
+    const mapped = mapTopologyDetailToDocument(source, { resolveVmDeviceType: () => 'windows-vm' })
+    const moved = moveTopologyNode(mapped, 'dc', 800, 500).document
+    const pasted = duplicateTopologyNodes(moved, new Set(['dc', 'switch-domain'])).document
+    const membership = Object.values(pasted.connections).find(
+      (connection) => connection.type === 'membership' && connection.nodeKey === 'dc-copy'
+    )!
+    if (membership.type !== 'membership') throw new Error('missing membership')
+    const edited = updateTopologyConnection(pasted, { ...membership, dnsServers: [], staticRoutes: null }).document
+    const compiled = compileTopologyDocument(edited)
+    expect(compiled.assets.find((asset) => asset.key === 'dc')?.interfaces[0]).toMatchObject({
+      useDefaultGateway: null,
+      dnsServers: ['127.0.0.1'],
+      staticRoutes: [],
+    })
+    expect(compiled.assets.find((asset) => asset.key === 'dc-copy')).toMatchObject({
+      vmNetworkMode: 'managed-static',
+      interfaces: [{ dnsServers: [], staticRoutes: null }],
+    })
+  })
+
   it('preserves all supported schema v2 semantics and VM device intent', () => {
     const source = detail()
     const document = mapTopologyDetailToDocument(source, {
@@ -214,7 +279,9 @@ describe('topology API round trip', () => {
     expect(document.schemaVersion).toBe(2)
     expect(compiled.schemaVersion).toBe(2)
     expect(compiled.networks).toEqual(source.definition.networks)
-    expect(compiled.assets).toEqual([...source.definition.assets].sort((left, right) => left.key.localeCompare(right.key)))
+    expect(compiled.assets).toEqual(
+      [...source.definition.assets].sort((left, right) => left.key.localeCompare(right.key))
+    )
     expect(compiled.connections).toEqual(source.definition.connections)
   })
 

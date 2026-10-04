@@ -127,9 +127,11 @@ public sealed class TeamLabHybridDatapathTests
         [new("mixed", "10.83.0.0/24", "10.83.0.1",
             [new("client", "client", "02:00:00:83:00:02", "10.83.0.2"),
              new("vm", "vm", "02:00:00:83:00:03", "10.83.0.3")], [], [],
-             Connectors: [new(Guid.Parse("01900000-0000-7000-8000-000000000083"), Guid.Parse("01900000-0000-7000-8000-000000000084"), "qa-external", "02:00:00:83:00:44")]),
+             Connectors: [new(Guid.Parse("01900000-0000-7000-8000-000000000083"), Guid.Parse("01900000-0000-7000-8000-000000000084"), "qa-external", "02:00:00:83:00:44")],
+             HostGateway: new("service-gateway", "02:00:00:83:00:fd", "10.83.0.253", "tlsg-qa-mixed")),
          new("isolated", "10.83.0.0/24", "10.83.0.1",
-            [new("isolated", "isolated", "02:00:00:83:00:05", "10.83.0.5")], [], [])], [], []));
+            [new("isolated", "isolated", "02:00:00:83:00:05", "10.83.0.5")], [], [],
+             HostGateway: new("service-gateway", "02:00:00:83:01:fd", "10.83.0.253", "tlsg-qa-isolated"))], [], []));
 
     static TeamLabExecutionPlanV2 Sign(TeamLabExecutionPlanV2 plan) => plan with
     {

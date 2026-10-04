@@ -1,4 +1,6 @@
 using System.Net;
+using GZCTF.Models.Data;
+using GZCTF.TeamLab.Contracts.Execution;
 using System.Net.Sockets;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -83,6 +85,13 @@ internal sealed partial class TeamLabTopologyStructureValidator(TeamLabAddressPo
             .GroupBy(item => item.Key, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
 
+        foreach (var (network, index) in definition.Networks.Select((value, index) => (value, index)))
+            if (network.DnsServerAssetKey is { } key &&
+                !definition.Assets.Any(asset => asset.Key == key &&
+                    asset.Interfaces.Any(iface => iface.NetworkKey == network.Key)))
+                Add(issues, "dns_asset_missing", $"networks[{index}].dnsServerAssetKey",
+                    "选择场景中提供 DNS 服务的资产。");
+
         foreach (var (asset, index) in definition.Assets.Select((value, index) => (value, index)))
             ValidateAsset(asset, index, networkByKey, issues);
         foreach (var (item, index) in infrastructure.Select((value, index) => (value, index)))
@@ -111,6 +120,27 @@ internal sealed partial class TeamLabTopologyStructureValidator(TeamLabAddressPo
             Add(issues, "device_parameters_invalid", $"{path}.deviceParameters",
                 "设备包参数必须是 JSON 对象。");
         ValidateInterfaces(asset.Interfaces, path, networkByKey, false, issues);
+        if (asset.VmNetworkMode is { } mode && (!Enum.IsDefined(mode) || asset.Kind != TeamLabAssetKind.Vm))
+            Add(issues, "guest_network_mode_invalid", $"{path}.vmNetworkMode", "Only VM assets support a defined guest network mode.");
+        if (asset.Interfaces.Count(iface => iface.UseDefaultGateway ?? iface.Primary) > 1)
+            Add(issues, "guest_default_gateway_multiple", $"{path}.interfaces", "Only one interface may use a default gateway.");
+        if (asset.Interfaces.Where(iface => iface.GuestInterfaceName is not null)
+            .GroupBy(iface => iface.GuestInterfaceName, StringComparer.OrdinalIgnoreCase).Any(group => group.Count() > 1))
+            Add(issues, "guest_interface_name_duplicate", $"{path}.interfaces", "Guest interface names must be unique.");
+        foreach (var (iface, ifaceIndex) in asset.Interfaces.Select((value, index) => (value, index)))
+        {
+            var ifacePath = $"{path}.interfaces[{ifaceIndex}]";
+            if (asset.Kind == TeamLabAssetKind.Docker && HasGuestRequirements(iface))
+                Add(issues, "guest_network_vm_only", ifacePath, "Platform guest network requirements are supported only for VM assets.");
+            if (iface.GuestInterfaceName is not null && (asset.Kind != TeamLabAssetKind.Vm ||
+                asset.VmNetworkMode is not null and not VmNetworkMode.ManagedStatic))
+                Add(issues, "guest_interface_name_mode_invalid", $"{ifacePath}.guestInterfaceName", "A target interface name requires ManagedStatic mode.");
+            if (asset.VmNetworkMode == VmNetworkMode.Preconfigured && HasGuestRequirements(iface))
+                Add(issues, "guest_network_preconfigured", ifacePath, "Preconfigured mode does not apply platform guest network requirements.");
+            if ((asset.Kind == TeamLabAssetKind.Docker || asset.VmNetworkMode == VmNetworkMode.Dhcp) &&
+                iface.StaticRoutes?.Any(route => route is null || route.Metric is not null) == true)
+                Add(issues, "guest_route_metric_mode_invalid", $"{ifacePath}.staticRoutes", "A route metric requires ManagedStatic mode.");
+        }
     }
 
     private static void ValidateInfrastructure(
@@ -202,6 +232,17 @@ internal sealed partial class TeamLabTopologyStructureValidator(TeamLabAddressPo
         {
             var path = $"{ownerPath}.interfaces[{index}]";
             ValidateKey(iface.Key, $"{path}.key", issues);
+            if (managedRouter && HasGuestRequirements(iface))
+                Add(issues, "guest_network_infrastructure_invalid", path, "Guest requirements cannot be set on managed infrastructure.");
+            if (!TeamLabGuestNetworkValidation.IsInterfaceName(iface.GuestInterfaceName))
+                Add(issues, "guest_interface_name_invalid", $"{path}.guestInterfaceName", "Target names must match [A-Za-z][A-Za-z0-9_-]{0,14}.");
+            if (iface.DnsServers is { } dns && (dns.Count > TeamLabGuestNetworkValidation.MaxDnsServers ||
+                dns.Any(value => !TeamLabGuestNetworkValidation.IsDnsServer(value)) || dns.Distinct().Count() != dns.Count))
+                Add(issues, "guest_dns_invalid", $"{path}.dnsServers", "Specify up to three distinct IPv4 DNS servers, or an empty list for no DNS.");
+            if (iface.StaticRoutes is { } routes && (routes.Count > TeamLabGuestNetworkValidation.MaxStaticRoutes ||
+                routes.Any(route => route is null || !TeamLabGuestNetworkValidation.IsRoute(new TeamLabGuestRouteV2(route.DestinationCidr, route.NextHop, route.Metric))) ||
+                routes.GroupBy(route => route.DestinationCidr).Any(group => group.Count() > 1)))
+                Add(issues, "guest_routes_invalid", $"{path}.staticRoutes", "Specify up to eight distinct typed IPv4 routes; default routes use the gateway setting.");
             if (!networkByKey.TryGetValue(iface.NetworkKey, out var network))
             {
                 Add(issues, "interface_network_missing", $"{path}.networkKey",
@@ -217,6 +258,9 @@ internal sealed partial class TeamLabTopologyStructureValidator(TeamLabAddressPo
                         : "Host offset must avoid network, gateway, DHCP/DNS, WireGuard server and broadcast reservations.");
         }
     }
+
+    internal static bool HasGuestRequirements(TeamLabTopologyInterfaceModel iface) =>
+        iface.GuestInterfaceName is not null || iface.UseDefaultGateway is not null || iface.DnsServers is not null || iface.StaticRoutes is not null;
 
     private static void ValidateUniqueKeys(
         IEnumerable<string> keys,

@@ -1,7 +1,7 @@
 import { Network } from 'lucide-react'
 import { updateTopologyNode } from '../../model/topologyCommands'
-import type { TopologySwitchNode } from '../../model/topologyDocument'
-import { InspectorSection, NumberInput, TextInput, ToggleInput } from './InspectorFields'
+import { isTopologyAsset, type TopologySwitchNode } from '../../model/topologyDocument'
+import { InspectorSection, NumberInput, SelectInput, TextInput, ToggleInput } from './InspectorFields'
 import type { InspectorDocumentProps } from './inspectorTypes'
 
 export function SwitchInspector({
@@ -20,6 +20,14 @@ export function SwitchInspector({
         <TextInput disabled={readOnly} label="网段名称" onChange={(networkName) => update({ networkName })} value={node.networkName} />
         <TextInput disabled={readOnly} label="地址池 CIDR" onChange={(poolCidr) => update({ poolCidr })} value={node.poolCidr} />
         <NumberInput disabled={readOnly} label="运行时前缀" max={32} min={1} onChange={(runtimePrefixLength) => update({ runtimePrefixLength })} value={node.runtimePrefixLength} />
+        <SelectInput disabled={readOnly} label="DNS 服务资产" onChange={(value) => update({ dnsServerAssetKey: value || null })} value={node.dnsServerAssetKey ?? ''}>
+          <option value="">平台默认</option>
+          {Object.values(document.nodes).filter(isTopologyAsset).filter((asset) =>
+            Object.values(document.connections).some((connection) =>
+              connection.type === 'membership' && connection.nodeKey === asset.key && connection.switchKey === node.key)).map((asset) => (
+            <option key={asset.key} value={asset.key}>{asset.name}</option>
+          ))}
+        </SelectInput>
         <ToggleInput checked={node.isEntry} disabled={readOnly} label="入口网段" onChange={(isEntry) => update({ isEntry })} />
         <ToggleInput
           checked={node.position.collapsed}
