@@ -1,5 +1,14 @@
 # YINYU 当前开发状态
 
+## TeamLab 管理后台与受管网络集成候选（2026-10-04）
+
+- 分支 `codex/teamlab-admin-redesign-integration` 从 `origin/main bc3599aa` 创建，正常合并 `origin/codex/teamlab-managed-network f36a491d` 和 `origin/codex/teamlab-admin-redesign bff10f0f`；合并提交为 `cb13cd45`、`263928a6`，未改写两条来源分支历史，未合并 `main`。
+- 集成保留已部署验证的 VM 受管网络链路及管理后台重设计。冲突处理中重新生成内部 API 客户端，并修正资产执行定义转换：镜像制品引用与 VM 网络默认同时保留，资产替换完整往返 `VmNetworkMode`、接口名、默认网关、DNS 和静态路由；事件工作区保留重设计详情抽屉并显示来宾网络阶段中文名称。
+- 前端完整门禁通过：locale、lint、严格 TypeScript、架构检查、113 个测试文件/376 项测试、生产构建、制品清单和体积预算。Release 解决方案构建通过，后端单元 1284/1284、PostgreSQL/Testcontainers 集成 304/304 通过；OpenAPI 由合并后 TestServer 导出并重新生成客户端。
+- 新增迁移分支专项覆盖真实升级顺序：数据库已记录 `20261001145237_AddTeamLabManagedGuestNetwork`、但缺少较早的 `20260930164900_AddSystemLogResourceIndex` 时，EF 可只补应用日志索引，受管网络 5 个列保持完整，最终无待应用迁移。日志索引在生产仍需维护窗口和新鲜备份副本验证，不能以本地 Testcontainers 代替锁表评估。
+- 本地 fixture 在 390、1366、1920、2560 宽度完成日间/夜间、键盘焦点和操作、reduced-motion、横向溢出与布局检查；覆盖场景草稿、发布就绪、逐网卡网络、资源登记、资产编排、SSH/VNC、服务开放、生命周期和运行事件。该证据不是生产 API、文件、远程会话或真实 VM 执行验收。
+- 本轮没有连接或修改 `10.24.0.27`、数据库、Agent、Registry 或网关，也没有重置或销毁保留的 Lab2 generation 4 四机。生产活动目录、源码和 Agent 摘要仍以 2026-10-03 网卡就绪交接为最近确认事实；容量上报读取根盘的缺口未扩大处理。
+
 ## TeamLab网卡就绪等待：Agent已部署，Lab2四机基础网络通过（2026-10-03）
 
 - Lab2限定重试中Server2008R2的QGA43.6秒回应，网卡62.8秒才可见，旧执行检查49.3秒已结束；Linux单/双卡和DC最终均出现本次MAC。现Agent第一次读缺MAC立即失败，证据支持设备初始化时序缺口。候选改为在原ReadyTimeout三分钟总预算内只读等待全部MAC，不增加镜像自启动代码/计划HTTP期限，保留多卡完整性、重复MAC失败、身份校验和取消。
@@ -33,6 +42,7 @@
 - 最终源码门禁：后端单元1251/1251、集成302/302，前端110文件373测试及完整门禁通过，Release构建通过（已有警告保留）。真实 `.27` 验收通过现代Windows双卡/明确路由、Ubuntu24双卡、DHCP/AD域解析与普通用户系统认证/共享读取、Docker HTTP，以及新建/重置/不同地址段双实例隔离/销毁。未做图形RDP登录；Linux测试DNS只验证配置，未验证解析服务；同地址段多副本VRF不在范围内。
 - Server2008R2原镜像缺QGA，已验证明确返回 `guest_qga_unavailable / guest-ready`，不能列为旧系统正例。Linux新模板518已Ready并通过实测；v1清理时删除machine-id导致网络服务不能初始化，v2仅修正镜像准备状态后通过。
 - 本次9个专用验收runtime全部销毁；原8台VM定义和磁盘保留、已关机。`.27/.30/.31`心跳在线并恢复可调度，只有`.27`升级；`.30/.31`仍为旧Agent，不在它们上运行进阶逐卡DHCP新策略。后续新场景应明确选择`.27`作为网络owner及Worker。统一证据、限制和回退见 [自动网络交接](handoffs/2026-10-02-teamlab-managed-network.md)。
+
 ## TeamLab 网络运行链部署（2026-09-27）
 
 - 分支 `codex/teamlab-windows-network`、提交 `279f259` 已推送；`10.24.0.27` 当前 release 为 `/opt/gzctf/releases/teamlab-net-279f259-20260927/publish`。本次仅上传主站 DLL、TeamLab 契约 DLL、前端静态文件和一个 Agent 程序；`.30/.31` 从 `.27` 内网取得同一 Agent。

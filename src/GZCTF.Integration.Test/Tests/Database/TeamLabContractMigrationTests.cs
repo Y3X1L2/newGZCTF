@@ -19,6 +19,8 @@ namespace GZCTF.Integration.Test.Tests.Database;
 
 public sealed class TeamLabContractMigrationTests : IAsyncLifetime
 {
+    private const string SystemLogResourceIndexMigration = "20260930164900_AddSystemLogResourceIndex";
+    private const string ManagedGuestNetworkMigration = "20261001145237_AddTeamLabManagedGuestNetwork";
     private const string PreviousMigration = "20260711115423_CompletePhaseOneChallengeApi";
     private const string FoundationMigration = "20260711144502_AddIndependentTeamLabFoundation";
     private const string ContractMigration = "20260711170329_RemovePenetrationTopologyRuntimeCompatibility";
@@ -109,6 +111,39 @@ public sealed class TeamLabContractMigrationTests : IAsyncLifetime
             await context.Database.GetService<IMigrator>().MigrateAsync();
             Assert.Empty(await context.Database.GetPendingMigrationsAsync());
         }
+    }
+
+    [Fact]
+    public async Task SystemLogResourceIndex_AppliesAfterManagedNetworkMigrationWasAlreadyRecorded()
+    {
+        await using var context = CreateContext();
+        await context.Database.MigrateAsync();
+        await context.Database.ExecuteSqlRawAsync($$"""
+            DROP INDEX IF EXISTS "IX_Logs_Resource_Time_Id";
+            DELETE FROM "__EFMigrationsHistory"
+            WHERE "MigrationId" = '{{SystemLogResourceIndexMigration}}';
+            """);
+
+        var pending = (await context.Database.GetPendingMigrationsAsync()).ToArray();
+        Assert.Contains(SystemLogResourceIndexMigration, pending);
+        Assert.DoesNotContain(ManagedGuestNetworkMigration, pending);
+
+        await context.Database.GetService<IMigrator>().MigrateAsync();
+
+        Assert.Empty(await context.Database.GetPendingMigrationsAsync());
+        Assert.Equal(1, await ScalarAsync<long>(context, """
+            SELECT count(*)
+            FROM pg_indexes
+            WHERE schemaname = 'public' AND indexname = 'IX_Logs_Resource_Time_Id'
+            """));
+        Assert.Equal(5, await ScalarAsync<long>(context, """
+            SELECT count(*)
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND ((table_name = 'TeamLabTopologyAssets' AND column_name = 'VmNetworkMode')
+                OR (table_name = 'TeamLabTopologyInterfaces' AND column_name IN
+                    ('GuestInterfaceName', 'UseDefaultGateway', 'DnsServersJson', 'StaticRoutesJson')))
+            """));
     }
 
     [Fact]
