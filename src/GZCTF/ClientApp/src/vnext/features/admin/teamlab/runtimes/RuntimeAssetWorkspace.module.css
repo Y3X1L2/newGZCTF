@@ -23,6 +23,5 @@
 .views { gap: var(--yn-space-4); margin: var(--yn-space-5) 0; border-bottom: 1px solid var(--yn-color-border); }
 .views button { display: flex; align-items: center; gap: var(--yn-space-2); min-height: 42px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--yn-color-muted); font: inherit; cursor: pointer; }
 .views button[aria-pressed='true'] { border-bottom-color: var(--yn-color-brand); color: var(--yn-color-text); }
-.accessLayout { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--yn-space-5); }
-@media (max-width: 1050px) { .accessLayout { grid-template-columns: 1fr; } }
+.accessLayout { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--yn-space-5); }
 @media (max-width: 760px) { .workspace { grid-template-columns: 1fr; } .assetRail { border-right: 0; border-bottom: 1px solid var(--yn-color-border); padding-right: 0; } .assetList { display: flex; max-height: none; min-height: 0; overflow-x: auto; } .assetList button { flex: 0 0 180px; } .assetDetail { padding-left: 0; } .assetHeader { flex-direction: column; } }

@@ -63,9 +63,9 @@ export function RuntimeAssetWorkspace({ runtime, onSubmitted }: { runtime: TeamL
         <button aria-pressed={view === 'files'} onClick={() => setView('files')} type="button"><FolderOpen size={16} />文件</button>
         <button aria-pressed={view === 'diagnostics'} onClick={() => setView('diagnostics')} type="button">诊断</button>
       </nav>
-      {view === 'access' ? <div className={styles.accessLayout}>
-        <RuntimeRemoteAccessPanel key={asset.id} runtime={runtime} assetId={asset.id} />
-        <ServiceAccessPanel key={asset.id} runtime={runtime} assetId={asset.id} />
+      {view === 'access' ? <div key={`${runtime.id}:${runtime.generation}:${asset.id}`} className={styles.accessLayout}>
+        <RuntimeRemoteAccessPanel runtime={runtime} assetId={asset.id} />
+        <ServiceAccessPanel runtime={runtime} assetId={asset.id} />
       </div> : null}
       {view === 'files' ? <AssetFilesPanel runtime={runtime} assetId={asset.id} /> : null}
       {view === 'diagnostics' ? <>{asset.kind === 'vm'

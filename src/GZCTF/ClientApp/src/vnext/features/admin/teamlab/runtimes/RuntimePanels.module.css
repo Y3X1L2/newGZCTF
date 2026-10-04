@@ -6,6 +6,7 @@
 
 .muted { color: var(--yn-color-muted); }
 .connectionActions { display: flex; align-items: center; flex-wrap: wrap; gap: var(--yn-space-2); }
+.serviceEndpoint { white-space: nowrap; }
 .assetSessions { margin: var(--yn-space-4) 0 0; padding: 0; list-style: none; }
 .assetSessions li { display: flex; align-items: center; justify-content: space-between; gap: var(--yn-space-2); padding: var(--yn-space-2) 0; border-top: 1px solid var(--yn-color-border); }
 
