@@ -1,21 +1,15 @@
-import type {
-  TeamLabCaptureStatus,
-  TeamLabEventLevel,
-  TeamLabPathConfidence,
-  TeamLabRuntimeStatus,
-} from '../api'
+import type { TeamLabCaptureStatus, TeamLabEventLevel, TeamLabPathConfidence, TeamLabRuntimeStatus } from '../api'
 
-export const terminalRuntimeStatuses = new Set<TeamLabRuntimeStatus>([
-  'failed',
-  'destroyed',
-])
+export const terminalRuntimeStatuses = new Set<TeamLabRuntimeStatus>(['failed', 'destroyed'])
 
 export function isRuntimeTerminal(status: TeamLabRuntimeStatus | undefined) {
   return status ? terminalRuntimeStatuses.has(status) : false
 }
 
 export function isRuntimeTransitioning(status: TeamLabRuntimeStatus | undefined) {
-  return status ? ['pending', 'planning', 'scheduled', 'deploying', 'probing', 'cleanup-pending', 'destroying'].includes(status) : false
+  return status
+    ? ['pending', 'planning', 'scheduled', 'deploying', 'probing', 'cleanup-pending', 'destroying'].includes(status)
+    : false
 }
 
 export function runtimeRefreshInterval(status: TeamLabRuntimeStatus | undefined) {
@@ -53,6 +47,17 @@ export const eventLevelLabels: Record<TeamLabEventLevel, string> = {
   success: '成功',
   warning: '警告',
   error: '错误',
+}
+
+const guestNetworkStageLabels: Readonly<Record<string, string>> = {
+  'guest-ready': '等待来宾就绪',
+  'guest-network-apply': '配置来宾网络',
+  'guest-network-verify': '验证来宾网络',
+}
+
+/** Only label stages reported by the server; unknown stages remain visible. */
+export function runtimeStageLabel(stage: string) {
+  return guestNetworkStageLabels[stage] ?? stage
 }
 
 export const pathConfidenceLabels: Record<TeamLabPathConfidence, string> = {

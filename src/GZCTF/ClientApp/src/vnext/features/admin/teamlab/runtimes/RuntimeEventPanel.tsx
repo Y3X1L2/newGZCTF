@@ -6,9 +6,9 @@ import { errorMessage } from '../../../../shared/errors'
 import { FilterToolbar, ToolbarGroup } from '../../shared/AdminWorkbench'
 import { formatAdminDate } from '../../shared/adminFormat'
 import type { TeamLabRuntimeEvent } from '../api'
-import type { TeamLabEventFilters } from './useRuntimeEvents'
-import { eventLevelLabels } from './runtimePresentation'
 import styles from './RuntimePanels.module.css'
+import { eventLevelLabels, runtimeStageLabel } from './runtimePresentation'
+import type { TeamLabEventFilters } from './useRuntimeEvents'
 
 const levelIcons = {
   info: Info,
@@ -48,7 +48,10 @@ export const RuntimeEventPanel = memo(function RuntimeEventPanel({
   return (
     <section className={styles.panel} aria-labelledby="runtime-events-title">
       <header className={styles.panelHeader}>
-        <div><span>持久化事件</span><h3 id="runtime-events-title">运行事件</h3></div>
+        <div>
+          <span>持久化事件</span>
+          <h3 id="runtime-events-title">运行事件</h3>
+        </div>
         <strong>{events.length} 条</strong>
       </header>
       <FilterToolbar>
@@ -56,12 +59,16 @@ export const RuntimeEventPanel = memo(function RuntimeEventPanel({
           <select
             aria-label="事件代次"
             className={styles.filterSelect}
-            onChange={(event) => onFiltersChange({ ...filters, generation: event.target.value ? Number(event.target.value) : null })}
+            onChange={(event) =>
+              onFiltersChange({ ...filters, generation: event.target.value ? Number(event.target.value) : null })
+            }
             value={filters.generation ?? ''}
           >
             <option value="">全部代次</option>
             {generations.map((generation) => (
-              <option key={generation} value={generation}>第 {generation} 代</option>
+              <option key={generation} value={generation}>
+                第 {generation} 代
+              </option>
             ))}
           </select>
           <select
@@ -72,12 +79,16 @@ export const RuntimeEventPanel = memo(function RuntimeEventPanel({
           >
             <option value="">全部阶段</option>
             {stages.map((stage) => (
-              <option key={stage} value={stage}>{stage}</option>
+              <option key={stage} value={stage}>
+                {runtimeStageLabel(stage)}
+              </option>
             ))}
           </select>
         </ToolbarGroup>
       </FilterToolbar>
-      {loading ? <DataState description="正在读取运行事件。" loading title="事件加载中" /> : error ? (
+      {loading ? (
+        <DataState description="正在读取运行事件。" loading title="事件加载中" />
+      ) : error ? (
         <InlineFeedback tone="danger">{errorMessage(error, '运行事件加载失败。')}</InlineFeedback>
       ) : ordered.length ? (
         <ol className={styles.eventTimeline}>
@@ -85,14 +96,23 @@ export const RuntimeEventPanel = memo(function RuntimeEventPanel({
             const Icon = levelIcons[event.level]
             return (
               <li data-level={event.level} key={event.cursor}>
-                <span aria-hidden="true"><Icon size={15} /></span>
-                <div><strong>{event.message}</strong><small>{event.stage} · 第 {event.generation} 代 · {eventLevelLabels[event.level]}</small></div>
+                <span aria-hidden="true">
+                  <Icon size={15} />
+                </span>
+                <div>
+                  <strong>{event.message}</strong>
+                  <small>
+                    {runtimeStageLabel(event.stage)} · 第 {event.generation} 代 · {eventLevelLabels[event.level]}
+                  </small>
+                </div>
                 <time>{formatAdminDate(event.createdAt)}</time>
               </li>
             )
           })}
         </ol>
-      ) : <DataState description="当前条件下尚未写入事件。" title="暂无运行事件" />}
+      ) : (
+        <DataState description="当前条件下尚未写入事件。" title="暂无运行事件" />
+      )}
     </section>
   )
 })

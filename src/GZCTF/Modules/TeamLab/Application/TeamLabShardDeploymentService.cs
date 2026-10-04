@@ -161,23 +161,27 @@ public sealed class TeamLabShardDeploymentService(
         var nodes = await context.WorkerNodes.AsNoTracking()
             .Where(item => nodeIds.Contains(item.Id))
             .ToDictionaryAsync(item => item.Id, cancellationToken);
-        var hasVm = runtimeAssets.Any(item => item.Kind == TeamLabResourceKind.Vm);
-        var required = new List<string>
-        {
-            AgentFeatureIds.TeamLabExecutionPlan,
-            AgentFeatureIds.TeamLabOvnOvs,
-            AgentFeatureIds.TeamLabArtifactCache
-        };
-        if (hasVm) required.Add(AgentFeatureIds.TeamLabNativeLibvirt);
-        if (runtimeAssets.Any(item => item.Kind == TeamLabResourceKind.Docker))
-            required.Add(AgentFeatureIds.Docker);
-        var requiredFeatures = required.Distinct().ToArray();
         foreach (var shard in shards)
         {
             if (!nodes.TryGetValue(shard.WorkerNodeId, out var node))
                 throw new TeamLabRuntimeExecutionException(
                     $"执行计划节点 {shard.WorkerNodeId} 不存在，无法部署运行环境。");
-            var missing = AgentCapabilityEvaluator.MissingFeatures(node, requiredFeatures);
+            var shardAssets = runtimeAssets.Where(item => item.ShardId == shard.Id).ToArray();
+            var requiredFeatures = new List<string>
+            {
+                AgentFeatureIds.TeamLabExecutionPlan,
+                AgentFeatureIds.TeamLabOvnOvs,
+                AgentFeatureIds.TeamLabArtifactCache
+            };
+            if (shardAssets.Any(item => item.Kind == TeamLabResourceKind.Vm))
+                requiredFeatures.Add(AgentFeatureIds.TeamLabNativeLibvirt);
+            if (shardAssets.Any(item => item.Kind == TeamLabResourceKind.Docker))
+                requiredFeatures.Add(AgentFeatureIds.Docker);
+            foreach (var asset in shardAssets)
+                if (asset.SourceTemplateId is { } templateId && templates.TryGetValue(templateId, out var template))
+                    requiredFeatures.AddRange(TeamLabGuestNetworkCapabilityPolicy.ForAsset(
+                        definition.Assets.FirstOrDefault(item => item.Key == asset.TopologyKey), asset, template));
+            var missing = AgentCapabilityEvaluator.MissingFeatures(node, requiredFeatures.Distinct(StringComparer.Ordinal).ToArray());
             if (missing.Length > 0)
             {
                 logger.LogWarning(
@@ -275,6 +279,9 @@ public sealed class TeamLabShardDeploymentService(
             var compensationError = await CompensateExecutionPlansAsync(
                 results, cleanupTimeout.Token);
             cancellationToken.ThrowIfCancellationRequested();
+            var guestFailure = failed.Select(item => item.GuestFailure).FirstOrDefault(item => item is not null);
+            if (guestFailure is not null)
+                throw guestFailure.WithCleanupFailure(compensationError is not null);
             var failure = string.Join("; ", failed.Select(item =>
                 $"node {item.WorkerNodeId}: {item.Message}"));
             throw new TeamLabRuntimeExecutionException(
@@ -345,11 +352,15 @@ public sealed class TeamLabShardDeploymentService(
             var response = await executor.ApplyExecutionPlanAsync(workerNodeId, plan, cancellationToken);
             if (response.Success)
                 return new ExecutionPlanApplyResult(workerNodeId, plan, response, null);
-            var message = FailureDetail(response.Events) ?? response.Message ?? "Agent rejected the execution plan.";
+            var guestEvent = response.Events.FirstOrDefault(item => item.Outcome == "failed" &&
+                item.Stage is "guest-ready" or "guest-network-apply" or "guest-network-verify");
+            var guestFailure = TeamLabGuestNetworkExecutionException.FromAgent(
+                guestEvent?.Stage ?? response.ErrorCategory, guestEvent?.ErrorCode ?? response.ErrorCode, workerNodeId);
+            var message = guestFailure?.Message ?? FailureDetail(response.Events) ?? response.Message ?? "Agent rejected the execution plan.";
             logger.LogWarning("TeamLab execution plan apply failed for node {WorkerNodeId}, runtime {RuntimeId}: {Message}",
                 workerNodeId, plan.RuntimeId, message);
             return new ExecutionPlanApplyResult(workerNodeId, plan, null, message,
-                response.ErrorCategory, response.ErrorCode);
+                response.ErrorCategory, response.ErrorCode, guestFailure);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -399,7 +410,8 @@ public sealed class TeamLabShardDeploymentService(
         TeamLabExecutionPlanApplyResponse? Response,
         string? Message,
         string? ErrorCategory = null,
-        string? ErrorCode = null)
+        string? ErrorCode = null,
+        TeamLabGuestNetworkExecutionException? GuestFailure = null)
     {
         public bool Success => Response is not null;
     }
@@ -442,6 +454,10 @@ public sealed class TeamLabShardDeploymentService(
             runtime, definition, cancellationToken);
         var globalInfrastructure = await routes.BuildGlobalInfrastructureRequestAsync(
             runtime, definition, cancellationToken);
+        var dnsServers = globalInfrastructure.Switches.ToDictionary(
+            item => item.Network.Key,
+            item => item.Network.DnsServerIp ?? item.Network.GatewayIp,
+            StringComparer.Ordinal);
         var allowedRoutes = BuildAllowedRoutes(runtime, definition);
         var digests = runtimeAssets
             .Where(item => item.SourceTemplateId.HasValue)
@@ -465,6 +481,7 @@ public sealed class TeamLabShardDeploymentService(
                 templates[asset.SourceTemplateId!.Value],
                 overlays.GetValueOrDefault(asset.TopologyKey),
                 allowedRoutes,
+                dnsServers,
                 imageReady: true,
                 cancellationToken);
             allAssetRequests.Add(request.AssetKey, request);
@@ -493,12 +510,27 @@ public sealed class TeamLabShardDeploymentService(
                 bindings.Add(binding);
         }
         var plans = new Dictionary<int, TeamLabExecutionPlanV2>();
+        var managedNetworkNodes = allAssetRequests.Values.Any(request => request.Kind == TeamLabAssetKind.Vm &&
+                request.VmNetworkMode == VmNetworkMode.ManagedStatic)
+            ? await context.WorkerNodes.AsNoTracking().Where(node => orderedShards.Select(shard => shard.WorkerNodeId).Contains(node.Id))
+                .ToDictionaryAsync(node => node.Id, cancellationToken)
+            : new Dictionary<Guid, WorkerNode>();
         foreach (var shard in orderedShards)
         {
             var shardAssets = runtimeAssets.Where(item => item.ShardId == shard.Id)
                 .OrderBy(item => item.TopologyKey, StringComparer.Ordinal)
                 .Select(item => allAssetRequests[item.TopologyKey])
                 .ToArray();
+            var managedFeatures = shardAssets.Where(asset => asset.Kind == TeamLabAssetKind.Vm)
+                .SelectMany(asset => TeamLabGuestNetworkCapabilityPolicy.RequiredFeatures(
+                    asset.VmNetworkMode ?? VmNetworkMode.Dhcp, asset.OperatingSystem)).Distinct(StringComparer.Ordinal).ToArray();
+            if (managedFeatures.Length > 0)
+            {
+                if (!managedNetworkNodes.TryGetValue(shard.WorkerNodeId, out var node))
+                    throw new TeamLabApiContractException("teamlab_guest_network_capability_unavailable", "ManagedStatic 目标节点不存在。", 409);
+                if (TeamLabGuestNetworkCapabilityPolicy.MissingReason(node, managedFeatures) is { } reason)
+                    throw new TeamLabApiContractException("teamlab_guest_network_capability_unavailable", reason, 409);
+            }
             plans.Add(shard.Id, TeamLabExecutionPlanCompiler.Compile(
                 runtime.Id,
                 runtime.PublicId,
@@ -583,23 +615,29 @@ public sealed class TeamLabShardDeploymentService(
         ImageTemplate template,
         TeamLabRuntimeOverlayModel? overlay,
         IReadOnlyDictionary<string, IReadOnlyList<string>> allowedRoutes,
+        IReadOnlyDictionary<string, string> dnsServers,
         bool imageReady,
         CancellationToken cancellationToken)
     {
         var shard = runtime.Shards.Single(item => item.Id == asset.ShardId);
         var parsedInterfaces = ParseInterfaces(asset).ToArray();
-        var primaryInterface = parsedInterfaces.SingleOrDefault(iface => iface.Primary) ?? parsedInterfaces.FirstOrDefault();
         var interfaces = parsedInterfaces.Select(iface =>
         {
             var network = runtime.Networks.Single(item => item.Generation == runtime.Generation && item.TopologyKey == iface.NetworkKey);
-            IReadOnlyList<string> dnsServers = iface.Key == primaryInterface?.Key
-                ? [network.GatewayIp]
-                : [];
+            var requirements = topologyAsset.Interfaces.Single(item => item.Key == iface.Key);
+            IReadOnlyList<string> interfaceDnsServers = topologyAsset.Kind == TeamLabAssetKind.Docker
+                ? iface.Primary ? [dnsServers[iface.NetworkKey]] : []
+                : requirements.DnsServers ?? [dnsServers[iface.NetworkKey]];
+            if (requirements.StaticRoutes?.Any(route => !TeamLabGuestNetworkValidation.IsNextHopOnInterface(
+                    route.NextHop, iface.IpAddress, iface.PrefixLength)) == true)
+                throw new TeamLabApiContractException("guest_route_next_hop_invalid",
+                    $"资产 '{asset.TopologyKey}' 的接口 '{iface.Key}' 静态路由下一跳必须是当前运行子网中可用的其他地址。", 422);
             return new TeamLabNodeInterfaceIntent(
                 iface.Key, iface.NetworkKey, network.BridgeName, iface.IpAddress, iface.PrefixLength,
                 iface.MacAddress, iface.Primary,
                 allowedRoutes.GetValueOrDefault(iface.NetworkKey) ?? [],
-                dnsServers);
+                interfaceDnsServers, requirements.GuestInterfaceName, requirements.UseDefaultGateway,
+                requirements.StaticRoutes?.Select(route => new TeamLabGuestRouteV2(route.DestinationCidr, route.NextHop, route.Metric)).ToArray());
         }).ToArray();
         var secrets = overlay?.Secrets ?? new Dictionary<string, string>();
         var imageReference = topologyAsset.Kind == TeamLabAssetKind.Docker
@@ -612,6 +650,9 @@ public sealed class TeamLabShardDeploymentService(
                 await context.TeamLabDevicePackages.AsNoTracking().SingleAsync(item => item.Id == packageId, cancellationToken),
                 topologyAsset.Kind, template.ImageHash!, asset.DevicePackageParametersJson, cancellationToken)
             : null;
+        var frozenNetworkMode = string.IsNullOrWhiteSpace(asset.ExecutionPlanJson)
+            ? null
+            : JsonSerializer.Deserialize<TeamLabExecutionAsset>(asset.ExecutionPlanJson)?.VmNetworkMode;
         return new TeamLabNodeAssetCreateRequest(
                 runtime.Id, asset.Id, runtime.PublicId, runtime.Generation, asset.TopologyKey, asset.Name, topologyAsset.Kind,
                 asset.SourceTemplateId ?? topologyAsset.ImageTemplateId, topologyAsset.CpuUnits, topologyAsset.MemoryMiB,
@@ -622,7 +663,7 @@ public sealed class TeamLabShardDeploymentService(
                 TeamLabResourceNameFactory.RouterNamespace(runtime.Id, shard.Id),
                 asset.AgentOperationId,
                 topologyAsset.Kind == TeamLabAssetKind.Vm ? template.VmRuntimeMode : null,
-                topologyAsset.Kind == TeamLabAssetKind.Vm ? template.VmNetworkMode : null,
+                topologyAsset.Kind == TeamLabAssetKind.Vm ? topologyAsset.VmNetworkMode ?? frozenNetworkMode ?? template.VmNetworkMode : null,
                 topologyAsset.Kind == TeamLabAssetKind.Docker
                     ? imageReference
                     : null,

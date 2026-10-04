@@ -6,6 +6,9 @@ using GZCTF.Models;
 using GZCTF.Models.Data;
 using GZCTF.Infrastructure.Telemetry;
 using GZCTF.Modules.Audit.Application;
+using GZCTF.Modules.Audit.Contracts;
+using GZCTF.Modules.Audit.Domain;
+using GZCTF.Modules.Audit.Infrastructure;
 using GZCTF.Modules.TeamLab.Application;
 using GZCTF.Modules.TeamLab.Domain.Runtime;
 using Microsoft.EntityFrameworkCore;
@@ -139,10 +142,44 @@ public sealed class TeamLabRemoteReconciliationTests
             Times.Exactly(101));
     }
 
-    private static TeamLabRemoteAccessService Service(AppDbContext context, ITeamLabRemoteRelayGateway relay, IMemoryCache cache) =>
+    [Fact]
+    public async Task CleanupFailure_PersistsValidRetryableEvent_ThenEndsAfterRecovery()
+    {
+        await using var context = CreateContext();
+        var session = (await SeedAsync(context, 1, expired: true))[0];
+        var relay = new Mock<ITeamLabRemoteRelayGateway>();
+        relay.SetupSequence(item => item.CancelTerminalAsync(session.WorkerNodeId, session.PublicId,
+                It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("relay unavailable"))
+            .Returns(Task.CompletedTask);
+        using var cache = new MemoryCache(new MemoryCacheOptions());
+        var service = Service(context, relay.Object, cache,
+            new EfOperationalEventWriter(context, NullLogger<EfOperationalEventWriter>.Instance));
+
+        await service.ExpireAsync(default);
+
+        Assert.Equal(TeamLabRemoteSessionStatus.Ending, session.Status);
+        Assert.Equal("cleanup_pending", session.EndReason);
+        Assert.Null(session.EndedAt);
+        var failure = Assert.Single(await context.Set<OperationalEvent>().Where(item =>
+            item.Outcome == OperationalEventOutcome.Failed).ToArrayAsync());
+        Assert.Equal(OperationalErrorCategory.Unknown, failure.ErrorCategory);
+        Assert.Equal(OperationalErrorCodes.RecoveryDeferred, failure.ErrorCode);
+        Assert.True(failure.Retryable);
+
+        await service.ExpireAsync(default);
+
+        Assert.Equal(TeamLabRemoteSessionStatus.Ended, session.Status);
+        Assert.NotNull(session.EndedAt);
+        Assert.Contains(await context.Set<OperationalEvent>().ToArrayAsync(), item =>
+            item.EventCode == OperationalEventCodes.TeamLab.RemoteSessionEnded && item.Outcome == OperationalEventOutcome.Succeeded);
+    }
+
+    private static TeamLabRemoteAccessService Service(AppDbContext context, ITeamLabRemoteRelayGateway relay, IMemoryCache cache,
+        IOperationalEventWriter? writer = null) =>
         new(context, new TeamLabAuthorizationService(context),
             new TeamLabScopeAuthorizationService(context), relay, null!, null!,
-            new TeamLabEventRecorder(context, Mock.Of<IOperationalEventWriter>(), new OperationalCorrelation()),
+            new TeamLabEventRecorder(context, writer ?? Mock.Of<IOperationalEventWriter>(), new OperationalCorrelation()),
             cache, NullLogger<TeamLabRemoteAccessService>.Instance);
 
     private static AppDbContext CreateContext() => new(new DbContextOptionsBuilder<AppDbContext>()

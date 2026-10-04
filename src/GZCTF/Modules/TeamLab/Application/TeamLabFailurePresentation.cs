@@ -25,7 +25,8 @@ public static class TeamLabFailurePresentation
             ? null
             : Create(
                 code,
-                ticket is null ? RuntimeStage(status) : Stage(ticket.Stage),
+                TeamLabGuestNetworkExecutionException.ProjectionStage(code) ??
+                    (ticket is null ? RuntimeStage(status) : Stage(ticket.Stage)),
                 ticket?.Retryable == true || status == TeamLabRuntimeStatus.CleanupPending,
                 "runtime",
                 runtimeId.ToString("D"));
@@ -94,7 +95,7 @@ public static class TeamLabFailurePresentation
             Actions(code, retryable),
             resourceType,
             resourceId,
-            Detail(code));
+            TeamLabGuestNetworkExecutionException.ProjectionDetail(code) ?? Detail(code));
 
     private static IReadOnlyList<string> Actions(string code, bool retryable) => code switch
     {

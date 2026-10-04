@@ -35,7 +35,8 @@ public enum VmRuntimeMode : byte
 public enum VmNetworkMode : byte
 {
     Dhcp = 0,
-    Preconfigured = 1
+    Preconfigured = 1,
+    ManagedStatic = 2
 }
 
 public class ImageTemplate

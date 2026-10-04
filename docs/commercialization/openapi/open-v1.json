@@ -17146,6 +17146,14 @@
             "type": "string",
             "format": "guid",
             "nullable": true
+          },
+          "vmNetworkMode": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/VmNetworkMode"
+              }
+            ]
           }
         }
       },
@@ -17187,6 +17195,45 @@
           "orderIndex": {
             "type": "integer",
             "format": "int32"
+          },
+          "guestInterfaceName": {
+            "type": "string",
+            "nullable": true
+          },
+          "useDefaultGateway": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "dnsServers": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "type": "string"
+            }
+          },
+          "staticRoutes": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/TeamLabGuestRouteModel"
+            }
+          }
+        }
+      },
+      "TeamLabGuestRouteModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "destinationCidr": {
+            "type": "string"
+          },
+          "nextHop": {
+            "type": "string"
+          },
+          "metric": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
           }
         }
       },
@@ -17213,6 +17260,20 @@
         "enum": [
           0,
           1
+        ]
+      },
+      "VmNetworkMode": {
+        "type": "integer",
+        "description": "",
+        "x-enumNames": [
+          "Dhcp",
+          "Preconfigured",
+          "ManagedStatic"
+        ],
+        "enum": [
+          0,
+          1,
+          2
         ]
       },
       "TeamLabProtocolEventReportModel": {
@@ -17662,6 +17723,10 @@
           "orderIndex": {
             "type": "integer",
             "format": "int32"
+          },
+          "dnsServerAssetKey": {
+            "type": "string",
+            "nullable": true
           }
         }
       },
@@ -18215,6 +18280,14 @@
             "items": {
               "$ref": "#/components/schemas/TeamLabPlanInterfaceModel"
             }
+          },
+          "vmNetworkMode": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/VmNetworkMode"
+              }
+            ]
           }
         }
       },
@@ -18234,6 +18307,28 @@
           },
           "primary": {
             "type": "boolean"
+          },
+          "guestInterfaceName": {
+            "type": "string",
+            "nullable": true
+          },
+          "useDefaultGateway": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "dnsServers": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "type": "string"
+            }
+          },
+          "staticRoutes": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/TeamLabGuestRouteModel"
+            }
           }
         }
       },
@@ -21151,18 +21246,6 @@
         "x-enumNames": [
           "Managed",
           "Opaque"
-        ],
-        "enum": [
-          0,
-          1
-        ]
-      },
-      "VmNetworkMode": {
-        "type": "integer",
-        "description": "",
-        "x-enumNames": [
-          "Dhcp",
-          "Preconfigured"
         ],
         "enum": [
           0,

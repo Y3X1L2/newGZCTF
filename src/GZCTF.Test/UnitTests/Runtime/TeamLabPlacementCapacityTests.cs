@@ -32,6 +32,49 @@ public sealed class TeamLabPlacementCapacityTests
 
     public TeamLabPlacementCapacityTests(ITestOutputHelper output) => _output = output;
 
+    [Theory]
+    [InlineData(false, true, OSType.Linux, false)]
+    [InlineData(true, false, OSType.Linux, false)]
+    [InlineData(true, false, OSType.Windows, true)]
+    [InlineData(true, true, OSType.Linux, true)]
+    public async Task ManagedStaticPlacement_RequiresNewAgentAndLinuxSeedTools(bool managedFeature, bool seedFeature,
+        OSType operatingSystem, bool expectedSuccess)
+    {
+        await using var context = CreateContext();
+        var node = SeedNode(context, "node-new", 8, 16, 4);
+        var manifest = AgentCapabilityEvaluator.Parse(node.CapabilityManifestJson)!;
+        var features = manifest.Features.Concat([AgentFeatureIds.Kvm, AgentFeatureIds.VmDownload]).ToList();
+        if (managedFeature) features.Add(AgentFeatureIds.TeamLabManagedGuestNetwork);
+        if (seedFeature) features.Add(AgentFeatureIds.CloudInit);
+        node.CapabilityManifestJson = AgentCapabilityEvaluator.Normalize(manifest with { Features = features.ToArray() }).Json;
+        node.Capabilities |= NodeCapability.Kvm;
+        node.MaxVms = 4;
+        context.ImageTemplates.Add(new ImageTemplate
+        {
+            Id = 1, Name = "network-template", ImageType = ImageType.Qcow2, OSType = operatingSystem,
+            VmNetworkMode = VmNetworkMode.Dhcp
+        });
+        var runtime = SeedRuntime(context, [Asset("vm", "entry", new(10, 512, 512)) with
+        { Kind = TeamLabAssetKind.Vm, VmNetworkMode = VmNetworkMode.ManagedStatic }]);
+        var ticket = DeploymentQueueTicket.Create(DeploymentQueueRequest.TeamLab(runtime.Id, 0, 1));
+        context.DeploymentQueueTickets.Add(ticket);
+        await context.SaveChangesAsync();
+
+        var result = await CreatePlacement(context).BindAndReserveAsync(ticket.Id, runtime.Id, CancellationToken.None);
+        Assert.Equal(expectedSuccess, result.Success);
+        if (expectedSuccess)
+        {
+            Assert.Equal(node.Id, result.Node?.Id);
+            Assert.Equal(1, Assert.Single(await context.FleetCapacityReservations.ToArrayAsync()).VmSlots);
+        }
+        else
+        {
+            Assert.Contains("teamlab_guest_network_capability_unavailable", result.Message, StringComparison.Ordinal);
+            Assert.Empty(await context.TeamLabRuntimeShards.ToArrayAsync());
+            Assert.Empty(await context.FleetCapacityReservations.ToArrayAsync());
+        }
+    }
+
     [Fact]
     public async Task Placement_UsesDeclaredResourcesAcrossHeterogeneousNodes()
     {

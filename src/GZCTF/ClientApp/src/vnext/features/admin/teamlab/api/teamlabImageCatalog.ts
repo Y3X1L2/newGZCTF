@@ -1,6 +1,8 @@
 import { ImageStatus, ImageType, OSType } from '@Api'
 import { imageTemplateAdminApi } from '../../api'
 import type { VmDeviceType } from '../model/topologyMapper'
+import type { TeamLabVmNetworkMode } from './teamlabContracts'
+import { parseTeamLabVmNetworkMode } from './teamlabParsers'
 
 export async function resolveTeamLabVmDeviceTypes(templateIds: readonly number[]) {
   const uniqueIds = [...new Set(templateIds)].filter((id) => id > 0).sort((left, right) => left - right)
@@ -17,6 +19,7 @@ export interface TeamLabImageOption {
   digest?: string | null
   deviceType: 'docker' | VmDeviceType
   remoteAccessProtocol?: 'ssh' | 'rdp' | null
+  vmNetworkMode?: TeamLabVmNetworkMode | null
 }
 
 const imagePageSize = 100
@@ -36,6 +39,9 @@ export async function listTeamLabImageOptions(): Promise<readonly TeamLabImageOp
       id: template.id,
       name: template.name,
       digest: template.imageHash,
+      ...(template.vmNetworkMode !== undefined
+        ? { vmNetworkMode: template.vmNetworkMode === null ? null : parseTeamLabVmNetworkMode(template.vmNetworkMode) }
+        : {}),
       deviceType:
         template.imageType === ImageType.Docker
           ? 'docker'

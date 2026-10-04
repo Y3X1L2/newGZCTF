@@ -133,6 +133,31 @@ public sealed class VmGuestControlTests
     }
 
     [Fact]
+    public void GuestAgentStandardInput_IsBoundedAndAbsentFromPublicCommandWireFormat()
+    {
+        var command = new VmGuestCommandRequest("network", "powershell.exe", ["-Command", "-"]);
+        Assert.False(VmGuestAgentService.BuildGuestExecArguments(command).ContainsKey("input-data"));
+        Assert.False(VmGuestAgentService.BuildGuestExecArguments(command).ContainsKey("env"));
+        Assert.Empty(Assert.IsType<string[]>(VmGuestAgentService.BuildGuestExecArguments(
+            command with { Environment = new Dictionary<string, string>() })["env"]));
+        Assert.Equal(["TEST_ONLY=value"], Assert.IsType<string[]>(VmGuestAgentService.BuildGuestExecArguments(
+            command with { Environment = new Dictionary<string, string> { ["TEST_ONLY"] = "value" } })["env"]));
+        var input = "Write-Output '网络初始化'";
+        command = command with { StandardInput = input };
+        var payload = VmGuestAgentService.BuildCommandPayload("guest-exec", VmGuestAgentService.BuildGuestExecArguments(command));
+        using var json = JsonDocument.Parse(payload);
+        Assert.Equal(input, Encoding.UTF8.GetString(Convert.FromBase64String(
+            json.RootElement.GetProperty("arguments").GetProperty("input-data").GetString()!)));
+        Assert.DoesNotContain("网络初始化", JsonSerializer.Serialize(command));
+        Assert.DoesNotContain("StandardInput", JsonSerializer.Serialize(command));
+        Assert.DoesNotContain(input, command.ToString());
+        Assert.Throws<ArgumentException>(() => VmGuestAgentService.BuildGuestExecArguments(
+            command with { StandardInput = new string('中', VmGuestAgentService.MaxStandardInputBytes / 3 + 1) }));
+        Assert.True(VmGuestAgentService.IsInputDataUnsupportedError("Parameter 'input-data' is unexpected"));
+        Assert.False(VmGuestAgentService.IsInputDataUnsupportedError("A different QGA command failed"));
+    }
+
+    [Fact]
     public void BootstrapArtifactPaths_RejectTraversalAndTemplatesFailClosed()
     {
         Assert.Equal("bin/install.sh", VmBootstrapService.NormalizeArtifactPath("./bin/install.sh"));
@@ -144,6 +169,27 @@ public sealed class VmGuestControlTests
             "port=${service_port}", new Dictionary<string, string> { ["service_port"] = "8080" });
         Assert.Equal("port=8080", rendered);
     }
+
+    [Theory]
+    [InlineData("No such file or directory", true)]
+    [InlineData("cannot find the path specified", true)]
+    [InlineData("{\"class\":\"CommandNotFound\"}", true)]
+    [InlineData("{\"class\":\"CommandDisabled\"}", true)]
+    [InlineData("permission denied", false)]
+    [InlineData("libvirt domain not found", false)]
+    [InlineData("QGA returned malformed JSON", false)]
+    public void OptionalGuestFileProbe_DistinguishesAbsentOrUnsupportedFromRealErrors(string message, bool unavailable) =>
+        Assert.Equal(unavailable, VmGuestAgentService.IsOptionalFileProbeUnavailableError(message));
+
+    [Theory]
+    [InlineData(@"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe", true)]
+    [InlineData(@"C:\Program Files\YINYU-GuestTools\LegacyPowerShellHost.exe", true)]
+    [InlineData(@"c:\program files\yinyu-guesttools\legacypowershellhost.exe", true)]
+    [InlineData(@"C:\Program Files\YINYU-GuestTools\Other.exe", false)]
+    [InlineData(@"C:\YINYU-QGA\LegacyPowerShellHost.exe", false)]
+    [InlineData("/usr/bin/python3", false)]
+    public void GuestNetworkTimeoutCleanup_UsesWindowsTaskkillForTheFixedOptionalHost(string path, bool windows) =>
+        Assert.Equal(windows, VmGuestAgentService.IsWindowsCommandPath(path));
 
     [Fact]
     public void BootstrapStepCheckpoints_RequireStableIdsAndRecognizeMissingGuestFiles()

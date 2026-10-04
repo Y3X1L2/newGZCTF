@@ -1,1 +1,2 @@
 *.sh text eol=lf
+src/GZCTF.Integration.Test/Fixtures/Hybrid/guest-init text eol=lf

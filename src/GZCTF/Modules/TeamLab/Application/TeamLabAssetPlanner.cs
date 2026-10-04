@@ -17,7 +17,8 @@ public sealed record TeamLabPlanningNodeSnapshot(
     int AvailableVmSlots,
     float CpuLoad,
     float MemoryLoad,
-    WorkloadResourceVector AvailableResources = default);
+    WorkloadResourceVector AvailableResources = default,
+    IReadOnlyList<string>? Features = null);
 
 public static class TeamLabAssetPlanner
 {
@@ -25,7 +26,8 @@ public static class TeamLabAssetPlanner
         Guid topologyId,
         Guid releaseId,
         TeamLabExecutionTopology definition,
-        IReadOnlyList<TeamLabPlanningNodeSnapshot> nodes)
+        IReadOnlyList<TeamLabPlanningNodeSnapshot> nodes,
+        IReadOnlyDictionary<string, string[]>? requiredFeaturesByAsset = null)
     {
         var networks = definition.Networks
             .OrderBy(item => item.Key, StringComparer.Ordinal)
@@ -44,10 +46,11 @@ public static class TeamLabAssetPlanner
                 item.ImageTemplateId,
                 new TeamLabAssetResourceModel(item.CpuUnits, item.MemoryMiB, item.StorageMiB),
                 item.Interfaces.Select(iface => new TeamLabPlanInterfaceModel(
-                    iface.Key, iface.NetworkKey, iface.HostOffset, iface.Primary)).ToArray()))
+                    iface.Key, iface.NetworkKey, iface.HostOffset, iface.Primary, iface.GuestInterfaceName,
+                    iface.UseDefaultGateway, iface.DnsServers, iface.StaticRoutes)).ToArray(), item.VmNetworkMode))
             .ToArray();
 
-        var rawGroups = BuildGroups(definition);
+        var rawGroups = BuildGroups(definition, requiredFeaturesByAsset);
         var edges = BuildPlacementEdges(definition, rawGroups);
         var groups = rawGroups.OrderByDescending(group => group.IsEntry)
             .ThenByDescending(group => edges.Where(edge => edge.Touches(group.Key)).Sum(edge => edge.Weight))
@@ -56,6 +59,10 @@ public static class TeamLabAssetPlanner
             .ThenBy(group => group.Key, StringComparer.Ordinal)
             .ToArray();
         var placements = Place(groups, edges, nodes);
+        if (placements is null && rawGroups.Any(group => group.RequiredFeatures.Count > 0 &&
+                nodes.All(node => !group.RequiredFeatures.All(feature => node.Features?.Contains(feature, StringComparer.Ordinal) == true))))
+            throw new TeamLabApiContractException("teamlab_guest_network_capability_unavailable",
+                "没有可调度节点支持 ManagedStatic 来宾网络配置或所需 Linux 配置盘工具。", 409);
         if (placements is null)
             throw new TeamLabApiContractException(
                 "capability_unavailable",
@@ -91,6 +98,7 @@ public static class TeamLabAssetPlanner
             shardByNetwork.GetValueOrDefault(connection.FromNetworkKey) !=
             shardByNetwork.GetValueOrDefault(connection.ToNetworkKey));
         var capabilities = new List<string> { "teamlab-fabric" };
+        capabilities.AddRange(rawGroups.SelectMany(group => group.RequiredFeatures).Distinct(StringComparer.Ordinal));
         if (assets.Any(item => item.Kind == TeamLabAssetKind.Docker)) capabilities.Add("docker");
         if (assets.Any(item => item.Kind == TeamLabAssetKind.Vm)) capabilities.Add("kvm");
 
@@ -143,7 +151,8 @@ public static class TeamLabAssetPlanner
     {
         var candidates = nodes.OrderBy(item => item.Name, StringComparer.Ordinal).ThenBy(item => item.Id).ToArray();
         var total = groups.Aggregate(WorkloadResourceVector.Zero, (sum, item) => sum + item.Resources);
-        var single = candidates.Where(node => CanPlace(node, total))
+        var single = candidates.Where(node => CanPlace(node, total) &&
+                groups.SelectMany(group => group.RequiredFeatures).All(feature => node.Features?.Contains(feature, StringComparer.Ordinal) == true))
             .OrderByDescending(node => Score(node, total.DockerSlots, total.VmSlots))
             .ThenBy(node => node.Name, StringComparer.Ordinal)
             .ThenBy(node => node.Id)
@@ -174,7 +183,8 @@ public static class TeamLabAssetPlanner
                                 : 0)
                     };
                 })
-                .Where(item => CanPlace(item.Node, item.Requested))
+                .Where(item => CanPlace(item.Node, item.Requested) && group.RequiredFeatures.All(feature =>
+                    item.Node.Features?.Contains(feature, StringComparer.Ordinal) == true))
                 .OrderBy(item => item.CrossNodeEdges)
                 .ThenByDescending(item => item.Placement is not null)
                 .ThenByDescending(item => Score(item.Node,
@@ -208,7 +218,7 @@ public static class TeamLabAssetPlanner
         250 * (1 - (float)dockerSlots / Math.Max(node.AvailableDockerSlots, 1)) +
         250 * (1 - (float)vmSlots / Math.Max(node.AvailableVmSlots, 1));
 
-    internal static IReadOnlyList<TeamLabInternalNetworkGroup> BuildGroups(TeamLabExecutionTopology definition)
+    internal static IReadOnlyList<TeamLabInternalNetworkGroup> BuildGroups(TeamLabExecutionTopology definition, IReadOnlyDictionary<string, string[]>? requiredFeaturesByAsset = null)
     {
         var parent = definition.Networks.ToDictionary(item => item.Key, item => item.Key, StringComparer.Ordinal);
         foreach (var asset in definition.Assets.Where(item => item.IsImageBacked && item.Interfaces.Count > 1))
@@ -235,7 +245,10 @@ public static class TeamLabAssetPlanner
                     networkKeys,
                     groupAssets.Select(item => item.Key).ToArray(),
                     resources,
-                    group.Any(item => item.IsEntry));
+                    group.Any(item => item.IsEntry))
+                {
+                    RequiredFeatures = groupAssets.SelectMany(asset => requiredFeaturesByAsset?.GetValueOrDefault(asset.Key) ?? []).Distinct(StringComparer.Ordinal).ToArray()
+                };
             }).ToArray();
     }
 
@@ -287,6 +300,7 @@ public static class TeamLabAssetPlanner
         WorkloadResourceVector Resources,
         bool IsEntry)
     {
+        public IReadOnlyList<string> RequiredFeatures { get; init; } = [];
         public int DockerSlots => Resources.DockerSlots;
         public int VmSlots => Resources.VmSlots;
     }

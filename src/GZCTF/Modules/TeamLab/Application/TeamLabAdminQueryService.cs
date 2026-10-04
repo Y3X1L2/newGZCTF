@@ -237,6 +237,10 @@ public sealed class TeamLabAdminQueryService(
         {
             planningBlocker = DescribePlanningBlocker(execution, await LoadPlanningNodesAsync(cancellationToken));
         }
+        catch (TeamLabApiContractException exception) when (exception.Code == "teamlab_guest_network_capability_unavailable")
+        {
+            planningBlocker = exception.Message;
+        }
         var requirements = execution.Assets
             .GroupBy(item => item.ImageTemplateId)
             .Select(group => new

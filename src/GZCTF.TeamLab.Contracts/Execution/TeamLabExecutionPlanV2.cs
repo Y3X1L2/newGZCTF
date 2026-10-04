@@ -219,6 +219,53 @@ public sealed record TeamLabExecutionPlanV2(
             return false;
         }
 
+        if (Assets.Any(asset => !TeamLabGuestNetworkValidation.IsValid(asset)) ||
+            Assets.SelectMany(asset => asset.NetworkAttachments).Any(attachment => attachment.PrefixLength is { } prefix &&
+                prefix != int.Parse(Networks.Single(network => network.Key == attachment.NetworkKey).Cidr.Split('/')[1])) ||
+            Assets.SelectMany(asset => asset.NetworkAttachments).Any(attachment => attachment.MacAddress is not null &&
+                !Networks.Single(network => network.Key == attachment.NetworkKey).Ports.Any(port =>
+                    port.Key == attachment.PortKey && string.Equals(port.MacAddress, attachment.MacAddress, StringComparison.OrdinalIgnoreCase))))
+        {
+            error = "Guest network configuration or current interface identity is invalid.";
+            return false;
+        }
+
+        foreach (var network in Networks)
+        foreach (var lease in network.DhcpLeases ?? [])
+        {
+            var ownerPort = network.Ports.FirstOrDefault(port =>
+                string.Equals(port.MacAddress, lease.MacAddress, StringComparison.OrdinalIgnoreCase) &&
+                IsSameIpv4Address(port.IpAddress, lease.IpAddress));
+            if (Assets.Any(asset => asset.AssetKey == ownerPort?.AssetKey &&
+                asset.Kind.Equals("docker", StringComparison.OrdinalIgnoreCase)) &&
+                (lease.UseDefaultGateway is not null || lease.DnsServers is not null || lease.StaticRoutes is not null))
+            {
+                error = "Guest network policy is supported only for VM assets.";
+                return false;
+            }
+            if (lease.DnsServers is { } dns && (dns.Count > TeamLabGuestNetworkValidation.MaxDnsServers ||
+                dns.Any(value => !TeamLabGuestNetworkValidation.IsDnsServer(value)) || dns.Distinct().Count() != dns.Count) ||
+                lease.StaticRoutes is { } routes && (routes.Count > TeamLabGuestNetworkValidation.MaxStaticRoutes ||
+                routes.Any(route => !TeamLabGuestNetworkValidation.IsRoute(route) || route.Metric is not null ||
+                    !TeamLabGuestNetworkValidation.IsNextHopOnInterface(route.NextHop, lease.IpAddress, int.Parse(network.Cidr.Split('/')[1]))) ||
+                routes.GroupBy(route => route.DestinationCidr).Any(group => group.Count() > 1)))
+            {
+                error = "DHCP interface options are invalid.";
+                return false;
+            }
+            var attachment = Assets.SelectMany(asset => asset.NetworkAttachments.Select(item => (Asset: asset, Attachment: item)))
+                .FirstOrDefault(item => item.Attachment.NetworkKey == network.Key &&
+                    string.Equals(item.Attachment.MacAddress, lease.MacAddress, StringComparison.OrdinalIgnoreCase));
+            if (attachment.Asset is not null && (attachment.Asset.NetworkMode != TeamLabGuestNetworkMode.Dhcp ||
+                lease.UseDefaultGateway is { } useGateway && useGateway != (attachment.Attachment.UseDefaultGateway ?? attachment.Attachment.Primary) ||
+                lease.DnsServers is { } leaseDns && attachment.Attachment.DnsServers is { } attachmentDns && !leaseDns.SequenceEqual(attachmentDns) ||
+                lease.StaticRoutes is { } leaseRoutes && attachment.Attachment.StaticRoutes is { } attachmentRoutes && !leaseRoutes.SequenceEqual(attachmentRoutes)))
+            {
+                error = "DHCP options do not match the declared guest interface.";
+                return false;
+            }
+        }
+
         var expectedDigest = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(
             this with { PlanDigest = string.Empty }))).ToLowerInvariant();
         if (!string.Equals(NormalizeDigest(PlanDigest), expectedDigest, StringComparison.Ordinal))
@@ -341,7 +388,8 @@ public sealed record TeamLabNetworkIntentV2(
     IReadOnlyList<TeamLabDnsRecordV2>? DnsRecords = null,
     TeamLabPlayerGatewayV2? PlayerGateway = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<TeamLabConnectorAttachmentV2>? Connectors = null,
-    TeamLabPlayerGatewayV2? HostGateway = null);
+    TeamLabPlayerGatewayV2? HostGateway = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? DnsServerIp = null);
 
 public sealed record TeamLabPlayerGatewayV2(
     string PortKey,
@@ -351,7 +399,10 @@ public sealed record TeamLabPlayerGatewayV2(
 public sealed record TeamLabDhcpLeaseV2(
     string MacAddress,
     string IpAddress,
-    string Hostname);
+    string Hostname,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? UseDefaultGateway = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<string>? DnsServers = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<TeamLabGuestRouteV2>? StaticRoutes = null);
 
 public sealed record TeamLabDnsRecordV2(string Hostname, string IpAddress);
 
@@ -393,7 +444,15 @@ public sealed record TeamLabAssetExecutionSpecV2(
     IReadOnlyList<TeamLabHealthCheckV2> HealthChecks,
     string? ImageReference = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] TeamLabDeviceExecutionV2? Device = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] TeamLabGuestOperatingSystem OperatingSystem = TeamLabGuestOperatingSystem.Linux);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] TeamLabGuestOperatingSystem OperatingSystem = TeamLabGuestOperatingSystem.Linux,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] TeamLabGuestNetworkMode NetworkMode = TeamLabGuestNetworkMode.Dhcp);
+
+public enum TeamLabGuestNetworkMode : byte
+{
+    Dhcp = 0,
+    Preconfigured = 1,
+    ManagedStatic = 2
+}
 
 public enum TeamLabGuestOperatingSystem : byte
 {
@@ -407,7 +466,17 @@ public sealed record TeamLabAssetNetworkAttachmentV2(
     string InterfaceName,
     string? IpAddress,
     string? GatewayIp = null,
-    bool Primary = false);
+    bool Primary = false,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? DnsServerIp = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? InterfaceKey = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? MacAddress = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? PrefixLength = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? GuestInterfaceName = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? UseDefaultGateway = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<string>? DnsServers = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<TeamLabGuestRouteV2>? StaticRoutes = null);
+
+public sealed record TeamLabGuestRouteV2(string DestinationCidr, string NextHop, int? Metric = null);
 
 public sealed record TeamLabHealthCheckV2(
     string Protocol,

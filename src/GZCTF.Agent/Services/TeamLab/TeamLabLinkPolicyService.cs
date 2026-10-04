@@ -113,7 +113,7 @@ public sealed class TeamLabLinkPolicyService(
         if (string.IsNullOrWhiteSpace(nb) || !IPNetwork.TryParse(networkCidr, out var network) || !Ipv4(gatewayIp) ||
             networkDigest is null || networkDigest.Length != 71 || !networkDigest.StartsWith("sha256:", StringComparison.Ordinal) || networkDigest[7..].Any(character => !Uri.IsHexDigit(character)))
             return (string.Empty, null, null);
-        var digestCondition = TeamLabNetworkPrimitives.ShellQuote($"external_ids:gzctf-network-digest={networkDigest}");
+        var digestCondition = NetworkDigestCondition(networkDigest);
         var addressCondition = TeamLabNetworkPrimitives.ShellQuote($"networks{{>=}}{gatewayIp}/{network.PrefixLength}");
         var (portOk, portOutput) = await runner.RunAsync(
             $"ovn-nbctl --timeout=15 --db={TeamLabNetworkPrimitives.ShellQuote(nb)} --data=bare --no-heading --columns=_uuid find Logical_Router_Port external_ids:gzctf-runtime={runtimeId:D} external_ids:gzctf-generation={generation} {addressCondition} {digestCondition}", token);
@@ -128,6 +128,10 @@ public sealed class TeamLabLinkPolicyService(
         var chassis = chassisOk ? UniqueIdentifier(chassisOut) : null;
         return (nb, lr, chassis);
     }
+
+    // ovn-nbctl find parses the map value as OVSDB syntax before comparing it; ':' needs a quoted string.
+    internal static string NetworkDigestCondition(string digest) =>
+        TeamLabNetworkPrimitives.ShellQuote("external_ids:gzctf-network-digest=" + JsonSerializer.Serialize(digest));
 
     internal static string BuildRouterLookupCommand(string nb, Guid runtimeId, int generation) =>
         $"ovn-nbctl --timeout=15 --db={TeamLabNetworkPrimitives.ShellQuote(nb)} --data=bare --no-heading --columns=name find Logical_Router external_ids:gzctf-runtime={runtimeId:D} external_ids:gzctf-generation={generation}";

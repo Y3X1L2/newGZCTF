@@ -1,12 +1,13 @@
 import { AlertTriangle, Check, LoaderCircle } from 'lucide-react'
 import { memo } from 'react'
 import type { TeamLabRuntime } from '../api'
-import { runtimeStageOrder, runtimeStatusLabels } from './runtimePresentation'
 import styles from './RuntimePanels.module.css'
+import { runtimeStageLabel, runtimeStageOrder, runtimeStatusLabels } from './runtimePresentation'
 
 export const RuntimeStageTimeline = memo(function RuntimeStageTimeline({ runtime }: { runtime: TeamLabRuntime }) {
   const currentIndex = runtimeStageOrder.indexOf(runtime.status)
-  const terminalCleanup = runtime.status === 'cleanup-pending' || runtime.status === 'destroying' || runtime.status === 'destroyed'
+  const terminalCleanup =
+    runtime.status === 'cleanup-pending' || runtime.status === 'destroying' || runtime.status === 'destroyed'
 
   return (
     <section className={styles.panel} aria-labelledby="runtime-stage-title">
@@ -15,17 +16,18 @@ export const RuntimeStageTimeline = memo(function RuntimeStageTimeline({ runtime
           <span>部署阶段</span>
           <h3 id="runtime-stage-title">部署阶段</h3>
         </div>
-        <code>{runtime.stage}</code>
+        <code>{runtimeStageLabel(runtime.stage)}</code>
       </header>
       <ol className={styles.stageTimeline}>
         {runtimeStageOrder.map((status, index) => {
-          const state = runtime.status === 'failed'
-            ? 'idle'
-            : currentIndex === index
-              ? 'active'
-              : currentIndex > index || runtime.status === 'running'
-                ? 'done'
-                : 'idle'
+          const state =
+            runtime.status === 'failed'
+              ? 'idle'
+              : currentIndex === index
+                ? 'active'
+                : currentIndex > index || runtime.status === 'running'
+                  ? 'done'
+                  : 'idle'
           return (
             <li data-state={state} key={status}>
               <span aria-hidden="true">
@@ -37,8 +39,10 @@ export const RuntimeStageTimeline = memo(function RuntimeStageTimeline({ runtime
         })}
         {runtime.status === 'failed' ? (
           <li data-state="failed">
-            <span aria-hidden="true"><AlertTriangle size={14} /></span>
-            <strong>失败于 {runtime.stage}</strong>
+            <span aria-hidden="true">
+              <AlertTriangle size={14} />
+            </span>
+            <strong>失败于 {runtimeStageLabel(runtime.stage)}</strong>
           </li>
         ) : null}
         {terminalCleanup ? (

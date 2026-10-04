@@ -2,7 +2,8 @@
 set -eu
 mkdir -p /tmp/guest/bin /tmp/guest/dev /tmp/guest/proc /tmp/guest/sys /tmp/guest/lib
 cp /bin/busybox /tmp/guest/bin/
-cp /opt/hybrid/guest-init /tmp/guest/init
+# Existing Windows checkouts may still have CRLF in this extensionless executable.
+sed 's/\r$//' /opt/hybrid/guest-init > /tmp/guest/init
 chmod 755 /tmp/guest/init
 module=$(find /lib/modules -name 'e1000.ko*' -print -quit)
 test -n "$module"

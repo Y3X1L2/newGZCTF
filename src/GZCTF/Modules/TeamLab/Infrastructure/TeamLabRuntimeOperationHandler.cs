@@ -91,7 +91,8 @@ public sealed class TeamLabRuntimeOperationHandler(
             }
         }
 
-        if (IsExternalCommand(job.Kind))
+        if (IsExternalCommand(job.Kind) || job.Kind is TeamLabRuntimeOperationKind.RemoteSessionCreate or
+            TeamLabRuntimeOperationKind.RemoteSessionEnd)
         {
             await ExecuteExternalCommandAsync(job, operation, leaseOwner, cancellationToken);
             return;
