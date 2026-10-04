@@ -79,7 +79,7 @@ export function ServiceAccessPanel({ runtime, assetId }: { runtime: TeamLabRunti
       {!request.data && !request.error ? <DataState loading title="正在读取服务开放记录" />
         : request.error ? <InlineFeedback tone="danger">{errorMessage(request.error, '服务开放记录读取失败。')}</InlineFeedback>
           : request.data?.some(item => item.assetId === asset.id && item.revokedAt === null) ? <div className={styles.fileTable}><table><thead><tr><th>访问地址</th><th>目标</th><th>状态</th><th>操作</th></tr></thead>
-            <tbody>{request.data.filter(item => item.assetId === asset.id && item.revokedAt === null).map(item => <tr key={item.id}><td><code>{item.endpoint}</code></td>
+            <tbody>{request.data.filter(item => item.assetId === asset.id && item.revokedAt === null).map(item => <tr key={item.id}><td><code className={styles.serviceEndpoint}>{item.endpoint}</code></td>
               <td>{item.protocol.toUpperCase()} / {item.internalPort}</td><td>{statusText(item.status)}<small>{item.lastError ? `：${item.lastError}` : ` · ${formatAdminDate(item.createdAt)}`}</small></td>
               <td>{item.status === 'active' ? <ActionButton disabled={acting} icon={<Unplug size={15} />} onClick={() => void remove(item.id)} tone="danger" type="button">撤销</ActionButton>
                 : '-'}</td></tr>)}</tbody></table></div>

@@ -1,4 +1,4 @@
-import { ArrowLeft, Boxes, CheckCircle2, FileClock, Network, Pause, Play, RefreshCw, RotateCcw, Shield, Trash2 } from 'lucide-react'
+import { ArrowLeft, Boxes, CheckCircle2, FileClock, LayoutDashboard, Network, Pause, Play, RefreshCw, RotateCcw, Shield, Trash2 } from 'lucide-react'
 import { ActionMenu } from '../../../../shared/ActionMenu'
 import { useCallback, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router'
@@ -27,7 +27,7 @@ import styles from './TeamLabRuntimeDetailPage.module.css'
 
 type RuntimeTab = 'overview' | 'assets' | 'network' | 'activity'
 const tabs = [
-  { key: 'overview', label: '概览', icon: Boxes }, { key: 'assets', label: '资产', icon: Boxes },
+  { key: 'overview', label: '概览', icon: LayoutDashboard }, { key: 'assets', label: '资产', icon: Boxes },
   { key: 'network', label: '网络与流量', icon: Network }, { key: 'activity', label: '活动记录', icon: FileClock },
 ] as const
 
