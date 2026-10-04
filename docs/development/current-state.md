@@ -1,14 +1,15 @@
 # YINYU 当前开发状态
 
-## TeamLab 资产界面修正候选（2026-10-04，未部署）
+## TeamLab 资产界面修正：已合并 main 并部署 .27（2026-10-04）
 
-- `codex/teamlab-asset-panel-fixes` 修正远程连接/服务兄弟组件重复 key 导致切换资产后多组 VNC 残留；改为整组按 runtime/generation/asset 重建。连接与开放服务上下排列，地址保持单行，概览图标与资产区分。
-- 原代码两项回归失败，修正后完整前端 114 文件/378 测试及全部门禁通过；本地前端读取 `.27` 真实四机数据连续九次切换只显示一组连接，日夜/四宽度/键盘/减少动画检查通过。服务地址用本地样本验证，未开放真实端口。尚未合并 main 或部署；后端/Agent/数据库/原四机未变。见[修正交接](handoffs/2026-10-04-teamlab-asset-panel-fixes.md)。
+- PR #12 正常合并到 `main cc58169d`，与候选 `8fd26c22` 同树；修正重复兄弟 key 导致多组 VNC 残留，改为整组按 runtime/generation/asset 替换；连接/服务上下排列、地址单行、概览图标区分。前端完整114文件/378测试及门禁通过，GitHub Quality 37206599605 success（后端1284/304通过）。
+- 用户批准后 `.27` 活动目录为 `/opt/gzctf/releases/teamlab-asset-ui-8fd26c22-20261004/publish`：前端8fd26c22，原Main3090b98a和Agentcc6c5737二进制保持；所有非前端文件/链接/权限/所有者比较一致，Agent同一PID1650376。新完整备份两个dump全文可读、附件/五摘要通过，位于 `/opt/gzctf/backups/teamlab-asset-ui-8fd26c22-20261004`。首次启动检查等待不足触发自动回退，修正仓库外脚本后最终切换12.58秒通过，旧发布/回退记录保留；无数据库迁移、日志删除或VM操作。
+- 正式站点九次切换均一组VNC/连接/服务，四宽度、日夜、键盘及浏览器error/warn0；上下布局和图标通过。带地址排版仅本地样本验证，现场未开放端口。Main/Agent active、NRestarts0，首页/Config200，队列0，三节点在线可调度，519–522 Ready；原四机generation4和域运行标识/状态保持。学习与原始验收资料只留本地。详见[资产界面修正交接](handoffs/2026-10-04-teamlab-asset-panel-fixes.md)。
 
 ## TeamLab 管理后台与受管网络：已合并 main 并部署 .27（2026-10-04）
 
 - PR #11 已正常合并到 `main 3090b98a04eecb74fbe47de36d10d3e56d5c47b4`，与集成候选 b486e703 源码树相同，保留完整历史；main Quality CI 37188421017 success。候选后端单元 1284/1284、集成 304/304、Release 构建通过；本地前端 113 文件/376 测试及完整门禁通过。
-- 用户明确批准部署，`.27` 当前主站/前端活动目录 `/opt/gzctf/releases/teamlab-admin-3090b98a-20261004/publish`，前端 manifest 为 3090b98a；Main DLL SHA256 `2846d6f795a5e8796b7c3dca6997e30735ed52c62cde2f7639cc1ff68b0f332a`。Agent 保留 cc6c5737，SHA256 `9b2142e9731d77495322e20a100432a728cf3d86f87dc67abebf85ed58a9b3e8`，同一 PID 未重启；`.30/.31` 未升级。
+- 用户明确批准部署，`.27` 该次主站/前端发布目录 `/opt/gzctf/releases/teamlab-admin-3090b98a-20261004/publish`（最新前端发布见上节），前端 manifest 为 3090b98a；Main DLL SHA256 `2846d6f795a5e8796b7c3dca6997e30735ed52c62cde2f7639cc1ff68b0f332a`。Agent 保留 cc6c5737，SHA256 `9b2142e9731d77495322e20a100432a728cf3d86f87dc67abebf85ed58a9b3e8`，同一 PID 未重启；`.30/.31` 未升级。
 - 新完整备份 `/opt/gzctf/backups/teamlab-admin-3090b98a-20261004` 全文读取/五摘要通过，完整恢复到独立副本并验证仅补缺失日志资源索引：149→150 migration、pending 0、核心表行数及全列结构保持、父及五分区索引 valid/ready。副本迁移 102.09 秒，生产新增索引及原子切换维护 140.2 秒；生产不执行已暴露解析错误的全历史脚本，采用 EF 官方缺失索引 delta。只删除本任务验证库；原备份/发布/日志保留。
 - 实际服务 Main/Agent active、NRestarts 0，首页/Config 200、队列 0、节点在线及恢复可调度、519–522 镜像 Ready。真实新版 GUI 管理员登录、设计/试运行/概览/资产/网络/活动页通过；DC 与旧 Windows 的 VNC 临时会话创建/连接地址/关闭通过，未做桌面登录。
 - 原 Lab2 runtime `01a1022f-7e91-7ad3-8309-833af4771430` generation 4、四 VM 同一身份持续运行，部署前后 QGA/MAC/IP/DNS/路由与限定通信 passed；没有重置或再配置网络。独立 Docker 测试正常创建、私网 HTTP 200、测试文件上传下载删除一致、正常销毁且容器残留 0；临时拓扑/发布记录保留复用，原四机/PVE/快照/镜像/Registry/公网网关保留。学习资料只留本地。
