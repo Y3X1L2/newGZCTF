@@ -1,6 +1,6 @@
 # TeamLab 管理后台与受管网络集成计划
 
-日期：2026-10-04。状态：本地集成与验证完成，待推送和创建审查 PR。目标分支：`codex/teamlab-admin-redesign-integration`。本任务不部署生产环境。
+日期：2026-10-04。状态：完成，分支已推送并创建 draft PR #11。目标分支：`codex/teamlab-admin-redesign-integration`。本任务不部署生产环境。
 
 ## 分支关系
 
@@ -34,4 +34,4 @@
 - [x] 后端执行 Release 解决方案构建、1284 项单元测试和 304 项集成测试；PostgreSQL 专项验证缺失的较早日志索引迁移可在已应用较新受管网络迁移后补装。
 - [x] 使用 390、1366、1920、2560 宽度检查日间/夜间、键盘操作、reduced-motion、横向溢出和布局稳定性。
 - [x] 执行 `git diff --check`，检查生成制品、敏感信息和仓库外资产未被误纳入。
-- [ ] 更新 `current-state.md` 和任务交接，提交并推送集成分支，提供可审查 PR；不合并 `main`，不部署。
+- [x] 更新 `current-state.md` 和任务交接，提交并推送集成分支，创建 draft PR #11；未合并 `main`，未部署。

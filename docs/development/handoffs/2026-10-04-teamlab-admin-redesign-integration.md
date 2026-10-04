@@ -18,11 +18,11 @@
 
 ## 当前状态
 
-- `in progress`：本地实现和验证完成，待推送分支并创建审查 PR。
+- `complete`
 - 证据状态：`VERIFIED`
-- 已完成：两次正常 merge、冲突处理、生成 API 刷新、代码/契约审计、全量门禁、迁移分支专项和多视口浏览器验证。
-- 正在进行：提交交接并推送远端。
-- 尚未完成：生产部署和集成候选的真实 VM/文件/远程会话复验；这些操作需要用户另行明确批准。
+- 已完成：两次正常 merge、冲突处理、生成 API 刷新、代码/契约审计、全量门禁、迁移分支专项、多视口浏览器验证、分支推送和 draft PR #11。
+- 正在进行：无。
+- 尚未完成：生产部署和集成候选的真实 VM/文件/远程会话复验；这些操作需要用户另行明确批准，不属于本次集成完成条件。
 
 ## 技术结论
 
@@ -60,7 +60,9 @@
 - 集成计划提交：`0fcaf65a`
 - 受管网络 merge：`cb13cd45`
 - 管理后台 merge 与冲突修正：`263928a6`
-- 推送分支：待本交接提交后推送 `codex/teamlab-admin-redesign-integration`
+- 集成验证与交接提交：`47baab2b`
+- 推送分支：`origin/codex/teamlab-admin-redesign-integration`
+- Draft PR：`https://github.com/Y3X1L2/newGZCTF/pull/11`
 - 是否已合并 `main`：否
 - 是否已删除任务分支和 worktree：否，保留供审查
 - 部署环境：未部署
