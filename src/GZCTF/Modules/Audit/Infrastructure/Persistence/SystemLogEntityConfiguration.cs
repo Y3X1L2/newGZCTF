@@ -21,6 +21,10 @@ public sealed class SystemLogEntityConfiguration : IEntityTypeConfiguration<LogM
         builder.HasIndex(item => new { item.WorkerNodeId, item.TimeUtc, item.Id })
             .IsDescending(false, true, true)
             .HasDatabaseName("IX_Logs_Node_Time_Id");
+        builder.HasIndex(item => new { item.ResourceType, item.ResourceId, item.TimeUtc, item.Id })
+            .IsDescending(false, false, true, true)
+            .HasFilter("\"ResourceType\" IS NOT NULL AND \"ResourceId\" IS NOT NULL")
+            .HasDatabaseName("IX_Logs_Resource_Time_Id");
         builder.HasIndex(item => new { item.TimeUtc, item.Id }).IsDescending(true, true)
             .HasDatabaseName("IX_Logs_Time_Id");
         builder.HasIndex(item => new { item.Level, item.TimeUtc, item.Id }).IsDescending(false, true, true)

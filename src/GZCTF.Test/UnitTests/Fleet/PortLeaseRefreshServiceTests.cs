@@ -3,12 +3,14 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using GZCTF.Models.Data;
+using GZCTF.Models;
 using GZCTF.Models.Internal;
 using GZCTF.Repositories.Interface;
 using GZCTF.Services.Fleet;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
+using Microsoft.EntityFrameworkCore;
+using GZCTF.Modules.TeamLab.Domain.Runtime;
 using Moq;
 using Xunit;
 
@@ -27,7 +29,8 @@ public class PortLeaseRefreshServiceTests
                 new PortMappingEntry(29999, "10.24.0.31", 42763, Guid.NewGuid())
             ]);
         var allocator = new RecordingPortAllocator();
-        var service = CreateService(repository.Object, allocator);
+        await using var db = Context();
+        var service = CreateService(repository.Object, allocator, db);
 
         await service.RefreshOnceAsync(CancellationToken.None);
 
@@ -36,25 +39,38 @@ public class PortLeaseRefreshServiceTests
         Assert.Equal(firstLease, reservation.LeaseId);
     }
 
-    static PortLeaseRefreshService CreateService(IContainerRepository repository, IPortAllocationService allocator)
+    [Fact]
+    public async Task RefreshOnceAsync_RefreshesOnlyActiveServiceMappings()
+    {
+        await using var db = Context();
+        var leaseId = Guid.NewGuid();
+        db.TeamLabServiceAccesses.AddRange(
+            new TeamLabServiceAccess { PublicPort = 30050, PortLeaseId = leaseId, Status = "active" },
+            new TeamLabServiceAccess { PublicPort = 30051, PortLeaseId = Guid.NewGuid(), Status = "revoked", RevokedAt = DateTimeOffset.UtcNow },
+            new TeamLabServiceAccess { PublicPort = 30052, PortLeaseId = Guid.NewGuid(), Status = "failed" });
+        await db.SaveChangesAsync();
+        var repository = new Mock<IContainerRepository>();
+        repository.Setup(item => item.GetProxyPortMappingsAsync(It.IsAny<CancellationToken>())).ReturnsAsync([]);
+        var allocator = new RecordingPortAllocator();
+
+        await CreateService(repository.Object, allocator, db).RefreshOnceAsync(CancellationToken.None);
+
+        Assert.Equal((30050, leaseId), Assert.Single(allocator.ReservedPorts));
+    }
+
+    static AppDbContext Context() => new(new DbContextOptionsBuilder<AppDbContext>()
+        .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
+
+    static PortLeaseRefreshService CreateService(IContainerRepository repository, IPortAllocationService allocator, AppDbContext context)
     {
         var services = new ServiceCollection();
         services.AddSingleton(repository);
         services.AddSingleton(allocator);
+        services.AddSingleton(context);
         var provider = services.BuildServiceProvider();
 
         return new PortLeaseRefreshService(
             provider.GetRequiredService<IServiceScopeFactory>(),
-            Options.Create(new ContainerProvider
-            {
-                NginxProxyConfig = new NginxProxyConfig
-                {
-                    Enable = true,
-                    SyncLocalConfig = false,
-                    ListenPortStart = 30000,
-                    ListenPortEnd = 30099
-                }
-            }),
             NullLogger<PortLeaseRefreshService>.Instance);
     }
 

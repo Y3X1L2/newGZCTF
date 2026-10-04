@@ -101,16 +101,16 @@ public sealed class TeamLabRuntimeOperationApplicationService(
 
     public Task<IdempotencyBeginResult> SubmitRemoteSessionCreateAsync(
         Guid apiTokenId, Guid actorUserId, string idempotencyKey, Guid runtimeId, Guid? controlScopeId,
-        int assetId, string reason, CancellationToken cancellationToken, bool vncConsole = false)
+        int assetId, string? reason, CancellationToken cancellationToken, bool vncConsole = false)
     {
-        if (assetId <= 0 || string.IsNullOrWhiteSpace(reason) || reason.Trim().Length is < 4 or > 500)
-            throw new TeamLabApiContractException("remote_access_request_invalid", "请选择资源并填写 4-500 个字符的访问原因。", 422);
+        if (assetId <= 0 || reason?.Length > 500)
+            throw new TeamLabApiContractException("remote_access_request_invalid", "远程连接参数无效。", 422);
         return SubmitAsync(apiTokenId, actorUserId, idempotencyKey,
             $"POST:/api/open/v1/teamlab/runtimes/{runtimeId:D}/assets/{assetId}/remote-sessions",
             TeamLabRuntimeOperationKind.RemoteSessionCreate,
             new TeamLabRuntimeOperationPayload(null, runtimeId, null)
             {
-                ControlScopeId = controlScopeId, RemoteAssetId = assetId, RemoteReason = reason.Trim(), RemoteVncConsole = vncConsole
+                ControlScopeId = controlScopeId, RemoteAssetId = assetId, RemoteReason = reason?.Trim(), RemoteVncConsole = vncConsole
             }, cancellationToken);
     }
 

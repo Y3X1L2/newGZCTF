@@ -1,5 +1,5 @@
 import { Plus, Search } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router'
 import { RuntimeApiError } from '../../api/runtimeJsonClient'
 import { ActionButton, InlineFeedback } from '../../../../shared/Interaction'
@@ -10,8 +10,6 @@ import {
   AdminPageHeader,
   CursorPaginationBar,
   FilterToolbar,
-  MetricItem,
-  MetricStrip,
   RefreshIndicator,
   ToolbarGroup,
 } from '../../shared/AdminWorkbench'
@@ -21,6 +19,7 @@ import { useTeamLabCatalog, type TeamLabSceneOwnerFilter, type TeamLabSceneStatu
 import styles from './TeamLabLibraryPage.module.css'
 import { RemoteSessionsPanel } from '../runtimes/RemoteSessionsPanel'
 import { RuntimeSearchPanel } from './RuntimeSearchPanel'
+import { TeamLabWorkspaceNav } from '../shared/TeamLabWorkspaceNav'
 
 export function TeamLabLibraryPage() {
   const navigate = useNavigate()
@@ -28,44 +27,28 @@ export function TeamLabLibraryPage() {
   const [createOpen, setCreateOpen] = useState(false)
   const [params, setParams] = useSearchParams()
   const view = params.get('view') === 'runtimes' ? 'runtimes' : params.get('view') === 'sessions' ? 'sessions' : 'scenes'
-  const setView = (value: 'scenes' | 'runtimes' | 'sessions') => setParams({ view: value })
+  const setView = (value: 'runtimes' | 'sessions') => setParams({ view: value })
 
   const title = view === 'runtimes' ? '运行实例检索' : view === 'sessions' ? '远程会话管理' : '组网场景库'
   useVNextPageTitle(title)
 
-  const metrics = useMemo(() => {
-    const scenes = catalog.page?.items ?? []
-    return {
-      scenes: scenes.length,
-      published: scenes.filter((scene) => scene.latestRelease?.sourceRevision === scene.revision).length,
-      running: scenes.filter((scene) => scene.latestTrialRuntime?.status === 'running').length,
-      assets: scenes.reduce((total, scene) => total + scene.assetCount, 0),
-    }
-  }, [catalog.page?.items])
   const forbidden = catalog.error instanceof RuntimeApiError && catalog.error.status === 403
 
   return (
     <div className={styles.page}>
       <AdminPageHeader
         actions={view === 'scenes' ? <ActionButton icon={<Plus size={16} />} onClick={() => setCreateOpen(true)} tone="primary" type="button">创建场景</ActionButton> : undefined}
-        description={view === 'scenes' ? '维护可复用的网络场景、不可变发布版本和试运行记录。' : undefined}
-        eyebrow="TEAMLAB ORCHESTRATION"
+        eyebrow="TEAMLAB"
         title={title}
       />
-      <nav className={styles.views} aria-label="组网工作台视图">
-        <button type="button" aria-pressed={view === 'scenes'} onClick={() => setView('scenes')}>场景库</button>
-        <button type="button" aria-pressed={view === 'runtimes'} onClick={() => setView('runtimes')}>运行实例</button>
-        <button type="button" aria-pressed={view === 'sessions'} onClick={() => setView('sessions')}>远程会话</button>
-      </nav>
+      <TeamLabWorkspaceNav active={view === 'scenes' ? 'scenes' : 'runtimes'} />
+      {view !== 'scenes' ? <div className={styles.subviews} aria-label="运行环境视图">
+        <button aria-pressed={view === 'runtimes'} onClick={() => setView('runtimes')} type="button">环境</button>
+        <button aria-pressed={view === 'sessions'} onClick={() => setView('sessions')} type="button">远程会话</button>
+      </div> : null}
       {view === 'sessions' ? <RemoteSessionsPanel /> : null}
       {view === 'runtimes' ? <RuntimeSearchPanel /> : null}
       {view === 'scenes' ? <>
-      <MetricStrip>
-        <MetricItem detail="当前页" label="场景" value={metrics.scenes} />
-        <MetricItem detail="当前修订已发布" label="可用版本" tone={metrics.published ? 'success' : 'neutral'} value={metrics.published} />
-        <MetricItem detail="当前页试运行" label="运行中" tone={metrics.running ? 'info' : 'neutral'} value={metrics.running} />
-        <MetricItem detail="当前页合计" label="资产" value={metrics.assets} />
-      </MetricStrip>
       <FilterToolbar>
         <ToolbarGroup grow>
           <label className={styles.searchBox}>

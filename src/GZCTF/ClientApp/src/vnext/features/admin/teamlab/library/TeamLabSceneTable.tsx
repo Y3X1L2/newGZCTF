@@ -22,7 +22,7 @@ export const TeamLabSceneTable = memo(function TeamLabSceneTable({
         render: (scene) => (
           <div className={styles.sceneIdentity}>
             <strong>{scene.name}</strong>
-            <small>修订 {scene.revision} · Schema {scene.schemaVersion}</small>
+            {scene.latestRelease ? <small>v{scene.latestRelease.version}</small> : null}
           </div>
         ),
       },

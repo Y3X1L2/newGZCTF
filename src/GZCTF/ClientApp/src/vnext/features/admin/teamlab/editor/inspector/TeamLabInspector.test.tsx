@@ -269,7 +269,7 @@ describe('TeamLabInspector', () => {
       />
     )
 
-    expect(screen.getByRole('option', { name: 'Web service (#42) - 未配置运维接入' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Web service - 未配置运维接入' })).toBeInTheDocument()
     expect(screen.queryByRole('option', { name: 'Windows Server (#99)' })).not.toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('镜像模板'), { target: { value: '42' } })
 

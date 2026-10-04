@@ -329,7 +329,7 @@ public sealed class TeamLabRuntimeOperationHandler(
                     result = await remoteAccess.CreateForApiOperationAsync(runtimeId,
                         payload.RemoteAssetId ?? throw MissingPayload("资产 ID"), actorUserId,
                         operation.ApiTokenId ?? throw MissingPayload("API token"),
-                        payload.RemoteReason ?? throw MissingPayload("访问原因"), operation.Id, cancellationToken, payload.RemoteVncConsole);
+                        payload.RemoteReason, operation.Id, cancellationToken, payload.RemoteVncConsole);
                 else
                 {
                     var sessionId = payload.RemoteSessionId ?? throw MissingPayload("会话 ID");

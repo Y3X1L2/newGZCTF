@@ -1,4 +1,4 @@
-import { ArrowRight, PlayCircle, Trash2, Wrench } from 'lucide-react'
+import { ArrowRight, Trash2, Wrench } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router'
 import useSWR from 'swr'
@@ -23,6 +23,7 @@ export function TeamLabRuntimesPage() {
   const [destroying, setDestroying] = useState<TeamLabAdminRuntimeSummary | null>(null)
   const [destroyError, setDestroyError] = useState<unknown>(null)
   const [acting, setActing] = useState(false)
+  const releases = useSWR(teamLabAdminKeys.releases(scene.id), () => teamLabAdminApi.listReleases(scene.id))
   const request = useSWR(
     [...teamLabAdminKeys.runtimes(scene.id), cursor.cursor ?? '', pageSize],
     () => teamLabAdminApi.listTrialRuntimes(scene.id, cursor.cursor ?? undefined, pageSize),
@@ -37,11 +38,11 @@ export function TeamLabRuntimesPage() {
       id: 'runtime',
       header: '运行实例',
       width: 'wide',
-      render: (runtime) => <span className={styles.identity}><strong>{runtime.stage}</strong><code>{runtime.id}</code></span>,
+      render: (runtime) => <span className={styles.identity}><strong>{scene.definition.name}</strong><span>{formatAdminDate(runtime.createdAt)}</span></span>,
     },
     { id: 'status', header: '状态', width: 'compact', render: (runtime) => <TeamLabRuntimeStatusBadge status={runtime.status} /> },
     { id: 'access', header: '选手入口', render: (runtime) => <TeamLabAccessStatusBadge open={runtime.openForAccess} /> },
-    { id: 'release', header: '发布版本', visibility: 'desktop', render: (runtime) => <code>{runtime.releaseId}</code> },
+    { id: 'release', header: '发布版本', visibility: 'desktop', render: (runtime) => { const release = releases.data?.find(item => item.id === runtime.releaseId); return release ? `v${release.version}` : '—' } },
     { id: 'updated', header: '最后更新', visibility: 'desktop', render: (runtime) => formatAdminDate(runtime.updatedAt ?? runtime.createdAt) },
     {
       id: 'actions', header: '操作', width: 'wide', align: 'right', render: (runtime) => (
@@ -55,7 +56,7 @@ export function TeamLabRuntimesPage() {
         </div>
       ),
     },
-  ], [navigate, scene.id])
+  ], [navigate, scene.id, scene.definition.name, releases.data])
 
   const destroy = async () => {
     if (!destroying || acting) return false
@@ -77,7 +78,7 @@ export function TeamLabRuntimesPage() {
   return (
     <section className={styles.page}>
       <header className={styles.pageHeader}>
-        <div><span>试运行实例</span><h2>试运行管理</h2><p>查看当前场景各发布版本的部署、分片和观测状态。</p></div>
+        <div><h2>试运行</h2></div>
         <RefreshIndicator active={request.isValidating && (request.data?.items.some((runtime) => isRuntimeTransitioning(runtime.status)) ?? false)} label={request.isValidating ? '同步中' : '状态已同步'} />
       </header>
       {!request.data && !request.error ? <DataState description="正在读取场景试运行记录。" loading title="试运行加载中" /> : request.error ? (
@@ -102,11 +103,8 @@ export function TeamLabRuntimesPage() {
       ) : (
         <DataState description="从已就绪的发布版本创建试运行后，记录会出现在这里。" title="暂无试运行" />
       )}
-      <footer className={styles.note}><PlayCircle size={15} />试运行创建入口位于“发布版本”页。</footer>
       <VNextConfirmDialog
-        confirmationText={destroying && isWaitingForNode(destroying.status) ? undefined : destroying?.id.slice(0, 8)}
         confirmLabel={destroying && isWaitingForNode(destroying.status) ? '确认取消' : '确认销毁'}
-        description={destroying && isWaitingForNode(destroying.status) ? '取消尚未进入节点执行的创建任务，并释放预留资源。' : '将清理该实例的分片、资产、路由、抓包和访问授权。'}
         message={destroyError ? <InlineFeedback tone="danger">{errorMessage(destroyError, '无法提交操作。')}</InlineFeedback> : destroying && isWaitingForNode(destroying.status) ? '取消后可从发布版本重新创建。' : '销毁不可撤销。'}
         onClose={() => !acting && setDestroying(null)}
         onConfirm={destroy}

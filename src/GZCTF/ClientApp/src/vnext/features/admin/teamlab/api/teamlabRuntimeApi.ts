@@ -24,7 +24,7 @@ import {
   parseTeamLabTrafficPathPage,
 } from './teamlabRuntimeParsers'
 import { parseTeamLabLinkPolicy, parseTeamLabLinkPolicyPage } from './teamlabResourcesParsers'
-import { teamLabParsing as parse } from './teamlabParsers'
+import { parseAsset, teamLabParsing as parse } from './teamlabParsers'
 import type { ApplyTeamLabLinkPolicyRequest } from './teamlabResourcesContracts'
 
 const root = '/api/admin/teamlab/runtimes'
@@ -141,6 +141,10 @@ export function createTeamLabRuntimeApi(client: RuntimeJsonClient = runtimeJsonC
 
     async changeAssets(runtimeId: string, request: ChangeTeamLabRuntimeAssetsRequest) {
       return parseTeamLabRuntime(await client.postJson(`${root}/${runtimeId}/asset-changes`, request))
+    },
+
+    async getAssetDefinition(runtimeId: string, assetId: number) {
+      return parseAsset(await client.get(`${root}/${runtimeId}/assets/${assetId}/definition`))
     },
 
     async listGrants(runtimeId: string): Promise<readonly TeamLabRuntimeGrant[]> {

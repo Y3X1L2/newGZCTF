@@ -4,7 +4,7 @@ import useSWR from 'swr'
 import { ActionButton, InlineFeedback, VNextConfirmDialog } from '../../../../shared/Interaction'
 import { DataState } from '../../../../shared/Primitives'
 import { errorMessage } from '../../../../shared/errors'
-import { DetailDrawer } from '../../shared/AdminWorkbench'
+import { DetailDrawer, StatusBadge } from '../../shared/AdminWorkbench'
 import { formatAdminDate } from '../../shared/adminFormat'
 import { teamLabRemoteAccessApi, type TeamLabRemoteSession } from '../api'
 import { RemoteAuditPanel } from './RemoteAuditPanel'
@@ -78,7 +78,7 @@ export function RemoteSessionsPanel({ runtimeId }: { runtimeId?: string }) {
         <label>
           <span>关键词</span>
           <input
-            placeholder="用户名、资产名、节点名或会话号"
+            placeholder="搜索用户、资产或节点"
             value={query}
             onChange={(event) => setQuery(event.currentTarget.value)}
           />
@@ -146,46 +146,41 @@ export function RemoteSessionsPanel({ runtimeId }: { runtimeId?: string }) {
                 <th>资产</th>
                 <th>状态 / 连接方式</th>
                 <th>操作者 / 节点</th>
-                <th>原因 / 到期时间</th>
-                <th>操作</th>
+                <th>到期时间</th>
+                <th />
               </tr>
             </thead>
             <tbody>
               {sessions.data.items.map(
-                ({ session, workerNodeId, workerNodeName, requestedByUserId, requestedByName }) => (
-                  <tr key={session.id} title={`会话 ${session.id} · 用户 ${requestedByUserId} · 节点 ${workerNodeId}`}>
+                ({ session, workerNodeName, requestedByName }) => (
+                  <tr key={session.id}>
                     <td>{session.assetName}</td>
                     <td>
-                      {session.endReason === 'service_restarted' ? '连接中断' : statusLabels[session.status]}
+                      <StatusBadge tone={session.status === 'failed' || session.endReason === 'service_restarted' ? 'danger' : session.status === 'connected' ? 'success' : session.status === 'ending' ? 'warning' : 'neutral'}>
+                        {session.endReason === 'service_restarted' ? '连接中断' : statusLabels[session.status]}
+                      </StatusBadge>
                       <small>{protocolLabels[session.protocol]}</small>
-                      {session.endReason && session.endReason !== 'service_restarted' ? (
-                        <small>{session.endReason}</small>
-                      ) : null}
                     </td>
                     <td>
                       {requestedByName}
                       <small>{workerNodeName}</small>
                     </td>
                     <td>
-                      {session.reason}
-                      <small>{formatAdminDate(session.expiresAt)}</small>
+                      {formatAdminDate(session.expiresAt)}
                     </td>
                     <td>
                       {!['ended', 'failed'].includes(session.status) ? (
-                        <ActionButton icon={<Square size={14} />} onClick={() => setSelected(session)} type="button">
-                          {session.status === 'ending' ? '重试清理' : '结束'}
-                        </ActionButton>
+                        <ActionButton aria-label={`结束 ${session.assetName} 的会话`} title={session.status === 'ending' ? '重试清理' : '结束会话'} icon={<Square size={14} />} onClick={() => setSelected(session)} type="button" />
                       ) : null}
                       <ActionButton
                         aria-label={`查看 ${session.assetName} 操作审计`}
+                        title="操作审计"
                         aria-pressed={auditSession?.id === session.id}
                         icon={<FileClock size={14} />}
                         onClick={() => setAuditSession(session)}
                         tone={auditSession?.id === session.id ? 'primary' : 'secondary'}
                         type="button"
-                      >
-                        操作审计
-                      </ActionButton>
+                      />
                     </td>
                   </tr>
                 )
@@ -208,7 +203,6 @@ export function RemoteSessionsPanel({ runtimeId }: { runtimeId?: string }) {
       </div>
       {error ? <InlineFeedback tone="danger">{errorMessage(error, '结束会话失败。')}</InlineFeedback> : null}
       <DetailDrawer
-        description={auditSession ? `会话 ${auditSession.id} · ${protocolLabels[auditSession.protocol]}` : undefined}
         onClose={() => setAuditSession(null)}
         open={auditSession !== null}
         title={auditSession ? `操作审计 · ${auditSession.assetName}` : '操作审计'}
@@ -219,7 +213,6 @@ export function RemoteSessionsPanel({ runtimeId }: { runtimeId?: string }) {
         open={selected !== null}
         title="结束远程会话"
         message={selected?.assetName ?? ''}
-        description="连接将断开，临时访问资源将被回收。"
         confirmLabel="结束会话"
         onClose={() => setSelected(null)}
         onConfirm={end}

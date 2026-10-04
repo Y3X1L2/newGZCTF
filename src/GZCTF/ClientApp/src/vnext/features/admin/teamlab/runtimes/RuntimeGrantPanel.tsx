@@ -65,8 +65,7 @@ export function RuntimeGrantPanel({ runtime }: { runtime: TeamLabRuntime }) {
   }
 
   return <section className={styles.panel} aria-labelledby="runtime-grants-title">
-    <header className={styles.header}><div><span>访问权限</span><h3 id="runtime-grants-title">运行环境授权</h3></div></header>
-    <p className={styles.hint}>授权可覆盖整个运行环境，也可只限定到一个资产。文件管理与远程会话分别控制。</p>
+    <header className={styles.header}><h3 id="runtime-grants-title">运行环境授权</h3></header>
     {failure ? <InlineFeedback tone="danger">{errorMessage(failure, '运行环境授权加载失败。')}</InlineFeedback> : null}
     {grants === null && !failure ? <DataState description="正在读取用户和 Token 授权。" loading title="授权加载中" /> : null}
     {grants?.length ? <div className={styles.grantList}>{grants.map((grant, index) => <div key={`${grant.subjectType}:${grant.subjectId}:${grant.assetKey ?? '*'}:${index}`}><span>{grant.subjectType === 'user' ? '用户' : 'API Token'}</span><strong>{grant.subjectName}</strong><small>{grant.assetKey ? runtime.assets.find((asset) => asset.key === grant.assetKey)?.name ?? grant.assetKey : '整个运行环境'}</small><p>{grant.permissions.map((permission) => permissionOptions.find((item) => item.value === permission)?.label ?? permission).join('、')}</p><button aria-label={`删除 ${grant.subjectName} 的授权`} disabled={busy} onClick={() => void save(grants.filter((_, row) => row !== index))} type="button"><Trash2 size={15} /></button></div>)}</div> : grants ? <DataState description="可在下方为用户或 API Token 添加权限。" title="当前没有额外授权" /> : null}

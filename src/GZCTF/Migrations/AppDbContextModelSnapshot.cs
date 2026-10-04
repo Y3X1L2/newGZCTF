@@ -1997,6 +1997,11 @@ namespace GZCTF.Migrations
                         .IsDescending(false, true, true)
                         .HasDatabaseName("IX_Logs_Node_Time_Id");
 
+                    b.HasIndex("ResourceType", "ResourceId", "TimeUtc", "Id")
+                        .IsDescending(false, false, true, true)
+                        .HasDatabaseName("IX_Logs_Resource_Time_Id")
+                        .HasFilter("\"ResourceType\" IS NOT NULL AND \"ResourceId\" IS NOT NULL");
+
                     b.ToTable("Logs");
                 });
 

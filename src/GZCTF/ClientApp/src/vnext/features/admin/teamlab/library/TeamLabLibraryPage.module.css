@@ -5,16 +5,21 @@
 }
 
 .views { display: flex; flex-wrap: wrap; gap: var(--yn-space-4); border-bottom: 1px solid var(--yn-color-border); margin: var(--yn-space-5) 0; }
-.views button { padding: var(--yn-space-3); border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--yn-color-text-secondary); cursor: pointer; font: inherit; }
-.views button[aria-pressed='true'] { border-bottom-color: var(--yn-color-text); color: var(--yn-color-text); }
-.views button:focus-visible { outline: 2px solid var(--yn-color-text); outline-offset: -2px; }
+.views a { padding: var(--yn-space-3); border-bottom: 2px solid transparent; color: var(--yn-color-text-secondary); text-decoration: none; }
+.views a[aria-current='page'] { border-bottom-color: var(--yn-color-text); color: var(--yn-color-text); }
+.views a:focus-visible { outline: 2px solid var(--yn-color-text); outline-offset: -2px; }
+.subviews { display: flex; gap: var(--yn-space-2); margin-bottom: var(--yn-space-4); }
+.subviews button { border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--yn-color-text-secondary); padding: var(--yn-space-2) var(--yn-space-3); font: inherit; cursor: pointer; }
+.subviews button[aria-pressed='true'] { border-bottom-color: var(--yn-color-text); color: var(--yn-color-text); }
 
-.runtimeSearchForm { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: var(--yn-space-5); align-items: end; }
+.runtimeSearchForm { grid-template-columns: minmax(180px, 1fr) minmax(130px, 180px) auto auto auto; margin-bottom: var(--yn-space-5); align-items: end; }
+.advancedFilters { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--yn-space-3); padding-top: var(--yn-space-3); border-top: 1px solid var(--yn-color-border); }
+.advancedFilters label { display: grid; gap: var(--yn-space-2); }
 .runtimeSearchForm > label { min-width: 0; }
 .runtimeSearchForm .errorFilter { display: flex; align-items: center; min-height: 38px; }
 .runtimeSearchForm .errorFilter input { width: 18px; height: 18px; min-height: 18px; padding: 0; accent-color: var(--yn-color-brand); }
 @media (max-width: 900px) { .runtimeSearchForm { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 600px) { .runtimeSearchForm { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 600px) { .runtimeSearchForm, .advancedFilters { grid-template-columns: minmax(0, 1fr); } }
 
 .page > section:nth-of-type(1) {
   margin-top: var(--yn-space-5);

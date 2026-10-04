@@ -14,6 +14,8 @@ export async function searchRuntimes(filters: RuntimeSearchFilters, after: strin
       const item = parse.record(value, label)
       return { id: parse.string(item.id, 'id'), topologyId: parse.nullableString(item.topologyId, 'topologyId'),
         releaseId: parse.string(item.releaseId, 'releaseId'), reference: parse.nullableString(item.reference, 'reference'),
+        scenarioName: parse.nullableString(item.scenarioName, 'scenarioName'), releaseVersion: parse.nullableNumber(item.releaseVersion, 'releaseVersion'),
+        updatedAt: parse.nullableNumber(item.updatedAt, 'updatedAt'),
         generation: parse.number(item.generation, 'generation'), status: parse.string(item.status, 'status'),
         createdById: parse.nullableString(item.createdById, 'createdById'), createdAt: parse.number(item.createdAt, 'createdAt'),
         assetCount: parse.number(item.assetCount, 'assetCount'), hasError: parse.boolean(item.hasError, 'hasError') }

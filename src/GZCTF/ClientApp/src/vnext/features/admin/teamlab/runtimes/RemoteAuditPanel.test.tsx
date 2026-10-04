@@ -16,12 +16,12 @@ describe('RemoteAuditPanel', () => {
     view.rerender(<RemoteAuditPanel sessionId="session-a" />)
     expect(screen.queryByRole('button', { name: '归档操作证据' })).toBeNull()
   })
-  it('shows digest and expiry and reports download failures without saving an error document', () => {
+  it('shows archive details without the digest and reports download failures', () => {
     const download = vi.fn()
     audit.mockReturnValue({ data: { state: 'ready', retentionDays: 90, items: [{ id: 7, size: 1024,
       sha256: 'a'.repeat(64), createdAt: 1788796800000, expiresAt: 1796572800000 }] }, download, mutate: vi.fn(), actionError: new Error('审计文件内容校验失败。') })
     render(<RemoteAuditPanel sessionId="session-a" />)
-    expect(screen.getByText('a'.repeat(64))).toBeTruthy()
+    expect(screen.queryByText('a'.repeat(64))).toBeNull()
     expect(screen.getByText('审计文件内容校验失败。')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: '下载证据 JSON' }))
     expect(download).toHaveBeenCalledWith(7)

@@ -1,10 +1,11 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { executeAssetFile, type AssetFileEntry } from '../api/teamlabAssetFilesApi'
 
 export function useAssetFiles(runtimeId: string, generation: number, assetId: number) {
   const [path, setPath] = useState('/')
   const [draftPath, setDraftPath] = useState('/')
   const [entries, setEntries] = useState<AssetFileEntry[] | null>(null)
+  const [directories, setDirectories] = useState<Record<string, readonly AssetFileEntry[]>>({})
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<unknown>(null)
   const [notice, setNotice] = useState('')
@@ -21,14 +22,15 @@ export function useAssetFiles(runtimeId: string, generation: number, assetId: nu
   }
   const read = async (target: string) => {
     const normalized = target.replace(/\/+$/, '') || '/'
-    setEntries(null)
     const next = await executeAssetFile(runtimeId, assetId, generation, 'list', normalized)
     setEntries(next)
+    setDirectories(current => ({ ...current, [normalized]: next.filter(entry => entry.kind === 'directory') }))
     setPath(normalized)
     setDraftPath(normalized)
   }
   const childPath = (name: string) => `${path === '/' ? '' : path}/${name}`
-  return { path, draftPath, setDraftPath, entries, busy, error, notice, childPath,
+  useEffect(() => { void run(() => read('/')) }, [runtimeId, generation, assetId])
+  return { path, draftPath, setDraftPath, entries, directories, busy, error, notice, childPath,
     resetIdentity: () => run(async () => {
       await executeAssetFile(runtimeId, assetId, generation, 'reset-ssh-identity', '/', undefined, true)
       setEntries(null)

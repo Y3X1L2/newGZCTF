@@ -1,289 +1,119 @@
-import { Monitor, RefreshCw, Terminal, Wrench } from 'lucide-react'
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ActionButton, InlineFeedback, VNextDialog } from '../../../../shared/Interaction'
-import { DataState } from '../../../../shared/Primitives'
+import { Monitor, RefreshCw, Terminal, Unplug } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import useSWR from 'swr'
+import { ActionButton, InlineFeedback } from '../../../../shared/Interaction'
 import { errorMessage } from '../../../../shared/errors'
-import { teamLabRemoteAccessApi, type TeamLabRemoteAccessAvailability, type TeamLabRuntime } from '../api'
-import styles from './RuntimePanels.module.css'
+import { teamLabRemoteAccessApi, type TeamLabRuntime } from '../api'
 import { ContainerTerminal } from './ContainerTerminal'
+import styles from './RuntimePanels.module.css'
 
-type RuntimeRemoteAccessPanelProps = { runtime: TeamLabRuntime }
-
-type AvailabilityBatch =
-  | { state: 'loading' }
-  | { state: 'error'; error: unknown }
-  | { state: 'ready'; items: ReadonlyMap<number, TeamLabRemoteAccessAvailability> }
-
-export const RuntimeRemoteAccessPanel = memo(function RuntimeRemoteAccessPanel({ runtime }: RuntimeRemoteAccessPanelProps) {
-  const [selectedAssetId, setSelectedAssetId] = useState<number | null>(null)
-  const [vncConsole, setVncConsole] = useState(false)
-  const [reason, setReason] = useState('')
+export function RuntimeRemoteAccessPanel({ runtime, assetId }: { runtime: TeamLabRuntime; assetId: number }) {
+  const asset = runtime.assets.find(item => item.id === assetId)!
   const [acting, setActing] = useState(false)
   const [error, setError] = useState<unknown>(null)
-  const [terminalSessionId, setTerminalSessionId] = useState<string | null>(null)
-  const [terminalClosing, setTerminalClosing] = useState(false)
-  const [terminalCloseError, setTerminalCloseError] = useState<unknown>(null)
-  const selected = runtime.assets.find((asset) => asset.id === selectedAssetId) ?? null
-  const assets = useMemo(() => runtime.assets.filter((asset) => asset.status === 'running' ||
-    asset.kind === 'vm' && asset.runtimeResourceId && !['destroying', 'destroyed', 'cleanup-pending'].includes(runtime.status)), [runtime.assets, runtime.status])
-  const [batch, setBatch] = useState<AvailabilityBatch>({ state: 'loading' })
-  const [retryNonce, setRetryNonce] = useState(0)
-  const cancelled = useRef(false)
-  const terminalClosingRef = useRef(false)
-  const remoteTriggerRef = useRef<HTMLButtonElement | null>(null)
-  const ownedSession = useRef<string | null>(null)
-  const terminalRequest = useRef<{ assetId: number; reason: string } | null>(null)
-  const [recreating, setRecreating] = useState(false)
+  const [terminalId, setTerminalId] = useState<string | null>(null)
+  const ownedTerminal = useRef<string | null>(null)
   const mounted = useRef(false)
-  const operationPending = useRef(false)
-  const [pendingCleanup, setPendingCleanup] = useState<string | null>(null)
+  const busy = useRef(false)
+  const trigger = useRef<HTMLButtonElement | null>(null)
+  const availability = useSWR(['teamlab:remote-access', runtime.id, assetId],
+    () => teamLabRemoteAccessApi.getAvailability(runtime.id, assetId))
+  const sessions = useSWR(['teamlab:asset-sessions', runtime.id, assetId],
+    () => teamLabRemoteAccessApi.list({ runtimeId: runtime.id }))
+  const active = sessions.data?.items.filter(item => item.session.assetId === assetId &&
+    ['creating', 'ready', 'connected', 'ending'].includes(item.session.status)) ?? []
 
   useEffect(() => {
     mounted.current = true
     return () => {
       mounted.current = false
-      cancelled.current = true
-      if (ownedSession.current) void teamLabRemoteAccessApi.end(ownedSession.current).catch(() => undefined)
+      if (ownedTerminal.current) void teamLabRemoteAccessApi.end(ownedTerminal.current).catch(setError)
     }
   }, [])
 
-  // Re-check availability whenever the running-asset set changes (an asset may reach
-  // running while the panel is open) and periodically while the panel is mounted.
-  const assetSignature = assets.map((asset) => asset.id).join(',')
-  useEffect(() => {
-    let disposed = false
-    const check = () => {
-      setBatch((current) => (current.state === 'loading' ? current : { state: 'loading' }))
-      void teamLabRemoteAccessApi
-        .getAvailabilityBatch(runtime.id)
-        .then((items) => {
-          if (!disposed) setBatch({ state: 'ready', items: new Map(items.map((item) => [item.assetId, item])) })
-        })
-        .catch((batchError) => {
-          if (!disposed) setBatch({ state: 'error', error: batchError })
-        })
-    }
-    check()
-    const timer = window.setInterval(check, 10_000)
-    return () => {
-      disposed = true
-      window.clearInterval(timer)
-    }
-  }, [assetSignature, retryNonce, runtime.id])
-
-  const close = useCallback(() => {
-    cancelled.current = true
-    setSelectedAssetId(null)
-    setReason('')
-    setError(null)
-  }, [])
-
-  const restoreRemoteFocus = useCallback(() => {
-    remoteTriggerRef.current?.focus()
-  }, [])
-
-  const closeTerminal = useCallback(async () => {
-    const sessionId = pendingCleanup ?? terminalSessionId
-    if (!sessionId || terminalClosingRef.current || operationPending.current) return
-    terminalClosingRef.current = true
-    setTerminalClosing(true)
-    setTerminalCloseError(null)
-    try {
-      await teamLabRemoteAccessApi.end(sessionId)
-      ownedSession.current = null
-      setTerminalSessionId(null)
-      setPendingCleanup(null)
-      terminalRequest.current = null
-    } catch (closeError) {
-      setTerminalCloseError(closeError)
-    } finally {
-      terminalClosingRef.current = false
-      setTerminalClosing(false)
-    }
-  }, [pendingCleanup, terminalSessionId])
-
-  const recreateTerminal = useCallback(async () => {
-    if (!terminalRequest.current || operationPending.current || terminalClosingRef.current) return
-    operationPending.current = true
-    setRecreating(true)
-    setTerminalCloseError(null)
-    try {
-      if (ownedSession.current) await teamLabRemoteAccessApi.end(ownedSession.current)
-      ownedSession.current = null
-      const request = terminalRequest.current
-      const session = await teamLabRemoteAccessApi.createSession(runtime.id, request.assetId, request.reason)
-      ownedSession.current = session.id
-      if (cancelled.current || !mounted.current) {
-        await teamLabRemoteAccessApi.end(session.id)
-        ownedSession.current = null
-        return
-      }
-      setTerminalSessionId(session.id)
-    } catch (nextError) {
-      setTerminalCloseError(nextError)
-    } finally {
-      operationPending.current = false
-      setRecreating(false)
-    }
-  }, [recreating, runtime.id])
-
-  const open = useCallback(async () => {
-    if (!selected || operationPending.current || ownedSession.current) return
-    operationPending.current = true
-    cancelled.current = false
+  const open = async (console: boolean, button?: HTMLButtonElement) => {
+    if (busy.current) return
+    busy.current = true
+    trigger.current = button ?? trigger.current
     setActing(true)
     setError(null)
-    // Open the window before the awaited calls so the browser does not treat it as
-    // a popup; the URL is filled in once the session is ready.
-    const popup = selected.kind === 'vm' ? window.open('about:blank', '_blank') : null
+    // Open before awaiting the session so browsers allow the remote window.
+    const popup = asset.kind === 'vm' ? window.open('about:blank', '_blank') : null
     if (popup) popup.opener = null
-    let createdSessionId: string | null = null
-    let delivered = false
+    let sessionId: string | null = null
+    let connected = false
     try {
-      if (selected.kind === 'vm' && !popup) throw new Error('浏览器阻止了运维窗口，请允许弹出窗口后重试。')
-      if (!vncConsole) {
-        const available = await teamLabRemoteAccessApi.getAvailability(runtime.id, selected.id)
-        if (cancelled.current || !mounted.current) return
-        if (!available.available) throw new Error(available.unavailableReason ?? '当前资产暂不可进入运维。')
-      }
-      const session = vncConsole
-        ? await teamLabRemoteAccessApi.createConsoleSession(runtime.id, selected.id, reason.trim())
-        : await teamLabRemoteAccessApi.createSession(runtime.id, selected.id, reason.trim())
-      createdSessionId = session.id
-      ownedSession.current = session.id
-      if (vncConsole && session.protocol !== 'vnc') throw new Error('当前服务未创建 VNC 控制台，会话将被关闭。')
-      if (cancelled.current || !mounted.current) return
+      if (asset.kind === 'vm' && !popup) throw new Error('请允许浏览器打开远程连接窗口。')
+      const session = console
+        ? await teamLabRemoteAccessApi.createConsoleSession(runtime.id, assetId)
+        : await teamLabRemoteAccessApi.createSession(runtime.id, assetId)
+      sessionId = session.id
+      if (!mounted.current) return
       if (session.protocol === 'containerTerminal') {
-        terminalRequest.current = { assetId: selected.id, reason: reason.trim() }
-        delivered = true
-        setTerminalSessionId(session.id)
-        // Success path: reset the dialog state directly; close() marks the flow as
-        // cancelled, which would close the freshly navigated popup in finally.
-        setSelectedAssetId(null)
-        setReason('')
-        setError(null)
-        return
-      }
-      const connect = await teamLabRemoteAccessApi.connect(session.id)
-      if (cancelled.current || !mounted.current) return
-      if (popup) {
-        if (popup.closed) throw new Error('运维窗口已关闭。')
-        popup.location.href = connect.url
+        ownedTerminal.current = session.id
+        setTerminalId(session.id)
       } else {
-        window.open(connect.url, '_blank', 'noopener,noreferrer')
+        const connection = await teamLabRemoteAccessApi.connect(session.id)
+        if (!mounted.current || popup?.closed) return
+        popup!.location.href = connection.url
       }
-      delivered = true
-      ownedSession.current = null
-      setSelectedAssetId(null)
-      setReason('')
-      setError(null)
-    } catch (nextError) {
-      if (!cancelled.current) setError(nextError)
+      connected = true
+      await sessions.mutate()
+    } catch (failure) {
+      if (mounted.current) setError(failure)
     } finally {
-      if (!delivered) {
+      if (!connected) {
         popup?.close()
-        if (createdSessionId) {
-          try {
-            await teamLabRemoteAccessApi.end(createdSessionId)
-            ownedSession.current = null
-          } catch (cleanupError) {
-            if (mounted.current) {
-              setTerminalCloseError(cleanupError)
-              setPendingCleanup(createdSessionId)
-            }
-          }
+        if (sessionId) {
+          try { await teamLabRemoteAccessApi.end(sessionId) }
+          catch (failure) { if (mounted.current) setError(failure) }
         }
       }
-      operationPending.current = false
+      busy.current = false
       if (mounted.current) setActing(false)
     }
-  }, [acting, close, reason, runtime.id, selected, vncConsole])
+  }
 
-  return (
-    <section aria-labelledby="runtime-remote-access-title" className={styles.panel}>
-      <header className={styles.panelHeader}>
-        <div><span>运维访问</span><h3 id="runtime-remote-access-title">资产运维</h3></div>
-      </header>
-      {assets.length ? (
-        <>
-          {batch.state === 'error' ? (
-            <InlineFeedback tone="danger">
-              {errorMessage(batch.error, '可用性批量检查失败。')}
-              <ActionButton
-                icon={<RefreshCw size={14} />}
-                onClick={() => setRetryNonce((value) => value + 1)}
-                tone="danger"
-                type="button"
-              >
-                重试
-              </ActionButton>
-            </InlineFeedback>
-          ) : null}
-          <div className={styles.remoteAssetList}>
-            {assets.map((asset) => {
-              const availability = batch.state === 'ready' ? batch.items.get(asset.id) : undefined
-              const checking = batch.state === 'loading'
-              const failed = batch.state === 'error'
-              const unavailable = batch.state === 'ready' && availability === undefined ? true : availability?.available === false
-              const disabled = checking || failed || unavailable || acting || terminalSessionId !== null || pendingCleanup !== null
-              const reasonText = checking
-                ? undefined
-                : failed
-                  ? '可用性检查失败'
-                  : availability?.available === false
-                    ? availability.unavailableReason ?? '当前资产暂不可进入运维。'
-                    : availability === undefined
-                      ? '批量检查未返回该资产的可用性结果'
-                      : undefined
-              return (
-                <article data-available={availability?.available || undefined} key={asset.id}>
-                  <div>
-                    <strong>{asset.name}</strong>
-                    <small>{asset.kind === 'vm' ? '虚拟机' : '容器'} {asset.primaryIp ? `· ${asset.primaryIp}` : ''}</small>
-                    {checking ? <small>正在检查可用性...</small> : null}
-                    {reasonText ? <small>{asset.kind === 'vm' ? 'SSH/RDP：' : ''}{reasonText}</small> : null}
-                  </div>
-                  <ActionButton disabled={disabled} icon={asset.kind === 'vm' ? <Monitor size={15} /> : <Terminal size={15} />} onClick={(event) => { remoteTriggerRef.current = event.currentTarget; setVncConsole(false); setSelectedAssetId(asset.id) }} type="button">
-                    {asset.kind === 'vm' ? 'SSH/RDP 运维' : '进入运维'}
-                  </ActionButton>
-                  {asset.kind === 'vm' ? <ActionButton disabled={acting || !!terminalSessionId || !!pendingCleanup}
-                    icon={<Monitor size={15} />} onClick={event => { remoteTriggerRef.current = event.currentTarget; setVncConsole(true); setSelectedAssetId(asset.id) }} type="button">VNC 控制台</ActionButton> : null}
-                </article>
-              )
-            })}
-          </div>
-        </>
-      ) : (
-        <DataState description="仅显示当前代次中正在运行的容器和虚拟机。" title="暂无可运维资产" />
-      )}
-      <VNextDialog
-        description="建立短期、仅限当前资产的运维连接。连接原因会写入审计记录。"
-        eyebrow="运维访问"
-        footer={<><ActionButton onClick={close} type="button">取消</ActionButton><ActionButton disabled={acting || reason.trim().length < 4} icon={<Wrench size={16} />} onClick={() => void open()} tone="primary" type="button">{acting ? '正在建立连接' : '建立连接'}</ActionButton></>}
-        onClose={close}
-        open={selected !== null}
-        title={selected ? `${vncConsole ? 'VNC 控制台' : '运维'} ${selected.name}` : '资产运维'}
-      >
-        <label className={styles.remoteReason}>
-          <span>运维原因</span>
-          <textarea autoFocus maxLength={500} onChange={(event) => setReason(event.target.value)} placeholder="例如：核查服务启动状态" value={reason} />
-          <small>{reason.trim().length}/500，至少 4 个字符</small>
-        </label>
-        {error ? <InlineFeedback tone="danger">{errorMessage(error, '无法建立运维连接。')}</InlineFeedback> : null}
-      </VNextDialog>
-      {pendingCleanup ? <InlineFeedback tone="danger">
-        {errorMessage(terminalCloseError, '会话清理未完成。')}
-        <ActionButton disabled={terminalClosing} icon={<RefreshCw size={14} />} onClick={() => void closeTerminal()} type="button">重试清理</ActionButton>
-      </InlineFeedback> : null}
-      <ContainerTerminal
-        closeError={terminalCloseError}
-        closing={terminalClosing}
-        sessionId={terminalSessionId}
-        returnFocus={restoreRemoteFocus}
-        onClose={closeTerminal}
-        onRecreate={recreateTerminal}
-        recreating={recreating}
-      />
-    </section>
-  )
-})
+  const end = useCallback(async (sessionId: string) => {
+    setActing(true)
+    setError(null)
+    try {
+      await teamLabRemoteAccessApi.end(sessionId)
+      if (ownedTerminal.current === sessionId) {
+        ownedTerminal.current = null
+        setTerminalId(null)
+      }
+      await sessions.mutate()
+      return true
+    } catch (failure) { setError(failure); return false }
+    finally { setActing(false) }
+  }, [sessions.mutate])
+
+  const usable = !!asset.runtimeResourceId && !['destroying', 'destroyed', 'cleanup-pending'].includes(runtime.status)
+  const protocol = availability.data?.protocol === 'rdp' ? 'RDP' : 'SSH'
+  return <section className={styles.panel} aria-label="远程连接">
+    <header className={styles.panelHeader}><h3>远程连接</h3></header>
+    <div className={styles.connectionActions}>
+      <ActionButton disabled={!usable || acting || !!terminalId || availability.isLoading || !availability.data?.available}
+        icon={asset.kind === 'vm' ? <Monitor size={17} /> : <Terminal size={17} />} tone="primary"
+        onClick={event => void open(false, event.currentTarget)} type="button">
+        {asset.kind === 'vm' ? protocol : '打开终端'}
+      </ActionButton>
+      {asset.kind === 'vm' ? <ActionButton disabled={!usable || acting} icon={<Monitor size={17} />}
+        onClick={event => void open(true, event.currentTarget)} type="button">VNC</ActionButton> : null}
+    </div>
+    {availability.error ? <InlineFeedback tone="danger">{errorMessage(availability.error, '连接信息读取失败。')}
+      <ActionButton aria-label="重新读取连接信息" icon={<RefreshCw size={15} />} onClick={() => void availability.mutate()} type="button" />
+    </InlineFeedback> : availability.data?.unavailableReason ? <p className={styles.muted}>{availability.data.unavailableReason}</p> : null}
+    {error ? <InlineFeedback tone="danger">{errorMessage(error, '远程连接失败。')}</InlineFeedback> : null}
+    {sessions.error ? <InlineFeedback tone="danger">{errorMessage(sessions.error, '会话读取失败。')}</InlineFeedback> : null}
+    {active.length ? <ul className={styles.assetSessions}>{active.map(({ session, requestedByName }) => <li key={session.id}>
+      <span><strong>{requestedByName}</strong> · {session.protocol === 'containerTerminal' ? '终端' : session.protocol.toUpperCase()}</span>
+      <ActionButton aria-label={`结束 ${requestedByName} 的连接`} disabled={acting} icon={<Unplug size={15} />}
+        onClick={() => void end(session.id)} type="button" />
+    </li>)}</ul> : null}
+    <ContainerTerminal sessionId={terminalId} closing={acting} closeError={error} returnFocus={() => trigger.current?.focus()}
+      onClose={async () => { if (ownedTerminal.current) await end(ownedTerminal.current) }}
+      onRecreate={async () => { if (ownedTerminal.current && await end(ownedTerminal.current)) await open(false) }} recreating={acting} />
+  </section>
+}

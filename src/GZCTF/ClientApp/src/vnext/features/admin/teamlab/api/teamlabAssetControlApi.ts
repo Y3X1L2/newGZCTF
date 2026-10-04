@@ -9,8 +9,8 @@ export const assetControlApi = {
     const item = parse.record(await runtimeJsonClient.get(base(runtimeId, assetId)), '资产操作权限')
     return { allowed: parse.boolean(item.allowed, 'allowed'), reason: parse.nullableString(item.reason, 'reason') }
   },
-  submit: async (runtimeId: string, assetId: number, generation: number, action: AssetControlAction, reason: string) =>
-    ticket(await runtimeJsonClient.postJson(base(runtimeId, assetId), { generation, action, reason, confirmed: true })),
+  submit: async (runtimeId: string, assetId: number, generation: number, action: AssetControlAction) =>
+    ticket(await runtimeJsonClient.postJson(base(runtimeId, assetId), { generation, action, confirmed: true })),
   retry: async (runtimeId: string, assetId: number, ticketId: string) =>
     ticket(await runtimeJsonClient.postJson(`${base(runtimeId, assetId)}/${encodeURIComponent(ticketId)}/retry`, {})),
   task: async (runtimeId: string, assetId: number, ticketId: string) => {

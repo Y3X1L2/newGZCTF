@@ -17,6 +17,7 @@ export interface TeamLabImageOption {
   id: number
   name: string
   digest?: string | null
+  artifactReference?: string | null
   deviceType: 'docker' | VmDeviceType
   remoteAccessProtocol?: 'ssh' | 'rdp' | null
   vmNetworkMode?: TeamLabVmNetworkMode | null
@@ -39,6 +40,7 @@ export async function listTeamLabImageOptions(): Promise<readonly TeamLabImageOp
       id: template.id,
       name: template.name,
       digest: template.imageHash,
+      artifactReference: template.registryUrl ?? `image-template:${template.id}`,
       ...(template.vmNetworkMode !== undefined
         ? { vmNetworkMode: template.vmNetworkMode === null ? null : parseTeamLabVmNetworkMode(template.vmNetworkMode) }
         : {}),

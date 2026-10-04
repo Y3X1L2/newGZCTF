@@ -33,7 +33,6 @@
 - 最终源码门禁：后端单元1251/1251、集成302/302，前端110文件373测试及完整门禁通过，Release构建通过（已有警告保留）。真实 `.27` 验收通过现代Windows双卡/明确路由、Ubuntu24双卡、DHCP/AD域解析与普通用户系统认证/共享读取、Docker HTTP，以及新建/重置/不同地址段双实例隔离/销毁。未做图形RDP登录；Linux测试DNS只验证配置，未验证解析服务；同地址段多副本VRF不在范围内。
 - Server2008R2原镜像缺QGA，已验证明确返回 `guest_qga_unavailable / guest-ready`，不能列为旧系统正例。Linux新模板518已Ready并通过实测；v1清理时删除machine-id导致网络服务不能初始化，v2仅修正镜像准备状态后通过。
 - 本次9个专用验收runtime全部销毁；原8台VM定义和磁盘保留、已关机。`.27/.30/.31`心跳在线并恢复可调度，只有`.27`升级；`.30/.31`仍为旧Agent，不在它们上运行进阶逐卡DHCP新策略。后续新场景应明确选择`.27`作为网络owner及Worker。统一证据、限制和回退见 [自动网络交接](handoffs/2026-10-02-teamlab-managed-network.md)。
-
 ## TeamLab 网络运行链部署（2026-09-27）
 
 - 分支 `codex/teamlab-windows-network`、提交 `279f259` 已推送；`10.24.0.27` 当前 release 为 `/opt/gzctf/releases/teamlab-net-279f259-20260927/publish`。本次仅上传主站 DLL、TeamLab 契约 DLL、前端静态文件和一个 Agent 程序；`.30/.31` 从 `.27` 内网取得同一 Agent。
