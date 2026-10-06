@@ -109,7 +109,8 @@ public sealed class AgentCapabilityService(
             features.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(),
             limits,
             new AgentHostFacts(logicalCpu, ReadTotalMemory(),
-                kvm ? ReadAvailableVmImageStorage(_kvmConfig.ImageStoragePath, _teamLabConfig.RuntimeStateRoot) : 0,
+                kvm ? ReadAvailableVmImageStorage(_kvmConfig.ImageStoragePath, _teamLabConfig.RuntimeStateRoot,
+                    features.Contains(AgentFeatureIds.TeamLabExecutionPlan)) : 0,
                 capabilities.KvmDevice, capabilities.CpuVirtualization,
                 ReadAvailableStorage(dockerRootDirectory)),
             DateTimeOffset.UtcNow);
@@ -166,9 +167,13 @@ public sealed class AgentCapabilityService(
     }
 
     internal static long ReadAvailableVmImageStorage(string imagePath, string runtimeStateRoot,
-        Func<string, long>? availableFreeSpace = null) =>
-        Math.Min(ReadAvailableStorage(imagePath, availableFreeSpace),
-            ReadAvailableStorage(runtimeStateRoot, availableFreeSpace));
+        bool includeTeamLabStorage, Func<string, long>? availableFreeSpace = null)
+    {
+        var imageAvailable = ReadAvailableStorage(imagePath, availableFreeSpace);
+        return includeTeamLabStorage
+            ? Math.Min(imageAvailable, ReadAvailableStorage(runtimeStateRoot, availableFreeSpace))
+            : imageAvailable;
+    }
 
     internal static long ReadAvailableStorage(string? path, Func<string, long>? availableFreeSpace = null)
     {

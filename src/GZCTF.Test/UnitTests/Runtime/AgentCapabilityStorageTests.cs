@@ -19,7 +19,7 @@ public sealed class AgentCapabilityStorageTests
         try
         {
             var queried = new List<string>();
-            var available = AgentCapabilityService.ReadAvailableVmImageStorage(images, runtime, path =>
+            var available = AgentCapabilityService.ReadAvailableVmImageStorage(images, runtime, true, path =>
             {
                 queried.Add(path);
                 return path == images ? 180 : 90;
@@ -35,7 +35,7 @@ public sealed class AgentCapabilityStorageTests
     }
 
     [Fact]
-    public void VmStorage_ReturnsZeroWhenEitherDirectoryIsMissing()
+    public void VmStorage_RuntimeDirectoryIsRequiredOnlyForTeamLabExecution()
     {
         var root = Path.Combine(Path.GetTempPath(), $"gzctf-capacity-{Guid.NewGuid():N}");
         var images = Path.Combine(root, "images");
@@ -43,7 +43,14 @@ public sealed class AgentCapabilityStorageTests
         Directory.CreateDirectory(images);
         try
         {
-            Assert.Equal(0, AgentCapabilityService.ReadAvailableVmImageStorage(images, runtime, _ => 180));
+            var queried = new List<string>();
+            Assert.Equal(180, AgentCapabilityService.ReadAvailableVmImageStorage(images, runtime, false, path =>
+            {
+                queried.Add(path);
+                return 180;
+            }));
+            Assert.Equal(new[] { images }, queried);
+            Assert.Equal(0, AgentCapabilityService.ReadAvailableVmImageStorage(images, runtime, true, _ => 180));
         }
         finally
         {
