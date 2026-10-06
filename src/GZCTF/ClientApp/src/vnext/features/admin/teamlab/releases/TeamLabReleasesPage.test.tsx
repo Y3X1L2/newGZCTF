@@ -38,6 +38,7 @@ describe('TeamLabReleasesPage', () => {
       topologyId: release.topologyId, releaseId: release.id, ready: true, images: [], blockingReasons: [], latestTrialRuntime: null,
       plan: { topologyId: release.topologyId, releaseId: release.id, networks: [], assets: [], shards: [], crossShardConnections: 0, requiredCapabilities: [], warnings: [], planHash: 'sha256:plan', managedInfrastructureCount: 0, observationPointEstimate: 0 },
     })
+    vi.spyOn(teamLabAdminApi, 'listTrialRuntimes').mockResolvedValue({ items: [], nextCursor: null })
   })
 
   it('shows server readiness and creates a trial from the selected immutable release', async () => {
@@ -46,15 +47,26 @@ describe('TeamLabReleasesPage', () => {
     })
     render(<MemoryRouter><SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}><TeamLabReleasesPage /></SWRConfig></MemoryRouter>)
 
-    expect(await screen.findByRole('heading', { name: '发布版本' })).toBeInTheDocument()
-    expect(await screen.findByText('可以创建运行环境')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: '创建试运行' }))
-    const dialog = await screen.findByRole('dialog', { name: '启动 TeamLab 试运行？' })
-    fireEvent.click(within(dialog).getByRole('button', { name: '创建试运行' }))
+    expect(await screen.findByRole('heading', { name: '版本与启动' })).toBeInTheDocument()
+    expect(await screen.findByText('可以启动运行环境')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '启动环境' }))
+    const dialog = await screen.findByRole('dialog', { name: '启动运行环境？' })
+    fireEvent.click(within(dialog).getByRole('button', { name: '启动环境' }))
 
     await waitFor(() => expect(create).toHaveBeenCalledWith(expect.any(String), {
       releaseId: release.id, constraints: null, overlays: null, externalReference: null,
     }))
-    expect(navigate).toHaveBeenCalledWith(`/admin/teamlab/${release.topologyId}/runtimes/019f0000-0000-7000-8000-000000000020`)
+    expect(navigate).toHaveBeenCalledWith('/admin/teamlab/runtimes/019f0000-0000-7000-8000-000000000020')
+  })
+
+  it('scrolls to runtime history after the legacy list route loads asynchronously', async () => {
+    const scroll = vi.fn()
+    Object.defineProperty(Element.prototype, 'scrollIntoView', { configurable: true, value: scroll })
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation(callback => { callback(0); return 1 })
+    render(<MemoryRouter initialEntries={[`/admin/teamlab/${release.topologyId}/releases#runtimes`]}>
+      <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}><TeamLabReleasesPage /></SWRConfig>
+    </MemoryRouter>)
+    await waitFor(() => expect(scroll).toHaveBeenCalled())
+    delete (Element.prototype as { scrollIntoView?: () => void }).scrollIntoView
   })
 })

@@ -19,7 +19,7 @@ const runtime: TeamLabRuntime = {
 }
 function mount(value = runtime, path = '/?tab=operations') {
   return render(<MemoryRouter initialEntries={[path]}><SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
-    <AssetControlPanel runtime={value} onReplace={vi.fn()} onRemove={vi.fn()} /></SWRConfig></MemoryRouter>)
+    <AssetControlPanel runtime={value} /></SWRConfig></MemoryRouter>)
 }
 describe('AssetControlPanel', () => {
   beforeEach(() => {

@@ -1,14 +1,15 @@
 import { RefreshCw } from 'lucide-react'
-import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router'
+import { useEffect, useMemo, useState } from 'react'
+import { Link, useLocation, useNavigate } from 'react-router'
 import useSWR from 'swr'
 import { ActionButton, InlineFeedback } from '../../../../shared/Interaction'
 import { DataState } from '../../../../shared/Primitives'
 import { errorMessage } from '../../../../shared/errors'
 import { RefreshIndicator, StatusBadge } from '../../shared/AdminWorkbench'
 import { formatAdminDate } from '../../shared/adminFormat'
-import { teamLabAdminApi, teamLabAdminKeys, teamLabRuntimeApi, type TeamLabRuntimeOverlay } from '../api'
+import { listTeamLabImageOptions, teamLabAdminApi, teamLabAdminKeys, teamLabRuntimeApi, type TeamLabRuntimeOverlay } from '../api'
 import { useTeamLabScene } from '../shared/TeamLabSceneShell'
+import { TeamLabRuntimesPage } from '../runtimes/TeamLabRuntimesPage'
 import { ReleaseReadinessPanel } from './ReleaseReadinessPanel'
 import { ReleaseTimeline } from './ReleaseTimeline'
 import { createTrialIdempotencyKey, TrialRunDialog } from './TrialRunDialog'
@@ -17,6 +18,7 @@ import styles from './TeamLabReleasesPage.module.css'
 export function TeamLabReleasesPage() {
   const { scene } = useTeamLabScene()
   const navigate = useNavigate()
+  const location = useLocation()
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [trialOpen, setTrialOpen] = useState(false)
   const [creatingTrial, setCreatingTrial] = useState(false)
@@ -37,7 +39,14 @@ export function TeamLabReleasesPage() {
     () => teamLabAdminApi.releaseReadiness(scene.id, selectedRelease!.id),
     { keepPreviousData: false, revalidateOnFocus: true }
   )
+  const imagesRequest = useSWR(['vnext:admin:teamlab:image-options'], listTeamLabImageOptions)
   const readinessMatchesSelection = readinessRequest.data?.releaseId === selectedRelease?.id
+
+  useEffect(() => {
+    if (location.hash !== '#runtimes' || !releasesRequest.data) return
+    const frame = window.requestAnimationFrame(() => document.getElementById('runtimes')?.scrollIntoView())
+    return () => window.cancelAnimationFrame(frame)
+  }, [location.hash, releasesRequest.data])
 
   const createTrial = async (overlays: readonly TeamLabRuntimeOverlay[] | null) => {
     if (!selectedRelease || !readinessMatchesSelection || !readinessRequest.data?.ready || creatingTrial) return false
@@ -51,7 +60,7 @@ export function TeamLabReleasesPage() {
         externalReference: null,
       })
       setTrialOpen(false)
-      navigate(`/admin/teamlab/${scene.id}/runtimes/${runtime.id}`)
+      navigate(`/admin/teamlab/runtimes/${runtime.id}`)
       return true
     } catch (error) {
       setOperationError(error)
@@ -79,14 +88,11 @@ export function TeamLabReleasesPage() {
     return <DataState description="正在读取场景的不可变发布记录。" loading title="发布版本加载中" />
   if (releasesRequest.error)
     return <DataState description={errorMessage(releasesRequest.error, '发布版本加载失败。')} title="无法读取发布版本" />
-  if (!releases.length)
-    return <DataState description="请先在“设计”页保存、校验并发布当前修订。" title="尚无发布版本" />
-
   return (
     <section className={styles.page}>
       <header className={styles.pageHeader}>
         <div>
-          <h2>发布版本</h2>
+          <h2>版本与启动</h2>
         </div>
         <div className={styles.headerActions}>
           <RefreshIndicator
@@ -100,17 +106,15 @@ export function TeamLabReleasesPage() {
       </header>
 
       {operationError ? <InlineFeedback tone="danger">{errorMessage(operationError, '试运行创建失败。')}</InlineFeedback> : null}
+      {releases[0] && releases[0].sourceRevision !== scene.revision ? <p className={styles.draftNotice}>设计草稿有未发布修改。启动只使用所选不可变版本；新设计须先<Link to={`/admin/teamlab/${scene.id}/design`}>检查并发布</Link>。</p> : null}
 
+      {!releases.length ? <DataState description="请先在设计页保存、校验并发布当前修订。" title="尚无发布版本" /> : <>
       <div className={styles.workspace}>
-        <aside className={styles.releaseRail}>
-          <div className={styles.railHeading}><span>版本历史</span><strong>{releases.length}</strong></div>
-          <ReleaseTimeline releases={releases} selectedId={selectedRelease!.id} onSelect={setSelectedId} />
-        </aside>
         <div className={styles.releaseDetail}>
           <header className={styles.releaseIdentity}>
-            <div><h3>v{selectedRelease!.version}</h3></div>
+            <div><h3>启动版本 v{selectedRelease!.version}</h3></div>
             <StatusBadge tone={selectedRelease!.sourceRevision === scene.revision ? 'success' : 'neutral'}>
-              {selectedRelease!.sourceRevision === scene.revision ? '当前设计' : '历史设计'}
+              {selectedRelease!.sourceRevision === scene.revision ? '与当前设计一致' : '与当前设计不同'}
             </StatusBadge>
           </header>
           <div className={styles.releaseFacts}>
@@ -130,11 +134,18 @@ export function TeamLabReleasesPage() {
                 if (readinessMatchesSelection) setTrialOpen(true)
               }}
               onPrepareImages={() => void prepareImages()}
+              imageOptions={imagesRequest.data}
               readiness={readinessRequest.data}
             />
           ) : null}
         </div>
       </div>
+      {releases.length > 1 ? <details className={styles.versionHistory}>
+        <summary>选择历史版本</summary>
+        <ReleaseTimeline releases={releases} selectedId={selectedRelease!.id} onSelect={setSelectedId} />
+      </details> : null}
+      </>}
+      <div id="runtimes" className={styles.runtimeHistory}><TeamLabRuntimesPage /></div>
       <TrialRunDialog
         onClose={() => setTrialOpen(false)}
         onConfirm={createTrial}
