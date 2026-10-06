@@ -638,7 +638,8 @@ public sealed class TeamLabTopologyApplicationService(
                 item.AvailableVm,
                 item.Node.CpuLoad,
                 item.Node.MemoryLoad,
-                item.Available, TeamLabGuestNetworkCapabilityPolicy.AdvertisedFeatures(item.Node)))
+                item.Available, TeamLabGuestNetworkCapabilityPolicy.AdvertisedFeatures(item.Node),
+                item.AvailableDockerStorageMiB, ResourceAvailabilityKnown: true))
             .ToArray();
 
     private sealed record TeamLabPlanSource(

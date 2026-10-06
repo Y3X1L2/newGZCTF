@@ -18,7 +18,19 @@ public sealed record TeamLabPlanningNodeSnapshot(
     float CpuLoad,
     float MemoryLoad,
     WorkloadResourceVector AvailableResources = default,
-    IReadOnlyList<string>? Features = null);
+    IReadOnlyList<string>? Features = null,
+    long? AvailableDockerStorageMiB = null,
+    bool ResourceAvailabilityKnown = false)
+{
+    // Production projections set ResourceAvailabilityKnown even when every resource fact is zero.
+    public WorkloadResourceVector AvailableFor(WorkloadResourceVector requested) =>
+        AvailableResources with
+        {
+            StorageMiB = WorkloadStorageBudget.For(requested,
+                AvailableDockerStorageMiB ?? AvailableResources.StorageMiB,
+                AvailableResources.StorageMiB)
+        };
+}
 
 public static class TeamLabAssetPlanner
 {
@@ -210,7 +222,8 @@ public static class TeamLabAssetPlanner
         (requested.VmSlots == 0 || node.SupportsVm) &&
         requested.DockerSlots <= node.AvailableDockerSlots &&
         requested.VmSlots <= node.AvailableVmSlots &&
-        (node.AvailableResources == WorkloadResourceVector.Zero || node.AvailableResources.CanFit(requested));
+        (node.AvailableResources == WorkloadResourceVector.Zero && !node.ResourceAvailabilityKnown ||
+         node.AvailableFor(requested).CanFit(requested));
 
     private static float Score(TeamLabPlanningNodeSnapshot node, int dockerSlots, int vmSlots) =>
         1000 * (1 - Math.Clamp(node.CpuLoad, 0, 1)) +
