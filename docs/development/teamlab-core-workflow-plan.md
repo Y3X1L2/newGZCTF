@@ -1,9 +1,9 @@
 # TeamLab first-round workflow implementation
 
-Status: contract task implemented locally; integration and deployment pending,
-2026-10-06. This is an engineering plan
-based on the approved local page plan and the 2026-10-05 UX audit. It records
-no production acceptance or deployment.
+Status: first-round workflow implemented and, after separate user approval,
+merged and deployed to 10.24.0.27 on 2026-10-06. This is the original
+engineering plan based on the approved local page plan and the 2026-10-05 UX
+audit; current production evidence is in the runtime-clarity rollout handoff.
 
 ## Goal and ownership
 
@@ -51,7 +51,11 @@ missing legacy data, generation reset, changed plan revision, file rejection,
 relevant backend tests, frontend checks, and build. Docker/VM connectivity,
 actual guest readback, RDP/SSH/SFTP, four-machine reset, gateway access, and
 release deployment require separate authorized infrastructure acceptance.
-Until then this task remains unmerged and undeployed.
+PR #13 and the later runtime-facts compatibility PR #14 have since merged to
+`main` and been deployed as separate Main-only atomic releases. Local code
+tests, real Docker smoke and retained-VM read-only checks passed within their
+documented limits. Formal GUI access and guest-observed network facts remain
+unverified; assigned configuration is not a connectivity measurement.
 
 ## Recovery point
 
