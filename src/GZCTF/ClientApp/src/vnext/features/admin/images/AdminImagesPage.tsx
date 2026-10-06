@@ -1,6 +1,7 @@
 import { Box, Eye, FileArchive, FolderInput, Search, Trash2, Upload, Wrench } from 'lucide-react'
 import { ChangeEvent, useEffect, useMemo, useState } from 'react'
 import useSWR from 'swr'
+import { Link } from 'react-router'
 import { ImageStatus, ImageType, OSType } from '@Api'
 import { ActionButton, InlineFeedback, VNextConfirmDialog } from '../../../shared/Interaction'
 import { DataState } from '../../../shared/Primitives'
@@ -59,6 +60,16 @@ export function AdminImagesPage() {
   )
 
   useVNextPageTitle('环境模板')
+
+  const templateId = Number(queryState.params.get('template'))
+  const returnTo = queryState.params.get('returnTo')
+  useEffect(() => {
+    if (!images || !Number.isInteger(templateId) || templateId <= 0) return
+    const template = images.find(item => item.id === templateId)
+    if (!template) return
+    setSelectedId(templateId)
+    if (queryState.params.get('remoteAccess') === '1' && template.canManage !== false) setRemoteAccessTarget(template)
+  }, [images, templateId, queryState.params])
 
   useEffect(() => setQuery(queryState.params.get('q') ?? ''), [queryState.params])
 
@@ -215,6 +226,11 @@ export function AdminImagesPage() {
 
   return (
     <div className={styles.page}>
+      {returnTo?.startsWith('/admin/teamlab/') ? <Link className={styles.returnLink} to={returnTo}>返回运行环境</Link> : null}
+      {images && Number.isInteger(templateId) && templateId > 0 && !images.some(item => item.id === templateId)
+        ? <InlineFeedback tone="danger">找不到指定的镜像模板，可能已删除或当前账号无权查看。</InlineFeedback> : null}
+      {images && queryState.params.get('remoteAccess') === '1' && images.find(item => item.id === templateId)?.canManage === false
+        ? <InlineFeedback tone="danger">当前账号无权修改该镜像模板的运维入口。</InlineFeedback> : null}
       <AdminPageHeader
         actions={
           <>
@@ -428,7 +444,7 @@ export function AdminImagesPage() {
         <ImageActionDialog mode={actionMode} onClose={() => setActionMode(null)} onCompleted={completed} open />
       ) : null}
 
-      <ImageRemoteAccessDialog onClose={() => setRemoteAccessTarget(null)} template={remoteAccessTarget} />
+      <ImageRemoteAccessDialog onClose={() => { setRemoteAccessTarget(null); queryState.update({ remoteAccess: null }, { replace: true, resetPage: false }) }} template={remoteAccessTarget} />
 
       <VNextConfirmDialog
         confirmLabel="删除模板"

@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { ActionButton, InlineFeedback, VNextDrawer } from '../../../../shared/Interaction'
 import { DataState } from '../../../../shared/Primitives'
 import { errorMessage } from '../../../../shared/errors'
-import { CursorPaginationBar, DataTable, StatusBadge } from '../../shared/AdminWorkbench'
+import { CursorPaginationBar, StatusBadge } from '../../shared/AdminWorkbench'
 import { formatAdminDate } from '../../shared/adminFormat'
 import { useTaskHistory } from './useTaskHistory'
 import styles from './RuntimeWorkspaces.module.css'
@@ -18,14 +18,18 @@ export function TaskHistoryPanel({ runtimeId, generation }: { runtimeId: string;
   return <section aria-label="操作记录">
     <div className={styles.toolbar}><label><input type="checkbox" checked={history.currentOnly} onChange={event => history.setCurrentOnly(event.currentTarget.checked)} /> 当前运行</label>
       <ActionButton aria-label="刷新操作记录" title="刷新操作记录" icon={<RefreshCw size={16} />} disabled={history.isValidating} onClick={() => void history.mutate()} type="button" /></div>
-    {history.error ? <InlineFeedback tone="danger">{errorMessage(history.error, '操作记录读取失败。')}</InlineFeedback>
-      : history.isLoading ? <DataState loading title="正在读取操作记录" /> : <DataTable caption="环境操作记录" rowKey={task => task.id} rows={history.data?.items ?? []} onRowClick={setSelected}
-        columns={[
-          { id: 'operation', header: '操作', render: task => <strong>{operations[task.operation] ?? task.operation}</strong> },
-          { id: 'status', header: '结果', render: task => <StatusBadge tone={task.status === 'failed' ? 'danger' : task.status === 'succeeded' ? 'success' : task.status === 'cancelled' ? 'neutral' : 'info'}>{statuses[task.status] ?? task.status}</StatusBadge> },
-          { id: 'created', header: '提交时间', render: task => formatAdminDate(task.createdAt) },
-          { id: 'duration', header: '耗时', render: task => task.completedAt ? `${((task.completedAt - task.createdAt) / 1000).toFixed(1)} 秒` : '—' },
-        ]} />}
+    <p className={styles.recordScope}>当前任务记录未提供操作人和目标对象；详细执行阶段可在记录中查看。</p>
+    {history.error ? <InlineFeedback tone="danger">{errorMessage(history.error, '操作记录读取失败。')}
+        <ActionButton aria-label="重新读取操作记录" icon={<RefreshCw size={15} />} onClick={() => void history.mutate()} type="button" />
+      </InlineFeedback>
+      : history.isLoading ? <DataState loading title="正在读取操作记录" /> : history.data?.items.length ? <ol className={styles.timeline}>
+        {history.data.items.map(task => <li key={task.id}><button onClick={() => setSelected(task)} type="button">
+          <span><strong>{operations[task.operation] ?? task.operation}</strong><small>{task.stage}</small>
+            {task.errorCode || task.blockedReasonCode ? <small className={styles.failure}>{task.errorCode ?? task.blockedReasonCode}</small> : null}</span>
+          <StatusBadge tone={task.status === 'failed' ? 'danger' : task.status === 'succeeded' ? 'success' : task.status === 'cancelled' ? 'neutral' : 'info'}>{statuses[task.status] ?? task.status}</StatusBadge>
+          <time dateTime={new Date(task.createdAt).toISOString()}>{formatAdminDate(task.createdAt)}</time>
+        </button></li>)}
+      </ol> : <DataState title="暂无操作记录" />}
     <CursorPaginationBar hasNext={!history.error && !!history.data?.nextCursor} onNext={history.next} onPrevious={history.previous} page={history.page} label="操作记录分页" />
     <VNextDrawer eyebrow="" open={selected !== null} onClose={() => setSelected(null)} title={selected ? operations[selected.operation] ?? selected.operation : '操作详情'}>
       {selected ? <dl className={styles.facts}>

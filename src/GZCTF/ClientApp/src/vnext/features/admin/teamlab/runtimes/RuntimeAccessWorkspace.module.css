@@ -1,0 +1,4 @@
+.workspace { display: grid; gap: var(--yn-space-6); min-width: 0; }
+.vpn { border-top: 1px solid var(--yn-color-border); padding-top: var(--yn-space-4); }
+.vpn > button { display: flex; align-items: center; justify-content: space-between; gap: var(--yn-space-3); width: 100%; padding: var(--yn-space-3) 0; border: 0; background: transparent; color: var(--yn-color-text); cursor: pointer; font: inherit; text-align: left; }
+.vpn > button span { color: var(--yn-color-brand); }
