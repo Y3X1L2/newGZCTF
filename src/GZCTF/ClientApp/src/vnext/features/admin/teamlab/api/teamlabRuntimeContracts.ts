@@ -82,6 +82,7 @@ export interface TeamLabRuntimeAsset {
   runtimeResourceId: string | null
   primaryIp: string | null
   operatingSystem?: TeamLabAssetOperatingSystem
+  operatingSystemSource?: 'execution-plan' | 'template-current' | 'unknown'
   sourceTemplateId?: number | null
   interfaces?: readonly TeamLabRuntimeInterface[]
   capabilities?: readonly TeamLabAssetCapability[]
