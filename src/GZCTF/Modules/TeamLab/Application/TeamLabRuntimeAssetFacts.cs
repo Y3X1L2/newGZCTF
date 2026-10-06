@@ -18,8 +18,9 @@ internal static class TeamLabRuntimeAssetFacts
         int runtimeGeneration) =>
         asset.Generation == runtimeGeneration &&
         runtimeStatus == TeamLabRuntimeStatus.Running &&
-        asset.Status is not (TeamLabRuntimeStatus.Failed or TeamLabRuntimeStatus.Paused or
-            TeamLabRuntimeStatus.Stopped or TeamLabRuntimeStatus.Destroyed) &&
+        (asset.Status is TeamLabRuntimeStatus.Pending or TeamLabRuntimeStatus.Planning or
+            TeamLabRuntimeStatus.Scheduled or TeamLabRuntimeStatus.Deploying or
+            TeamLabRuntimeStatus.Probing or TeamLabRuntimeStatus.Running) &&
         asset.WorkerNodeId is not null && !string.IsNullOrWhiteSpace(asset.RuntimeResourceId);
 
     internal static IReadOnlyDictionary<string, ExecutedAsset> ReadCurrentSpecs(

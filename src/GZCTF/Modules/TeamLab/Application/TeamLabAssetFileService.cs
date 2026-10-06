@@ -5,7 +5,6 @@ using Microsoft.EntityFrameworkCore;
 using GZCTF.Modules.Content.Application;
 using GZCTF.Infrastructure.Concurrency;
 using GZCTF.Models.Internal;
-using GZCTF.Models.Data;
 using Microsoft.Extensions.Options;
 
 namespace GZCTF.Modules.TeamLab.Application;
@@ -117,10 +116,9 @@ public sealed class TeamLabAssetFileService(AppDbContext context, TeamLabAuthori
                 ? templates.GetValueOrDefault(sourceId) : null;
             var os = TeamLabRuntimeAssetFacts.OperatingSystem(asset,
                 specs.GetValueOrDefault(asset.TopologyKey), template);
-            if (os.Value == "windows" || template?.OperatingSystem == OSType.Windows ||
-                os.Value == "unknown" && template is null)
+            if (os.Value != "linux")
                 throw new TeamLabApiContractException("files.unsupported",
-                    "Windows 或系统类型未确认的虚拟机不支持文件管理。", 422);
+                    "只有系统类型可确认的 Linux 虚拟机支持文件管理。", 422);
         }
         if (command.Operation == "reset-ssh-identity")
         {
