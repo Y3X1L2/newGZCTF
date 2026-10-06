@@ -63,9 +63,7 @@ public sealed class NodeEligibilityEvaluator(IOptions<RuntimeSchedulingOptions> 
         if (requiredFeatures is { Count: > 0 } &&
             !AgentCapabilityEvaluator.Supports(node, requiredFeatures.ToArray()))
             return "agent_feature_unavailable";
-        var available = ignoreDynamicLoad
-            ? snapshot.AvailableIgnoringDynamicLoad
-            : snapshot.Available;
+        var available = snapshot.AvailableFor(requested, ignoreDynamicLoad);
         if (requested.CpuUnits > available.CpuUnits) return "node_cpu_capacity_exhausted";
         if (requested.MemoryMiB > available.MemoryMiB) return "node_memory_capacity_exhausted";
         if (requested.StorageMiB > available.StorageMiB) return "node_storage_capacity_exhausted";
