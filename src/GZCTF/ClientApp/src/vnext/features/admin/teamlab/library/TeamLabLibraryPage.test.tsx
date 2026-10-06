@@ -71,6 +71,14 @@ describe('TeamLabLibraryPage', () => {
     expect(within(row).getByRole('link', { name: '版本与启动 企业域演练' })).toHaveAttribute('href', `/admin/teamlab/${scene.id}/releases`)
   })
 
+  it('keeps complete scene actions in the narrow-screen item layout', () => {
+    render(<MemoryRouter><TeamLabLibraryPage /></MemoryRouter>)
+    const item = screen.getByRole('article')
+    expect(within(item).getByRole('link', { name: '设计 企业域演练' })).toHaveAttribute('href', `/admin/teamlab/${scene.id}/design`)
+    expect(within(item).getByRole('link', { name: '版本与启动 企业域演练' })).toHaveAttribute('href', `/admin/teamlab/${scene.id}/releases`)
+    expect(item).toHaveTextContent('3 网段 · 8 资产')
+  })
+
   it('makes an active trial explicit in the scene status', () => {
     vi.mocked(useTeamLabCatalog).mockReturnValue(catalog({
       page: {

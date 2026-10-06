@@ -1,11 +1,20 @@
 import { Boxes, Network, PlayCircle } from 'lucide-react'
 import { memo, useMemo } from 'react'
 import { Link, useNavigate } from 'react-router'
+import { DataState } from '../../../../shared/Primitives'
 import type { TeamLabAdminSceneSummary } from '../api'
 import { DataTable, type AdminDataColumn } from '../../shared/AdminWorkbench'
 import { formatAdminDate } from '../../shared/adminFormat'
 import { TeamLabRuntimeStatusBadge } from '../shared/TeamLabStatusBadge'
 import styles from './TeamLabLibraryPage.module.css'
+
+function SceneActions({ scene }: { scene: TeamLabAdminSceneSummary }) {
+  return <div className={styles.sceneActions} onClick={(event) => event.stopPropagation()}>
+    <Link aria-label={`设计 ${scene.name}`} to={`/admin/teamlab/${scene.id}/design`} title="设计"><Network size={16} /><span>设计</span></Link>
+    <Link aria-label={`版本与启动 ${scene.name}`} to={`/admin/teamlab/${scene.id}/releases`} title="版本与启动"><Boxes size={16} /><span>版本与启动</span></Link>
+    {scene.latestTrialRuntime ? <Link aria-label={`查看环境 ${scene.name}`} to={`/admin/teamlab/runtimes/${scene.latestTrialRuntime.id}`} title="查看环境"><PlayCircle size={16} /><span>查看环境</span></Link> : <span className={styles.muted}>暂无环境</span>}
+  </div>
+}
 
 export const TeamLabSceneTable = memo(function TeamLabSceneTable({
   scenes,
@@ -66,20 +75,14 @@ export const TeamLabSceneTable = memo(function TeamLabSceneTable({
         header: '操作',
         width: 'wide',
         align: 'right',
-        render: (scene) => (
-          <div className={styles.sceneActions} onClick={(event) => event.stopPropagation()}>
-            <Link aria-label={`设计 ${scene.name}`} to={`/admin/teamlab/${scene.id}/design`} title="设计"><Network size={16} /><span>设计</span></Link>
-            <Link aria-label={`版本与启动 ${scene.name}`} to={`/admin/teamlab/${scene.id}/releases`} title="版本与启动"><Boxes size={16} /><span>版本与启动</span></Link>
-            {scene.latestTrialRuntime ? <Link aria-label={`查看环境 ${scene.name}`} to={`/admin/teamlab/runtimes/${scene.latestTrialRuntime.id}`} title="查看环境"><PlayCircle size={16} /><span>查看环境</span></Link> : <span className={styles.muted}>暂无环境</span>}
-          </div>
-        ),
+        render: (scene) => <SceneActions scene={scene} />,
       },
     ],
     [navigate]
   )
 
-  return (
-    <DataTable
+  return <>
+    <div className={styles.desktopSceneTable}><DataTable
       caption="TeamLab 场景库"
       columns={columns}
       emptyDescription="调整搜索或筛选条件，或者创建新的场景。"
@@ -87,6 +90,15 @@ export const TeamLabSceneTable = memo(function TeamLabSceneTable({
       onRowClick={(scene) => navigate(`/admin/teamlab/${scene.id}/design`)}
       rowKey={(scene) => scene.id}
       rows={[...scenes]}
-    />
-  )
+    /></div>
+    <div className={styles.mobileSceneList} aria-label="TeamLab 场景库">
+      {scenes.length ? scenes.map(scene => <article className={styles.mobileScene} key={scene.id}>
+        <h3><Link to={`/admin/teamlab/${scene.id}/design`}>{scene.name}</Link></h3>
+        <p>{scene.latestRelease ? `最新发布 v${scene.latestRelease.version}` : '尚未发布'} · {scene.networkCount} 网段 · {scene.assetCount} 资产</p>
+        <p>{!scene.latestRelease ? '未发布草稿' : scene.revision === scene.latestRelease.sourceRevision ? '草稿与最新发布一致' : '草稿有待发布修改'}</p>
+        {scene.latestTrialRuntime ? <TeamLabRuntimeStatusBadge status={scene.latestTrialRuntime.status} /> : null}
+        <SceneActions scene={scene} />
+      </article>) : <DataState description="调整筛选条件，或新建场景。" title="暂无匹配场景" />}
+    </div>
+  </>
 })
