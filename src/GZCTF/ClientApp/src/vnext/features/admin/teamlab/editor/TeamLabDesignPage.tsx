@@ -92,7 +92,7 @@ export function TeamLabDesignPage({
   )
   const { selection, select, clear } = useEditorSelection(document)
   const [leftPanelOpen, setLeftPanelOpen] = useState(true)
-  const [rightPanelOpen, setRightPanelOpen] = useState(true)
+  const [rightPanelOpen, setRightPanelOpen] = useState(false)
   const [focusMode, setFocusMode] = useState(false)
   const [selectedNetworkKey, setSelectedNetworkKey] = useState<string | null>(null)
   const [layoutRequest, setLayoutRequest] = useState(0)
@@ -256,14 +256,20 @@ export function TeamLabDesignPage({
   const selectCanvasItems = useCallback(
     (nodeKeys: readonly string[], connectionKeys: readonly string[]) => {
       select(nodeKeys, connectionKeys)
-      if (nodeKeys.length > 0 || connectionKeys.length > 0) setSelectedNetworkKey(null)
+      if (nodeKeys.length > 0 || connectionKeys.length > 0) {
+        setSelectedNetworkKey(null)
+        setRightPanelOpen(true)
+      }
     },
     [select]
   )
   const selectNetworkRegion = useCallback(
     (networkKey: string | null) => {
       setSelectedNetworkKey(networkKey)
-      if (networkKey) clear()
+      if (networkKey) {
+        clear()
+        setRightPanelOpen(true)
+      }
     },
     [clear]
   )
@@ -297,7 +303,8 @@ export function TeamLabDesignPage({
   // Focus mode keeps the node library available so operators can continue
   // building topology while the inspector is out of the way.
   const leftVisible = leftPanelOpen
-  const rightVisible = rightPanelOpen
+  const hasSelection = selection.nodeKeys.size > 0 || selection.connectionKeys.size > 0 || Boolean(selectedNetworkKey)
+  const rightVisible = rightPanelOpen && (hasSelection || focusMode)
   return (
     <section className={`${styles.page} ${focusMode ? styles.focusMode : ''}`}>
       <header className={styles.header}>
@@ -330,12 +337,12 @@ export function TeamLabDesignPage({
           {onPublish ? (
             <button
               className={styles.publishButton}
-              disabled={publishDisabled || publishing || saveStatus !== 'saved'}
+              disabled={publishDisabled || publishing || saveStatus === 'conflict'}
               onClick={onPublish}
               type="button"
             >
               {publishing ? <LoaderCircle className={styles.spin} size={16} /> : <Rocket size={16} />}
-              {publishing ? '发布中' : '发布新版本'}
+              {publishing ? '发布中' : '检查并发布'}
             </button>
           ) : null}
           {onSave ? (
@@ -367,7 +374,7 @@ export function TeamLabDesignPage({
           {feedback}
         </div>
       ) : null}
-      {compact ? <div className={styles.mobileNotice}>移动端以只读模式显示拓扑。</div> : null}
+      {compact ? <div className={styles.mobileNotice}>当前宽度仅可查看拓扑。请使用宽于 760px 的桌面窗口编辑场景。</div> : null}
       <div className={styles.workspace}>
         {leftVisible ? <NodePalette disabled={effectiveReadOnly} expanded={focusMode} onAdd={addPaletteNode} /> : null}
         <TeamLabCanvas

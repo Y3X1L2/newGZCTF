@@ -47,7 +47,7 @@ export function TeamLabRuntimesPage() {
     {
       id: 'actions', header: '操作', width: 'wide', align: 'right', render: (runtime) => (
         <div className={styles.rowActions} onClick={(event) => event.stopPropagation()}>
-          <ActionButton aria-label="进入资产运维" icon={<Wrench size={15} />} onClick={() => navigate(`/admin/teamlab/${scene.id}/runtimes/${runtime.id}?tab=operations`)} title="进入资产运维" type="button" />
+          <ActionButton aria-label="进入环境" icon={<Wrench size={15} />} onClick={() => navigate(`/admin/teamlab/runtimes/${runtime.id}`)} title="进入环境" type="button" />
           <ActionButton aria-label={isWaitingForNode(runtime.status) ? '取消创建' : '销毁运行实例'}
             disabled={isRuntimeTerminal(runtime.status) || runtime.status === 'destroying' || runtime.status === 'cleanup-pending' || isNodeExecutionActive(runtime.status)}
             icon={<Trash2 size={15} />} onClick={() => { setDestroyError(null); setDestroying(runtime) }}
@@ -78,7 +78,7 @@ export function TeamLabRuntimesPage() {
   return (
     <section className={styles.page}>
       <header className={styles.pageHeader}>
-        <div><h2>试运行</h2></div>
+        <div><h2>最近运行环境</h2></div>
         <RefreshIndicator active={request.isValidating && (request.data?.items.some((runtime) => isRuntimeTransitioning(runtime.status)) ?? false)} label={request.isValidating ? '同步中' : '状态已同步'} />
       </header>
       {!request.data && !request.error ? <DataState description="正在读取场景试运行记录。" loading title="试运行加载中" /> : request.error ? (
@@ -86,22 +86,22 @@ export function TeamLabRuntimesPage() {
       ) : request.data?.items.length ? (
         <>
           <DataTable
-            caption={`${scene.definition.name} 的试运行记录`}
+            caption={`${scene.definition.name} 的运行记录`}
             columns={columns}
-            onRowClick={(runtime) => navigate(`/admin/teamlab/${scene.id}/runtimes/${runtime.id}`)}
+            onRowClick={(runtime) => navigate(`/admin/teamlab/runtimes/${runtime.id}`)}
             rowKey={(runtime) => runtime.id}
             rows={[...request.data.items]}
           />
           <CursorPaginationBar
             hasNext={Boolean(request.data.nextCursor)}
-            label="试运行记录分页"
+            label="运行记录分页"
             onNext={() => request.data?.nextCursor && cursor.next(request.data.nextCursor)}
             onPrevious={cursor.previous}
             page={cursor.page}
           />
         </>
       ) : (
-        <DataState description="从已就绪的发布版本创建试运行后，记录会出现在这里。" title="暂无试运行" />
+        <DataState description="从已就绪的发布版本启动环境后，记录会出现在这里。" title="暂无运行环境" />
       )}
       <VNextConfirmDialog
         confirmLabel={destroying && isWaitingForNode(destroying.status) ? '确认取消' : '确认销毁'}

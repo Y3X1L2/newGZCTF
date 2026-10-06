@@ -1,10 +1,16 @@
 import { fireEvent, render, screen } from '@testing-library/react'
+import { MemoryRouter } from 'react-router'
+import type { ReactElement } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { serializeTeamLabWriteRequest } from '../../api/teamlabParsers'
 import { compileTopologyDocument } from '../../model/topologyCompiler'
 import type { TopologyDocument } from '../../model/topologyDocument'
 import type { TopologySelection } from '../../model/topologySelection'
 import { TeamLabInspector } from './TeamLabInspector'
+
+function renderInspector(element: ReactElement) {
+  return render(<MemoryRouter>{element}</MemoryRouter>)
+}
 
 function createDocument(): TopologyDocument {
   return {
@@ -99,7 +105,7 @@ const selection = (nodeKeys: string[] = [], connectionKeys: string[] = []): Topo
 describe('TeamLabInspector', () => {
   it.each(['asset', 'connection'])('keeps ordinary Docker %s editing free of VM network requirements', (target) => {
     const change = vi.fn()
-    render(
+    renderInspector(
       <TeamLabInspector
         document={createDocument()}
         onDocumentChange={change}
@@ -144,7 +150,7 @@ describe('TeamLabInspector', () => {
       serializeTeamLabWriteRequest(compileTopologyDocument(document)).assets.find((asset) => asset.key === 'app')!
         .interfaces[0]
     const change = vi.fn()
-    const view = render(
+    const view = renderInspector(
       <TeamLabInspector document={vmDocument} onDocumentChange={change} selection={selection([], ['app-edge'])} />
     )
     expect(screen.getByText('接口网络要求')).toBeInTheDocument()
@@ -198,7 +204,7 @@ describe('TeamLabInspector', () => {
       nodes: { ...source.nodes, app: { ...asset, type: 'linux-vm', vmNetworkMode: 'managed-static' } },
     }
     const change = vi.fn()
-    render(<TeamLabInspector document={vmDocument} onDocumentChange={change} selection={selection(['app'])} />)
+    renderInspector(<TeamLabInspector document={vmDocument} onDocumentChange={change} selection={selection(['app'])} />)
     expect(screen.getByText('接口网络要求')).toBeInTheDocument()
     expect(screen.getByLabelText('网络配置方式')).toHaveValue('managed-static')
     fireEvent.change(screen.getByLabelText('DNS 配置'), { target: { value: 'none' } })
@@ -212,7 +218,7 @@ describe('TeamLabInspector', () => {
   it('edits a switch with the immutable command and preserves advanced fields', () => {
     const source = createDocument()
     const onDocumentChange = vi.fn()
-    render(<TeamLabInspector document={source} onDocumentChange={onDocumentChange} selection={selection(['edge'])} />)
+    renderInspector(<TeamLabInspector document={source} onDocumentChange={onDocumentChange} selection={selection(['edge'])} />)
 
     const name = screen.getByLabelText('交换机名称')
     fireEvent.change(name, { target: { value: 'Ingress switch' } })
@@ -231,7 +237,7 @@ describe('TeamLabInspector', () => {
   it('edits a network region without selecting it as a regular flow node', () => {
     const source = createDocument()
     const onDocumentChange = vi.fn()
-    render(
+    renderInspector(
       <TeamLabInspector
         document={source}
         onDocumentChange={onDocumentChange}
@@ -257,7 +263,7 @@ describe('TeamLabInspector', () => {
 
   it('uses a compatible ready image option and preserves the complete asset contract', () => {
     const onDocumentChange = vi.fn()
-    render(
+    renderInspector(
       <TeamLabInspector
         document={createDocument()}
         imageOptions={[
@@ -283,7 +289,7 @@ describe('TeamLabInspector', () => {
 
   it('updates membership and route connections', () => {
     const membershipChange = vi.fn()
-    const membershipView = render(
+    const membershipView = renderInspector(
       <TeamLabInspector
         document={createDocument()}
         onDocumentChange={membershipChange}
@@ -299,7 +305,7 @@ describe('TeamLabInspector', () => {
     membershipView.unmount()
 
     const routeChange = vi.fn()
-    const routeView = render(
+    const routeView = renderInspector(
       <TeamLabInspector
         document={createDocument()}
         onDocumentChange={routeChange}
@@ -315,7 +321,7 @@ describe('TeamLabInspector', () => {
 
   it('edits document observation with no selection and summarizes multiple selections', () => {
     const onDocumentChange = vi.fn()
-    const observationView = render(
+    const observationView = renderInspector(
       <TeamLabInspector document={createDocument()} onDocumentChange={onDocumentChange} selection={selection()} />
     )
     expect(screen.getByLabelText('场景名称')).toHaveValue('Enterprise network')
@@ -323,7 +329,7 @@ describe('TeamLabInspector', () => {
     expect((onDocumentChange.mock.calls[0][0] as TopologyDocument).observation.flowMetadataEnabled).toBe(false)
     observationView.unmount()
 
-    render(
+    renderInspector(
       <TeamLabInspector
         document={createDocument()}
         onDocumentChange={vi.fn()}

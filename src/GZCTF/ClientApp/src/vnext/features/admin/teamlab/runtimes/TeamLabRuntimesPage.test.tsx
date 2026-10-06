@@ -43,7 +43,7 @@ function renderPage() {
       <MemoryRouter initialEntries={[`/admin/teamlab/${scene.id}/runtimes`]}>
         <Routes>
           <Route path="/admin/teamlab/:topologyId/runtimes" element={<TeamLabRuntimesPage />} />
-          <Route path="/admin/teamlab/:topologyId/runtimes/:runtimeId" element={<div>运行详情已打开</div>} />
+          <Route path="/admin/teamlab/runtimes/:runtimeId" element={<div>运行详情已打开</div>} />
         </Routes>
       </MemoryRouter>
     </SWRConfig>

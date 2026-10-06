@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { MemoryRouter } from 'react-router'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { addTopologyNode } from '../model/topologyCommands'
 import { createEmptyTopologyDocument } from '../model/topologyDocument'
@@ -22,7 +23,7 @@ afterAll(() => {
 describe('TeamLabDesignPage', () => {
   it('adds a palette node as one history entry and supports undo', async () => {
     const onChange = vi.fn()
-    render(<TeamLabDesignPage initialDocument={createEmptyTopologyDocument('Demo')} onDocumentChange={onChange} />)
+    render(<MemoryRouter><TeamLabDesignPage initialDocument={createEmptyTopologyDocument('Demo')} onDocumentChange={onChange} /></MemoryRouter>)
 
     fireEvent.click(screen.getByRole('button', { name: /交换机.*承载一个隔离网段/ }))
     await waitFor(() => expect(onChange).toHaveBeenCalledTimes(1))
@@ -76,7 +77,7 @@ describe('TeamLabDesignPage', () => {
 
   it('adds a standard asset with its default resource profile', async () => {
     const onChange = vi.fn()
-    render(<TeamLabDesignPage initialDocument={createEmptyTopologyDocument('Demo')} onDocumentChange={onChange} />)
+    render(<MemoryRouter><TeamLabDesignPage initialDocument={createEmptyTopologyDocument('Demo')} onDocumentChange={onChange} /></MemoryRouter>)
 
     fireEvent.click(screen.getByRole('button', { name: /Docker：轻量容器服务/ }))
 

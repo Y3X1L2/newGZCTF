@@ -1,6 +1,6 @@
 import { ArrowRight, Plus, Search, Server } from 'lucide-react'
 import { ChangeEvent, useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 import { NodeCapability, NodeStatus } from '@Api'
 import { ActionButton } from '../../../shared/Interaction'
 import { DataState } from '../../../shared/Primitives'
@@ -202,11 +202,12 @@ export function AdminNodesPage() {
   return (
     <div className={styles.page}>
       <AdminPageHeader
-        actions={
+        actions={<>
+          <Link to="/admin/nodes/teamlab-cache">节点制品缓存</Link>
           <ActionButton icon={<Plus size={16} />} onClick={() => setRegisterOpen(true)} tone="primary" type="button">
             添加节点
           </ActionButton>
-        }
+        </>}
         description="查看节点运行能力、容量、端口池、Agent 心跳与多节点调度状态。"
         eyebrow="RUNTIME FLEET"
         title="节点管理"

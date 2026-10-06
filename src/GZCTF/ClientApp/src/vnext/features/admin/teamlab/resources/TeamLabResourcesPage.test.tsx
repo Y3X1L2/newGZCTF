@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { MemoryRouter } from 'react-router'
 import type { TeamLabConnector, TeamLabDevicePackage } from '../api'
 import { teamLabResourcesApi } from '../api'
-import { TeamLabResourcesPage } from './TeamLabResourcesPage'
+import { NodeCacheTab, TeamLabResourcesPage } from './TeamLabResourcesPage'
 import { useConnectorRegistry, useDevicePackageCatalog, useNodeArtifactCache } from './useTeamLabResources'
 
 vi.mock('./useTeamLabResources', () => ({
@@ -140,7 +140,7 @@ describe('TeamLabResourcesPage', () => {
   it('renders the device package catalog with capability summary', () => {
     render(<MemoryRouter><TeamLabResourcesPage /></MemoryRouter>)
 
-    expect(screen.getByRole('heading', { name: '资源' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '设备与现场资源维护' })).toBeInTheDocument()
     const row = screen.getByRole('row', { name: /PLC 模拟器/ })
     expect(row).toHaveTextContent('1.2.0')
     expect(row).toHaveTextContent('OCI 镜像')
@@ -158,9 +158,8 @@ describe('TeamLabResourcesPage', () => {
     expect(screen.queryByText('10.0.7.125')).not.toBeInTheDocument()
   })
 
-  it('switches to the node artifact cache tab with reference counts', () => {
-    render(<MemoryRouter><TeamLabResourcesPage /></MemoryRouter>)
-    fireEvent.click(screen.getByRole('button', { name: '节点缓存' }))
+  it('exposes the node artifact cache through node operations', () => {
+    render(<MemoryRouter><NodeCacheTab /></MemoryRouter>)
 
     expect(screen.getByRole('row', { name: /#7/ })).toHaveTextContent('2')
   })

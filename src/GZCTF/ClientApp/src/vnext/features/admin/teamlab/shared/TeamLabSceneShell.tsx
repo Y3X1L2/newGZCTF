@@ -1,4 +1,4 @@
-import { ArrowLeft, Boxes, Network, PlayCircle } from 'lucide-react'
+import { ArrowLeft, Boxes, Network } from 'lucide-react'
 import { createContext, useContext } from 'react'
 import { Link, NavLink, Outlet, useParams } from 'react-router'
 import useSWR from 'swr'
@@ -9,6 +9,7 @@ import { useVNextPageTitle } from '../../../../shared/useVNextPageTitle'
 import { AdminPageHeader } from '../../shared/AdminWorkbench'
 import { teamLabAdminApi, teamLabAdminKeys, type TeamLabTopologyDetail } from '../api'
 import styles from './TeamLabSceneShell.module.css'
+import { TeamLabWorkspaceNav } from './TeamLabWorkspaceNav'
 
 interface TeamLabSceneContextValue {
   scene: TeamLabTopologyDetail
@@ -23,7 +24,7 @@ export function useTeamLabScene() {
 }
 
 export function TeamLabSceneShell() {
-  const { topologyId = '', runtimeId } = useParams()
+  const { topologyId = '' } = useParams()
   const request = useSWR(
     topologyId ? teamLabAdminKeys.topology(topologyId) : null,
     () => teamLabAdminApi.getTopology(topologyId),
@@ -47,7 +48,8 @@ export function TeamLabSceneShell() {
   return (
     <TeamLabSceneContext.Provider value={{ scene }}>
       <div className={styles.page}>
-        {!runtimeId ? <><Link className={styles.backLink} to="/admin/teamlab">
+        <TeamLabWorkspaceNav active="scenes" />
+        <Link className={styles.backLink} to="/admin/teamlab">
           <ArrowLeft size={16} />
           场景库
         </Link>
@@ -58,9 +60,8 @@ export function TeamLabSceneShell() {
         />
         <nav aria-label="场景管理" className={styles.tabs}>
           <NavLink to="design"><Network size={16} />设计</NavLink>
-          <NavLink to="releases"><Boxes size={16} />发布版本</NavLink>
-          <NavLink to="runtimes"><PlayCircle size={16} />试运行</NavLink>
-        </nav></> : null}
+          <NavLink to="releases"><Boxes size={16} />版本与启动</NavLink>
+        </nav>
         <main className={styles.content}>
           <Outlet context={{ scene }} />
         </main>

@@ -1,6 +1,6 @@
 import { Plus, Search } from 'lucide-react'
 import { useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router'
+import { Navigate, useNavigate, useSearchParams } from 'react-router'
 import { RuntimeApiError } from '../../api/runtimeJsonClient'
 import { ActionButton, InlineFeedback } from '../../../../shared/Interaction'
 import { DataState } from '../../../../shared/Primitives'
@@ -17,38 +17,35 @@ import { TeamLabCreateDialog } from './TeamLabCreateDialog'
 import { TeamLabSceneTable } from './TeamLabSceneTable'
 import { useTeamLabCatalog, type TeamLabSceneOwnerFilter, type TeamLabSceneStatusFilter } from './useTeamLabCatalog'
 import styles from './TeamLabLibraryPage.module.css'
-import { RemoteSessionsPanel } from '../runtimes/RemoteSessionsPanel'
-import { RuntimeSearchPanel } from './RuntimeSearchPanel'
 import { TeamLabWorkspaceNav } from '../shared/TeamLabWorkspaceNav'
 
 export function TeamLabLibraryPage() {
+  const [params] = useSearchParams()
+  const view = params.get('view')
+  if (view === 'runtimes' || view === 'sessions') {
+    const next = new URLSearchParams(params)
+    if (view === 'runtimes') next.delete('view')
+    return <Navigate replace to={`/admin/teamlab/runtimes${next.size ? `?${next}` : ''}`} />
+  }
+  return <TeamLabSceneLibrary />
+}
+
+function TeamLabSceneLibrary() {
   const navigate = useNavigate()
   const catalog = useTeamLabCatalog()
   const [createOpen, setCreateOpen] = useState(false)
-  const [params, setParams] = useSearchParams()
-  const view = params.get('view') === 'runtimes' ? 'runtimes' : params.get('view') === 'sessions' ? 'sessions' : 'scenes'
-  const setView = (value: 'runtimes' | 'sessions') => setParams({ view: value })
-
-  const title = view === 'runtimes' ? '运行实例检索' : view === 'sessions' ? '远程会话管理' : '组网场景库'
-  useVNextPageTitle(title)
+  useVNextPageTitle('组网场景库')
 
   const forbidden = catalog.error instanceof RuntimeApiError && catalog.error.status === 403
 
   return (
     <div className={styles.page}>
       <AdminPageHeader
-        actions={view === 'scenes' ? <ActionButton icon={<Plus size={16} />} onClick={() => setCreateOpen(true)} tone="primary" type="button">创建场景</ActionButton> : undefined}
+        actions={<ActionButton icon={<Plus size={16} />} onClick={() => setCreateOpen(true)} tone="primary" type="button">新建场景</ActionButton>}
         eyebrow="TEAMLAB"
-        title={title}
+        title="组网场景库"
       />
-      <TeamLabWorkspaceNav active={view === 'scenes' ? 'scenes' : 'runtimes'} />
-      {view !== 'scenes' ? <div className={styles.subviews} aria-label="运行环境视图">
-        <button aria-pressed={view === 'runtimes'} onClick={() => setView('runtimes')} type="button">环境</button>
-        <button aria-pressed={view === 'sessions'} onClick={() => setView('sessions')} type="button">远程会话</button>
-      </div> : null}
-      {view === 'sessions' ? <RemoteSessionsPanel /> : null}
-      {view === 'runtimes' ? <RuntimeSearchPanel /> : null}
-      {view === 'scenes' ? <>
+      <TeamLabWorkspaceNav active="scenes" />
       <FilterToolbar>
         <ToolbarGroup grow>
           <label className={styles.searchBox}>
@@ -106,7 +103,6 @@ export function TeamLabLibraryPage() {
         </>
       )}
 
-      </> : null}
       <TeamLabCreateDialog
         onClose={() => setCreateOpen(false)}
         onCreated={(topologyId) => {
