@@ -7,6 +7,7 @@ using GZCTF.Models.Data;
 using GZCTF.Infrastructure.Concurrency;
 using GZCTF.Modules.Content.Application;
 using GZCTF.Modules.Content.Domain;
+using GZCTF.Modules.Content.Infrastructure;
 using GZCTF.Modules.TeamLab.Domain.Runtime;
 using System.Security.Cryptography;
 using Microsoft.AspNetCore.DataProtection;
@@ -208,7 +209,8 @@ public sealed class TeamLabAssetFileTests
     static TeamLabAssetFileService Service(AppDbContext db, ITeamLabAssetFileGateway gateway, IDataProtectionProvider? protection = null) =>
         new(db, new TeamLabAuthorizationService(db), gateway,
             new TeamLabEventRecorder(db, new EfOperationalEventWriter(db, NullLogger<EfOperationalEventWriter>.Instance), new OperationalCorrelation()),
-            new ImageRemoteAccessService(db, protection ?? new EphemeralDataProtectionProvider()), new LocalDevelopmentLeaseProvider(),
+            new ImageRemoteAccessService(db, protection ?? new EphemeralDataProtectionProvider()),
+            new EfImageRuntimeAccessQuery(db), new LocalDevelopmentLeaseProvider(),
             new TeamLabRuntimeOperationPayloadProtector(new EphemeralDataProtectionProvider()));
     static async Task<TeamLabRuntimeAsset> Seed(AppDbContext db)
     {

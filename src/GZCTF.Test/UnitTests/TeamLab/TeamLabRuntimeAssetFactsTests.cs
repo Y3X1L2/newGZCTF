@@ -5,7 +5,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using GZCTF.Models;
 using GZCTF.Models.Data;
-using GZCTF.Modules.Content.Domain;
+using GZCTF.Modules.Content.Contracts;
+using GZCTF.Modules.Content.Infrastructure;
 using GZCTF.Modules.TeamLab.Application;
 using GZCTF.Modules.TeamLab.Domain.Runtime;
 using GZCTF.Modules.TeamLab.Domain;
@@ -29,7 +30,7 @@ public sealed class TeamLabRuntimeAssetFactsTests
         await context.SaveChangesAsync();
         context.ChangeTracker.Clear();
 
-        var detail = await new TeamLabRuntimeProjectionService(context)
+        var detail = await new TeamLabRuntimeProjectionService(context, new EfImageRuntimeAccessQuery(context))
             .GetAsync(runtime.PublicId, CancellationToken.None);
 
         Assert.Null(detail.TopologyId);
@@ -57,7 +58,7 @@ public sealed class TeamLabRuntimeAssetFactsTests
         await context.SaveChangesAsync();
         context.ChangeTracker.Clear();
 
-        var detail = await new TeamLabRuntimeProjectionService(context)
+        var detail = await new TeamLabRuntimeProjectionService(context, new EfImageRuntimeAccessQuery(context))
             .GetAsync(runtime.PublicId, CancellationToken.None);
 
         Assert.Equal(topology.PublicId, detail.TopologyId);
@@ -120,13 +121,13 @@ public sealed class TeamLabRuntimeAssetFactsTests
         var executed = facts[asset.TopologyKey];
         Assert.False(executed.OperatingSystemRecorded);
 
-        var template = new ImageTemplate { Id = 42, ImageHash = Digest, OSType = OSType.Linux };
+        var template = new ImageRuntimeAccessSummary(42, Digest, OSType.Linux, null, false);
         Assert.Equal(("linux", "template-current"),
             TeamLabRuntimeAssetFacts.OperatingSystem(asset, executed, template));
-        template.OSType = OSType.Windows;
+        template = template with { OperatingSystem = OSType.Windows };
         Assert.Equal(("windows", "template-current"),
             TeamLabRuntimeAssetFacts.OperatingSystem(asset, executed, template));
-        template.ImageHash = "changed-image";
+        template = template with { ImageHash = "changed-image" };
         Assert.Equal(("unknown", "unknown"),
             TeamLabRuntimeAssetFacts.OperatingSystem(asset, executed, template));
         Assert.Equal(("unknown", "unknown"),
@@ -144,10 +145,8 @@ public sealed class TeamLabRuntimeAssetFactsTests
         var os = TeamLabRuntimeAssetFacts.OperatingSystem(asset, facts[asset.TopologyKey], null);
         Assert.Equal(("windows", "execution-plan"), os);
 
-        var configured = new ImageTemplateRemoteAccess { ImageTemplateId = 42, Enabled = true,
-            Protocol = TeamLabRemoteProtocol.Rdp, Port = 3389,
-            Username = "operator", ProtectedSecret = "protected-placeholder" };
-        var capabilities = TeamLabRuntimeAssetFacts.Capabilities(asset, TeamLabRuntimeStatus.Running,
+        var configured = new ImageRuntimeAccessSummary(42, Digest, OSType.Windows, "rdp", true);
+        var capabilities = TeamLabRuntimeAssetFacts.Capabilities(asset, TeamLabRuntimeStatus.Running, 4,
             os.Value, configured);
         Assert.Equal("configured-unverified", capabilities.Single(item => item.Kind == "rdp").Status);
         Assert.Equal(42, capabilities.Single(item => item.Kind == "rdp").SettingsTemplateId);
@@ -155,12 +154,15 @@ public sealed class TeamLabRuntimeAssetFactsTests
         Assert.Equal("unsupported", capabilities.Single(item => item.Kind == "ssh").Status);
 
         asset.Status = TeamLabRuntimeStatus.Deploying;
-        Assert.True(TeamLabRuntimeAssetFacts.IsRunning(asset, TeamLabRuntimeStatus.Running));
+        Assert.True(TeamLabRuntimeAssetFacts.IsRunning(asset, TeamLabRuntimeStatus.Running, 4));
         Assert.Equal("configured-unverified", TeamLabRuntimeAssetFacts.Capabilities(asset,
-            TeamLabRuntimeStatus.Running, os.Value, configured)
+            TeamLabRuntimeStatus.Running, 4, os.Value, configured)
             .Single(item => item.Kind == "rdp").Status);
         asset.Status = TeamLabRuntimeStatus.Failed;
-        Assert.False(TeamLabRuntimeAssetFacts.IsRunning(asset, TeamLabRuntimeStatus.Running));
+        Assert.False(TeamLabRuntimeAssetFacts.IsRunning(asset, TeamLabRuntimeStatus.Running, 4));
+        asset.Status = TeamLabRuntimeStatus.Running;
+        asset.Generation = 3;
+        Assert.False(TeamLabRuntimeAssetFacts.IsRunning(asset, TeamLabRuntimeStatus.Running, 4));
     }
 
     private static TeamLabRuntimeAsset Asset() => new()

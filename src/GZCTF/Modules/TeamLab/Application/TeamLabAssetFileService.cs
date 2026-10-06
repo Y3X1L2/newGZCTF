@@ -27,6 +27,7 @@ public interface ITeamLabAssetFileGateway
 public sealed class TeamLabAssetFileService(AppDbContext context, TeamLabAuthorizationService authorization,
     ITeamLabAssetFileGateway gateway,
     TeamLabEventRecorder events, ImageRemoteAccessService imageAccess,
+    IImageRuntimeAccessQuery runtimeImageAccess,
     IDistributedLeaseProvider leases, TeamLabRuntimeOperationPayloadProtector operationPayloads,
     IOptions<TeamLabNetworkConfig>? options = null)
 {
@@ -110,12 +111,13 @@ public sealed class TeamLabAssetFileService(AppDbContext context, TeamLabAuthori
                 .Where(item => item.RuntimeId == asset.RuntimeId && item.Generation == asset.Generation)
                 .ToArrayAsync(token);
             var specs = TeamLabRuntimeAssetFacts.ReadCurrentSpecs(asset.Runtime, snapshots);
-            var template = await context.ImageTemplates.AsNoTracking()
-                .Where(item => item.Id == asset.SourceTemplateId)
-                .SingleOrDefaultAsync(token);
+            var templates = await runtimeImageAccess.GetBatchAsync(
+                asset.SourceTemplateId is { } templateId ? [templateId] : [], token);
+            var template = asset.SourceTemplateId is { } sourceId
+                ? templates.GetValueOrDefault(sourceId) : null;
             var os = TeamLabRuntimeAssetFacts.OperatingSystem(asset,
                 specs.GetValueOrDefault(asset.TopologyKey), template);
-            if (os.Value == "windows" || template?.OSType == OSType.Windows ||
+            if (os.Value == "windows" || template?.OperatingSystem == OSType.Windows ||
                 os.Value == "unknown" && template is null)
                 throw new TeamLabApiContractException("files.unsupported",
                     "Windows 或系统类型未确认的虚拟机不支持文件管理。", 422);
