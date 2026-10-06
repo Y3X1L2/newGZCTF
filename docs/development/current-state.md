@@ -1,9 +1,11 @@
 # YINYU 当前开发状态
 
-## TeamLab 第一轮制作与运行工作区：集成候选，未合并 main 或部署（2026-10-06）
+## TeamLab 第一轮工作区与运行事实兼容：已合并 main 并部署 .27（2026-10-06）
 
-- 从 `origin/main f21f5ef2` 开发的三线代码已在任务分支形成候选，已验证代码提交为 `865842ee`，未合并 `main` 或部署。普通组网入口收敛为场景与运行环境；设计草稿、不可变发布和运行实例继续分开。全局运行详情脱离可编辑场景草稿，旧 URL 有兼容去向；逐网卡分配与独立可选来宾回读分开表达，当前缺可靠回读时显示未核对。Windows 不再误标 SSH 或提供没有支持闭环的文件入口；现存设备/现场绑定保留只读信息与管理员维护路径。后端权限和受管生命周期边界保留。
-- [Quality CI 37416742591](https://github.com/Y3X1L2/newGZCTF/actions/runs/37416742591) 在 `865842ee` 上 completed/success：后端单测 1294/1294、PostgreSQL/Testcontainers 集成 305/305（0 skip），EF 模型、PostgreSQL 查询计划和 OpenAPI 兼容通过；前端 118 文件/395 测试及 lint/类型/架构/构建通过。本机 PostgreSQL 16 Testcontainer 专项 1/1 通过。`3ace86e2` 前端已单独构建并逐文件核验 manifest；Main `a3bdb34a` 与该前端组合的候选制品留仓库外、未部署。先前 `ce17bf1c` 的本地 IAB 合成只读 fixture 四宽度/日夜及 390/1366 复拍无页面级横向溢出；最后 `13bff315` 修改未复拍，不能沿用旧截图作最终视觉签收。真实 Docker/VM/网络和生产验收未完成；学习资料与原始制品仍留仓库外本地目录。详见[集成交接](handoffs/2026-10-06-teamlab-core-workflow-integration.md)。
+- 用户明确批准后，PR #13 正常合并为 `main d3b8c954`，PR #14 的运行摘要兼容与界面收口正常合并为 `main 33983541`。普通组网入口收敛为场景与运行环境，草稿、不可变版本和实例仍为不同事实；旧 URL 有兼容去向。已部署活动目录 `/opt/gzctf/releases/teamlab-runtime-clarity-b2af7def-20261006/publish`：Main DLL SHA256 `b92a849dfa4946c23e1a590a69e0b60063b2ac223519bfab8d82f0ee861077e9`，前端 manifest 对应 `b2af7def`。Agent 继续使用 `cc6c5737` 的 SHA256 `9b2142e9731d77495322e20a100432a728cf3d86f87dc67abebf85ed58a9b3e8`、同一 PID 1650376，未升级 `.30/.31`；无数据库迁移、Registry/PVE/公网网关修改。
+- [PR #14 Quality](https://github.com/Y3X1L2/newGZCTF/actions/runs/37449290029) completed/success：后端单测 1296/1296、PostgreSQL/Testcontainers 集成 305/305（0 skip），EF 模型、查询计划和 OpenAPI 兼容通过；前端 118 文件/396 测试及 locale/lint/类型/架构/构建通过。线上旧四机曾因执行计划 `sha256:<64 hex>` 与运行资产原始 64 位摘要被直接字符串比较而显示 OS unknown/网卡空；PR #14 严格规范化相同 SHA-256 后，正式管理员 API 对原 generation 4 四机返回 2 Windows、2 Linux 和 5 张逐网卡 assigned，IP/前缀/DNS/网关/路由逐项与冻结执行计划一致，`observed` 仍为 null，不能称来宾实测。Windows 文件请求实际返回 422 `files.unsupported`；未配置的 RDP/SSH/SFTP 明确为 `unconfigured`。
+- 发布前完整备份 `/opt/gzctf/backups/teamlab-core-workflow-d3b8c954-20261006-pre` 与修正版在线完整备份 `/opt/gzctf/backups/teamlab-runtime-clarity-b2af7def-20261006-pre` 均完成两份数据库 dump 全文读取、附件/配置摘要校验；前者备份任务 5 分 37 秒、Main 暂停约 5 分 29 秒，后者在线完成且未停 Main。两次原子切换分别 18.86 秒和 20.16 秒通过，旧 release/备份/日志保留。最终 Main/Agent active、NRestarts 0，首页/Config/manifest 200，迁移 150、队列 0、三节点在线可调度且 Fabric healthy、模板 519–522 Ready；原 Lab2 四 VM generation 4 的数据库身份未变，本机四域仍 running。独立模板 495 Docker 正常创建、私网 HTTP 200、文件上传下载字节一致并删除、运行实例正常销毁且容器消失，临时节点调度设置已恢复；场景/版本元数据留作审计。
+- 最终启动窗口宽正则匹配 1 条 INFO，经固定审计模板和时间与 Windows 文件 422 负测同刻核对，属于预期失败操作审计；未处理异常/Fatal/stack 为 0，不能把“日志匹配 1”写成所有日志 0。正式最新版 GUI 因 IAB 不可用且 Chrome 扩展不支持当前认证，未完成线上截图/交互验收；旧合成 fixture 截图不能证明本次部署。未验真实图形登录、SSH/RDP/SFTP连通、来宾网络回读或靶机业务。脱敏发布证据与原始学习资料只留仓库外及服务器受保护目录。详见[发布交接](handoffs/2026-10-06-teamlab-runtime-clarity-rollout.md)。
 
 ## TeamLab 资产界面修正：已合并 main 并部署 .27（2026-10-04）
 
