@@ -17,8 +17,8 @@ export function RuntimeActivityWorkspace({ runtime, eventFilters, onFiltersChang
   useEffect(() => { if (initialDetail) { setAdvanced(true); setView(initialDetail) } }, [initialDetail])
   useEffect(() => { if (eventFilters.generation !== null || eventFilters.stage) { setAdvanced(true); setView('events') } }, [eventFilters])
   const events = useRuntimeEvents(advanced && view === 'events' ? runtime.id : '', runtime.status, eventFilters)
-  return <div>
-    <TaskHistoryPanel runtimeId={runtime.id} generation={runtime.generation} />
+  return <div className={styles.activityWorkspace}>
+    <TaskHistoryPanel runtimeId={runtime.id} generation={runtime.generation} currentStatus={runtime.status} />
     <details className={styles.advanced} open={advanced} onToggle={event => setAdvanced(event.currentTarget.open)}>
       <summary>高级排障与会话审计</summary>
       <nav className={styles.viewTabs} aria-label="高级排障类型">

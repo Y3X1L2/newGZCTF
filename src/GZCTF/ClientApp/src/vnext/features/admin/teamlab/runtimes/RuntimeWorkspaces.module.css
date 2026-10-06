@@ -1,15 +1,22 @@
 .viewTabs { display: flex; align-items: center; gap: var(--yn-space-1); padding-bottom: var(--yn-space-4); }
+.activityWorkspace { min-width: 0; padding: var(--yn-space-5); border: 1px solid var(--yn-color-border); border-radius: var(--yn-radius-md); background: var(--yn-color-surface); }
+.recordPanel { min-width: 0; }
 .advanced { margin-top: var(--yn-space-6); border-top: 1px solid var(--yn-color-border); padding-top: var(--yn-space-4); }
 .advanced summary { cursor: pointer; padding: var(--yn-space-2) 0; color: var(--yn-color-muted); }
 .advanced .viewTabs { flex-wrap: wrap; padding-top: var(--yn-space-3); }
-.recordScope { color: var(--yn-color-muted); font-size: var(--yn-font-sm); }
-.timeline { padding: 0; margin: 0; list-style: none; }
-.timeline li { border-top: 1px solid var(--yn-color-border); }
-.timeline button { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: start; gap: var(--yn-space-4); width: 100%; padding: var(--yn-space-4) 0; border: 0; background: transparent; color: var(--yn-color-text); cursor: pointer; font: inherit; text-align: left; }
-.timeline button > span:first-child { display: grid; gap: var(--yn-space-1); min-width: 0; overflow-wrap: anywhere; }
+.recordScope { margin: var(--yn-space-3) 0 var(--yn-space-4); color: var(--yn-color-muted); font-size: var(--yn-font-sm); }
+.timeline { padding: 0; margin: 0; border-top: 1px solid var(--yn-color-border); list-style: none; }
+.timeline li { border-bottom: 1px solid var(--yn-color-border); }
+.timeline button { display: grid; min-height: 88px; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: var(--yn-space-4); width: 100%; padding: var(--yn-space-4); border: 0; border-left: 3px solid transparent; background: transparent; color: var(--yn-color-text); cursor: pointer; font: inherit; text-align: left; }
+.timeline button[data-status='failed'] { border-left-color: var(--yn-color-danger); }
+.timeline button:hover { background: var(--yn-color-surface-muted); }
+.timeline button:focus-visible { outline: 2px solid var(--yn-color-brand); outline-offset: -2px; }
+.recordMain, .recordSide { display: grid; min-width: 0; gap: var(--yn-space-2); }
+.recordMain strong { font-size: var(--yn-font-md); }
+.recordSide { justify-items: end; text-align: right; }
 .timeline small, .timeline time { color: var(--yn-color-muted); font-size: var(--yn-font-sm); }
 .timeline .failure { color: var(--yn-color-danger); }
-@media (max-width: 600px) { .timeline button { grid-template-columns: minmax(0, 1fr) auto; } .timeline time { grid-column: 1 / -1; } }
+@media (max-width: 600px) { .activityWorkspace { padding: var(--yn-space-3); } .timeline button { padding: var(--yn-space-3); gap: var(--yn-space-2); } }
 .viewTabs button { min-height: 36px; padding: var(--yn-space-2) var(--yn-space-3); border: 0; border-radius: var(--yn-radius-sm); background: transparent; color: var(--yn-color-muted); cursor: pointer; font: inherit; white-space: nowrap; }
 .viewTabs button[aria-pressed='true'] { background: var(--yn-color-surface-muted); color: var(--yn-color-text); }
 .networkLayout { display: grid; grid-template-columns: minmax(190px, 230px) minmax(0, 1fr); gap: var(--yn-space-6); min-width: 0; }
