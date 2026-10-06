@@ -25,7 +25,8 @@ and adds:
 
 | Field | Type | Meaning |
 | --- | --- | --- |
-| `operatingSystem` | `windows` / `linux` / `unknown` | Derived from its identified image template only. Missing template is unknown. Docker remains identified by `kind`. |
+| `operatingSystem` | `windows` / `linux` / `unknown` | OS metadata, never inferred from a missing enum value or a machine name. Docker remains identified by `kind`. |
+| `operatingSystemSource` | `execution-plan` / `template-current` / `unknown` | Explicit plan value takes priority; otherwise matching current template metadata is identified as current metadata, not a frozen or guest-observed fact. |
 | `sourceTemplateId` | integer or null | Template ID already bound to this generation's runtime asset. Settings navigation only, no credential values. |
 | `interfaces` | array | Per-interface allocation from this generation's runtime asset and executed asset definition. |
 | `capabilities` | array | Applicable tools with `kind`, `status`, `reason`, and `settingsTemplateId`. |
@@ -56,8 +57,11 @@ files. The existing authorization checks remain authoritative for invoking tools
 - Runtime data comes from the current generation's asset records and the
   executed plan, including current plan revision after runtime changes. Neither
   scene drafts nor a newer release are a source for a running asset.
-- Old execution plans remain readable. Unknown OS and absent interface facts
-  remain explicit; neither defaults to Linux or a successful observation.
+- Old execution plans remain readable. The serializer omits the default Linux
+  enum in older plan JSON, so an absent OS field is not enough to call an asset
+  Linux. The current template OS may be shown only if its ID and image digest
+  match the executed asset, with `operatingSystemSource=template-current`.
+  Otherwise OS is unknown. No OS value is a guest observation.
 - Template configuration is read without returning usernames or secrets.
   Changing it can affect new connections to an existing runtime.
 - Windows file requests return the existing `files.unsupported` contract error

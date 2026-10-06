@@ -147,7 +147,8 @@ describe('TeamLab runtime contract boundary', () => {
     expect(legacy.topologyId).toBeNull()
     expect(legacy.assets[0]).toMatchObject({ operatingSystem: 'unknown', interfaces: [], capabilities: [] })
 
-    const asset = { ...runtimeWire.assets[0], operatingSystem: 'windows', sourceTemplateId: 42,
+    const asset = { ...runtimeWire.assets[0], operatingSystem: 'windows',
+      operatingSystemSource: 'execution-plan', sourceTemplateId: 42,
       interfaces: [{ key: 'internal', networkKey: 'inside', primary: false,
         assigned: { ipAddress: '172.22.1.15', prefixLength: 23, dnsServers: ['172.22.1.2'],
           gatewayIp: null, staticRoutes: [] }, observed: null }],
@@ -156,6 +157,7 @@ describe('TeamLab runtime contract boundary', () => {
     const runtime = parseTeamLabRuntime({ ...runtimeWire, topologyId: 'scene-id', topologyName: 'Frozen name',
       assets: [asset] })
     expect(runtime.topologyName).toBe('Frozen name')
+    expect(runtime.assets[0].operatingSystemSource).toBe('execution-plan')
     expect(runtime.assets[0].interfaces?.[0].assigned?.ipAddress).toBe('172.22.1.15')
     expect(runtime.assets[0].interfaces?.[0].observed).toBeNull()
     expect(runtime.assets[0].capabilities?.[0].status).toBe('configured-unverified')
