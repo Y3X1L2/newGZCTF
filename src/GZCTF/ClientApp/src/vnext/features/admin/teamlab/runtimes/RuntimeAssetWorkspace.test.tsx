@@ -98,4 +98,18 @@ describe('RuntimeAssetWorkspace asset switching', () => {
     expect(interfaces).not.toHaveTextContent('10.1.0.254')
     expect(screen.queryByRole('button', { name: '传文件' })).toBeNull()
   })
+
+  it('keeps a guest readback distinct from the allocated address', () => {
+    const source = runtime.assets[0]
+    mount({ ...runtime, assets: [{ ...source, interfaces: [{ ...source.interfaces![0],
+      observed: { ipAddress: '192.168.50.31', prefixLength: 24, dnsServers: ['192.168.50.3'],
+        gatewayIp: null, staticRoutes: [], observedAt: 1788796800000 } }] }] })
+    const interfaces = screen.getByRole('region', { name: '网卡与地址' })
+    expect(interfaces).toHaveTextContent('192.168.50.1/24')
+    expect(interfaces).toHaveTextContent('192.168.50.31/24')
+    expect(interfaces).not.toHaveTextContent('来宾状态未核对')
+    fireEvent.click(screen.getByText('DNS 与路由'))
+    expect(interfaces).toHaveTextContent('回读 DNS')
+    expect(interfaces).toHaveTextContent('192.168.50.3')
+  })
 })
