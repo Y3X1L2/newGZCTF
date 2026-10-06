@@ -5,6 +5,8 @@ import { teamLabRuntimeApi, type TeamLabRuntime } from '../api'
 import { teamLabServiceAccessApi } from '../api/teamlabServiceAccessApi'
 import { RuntimeAccessWorkspace } from './RuntimeAccessWorkspace'
 
+vi.mock('./RuntimeGrantPanel', () => ({ RuntimeGrantPanel: () => <div>平台权限设置</div> }))
+
 const runtime: TeamLabRuntime = {
   id: 'runtime-a', releaseId: 'release-a', generation: 1, status: 'running', stage: 'ready', openForAccess: false,
   shards: [], networks: [], assets: [], createdAt: 1, updatedAt: 1, error: null,
@@ -21,5 +23,8 @@ describe('RuntimeAccessWorkspace', () => {
     await waitFor(() => expect(teamLabRuntimeApi.listAccessGrants).toHaveBeenCalledWith(runtime.id))
     expect(create).not.toHaveBeenCalled()
     expect(screen.getByRole('button', { name: '新增授权' })).toBeInTheDocument()
+    expect(screen.getByText(/平台操作权限不会对外部端口/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '平台操作权限' }))
+    expect(screen.getByText('平台权限设置')).toBeInTheDocument()
   })
 })
