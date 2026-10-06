@@ -4,7 +4,7 @@
 
 - Goal: let ordinary Docker and VM scheduling, TeamLab placement, and release readiness use the storage available to the requested workload after the .27 VM data volume expansion.
 - Base: `origin/main 7a1f554d`; integration branch: `codex/workload-storage-integration` in an isolated worktree.
-- Scope: Agent host facts, main runtime capacity evaluation, TeamLab planning/readiness, focused tests and contract documentation. No database migration, queue replacement, instance lifecycle operation, or production deployment.
+- Scope: Agent host facts, main runtime capacity evaluation, TeamLab planning/readiness, generated internal API client, focused tests and contract documentation. No database migration, queue replacement, instance lifecycle operation, or production deployment.
 
 ## Verified Environment
 
@@ -15,6 +15,7 @@
 ## Implementation
 
 - Agent schema 1 gains optional `AvailableDockerStorageBytes`. An old Agent omits it (`null`); a new Agent reports a non-null free-space measurement, or `0` when Docker root cannot be measured. Docker daemon info supplies `DockerRootDir`; filesystem readings use the complete configured path rather than its lexical root.
+- Main's node detail response exposes the new optional nullable host fact. The internal OpenAPI was exported through `OpenApiDocumentationTests.Development_ExportsInternalContract` and the repository's `swagger-typescript-api` template regenerated `ClientApp/src/generated/Api.ts`; the reviewed generated diff adds only `availableDockerStorageBytes?: number | null`.
 - VM storage uses `Kvm.ImageStoragePath`. When the Agent declares `TeamLabExecutionPlan`, it conservatively takes the smaller free space of that path and `TeamLab.RuntimeStateRoot`. Ordinary KVM remains independent of an absent TeamLab directory.
 - `NodeCapacitySnapshot.AvailableFor(requested)` and `Fits(requested)` select Docker storage for Docker-only requests and VM storage for VM-only requests. A mixed request uses the smaller budget for its aggregate storage demand. All active `FleetCapacityReservation.StorageMiB` values are subtracted from both budgets. These are conservative accounting rules, not precise per-filesystem reservations; mixed or simultaneous cross-kind workloads can be rejected despite physical headroom.
 - Fleet reservation and physical TeamLab placement use the same eligibility evaluator. TeamLab release planning uses the workload-specific budget and treats measured zero as unavailable. Admin readiness diagnoses network groups against the corresponding snapshot, including storage, slots, CPU/memory and declared guest-network features.
@@ -26,6 +27,7 @@
 | .NET Release solution build | Passed on integrated source |
 | .NET unit tests | 1311/1311 on full rerun; an unrelated Windows environment inheritance test failed once and passed in isolation before the successful rerun |
 | PostgreSQL/Testcontainers integration | Passed: 305/305, no skips |
+| Internal OpenAPI schema | Lightweight TestServer export and nullable Docker host-fact assertion passed (1/1) after the full backend suite |
 | Frontend `pnpm build` gate | Passed: locale, lint, type, architecture, 118 files / 398 tests, Vite and bundle budget |
 | Real .27 workload | Not run; candidate is not deployed |
 

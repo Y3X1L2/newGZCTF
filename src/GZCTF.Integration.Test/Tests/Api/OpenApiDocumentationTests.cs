@@ -30,6 +30,11 @@ public sealed class OpenApiDocumentationTests
         var content = await response.Content.ReadAsStringAsync();
         using var document = JsonDocument.Parse(content);
         Assert.True(document.RootElement.GetProperty("paths").TryGetProperty("/api/admin/teamlab/runtimes/search", out _));
+        var dockerStorage = document.RootElement.GetProperty("components").GetProperty("schemas")
+            .GetProperty("AgentHostFacts").GetProperty("properties")
+            .GetProperty("availableDockerStorageBytes");
+        Assert.Equal("int64", dockerStorage.GetProperty("format").GetString());
+        Assert.True(dockerStorage.GetProperty("nullable").GetBoolean());
         if (Environment.GetEnvironmentVariable("OPENAPI_INTERNAL_PATH") is { Length: > 0 } outputPath)
             await File.WriteAllTextAsync(outputPath, content);
     }

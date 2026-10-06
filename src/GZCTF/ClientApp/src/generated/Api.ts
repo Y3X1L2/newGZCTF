@@ -5799,6 +5799,8 @@ export interface AgentHostFacts {
   availableVmImageStorageBytes?: number;
   kvmDevice?: boolean;
   cpuVirtualization?: boolean;
+  /** @format int64 */
+  availableDockerStorageBytes?: number | null;
 }
 
 export interface OperationalEventViewPageModel {
