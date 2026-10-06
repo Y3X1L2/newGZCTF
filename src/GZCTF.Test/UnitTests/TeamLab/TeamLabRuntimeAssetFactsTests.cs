@@ -18,7 +18,8 @@ namespace GZCTF.Test.UnitTests.TeamLab;
 
 public sealed class TeamLabRuntimeAssetFactsTests
 {
-    private const string Digest = "sha256:0123456789abcdef";
+    private const string RawDigest = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+    private const string Digest = "sha256:" + RawDigest;
 
     [Fact]
     public async Task RuntimeDetailKeepsOrphanedRuntimeReadableWithoutCreatingAccessResources()
@@ -145,9 +146,12 @@ public sealed class TeamLabRuntimeAssetFactsTests
         var executed = facts[asset.TopologyKey];
         Assert.False(executed.OperatingSystemRecorded);
 
-        var template = new ImageRuntimeAccessSummary(42, Digest, OSType.Linux, null, false);
+        var template = new ImageRuntimeAccessSummary(42, RawDigest, OSType.Linux, null, false);
         Assert.Equal(("linux", "template-current"),
             TeamLabRuntimeAssetFacts.OperatingSystem(asset, executed, template));
+        Assert.Equal("unconfigured", TeamLabRuntimeAssetFacts.Capabilities(asset,
+            TeamLabRuntimeStatus.Running, 4, "linux", null)
+            .Single(item => item.Kind == "ssh").Status);
         template = template with { OperatingSystem = OSType.Windows };
         Assert.Equal(("windows", "template-current"),
             TeamLabRuntimeAssetFacts.OperatingSystem(asset, executed, template));
@@ -156,6 +160,56 @@ public sealed class TeamLabRuntimeAssetFactsTests
             TeamLabRuntimeAssetFacts.OperatingSystem(asset, executed, template));
         Assert.Equal(("unknown", "unknown"),
             TeamLabRuntimeAssetFacts.OperatingSystem(asset, executed, null));
+    }
+
+    [Fact]
+    public void InvalidOrDifferentDigestCannotBorrowPlanOperatingSystemOrInterfaces()
+    {
+        var asset = Asset();
+        var executed = new TeamLabRuntimeAssetFacts.ExecutedAsset(
+            Spec(TeamLabGuestOperatingSystem.Windows, "10.66.0.15", "172.22.1.15"), true);
+        var template = new ImageRuntimeAccessSummary(42, RawDigest, OSType.Windows, "rdp", true);
+        Assert.Equal(("windows", "execution-plan"),
+            TeamLabRuntimeAssetFacts.OperatingSystem(asset, executed, template));
+        Assert.Equal(2, TeamLabRuntimeAssetFacts.Interfaces(asset, executed).Count);
+
+        asset.ImageDigest = new string('b', 64);
+        Assert.Equal(("unknown", "unknown"),
+            TeamLabRuntimeAssetFacts.OperatingSystem(asset, executed, template));
+        Assert.Empty(TeamLabRuntimeAssetFacts.Interfaces(asset, executed));
+        asset.ImageDigest = "sha256:not-a-digest";
+        Assert.Equal(("unknown", "unknown"),
+            TeamLabRuntimeAssetFacts.OperatingSystem(asset, executed, template));
+        Assert.Empty(TeamLabRuntimeAssetFacts.Interfaces(asset, executed));
+    }
+
+    [Fact]
+    public void DockerPlanWithCanonicalDigestKeepsItsAssignedInterface()
+    {
+        var asset = Asset();
+        asset.Kind = TeamLabResourceKind.Docker;
+        asset.SourceTemplateId = 495;
+        asset.InterfaceSummaryJson = JsonSerializer.Serialize(new[]
+        {
+            new { Key = "eth0", NetworkKey = "edge", IpAddress = "10.66.0.15",
+                PrefixLength = 24, MacAddress = "02:42:00:00:00:01", Primary = true }
+        });
+        var spec = Spec(TeamLabGuestOperatingSystem.Linux, "10.66.0.15", "172.22.1.15") with
+        {
+            Kind = "docker", TemplateId = 495,
+            NetworkAttachments = [new TeamLabAssetNetworkAttachmentV2(
+                "edge", "web:eth0", "eth0", "10.66.0.15", "10.66.0.1", true,
+                InterfaceKey: "eth0", PrefixLength: 24)]
+        };
+        var executed = new TeamLabRuntimeAssetFacts.ExecutedAsset(spec, false);
+
+        var iface = Assert.Single(TeamLabRuntimeAssetFacts.Interfaces(asset, executed));
+        Assert.Equal("10.66.0.15", iface.Assigned?.IpAddress);
+        Assert.Null(iface.Observed);
+        Assert.Empty(TeamLabRuntimeAssetFacts.Interfaces(asset, executed with
+        {
+            Spec = spec with { Kind = "vm" }
+        }));
     }
 
     [Fact]
@@ -197,7 +251,7 @@ public sealed class TeamLabRuntimeAssetFactsTests
     private static TeamLabRuntimeAsset Asset() => new()
     {
         RuntimeId = 8, Generation = 4, Kind = TeamLabResourceKind.Vm,
-        TopologyKey = "web", SourceTemplateId = 42, ImageDigest = Digest,
+        TopologyKey = "web", SourceTemplateId = 42, ImageDigest = RawDigest,
         WorkerNodeId = Guid.NewGuid(), RuntimeResourceId = "vm-web",
         NativeIdentity = Guid.NewGuid().ToString("D"), IpAddress = "10.66.0.15",
         Status = TeamLabRuntimeStatus.Running,

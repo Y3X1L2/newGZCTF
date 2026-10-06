@@ -14,7 +14,7 @@ namespace GZCTF.Integration.Test.Tests.Database;
 
 public sealed class TeamLabRuntimeCapabilityProjectionPostgresTests : IAsyncLifetime
 {
-    private const string ImageDigest = "sha256:0123456789abcdef";
+    private const string ImageDigest = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
     private readonly PostgreSqlContainer postgres = new PostgreSqlBuilder("postgres:16-alpine")
         .WithDatabase("teamlab_capability_projection")
         .WithUsername("postgres")
@@ -75,7 +75,7 @@ public sealed class TeamLabRuntimeCapabilityProjectionPostgresTests : IAsyncLife
         await db.SaveChangesAsync();
 
         var planAsset = new TeamLabAssetExecutionSpecV2(
-            asset.TopologyKey, "vm", "fixture-vm", ImageDigest, "fixture-vm",
+            asset.TopologyKey, "vm", "fixture-vm", "sha256:" + ImageDigest, "fixture-vm",
             template.Id, 2, 2048, [], [], OperatingSystem: TeamLabGuestOperatingSystem.Windows);
         var plan = new TeamLabExecutionPlanV2(runtime.Id, runtime.PublicId, runtime.Generation,
             "fixture-shard", "digest", "network-digest", true, [], [planAsset], []);
