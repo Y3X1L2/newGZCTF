@@ -27,7 +27,7 @@
 .readiness { display: grid; gap: var(--yn-space-4); margin-top: var(--yn-space-6); padding-top: var(--yn-space-5); border-top: 1px solid var(--yn-color-border); }
 .readinessStatus { display: flex; align-items: center; gap: var(--yn-space-2); color: var(--yn-color-warning); font-size: var(--yn-font-lg); }
 .readinessStatus[data-ready='true'] { color: var(--yn-color-success); }
-.blockers { display: grid; gap: var(--yn-space-2); margin: 0; padding-left: var(--yn-space-5); color: var(--yn-color-text); }
+.blockers { display: grid; min-width: 0; gap: var(--yn-space-2); margin: 0; padding-left: var(--yn-space-5); color: var(--yn-color-text); overflow-wrap: anywhere; }
 .readinessNote, .imageDetails p { margin: 0; color: var(--yn-color-muted); font-size: var(--yn-font-sm); }
 .readinessActions { gap: var(--yn-space-2); }
 .latestTrial { width: fit-content; gap: var(--yn-space-2); color: var(--yn-color-text-secondary); text-decoration: none; }
