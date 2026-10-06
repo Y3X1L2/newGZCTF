@@ -1,4 +1,5 @@
-import { RefreshCw } from 'lucide-react'
+import { ChevronDown, RefreshCw } from 'lucide-react'
+import { useState } from 'react'
 import { ActionButton, InlineFeedback } from '../../../../shared/Interaction'
 import { DataState } from '../../../../shared/Primitives'
 import { errorMessage } from '../../../../shared/errors'
@@ -11,19 +12,23 @@ const stateLabels: Record<string, string> = { running: '运行中', blocked: '�
   'in shutdown': '正在关机', 'shut off': '已关机', crashed: '已崩溃', pmsuspended: '电源管理挂起' }
 
 export function VmDiagnosticsPanel({ runtime, assetId }: { runtime: TeamLabRuntime; assetId: number }) {
+  const [open, setOpen] = useState(false)
   const asset = runtime.assets.find(item => item.id === assetId && item.kind === 'vm')
-  const diagnostics = useVmDiagnostics(runtime.id, runtime.generation, asset?.id)
+  const diagnostics = useVmDiagnostics(runtime.id, runtime.generation, open ? asset?.id : undefined)
   if (!asset) return null
-  return <section className={styles.panel} aria-label="虚拟机诊断">
-    <header className={styles.panelHeader}><h3>虚拟机诊断</h3>
+  return <section className={styles.powerDetails} aria-label="虚拟机电源状态">
+    <button aria-expanded={open} className={styles.powerToggle} onClick={() => setOpen(value => !value)} type="button">
+      <ChevronDown size={16} />虚拟机电源状态
+    </button>
+    {open ? <div className={styles.powerContent}>
       <ActionButton icon={<RefreshCw size={16} />} disabled={diagnostics.isValidating}
-        onClick={() => void diagnostics.mutate()} type="button">刷新 VM 状态</ActionButton>
-    </header>
-    {diagnostics.error ? <InlineFeedback tone="danger">{errorMessage(diagnostics.error, 'VM 状态读取失败。')}</InlineFeedback>
-      : diagnostics.isLoading || !diagnostics.data ? <DataState loading title="正在读取 VM 状态" />
-      : <dl className={styles.diagnosticsFacts}>
-        <div><dt>libvirt 电源状态</dt><dd>{stateLabels[diagnostics.data.state] ?? diagnostics.data.state}</dd></div>
-        <div><dt>采集时间</dt><dd>{formatAdminDate(diagnostics.data.observedAt)}</dd></div>
-      </dl>}
+        onClick={() => void diagnostics.mutate()} type="button">刷新电源状态</ActionButton>
+      {diagnostics.error ? <InlineFeedback tone="danger">{errorMessage(diagnostics.error, '电源状态读取失败。')}</InlineFeedback>
+        : diagnostics.isLoading || !diagnostics.data ? <DataState loading title="正在读取电源状态" />
+        : <dl className={styles.diagnosticsFacts}>
+          <div><dt>电源状态</dt><dd>{stateLabels[diagnostics.data.state] ?? diagnostics.data.state}</dd></div>
+          <div><dt>采集时间</dt><dd>{formatAdminDate(diagnostics.data.observedAt)}</dd></div>
+        </dl>}
+    </div> : null}
   </section>
 }

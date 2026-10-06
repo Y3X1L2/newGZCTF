@@ -29,6 +29,7 @@ export function RuntimeAssetWorkspace({ runtime }: { runtime: TeamLabRuntime }) 
   const visibleInterfaces = asset.interfaces ?? []
   const transfer = asset.capabilities?.find(item => item.kind === (asset.kind === 'docker' ? 'files' : 'sftp'))
   const canTransfer = transfer?.status === 'configured-unverified'
+  const hasMoreTools = asset.kind === 'docker' || canTransfer || !!transfer && ['unconfigured', 'currently-unavailable'].includes(transfer.status)
   return <div className={styles.workspace}>
     <aside className={styles.assetRail} aria-label="按网段查看机器">
       <h3>机器与网段</h3>
@@ -70,14 +71,14 @@ export function RuntimeAssetWorkspace({ runtime }: { runtime: TeamLabRuntime }) 
       </section>
       <RuntimeRemoteAccessPanel runtime={runtime} assetId={asset.id} />
       {asset.kind === 'vm' ? <VmDiagnosticsPanel runtime={runtime} assetId={asset.id} /> : null}
-      <section className={styles.moreTools} aria-label="更多机器工具"><h4>更多工具</h4>
+      {hasMoreTools ? <section className={styles.moreTools} aria-label="更多机器工具"><h4>更多工具</h4>
         {asset.kind === 'docker' ? <button onClick={() => setTool(tool === 'logs' ? null : 'logs')} type="button"><Terminal size={16} />容器日志</button> : null}
         {canTransfer ? <button onClick={() => setTool(tool === 'transfer' ? null : 'transfer')} type="button"><FolderUp size={16} />传文件</button> : null}
         {transfer?.status === 'unconfigured' && transfer.settingsTemplateId ? <Link to={`/admin/images?template=${transfer.settingsTemplateId}&remoteAccess=1&returnTo=${encodeURIComponent(window.location.pathname + window.location.search)}`}><HardDrive size={16} />配置传文件入口</Link> : null}
         {transfer && ['unconfigured', 'currently-unavailable'].includes(transfer.status) ? <p>{transfer.reason}</p> : null}
         {tool === 'logs' ? <AssetDiagnosticsPanel runtime={runtime} assetId={asset.id} /> : null}
         {tool === 'transfer' ? <><p>实例内文件变化不会自动写回镜像或场景版本。</p><AssetTransferPanel runtime={runtime} assetId={asset.id} /></> : null}
-      </section>
+      </section> : null}
     </div>
   </div>
 }
