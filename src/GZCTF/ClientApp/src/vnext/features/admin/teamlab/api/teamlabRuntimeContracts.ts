@@ -45,6 +45,34 @@ export interface TeamLabRuntimeNetwork {
   gatewayIp: string
 }
 
+export type TeamLabAssetOperatingSystem = 'windows' | 'linux' | 'unknown'
+export type TeamLabAssetCapabilityKind = 'console' | 'rdp' | 'ssh' | 'sftp' | 'terminal' | 'files'
+export type TeamLabAssetCapabilityStatus =
+  | 'unsupported' | 'unconfigured' | 'configured-unverified' | 'currently-unavailable'
+
+export interface TeamLabRuntimeInterfaceValues {
+  ipAddress: string
+  prefixLength: number
+  dnsServers: readonly string[]
+  gatewayIp: string | null
+  staticRoutes: readonly { destinationCidr: string; nextHop: string; metric: number | null }[]
+}
+
+export interface TeamLabRuntimeInterface {
+  key: string
+  networkKey: string
+  primary: boolean
+  assigned: TeamLabRuntimeInterfaceValues | null
+  observed: (TeamLabRuntimeInterfaceValues & { observedAt: number }) | null
+}
+
+export interface TeamLabAssetCapability {
+  kind: TeamLabAssetCapabilityKind
+  status: TeamLabAssetCapabilityStatus
+  reason: string
+  settingsTemplateId: number | null
+}
+
 export interface TeamLabRuntimeAsset {
   id: number
   key: string
@@ -53,6 +81,10 @@ export interface TeamLabRuntimeAsset {
   networkKeys: readonly string[]
   runtimeResourceId: string | null
   primaryIp: string | null
+  operatingSystem?: TeamLabAssetOperatingSystem
+  sourceTemplateId?: number | null
+  interfaces?: readonly TeamLabRuntimeInterface[]
+  capabilities?: readonly TeamLabAssetCapability[]
   status: TeamLabRuntimeStatus
   error: string | null
 }
@@ -66,6 +98,8 @@ export interface TeamLabRuntime {
   queueStatus?: 'pending' | 'scheduling' | 'scheduled' | 'running' | 'succeeded' | 'failed' | 'cancelled' | null
   id: string
   releaseId: string
+  topologyId?: string | null
+  topologyName?: string | null
   releaseVersion?: number | null
   planRevision?: number
   generation: number
