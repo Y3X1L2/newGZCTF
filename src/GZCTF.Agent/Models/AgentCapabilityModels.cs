@@ -48,7 +48,8 @@ public sealed record AgentHostFacts(
     long TotalMemoryBytes,
     long AvailableVmImageStorageBytes,
     bool KvmDevice,
-    bool CpuVirtualization);
+    bool CpuVirtualization,
+    long? AvailableDockerStorageBytes = null);
 
 public sealed record AgentCapabilityManifest(
     string AgentVersion,
