@@ -3,7 +3,7 @@
 ## 目标与代码身份
 
 - 起点 `origin/main f21f5ef2`。按已批准的第一轮页面规划整合场景库、设计、版本与启动、全局运行环境及运行详情；草稿、不可变版本和实例继续为不同事实。
-- 三线主体集成候选为 `2932c81cc6758d6c4f2fc1035f131efc59a50025`；场景库 1366px 冗余箭头修正为 `db4c8fc1`，390px 独立条目布局为 `56c51835`。包含后端边界修正和运行文案修正的最新功能树为 `ce17bf1c`，最终 PR 提交与检查结果待确认。
+- 三线主体集成候选为 `2932c81cc6758d6c4f2fc1035f131efc59a50025`；场景库 1366px 冗余箭头修正为 `db4c8fc1`，390px 独立条目布局为 `56c51835`。包含最后 Windows 空工具区和 VM 电源详情收口 `13bff315`、本机 PostgreSQL 回归的最新功能树为 `3ace86e246ef59a66140c2ee0f61cadc13f11642`，最终 PR 检查结果待确认。
 - 本任务分支与候选均未合并 `main`、未推送生产制品、未部署，也未修改生产服务器、节点、镜像、数据库或网关。没有数据库迁移或 Agent 改动。
 
 ## 实现范围
@@ -23,13 +23,15 @@
 | 本地视觉修正 | IAB 本地合成 fixture 截图发现 1366px 场景表末尾冗余箭头换行；`db4c8fc1` 移除后场景库 1 文件/6 测试、严格类型与 lint 通过。`ce17bf1c` 复拍操作列一行。 |
 | 小屏场景库 | IAB 本地合成 fixture 截图发现 390px 桌面表格压窄；`56c51835` 改为逐场景条目，场景库 1 文件/7 测试、严格类型/lint/架构通过。`ce17bf1c` 复拍动作完整。 |
 | PR head 前端制品 | 核验 ClientApp 源码与 `ce17bf1c` 同树后，设置该 git SHA/name 执行 Vite 构建、manifest 和 bundle budget，均通过。仓库外 `D:/Work/YINYU-TeamLab-Core-Workflow-20261006/frontend-ce17bf1c`：223 文件/3,772,962 字节，manifest SHA256 `a8f43b6b7bea8ddb70501cb1bb58f706de78c351cd7469a67e5ca279f4dc4659`；逐文件长度与 SHA256 核验通过。目录供同版 Main 候选组合，不是发布。 |
+| 最新功能树前端制品 | `3ace86e2` 上 Vite、manifest 和 bundle budget 通过。仓库外 `D:/Work/YINYU-TeamLab-Core-Workflow-20261006/frontend-3ace86e2`：223 文件/3,773,732 字节，manifest gitSha 为完整 `3ace86e246ef59a66140c2ee0f61cadc13f11642`，manifest SHA256 `fe9b23f73b77094c072312d74c55cecc4d4e3be46935dac7b7bbe783ca228f07`；逐文件长度与 SHA256 核验通过，已交给后端候选组合。旧 ce17 目录保留作比较，不是最终 UI。 |
+| 最后运行页收口 | `13bff315` 隐藏 Windows 空工具区，VM 宿主电源事实折叠按需展开并去掉 libvirt 术语；定向 6/6、严格类型/lint/diff 通过。该增量未能在 CUA IAB 复拍。 |
 
 以上局部门禁没有把 4ec 之后的所有提交再次跑一遍完整 391 项；最终 GitHub PR CI 需在最终树验证。`git diff --check` 在文档提交后复核。
 
 ## 尚未验证与交接
 
-- 本地 PostgreSQL 集成测试正在准备，尚无结果；最终 PR CI 也尚未给出针对最新功能树的完整结论。后端代码定向和全量结果由后端集成人在同一交接或 PR 记录，不引用旧生产测试数替代。较早 `a3bdb34a` 的 Quality run `37414453314` 不能代替后续 `ce17bf1c` 的检查。
-- 有 IAB 的运行工作区代理已在 `ce17bf1c` 用真实页面组件和本地合成只读 fixture 检查 390/1366/1920/2560、日夜、键盘与 reduced-motion，四宽度无页面级横向溢出；390/1366 场景修正复拍通过。仓库外截图与限制记录：`D:/Work/YINYU-TeamLab-Page-Plan-20261006/visual-acceptance/TeamLab-集成版本地视觉验收.md`。制作代理的 CUA 仅有报 API-key 错误的 Chrome 扩展，不能独立做浏览器签收。该 fixture 绕过登录壳层，只核组件布局与只读导航，不验证正式旧 URL、真实 API 或生产业务链。
+- 本机 PostgreSQL 16 Testcontainer 的新增查询/投影回归 1/1 通过，证据见[合同 PostgreSQL 交接](2026-10-06-teamlab-core-contracts-postgres-ci.md)；它不证明真实来宾网络或远程接入。`a3bdb34a` 的 Quality run `37414453314` 与 `ce17bf1c` 的 PR Quality 均已通过；最新 `3ace86e2` 的 Quality CI 仍待最终结果，旧 run 不代替最新树。
+- 有 IAB 的运行工作区代理已在 `ce17bf1c` 用真实页面组件和本地合成只读 fixture 检查 390/1366/1920/2560、日夜、键盘与 reduced-motion，四宽度无页面级横向溢出；390/1366 场景修正复拍通过。仓库外截图与限制记录：`D:/Work/YINYU-TeamLab-Page-Plan-20261006/visual-acceptance/TeamLab-集成版本地视觉验收.md`。最后 `13bff315` 修改后 CUA IAB 不可用，未复拍；该报告只证明 ce17 版本的页面，不能充当 3ace 最终视觉签收。制作代理 CUA 也无法访问 IAB。fixture 绕过登录壳层，只核组件布局与只读导航，不验证正式旧 URL、真实 API 或生产业务链。
 - 真实 Docker/KVM、四机网络、来宾回读、RDP/SSH/SFTP、VPN、业务端口、故障恢复和销毁链路未在本任务执行；不可把代码实现或合成截图写成实机通过。用户未要求部署，后续仍须单独审批维护窗口。
 - 全局搜索没有可信来源类型、显示所有者、到期字段；创建运行接口没有环境名称字段。页面不伪造这些事实，也没有扩展数据库 schema。场景复制/归档未加入无合同操作。
 
