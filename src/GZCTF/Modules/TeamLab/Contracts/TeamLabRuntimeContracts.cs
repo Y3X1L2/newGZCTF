@@ -88,6 +88,34 @@ public sealed record TeamLabRuntimeNetworkProjectionModel(
     string Cidr,
     string GatewayIp);
 
+public sealed record TeamLabRuntimeInterfaceValuesModel(
+    string IpAddress,
+    int PrefixLength,
+    IReadOnlyList<string> DnsServers,
+    string? GatewayIp,
+    IReadOnlyList<TeamLabGuestRouteModel> StaticRoutes);
+
+public sealed record TeamLabRuntimeObservedInterfaceModel(
+    string IpAddress,
+    int PrefixLength,
+    IReadOnlyList<string> DnsServers,
+    string? GatewayIp,
+    IReadOnlyList<TeamLabGuestRouteModel> StaticRoutes,
+    DateTimeOffset ObservedAt);
+
+public sealed record TeamLabRuntimeInterfaceProjectionModel(
+    string Key,
+    string NetworkKey,
+    bool Primary,
+    TeamLabRuntimeInterfaceValuesModel? Assigned,
+    TeamLabRuntimeObservedInterfaceModel? Observed);
+
+public sealed record TeamLabRuntimeAssetCapabilityModel(
+    string Kind,
+    string Status,
+    string Reason,
+    int? SettingsTemplateId = null);
+
 public sealed record TeamLabRuntimeAssetProjectionModel(
     int Id,
     string Key,
@@ -98,7 +126,12 @@ public sealed record TeamLabRuntimeAssetProjectionModel(
     string? PrimaryIp,
     TeamLabRuntimeStatus Status,
     string? Error,
-    TeamLabFailureProjectionModel? Failure = null);
+    TeamLabFailureProjectionModel? Failure = null,
+    string OperatingSystem = "unknown",
+    string OperatingSystemSource = "unknown",
+    int? SourceTemplateId = null,
+    IReadOnlyList<TeamLabRuntimeInterfaceProjectionModel>? Interfaces = null,
+    IReadOnlyList<TeamLabRuntimeAssetCapabilityModel>? Capabilities = null);
 
 public sealed record TeamLabFailureProjectionModel(
     string Code,
@@ -136,7 +169,9 @@ public sealed record TeamLabRuntimeProjectionModel(
     IReadOnlyList<string>? RecoveryActions = null,
     TeamLabFailureProjectionModel? Failure = null,
     Guid? ManagedRolloutId = null,
-    int PlanRevision = 0);
+    int PlanRevision = 0,
+    Guid? TopologyId = null,
+    string? TopologyName = null);
 
 public sealed record TeamLabRuntimeEventModel(
     long Cursor,

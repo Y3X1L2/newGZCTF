@@ -207,7 +207,7 @@ public sealed class TeamLabRemoteAccessService(
             .Select(item => (int?)item.Id)
             .SingleOrDefaultAsync(cancellationToken)
             ?? throw new TeamLabApiContractException("runtime_not_found", "未找到 TeamLab 运行时", 404);
-        var assets = await context.TeamLabRuntimeAssets.AsNoTracking()
+        var assets = await context.TeamLabRuntimeAssets.AsNoTracking().Include(item => item.Runtime)
             .Where(item => item.RuntimeId == runtime &&
                            (assetKeys == null || assetKeys.Contains(item.TopologyKey)))
             .OrderBy(item => item.Id)
@@ -810,7 +810,7 @@ public sealed class TeamLabRemoteAccessService(
         TeamLabRuntimeAsset asset,
         ImageTemplateRemoteAccess? configuration)
     {
-        if (asset.Status != TeamLabRuntimeStatus.Running)
+        if (!TeamLabRuntimeAssetFacts.IsRunning(asset, asset.Runtime.Status))
             return new(asset.Id, asset.Name, null, false, "资源未在运行");
         if (asset.Kind == TeamLabResourceKind.Docker)
             return new(asset.Id, asset.Name, TeamLabRemoteProtocol.ContainerTerminal, true, null);

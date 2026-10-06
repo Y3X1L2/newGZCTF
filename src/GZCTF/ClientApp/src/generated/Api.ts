@@ -1095,6 +1095,9 @@ export interface TeamLabRuntimeProjectionModel {
   managedRolloutId?: string | null;
   /** @format int32 */
   planRevision?: number;
+  /** @format guid */
+  topologyId?: string | null;
+  topologyName?: string | null;
 }
 
 export interface TeamLabRuntimeShardProjectionModel {
@@ -1139,6 +1142,55 @@ export interface TeamLabRuntimeAssetProjectionModel {
   status?: TeamLabRuntimeStatus;
   error?: string | null;
   failure?: TeamLabFailureProjectionModel | null;
+  operatingSystem?: string;
+  operatingSystemSource?: string;
+  /** @format int32 */
+  sourceTemplateId?: number | null;
+  interfaces?: TeamLabRuntimeInterfaceProjectionModel[] | null;
+  capabilities?: TeamLabRuntimeAssetCapabilityModel[] | null;
+}
+
+export interface TeamLabRuntimeInterfaceProjectionModel {
+  key?: string;
+  networkKey?: string;
+  primary?: boolean;
+  assigned?: TeamLabRuntimeInterfaceValuesModel | null;
+  observed?: TeamLabRuntimeObservedInterfaceModel | null;
+}
+
+export interface TeamLabRuntimeInterfaceValuesModel {
+  ipAddress?: string;
+  /** @format int32 */
+  prefixLength?: number;
+  dnsServers?: string[];
+  gatewayIp?: string | null;
+  staticRoutes?: TeamLabGuestRouteModel[];
+}
+
+export interface TeamLabGuestRouteModel {
+  destinationCidr?: string;
+  nextHop?: string;
+  /** @format int32 */
+  metric?: number | null;
+}
+
+export interface TeamLabRuntimeObservedInterfaceModel {
+  ipAddress?: string;
+  /** @format int32 */
+  prefixLength?: number;
+  dnsServers?: string[];
+  gatewayIp?: string | null;
+  staticRoutes?: TeamLabGuestRouteModel[];
+  /** @format uint64 */
+  observedAt?: number;
+}
+
+export interface TeamLabRuntimeAssetCapabilityModel {
+  kind?: string;
+  status?: string;
+  reason?: string;
+  /** @format int32 */
+  settingsTemplateId?: number | null;
 }
 
 export interface TeamLabRuntimeSubStageProjectionModel {
@@ -1312,13 +1364,6 @@ export interface TeamLabTopologyInterfaceModel {
   useDefaultGateway?: boolean | null;
   dnsServers?: string[] | null;
   staticRoutes?: TeamLabGuestRouteModel[] | null;
-}
-
-export interface TeamLabGuestRouteModel {
-  destinationCidr?: string;
-  nextHop?: string;
-  /** @format int32 */
-  metric?: number | null;
 }
 
 export interface TeamLabHealthCheckModel {
