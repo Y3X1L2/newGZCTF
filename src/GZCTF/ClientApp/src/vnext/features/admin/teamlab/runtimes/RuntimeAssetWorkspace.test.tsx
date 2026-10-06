@@ -55,6 +55,7 @@ describe('RuntimeAssetWorkspace asset switching', () => {
       await waitFor(() => expect(teamLabRemoteAccessApi.getAvailability).toHaveBeenCalledWith('runtime', id))
       expect(screen.getAllByRole('region', { name: '远程连接' })).toHaveLength(1)
       expect(screen.getAllByRole('button', { name: '控制台' })).toHaveLength(1)
+      expect(screen.getAllByText('当前机器')).toHaveLength(1)
       expect(screen.getByRole('region', { name: '网卡与地址' })).toHaveTextContent(`192.168.50.${id}/24`)
       expect(screen.queryByRole('region', { name: '业务访问入口' })).toBeNull()
     }
@@ -93,6 +94,8 @@ describe('RuntimeAssetWorkspace asset switching', () => {
     const interfaces = screen.getByRole('region', { name: '网卡与地址' })
     expect(interfaces).toHaveTextContent('192.168.50.1/24')
     expect(interfaces).toHaveTextContent('10.1.0.8/24')
+    expect(screen.getAllByText('当前机器')).toHaveLength(2)
+    screen.getAllByText('当前机器').forEach(mark => expect(mark.closest('button')).toHaveAttribute('aria-current', 'true'))
     expect(interfaces).toHaveTextContent('来宾状态未核对')
     fireEvent.click(screen.getAllByText('DNS 与路由')[1])
     expect(interfaces).toHaveTextContent('10.1.0.1')
