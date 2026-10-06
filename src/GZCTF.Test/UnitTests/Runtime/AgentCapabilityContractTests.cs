@@ -41,6 +41,37 @@ public sealed class AgentCapabilityContractTests
     }
 
     [Fact]
+    public void DockerStorageField_DistinguishesLegacyMissingFromMeasuredZero()
+    {
+        var source = new AgentManifest("1.8.3", null, 1, [AgentFeatureIds.Docker],
+            new AgentLimits(1, 0, 1, 0),
+            new AgentHostFacts(4, 8L * 1024 * 1024 * 1024, 0, false, false),
+            DateTimeOffset.UtcNow);
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var legacyJson = JsonSerializer.Serialize(source, options);
+        var legacy = JsonSerializer.Deserialize<PlatformManifest>(legacyJson, options);
+
+        Assert.NotNull(legacy);
+        Assert.Null(legacy.Host.AvailableDockerStorageBytes);
+
+        var measuredJson = JsonSerializer.Serialize(source with
+        {
+            Host = source.Host with { AvailableDockerStorageBytes = 0 }
+        }, options);
+        var measured = JsonSerializer.Deserialize<PlatformManifest>(measuredJson, options);
+        Assert.NotNull(measured);
+        Assert.Equal(0, measured.Host.AvailableDockerStorageBytes);
+
+        var positiveJson = JsonSerializer.Serialize(source with
+        {
+            Host = source.Host with { AvailableDockerStorageBytes = 123456789 }
+        }, options);
+        var positive = JsonSerializer.Deserialize<PlatformManifest>(positiveJson, options);
+        Assert.NotNull(positive);
+        Assert.Equal(123456789, positive.Host.AvailableDockerStorageBytes);
+    }
+
+    [Fact]
     public async Task ImageTransferSingleFlight_ExecutesOneTransferForConcurrentWaiters()
     {
         var singleFlight = new ImageTransferSingleFlight();
