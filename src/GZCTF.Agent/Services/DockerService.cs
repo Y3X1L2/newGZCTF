@@ -50,7 +50,7 @@ public class DockerService
             return string.IsNullOrWhiteSpace(info?.DockerRootDir) ? null : info.DockerRootDir;
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { throw; }
-        catch (Exception error) when (error is HttpRequestException or IOException or DockerApiException or OperationCanceledException)
+        catch
         { return null; }
     }
 
