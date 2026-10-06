@@ -16,6 +16,7 @@ public static class ContentModuleRegistration
     public static IServiceCollection AddContentModule(this IServiceCollection services)
     {
         services.AddScoped<IImageTemplateCatalog, EfImageTemplateCatalog>();
+        services.AddScoped<IImageRuntimeAccessQuery, EfImageRuntimeAccessQuery>();
         services.AddScoped<IImageTemplateArtifactCleaner, ImageTemplateArtifactCleaner>();
         services.AddScoped<ImageTemplateReferenceService>();
         services.AddScoped<ImageTemplateDeletionService>();

@@ -1,6 +1,7 @@
 using GZCTF.Models;
 using GZCTF.Models.Data;
 using GZCTF.Infrastructure.Persistence.Queries;
+using GZCTF.Modules.Content.Application;
 using GZCTF.Modules.TeamLab.Contracts;
 using GZCTF.Modules.TeamLab.Domain;
 using GZCTF.Modules.TeamLab.Domain.Runtime;
@@ -9,7 +10,8 @@ using System.Text.Json;
 
 namespace GZCTF.Modules.TeamLab.Application;
 
-public sealed class TeamLabRuntimeProjectionService(AppDbContext context)
+public sealed class TeamLabRuntimeProjectionService(AppDbContext context,
+    IImageRuntimeAccessQuery imageAccessQuery)
 {
     public async Task<TeamLabTopologyAssetModel> GetAssetDefinitionAsync(
         Guid runtimeId, int assetId, CancellationToken token)
@@ -51,12 +53,7 @@ public sealed class TeamLabRuntimeProjectionService(AppDbContext context)
             item.Kind is TeamLabResourceKind.Docker or TeamLabResourceKind.Vm).ToArray();
         var templateIds = currentAssets.Where(item => item.SourceTemplateId.HasValue)
             .Select(item => item.SourceTemplateId!.Value).Distinct().ToArray();
-        var templates = await context.ImageTemplates.AsNoTracking()
-            .Where(item => templateIds.Contains(item.Id))
-            .ToDictionaryAsync(item => item.Id, cancellationToken);
-        var configurations = await context.ImageTemplateRemoteAccesses.AsNoTracking()
-            .Where(item => templateIds.Contains(item.ImageTemplateId))
-            .ToDictionaryAsync(item => item.ImageTemplateId, cancellationToken);
+        var templates = await imageAccessQuery.GetBatchAsync(templateIds, cancellationToken);
         var ticket = await context.DeploymentQueueTickets.AsNoTracking()
             .Where(item => item.TeamLabRuntimeId == runtime.Id && item.Generation == runtime.Generation)
             .OrderByDescending(item => item.CreatedAt)
@@ -138,9 +135,8 @@ public sealed class TeamLabRuntimeProjectionService(AppDbContext context)
                     os.Source,
                     item.SourceTemplateId,
                     TeamLabRuntimeAssetFacts.Interfaces(item, executed),
-                    TeamLabRuntimeAssetFacts.Capabilities(item, runtime.Status, os.Value,
-                        item.SourceTemplateId is { } templateId
-                            ? configurations.GetValueOrDefault(templateId) : null));
+                    TeamLabRuntimeAssetFacts.Capabilities(item, runtime.Status, runtime.Generation, os.Value,
+                        template));
                 }).ToArray(),
             runtime.CreatedAt,
             runtime.UpdatedAt,

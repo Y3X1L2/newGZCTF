@@ -1,6 +1,6 @@
 using System.Text.Json;
 using GZCTF.Models.Data;
-using GZCTF.Modules.Content.Domain;
+using GZCTF.Modules.Content.Contracts;
 using GZCTF.Modules.TeamLab.Contracts;
 using GZCTF.Modules.TeamLab.Domain.Runtime;
 using GZCTF.TeamLab.Contracts.Execution;
@@ -14,7 +14,9 @@ internal static class TeamLabRuntimeAssetFacts
         string Key, string NetworkKey, string IpAddress, int PrefixLength,
         string MacAddress, bool Primary);
 
-    internal static bool IsRunning(TeamLabRuntimeAsset asset, TeamLabRuntimeStatus runtimeStatus) =>
+    internal static bool IsRunning(TeamLabRuntimeAsset asset, TeamLabRuntimeStatus runtimeStatus,
+        int runtimeGeneration) =>
+        asset.Generation == runtimeGeneration &&
         runtimeStatus == TeamLabRuntimeStatus.Running &&
         asset.Status is not (TeamLabRuntimeStatus.Failed or TeamLabRuntimeStatus.Paused or
             TeamLabRuntimeStatus.Stopped or TeamLabRuntimeStatus.Destroyed) &&
@@ -55,7 +57,7 @@ internal static class TeamLabRuntimeAssetFacts
     }
 
     internal static (string Value, string Source) OperatingSystem(
-        TeamLabRuntimeAsset asset, ExecutedAsset? executed, ImageTemplate? template)
+        TeamLabRuntimeAsset asset, ExecutedAsset? executed, ImageRuntimeAccessSummary? template)
     {
         var spec = executed?.Spec;
         if (asset.Kind != TeamLabResourceKind.Vm || spec is null ||
@@ -63,9 +65,9 @@ internal static class TeamLabRuntimeAssetFacts
             !string.Equals(spec.ImageDigest, asset.ImageDigest, StringComparison.Ordinal))
             return ("unknown", "unknown");
         if (!executed!.OperatingSystemRecorded)
-            return template is not null && template.Id == asset.SourceTemplateId &&
+            return template is not null && template.TemplateId == asset.SourceTemplateId &&
                    string.Equals(template.ImageHash, asset.ImageDigest, StringComparison.Ordinal)
-                ? (template.OSType == OSType.Windows ? "windows" : "linux", "template-current")
+                ? (template.OperatingSystem == OSType.Windows ? "windows" : "linux", "template-current")
                 : ("unknown", "unknown");
         var value = spec.OperatingSystem switch
         {
@@ -112,8 +114,9 @@ internal static class TeamLabRuntimeAssetFacts
     }
 
     internal static IReadOnlyList<TeamLabRuntimeAssetCapabilityModel> Capabilities(
-        TeamLabRuntimeAsset asset, TeamLabRuntimeStatus runtimeStatus, string operatingSystem,
-        ImageTemplateRemoteAccess? configuration)
+        TeamLabRuntimeAsset asset, TeamLabRuntimeStatus runtimeStatus, int runtimeGeneration,
+        string operatingSystem,
+        ImageRuntimeAccessSummary? configuration)
     {
         var available = asset.WorkerNodeId is not null &&
             !string.IsNullOrWhiteSpace(asset.RuntimeResourceId);
@@ -123,16 +126,15 @@ internal static class TeamLabRuntimeAssetFacts
             new(kind, usable && available ? "configured-unverified" : "currently-unavailable", reason);
         TeamLabRuntimeAssetCapabilityModel Configured(string kind, TeamLabRemoteProtocol protocol,
             bool usable) =>
-            configuration is not { Enabled: true, Port: >= 1 and <= 65535 } ||
-            configuration.Protocol != protocol ||
-            string.IsNullOrWhiteSpace(configuration.Username) ||
-            string.IsNullOrWhiteSpace(configuration.ProtectedSecret)
+            configuration is not { RemoteConfigured: true } ||
+            !string.Equals(configuration.RemoteProtocol, protocol.ToString(),
+                StringComparison.OrdinalIgnoreCase)
                 ? new(kind, "unconfigured", "需在环境模板中配置运维入口", asset.SourceTemplateId)
                 : !usable || !available
                     ? new(kind, "currently-unavailable", "资产当前不可用", asset.SourceTemplateId)
                     : new(kind, "configured-unverified", "模板已配置，尚未验证来宾服务与网络连通", asset.SourceTemplateId);
 
-        var running = IsRunning(asset, runtimeStatus);
+        var running = IsRunning(asset, runtimeStatus, runtimeGeneration);
         var vmAccessReady = running && !string.IsNullOrWhiteSpace(asset.NativeIdentity) &&
             !string.IsNullOrWhiteSpace(asset.IpAddress);
         if (asset.Kind == TeamLabResourceKind.Docker)
