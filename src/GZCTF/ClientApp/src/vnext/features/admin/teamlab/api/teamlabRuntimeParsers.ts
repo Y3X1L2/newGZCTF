@@ -19,6 +19,9 @@ import { teamLabParsing as parse } from './teamlabParsers'
 
 const assetKinds = { 0: 'docker', 1: 'vm', Docker: 'docker', Vm: 'vm' } as const
 const operatingSystems = { windows: 'windows', linux: 'linux', unknown: 'unknown' } as const
+const operatingSystemSources = {
+  'execution-plan': 'execution-plan', 'template-current': 'template-current', unknown: 'unknown',
+} as const
 const capabilityKinds = {
   console: 'console', rdp: 'rdp', ssh: 'ssh', sftp: 'sftp', terminal: 'terminal', files: 'files',
 } as const
@@ -208,6 +211,8 @@ export function parseTeamLabRuntime(value: unknown): TeamLabRuntime {
         primaryIp: parse.nullableString(asset.primaryIp, `${label}.primaryIp`),
         operatingSystem: asset.operatingSystem == null ? 'unknown' :
           parse.enumValue(asset.operatingSystem, operatingSystems, `${label}.operatingSystem`),
+        operatingSystemSource: asset.operatingSystemSource == null ? 'unknown' :
+          parse.enumValue(asset.operatingSystemSource, operatingSystemSources, `${label}.operatingSystemSource`),
         sourceTemplateId: parse.nullableNumber(asset.sourceTemplateId, `${label}.sourceTemplateId`),
         interfaces: asset.interfaces == null ? [] : parse.array(asset.interfaces, `${label}.interfaces`, (entry, interfaceLabel) => {
           const iface = parse.record(entry, interfaceLabel)
