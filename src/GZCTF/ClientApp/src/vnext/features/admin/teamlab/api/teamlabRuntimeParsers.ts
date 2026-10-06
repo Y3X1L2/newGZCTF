@@ -18,6 +18,17 @@ import type {
 import { teamLabParsing as parse } from './teamlabParsers'
 
 const assetKinds = { 0: 'docker', 1: 'vm', Docker: 'docker', Vm: 'vm' } as const
+const operatingSystems = { windows: 'windows', linux: 'linux', unknown: 'unknown' } as const
+const operatingSystemSources = {
+  'execution-plan': 'execution-plan', 'template-current': 'template-current', unknown: 'unknown',
+} as const
+const capabilityKinds = {
+  console: 'console', rdp: 'rdp', ssh: 'ssh', sftp: 'sftp', terminal: 'terminal', files: 'files',
+} as const
+const capabilityStatuses = {
+  unsupported: 'unsupported', unconfigured: 'unconfigured',
+  'configured-unverified': 'configured-unverified', 'currently-unavailable': 'currently-unavailable',
+} as const
 const queueStatuses = {
   0: 'pending', 1: 'scheduling', 2: 'scheduled', 3: 'running', 4: 'succeeded', 5: 'failed', 6: 'cancelled',
   Pending: 'pending', Scheduling: 'scheduling', Scheduled: 'scheduled', Running: 'running',
@@ -124,6 +135,24 @@ function assetKind(value: unknown, label: string): TeamLabAssetKind {
   return parse.enumValue(value, assetKinds, label)
 }
 
+function interfaceValues(value: unknown, label: string) {
+  const item = parse.record(value, label)
+  return {
+    ipAddress: parse.string(item.ipAddress, `${label}.ipAddress`),
+    prefixLength: parse.number(item.prefixLength, `${label}.prefixLength`),
+    dnsServers: parse.array(item.dnsServers, `${label}.dnsServers`, parse.string),
+    gatewayIp: parse.nullableString(item.gatewayIp, `${label}.gatewayIp`),
+    staticRoutes: parse.array(item.staticRoutes, `${label}.staticRoutes`, (entry, routeLabel) => {
+      const route = parse.record(entry, routeLabel)
+      return {
+        destinationCidr: parse.string(route.destinationCidr, `${routeLabel}.destinationCidr`),
+        nextHop: parse.string(route.nextHop, `${routeLabel}.nextHop`),
+        metric: parse.nullableNumber(route.metric, `${routeLabel}.metric`),
+      }
+    }),
+  }
+}
+
 export function parseTeamLabRuntime(value: unknown): TeamLabRuntime {
   const item = parse.record(value, 'TeamLab runtime')
   const failure = item.failure == null ? null : parse.record(item.failure, 'TeamLab runtime.failure')
@@ -141,6 +170,8 @@ export function parseTeamLabRuntime(value: unknown): TeamLabRuntime {
     queueStatus: item.queueStatus == null ? null : parse.enumValue(item.queueStatus, queueStatuses, 'TeamLab runtime.queueStatus'),
     id: parse.string(item.id, 'TeamLab runtime.id'),
     releaseId: parse.string(item.releaseId, 'TeamLab runtime.releaseId'),
+    topologyId: parse.nullableString(item.topologyId, 'TeamLab runtime.topologyId'),
+    topologyName: parse.nullableString(item.topologyName, 'TeamLab runtime.topologyName'),
     releaseVersion: item.releaseVersion == null ? null : parse.number(item.releaseVersion, 'TeamLab runtime.releaseVersion'),
     planRevision: item.planRevision == null ? 0 : parse.number(item.planRevision, 'TeamLab runtime.planRevision'),
     generation: parse.number(item.generation, 'TeamLab runtime.generation'),
@@ -178,6 +209,34 @@ export function parseTeamLabRuntime(value: unknown): TeamLabRuntime {
         networkKeys: parse.array(asset.networkKeys, `${label}.networkKeys`, parse.string),
         runtimeResourceId: parse.nullableString(asset.runtimeResourceId, `${label}.runtimeResourceId`),
         primaryIp: parse.nullableString(asset.primaryIp, `${label}.primaryIp`),
+        operatingSystem: asset.operatingSystem == null ? 'unknown' :
+          parse.enumValue(asset.operatingSystem, operatingSystems, `${label}.operatingSystem`),
+        operatingSystemSource: asset.operatingSystemSource == null ? 'unknown' :
+          parse.enumValue(asset.operatingSystemSource, operatingSystemSources, `${label}.operatingSystemSource`),
+        sourceTemplateId: parse.nullableNumber(asset.sourceTemplateId, `${label}.sourceTemplateId`),
+        interfaces: asset.interfaces == null ? [] : parse.array(asset.interfaces, `${label}.interfaces`, (entry, interfaceLabel) => {
+          const iface = parse.record(entry, interfaceLabel)
+          return {
+            key: parse.string(iface.key, `${interfaceLabel}.key`),
+            networkKey: parse.string(iface.networkKey, `${interfaceLabel}.networkKey`),
+            primary: parse.boolean(iface.primary, `${interfaceLabel}.primary`),
+            assigned: iface.assigned == null ? null : interfaceValues(iface.assigned, `${interfaceLabel}.assigned`),
+            observed: iface.observed == null ? null : {
+              ...interfaceValues(iface.observed, `${interfaceLabel}.observed`),
+              observedAt: parse.number(parse.record(iface.observed, `${interfaceLabel}.observed`).observedAt,
+                `${interfaceLabel}.observed.observedAt`),
+            },
+          }
+        }),
+        capabilities: asset.capabilities == null ? [] : parse.array(asset.capabilities, `${label}.capabilities`, (entry, capabilityLabel) => {
+          const capability = parse.record(entry, capabilityLabel)
+          return {
+            kind: parse.enumValue(capability.kind, capabilityKinds, `${capabilityLabel}.kind`),
+            status: parse.enumValue(capability.status, capabilityStatuses, `${capabilityLabel}.status`),
+            reason: parse.string(capability.reason, `${capabilityLabel}.reason`),
+            settingsTemplateId: parse.nullableNumber(capability.settingsTemplateId, `${capabilityLabel}.settingsTemplateId`),
+          }
+        }),
         status: runtimeStatus(asset.status, `${label}.status`),
         error: parse.nullableString(asset.error, `${label}.error`),
       }

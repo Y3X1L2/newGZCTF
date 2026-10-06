@@ -109,6 +109,12 @@
   color: var(--yn-color-text);
 }
 
+.sceneActions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--yn-space-2); }
+.sceneActions a { display: inline-flex; align-items: center; gap: 5px; padding: var(--yn-space-2); color: var(--yn-color-text-secondary); text-decoration: none; white-space: nowrap; }
+.sceneActions a:hover, .sceneActions a:focus-visible { color: var(--yn-color-text); outline-color: var(--yn-color-brand); }
+.maintenanceNote { color: var(--yn-color-text-secondary); }
+.mobileSceneList { display: none; }
+
 .dialogForm {
   display: grid;
   gap: var(--yn-space-2);
@@ -135,6 +141,14 @@
 }
 
 @media (max-width: 760px) {
+  .desktopSceneTable { display: none; }
+  .mobileSceneList { display: block; border-top: 1px solid var(--yn-color-border); }
+  .mobileScene { min-width: 0; padding: var(--yn-space-4) 0; border-bottom: 1px solid var(--yn-color-border); }
+  .mobileScene h3 { margin: 0 0 var(--yn-space-2); font-size: var(--yn-font-md); }
+  .mobileScene h3 a { color: var(--yn-color-text); text-decoration: none; }
+  .mobileScene p { margin: 0 0 var(--yn-space-2); color: var(--yn-color-text-secondary); font-size: var(--yn-font-sm); }
+  .mobileScene .sceneActions { justify-content: flex-start; gap: var(--yn-space-1) var(--yn-space-2); margin-top: var(--yn-space-3); }
+  .mobileScene .sceneActions a { white-space: nowrap; }
   .page {
     padding-top: var(--yn-space-5);
   }

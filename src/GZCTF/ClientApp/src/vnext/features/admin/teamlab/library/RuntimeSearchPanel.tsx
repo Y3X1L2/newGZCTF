@@ -1,12 +1,12 @@
 import { ArrowRight, RefreshCw, Search, SlidersHorizontal } from 'lucide-react'
-import { useState } from 'react'
-import { Link } from 'react-router'
+import { useEffect, useState } from 'react'
+import { Link, useLocation } from 'react-router'
 import { ActionButton, InlineFeedback } from '../../../../shared/Interaction'
 import { DataState } from '../../../../shared/Primitives'
 import { errorMessage } from '../../../../shared/errors'
 import { CursorPaginationBar } from '../../shared/AdminWorkbench'
 import { formatAdminDate } from '../../shared/adminFormat'
-import { emptyRuntimeSearch, useRuntimeSearch } from './useRuntimeSearch'
+import { useRuntimeSearch } from './useRuntimeSearch'
 import { TeamLabRuntimeStatusBadge } from '../shared/TeamLabStatusBadge'
 import type { TeamLabRuntimeStatus } from '../api'
 import styles from '../runtimes/RuntimePanels.module.css'
@@ -16,10 +16,12 @@ const statusOptions = ['等待调度', '规划中', '已调度', '部署中', '�
 const uuidPattern = '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}'
 
 export function RuntimeSearchPanel() {
-  const [draft, setDraft] = useState(emptyRuntimeSearch)
-  const [advanced, setAdvanced] = useState(false)
+  const location = useLocation()
   const result = useRuntimeSearch()
-  return <section className={styles.panel} aria-label="运行实例检索">
+  const [draft, setDraft] = useState(result.filters)
+  const [advanced, setAdvanced] = useState(false)
+  useEffect(() => setDraft(result.filters), [result.filters])
+  return <section className={styles.panel} aria-label="运行环境检索">
     <header className={styles.panelHeader}><h3>运行环境</h3>
       <ActionButton aria-label="刷新环境" title="刷新环境" icon={<RefreshCw size={16} />} disabled={result.isValidating} onClick={() => void result.mutate()} type="button" />
     </header>
@@ -41,13 +43,13 @@ export function RuntimeSearchPanel() {
     {result.error ? <InlineFeedback tone="danger">{errorMessage(result.error, '运行实例读取失败。')}</InlineFeedback>
       : result.isLoading ? <DataState loading title="正在查询运行实例" /> : !result.data?.items.length ? <DataState title="没有符合条件的运行实例" />
       : <div className={styles.sessionTableScroll}><table className={styles.sessionTable}>
-        <thead><tr><th>环境</th><th>版本</th><th>状态</th><th>资产</th><th>最后更新</th><th /></tr></thead>
+        <thead><tr><th>环境</th><th>场景 / 版本</th><th>状态</th><th>资产</th><th>创建时间</th><th /></tr></thead>
         <tbody>{result.data.items.map(item => <tr key={item.id}>
-          <td><strong>{item.reference || item.scenarioName || '独立环境'}</strong>{item.reference && item.scenarioName ? <small>{item.scenarioName}</small> : null}</td>
-          <td>{item.releaseVersion ? `v${item.releaseVersion}` : '—'}</td>
+          <td><strong>{item.reference || item.scenarioName || '未命名环境'}</strong></td>
+          <td>{item.scenarioName || '场景关联未知'}{item.releaseVersion ? <small>v{item.releaseVersion}</small> : <small>版本未知</small>}</td>
           <td><TeamLabRuntimeStatusBadge status={(item.status === 'ready' ? 'running' : item.status === 'queued' ? 'scheduled' : item.status) as TeamLabRuntimeStatus} />{item.hasError && item.status !== 'failed' ? <small>存在异常</small> : null}</td>
-          <td>{item.assetCount}</td><td>{formatAdminDate(item.updatedAt ?? item.createdAt)}</td>
-          <td>{item.topologyId ? <Link aria-label="资产运维" title="进入环境" to={`/admin/teamlab/${item.topologyId}/runtimes/${item.id}?tab=assets&from=runtime-search`}><ArrowRight size={17} /></Link> : '发布关联缺失'}</td>
+          <td>{item.assetCount}</td><td>{formatAdminDate(item.createdAt)}</td>
+          <td><Link aria-label={`进入环境 ${item.reference || item.scenarioName || item.id}`} title="进入环境" state={{ returnTo: `${location.pathname}${location.search}` }} to={`/admin/teamlab/runtimes/${item.id}?from=runtime-search`}><ArrowRight size={17} /></Link></td>
         </tr>)}</tbody></table></div>}
     <CursorPaginationBar page={result.cursor.page} hasNext={!result.error && !!result.data?.nextCursor}
       onPrevious={result.cursor.previous} onNext={() => result.data?.nextCursor && result.cursor.next(result.data.nextCursor)} label="运行实例分页" />

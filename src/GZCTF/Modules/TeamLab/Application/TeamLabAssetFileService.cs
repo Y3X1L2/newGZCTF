@@ -26,6 +26,7 @@ public interface ITeamLabAssetFileGateway
 public sealed class TeamLabAssetFileService(AppDbContext context, TeamLabAuthorizationService authorization,
     ITeamLabAssetFileGateway gateway,
     TeamLabEventRecorder events, ImageRemoteAccessService imageAccess,
+    IImageRuntimeAccessQuery runtimeImageAccess,
     IDistributedLeaseProvider leases, TeamLabRuntimeOperationPayloadProtector operationPayloads,
     IOptions<TeamLabNetworkConfig>? options = null)
 {
@@ -103,6 +104,22 @@ public sealed class TeamLabAssetFileService(AppDbContext context, TeamLabAuthori
             ?? throw new TeamLabApiContractException("runtime_asset_not_found", "未找到运行资产。", 404);
         if (asset.Kind is not (TeamLabResourceKind.Docker or TeamLabResourceKind.Vm))
             throw new TeamLabApiContractException("files.unsupported", "当前资产不支持文件管理。", 422);
+        if (asset.Kind == TeamLabResourceKind.Vm)
+        {
+            var snapshots = await context.TeamLabExecutionPlanSnapshots.AsNoTracking()
+                .Where(item => item.RuntimeId == asset.RuntimeId && item.Generation == asset.Generation)
+                .ToArrayAsync(token);
+            var specs = TeamLabRuntimeAssetFacts.ReadCurrentSpecs(asset.Runtime, snapshots);
+            var templates = await runtimeImageAccess.GetBatchAsync(
+                asset.SourceTemplateId is { } templateId ? [templateId] : [], token);
+            var template = asset.SourceTemplateId is { } sourceId
+                ? templates.GetValueOrDefault(sourceId) : null;
+            var os = TeamLabRuntimeAssetFacts.OperatingSystem(asset,
+                specs.GetValueOrDefault(asset.TopologyKey), template);
+            if (os.Value != "linux")
+                throw new TeamLabApiContractException("files.unsupported",
+                    "只有系统类型可确认的 Linux 虚拟机支持文件管理。", 422);
+        }
         if (command.Operation == "reset-ssh-identity")
         {
             if (asset.Kind != TeamLabResourceKind.Vm) throw new TeamLabApiContractException("files.unsupported", "只有虚拟机使用 SSH 身份登记。", 422);

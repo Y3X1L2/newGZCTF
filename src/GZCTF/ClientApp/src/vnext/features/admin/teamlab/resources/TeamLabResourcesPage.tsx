@@ -1,5 +1,6 @@
 import { Plus, Search } from 'lucide-react'
 import { useState } from 'react'
+import { Link } from 'react-router'
 import { RuntimeApiError } from '../../api/runtimeJsonClient'
 import { ActionButton, InlineFeedback, VNextConfirmDialog } from '../../../../shared/Interaction'
 import { DataState } from '../../../../shared/Primitives'
@@ -32,30 +33,29 @@ import {
 } from './resourcesPresentation'
 import { useConnectorRegistry, useDevicePackageCatalog, useNodeArtifactCache } from './useTeamLabResources'
 import styles from './TeamLabResourcesPage.module.css'
-import { TeamLabWorkspaceNav } from '../shared/TeamLabWorkspaceNav'
 
-type ResourcesTab = 'packages' | 'connectors' | 'cache'
+type ResourcesTab = 'packages' | 'connectors'
 
 const tabLabels: Record<ResourcesTab, string> = {
   packages: '设备模板',
   connectors: '现场连接器',
-  cache: '节点制品缓存',
 }
 
 export function TeamLabResourcesPage() {
   const [tab, setTab] = useState<ResourcesTab>('packages')
 
-  useVNextPageTitle('TeamLab 组网资源')
+  useVNextPageTitle('TeamLab 设备与现场资源维护')
 
   return (
     <div className={styles.page}>
       <AdminPageHeader
         eyebrow="TEAMLAB"
-        title="资源"
+        title="设备与现场资源维护"
       />
-      <TeamLabWorkspaceNav active="resources" />
+      <p>此入口用于维护已有设备模板与现场连接器。普通虚拟场景直接在设计页选择镜像和网络。</p>
+      <p><Link to="/admin/images">环境模板</Link> · <Link to="/admin/nodes/teamlab-cache">节点制品缓存</Link> · <Link to="/admin/teamlab">返回场景</Link></p>
       <nav aria-label="组网资源分区" className={styles.tabs}>
-        {(Object.keys(tabLabels) as ResourcesTab[]).filter((key) => key !== 'cache').map((key) => (
+        {(Object.keys(tabLabels) as ResourcesTab[]).map((key) => (
           <button
             className={styles.tab}
             data-active={tab === key}
@@ -67,10 +67,8 @@ export function TeamLabResourcesPage() {
           </button>
         ))}
       </nav>
-      <button aria-pressed={tab === 'cache'} className={styles.cacheLink} onClick={() => setTab('cache')} type="button">节点缓存</button>
       {tab === 'packages' ? <DevicePackagesTab /> : null}
       {tab === 'connectors' ? <ConnectorsTab /> : null}
-      {tab === 'cache' ? <NodeCacheTab /> : null}
     </div>
   )
 }
@@ -419,7 +417,7 @@ function ConnectorsTab() {
   )
 }
 
-function NodeCacheTab() {
+export function NodeCacheTab() {
   const cache = useNodeArtifactCache()
 
   const columns: AdminDataColumn<TeamLabNodeCacheEntry>[] = [

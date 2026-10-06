@@ -1,5 +1,10 @@
 # YINYU 当前开发状态
 
+## TeamLab 第一轮制作与运行工作区：集成候选，未合并 main 或部署（2026-10-06）
+
+- 从 `origin/main f21f5ef2` 开发的三线代码已在任务分支形成候选，已验证代码提交为 `865842ee`，未合并 `main` 或部署。普通组网入口收敛为场景与运行环境；设计草稿、不可变发布和运行实例继续分开。全局运行详情脱离可编辑场景草稿，旧 URL 有兼容去向；逐网卡分配与独立可选来宾回读分开表达，当前缺可靠回读时显示未核对。Windows 不再误标 SSH 或提供没有支持闭环的文件入口；现存设备/现场绑定保留只读信息与管理员维护路径。后端权限和受管生命周期边界保留。
+- [Quality CI 37416742591](https://github.com/Y3X1L2/newGZCTF/actions/runs/37416742591) 在 `865842ee` 上 completed/success：后端单测 1294/1294、PostgreSQL/Testcontainers 集成 305/305（0 skip），EF 模型、PostgreSQL 查询计划和 OpenAPI 兼容通过；前端 118 文件/395 测试及 lint/类型/架构/构建通过。本机 PostgreSQL 16 Testcontainer 专项 1/1 通过。`3ace86e2` 前端已单独构建并逐文件核验 manifest；Main `a3bdb34a` 与该前端组合的候选制品留仓库外、未部署。先前 `ce17bf1c` 的本地 IAB 合成只读 fixture 四宽度/日夜及 390/1366 复拍无页面级横向溢出；最后 `13bff315` 修改未复拍，不能沿用旧截图作最终视觉签收。真实 Docker/VM/网络和生产验收未完成；学习资料与原始制品仍留仓库外本地目录。详见[集成交接](handoffs/2026-10-06-teamlab-core-workflow-integration.md)。
+
 ## TeamLab 资产界面修正：已合并 main 并部署 .27（2026-10-04）
 
 - PR #12 正常合并到 `main cc58169d`，与候选 `8fd26c22` 同树；修正重复兄弟 key 导致多组 VNC 残留，改为整组按 runtime/generation/asset 替换；连接/服务上下排列、地址单行、概览图标区分。前端完整114文件/378测试及门禁通过，GitHub Quality 37206599605 success（后端1284/304通过）。

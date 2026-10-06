@@ -190,7 +190,7 @@ public sealed class TeamLabDeploymentOrchestrationTests
     }
 
     private static TeamLabRuntimeOrchestrator LifecycleOrchestrator(AppDbContext context, ITeamLabNodeExecutor nodes,
-        ITeamLabRuntimeQueue? queue = null, TeamLabRuntimeOperationPayloadProtector? protector = null) => new(context, null!, new TeamLabRuntimeProjectionService(context),
+        ITeamLabRuntimeQueue? queue = null, TeamLabRuntimeOperationPayloadProtector? protector = null) => new(context, null!, new TeamLabRuntimeProjectionService(context, new GZCTF.Modules.Content.Infrastructure.EfImageRuntimeAccessQuery(context)),
         null!, null!, nodes, null!, null!, null!, null!, null!, null!, new TeamLabRuntimeLifecycleGuard(context),
         protector ?? new TeamLabRuntimeOperationPayloadProtector(new EphemeralDataProtectionProvider()), queue ?? Mock.Of<ITeamLabRuntimeQueue>(), null!,
         new TeamLabEventRecorder(context, Mock.Of<IOperationalEventWriter>(), new OperationalCorrelation()),

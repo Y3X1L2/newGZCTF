@@ -1,4 +1,5 @@
 import { Container, Monitor, MonitorCog } from 'lucide-react'
+import { Link } from 'react-router'
 import type { TeamLabImageOption } from '../../api'
 import { updateTopologyNode } from '../../model/topologyCommands'
 import type { TopologyAssetNode } from '../../model/topologyDocument'
@@ -56,6 +57,7 @@ export function AssetInspector({
           ))}
         </SelectInput>
         {node.devicePackageId ? <p>镜像由设备模板确定；解除模板绑定后可单独更换镜像。</p> : null}
+        <p>镜像与可选 SSH/RDP 运维入口在 <Link to="/admin/images">环境模板</Link> 中配置。运维入口未配置不会阻止场景发布。</p>
         {node.type !== 'docker' ? (
           <GuestNetworkModeEditor
             mode={node.vmNetworkMode}
@@ -72,7 +74,6 @@ export function AssetInspector({
         readOnly={readOnly}
         resources={node.resources}
       />
-      <CapabilityBindingEditor node={node} imageOptions={compatibleImages} onAssetChange={update} readOnly={readOnly} />
       <NetworkInterfacesEditor
         imageOptions={imageOptions}
         document={document}
@@ -80,11 +81,16 @@ export function AssetInspector({
         onDocumentChange={onDocumentChange}
         readOnly={readOnly}
       />
-      <HealthCheckEditor
-        healthCheck={node.healthCheck}
-        onChange={(healthCheck) => update({ healthCheck })}
-        readOnly={readOnly}
-      />
+      <details open={Boolean(node.devicePackageId || node.connectorId)}>
+        <summary>高级配置{node.devicePackageId || node.connectorId ? ' · 已有设备或现场绑定' : ''}</summary>
+        {node.devicePackageId || node.connectorId ? <CapabilityBindingEditor node={node} imageOptions={compatibleImages} onAssetChange={update} readOnly /> : null}
+        {node.devicePackageId || node.connectorId ? <p>已有绑定保持原值。请在 <Link to="/admin/teamlab/resources">管理员维护入口</Link> 查看资源；常规设计不再创建或修改绑定。</p> : null}
+        <HealthCheckEditor
+          healthCheck={node.healthCheck}
+          onChange={(healthCheck) => update({ healthCheck })}
+          readOnly={readOnly}
+        />
+      </details>
     </>
   )
 }

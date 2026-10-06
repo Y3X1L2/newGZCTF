@@ -2,21 +2,24 @@ import { AlertTriangle, CheckCircle2, Download, PlayCircle } from 'lucide-react'
 import { Link } from 'react-router'
 import { ActionButton } from '../../../../shared/Interaction'
 import type { TeamLabAdminReleaseReadiness } from '../api'
+import type { TeamLabImageOption } from '../api/teamlabImageCatalog'
 import { TeamLabRuntimeStatusBadge } from '../shared/TeamLabStatusBadge'
 import styles from './TeamLabReleasesPage.module.css'
 
-export function ReleaseReadinessPanel({ readiness, creatingTrial, preparingImages, onCreateTrial, onPrepareImages }: {
+export function ReleaseReadinessPanel({ readiness, imageOptions, creatingTrial, preparingImages, onCreateTrial, onPrepareImages }: {
   readiness: TeamLabAdminReleaseReadiness
+  imageOptions?: readonly TeamLabImageOption[]
   creatingTrial: boolean
   preparingImages: boolean
   onCreateTrial: () => void
   onPrepareImages: () => void
 }) {
   const imagesToPrepare = readiness.images.filter(image => image.pendingNodeCount || image.failedNodeCount)
+  const vmImages = [...new Set(readiness.plan?.assets.filter(asset => asset.kind === 'vm').map(asset => asset.imageTemplateId) ?? [])]
   return <section className={styles.readiness} aria-label="版本运行准备">
     <div className={styles.readinessStatus} data-ready={readiness.ready}>
       {readiness.ready ? <CheckCircle2 size={20} /> : <AlertTriangle size={20} />}
-      <strong>{readiness.ready ? '可以创建运行环境' : imagesToPrepare.length ? '需要准备镜像' : '暂不可创建'}</strong>
+      <strong>{readiness.ready ? '可以启动运行环境' : imagesToPrepare.length ? '需要准备镜像' : '暂不可启动'}</strong>
     </div>
     {readiness.plan ? <div className={styles.releaseScale}>
       <span>{readiness.plan.networks.length} 个网段</span>
@@ -30,11 +33,20 @@ export function ReleaseReadinessPanel({ readiness, creatingTrial, preparingImage
         {preparingImages ? '准备中' : '准备镜像'}
       </ActionButton> : null}
       <ActionButton disabled={!readiness.ready || creatingTrial} icon={<PlayCircle size={16} />} onClick={onCreateTrial} tone="primary" type="button">
-        {creatingTrial ? '正在创建' : '创建试运行'}
+        {creatingTrial ? '正在启动' : '启动环境'}
       </ActionButton>
     </div>
-    {readiness.latestTrialRuntime ? <Link className={styles.latestTrial} to={`/admin/teamlab/${readiness.topologyId}/runtimes/${readiness.latestTrialRuntime.id}`}>
-      最近试运行 <TeamLabRuntimeStatusBadge status={readiness.latestTrialRuntime.status} />
+    {vmImages.length ? <section className={styles.optionalAccess} aria-label="可选运维入口">
+      <h4>可选运维入口</h4>
+      <p>SSH/RDP 不参与启动就绪判断。模板配置不代表登录已经实测可用。</p>
+      <ul>{vmImages.map(id => {
+        const image = imageOptions?.find(option => option.id === id)
+        return <li key={id}>{image?.name ?? `模板 #${id}`}：{!imageOptions || !image ? '配置未知' : image.remoteAccessProtocol ? `已配置 ${image.remoteAccessProtocol.toUpperCase()}，尚未验证` : '未配置'} </li>
+      })}</ul>
+      <Link to="/admin/images">配置环境模板</Link>
+    </section> : null}
+    {readiness.latestTrialRuntime ? <Link className={styles.latestTrial} to={`/admin/teamlab/runtimes/${readiness.latestTrialRuntime.id}`}>
+      最近运行环境 <TeamLabRuntimeStatusBadge status={readiness.latestTrialRuntime.status} />
     </Link> : null}
     {readiness.images.length ? <details className={styles.imageDetails}>
       <summary>镜像分发详情</summary>

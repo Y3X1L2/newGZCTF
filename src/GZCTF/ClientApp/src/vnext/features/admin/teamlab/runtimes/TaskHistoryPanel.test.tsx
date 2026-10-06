@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { TaskHistoryPanel } from './TaskHistoryPanel'
 
@@ -19,8 +19,8 @@ describe('TaskHistoryPanel', () => {
     expect(history).toHaveBeenCalledWith('runtime-a', 3)
     expect(screen.getByText('暂停')).toBeTruthy()
     expect(screen.queryByText('ticket-a')).toBeNull()
-    fireEvent.click(screen.getByRole('row', { name: /暂停/ }))
-    expect(screen.getByText('node_unavailable')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: /暂停/ }))
+    expect(within(screen.getByRole('dialog')).getByText('node_unavailable')).toBeTruthy()
     expect(screen.getByRole('button', { name: '上一页' }).hasAttribute('disabled')).toBe(true)
     fireEvent.click(screen.getByRole('button', { name: '下一页' }))
     expect(next).toHaveBeenCalledOnce()

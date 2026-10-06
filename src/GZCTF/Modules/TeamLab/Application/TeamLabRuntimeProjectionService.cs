@@ -1,14 +1,17 @@
 using GZCTF.Models;
 using GZCTF.Models.Data;
 using GZCTF.Infrastructure.Persistence.Queries;
+using GZCTF.Modules.Content.Application;
 using GZCTF.Modules.TeamLab.Contracts;
 using GZCTF.Modules.TeamLab.Domain;
+using GZCTF.Modules.TeamLab.Domain.Runtime;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
 
 namespace GZCTF.Modules.TeamLab.Application;
 
-public sealed class TeamLabRuntimeProjectionService(AppDbContext context)
+public sealed class TeamLabRuntimeProjectionService(AppDbContext context,
+    IImageRuntimeAccessQuery imageAccessQuery)
 {
     public async Task<TeamLabTopologyAssetModel> GetAssetDefinitionAsync(
         Guid runtimeId, int assetId, CancellationToken token)
@@ -35,13 +38,22 @@ public sealed class TeamLabRuntimeProjectionService(AppDbContext context)
             .SingleOrDefaultAsync(item => item.PublicId == runtimePublicId, cancellationToken)
             ?? throw new TeamLabApiContractException("runtime_not_found", "未找到 TeamLab 运行时", 404);
         var releaseId = runtime.TopologyReleaseId;
-        if (releaseId == Guid.Empty)
-            throw new TeamLabApiContractException("runtime_invalid", "TeamLab 运行时未关联拓扑版本", 500);
         var release = await context.TeamLabTopologyReleases.AsNoTracking()
             .Where(item => item.Id == releaseId)
-            .Select(item => new { item.Version, item.ControlScopeId })
-            .SingleOrDefaultAsync(cancellationToken)
-            ?? throw new TeamLabApiContractException("release_not_found", "未找到运行时关联的发布版本", 500);
+            .Select(item => new { item.Version, item.ControlScopeId,
+                TopologyId = item.Topology == null ? (Guid?)null : item.Topology.PublicId,
+                item.CanonicalJson })
+            .SingleOrDefaultAsync(cancellationToken);
+        var snapshots = await context.TeamLabExecutionPlanSnapshots.AsNoTracking()
+            .Where(item => item.RuntimeId == runtime.Id && item.Generation == runtime.Generation)
+            .ToArrayAsync(cancellationToken);
+        var specs = TeamLabRuntimeAssetFacts.ReadCurrentSpecs(runtime, snapshots);
+        var currentAssets = runtime.Assets.Where(item => item.Generation == runtime.Generation &&
+            item.Status != TeamLabRuntimeStatus.Destroyed &&
+            item.Kind is TeamLabResourceKind.Docker or TeamLabResourceKind.Vm).ToArray();
+        var templateIds = currentAssets.Where(item => item.SourceTemplateId.HasValue)
+            .Select(item => item.SourceTemplateId!.Value).Distinct().ToArray();
+        var templates = await imageAccessQuery.GetBatchAsync(templateIds, cancellationToken);
         var ticket = await context.DeploymentQueueTickets.AsNoTracking()
             .Where(item => item.TeamLabRuntimeId == runtime.Id && item.Generation == runtime.Generation)
             .OrderByDescending(item => item.CreatedAt)
@@ -98,11 +110,15 @@ public sealed class TeamLabRuntimeProjectionService(AppDbContext context)
                 .OrderBy(item => item.TopologyKey, StringComparer.Ordinal)
                 .Select(item => new TeamLabRuntimeNetworkProjectionModel(
                     item.TopologyKey, item.Name, item.Cidr, item.GatewayIp)).ToArray(),
-            runtime.Assets.Where(item => item.Generation == runtime.Generation &&
-                                         item.Status != TeamLabRuntimeStatus.Destroyed &&
-                                         item.Kind is TeamLabResourceKind.Docker or TeamLabResourceKind.Vm)
+            currentAssets
                 .OrderBy(item => item.TopologyKey, StringComparer.Ordinal)
-                .Select(item => new TeamLabRuntimeAssetProjectionModel(
+                .Select(item =>
+                {
+                    var executed = specs.GetValueOrDefault(item.TopologyKey);
+                    var template = item.SourceTemplateId is { } sourceId
+                        ? templates.GetValueOrDefault(sourceId) : null;
+                    var os = TeamLabRuntimeAssetFacts.OperatingSystem(item, executed, template);
+                    return new TeamLabRuntimeAssetProjectionModel(
                     item.Id,
                     item.TopologyKey,
                     item.Name,
@@ -114,7 +130,14 @@ public sealed class TeamLabRuntimeProjectionService(AppDbContext context)
                     item.LastError,
                     TeamLabFailurePresentation.ForResource(
                         item.Status, "asset", "asset_deployment_failed",
-                        "asset", item.TopologyKey))).ToArray(),
+                        "asset", item.TopologyKey),
+                    os.Value,
+                    os.Source,
+                    item.SourceTemplateId,
+                    TeamLabRuntimeAssetFacts.Interfaces(item, executed),
+                    TeamLabRuntimeAssetFacts.Capabilities(item, runtime.Status, runtime.Generation, os.Value,
+                        template));
+                }).ToArray(),
             runtime.CreatedAt,
             runtime.UpdatedAt,
             runtime.LastError,
@@ -122,19 +145,37 @@ public sealed class TeamLabRuntimeProjectionService(AppDbContext context)
             ticket?.Id,
             ticket?.Status,
             subStages,
-            runtime.ControlScopeId ?? release.ControlScopeId,
-            release.Version,
+            runtime.ControlScopeId ?? release?.ControlScopeId,
+            release?.Version,
             TeamLabFailurePresentation.RecoveryActions(runtime.Status, runtimeFailure),
             runtimeFailure,
             managedRolloutId,
-            runtime.PlanRevision);
+            runtime.PlanRevision,
+            release?.TopologyId,
+            release is null ? null : FrozenName(release.CanonicalJson));
+    }
+
+    private static string? FrozenName(string canonicalJson)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(canonicalJson);
+            return document.RootElement.TryGetProperty("name", out var name) &&
+                name.ValueKind == JsonValueKind.String ? name.GetString() : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     private static TeamLabRuntimeStatus EffectiveAssetStatus(
         TeamLabRuntimeStatus runtimeStatus,
         TeamLabRuntimeAsset asset) =>
         runtimeStatus == TeamLabRuntimeStatus.Running &&
-        asset.Status is not (TeamLabRuntimeStatus.Failed or TeamLabRuntimeStatus.Paused or TeamLabRuntimeStatus.Stopped) &&
+        (asset.Status is TeamLabRuntimeStatus.Pending or TeamLabRuntimeStatus.Planning or
+            TeamLabRuntimeStatus.Scheduled or TeamLabRuntimeStatus.Deploying or
+            TeamLabRuntimeStatus.Probing or TeamLabRuntimeStatus.Running) &&
         !string.IsNullOrWhiteSpace(asset.RuntimeResourceId)
             ? TeamLabRuntimeStatus.Running
             : asset.Status;

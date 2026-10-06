@@ -89,25 +89,38 @@ function TeamLabDesignSession({
     (document: TopologyDocument) => {
       setDraft(document)
       setValidation(null)
+      setPublishOpen(false)
       setOperationError(null)
       autosave.schedule(document)
     },
     [autosave]
   )
-  const validate = useCallback(async () => {
+  const validate = useCallback(async (showResult = true) => {
     setValidating(true)
     setOperationError(null)
     try {
-      if (!(await autosave.flush())) return
+      if (!(await autosave.flush())) return null
+      const checkedRevision = revisionRef.current
       const result = await teamLabAdminApi.validateTopology(scene.id)
-      setValidation({ revision: revisionRef.current, result })
-      setValidationOpen(true)
+      if (!(await autosave.flush())) return null
+      if (revisionRef.current !== checkedRevision) {
+        setOperationError(new Error('校验期间设计发生变化，请重新检查并发布。'))
+        return null
+      }
+      setValidation({ revision: checkedRevision, result })
+      if (showResult || !result.valid) setValidationOpen(true)
+      return result
     } catch (error) {
       setOperationError(error)
+      return null
     } finally {
       setValidating(false)
     }
   }, [autosave, draft, scene.id])
+  const checkAndPublish = useCallback(async () => {
+    const result = await validate(false)
+    if (result?.valid) setPublishOpen(true)
+  }, [validate])
   const currentValidation = validation?.revision === savedRevision ? validation.result : null
   const latestRelease = useMemo(
     () => [...(releases ?? [])].sort((left, right) => right.version - left.version)[0] ?? null,
@@ -184,11 +197,11 @@ function TeamLabDesignSession({
         onSave={async (document) => {
           await autosave.flush(document)
         }}
-        onPublish={() => setPublishOpen(true)}
-        onValidate={validate}
+        onPublish={() => void checkAndPublish()}
+        onValidate={() => void validate()}
         publicationState={publicationState}
         publicationStatus={publicationStatus}
-        publishDisabled={!currentValidation?.valid || !hasUnpublishedChanges}
+        publishDisabled={!hasUnpublishedChanges || validating}
         publishing={publishing}
         saveStatus={autosave.status}
         validationIssueCount={currentValidation?.issues.length ?? 0}

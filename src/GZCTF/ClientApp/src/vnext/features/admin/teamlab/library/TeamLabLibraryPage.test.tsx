@@ -67,7 +67,16 @@ describe('TeamLabLibraryPage', () => {
     const row = screen.getByRole('row', { name: /企业域演练/ })
     expect(row).toHaveTextContent('3 网段 · 8 资产')
     expect(row).not.toHaveTextContent('设施')
-    expect(within(row).getByText('已发布')).toBeInTheDocument()
+    expect(within(row).getByText('与最新发布一致')).toBeInTheDocument()
+    expect(within(row).getByRole('link', { name: '版本与启动 企业域演练' })).toHaveAttribute('href', `/admin/teamlab/${scene.id}/releases`)
+  })
+
+  it('keeps complete scene actions in the narrow-screen item layout', () => {
+    render(<MemoryRouter><TeamLabLibraryPage /></MemoryRouter>)
+    const item = screen.getByRole('article')
+    expect(within(item).getByRole('link', { name: '设计 企业域演练' })).toHaveAttribute('href', `/admin/teamlab/${scene.id}/design`)
+    expect(within(item).getByRole('link', { name: '版本与启动 企业域演练' })).toHaveAttribute('href', `/admin/teamlab/${scene.id}/releases`)
+    expect(item).toHaveTextContent('3 网段 · 8 资产')
   })
 
   it('makes an active trial explicit in the scene status', () => {
@@ -92,10 +101,9 @@ describe('TeamLabLibraryPage', () => {
     render(<MemoryRouter><TeamLabLibraryPage /></MemoryRouter>)
 
     const row = screen.getByRole('row', { name: /企业域演练/ })
-    const sceneStatus = within(row).getByText('试运行中').closest('span')
-    expect(sceneStatus).toHaveAttribute('data-pulse', 'true')
-    expect(sceneStatus?.querySelector('svg')).not.toBeNull()
+    expect(within(row).getByText('与最新发布一致')).toBeInTheDocument()
     expect(within(row).getByText('规划中')).toBeInTheDocument()
+    expect(within(row).getByRole('link', { name: '查看环境 企业域演练' })).toHaveAttribute('href', '/admin/teamlab/runtimes/019f0000-0000-7000-8000-000000000010')
   })
 
   it.each([
@@ -123,9 +131,8 @@ describe('TeamLabLibraryPage', () => {
     render(<MemoryRouter><TeamLabLibraryPage /></MemoryRouter>)
 
     const row = screen.getByRole('row', { name: /企业域演练/ })
-    expect(within(row).getByText('已发布')).toBeInTheDocument()
+    expect(within(row).getByText('与最新发布一致')).toBeInTheDocument()
     expect(within(row).getByText(runtimeLabel)).toBeInTheDocument()
-    expect(within(row).queryByText('试运行中')).not.toBeInTheDocument()
   })
 
   it('renders an explicit empty state without inventing local rows', () => {
