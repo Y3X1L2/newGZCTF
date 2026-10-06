@@ -49,6 +49,7 @@ describe('RuntimeAssetWorkspace asset switching', () => {
   it('keeps one console and per-interface address after repeated asset switches', async () => {
     mount()
     await screen.findByText('未配置 RDP')
+    expect(screen.queryByRole('region', { name: '更多机器工具' })).toBeNull()
     for (const id of [2, 3, 4, 1, 4, 2, 1]) {
       select(id)
       await waitFor(() => expect(teamLabRemoteAccessApi.getAvailability).toHaveBeenCalledWith('runtime', id))
