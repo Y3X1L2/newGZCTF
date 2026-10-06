@@ -400,7 +400,7 @@
 .diagnosticsControls label { display: grid; gap: var(--yn-space-2); min-width: 0; max-width: 100%; }
 .diagnosticsControls select { max-width: 100%; padding: var(--yn-space-2); color: var(--yn-color-text); background: var(--yn-color-surface); border: 1px solid var(--yn-color-border); border-radius: 4px; }
 .diagnosticsFacts { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: var(--yn-space-4); }
-.powerDetails { border-top: 1px solid var(--yn-color-border); padding-top: var(--yn-space-4); }
+.powerDetails { border-top: 0; padding-top: 0; }
 .powerToggle { display: inline-flex; align-items: center; gap: var(--yn-space-2); padding: 0; border: 0; background: transparent; color: var(--yn-color-muted); cursor: pointer; font: inherit; }
 .powerToggle[aria-expanded='true'] svg { transform: rotate(180deg); }
 .powerContent { display: grid; justify-items: start; gap: var(--yn-space-3); padding-top: var(--yn-space-4); }

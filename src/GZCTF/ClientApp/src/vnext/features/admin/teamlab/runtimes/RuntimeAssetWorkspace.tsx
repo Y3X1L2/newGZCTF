@@ -25,6 +25,8 @@ export function RuntimeAssetWorkspace({ runtime }: { runtime: TeamLabRuntime }) 
     setTool(null)
     setParams(current => { const next = new URLSearchParams(current); next.set('asset', String(id)); next.delete('assetTask'); return next }, { replace: true })
   }
+  const belongsToNetwork = (item: TeamLabRuntimeAsset, networkKey: string) =>
+    item.interfaces?.some(nic => nic.networkKey === networkKey) || item.networkKeys.includes(networkKey)
   if (!asset) return <DataState title="当前环境没有机器" />
   const visibleInterfaces = asset.interfaces ?? []
   const transfer = asset.capabilities?.find(item => item.kind === (asset.kind === 'docker' ? 'files' : 'sftp'))
@@ -35,15 +37,21 @@ export function RuntimeAssetWorkspace({ runtime }: { runtime: TeamLabRuntime }) 
       <h3>机器与网段</h3>
       {runtime.networks.map(network => <section key={network.key} className={styles.networkGroup}>
         <h4><Network size={16} />{network.name}</h4><small>{network.cidr}</small>
-        {assets.filter(item => item.networkKeys.includes(network.key)).map(item => {
+        {assets.filter(item => belongsToNetwork(item, network.key)).map(item => {
           const address = item.interfaces?.find(nic => nic.networkKey === network.key)?.assigned?.ipAddress
           return <button aria-current={item.id === asset.id ? 'true' : undefined} key={item.id} onClick={() => select(item.id)} type="button">
-            <span><strong>{item.name}</strong><small>{address ?? '地址未分配'}</small></span><TeamLabAssetStatusBadge status={item.status} />
+            <span><strong>{item.name}</strong><small>{address ?? '地址未分配'}</small></span>
+            <span className={styles.railState}><TeamLabAssetStatusBadge status={item.status} />
+              {item.id === asset.id ? <small className={styles.currentMark}>当前机器</small> : null}</span>
           </button>
         })}
       </section>)}
-      {assets.filter(item => !item.networkKeys.length || !item.networkKeys.some(key => runtime.networks.some(network => network.key === key))).map(item =>
-        <button aria-current={item.id === asset.id ? 'true' : undefined} key={item.id} onClick={() => select(item.id)} type="button"><span><strong>{item.name}</strong><small>网段未关联</small></span></button>)}
+      {assets.filter(item => !runtime.networks.some(network => belongsToNetwork(item, network.key))).map(item =>
+        <button aria-current={item.id === asset.id ? 'true' : undefined} key={item.id} onClick={() => select(item.id)} type="button">
+          <span><strong>{item.name}</strong><small>网段未关联</small></span>
+          <span className={styles.railState}><TeamLabAssetStatusBadge status={item.status} />
+            {item.id === asset.id ? <small className={styles.currentMark}>当前机器</small> : null}</span>
+        </button>)}
     </aside>
     <div className={styles.assetDetail} key={`${runtime.id}:${runtime.generation}:${asset.id}`}>
       <header className={styles.assetHeader}><div><span>{kindLabel(asset)}</span><h3>{asset.name}</h3>

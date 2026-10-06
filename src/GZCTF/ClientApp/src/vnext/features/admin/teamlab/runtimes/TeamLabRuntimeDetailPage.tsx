@@ -73,9 +73,9 @@ export function TeamLabRuntimeDetailPage() {
     finally { setActing(false) }
   }
 
-  if (state.isLoading) return <DataState loading title="正在读取运行环境" />
-  if (!runtime || state.error) return <><DataState description={errorMessage(state.error, '运行环境加载失败。')} title="无法打开运行环境" />
-    <ActionButton icon={<RefreshCw size={16} />} onClick={() => void state.mutate()} type="button">重新读取</ActionButton></>
+  if (state.isLoading) return <section className={styles.page}><DataState loading title="正在读取运行环境" /></section>
+  if (!runtime || state.error) return <section className={styles.page}><DataState description={errorMessage(state.error, '运行环境加载失败。')} title="无法打开运行环境" />
+    <ActionButton icon={<RefreshCw size={16} />} onClick={() => void state.mutate()} type="button">重新读取</ActionButton></section>
   const queueActive = !!runtime.queueStatus && ['pending', 'scheduling', 'scheduled', 'running'].includes(runtime.queueStatus)
   const canCancel = runtime.queueStatus === 'pending' || runtime.queueStatus === 'scheduling'
   const canReset = !runtime.managedRolloutId && !queueActive && ['running', 'failed', 'paused'].includes(runtime.status)

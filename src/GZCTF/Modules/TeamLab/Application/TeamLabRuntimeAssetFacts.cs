@@ -63,11 +63,11 @@ internal static class TeamLabRuntimeAssetFacts
         var spec = executed?.Spec;
         if (asset.Kind != TeamLabResourceKind.Vm || spec is null ||
             spec.Kind != "vm" || spec.TemplateId != asset.SourceTemplateId ||
-            !string.Equals(spec.ImageDigest, asset.ImageDigest, StringComparison.Ordinal))
+            !SameImageDigest(spec.ImageDigest, asset.ImageDigest))
             return ("unknown", "unknown");
         if (!executed!.OperatingSystemRecorded)
             return template is not null && template.TemplateId == asset.SourceTemplateId &&
-                   string.Equals(template.ImageHash, asset.ImageDigest, StringComparison.Ordinal)
+                   SameImageDigest(template.ImageHash, asset.ImageDigest)
                 ? (template.OperatingSystem == OSType.Windows ? "windows" : "linux", "template-current")
                 : ("unknown", "unknown");
         var value = spec.OperatingSystem switch
@@ -83,8 +83,10 @@ internal static class TeamLabRuntimeAssetFacts
         TeamLabRuntimeAsset asset, ExecutedAsset? executed)
     {
         var spec = executed?.Spec;
-        if (spec is null || spec.TemplateId != asset.SourceTemplateId ||
-            !string.Equals(spec.ImageDigest, asset.ImageDigest, StringComparison.Ordinal)) return [];
+        var expectedKind = asset.Kind == TeamLabResourceKind.Docker ? "docker" : "vm";
+        if (spec is null || !string.Equals(spec.Kind, expectedKind, StringComparison.OrdinalIgnoreCase) ||
+            spec.TemplateId != asset.SourceTemplateId ||
+            !SameImageDigest(spec.ImageDigest, asset.ImageDigest)) return [];
         InterfaceAllocation[] allocations;
         try
         {
@@ -112,6 +114,25 @@ internal static class TeamLabRuntimeAssetFacts
             return new TeamLabRuntimeInterfaceProjectionModel(
                 allocation.Key, allocation.NetworkKey, allocation.Primary, assigned, null);
         }).ToArray();
+    }
+
+    private static bool SameImageDigest(string? left, string? right)
+    {
+        var canonicalLeft = CanonicalSha256(left);
+        return canonicalLeft is not null &&
+               string.Equals(canonicalLeft, CanonicalSha256(right), StringComparison.Ordinal);
+    }
+
+    // Runtime assets retain the source hash; accepted execution plans use a prefixed digest.
+    private static string? CanonicalSha256(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        var digest = value.Trim();
+        if (digest.StartsWith("sha256:", StringComparison.OrdinalIgnoreCase))
+            digest = digest["sha256:".Length..];
+        return digest.Length == 64 && digest.All(Uri.IsHexDigit)
+            ? $"sha256:{digest.ToLowerInvariant()}"
+            : null;
     }
 
     internal static IReadOnlyList<TeamLabRuntimeAssetCapabilityModel> Capabilities(
