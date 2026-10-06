@@ -112,7 +112,9 @@ export function RuntimeRemoteAccessPanel({ runtime, assetId }: { runtime: TeamLa
         onClick={event => void open(true, event.currentTarget)} type="button">控制台</ActionButton> : null}
     </div>
     {capability?.status === 'unconfigured' ? <p className={styles.muted}>{capability.reason}{settingsId && accessKind !== 'terminal' ? <>。<Link to={`/admin/images?template=${settingsId}&remoteAccess=1&returnTo=${returnTo}`}><Settings2 size={15} />配置{accessKind === 'rdp' ? '远程桌面' : 'SSH'}入口</Link></> : null}</p> : null}
-    {capability?.status === 'configured-unverified' ? <p className={styles.muted}>运维入口已配置，来宾服务与账号尚未实测。修改镜像模板设置可能影响本环境后续新连接。</p> : null}
+    {capability?.status === 'configured-unverified' ? <p className={styles.muted}>{asset.kind === 'docker'
+      ? '容器终端已准备，实际连接需打开后确认。'
+      : '运维入口已配置，来宾服务与账号尚未实测。修改镜像模板设置可能影响本环境后续新连接。'}</p> : null}
     {configured && availability.data && !protocolMatches ? <p className={styles.muted}>远程协议与当前能力记录不一致，请刷新运行状态或检查镜像设置。</p> : null}
     {capability?.status === 'currently-unavailable' ? <p className={styles.muted}>{capability.reason}</p> : null}
     {consoleCapability?.status === 'currently-unavailable' ? <p className={styles.muted}>控制台当前不可用：{consoleCapability.reason}</p> : null}

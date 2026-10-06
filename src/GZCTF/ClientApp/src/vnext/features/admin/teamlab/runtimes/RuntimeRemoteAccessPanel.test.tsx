@@ -47,6 +47,8 @@ describe('RuntimeRemoteAccessPanel lifecycle', () => {
 
   it('creates a terminal under StrictMode and cleans it on unmount', async () => {
     const view = mount()
+    expect(screen.getByText('容器终端已准备，实际连接需打开后确认。')).toBeInTheDocument()
+    expect(screen.queryByText(/镜像模板设置可能影响/)).toBeNull()
     await begin()
     expect(await screen.findByText('terminal:session')).toBeInTheDocument()
     view.unmount()
