@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
 using GZCTF.Agent.Models;
@@ -48,8 +49,9 @@ public sealed class AgentCapabilityContractTests
             new AgentHostFacts(4, 8L * 1024 * 1024 * 1024, 0, false, false),
             DateTimeOffset.UtcNow);
         var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
-        var legacyJson = JsonSerializer.Serialize(source, options);
-        var legacy = JsonSerializer.Deserialize<PlatformManifest>(legacyJson, options);
+        var legacyJson = JsonNode.Parse(JsonSerializer.Serialize(source, options))!.AsObject();
+        Assert.True(legacyJson["host"]!.AsObject().Remove("availableDockerStorageBytes"));
+        var legacy = JsonSerializer.Deserialize<PlatformManifest>(legacyJson.ToJsonString(), options);
 
         Assert.NotNull(legacy);
         Assert.Null(legacy.Host.AvailableDockerStorageBytes);
