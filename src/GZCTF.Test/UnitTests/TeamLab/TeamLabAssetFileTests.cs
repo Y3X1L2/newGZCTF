@@ -157,7 +157,7 @@ public sealed class TeamLabAssetFileTests
         asset.IpAddress = "10.80.0.10";
         asset.SourceTemplateId = 42;
         asset.TopologyKey = "linux-vm";
-        asset.ImageDigest = "sha256:fixture-vm";
+        asset.ImageDigest = new string('a', 64);
         db.ImageTemplates.Add(new ImageTemplate { Id = 42, Name = "linux-vm", OSType = OSType.Linux,
             ImageType = ImageType.Qcow2, ImageHash = asset.ImageDigest });
         AddVmPlan(db, asset, TeamLabGuestOperatingSystem.Linux);
@@ -198,7 +198,7 @@ public sealed class TeamLabAssetFileTests
         asset.Kind = TeamLabResourceKind.Vm;
         asset.SourceTemplateId = 43;
         asset.TopologyKey = "windows-vm";
-        asset.ImageDigest = "sha256:windows-fixture";
+        asset.ImageDigest = new string('b', 64);
         db.ImageTemplates.Add(new ImageTemplate { Id = 43, Name = "windows-vm", OSType = OSType.Windows,
             ImageType = ImageType.Qcow2, ImageHash = asset.ImageDigest });
         AddVmPlan(db, asset, TeamLabGuestOperatingSystem.Windows);
@@ -221,10 +221,10 @@ public sealed class TeamLabAssetFileTests
         asset.Kind = TeamLabResourceKind.Vm;
         asset.SourceTemplateId = 44;
         asset.TopologyKey = "old-linux-vm";
-        asset.ImageDigest = "sha256:original-vm";
+        asset.ImageDigest = new string('c', 64);
         db.ImageTemplates.Add(new ImageTemplate { Id = 44, Name = "replacement-template",
             OSType = OSType.Linux, ImageType = ImageType.Qcow2,
-            ImageHash = "sha256:different-image" });
+            ImageHash = new string('d', 64) });
         AddVmPlan(db, asset, TeamLabGuestOperatingSystem.Linux);
         await db.SaveChangesAsync();
         var gateway = new Mock<ITeamLabAssetFileGateway>(MockBehavior.Strict);
@@ -240,7 +240,7 @@ public sealed class TeamLabAssetFileTests
     static void AddVmPlan(AppDbContext db, TeamLabRuntimeAsset asset, TeamLabGuestOperatingSystem os)
     {
         var spec = new TeamLabAssetExecutionSpecV2(asset.TopologyKey, "vm", "vm-resource",
-            asset.ImageDigest!, "vm-resource", asset.SourceTemplateId!.Value,
+            "sha256:" + asset.ImageDigest, "vm-resource", asset.SourceTemplateId!.Value,
             2, 2048, [], [], OperatingSystem: os);
         var plan = new TeamLabExecutionPlanV2(asset.RuntimeId, asset.Runtime.PublicId,
             asset.Generation, "shard", "digest", "network-digest", true, [], [spec], []);
