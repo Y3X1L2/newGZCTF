@@ -89,6 +89,7 @@ function TeamLabDesignSession({
     (document: TopologyDocument) => {
       setDraft(document)
       setValidation(null)
+      setPublishOpen(false)
       setOperationError(null)
       autosave.schedule(document)
     },
@@ -99,8 +100,14 @@ function TeamLabDesignSession({
     setOperationError(null)
     try {
       if (!(await autosave.flush())) return null
+      const checkedRevision = revisionRef.current
       const result = await teamLabAdminApi.validateTopology(scene.id)
-      setValidation({ revision: revisionRef.current, result })
+      if (!(await autosave.flush())) return null
+      if (revisionRef.current !== checkedRevision) {
+        setOperationError(new Error('校验期间设计发生变化，请重新检查并发布。'))
+        return null
+      }
+      setValidation({ revision: checkedRevision, result })
       if (showResult || !result.valid) setValidationOpen(true)
       return result
     } catch (error) {

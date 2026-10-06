@@ -58,4 +58,15 @@ describe('TeamLabReleasesPage', () => {
     }))
     expect(navigate).toHaveBeenCalledWith('/admin/teamlab/runtimes/019f0000-0000-7000-8000-000000000020')
   })
+
+  it('scrolls to runtime history after the legacy list route loads asynchronously', async () => {
+    const scroll = vi.fn()
+    Object.defineProperty(Element.prototype, 'scrollIntoView', { configurable: true, value: scroll })
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation(callback => { callback(0); return 1 })
+    render(<MemoryRouter initialEntries={[`/admin/teamlab/${release.topologyId}/releases#runtimes`]}>
+      <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}><TeamLabReleasesPage /></SWRConfig>
+    </MemoryRouter>)
+    await waitFor(() => expect(scroll).toHaveBeenCalled())
+    delete (Element.prototype as { scrollIntoView?: () => void }).scrollIntoView
+  })
 })
