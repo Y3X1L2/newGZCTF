@@ -9,7 +9,7 @@
 
 - 基线：`origin/main f21f5ef2`；任务分支 `codex/teamlab-core-runtime`；工作树 `C:/Users/Cloud/.codex/worktrees/teamlab-managed-agent/newGZCTF`。
 - 运行 UI 主体：`fbe768f0`；旧诊断 URL 兼容：`e7ad8d13`。分支已推送，保留工作树供集成审查。
-- 当前状态：代码已实现并完成本地验证；前后端集成后的真实基础设施验收、生产发布均未执行。
+- 当前状态：代码已实现并完成本地验证；最终三线集成 `ce17bf1c` 已完成前端视觉复查，真实基础设施验收与生产发布均未执行。
 
 ## 技术结论与改动
 
@@ -29,7 +29,7 @@
 | 运行模块及镜像深链测试 | `pnpm exec vitest run src/vnext/features/admin/teamlab/runtimes src/vnext/features/admin/images/AdminImagesPage.remoteAccess.test.tsx` | 24 文件、73 测试通过 |
 | 构建 | `pnpm exec vite build` | 本地生产制品构建通过 |
 | 差异 | `git diff --check` | 通过 |
-| 本地视觉 | CUA IAB 打开临时只读 Vite fixture，390/1366/1920/2560 宽度；明暗、键盘 Tab、CDP reduced-motion | 四档无页面级横向溢出；窄屏与桌面布局可读。临时 fixture 已移除，服务器已停止；截图仅保存在本次工具记录，未落盘。 |
+| 本地视觉 | CUA IAB 打开临时只读 Vite fixture，390/1366/1920/2560 宽度；明暗、键盘 Tab、CDP reduced-motion | 四档无页面级横向溢出；窄屏与桌面布局可读。50 张截图、最终 fixture 与详细限制保存在仓库外 `D:/Work/YINYU-TeamLab-Page-Plan-20261006/visual-acceptance/`。临时仓库文件已移除，服务器已停止。 |
 
 完整前端门禁将由集成任务统一执行。本地 fixture 无后端，任务/诊断 API 返回 502；不能据此判断真实业务链路。真实 Docker、Linux/Windows VM、SSH/RDP、VPN 和业务端口可达性尚未验收。后端当前 `observed=null`，不能宣称真实来宾配置已回读。
 
