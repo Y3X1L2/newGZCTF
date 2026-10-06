@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.IO;
 using GZCTF.Models;
+using GZCTF.Models.Data;
 using GZCTF.Infrastructure.Concurrency;
 using GZCTF.Modules.Content.Application;
 using GZCTF.Modules.Content.Domain;
@@ -152,6 +153,8 @@ public sealed class TeamLabAssetFileTests
         asset.NativeIdentity = Guid.NewGuid().ToString();
         asset.IpAddress = "10.80.0.10";
         asset.SourceTemplateId = 42;
+        db.ImageTemplates.Add(new ImageTemplate { Id = 42, Name = "linux-vm", OSType = OSType.Linux,
+            ImageType = ImageType.Qcow2 });
         var protection = new EphemeralDataProtectionProvider();
         var credential = Convert.ToBase64String(RandomNumberGenerator.GetBytes(24));
         db.ImageTemplateRemoteAccesses.Add(new ImageTemplateRemoteAccess
@@ -179,6 +182,26 @@ public sealed class TeamLabAssetFileTests
             new(3, "reset-ssh-identity", "/", Confirmed: true), default);
         Assert.Equal(replacementKey, asset.SftpHostKeySha256);
         gateway.Verify(item => item.ExecuteVmAsync(It.IsAny<Guid>(), It.Is<TeamLabVmFileRequest>(request => request.Operation == "list"), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task WindowsVmFileRequestIsRejectedBeforeSftpDispatch()
+    {
+        await using var db = Context();
+        var asset = await Seed(db);
+        asset.Kind = TeamLabResourceKind.Vm;
+        asset.SourceTemplateId = 43;
+        db.ImageTemplates.Add(new ImageTemplate { Id = 43, Name = "windows-vm", OSType = OSType.Windows,
+            ImageType = ImageType.Qcow2 });
+        await db.SaveChangesAsync();
+        var gateway = new Mock<ITeamLabAssetFileGateway>(MockBehavior.Strict);
+
+        var error = await Assert.ThrowsAsync<TeamLabApiContractException>(() =>
+            Service(db, gateway.Object).ExecuteAsync(asset.Runtime.PublicId, asset.Id,
+                asset.Runtime.CreatedById!.Value, false, new(3, "list", "/"), default));
+
+        Assert.Equal("files.unsupported", error.Code);
+        gateway.VerifyNoOtherCalls();
     }
 
     static AppDbContext Context() => new(new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);

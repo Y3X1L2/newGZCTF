@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using GZCTF.Modules.Content.Application;
 using GZCTF.Infrastructure.Concurrency;
 using GZCTF.Models.Internal;
+using GZCTF.Models.Data;
 using Microsoft.Extensions.Options;
 
 namespace GZCTF.Modules.TeamLab.Application;
@@ -103,6 +104,22 @@ public sealed class TeamLabAssetFileService(AppDbContext context, TeamLabAuthori
             ?? throw new TeamLabApiContractException("runtime_asset_not_found", "未找到运行资产。", 404);
         if (asset.Kind is not (TeamLabResourceKind.Docker or TeamLabResourceKind.Vm))
             throw new TeamLabApiContractException("files.unsupported", "当前资产不支持文件管理。", 422);
+        if (asset.Kind == TeamLabResourceKind.Vm)
+        {
+            var snapshots = await context.TeamLabExecutionPlanSnapshots.AsNoTracking()
+                .Where(item => item.RuntimeId == asset.RuntimeId && item.Generation == asset.Generation)
+                .ToArrayAsync(token);
+            var specs = TeamLabRuntimeAssetFacts.ReadCurrentSpecs(asset.Runtime, snapshots);
+            var template = await context.ImageTemplates.AsNoTracking()
+                .Where(item => item.Id == asset.SourceTemplateId)
+                .SingleOrDefaultAsync(token);
+            var os = TeamLabRuntimeAssetFacts.OperatingSystem(asset,
+                specs.GetValueOrDefault(asset.TopologyKey), template);
+            if (os.Value == "windows" || template?.OSType == OSType.Windows ||
+                os.Value == "unknown" && template is null)
+                throw new TeamLabApiContractException("files.unsupported",
+                    "Windows 或系统类型未确认的虚拟机不支持文件管理。", 422);
+        }
         if (command.Operation == "reset-ssh-identity")
         {
             if (asset.Kind != TeamLabResourceKind.Vm) throw new TeamLabApiContractException("files.unsupported", "只有虚拟机使用 SSH 身份登记。", 422);
