@@ -1,4 +1,4 @@
-import { ArrowUpRight, Boxes, Network, PlayCircle } from 'lucide-react'
+import { Boxes, Network, PlayCircle } from 'lucide-react'
 import { memo, useMemo } from 'react'
 import { Link, useNavigate } from 'react-router'
 import type { TeamLabAdminSceneSummary } from '../api'
@@ -71,7 +71,6 @@ export const TeamLabSceneTable = memo(function TeamLabSceneTable({
             <Link aria-label={`设计 ${scene.name}`} to={`/admin/teamlab/${scene.id}/design`} title="设计"><Network size={16} /><span>设计</span></Link>
             <Link aria-label={`版本与启动 ${scene.name}`} to={`/admin/teamlab/${scene.id}/releases`} title="版本与启动"><Boxes size={16} /><span>版本与启动</span></Link>
             {scene.latestTrialRuntime ? <Link aria-label={`查看环境 ${scene.name}`} to={`/admin/teamlab/runtimes/${scene.latestTrialRuntime.id}`} title="查看环境"><PlayCircle size={16} /><span>查看环境</span></Link> : <span className={styles.muted}>暂无环境</span>}
-            <ArrowUpRight aria-hidden="true" size={15} />
           </div>
         ),
       },
