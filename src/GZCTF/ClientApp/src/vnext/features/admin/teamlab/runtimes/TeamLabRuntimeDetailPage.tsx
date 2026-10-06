@@ -34,7 +34,7 @@ export function TeamLabRuntimeDetailPage() {
   const location = useLocation()
   const [params, setParams] = useSearchParams()
   const requestedTab = params.get('tab')
-  const tab: RuntimeTab = requestedTab === 'events' || requestedTab === 'logs' ? 'activity'
+  const tab: RuntimeTab = requestedTab === 'events' || requestedTab === 'logs' || requestedTab === 'capture' ? 'activity'
     : requestedTab === 'overview' || requestedTab === 'network' || requestedTab === 'operations' || requestedTab === 'traffic' ? 'assets'
     : tabs.some(item => item.key === requestedTab) ? requestedTab as RuntimeTab : 'assets'
   const [confirmation, setConfirmation] = useState<'reset' | 'destroy' | 'update' | null>(null)
@@ -118,7 +118,8 @@ export function TeamLabRuntimeDetailPage() {
     <div className={styles.content}>
       {tab === 'assets' ? <>{transitioning ? <RuntimeStageTimeline runtime={runtime} /> : null}<RuntimeAssetWorkspace key={`${runtime.id}:${runtime.generation}`} runtime={runtime} /></> : null}
       {tab === 'access' ? <RuntimeAccessWorkspace key={`${runtime.id}:${runtime.generation}`} runtime={runtime} /> : null}
-      {tab === 'activity' ? <RuntimeActivityWorkspace runtime={runtime} eventFilters={eventFilters} onFiltersChange={setEventFilters} /> : null}
+      {tab === 'activity' ? <RuntimeActivityWorkspace runtime={runtime} eventFilters={eventFilters} onFiltersChange={setEventFilters}
+        initialDetail={requestedTab === 'events' || requestedTab === 'logs' || requestedTab === 'capture' ? requestedTab : undefined} /> : null}
     </div>
     <VNextDrawer eyebrow="" open={drawer !== null} onClose={() => setDrawer(null)} title={drawer === 'grants' ? '访问权限' : drawer === 'check' ? '运行状态检查' : '部署详情'}>
       {drawer === 'grants' ? <RuntimeGrantPanel runtime={runtime} /> : drawer === 'check' ? <RuntimeDifferencesPanel runtime={runtime} /> : drawer === 'deployment' ? <>

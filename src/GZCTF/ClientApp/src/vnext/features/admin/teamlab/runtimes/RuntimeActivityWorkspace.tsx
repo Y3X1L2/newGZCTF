@@ -8,11 +8,13 @@ import { TaskHistoryPanel } from './TaskHistoryPanel'
 import { useRuntimeEvents, type TeamLabEventFilters } from './useRuntimeEvents'
 import styles from './RuntimeWorkspaces.module.css'
 
-export function RuntimeActivityWorkspace({ runtime, eventFilters, onFiltersChange }: {
+export function RuntimeActivityWorkspace({ runtime, eventFilters, onFiltersChange, initialDetail }: {
   runtime: TeamLabRuntime; eventFilters: TeamLabEventFilters; onFiltersChange: (filters: TeamLabEventFilters) => void
+  initialDetail?: 'events' | 'logs' | 'capture'
 }) {
-  const [advanced, setAdvanced] = useState(false)
-  const [view, setView] = useState<'events' | 'logs' | 'sessions' | 'capture'>('events')
+  const [advanced, setAdvanced] = useState(Boolean(initialDetail))
+  const [view, setView] = useState<'events' | 'logs' | 'sessions' | 'capture'>(initialDetail ?? 'events')
+  useEffect(() => { if (initialDetail) { setAdvanced(true); setView(initialDetail) } }, [initialDetail])
   useEffect(() => { if (eventFilters.generation !== null || eventFilters.stage) { setAdvanced(true); setView('events') } }, [eventFilters])
   const events = useRuntimeEvents(advanced && view === 'events' ? runtime.id : '', runtime.status, eventFilters)
   return <div>

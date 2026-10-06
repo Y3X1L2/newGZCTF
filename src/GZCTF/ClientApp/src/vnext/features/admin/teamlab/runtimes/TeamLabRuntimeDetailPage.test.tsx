@@ -10,6 +10,7 @@ import { useTrafficObservability } from './useTrafficObservability'
 
 vi.mock('./useTeamLabRuntime', () => ({ useTeamLabRuntime: vi.fn() }))
 vi.mock('./RuntimeAccessPanel', () => ({ RuntimeAccessPanel: () => <div>访问入口</div> }))
+vi.mock('./CapturePanel', () => ({ CapturePanel: () => <div>限时抓包记录</div> }))
 vi.mock('./useRuntimeUpdatePreview', () => ({ useRuntimeUpdatePreview: vi.fn() }))
 vi.mock('./useRuntimeEvents', () => ({
   useRuntimeEvents: vi.fn(),
@@ -119,6 +120,14 @@ describe('TeamLabRuntimeDetailPage', () => {
     expect(screen.getByRole('heading', { name: '企业域演练' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '机器与网络' })).toHaveAttribute('aria-current', 'page')
     expect(screen.getByRole('link', { name: '版本与启动' })).toHaveAttribute('href', '/admin/teamlab/topology-a/releases')
+  })
+
+  it('opens legacy capture links inside advanced operation records', () => {
+    render(<MemoryRouter initialEntries={[`/admin/teamlab/runtimes/${runtime.id}?tab=capture`]}><Routes>
+      <Route path="/admin/teamlab/runtimes/:runtimeId" element={<TeamLabRuntimeDetailPage />} />
+    </Routes></MemoryRouter>)
+    expect(screen.getByRole('button', { name: /^操作记录$/ })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByText('限时抓包记录')).toBeInTheDocument()
   })
 
   it('uses three task views without exposing traffic workbench', () => {
