@@ -4,6 +4,7 @@ import { SWRConfig } from 'swr'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { teamLabAdminApi, teamLabRuntimeApi, type TeamLabRelease } from '../api'
 import { TeamLabReleasesPage } from './TeamLabReleasesPage'
+import { ReleaseReadinessPanel } from './ReleaseReadinessPanel'
 
 const navigate = vi.fn()
 vi.mock('react-router', async () => {
@@ -68,5 +69,38 @@ describe('TeamLabReleasesPage', () => {
     </MemoryRouter>)
     await waitFor(() => expect(scroll).toHaveBeenCalled())
     delete (Element.prototype as { scrollIntoView?: () => void }).scrollIntoView
+  })
+
+  it('shows cached nodes separately from placement blockers', () => {
+    render(<MemoryRouter><ReleaseReadinessPanel
+      readiness={{
+        topologyId: release.topologyId, releaseId: release.id, ready: false, plan: null,
+        images: [{ imageTemplateId: 1, name: 'Windows 模板', imageType: 'qcow2', eligibleNodeCount: 2, readyNodeCount: 1, pendingNodeCount: 1, failedNodeCount: 0 }],
+        latestTrialRuntime: null, blockingReasons: ['网络组 entry/internal 需在同一节点放置。'],
+      }}
+      creatingTrial={false} preparingImages={false} onCreateTrial={vi.fn()} onPrepareImages={vi.fn()}
+    /></MemoryRouter>)
+
+    expect(screen.getByText('暂不可启动')).toBeInTheDocument()
+    expect(screen.queryByText('需要准备镜像')).not.toBeInTheDocument()
+    expect(screen.getByText('网络组 entry/internal 需在同一节点放置。')).toBeInTheDocument()
+    fireEvent.click(screen.getByText('镜像分发详情'))
+    expect(screen.getByText('已缓存 / 合格节点')).toBeInTheDocument()
+    expect(screen.getByText('1/2')).toBeInTheDocument()
+    expect(screen.getByText(/其他节点未缓存不单独阻止启动/)).toBeInTheDocument()
+  })
+
+  it('keeps start available when only one of two eligible nodes has a cached image', () => {
+    render(<MemoryRouter><ReleaseReadinessPanel
+      readiness={{
+        topologyId: release.topologyId, releaseId: release.id, ready: true, plan: null,
+        images: [{ imageTemplateId: 1, name: 'Windows 模板', imageType: 'qcow2', eligibleNodeCount: 2, readyNodeCount: 1, pendingNodeCount: 1, failedNodeCount: 0 }],
+        latestTrialRuntime: null, blockingReasons: [],
+      }}
+      creatingTrial={false} preparingImages={false} onCreateTrial={vi.fn()} onPrepareImages={vi.fn()}
+    /></MemoryRouter>)
+
+    expect(screen.getByText('可以启动运行环境')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '启动环境' })).toBeEnabled()
   })
 })

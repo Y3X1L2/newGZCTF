@@ -28,6 +28,7 @@
 .readinessStatus { display: flex; align-items: center; gap: var(--yn-space-2); color: var(--yn-color-warning); font-size: var(--yn-font-lg); }
 .readinessStatus[data-ready='true'] { color: var(--yn-color-success); }
 .blockers { display: grid; gap: var(--yn-space-2); margin: 0; padding-left: var(--yn-space-5); color: var(--yn-color-text); }
+.readinessNote, .imageDetails p { margin: 0; color: var(--yn-color-muted); font-size: var(--yn-font-sm); }
 .readinessActions { gap: var(--yn-space-2); }
 .latestTrial { width: fit-content; gap: var(--yn-space-2); color: var(--yn-color-text-secondary); text-decoration: none; }
 .latestTrial:hover { color: var(--yn-color-text); }

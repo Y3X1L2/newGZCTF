@@ -235,13 +235,13 @@ public sealed class TeamLabAdminQueryService(
             plan = await topologies.PlanAsync(
                 topologyId, releaseId, actorUserId, administrator, cancellationToken);
         }
-        catch (TeamLabApiContractException exception) when (exception.Code == "capability_unavailable")
+        catch (TeamLabApiContractException exception) when (exception.Code is
+            "capability_unavailable" or "teamlab_guest_network_capability_unavailable")
         {
-            planningBlocker = DescribePlanningBlocker(execution, await LoadPlanningNodesAsync(cancellationToken));
-        }
-        catch (TeamLabApiContractException exception) when (exception.Code == "teamlab_guest_network_capability_unavailable")
-        {
-            planningBlocker = exception.Message;
+            var requiredFeatures = await TeamLabGuestNetworkCapabilityPolicy.LoadDeclaredAsync(
+                context, execution, cancellationToken);
+            planningBlocker = DescribePlanningBlocker(execution,
+                await LoadPlanningCapacityAsync(cancellationToken), requiredFeatures);
         }
         var requirements = execution.Assets
             .GroupBy(item => item.ImageTemplateId)
@@ -260,8 +260,9 @@ public sealed class TeamLabAdminQueryService(
         var nodes = await context.WorkerNodes.AsNoTracking()
             .Where(item => item.IsSchedulable && item.TeamLabNetworkEnabled &&
                            item.TeamLabTunnelStatus == TeamLabTunnelStatus.Healthy)
-            .Select(item => new { item.Id, item.Capabilities })
             .ToArrayAsync(cancellationToken);
+        var onlineNodes = nodes.Where(item => item.GetEffectiveStatus(DateTimeOffset.UtcNow) == NodeStatus.Online)
+            .ToArray();
         var records = await context.ImageDistributionRecords.AsNoTracking()
             .Where(item => templateIds.Contains(item.ImageTemplateId))
             .Select(item => new { item.ImageTemplateId, item.WorkerNodeId, item.ImageHash, item.Status })
@@ -274,7 +275,7 @@ public sealed class TeamLabAdminQueryService(
             var requiredCapability = requirement.Kind == TeamLabAssetKind.Docker
                 ? NodeCapability.Docker
                 : NodeCapability.Kvm;
-            var eligible = nodes.Where(item => (item.Capabilities & requiredCapability) != 0)
+            var eligible = onlineNodes.Where(item => (item.Capabilities & requiredCapability) != 0)
                 .Select(item => item.Id)
                 .ToHashSet();
             var matching = records.Where(item => item.ImageTemplateId == requirement.Id &&
@@ -328,42 +329,89 @@ public sealed class TeamLabAdminQueryService(
             blockers);
     }
 
-    private async Task<IReadOnlyList<TeamLabPlanningNodeSnapshot>> LoadPlanningNodesAsync(
+    private async Task<IReadOnlyList<NodeCapacitySnapshot>> LoadPlanningCapacityAsync(
         CancellationToken cancellationToken) =>
         (await capacitySnapshots.LoadAsync(cancellationToken))
         .Where(item => item.Node.IsSchedulable && item.Node.TeamLabNetworkEnabled &&
                        item.Node.TeamLabTunnelStatus == TeamLabTunnelStatus.Healthy &&
                        item.Node.GetEffectiveStatus(DateTimeOffset.UtcNow) == NodeStatus.Online)
-        .Select(item => new TeamLabPlanningNodeSnapshot(
-            item.Node.Id,
-            item.Node.Name,
-            (item.Node.Capabilities & NodeCapability.Docker) != 0,
-            (item.Node.Capabilities & NodeCapability.Kvm) != 0,
-            item.AvailableDocker,
-            item.AvailableVm,
-            item.Node.CpuLoad,
-            item.Node.MemoryLoad,
-            item.Available))
         .ToArray();
 
-    private static string DescribePlanningBlocker(
+    internal static string DescribePlanningBlocker(
         TeamLabExecutionTopology execution,
-        IReadOnlyList<TeamLabPlanningNodeSnapshot> nodes)
+        IReadOnlyList<NodeCapacitySnapshot> nodes,
+        IReadOnlyDictionary<string, string[]>? requiredFeaturesByAsset = null)
     {
-        var docker = execution.Assets.Count(item => item.Kind == TeamLabAssetKind.Docker);
-        var vm = execution.Assets.Count(item => item.Kind == TeamLabAssetKind.Vm);
-        var cpu = execution.Assets.Sum(item => item.CpuUnits);
-        var memory = execution.Assets.Sum(item => item.MemoryMiB);
-        var storage = execution.Assets.Sum(item => item.StorageMiB);
-        var availableDocker = nodes.Where(item => item.SupportsDocker).Sum(item => item.AvailableDockerSlots);
-        var availableVm = nodes.Where(item => item.SupportsVm).Sum(item => item.AvailableVmSlots);
-        var availableCpu = nodes.Sum(item => item.AvailableResources.CpuUnits);
-        var availableMemory = nodes.Sum(item => item.AvailableResources.MemoryMiB);
-        var availableStorage = nodes.Sum(item => item.AvailableResources.StorageMiB);
-        var nodeSummary = nodes.Count == 0
-            ? "当前没有已接入组网的在线可调度节点"
-            : $"当前可用：Docker {availableDocker} 个、VM {availableVm} 个、CPU {availableCpu}、内存 {availableMemory} MiB、存储 {availableStorage} MiB";
-        return $"资源不足，无法放置该版本。需求：Docker {docker} 个、VM {vm} 个、CPU {cpu}、内存 {memory} MiB、存储 {storage} MiB；{nodeSummary}。";
+        if (nodes.Count == 0)
+            return "当前没有已接入组网的在线可调度节点，无法完成放置。";
+
+        var groups = TeamLabAssetPlanner.BuildGroups(execution, requiredFeaturesByAsset);
+        var blocked = groups.Where(group => !nodes.Any(node => CanHostGroup(node, group))).ToArray();
+        if (blocked.Length == 0)
+            return "当前合格节点无法完成该版本的整体放置；各网络组需分别由单个节点容纳，并同时满足节点容量、能力和组间分配约束。";
+
+        return string.Join(" ", blocked.Select(group =>
+        {
+            var required = group.Resources;
+            var demand = $"CPU {required.CpuUnits}、内存 {required.MemoryMiB} MiB、存储 {FormatStorage(required.StorageMiB)}、Docker {required.DockerSlots} 个、VM {required.VmSlots} 个";
+            var candidates = string.Join("；", nodes.OrderBy(node => node.Node.Name, StringComparer.Ordinal)
+                .Select(node => DescribeNodeForGroup(node, group)));
+            return $"当前合格节点无法容纳网络组 {string.Join("/", group.NetworkKeys)}；" +
+                $"该组需在同一节点放置（{demand}）。节点检查：{candidates}。";
+        }));
+    }
+
+    private static bool CanHostGroup(NodeCapacitySnapshot snapshot,
+        TeamLabAssetPlanner.TeamLabInternalNetworkGroup group) =>
+        HasCapabilities(snapshot, group) && HasFeatures(snapshot, group) && snapshot.Fits(group.Resources);
+
+    private static string DescribeNodeForGroup(NodeCapacitySnapshot snapshot,
+        TeamLabAssetPlanner.TeamLabInternalNetworkGroup group)
+    {
+        var required = group.Resources;
+        var node = snapshot.Node;
+        var missing = new List<string>();
+        if (required.DockerSlots > 0 && (node.Capabilities & NodeCapability.Docker) == 0)
+            missing.Add("缺少 Docker 能力");
+        if (required.VmSlots > 0 && (node.Capabilities & NodeCapability.Kvm) == 0)
+            missing.Add("缺少 KVM 能力");
+        var advertised = TeamLabGuestNetworkCapabilityPolicy.AdvertisedFeatures(node);
+        var missingFeatures = group.RequiredFeatures.Except(advertised, StringComparer.Ordinal).ToArray();
+        if (missingFeatures.Length > 0)
+            missing.Add($"缺少网络能力 {string.Join("、", missingFeatures)}");
+        if (!HasCapabilities(snapshot, group))
+            return $"{node.Name}：{string.Join("、", missing)}";
+
+        var available = snapshot.AvailableFor(required);
+        var storageKind = required.VmSlots > 0 && required.DockerSlots > 0 ? "混合组存储" :
+            required.VmSlots > 0 ? "VM 空间" : "Docker 空间";
+        var capacity = $"CPU {Math.Max(0, available.CpuUnits)}/{required.CpuUnits}、" +
+            $"内存 {Math.Max(0, available.MemoryMiB)}/{required.MemoryMiB} MiB、" +
+            $"{storageKind} {FormatStorage(available.StorageMiB)}/{FormatStorage(required.StorageMiB)}、" +
+            $"Docker 位 {snapshot.AvailableDocker}/{required.DockerSlots}、VM 位 {snapshot.AvailableVm}/{required.VmSlots}";
+        if (available.CpuUnits < required.CpuUnits) missing.Add("CPU 不足");
+        if (available.MemoryMiB < required.MemoryMiB) missing.Add("内存不足");
+        if (available.StorageMiB < required.StorageMiB) missing.Add("空间不足");
+        if (snapshot.AvailableDocker < required.DockerSlots || snapshot.AvailableVm < required.VmSlots)
+            missing.Add("实例位不足");
+        return $"{node.Name}：{capacity}（{(missing.Count == 0 ? "单组容量可用" : string.Join("、", missing))}）";
+    }
+
+    private static bool HasCapabilities(NodeCapacitySnapshot snapshot,
+        TeamLabAssetPlanner.TeamLabInternalNetworkGroup group) =>
+        (group.DockerSlots == 0 || (snapshot.Node.Capabilities & NodeCapability.Docker) != 0) &&
+        (group.VmSlots == 0 || (snapshot.Node.Capabilities & NodeCapability.Kvm) != 0);
+
+    private static bool HasFeatures(NodeCapacitySnapshot snapshot,
+        TeamLabAssetPlanner.TeamLabInternalNetworkGroup group) =>
+        group.RequiredFeatures.All(feature =>
+            TeamLabGuestNetworkCapabilityPolicy.AdvertisedFeatures(snapshot.Node)
+                .Contains(feature, StringComparer.Ordinal));
+
+    private static string FormatStorage(long mib)
+    {
+        var available = Math.Max(0, mib);
+        return $"{available / 1024d:0.#} GiB ({available} MiB)";
     }
 
     public async Task<TeamLabAdminRuntimePageModel> ListTrialRuntimesAsync(
