@@ -21,8 +21,8 @@ public sealed class EfImageRuntimeAccessQuery(AppDbContext context) : IImageRunt
             .Select(item => new
             {
                 item.ImageTemplateId, item.Enabled, item.Protocol, item.Port,
-                HasUsername = item.Username != null && item.Username != "",
-                HasSecret = item.ProtectedSecret != null && item.ProtectedSecret != ""
+                HasUsername = item.Username != null && item.Username.Trim() != "",
+                HasSecret = item.ProtectedSecret != null && item.ProtectedSecret.Trim() != ""
             })
             .ToDictionaryAsync(item => item.ImageTemplateId, cancellationToken);
         return templates.ToDictionary(item => item.Id, item =>

@@ -67,6 +67,30 @@ public sealed class TeamLabRuntimeAssetFactsTests
     }
 
     [Fact]
+    public async Task RuntimeDetailDoesNotPromoteDestroyingAssetWithOldResourceId()
+    {
+        await using var context = Context();
+        var runtime = new TeamLabRuntime { Generation = 2, Status = TeamLabRuntimeStatus.Running };
+        context.TeamLabRuntimes.Add(runtime);
+        context.TeamLabRuntimeAssets.Add(new TeamLabRuntimeAsset
+        {
+            Runtime = runtime, Generation = 2, Kind = TeamLabResourceKind.Vm,
+            TopologyKey = "old-vm", Name = "Old VM", Status = TeamLabRuntimeStatus.Destroying,
+            WorkerNodeId = Guid.NewGuid(), RuntimeResourceId = "leftover-resource"
+        });
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var detail = await new TeamLabRuntimeProjectionService(context, new EfImageRuntimeAccessQuery(context))
+            .GetAsync(runtime.PublicId, CancellationToken.None);
+
+        var asset = Assert.Single(detail.Assets);
+        Assert.Equal(TeamLabRuntimeStatus.Destroying, asset.Status);
+        Assert.Equal("currently-unavailable", Assert.Single(asset.Capabilities!, item =>
+            item.Kind == "console").Status);
+    }
+
+    [Fact]
     public void CurrentPlanRevisionProjectsEachInterfaceWithoutInventingObservation()
     {
         var runtime = new TeamLabRuntime { Id = 8, Generation = 4, PlanRevision = 2 };
@@ -162,6 +186,11 @@ public sealed class TeamLabRuntimeAssetFactsTests
         Assert.False(TeamLabRuntimeAssetFacts.IsRunning(asset, TeamLabRuntimeStatus.Running, 4));
         asset.Status = TeamLabRuntimeStatus.Running;
         asset.Generation = 3;
+        Assert.False(TeamLabRuntimeAssetFacts.IsRunning(asset, TeamLabRuntimeStatus.Running, 4));
+        asset.Generation = 4;
+        asset.Status = TeamLabRuntimeStatus.Destroying;
+        Assert.False(TeamLabRuntimeAssetFacts.IsRunning(asset, TeamLabRuntimeStatus.Running, 4));
+        asset.Status = TeamLabRuntimeStatus.CleanupPending;
         Assert.False(TeamLabRuntimeAssetFacts.IsRunning(asset, TeamLabRuntimeStatus.Running, 4));
     }
 

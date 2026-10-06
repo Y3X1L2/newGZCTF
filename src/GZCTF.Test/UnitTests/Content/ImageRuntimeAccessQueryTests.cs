@@ -20,11 +20,12 @@ public sealed class ImageRuntimeAccessQueryTests
             .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
         context.ImageTemplates.Add(new ImageTemplate { Id = 42, Name = "vm", ImageHash = "digest-a",
             OSType = OSType.Windows, ImageType = ImageType.Qcow2 });
-        context.ImageTemplateRemoteAccesses.Add(new ImageTemplateRemoteAccess
+        var configuration = new ImageTemplateRemoteAccess
         {
             ImageTemplateId = 42, Enabled = true, Protocol = GZCTF.Modules.TeamLab.Domain.Runtime.TeamLabRemoteProtocol.Rdp,
             Port = 3389, Username = "operator", ProtectedSecret = Guid.NewGuid().ToString("N")
-        });
+        };
+        context.ImageTemplateRemoteAccesses.Add(configuration);
         await context.SaveChangesAsync();
 
         var result = await new EfImageRuntimeAccessQuery(context)
@@ -36,5 +37,18 @@ public sealed class ImageRuntimeAccessQueryTests
         Assert.True(result[42].RemoteConfigured);
         Assert.DoesNotContain(result[42].GetType().GetProperties(), item =>
             item.Name is "Username" or "ProtectedSecret");
+
+        configuration.Username = "  ";
+        await context.SaveChangesAsync();
+        var missingUsername = await new EfImageRuntimeAccessQuery(context)
+            .GetBatchAsync([42], CancellationToken.None);
+        Assert.False(missingUsername[42].RemoteConfigured);
+
+        configuration.Username = "operator";
+        configuration.ProtectedSecret = "  ";
+        await context.SaveChangesAsync();
+        var missingSecret = await new EfImageRuntimeAccessQuery(context)
+            .GetBatchAsync([42], CancellationToken.None);
+        Assert.False(missingSecret[42].RemoteConfigured);
     }
 }

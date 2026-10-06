@@ -67,7 +67,8 @@ files. The existing authorization checks remain authoritative for invoking tools
 - TeamLab reads OS, image digest, and remote configuration presence through a
   Content-owned batch query contract. It does not directly read Content tables
   for the new runtime projection.
-- Windows file requests return the existing `files.unsupported` contract error
-  before any SFTP dispatch. No Windows SFTP implementation is implied.
+- Windows or unconfirmed-OS VM file requests return the existing
+  `files.unsupported` contract error before any SFTP dispatch. No Windows SFTP
+  implementation is implied.
 - This GET creates no remote sessions, VPN grants, capture jobs, or deep probes.
   Live infrastructure acceptance remains separate from local tests.
