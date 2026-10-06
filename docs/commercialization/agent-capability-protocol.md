@@ -80,7 +80,7 @@ public sealed record AgentHostFacts(
     long? AvailableDockerStorageBytes = null);
 ```
 
-JSON 使用 `camelCase`，feature 集合按 ordinal 升序返回，容量以 byte 为单位且非负。新 Agent 始终上报 `availableDockerStorageBytes` 的实测值，无法测量时为 `0`；旧 Agent 缺此可选字段，主站解析为 `null` 并沿用旧单指标语义，不能把 `0` 当成缺字段。`ObservedAt` 使用 UTC ISO-8601。此为开发候选契约，须先发布兼容主站，再发布 Agent；截至本次记录尚未部署。
+JSON 使用 `camelCase`，feature 集合按 ordinal 升序返回，容量以 byte 为单位且非负。新 Agent 始终上报 `availableDockerStorageBytes` 的实测值，无法测量时为 `0`；旧 Agent 缺此可选字段，主站解析为 `null` 并沿用旧单指标语义，不能把 `0` 当成缺字段。普通 KVM 的 `availableVmImageStorageBytes` 只测镜像目录；声明 TeamLab 执行计划能力时还测 runtime 目录并取较小值。`ObservedAt` 使用 UTC ISO-8601。此为开发候选契约，须先发布兼容主站，再发布 Agent；截至本次记录尚未部署。
 
 示例：
 
