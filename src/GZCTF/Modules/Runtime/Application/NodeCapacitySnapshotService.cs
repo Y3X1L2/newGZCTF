@@ -20,7 +20,8 @@ public sealed record NodeCapacitySnapshot(
     WorkloadResourceVector ResourceTotal = default,
     WorkloadResourceVector ResourceActual = default,
     WorkloadResourceVector ResourceReserved = default,
-    WorkloadResourceVector ResourceSafetyMargin = default)
+    WorkloadResourceVector ResourceSafetyMargin = default,
+    long? DockerStorageTotalMiB = null)
 {
     public int CurrentDocker => Math.Max(LiveDocker, FactDocker);
     public int CurrentVm => Math.Max(LiveVm, FactVm);
@@ -53,6 +54,24 @@ public sealed record NodeCapacitySnapshot(
         0,
         0);
     public WorkloadResourceVector Available => Total - Actual - Reserved - SafetyMargin;
+    public long AvailableDockerStorageMiB =>
+        (DockerStorageTotalMiB ?? ResourceTotal.StorageMiB) - ResourceActual.StorageMiB -
+        ResourceReserved.StorageMiB - ResourceSafetyMargin.StorageMiB;
+    public WorkloadResourceVector AvailableFor(WorkloadResourceVector requested, bool ignoreDynamicLoad = false)
+    {
+        var available = ignoreDynamicLoad ? AvailableIgnoringDynamicLoad : Available;
+        var availableDockerStorage = ignoreDynamicLoad
+            ? (DockerStorageTotalMiB ?? ResourceTotal.StorageMiB) - ResourceReserved.StorageMiB -
+              ResourceSafetyMargin.StorageMiB
+            : AvailableDockerStorageMiB;
+        return available with
+        {
+            StorageMiB = WorkloadStorageBudget.For(requested, availableDockerStorage,
+                available.StorageMiB)
+        };
+    }
+    public bool Fits(WorkloadResourceVector requested, bool ignoreDynamicLoad = false) =>
+        AvailableFor(requested, ignoreDynamicLoad).CanFit(requested);
     public WorkloadResourceVector AvailableIgnoringDynamicLoad => new(
         ResourceTotal.CpuUnits - ResourceReserved.CpuUnits,
         ResourceTotal.MemoryMiB - ResourceReserved.MemoryMiB,
@@ -197,6 +216,9 @@ public sealed class NodeCapacitySnapshotService
             var totalMemoryMiB = Math.Max(0L, (manifest?.Host?.TotalMemoryBytes ?? 0) / (1024L * 1024L));
             var totalStorageMiB = Math.Max(0L,
                 (manifest?.Host?.AvailableVmImageStorageBytes ?? 0) / (1024L * 1024L));
+            var dockerStorageMiB = manifest?.Host?.AvailableDockerStorageBytes is { } dockerBytes
+                ? Math.Max(0L, dockerBytes / (1024L * 1024L))
+                : (long?)null;
             var resourceTotal = new WorkloadResourceVector(
                 totalCpuUnits, totalMemoryMiB, totalStorageMiB, 0, 0);
             var resourceActual = new WorkloadResourceVector(
@@ -224,7 +246,8 @@ public sealed class NodeCapacitySnapshotService
                 resourceTotal,
                 resourceActual,
                 resourceReserved,
-                resourceSafety);
+                resourceSafety,
+                dockerStorageMiB);
         }).ToArray();
     }
 
