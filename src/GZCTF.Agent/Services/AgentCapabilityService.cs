@@ -9,11 +9,13 @@ public sealed class AgentCapabilityService(
     TeamLabNetworkService teamLab,
     TeamLabDataPlanePreparationService dataPlane,
     IOptions<AgentConfig> options,
+    IOptions<KvmConfig> kvmOptions,
     IOptions<AgentTeamLabConfig> teamLabOptions,
     DockerService docker)
 {
     const int ManifestSchemaVersion = 1;
     readonly AgentConfig _config = options.Value;
+    readonly KvmConfig _kvmConfig = kvmOptions.Value;
     readonly AgentTeamLabConfig _teamLabConfig = teamLabOptions.Value;
     readonly Lazy<Task<string?>> _binarySha256 = new(ComputeBinarySha256Async);
 
@@ -99,14 +101,17 @@ public sealed class AgentCapabilityService(
                 features.Contains(AgentFeatureIds.TeamLabExecutionPlan)),
             Resolve(_config.ExecutionLimits.ArtifactCleanupOperations, 1,
                 features.Contains(AgentFeatureIds.TeamLabArtifactCache)));
+        var dockerRootDirectory = dockerAvailable ? await docker.GetDockerRootDirectoryAsync(token) : null;
         return new AgentCapabilityManifest(
             typeof(AgentCapabilityService).Assembly.GetName().Version?.ToString() ?? "unknown",
             binarySha256,
             ManifestSchemaVersion,
             features.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(),
             limits,
-            new AgentHostFacts(logicalCpu, ReadTotalMemory(), ReadAvailableVmImageStorage(), capabilities.KvmDevice,
-                capabilities.CpuVirtualization),
+            new AgentHostFacts(logicalCpu, ReadTotalMemory(),
+                kvm ? ReadAvailableVmImageStorage(_kvmConfig.ImageStoragePath, _teamLabConfig.RuntimeStateRoot) : 0,
+                capabilities.KvmDevice, capabilities.CpuVirtualization,
+                ReadAvailableStorage(dockerRootDirectory)),
             DateTimeOffset.UtcNow);
     }
 
@@ -160,13 +165,18 @@ public sealed class AgentCapabilityService(
         }
     }
 
-    static long ReadAvailableVmImageStorage()
+    internal static long ReadAvailableVmImageStorage(string imagePath, string runtimeStateRoot,
+        Func<string, long>? availableFreeSpace = null) =>
+        Math.Min(ReadAvailableStorage(imagePath, availableFreeSpace),
+            ReadAvailableStorage(runtimeStateRoot, availableFreeSpace));
+
+    internal static long ReadAvailableStorage(string? path, Func<string, long>? availableFreeSpace = null)
     {
         try
         {
-            const string imagePath = "/var/lib/gzctf/images";
-            var root = Path.GetPathRoot(Path.GetFullPath(imagePath));
-            return string.IsNullOrWhiteSpace(root) ? 0 : new DriveInfo(root).AvailableFreeSpace;
+            if (string.IsNullOrWhiteSpace(path) || !Path.IsPathFullyQualified(path) ||
+                !Directory.Exists(path)) return 0;
+            return Math.Max(0, availableFreeSpace?.Invoke(path) ?? new DriveInfo(path).AvailableFreeSpace);
         }
         catch
         {
