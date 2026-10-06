@@ -55,12 +55,16 @@ export function RuntimeAssetWorkspace({ runtime }: { runtime: TeamLabRuntime }) 
         {visibleInterfaces.length ? visibleInterfaces.map(nic => <div className={styles.interface} key={nic.key}>
           <div><strong>{runtime.networks.find(network => network.key === nic.networkKey)?.name ?? nic.networkKey}</strong>
             <span>{nic.key}{nic.primary ? ' · 主网卡' : ''}</span></div>
-          <div><code>{nic.assigned ? `${nic.assigned.ipAddress}/${nic.assigned.prefixLength}` : '未分配地址'}</code>
-            <small>{nic.observed ? `来宾回读 ${new Date(nic.observed.observedAt).toLocaleString()}` : '分配配置，来宾状态未核对'}</small></div>
+          <div><small>分配配置</small><code>{nic.assigned ? `${nic.assigned.ipAddress}/${nic.assigned.prefixLength}` : '未分配地址'}</code>
+            {nic.observed ? <><small>来宾回读 · {new Date(nic.observed.observedAt).toLocaleString()}</small>
+              <code>{nic.observed.ipAddress}/{nic.observed.prefixLength}</code></> : <small>来宾状态未核对</small>}</div>
           <details><summary>DNS 与路由</summary>
-            <dl><div><dt>DNS</dt><dd>{nic.assigned?.dnsServers.join('、') || '未设置'}</dd></div>
-              <div><dt>默认网关</dt><dd>{nic.assigned?.gatewayIp || '未设置'}</dd></div>
-              <div><dt>静态路由</dt><dd>{nic.assigned?.staticRoutes.map(route => `${route.destinationCidr} → ${route.nextHop}`).join('；') || '无'}</dd></div></dl>
+            <dl><div><dt>分配 DNS</dt><dd>{nic.assigned?.dnsServers.join('、') || '未设置'}</dd></div>
+              <div><dt>分配网关</dt><dd>{nic.assigned?.gatewayIp || '未设置'}</dd></div>
+              <div><dt>分配路由</dt><dd>{nic.assigned?.staticRoutes.map(route => `${route.destinationCidr} → ${route.nextHop}`).join('；') || '无'}</dd></div>
+              {nic.observed ? <><div><dt>回读 DNS</dt><dd>{nic.observed.dnsServers.join('、') || '未设置'}</dd></div>
+                <div><dt>回读网关</dt><dd>{nic.observed.gatewayIp || '未设置'}</dd></div>
+                <div><dt>回读路由</dt><dd>{nic.observed.staticRoutes.map(route => `${route.destinationCidr} → ${route.nextHop}`).join('；') || '无'}</dd></div></> : null}</dl>
           </details>
         </div>) : <p>当前代次没有可确认的逐网卡分配记录，地址尚未核对。</p>}
       </section>
