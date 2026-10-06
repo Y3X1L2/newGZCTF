@@ -35,21 +35,21 @@ export function TrialRunDialog({
   return (
     <VNextDialog
       description="平台将按服务端执行计划预留资源、分发镜像并启动该不可变版本。"
-      eyebrow="TRIAL RUNTIME"
+      eyebrow="RUNTIME"
       footer={
         <>
           <ActionButton disabled={submitting} onClick={onClose} type="button">取消</ActionButton>
           <ActionButton disabled={submitting} onClick={() => void submit()} tone="primary" type="button">
-            {submitting ? '正在创建' : '创建试运行'}
+            {submitting ? '正在启动' : '启动环境'}
           </ActionButton>
         </>
       }
       onClose={onClose}
       open={open && release !== null}
-      title="启动 TeamLab 试运行？"
+      title="启动运行环境？"
     >
       <div className={styles.content}>
-        <p>{release ? `为发布版本 v${release.version} 创建一套独立试运行环境。` : ''}</p>
+        <p>{release ? `使用不可变发布版本 v${release.version} 启动一套独立环境。` : ''}</p>
       </div>
     </VNextDialog>
   )
