@@ -173,7 +173,9 @@ public sealed class TeamLabRuntimeProjectionService(AppDbContext context,
         TeamLabRuntimeStatus runtimeStatus,
         TeamLabRuntimeAsset asset) =>
         runtimeStatus == TeamLabRuntimeStatus.Running &&
-        asset.Status is not (TeamLabRuntimeStatus.Failed or TeamLabRuntimeStatus.Paused or TeamLabRuntimeStatus.Stopped) &&
+        (asset.Status is TeamLabRuntimeStatus.Pending or TeamLabRuntimeStatus.Planning or
+            TeamLabRuntimeStatus.Scheduled or TeamLabRuntimeStatus.Deploying or
+            TeamLabRuntimeStatus.Probing or TeamLabRuntimeStatus.Running) &&
         !string.IsNullOrWhiteSpace(asset.RuntimeResourceId)
             ? TeamLabRuntimeStatus.Running
             : asset.Status;

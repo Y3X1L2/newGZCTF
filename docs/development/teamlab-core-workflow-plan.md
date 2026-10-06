@@ -1,6 +1,7 @@
 # TeamLab first-round workflow implementation
 
-Status: local development in progress, 2026-10-06. This is an engineering plan
+Status: contract task implemented locally; integration and deployment pending,
+2026-10-06. This is an engineering plan
 based on the approved local page plan and the 2026-10-05 UX audit. It records
 no production acceptance or deployment.
 
