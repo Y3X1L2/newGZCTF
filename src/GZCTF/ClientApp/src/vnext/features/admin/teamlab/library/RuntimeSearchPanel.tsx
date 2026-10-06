@@ -1,6 +1,6 @@
 import { ArrowRight, RefreshCw, Search, SlidersHorizontal } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router'
+import { Link, useLocation } from 'react-router'
 import { ActionButton, InlineFeedback } from '../../../../shared/Interaction'
 import { DataState } from '../../../../shared/Primitives'
 import { errorMessage } from '../../../../shared/errors'
@@ -16,6 +16,7 @@ const statusOptions = ['等待调度', '规划中', '已调度', '部署中', '�
 const uuidPattern = '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}'
 
 export function RuntimeSearchPanel() {
+  const location = useLocation()
   const result = useRuntimeSearch()
   const [draft, setDraft] = useState(result.filters)
   const [advanced, setAdvanced] = useState(false)
@@ -42,14 +43,13 @@ export function RuntimeSearchPanel() {
     {result.error ? <InlineFeedback tone="danger">{errorMessage(result.error, '运行实例读取失败。')}</InlineFeedback>
       : result.isLoading ? <DataState loading title="正在查询运行实例" /> : !result.data?.items.length ? <DataState title="没有符合条件的运行实例" />
       : <div className={styles.sessionTableScroll}><table className={styles.sessionTable}>
-        <thead><tr><th>环境</th><th>场景 / 版本</th><th>来源 / 创建人</th><th>状态</th><th>资产</th><th>创建时间</th><th /></tr></thead>
+        <thead><tr><th>环境</th><th>场景 / 版本</th><th>状态</th><th>资产</th><th>创建时间</th><th /></tr></thead>
         <tbody>{result.data.items.map(item => <tr key={item.id}>
           <td><strong>{item.reference || item.scenarioName || '未命名环境'}</strong></td>
           <td>{item.scenarioName || '场景关联未知'}{item.releaseVersion ? <small>v{item.releaseVersion}</small> : <small>版本未知</small>}</td>
-          <td><span>来源未知</span><small>{item.createdById ? `创建人 ID ${item.createdById}` : '创建人未知'}</small></td>
           <td><TeamLabRuntimeStatusBadge status={(item.status === 'ready' ? 'running' : item.status === 'queued' ? 'scheduled' : item.status) as TeamLabRuntimeStatus} />{item.hasError && item.status !== 'failed' ? <small>存在异常</small> : null}</td>
           <td>{item.assetCount}</td><td>{formatAdminDate(item.createdAt)}</td>
-          <td><Link aria-label={`进入环境 ${item.reference || item.scenarioName || item.id}`} title="进入环境" to={`/admin/teamlab/runtimes/${item.id}?from=runtime-search`}><ArrowRight size={17} /></Link></td>
+          <td><Link aria-label={`进入环境 ${item.reference || item.scenarioName || item.id}`} title="进入环境" state={{ returnTo: `${location.pathname}${location.search}` }} to={`/admin/teamlab/runtimes/${item.id}?from=runtime-search`}><ArrowRight size={17} /></Link></td>
         </tr>)}</tbody></table></div>}
     <CursorPaginationBar page={result.cursor.page} hasNext={!result.error && !!result.data?.nextCursor}
       onPrevious={result.cursor.previous} onNext={() => result.data?.nextCursor && result.cursor.next(result.data.nextCursor)} label="运行实例分页" />

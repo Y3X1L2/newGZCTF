@@ -1,7 +1,6 @@
 import { RefreshCw } from 'lucide-react'
-import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router'
-import { Link } from 'react-router'
+import { useEffect, useMemo, useState } from 'react'
+import { Link, useLocation, useNavigate } from 'react-router'
 import useSWR from 'swr'
 import { ActionButton, InlineFeedback } from '../../../../shared/Interaction'
 import { DataState } from '../../../../shared/Primitives'
@@ -19,6 +18,7 @@ import styles from './TeamLabReleasesPage.module.css'
 export function TeamLabReleasesPage() {
   const { scene } = useTeamLabScene()
   const navigate = useNavigate()
+  const location = useLocation()
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [trialOpen, setTrialOpen] = useState(false)
   const [creatingTrial, setCreatingTrial] = useState(false)
@@ -41,6 +41,12 @@ export function TeamLabReleasesPage() {
   )
   const imagesRequest = useSWR(['vnext:admin:teamlab:image-options'], listTeamLabImageOptions)
   const readinessMatchesSelection = readinessRequest.data?.releaseId === selectedRelease?.id
+
+  useEffect(() => {
+    if (location.hash !== '#runtimes' || !releasesRequest.data) return
+    const frame = window.requestAnimationFrame(() => document.getElementById('runtimes')?.scrollIntoView())
+    return () => window.cancelAnimationFrame(frame)
+  }, [location.hash, releasesRequest.data])
 
   const createTrial = async (overlays: readonly TeamLabRuntimeOverlay[] | null) => {
     if (!selectedRelease || !readinessMatchesSelection || !readinessRequest.data?.ready || creatingTrial) return false

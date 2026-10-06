@@ -1,7 +1,6 @@
 import { useMemo } from 'react'
 import { useSearchParams } from 'react-router'
 import useSWR from 'swr'
-import { useAdminCursorState } from '../../shared/useAdminCursorState'
 import { searchRuntimes, type RuntimeSearchFilters } from '../api/teamlabRuntimeSearchApi'
 
 export const emptyRuntimeSearch: RuntimeSearchFilters = {
@@ -18,7 +17,30 @@ export function useRuntimeSearch() {
     createdById: params.get('createdById') ?? '',
     errorsOnly: params.get('errorsOnly') === 'true',
   }), [params])
-  const cursor = useAdminCursorState(JSON.stringify(filters))
+  const cursorStack = params.getAll('after')
+  const cursor = {
+    cursor: cursorStack.at(-1) ?? null,
+    page: cursorStack.length + 1,
+    canGoBack: cursorStack.length > 0,
+    next: (nextCursor: string) => {
+      setParams(current => {
+        const next = new URLSearchParams(current)
+        next.append('after', nextCursor)
+        return next
+      })
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    },
+    previous: () => {
+      setParams(current => {
+        const next = new URLSearchParams(current)
+        const stack = next.getAll('after')
+        next.delete('after')
+        stack.slice(0, -1).forEach(value => next.append('after', value))
+        return next
+      })
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    },
+  }
   const request = useSWR(['teamlab:runtime-search', filters, cursor.cursor], () => searchRuntimes(filters, cursor.cursor),
     { keepPreviousData: false, revalidateOnFocus: false, shouldRetryOnError: false })
   const setFilters = (next: RuntimeSearchFilters) => {
