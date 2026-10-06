@@ -11,7 +11,7 @@ const labels: Record<AssetControlAction, string> = {
   start: '启动', stop: '停止', restart: '重启', rebuild: '重建', pause: '暂停', resume: '恢复',
 }
 
-export function AssetControlPanel({ runtime, onReplace, onRemove }: { runtime: TeamLabRuntime; onReplace: () => void; onRemove: () => void }) {
+export function AssetControlPanel({ runtime }: { runtime: TeamLabRuntime }) {
   const controls = useAssetControls(runtime)
   const asset = controls.asset
   if (!asset) return null
@@ -31,8 +31,6 @@ export function AssetControlPanel({ runtime, onReplace, onRemove }: { runtime: T
       onClick={() => choose(primary)} type="button">{labels[primary]}</ActionButton>
     <ActionMenu label="更多资产操作" items={[
       ...(Object.keys(labels) as AssetControlAction[]).filter(action => action !== primary && available(action)).map(action => ({ label: labels[action], disabled, onSelect: () => choose(action) })),
-      { label: '替换资产', disabled, separator: true, onSelect: onReplace },
-      { label: '移除资产', disabled, danger: true, onSelect: onRemove },
     ]} />
     {controls.task ? <span className={styles.task} role="status">{controls.task.status === 'failed' ? controls.task.errorCode ?? '操作失败' : controls.task.status === 'succeeded' ? '已完成' : '执行中'}</span> : null}
     {controls.task?.canRetry ? <ActionButton disabled={disabled} onClick={() => void controls.retry()} type="button">继续执行</ActionButton> : null}
