@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using GZCTF.Modules.Runtime.Domain;
 using GZCTF.Modules.TeamLab.Application;
 using GZCTF.Modules.TeamLab.Contracts;
 using GZCTF.Modules.TeamLab.Domain;
@@ -174,6 +175,51 @@ public sealed class TeamLabTopologyV2Tests
             shard.NetworkKeys.Contains("entry") && shard.NetworkKeys.Contains("core"));
         Assert.Equal(4, plan.ManagedInfrastructureCount);
         Assert.True(plan.ObservationPointEstimate >= 7);
+    }
+
+    [Fact]
+    public void Planner_PlacesDockerAndVmGroupsOnNodesWithTheirOwnStorageBudget()
+    {
+        var definition = new TeamLabTopologyDefinitionModel("split-storage",
+            [Network("entry", "10.32.0.0/16", true), Network("vm", "10.33.0.0/16", false)],
+            [
+                Asset("docker", "entry", 1, 10) with
+                { Resources = new TeamLabAssetResourceModel(10, 512, 80 * 1024) },
+                Asset("guest", "vm", 2, 10) with
+                {
+                    Kind = TeamLabAssetKind.Vm,
+                    Resources = new TeamLabAssetResourceModel(10, 512, 120 * 1024)
+                }
+            ], []);
+        var execution = TeamLabTopologyV2Compiler.Compile(definition);
+        var dockerNode = new TeamLabPlanningNodeSnapshot(Guid.NewGuid(), "docker-node", true, true,
+            2, 2, 0, 0, new WorkloadResourceVector(80, 16_384, 50 * 1024, 2, 2),
+            AvailableDockerStorageMiB: 90 * 1024);
+        var vmNode = new TeamLabPlanningNodeSnapshot(Guid.NewGuid(), "vm-node", true, true,
+            2, 2, 0, 0, new WorkloadResourceVector(80, 16_384, 150 * 1024, 2, 2),
+            AvailableDockerStorageMiB: 50 * 1024);
+
+        var placement = TeamLabAssetPlanner.BuildPlacement(execution, [dockerNode, vmNode]);
+
+        Assert.NotNull(placement);
+        Assert.Equal(2, placement.Count);
+        Assert.Contains(placement, item => item.Node.Id == dockerNode.Id &&
+            item.Groups.Single().AssetKeys.Contains("docker"));
+        Assert.Contains(placement, item => item.Node.Id == vmNode.Id &&
+            item.Groups.Single().AssetKeys.Contains("guest"));
+    }
+
+    [Fact]
+    public void Planner_TreatsMeasuredZeroResourcesAsUnavailable()
+    {
+        var definition = new TeamLabTopologyDefinitionModel("measured-zero",
+            [Network("entry", "10.34.0.0/16", true)],
+            [Asset("docker", "entry", 1, 10)], []);
+        var execution = TeamLabTopologyV2Compiler.Compile(definition);
+        var node = new TeamLabPlanningNodeSnapshot(Guid.NewGuid(), "node", true, false,
+            1, 0, 0, 0, AvailableDockerStorageMiB: 0, ResourceAvailabilityKnown: true);
+
+        Assert.Null(TeamLabAssetPlanner.BuildPlacement(execution, [node]));
     }
 
     private static TeamLabTopologyDefinitionModel CreateManagedDefinition() => new(

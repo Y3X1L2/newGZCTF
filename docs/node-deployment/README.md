@@ -125,7 +125,11 @@ registry.ctf.lan/web/basic-sqli:20260610
 
 - 不要把 PVE root 密码写入脚本、仓库或平台配置文件。
 - 大型 Windows qcow2 不建议比赛开始后临时分发，最好赛前预同步。
-- 当前代码的 VM 运行时 overlay 也会放在 `ImageStoragePath` 下。若直接把
-  `/var/lib/gzctf/images` 挂成 NFS，运行时磁盘也会落到 NFS 上，性能和稳定性不如本地缓存。
+- 普通 KVM 的运行时 overlay 放在 `Kvm:ImageStoragePath` 下；TeamLab VM 的
+  overlay 放在 `TeamLab:RuntimeStateRoot` 下。仅声明 TeamLab 执行计划能力时，
+  Agent 才对两个目录的空闲量取较小值；普通 KVM 只读取镜像目录。
+  Docker 预算读取 Docker daemon 上报的 `DockerRootDir`
+  所在文件系统，可能与 VM 存储盘不同；发布前分别核对三个目录的挂载来源与余量。
+  不宜将运行时磁盘直接放到 NFS 上。
 - 更理想的后续改造是把“基础镜像目录”和“运行时磁盘目录”拆开：基础镜像可读共享，
   运行时 overlay 放 worker 本地 SSD/NVMe。

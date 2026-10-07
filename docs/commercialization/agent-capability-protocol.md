@@ -52,11 +52,11 @@ Agent status endpoint 继续使用节点 auth token。未认证请求返回 `401
 ### 4.2 响应契约
 
 ```csharp
-public sealed record AgentStatusResponse(
+public sealed record AgentCapabilityManifest(
     string AgentVersion,
     string? BinarySha256,
     int ManifestSchemaVersion,
-    IReadOnlySet<string> Features,
+    string[] Features,
     AgentExecutionLimits ExecutionLimits,
     AgentHostFacts Host,
     DateTimeOffset ObservedAt);
@@ -66,58 +66,52 @@ public sealed record AgentExecutionLimits(
     int VmCreates,
     int DockerImageTransfers,
     int VmImageTransfers,
-    int TeamLabNetworkOperations,
-    int ControlOperations);
+    int TeamLabNetworkOperations = 0,
+    int ControlOperations = 0,
+    int TeamLabExecutionOperations = 1,
+    int ArtifactCleanupOperations = 1);
 
 public sealed record AgentHostFacts(
-    int LogicalCpuCount,
-    long TotalMemoryMiB,
-    long AvailableMemoryMiB,
-    long ImageStorageTotalMiB,
-    long ImageStorageAvailableMiB,
+    int LogicalCpu,
+    long TotalMemoryBytes,
+    long AvailableVmImageStorageBytes,
     bool KvmDevice,
-    bool CpuVirtualization);
+    bool CpuVirtualization,
+    long? AvailableDockerStorageBytes = null);
 ```
 
-JSON 使用 `camelCase`，feature 集合按 ordinal 升序返回，所有容量为非负整数。`ObservedAt` 使用 UTC ISO-8601。
+JSON 使用 `camelCase`，feature 集合按 ordinal 升序返回，容量以 byte 为单位且非负。新 Agent 始终上报 `availableDockerStorageBytes` 的实测值，无法测量时为 `0`；旧 Agent 缺此可选字段，主站解析为 `null` 并沿用旧单指标语义，不能把 `0` 当成缺字段。普通 KVM 的 `availableVmImageStorageBytes` 只测镜像目录；声明 TeamLab 执行计划能力时还测 runtime 目录并取较小值。`ObservedAt` 使用 UTC ISO-8601。此为开发候选契约，须先发布兼容主站，再发布 Agent；截至本次记录尚未部署。
 
 示例：
 
 ```json
 {
-  "agentVersion": "6.0.0",
-  "binarySha256": "d95f0a5c1d5d6c88a0fdabf72f6589b50946d168c1655ea84d2ee51f0bb5427b",
+  "agentVersion": "1.8.3",
+  "binarySha256": null,
   "manifestSchemaVersion": 1,
   "features": [
     "image.docker.pull.v1",
-    "image.vm.download.v1",
-    "maintenance.self-update.v1",
-    "runtime.docker.v1",
-    "runtime.kvm.v1",
-    "runtime.vm.cloud-init.v1",
-    "teamlab.fabric.l3.v1",
-    "teamlab.flow.v1",
-    "teamlab.pcap.v1",
-    "teamlab.wireguard.v1"
+    "runtime.docker.v1"
   ],
   "executionLimits": {
-    "dockerCreates": 8,
-    "vmCreates": 2,
+    "dockerCreates": 4,
+    "vmCreates": 0,
     "dockerImageTransfers": 2,
-    "vmImageTransfers": 1,
-    "teamLabNetworkOperations": 4,
-    "controlOperations": 2
+    "vmImageTransfers": 0,
+    "teamLabNetworkOperations": 0,
+    "controlOperations": 2,
+    "teamLabExecutionOperations": 0,
+    "artifactCleanupOperations": 0
   },
   "host": {
-    "logicalCpuCount": 16,
-    "totalMemoryMiB": 32768,
-    "availableMemoryMiB": 24576,
-    "imageStorageTotalMiB": 524288,
-    "imageStorageAvailableMiB": 401532,
-    "kvmDevice": true,
-    "cpuVirtualization": true
+    "logicalCpu": 8,
+    "totalMemoryBytes": 17179869184,
+    "availableVmImageStorageBytes": 0,
+    "kvmDevice": false,
+    "cpuVirtualization": false,
+    "availableDockerStorageBytes": 75161927680
   },
-  "observedAt": "2026-07-12T14:30:00Z"
+  "observedAt": "2026-10-07T00:00:00Z"
 }
 ```
 

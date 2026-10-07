@@ -19,7 +19,7 @@ export function ReleaseReadinessPanel({ readiness, imageOptions, creatingTrial, 
   return <section className={styles.readiness} aria-label="版本运行准备">
     <div className={styles.readinessStatus} data-ready={readiness.ready}>
       {readiness.ready ? <CheckCircle2 size={20} /> : <AlertTriangle size={20} />}
-      <strong>{readiness.ready ? '可以启动运行环境' : imagesToPrepare.length ? '需要准备镜像' : '暂不可启动'}</strong>
+      <strong>{readiness.ready ? '可以启动运行环境' : '暂不可启动'}</strong>
     </div>
     {readiness.plan ? <div className={styles.releaseScale}>
       <span>{readiness.plan.networks.length} 个网段</span>
@@ -28,6 +28,7 @@ export function ReleaseReadinessPanel({ readiness, imageOptions, creatingTrial, 
     {readiness.blockingReasons.length ? <ul className={styles.blockers}>
       {readiness.blockingReasons.map(reason => <li key={reason}>{reason}</li>)}
     </ul> : null}
+    <p className={styles.readinessNote}>启动就绪表示当前可完成放置；来宾系统连接需在运行后验证。</p>
     <div className={styles.readinessActions}>
       {imagesToPrepare.length ? <ActionButton disabled={preparingImages} icon={<Download size={16} />} onClick={onPrepareImages} type="button">
         {preparingImages ? '准备中' : '准备镜像'}
@@ -50,7 +51,8 @@ export function ReleaseReadinessPanel({ readiness, imageOptions, creatingTrial, 
     </Link> : null}
     {readiness.images.length ? <details className={styles.imageDetails}>
       <summary>镜像分发详情</summary>
-      <table><thead><tr><th>模板</th><th>已就绪</th><th>待分发</th><th>失败</th></tr></thead><tbody>
+      <p>已缓存节点 / 能力合格节点。其他节点未缓存不单独阻止启动；实际运行仍需在选定节点完成镜像准备。</p>
+      <table><thead><tr><th>模板</th><th>已缓存 / 合格节点</th><th>待分发</th><th>失败</th></tr></thead><tbody>
         {readiness.images.map(image => <tr key={image.imageTemplateId}>
           <td>{image.name}</td><td>{image.readyNodeCount}/{image.eligibleNodeCount}</td>
           <td>{image.pendingNodeCount}</td><td>{image.failedNodeCount}</td>

@@ -40,6 +40,20 @@ public class DockerService
         { return false; }
     }
 
+    public async Task<string?> GetDockerRootDirectoryAsync(CancellationToken token)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(token);
+        timeout.CancelAfter(TimeSpan.FromSeconds(3));
+        try
+        {
+            var info = await _client.System.GetSystemInfoAsync(timeout.Token);
+            return string.IsNullOrWhiteSpace(info?.DockerRootDir) ? null : info.DockerRootDir;
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { throw; }
+        catch
+        { return null; }
+    }
+
     public async Task<AgentContainerResponse?> CreateContainerAsync(CreateContainerRequest request, CancellationToken token)
     {
         var containerName = BuildContainerName(request);

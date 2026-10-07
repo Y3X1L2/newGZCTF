@@ -1,5 +1,10 @@
 # YINYU 当前开发状态
 
+## .27 双存储容量扩展与修复候选（2026-10-07）
+
+- 只读核验确认 `.27` 根文件系统约 70 GiB 可用，`/dev/sdb1` ext4 数据盘约 590 GiB 总量、180 GiB 可用；Docker 的 `/var/lib/docker` 在根盘，KVM 镜像与 TeamLab 运行目录绑定到数据盘。Main/Agent 仍为原发布，扩盘本身未更新其容量上报或调度代码。用户确认此前失败实例已同步并清理；本任务未重复清理，也未证明 OVN 全部残留为零。
+- `codex/workload-storage-integration` 是从 `origin/main 7a1f554d` 建立的未合并、未部署候选：Agent 分别上报 Docker/VM 可用空间，主站按 workload 类型调度，TeamLab 预览和准备诊断使用同一存储预算。旧 Agent 缺 Docker 字段时回退原指标，显式 `0` 表示不可用。混合请求使用两预算较小值，并从两者都扣除所有活动存储预留，可能保守低估容量；尚未实现精确分盘预留或完成真实四 VM 复测。证据、验证和后续发布边界见[候选交接](handoffs/2026-10-07-teamlab-workload-storage-candidate.md)。
+
 ## TeamLab 第一轮工作区与运行事实兼容：已合并 main 并部署 .27（2026-10-06）
 
 - 用户明确批准后，PR #13 正常合并为 `main d3b8c954`，PR #14 的运行摘要兼容与界面收口正常合并为 `main 33983541`。普通组网入口收敛为场景与运行环境，草稿、不可变版本和实例仍为不同事实；旧 URL 有兼容去向。已部署活动目录 `/opt/gzctf/releases/teamlab-runtime-clarity-b2af7def-20261006/publish`：Main DLL SHA256 `b92a849dfa4946c23e1a590a69e0b60063b2ac223519bfab8d82f0ee861077e9`，前端 manifest 对应 `b2af7def`。Agent 继续使用 `cc6c5737` 的 SHA256 `9b2142e9731d77495322e20a100432a728cf3d86f87dc67abebf85ed58a9b3e8`、同一 PID 1650376，未升级 `.30/.31`；无数据库迁移、Registry/PVE/公网网关修改。
