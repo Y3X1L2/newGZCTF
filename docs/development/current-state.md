@@ -1,6 +1,16 @@
 # YINYU 当前开发状态
 
-## .27 双存储容量扩展与修复候选（2026-10-07）
+## TeamLab 分盘容量修复：已合并并部署，四机和 Docker 限定验收通过（2026-10-07）
+
+- PR #16 正常合并为 `main 1ec26826`，与候选 `3efb948c` 同树；PR/合并后 Quality 均 success。`.27` 新数据盘 release 原子切换成功，Main DLL `6a8c2979…`、前端 manifest 对应 `3efb948c`；Main/Agent PID 3477834/3478165、active/NRestarts 0。必要兼容修复经正式 Agent sync 扩到 `.30`，两节点实际 Agent SHA `d5711da5…`，`.31` 保留 `cc6c5737/9b2142e9…`。无新迁移、Registry/PVE/公网网关修改。
+- `.27` 独立磁盘与 manifest 回读证明 Docker 根卷约 69.5 GiB、VM 数据盘约 176–177 GiB，两个 VM 目录同卷不相加；`.30` Docker 根卷约 79.4 GiB、无 KVM/VM 指标 0，纯 Docker 正常。新完整备份放数据盘，两个 dump 全文解码、六关键摘要、隔离两库完整恢复/schema/迁移/核心行数一致；仅销毁本任务临时恢复副本。Main 一致备份暂停 214 秒、正式切换约 22 秒，原备份/发布/资源保留。
+- 正常创建 Lab2 runtime `01a11644-670e-7c8f-894b-a6c7601a2589` generation 1，四 VM 仅 `.27`，五张当前 MAC/原 IP/前缀/DNS/无默认路由及限定内部 TCP、OA→入口隔离、平台 router 0 全部只读验收通过。仅修了首次验收脚本读取 MAC 的问题，未手工调整来宾或重置，四机保留运行。独立 Docker 首次因 `.30` 旧 Agent 摘要不兼容失败，升级后正常清理旧自有实例并一次新建 `.30` Docker，HTTP 200/文件往返/正常销毁/容器残留 0/队列 0 通过；不能称 `.27` Docker 生命周期已实测。
+- 本次四机创建触发全 KVM 节点预分发，向未被选中的 `.31` 新缓存 519–522，约 14.56 GB，将其根盘可用量压到 0。已确认无本节点 VM/backing/运行引用，用正常 preparation 撤销与 Agent 安全清理收回四个自有新副本；旧十五缓存 metadata、旧 Agent/PID、`.27` 当前四机/缓存和 Registry 主副本保持，`.31` 实际可用恢复约 10.73 GiB。**全节点预分发与下载峰值容量保护源码仍未修，再次创建仍可能触发。**
+- 最终首页/Config/manifest 200、迁移 150、队列 0、三节点在线/可调度/Fabric healthy；Main 三条 Error 对应首次旧摘要失败，未处理/Fatal 0，不宣称所有日志 0。未验收业务/AD 账号、图形登录、公网、双副本、四机 reset/destroy、跨节点 VM 或新版 GUI 真实视口。完整身份、回退、范围变化、副作用和证据见[发布交接](handoffs/2026-10-07-teamlab-workload-storage-rollout.md)。学习与原始制品/证据仅本地。
+
+## .27 双存储扩展与发布前候选预检（2026-10-07）
+
+本节保留发布前的时间点；当前发布事实以上一节为准。
 
 - 只读核验确认 `.27` 根文件系统约 70 GiB 可用，`/dev/sdb1` ext4 数据盘约 590 GiB 总量、180 GiB 可用；Docker 的 `/var/lib/docker` 在根盘，KVM 镜像与 TeamLab 运行目录绑定到数据盘。Main/Agent 仍为原发布，扩盘本身未更新其容量上报或调度代码。用户确认此前失败实例已同步并清理；本任务未重复清理，也未证明 OVN 全部残留为零。
 - `codex/workload-storage-integration` 是从 `origin/main 7a1f554d` 建立的未合并、未部署候选：Agent 分别上报 Docker/VM 可用空间，主站按 workload 类型调度，TeamLab 预览和准备诊断使用同一存储预算。旧 Agent 缺 Docker 字段时回退原指标，显式 `0` 表示不可用。混合请求使用两预算较小值，并从两者都扣除所有活动存储预留，可能保守低估容量；尚未实现精确分盘预留或完成真实四 VM 复测。证据、验证和后续发布边界见[候选交接](handoffs/2026-10-07-teamlab-workload-storage-candidate.md)。
