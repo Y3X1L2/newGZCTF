@@ -77,34 +77,6 @@ public class TrainingCourseAdminController(
         await context.SaveChangesAsync(token);
     }
 
-    async Task DistributeCourseImageAsync(
-        int courseId,
-        int? templateId,
-        string reason,
-        CancellationToken token)
-    {
-        if (!templateId.HasValue)
-            return;
-
-        try
-        {
-            var template = await context.ImageTemplates.SingleAsync(
-                item => item.Id == templateId.Value,
-                token);
-            await imageDistribution.DistributeToCapableNodesAsync(
-                template,
-                token,
-                ImageDistributionReferenceKey.TrainingCourse(courseId));
-        }
-        catch (Exception ex) when (ex is InvalidOperationException or HttpRequestException or IOException or AgentClientException)
-        {
-            logger.LogWarning(ex,
-                "Failed to distribute training image for course {CourseId}, template {TemplateId} after {Reason}.",
-                courseId, templateId.Value, reason);
-            throw;
-        }
-    }
-
     private IQueryable<TrainingCourse> CourseQuery() =>
         context.TrainingCourses
             .Include(c => c.Teachers)
@@ -1703,8 +1675,7 @@ public class TrainingCourseAdminController(
             var template = await context.ImageTemplates.SingleAsync(
                 item => item.Id == imported.Id, token);
             await BindTemplateAsync(courseId, template.Id, actor.Id, token);
-            await DistributeCourseImageAsync(
-                courseId, template.Id, "training Docker reference import", token);
+
             logger.SystemLog($"Imported training course Docker template {template.Name}: course={courseId}, template={template.Id}.",
                 TaskStatus.Success, LogLevel.Information);
             return Ok(TrainingCourseImageTemplateModel.FromTemplate(template));
@@ -1754,8 +1725,7 @@ public class TrainingCourseAdminController(
             var template = await context.ImageTemplates.SingleAsync(
                 item => item.Id == imported.Id, token);
             await BindTemplateAsync(courseId, template.Id, actor.Id, token);
-            await DistributeCourseImageAsync(
-                courseId, template.Id, "training Docker archive import", token);
+
             logger.SystemLog($"Uploaded training course Docker template {template.Name}: course={courseId}, template={template.Id}.",
                 TaskStatus.Success, LogLevel.Information);
 
@@ -1912,7 +1882,7 @@ public class TrainingCourseAdminController(
         await BindTemplateAsync(courseId, template.Id, actor.Id, token);
         logger.SystemLog($"Attached training course image template {template.Id}: course={courseId}.",
             TaskStatus.Success, LogLevel.Information);
-        await DistributeCourseImageAsync(courseId, template.Id, "training template attach", token);
+
         return Ok();
     }
 
@@ -1985,8 +1955,7 @@ public class TrainingCourseAdminController(
         await transaction.CommitAsync(token);
         logger.SystemLog($"Created training course challenge {exercise.Title}: course={courseId}, challenge={exercise.Id}.",
             TaskStatus.Success, LogLevel.Information);
-        await DistributeCourseImageAsync(
-            courseId, exercise.ImageTemplateId, "training challenge create", token);
+
         await exerciseManagement.CollectTrainingChallengeAsync(exercise.Id, token);
 
         return Ok(TrainingCourseChallengeModel.FromChallenge(link, model.ChapterId));
@@ -2058,8 +2027,7 @@ public class TrainingCourseAdminController(
         await transaction.CommitAsync(token);
         logger.SystemLog($"Updated training course challenge {link.ExerciseChallenge.Title}: course={courseId}, challenge={exerciseChallengeId}.",
             TaskStatus.Success, LogLevel.Information);
-        await DistributeCourseImageAsync(
-            courseId, link.ExerciseChallenge.ImageTemplateId, "training challenge update", token);
+
         await exerciseManagement.CollectTrainingChallengeAsync(link.ExerciseChallengeId, token);
 
         return await CourseChallengeEditDetail(courseId, exerciseChallengeId, token);
@@ -2110,8 +2078,7 @@ public class TrainingCourseAdminController(
         await context.SaveChangesAsync(token);
         logger.SystemLog($"Attached training course challenge {model.ExerciseChallengeId}: course={courseId}.",
             TaskStatus.Success, LogLevel.Information);
-        await DistributeCourseImageAsync(
-            courseId, challenge.ImageTemplateId, "training challenge attach", token);
+
         return Ok();
     }
 

@@ -15,6 +15,7 @@ using GZCTF.Modules.Audit.Application;
 using GZCTF.Modules.Audit.Domain;
 using GZCTF.Modules.Runtime.Application;
 using GZCTF.Modules.Runtime.Contracts;
+using GZCTF.Modules.Runtime.Domain;
 using GZCTF.Modules.TeamLab.Application;
 using GZCTF.Modules.TeamLab.Contracts;
 using GZCTF.Modules.TeamLab.Domain;
@@ -37,6 +38,102 @@ namespace GZCTF.Test.UnitTests.TeamLab;
 
 public sealed class TeamLabDeploymentOrchestrationTests
 {
+    [Fact]
+    public async Task QueuedDestroy_ReleasesPreparationOnlyAfterLastConsumerAndKeepsNewPrewarmOnRetry()
+    {
+        await using var context = CreateContext();
+        var (first, shard) = await SeedRuntimeAsync(context);
+        var release = new TeamLabTopologyRelease { Version = 1 };
+        first.TopologyReleaseId = release.Id;
+        var second = new TeamLabRuntime
+        {
+            Id = 1002, TopologyReleaseId = release.Id, Status = TeamLabRuntimeStatus.Paused
+        };
+        var record = new ImageDistributionRecord
+        {
+            ImageTemplateId = 1, WorkerNodeId = shard.WorkerNodeId, ImageType = ImageType.Docker,
+            ImageHash = "teamlab-test", Status = ImageDistributionStatus.Ready,
+            References =
+            [
+                new() { Kind = ImageDistributionReferenceKind.TeamLabRelease, ResourcePublicId = release.Id },
+                new() { Kind = ImageDistributionReferenceKind.TeamLabRuntime, ResourceId = first.Id },
+                new() { Kind = ImageDistributionReferenceKind.TeamLabRuntime, ResourceId = second.Id }
+            ]
+        };
+        context.AddRange(release, second, record);
+        await context.SaveChangesAsync();
+        var (orchestrator, _) = DestructionOrchestrator(context);
+
+        Assert.True((await orchestrator.ExecuteQueuedDestroyAsync(first.Id, default)).Success);
+        Assert.Equal(TeamLabRuntimeStatus.Destroyed, first.Status);
+        Assert.Equal(2, await context.ImageDistributionReferences.CountAsync());
+        Assert.Equal(ImageDistributionStatus.Ready, record.Status);
+
+        Assert.True((await orchestrator.ExecuteQueuedDestroyAsync(second.Id, default)).Success);
+        Assert.Empty(await context.ImageDistributionReferences.ToArrayAsync());
+        Assert.Equal(ImageDistributionStatus.CleanupPending, record.Status);
+
+        var destroyedAt = second.UpdatedAt!.Value;
+        record.Status = ImageDistributionStatus.Ready;
+        record.Operation = ImageDistributionOperation.Distribute;
+        var newPreparation = new ImageDistributionReference
+        {
+            DistributionRecord = record, Kind = ImageDistributionReferenceKind.TeamLabRelease,
+            ResourcePublicId = release.Id, CreatedAt = destroyedAt.AddSeconds(1)
+        };
+        context.ImageDistributionReferences.Add(newPreparation);
+        await context.SaveChangesAsync();
+
+        Assert.True((await orchestrator.ExecuteQueuedDestroyAsync(second.Id, default)).Success);
+        Assert.Equal(destroyedAt, second.UpdatedAt);
+        Assert.Equal(newPreparation.Id, (await context.ImageDistributionReferences.SingleAsync()).Id);
+        Assert.Equal(ImageDistributionStatus.Ready, record.Status);
+    }
+
+    [Fact]
+    public async Task GenerationCleanup_ForResetDoesNotReleasePreparation()
+    {
+        await using var context = CreateContext();
+        var (runtime, shard) = await SeedRuntimeAsync(context);
+        var release = new TeamLabTopologyRelease { Version = 1 };
+        runtime.TopologyReleaseId = release.Id;
+        context.AddRange(release, new ImageDistributionRecord
+        {
+            ImageTemplateId = 1, WorkerNodeId = shard.WorkerNodeId, ImageType = ImageType.Docker,
+            ImageHash = "teamlab-test", Status = ImageDistributionStatus.Ready,
+            References = [new() { Kind = ImageDistributionReferenceKind.TeamLabRelease, ResourcePublicId = release.Id }]
+        });
+        await context.SaveChangesAsync();
+        var (_, cleanup) = DestructionOrchestrator(context);
+
+        var result = await cleanup.CleanupAsync(runtime, markDestroyedOnSuccess: true, default);
+
+        Assert.True(result.Success);
+        Assert.Equal(TeamLabRuntimeStatus.Destroyed, runtime.Status);
+        Assert.Single(await context.ImageDistributionReferences.ToArrayAsync());
+    }
+
+    private static (TeamLabRuntimeOrchestrator Orchestrator, TeamLabRuntimeCleanupService Cleanup)
+        DestructionOrchestrator(AppDbContext context)
+    {
+        var nodes = Mock.Of<ITeamLabNodeExecutor>();
+        var writer = Mock.Of<IOperationalEventWriter>();
+        var recorder = new TeamLabEventRecorder(context, writer, new OperationalCorrelation());
+        var distribution = new ImageDistributionService(context, null!, null!, null!, null!,
+            new ImageDistributionCoordinator(), new DeploymentExecutionContextAccessor(), writer,
+            NullLogger<ImageDistributionService>.Instance);
+        var preparation = new TeamLabReleaseImagePreparationService(context, distribution);
+        var traffic = new TeamLabTrafficApplicationService(context, nodes,
+            Mock.Of<IDistributedLeaseProvider>(), Mock.Of<ITeamLabTrafficIngestor>(), recorder,
+            NullLogger<TeamLabTrafficApplicationService>.Instance);
+        var cleanup = new TeamLabRuntimeCleanupService(context, nodes, traffic, CaptureCleanup(),
+            Mock.Of<IPublicUdpGatewayProvider>(), recorder, RemoteAccess(), ServiceAccessCleanup(), preparation);
+        var orchestrator = new TeamLabRuntimeOrchestrator(context, null!, null!, null!, null!, nodes, null!,
+            traffic, cleanup, null!, new TeamLabArtifactDistribution(distribution), null!, null!, null!, null!,
+            null!, recorder, NullLogger<TeamLabRuntimeOrchestrator>.Instance);
+        return (orchestrator, cleanup);
+    }
+
     [Theory]
     [InlineData(RuntimeOperationKind.Pause, DeploymentQueueTicketStatus.Running, "runtime-pausing")]
     [InlineData(RuntimeOperationKind.Resume, DeploymentQueueTicketStatus.Running, "runtime-resuming")]

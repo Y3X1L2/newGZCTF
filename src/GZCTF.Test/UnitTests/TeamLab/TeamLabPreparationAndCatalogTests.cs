@@ -16,14 +16,14 @@ namespace GZCTF.Test.UnitTests.TeamLab;
 public sealed class TeamLabPreparationAndCatalogTests
 {
     [Fact]
-    public void Preparation_ReadyWhenAllImagesReadyOnEligibleNodes()
+    public async Task Preparation_ReadyWhenAllImagesReadyOnEligibleNodes()
     {
         using var context = CreateContext();
         var releaseId = SeedRelease(context, out var templateId, out var digest);
         SeedNodeAndRecord(context, templateId, digest, ImageDistributionStatus.Ready);
 
-        var preparation = new TeamLabReleaseImagePreparationService(context, null!)
-            .GetPreparationAsync(releaseId, default).Result;
+        var preparation = await new TeamLabReleaseImagePreparationService(context, null!)
+            .GetPreparationAsync(releaseId, default);
 
         Assert.Equal("readyToStart", preparation.State);
         Assert.True(preparation.PlanAvailable);
@@ -37,18 +37,18 @@ public sealed class TeamLabPreparationAndCatalogTests
     }
 
     [Fact]
-    public void Preparation_BlockedWhenImageDistributionFailed()
+    public async Task Preparation_OnDemandWithFailedCache_ExposesFailureWithoutBlockingStart()
     {
         using var context = CreateContext();
         var releaseId = SeedRelease(context, out var templateId, out var digest);
         SeedNodeAndRecord(context, templateId, digest, ImageDistributionStatus.Failed);
 
-        var preparation = new TeamLabReleaseImagePreparationService(context, null!)
-            .GetPreparationAsync(releaseId, default).Result;
+        var preparation = await new TeamLabReleaseImagePreparationService(context, null!)
+            .GetPreparationAsync(releaseId, default);
 
-        Assert.Equal("blocked", preparation.State);
-        Assert.False(preparation.ReadyToStart);
-        Assert.Single(preparation.Blockers);
+        Assert.Equal("onDemand", preparation.State);
+        Assert.True(preparation.ReadyToStart);
+        Assert.Empty(preparation.Blockers);
         var image = Assert.Single(preparation.Images);
         Assert.NotNull(image.Failure);
         Assert.Equal("image_distribution_failed", image.Failure!.Code);
@@ -56,33 +56,73 @@ public sealed class TeamLabPreparationAndCatalogTests
     }
 
     [Fact]
-    public void Preparation_PreparingWhileImagesPulling()
+    public async Task Preparation_OnDemandWhileImagesPulling()
     {
         using var context = CreateContext();
         var releaseId = SeedRelease(context, out var templateId, out var digest);
         SeedNodeAndRecord(context, templateId, digest, ImageDistributionStatus.Pulling);
 
-        var preparation = new TeamLabReleaseImagePreparationService(context, null!)
-            .GetPreparationAsync(releaseId, default).Result;
+        var preparation = await new TeamLabReleaseImagePreparationService(context, null!)
+            .GetPreparationAsync(releaseId, default);
 
-        Assert.Equal("preparing", preparation.State);
+        Assert.Equal("onDemand", preparation.State);
         Assert.True(preparation.PlanAvailable);
-        Assert.False(preparation.ReadyToStart);
+        Assert.True(preparation.ReadyToStart);
         Assert.Equal(1, preparation.Images[0].PreparingNodeCount);
     }
 
     [Fact]
-    public void Preparation_BlockedWithoutEligibleNodes()
+    public async Task Preparation_BlockedWithoutEligibleNodes()
     {
         using var context = CreateContext();
         var releaseId = SeedRelease(context, out _, out _);
 
-        var preparation = new TeamLabReleaseImagePreparationService(context, null!)
-            .GetPreparationAsync(releaseId, default).Result;
+        var preparation = await new TeamLabReleaseImagePreparationService(context, null!)
+            .GetPreparationAsync(releaseId, default);
 
         Assert.Equal("blocked", preparation.State);
         Assert.False(preparation.PlanAvailable);
         Assert.Contains("没有具备对应能力的可调度节点", preparation.Blockers[0]);
+    }
+
+    [Fact]
+    public async Task Preparation_AllowsColdCacheWithoutCreatingDistributionRecords()
+    {
+        using var context = CreateContext();
+        var releaseId = SeedRelease(context, out var templateId, out var digest);
+        SeedNodeAndRecord(context, templateId, digest, ImageDistributionStatus.Ready);
+        context.ImageDistributionRecords.RemoveRange(context.ImageDistributionRecords);
+        await context.SaveChangesAsync();
+
+        var preparation = await new TeamLabReleaseImagePreparationService(context, null!)
+            .GetPreparationAsync(releaseId, default);
+
+        Assert.Equal("onDemand", preparation.State);
+        Assert.True(preparation.ReadyToStart);
+        Assert.Empty(preparation.Blockers);
+        Assert.Equal(0, preparation.Images[0].ReadyNodeCount);
+        Assert.Empty(await context.ImageDistributionRecords.ToArrayAsync());
+    }
+
+    [Theory]
+    [InlineData(ImageStatus.Importing)]
+    [InlineData(ImageStatus.Error)]
+    [InlineData(ImageStatus.Deleting)]
+    public async Task Preparation_BlocksUnavailableSourceEvenWithCachedCopy(ImageStatus status)
+    {
+        using var context = CreateContext();
+        var releaseId = SeedRelease(context, out var templateId, out var digest);
+        SeedNodeAndRecord(context, templateId, digest, ImageDistributionStatus.Ready);
+        context.ImageTemplates.Single().Status = status;
+        await context.SaveChangesAsync();
+
+        var preparation = await new TeamLabReleaseImagePreparationService(context, null!)
+            .GetPreparationAsync(releaseId, default);
+
+        Assert.Equal("blocked", preparation.State);
+        Assert.False(preparation.ReadyToStart);
+        Assert.Contains("源制品未就绪", Assert.Single(preparation.Blockers));
+        Assert.Equal(1, preparation.Images[0].ReadyNodeCount);
     }
 
     private static Guid SeedRelease(

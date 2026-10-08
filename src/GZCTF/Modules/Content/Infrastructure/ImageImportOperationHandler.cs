@@ -4,7 +4,6 @@ using GZCTF.Modules.Audit.Application;
 using GZCTF.Modules.Content.Application;
 using GZCTF.Modules.Content.Contracts;
 using GZCTF.Modules.Content.Domain;
-using GZCTF.Services.Fleet;
 using Microsoft.EntityFrameworkCore;
 
 namespace GZCTF.Modules.Content.Infrastructure;
@@ -13,7 +12,6 @@ public sealed class ImageImportOperationHandler(
     AppDbContext context,
     ImageImportApplicationService imports,
     ApiOperationService operations,
-    ImageDistributionService distribution,
     IImageImportStagingStore staging) : IApiOperationHandler
 {
     public string Kind => ImageImportApplicationService.OperationKind;
@@ -51,7 +49,7 @@ public sealed class ImageImportOperationHandler(
             else
             {
                 await RequireLeaseAsync(
-                    operationId, leaseOwner, "image-importing", 0, 3, cancellationToken);
+                    operationId, leaseOwner, "image-importing", 0, 1, cancellationToken);
                 var imported = await imports.ExecuteJobAsync(job, true, cancellationToken);
                 template = await context.ImageTemplates.SingleAsync(
                     item => item.Id == imported.Id, cancellationToken);
@@ -60,7 +58,7 @@ public sealed class ImageImportOperationHandler(
                     leaseOwner,
                     "image-ready",
                     1,
-                    3,
+                    1,
                     cancellationToken,
                     template.Id);
             }
@@ -75,22 +73,14 @@ public sealed class ImageImportOperationHandler(
         if (job.SourceKind != ImageImportSourceKind.DockerReference)
             await staging.DeleteAsync(job.StagedPath, CancellationToken.None);
 
+        // Import readiness describes the durable artifact, not copies on every Worker.
+        // Deployment prepares only the node selected by its existing queue ticket.
         await RequireLeaseAsync(
             operationId,
             leaseOwner,
-            "image-distributing",
-            2,
-            3,
-            cancellationToken,
-            template.Id);
-        var distributionRecords = await distribution.DistributeToCapableNodesAsync(
-            template, cancellationToken);
-        await RequireLeaseAsync(
-            operationId,
-            leaseOwner,
-            "image-distribution-queued",
-            3,
-            3,
+            "image-ready",
+            1,
+            1,
             cancellationToken,
             template.Id);
     }

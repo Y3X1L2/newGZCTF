@@ -384,47 +384,23 @@ public sealed class TeamLabRolloutCoordinator(
     private async Task<bool> PrepareImagesAsync(TeamLabRollout rollout, CancellationToken cancellationToken)
     {
         var definition = TeamLabReleaseCodec.DecodeExecution(rollout.Release.SchemaVersion, rollout.Release.CanonicalJson);
-        var templateIds = definition.Assets.Select(item => item.ImageTemplateId).Distinct().Order().ToArray();
-        await distribution.DistributeTemplatesAsync(templateIds,
-            ImageDistributionReferenceKey.TeamLabRollout(rollout.Id), cancellationToken);
-        if (templateIds.Length == 0) return true;
-
-        var records = await context.ImageDistributionRecords.AsNoTracking()
-            .Where(item => templateIds.Contains(item.ImageTemplateId) &&
-                           item.References.Any(reference =>
-                               reference.Kind == ImageDistributionReferenceKind.TeamLabRollout &&
-                               reference.ResourceId == rollout.Id))
-            .Select(item => new { item.ImageTemplateId, item.Status, item.ErrorMessage })
-            .ToArrayAsync(cancellationToken);
-        var missingTemplate = templateIds.FirstOrDefault(templateId =>
-            records.All(record => record.ImageTemplateId != templateId));
-        if (records.Length == 0 || missingTemplate != 0)
+        try
+        {
+            // Rollout preparation creates target runtimes; it is not an all-node cache prewarm.
+            // Each target's existing deployment ticket prepares only its assigned Workers.
+            await TeamLabTopologyApplicationService.ValidateImageTemplatesAsync(
+                context, definition, cancellationToken);
+            return true;
+        }
+        catch (TeamLabApiContractException exception) when (exception.Code is
+            "image_template_unavailable" or "image_template_digest_changed")
         {
             rollout.Status = TeamLabRolloutStatus.Blocked;
             rollout.PreparationRequested = false;
-            rollout.LastError = missingTemplate == 0
-                ? "没有可调度的 node 能承载一个或多个 release images"
-                : $"没有可调度的 node 能承载 image template {missingTemplate}";
+            rollout.LastError = Limit(exception.Message);
             await context.SaveChangesAsync(cancellationToken);
             return false;
         }
-        var failed = records.FirstOrDefault(item => item.Status == ImageDistributionStatus.Failed);
-        if (failed is not null)
-        {
-            rollout.Status = TeamLabRolloutStatus.Blocked;
-            rollout.PreparationRequested = false;
-            rollout.LastError = Limit(failed.ErrorMessage ?? "image 分发失败");
-            await context.SaveChangesAsync(cancellationToken);
-            return false;
-        }
-        if (records.Any(item => item.Status != ImageDistributionStatus.Ready))
-        {
-            rollout.Status = TeamLabRolloutStatus.Preparing;
-            rollout.UpdatedAt = DateTimeOffset.UtcNow;
-            await context.SaveChangesAsync(cancellationToken);
-            return false;
-        }
-        return true;
     }
 
     private async Task<bool> RefreshTargetFactsAsync(TeamLabRollout rollout, CancellationToken cancellationToken)

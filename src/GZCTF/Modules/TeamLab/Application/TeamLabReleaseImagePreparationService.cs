@@ -8,12 +8,9 @@ using Microsoft.EntityFrameworkCore;
 namespace GZCTF.Modules.TeamLab.Application;
 
 /// <summary>
-/// Queues release images ahead of runtime creation and keeps them while the release
-/// exists. The claim attached here is the topology-scoped preparation claim: topology
-/// deletion is blocked while any release exists (<c>release_immutable</c>), so the
-/// claim lifetime equals the release lifetime. Runtimes and rollouts attach their own
-/// claims when they consume the release, so a shared image survives until every
-/// dependent resource is terminally cleaned.
+/// Explicit administrator prewarming and release preparation diagnostics.
+/// Publishing and creating a runtime do not call this prewarming path; deployment
+/// prepares the required images only on its selected Workers with runtime claims.
 /// </summary>
 public sealed class TeamLabReleaseImagePreparationService(
     AppDbContext context,
@@ -53,6 +50,9 @@ public sealed class TeamLabReleaseImagePreparationService(
     public Task ReleaseAsync(Guid releaseId, CancellationToken cancellationToken) =>
         distribution.ReleaseTeamLabReleaseReferencesAsync(releaseId, cancellationToken);
 
+    public Task ReleaseBeforeAsync(Guid releaseId, DateTimeOffset destroyedAt, CancellationToken cancellationToken) =>
+        distribution.ReleaseTeamLabReleaseReferencesBeforeAsync(releaseId, destroyedAt, cancellationToken);
+
     public async Task ReleaseScopeAsync(Guid scopeId, CancellationToken cancellationToken)
     {
         var releaseIds = await context.TeamLabTopologyReleases.AsNoTracking()
@@ -64,8 +64,8 @@ public sealed class TeamLabReleaseImagePreparationService(
     }
 
     /// <summary>
-    /// External readiness projection. No worker address, ticket or Agent detail crosses
-    /// the boundary; callers observe only per-template counts against eligible nodes.
+    /// Artifact/capability admission with independent cache diagnostics. ReadyToStart
+    /// permits on-demand downloads; cache counts are not a placement guarantee.
     /// </summary>
     public async Task<TeamLabReleasePreparationModel> GetPreparationAsync(
         Guid releaseId,
@@ -88,7 +88,7 @@ public sealed class TeamLabReleaseImagePreparationService(
         var templateIds = requirements.Select(item => item.Id).ToArray();
         var templates = await context.ImageTemplates.AsNoTracking()
             .Where(item => templateIds.Contains(item.Id))
-            .Select(item => new { item.Id, item.Name, item.ImageType, item.ImageHash })
+            .Select(item => new { item.Id, item.Name, item.ImageType, item.ImageHash, item.Status })
             .ToDictionaryAsync(item => item.Id, cancellationToken);
         var now = DateTimeOffset.UtcNow;
         var nodes = (await context.WorkerNodes.AsNoTracking()
@@ -117,6 +117,14 @@ public sealed class TeamLabReleaseImagePreparationService(
         {
             templates.TryGetValue(requirement.Id, out var template);
             var digest = requirement.Digest ?? template?.ImageHash ?? string.Empty;
+            var kindMatches = requirement.Kind == TeamLabAssetKind.Docker
+                ? template?.ImageType == ImageType.Docker
+                : template is not null && template.ImageType != ImageType.Docker;
+            if (template is null || template.Status != ImageStatus.Ready ||
+                string.IsNullOrWhiteSpace(template.ImageHash) || !kindMatches)
+                blockers.Add($"{template?.Name ?? $"模板 {requirement.Id}"} 的源制品未就绪。");
+            else if (!string.Equals(digest, template.ImageHash, StringComparison.Ordinal))
+                blockers.Add($"{template.Name} 的源制品不再匹配已发布摘要。");
             var requiredCapability = requirement.Kind == TeamLabAssetKind.Docker
                 ? NodeCapability.Docker
                 : NodeCapability.Kvm;
@@ -150,19 +158,11 @@ public sealed class TeamLabReleaseImagePreparationService(
         if (!planAvailable)
             blockers.AddRange(images.Where(item => item.EligibleNodeCount == 0)
                 .Select(item => $"{item.TemplateName} 没有具备对应能力的可调度节点。"));
-        var failedImages = images.Where(item => item.Failure is not null).ToArray();
-        if (failedImages.Length > 0)
-            blockers.AddRange(failedImages.Select(item => $"{item.TemplateName} 镜像准备失败。"));
-        var started = images.Any(item => item.ReadyNodeCount > 0 || item.PreparingNodeCount > 0 || item.FailedNodeCount > 0);
-        var readyToStart = planAvailable && failedImages.Length == 0 &&
-                           images.All(item => item.ReadyNodeCount > 0);
-        var preparing = planAvailable && failedImages.Length == 0 &&
-                        images.Any(item => item.PreparingNodeCount > 0) && !readyToStart;
-        var state = !planAvailable || failedImages.Length > 0
-            ? "blocked"
-            : readyToStart ? "readyToStart" : preparing ? "preparing" : "notStarted";
-        if (state == "notStarted")
-            blockers.Add("镜像准备尚未开始，请提交 POST /api/open/v1/teamlab/preparations/releases/{releaseId} 触发预分发。");
+        // Failed copies on unrelated Workers do not block on-demand deployment.
+        // The selected-node Ensure path still reports a real transfer failure on its ticket.
+        var readyToStart = planAvailable && blockers.Count == 0;
+        var cacheReady = images.All(item => item.ReadyNodeCount > 0);
+        var state = !readyToStart ? "blocked" : cacheReady ? "readyToStart" : "onDemand";
         return new TeamLabReleasePreparationModel(
             releaseId,
             state,

@@ -1,135 +1,80 @@
 # GZCTF 节点部署简要指南
 
-本目录用于沉淀远程计算节点的初始化流程。这里的“节点”指在管理后台 `/admin/nodes`
-添加的远程服务器，例如 `<WORKER_HOST>`。平台会通过 SSH 连接节点，部署
-`gzctf-agent`，之后由 agent 在该节点上启动 Docker 容器或 KVM 虚拟机。
+节点是在 `/admin/nodes` 登记的独立 Linux Worker。主站保存镜像目录、引用和运行计划；
+Agent 在 Worker 上执行本机 Docker/KVM 操作。建议在 PVE 中建立专用 Worker VM，
+不要把 PVE 管理宿主直接用作靶机执行节点。
 
-## 一、节点需要提前准备什么
+## 节点准备
 
-每台远程节点至少需要：
+- .NET / ASP.NET Core Runtime 10，用于 `gzctf-agent`。
+- Docker，承载容器；KVM/libvirt，承载 VM。两种能力独立，纯 Docker 节点不必安装 KVM。
+- 节点可访问平台、镜像 Registry；主站可访问 Agent（默认 `5001/tcp`）。
+- TeamLab 节点还须通过平台完成 OVN/OVS、Fabric 和隧道健康配置。仅在线不代表组网可用。
+- 核对 Docker 数据目录、`Kvm:ImageStoragePath`、`TeamLab:RuntimeStateRoot` 的真实挂载和剩余空间。
+  根盘、VM 数据盘和 PVE 的 thin pool 是不同容量约束，都需要监测。
 
-- Linux 系统，建议 Ubuntu/Debian 系。
-- Docker：用于普通 CTF、AWDP 的容器靶机。
-- .NET / ASP.NET Core Runtime 10：用于运行 `gzctf-agent`。
-- KVM/libvirt：用于 Windows 靶机、渗透测试靶机等虚拟机场景。
-- 可从节点访问主平台：`http://<PLATFORM_HOST>:<PORT>`。
-- 可从主平台访问节点 agent 端口：默认 `5001/tcp`。
-
-推荐初始化脚本：
-
-```bash
-sudo bash docs/node-deployment/setup-gzctf-worker-node.sh
-```
-
-如果要配置 Docker 私有仓库或镜像仓库挂载：
-
-```bash
-sudo bash docs/node-deployment/setup-gzctf-worker-node.sh \
-  --insecure-registry <REGISTRY_HOST>:5000 \
-  --registry-mirror https://registry-1.docker.io \
-  --nfs-source <NFS_HOST>:/data/nfs-pve/gzctf-images \
-  --repo-dir /mnt/gzctf-image-repo
-```
-
-脚本不会安装 `gzctf-agent`。脚本执行完成后，在平台后台“节点部署”页面填写
-节点 IP、用户名、密码，由平台自动下发 agent。
-
-仓库根目录还保留了一个轻量入口：
+先检查基础依赖，命令只进行检查：
 
 ```bash
 sudo bash scripts/prepare-agent-node.sh --check-only
 ```
 
-它适合快速检查或安装 Docker、.NET、KVM/libvirt 基础依赖；如果需要配置 Docker
-私有仓库、registry mirror 或 NFS 镜像仓库，优先使用本目录下的
-`setup-gzctf-worker-node.sh`。
+需要安装依赖时使用本目录的初始化脚本；它准备系统，不直接安装平台注册的 Agent：
 
-## 二、当前项目里的镜像机制
-
-### Docker 镜像
-
-Docker 题目实际启动时，如果目标节点没有对应镜像，agent 会在该节点执行 pull。
-因此远程节点不要求提前拥有所有 Docker 镜像，但必须满足其中一个条件：
-
-- 节点能访问 Docker Hub 或指定私有 registry；
-- 节点已经预拉取了对应镜像；
-- 平台的镜像模板中配置了可访问的 registry 地址和必要的认证信息。
-
-推荐做法是搭建局域网私有 registry 或 Harbor，把所有比赛镜像推到内网 registry。
-题目配置里使用固定 tag 或 digest，例如：
-
-```text
-registry.ctf.lan/web/basic-sqli:20260610
+```bash
+sudo bash docs/node-deployment/setup-gzctf-worker-node.sh   --insecure-registry <REGISTRY_HOST>:5000
 ```
 
-比赛前可对常用镜像做预拉取，减少选手首次启动容器时的等待。
+完成后通过后台“节点部署”安装/同步 Agent。不要把密码、token 或私钥写入脚本和 Git。
 
-### KVM / Windows 镜像
+## 镜像来源与按需分发
 
-当前 KVM agent 约定镜像目录为：
-
-```text
-/var/lib/gzctf/images
-```
-
-平台创建 VM 时会查找：
+普通镜像导入、课程绑定、题目导入/编辑、TeamLab 发布、创建试运行和批量 rollout 不再隐含向所有节点复制镜像。
+正常运行沿已有部署队列选择节点，在所选节点确认或准备镜像，下载/校验成功后才启动。
+缺缓存不创建空白 VM 来代替原模板；下载失败应在对应票据和分发记录中报告。
 
 ```text
-/var/lib/gzctf/images/<templateId>.qcow2
+规范导入 -> Registry 制品 + 主站模板/摘要 -> 选择运行节点
+                                             |
+                                             v
+                            仅选中 Worker 检查缓存 -> 缺失则下载/校验
+                                             |
+                                             v
+                                     创建实例自己的可写盘
 ```
 
-如果存在该模板文件，会用它作为 backing file 创建运行时 qcow2；如果不存在，
-会创建一个空盘。因此 VM 镜像需要提前分发到被调度的 KVM 节点，或者通过平台的
-镜像上传/分发接口让节点下载。
+- Docker 规范导入把镜像推到配置的 Registry，Worker 使用登记的镜像地址拉取。
+  导入仍可经过主站 Docker load/tag/push，不代表主站变成所有运行实例的执行节点。
+- 规范 qcow2 导入把制品推入 Registry；成功后删除导入暂存文件，模板保留不可变摘要和来源。
+- 旧的后台 VM Upload、Local 和 Archive 路径仍可能保留 `LocalFilePath` 作为当前唯一源文件，
+  后续分发可将其制作为 Registry 制品。不得在该迁移成功并核验前删除源文件。
+  本期没有自动迁移所有旧格式，也没有宣称主站已经没有本地源文件。
+- Worker 的 VM 缓存为 `<Kvm:ImageStoragePath>/<templateId>.qcow2`；下载中可有 `.part`。
+  实例 qcow2 是依赖该底盘的差异盘，不能只按“VM 已停止”判断底盘可删。
 
-## 三、结合当前 PVE 的建议
+不需要在每个节点手工 `rsync` 全部镜像。原始 PVE 导出文件、快照与教学材料独立保存，
+不属于平台节点缓存或自动回收范围。
 
-已观察到 PVE 8.4 上有以下存储：
+## 显式预热与准备诊断
 
-- `local`：目录存储，空间较小，适合 ISO、临时文件。
-- `local-lvm`：本机 LVM thin，适合 PVE VM 本身磁盘。
-- `nfs-pve-shared`：NFS 共享存储，约 35T 可用，挂载源为
-  `<NFS_HOST>:/data/nfs-pve`。
+管理员主动调用镜像分发、TeamLab templates/release Prepare 时仍会预热合格节点。
+这属于额外存储操作，应先确认目标范围与容量；普通启动不依赖先调用这些接口。
+本期没有实现管理员自选目标/租期 API，也没有实现基于缓存年龄的 TTL/LRU。
 
-推荐把 `nfs-pve-shared` 作为“镜像母仓库”，不要把所有大镜像散落在每台节点上手工维护。
+“可以启动”表示主制品及当前放置条件满足，不表示所有 Worker 已缓存、更不表示来宾业务实测通过。
+“已缓存 1/2”表示两个能力合格节点中一个已有缓存；所选节点尚未缓存时，启动流程会按需下载。
+未被选中节点的旧分发失败不能单独阻断本次运行；所选节点下载失败仍会使当前运行任务失败。
 
-推荐流程：
+外部 preparation `ReadyToStart` 同样表示允许按需启动；`State=onDemand` 表示仍需下载，
+每模板 cache counts 保留真实记录。它不是调度资源预留，也不是所选节点的就绪保证。
 
-1. 在 PVE 中制作 Windows/Linux 靶机黄金模板。
-2. 关机并清理模板，导出为 qcow2。
-3. 把 qcow2 放到 NFS 共享镜像仓库，例如：
+## 回收边界
 
-   ```text
-   /mnt/pve/nfs-pve-shared/gzctf-images/
-   ```
+销毁实例、撤销预热和全局删除模板是不同操作。底盘清理必须通过平台引用检查及
+Agent 实际 backing/inventory 检查；不能绕过保护手工批量删除正在使用的缓存。
+模板全局删除还会检查课程、题目、TeamLab 草稿和不可变版本等业务引用。
+Registry manifest 删除后，未被引用的 blob 仍需受控 Registry GC 才释放物理空间。
 
-4. 比赛前同步到各 GZCTF worker 的本地缓存：
-
-   ```bash
-   rsync -aH --info=progress2 \
-     /mnt/gzctf-image-repo/*.qcow2 \
-     /var/lib/gzctf/images/
-   ```
-
-5. 在平台中导入/登记镜像模板，并确认 `<templateId>.qcow2` 在会被调度的节点存在。
-
-短期最稳妥方案：
-
-- Docker：统一走内网 registry。
-- VM/qcow2：PVE NFS 做母仓库，worker 本地 `/var/lib/gzctf/images` 做运行缓存。
-
-不建议把 PVE 管理节点本身直接作为 GZCTF worker；更建议在 PVE 里开专门的 worker VM，
-例如 `<WORKER_HOST>` 这种节点。这样平台、worker、PVE 管理面之间职责清晰。
-
-## 四、注意事项
-
-- 不要把 PVE root 密码写入脚本、仓库或平台配置文件。
-- 大型 Windows qcow2 不建议比赛开始后临时分发，最好赛前预同步。
-- 普通 KVM 的运行时 overlay 放在 `Kvm:ImageStoragePath` 下；TeamLab VM 的
-  overlay 放在 `TeamLab:RuntimeStateRoot` 下。仅声明 TeamLab 执行计划能力时，
-  Agent 才对两个目录的空闲量取较小值；普通 KVM 只读取镜像目录。
-  Docker 预算读取 Docker daemon 上报的 `DockerRootDir`
-  所在文件系统，可能与 VM 存储盘不同；发布前分别核对三个目录的挂载来源与余量。
-  不宜将运行时磁盘直接放到 NFS 上。
-- 更理想的后续改造是把“基础镜像目录”和“运行时磁盘目录”拆开：基础镜像可读共享，
-  运行时 overlay 放 worker 本地 SSD/NVMe。
+本期按需分发使用原 `DeploymentQueueTicket` 和 `ImageDistributionRecord`；没有新增第二套队列。
+同一 LAN/组内资产跨节点放置尚未实现；现状仍以不可拆网络组调度，
+OVN/OVS 已具备跨节点网络基础不代表当前调度器已能拆分这类组。

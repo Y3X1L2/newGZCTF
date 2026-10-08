@@ -14,7 +14,7 @@ export function ReleaseReadinessPanel({ readiness, imageOptions, creatingTrial, 
   onCreateTrial: () => void
   onPrepareImages: () => void
 }) {
-  const imagesToPrepare = readiness.images.filter(image => image.pendingNodeCount || image.failedNodeCount)
+  const imagesToPrepare = readiness.images.filter(image => image.readyNodeCount < image.eligibleNodeCount || image.pendingNodeCount || image.failedNodeCount)
   const vmImages = [...new Set(readiness.plan?.assets.filter(asset => asset.kind === 'vm').map(asset => asset.imageTemplateId) ?? [])]
   return <section className={styles.readiness} aria-label="版本运行准备">
     <div className={styles.readinessStatus} data-ready={readiness.ready}>
@@ -28,10 +28,10 @@ export function ReleaseReadinessPanel({ readiness, imageOptions, creatingTrial, 
     {readiness.blockingReasons.length ? <ul className={styles.blockers}>
       {readiness.blockingReasons.map(reason => <li key={reason}>{reason}</li>)}
     </ul> : null}
-    <p className={styles.readinessNote}>启动就绪表示当前可完成放置；来宾系统连接需在运行后验证。</p>
+    <p className={styles.readinessNote}>可以启动表示制品与当前放置条件满足。缺少的缓存将在选定节点下载；来宾系统连接需在运行后验证。</p>
     <div className={styles.readinessActions}>
       {imagesToPrepare.length ? <ActionButton disabled={preparingImages} icon={<Download size={16} />} onClick={onPrepareImages} type="button">
-        {preparingImages ? '准备中' : '准备镜像'}
+        {preparingImages ? '预热中' : '预热合格节点'}
       </ActionButton> : null}
       <ActionButton disabled={!readiness.ready || creatingTrial} icon={<PlayCircle size={16} />} onClick={onCreateTrial} tone="primary" type="button">
         {creatingTrial ? '正在启动' : '启动环境'}
@@ -51,7 +51,7 @@ export function ReleaseReadinessPanel({ readiness, imageOptions, creatingTrial, 
     </Link> : null}
     {readiness.images.length ? <details className={styles.imageDetails}>
       <summary>镜像分发详情</summary>
-      <p>已缓存节点 / 能力合格节点。其他节点未缓存不单独阻止启动；实际运行仍需在选定节点完成镜像准备。</p>
+      <p>已缓存节点 / 能力合格节点。其他节点未缓存或分发失败不单独阻止启动；普通启动只在选定节点准备镜像。手动预热会向所有合格节点分发。</p>
       <table><thead><tr><th>模板</th><th>已缓存 / 合格节点</th><th>待分发</th><th>失败</th></tr></thead><tbody>
         {readiness.images.map(image => <tr key={image.imageTemplateId}>
           <td>{image.name}</td><td>{image.readyNodeCount}/{image.eligibleNodeCount}</td>
