@@ -9,6 +9,7 @@ public sealed class ImageTransferSingleFlight
     public async Task<T> RunAsync<T>(string key, Func<CancellationToken, Task<T>> operation,
         CancellationToken waiterToken)
     {
+        waiterToken.ThrowIfCancellationRequested();
         var lazy = _operations.GetOrAdd(key, _ => CreateSharedOperation(key, operation));
         return (T)(await lazy.Value.WaitAsync(waiterToken))!;
     }
