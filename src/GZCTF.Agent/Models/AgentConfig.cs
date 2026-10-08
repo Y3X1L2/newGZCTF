@@ -10,6 +10,15 @@ public class AgentConfig
     public string OperationStateRoot { get; set; } = "/var/lib/gzctf/agent";
     public GuestManagementConfig GuestManagement { get; set; } = new();
     public AgentExecutionLimitOverrides ExecutionLimits { get; set; } = new();
+    public AgentImageStorageConfig ImageStorage { get; set; } = new();
+}
+
+public sealed class AgentImageStorageConfig
+{
+    public long SafetyMarginBytes { get; set; } = 1024L * 1024 * 1024;
+    // Docker does not expose a trustworthy expanded-size bound before a pull. This is a
+    // conservative admission allowance, not a disk quota or a runtime growth reservation.
+    public long DockerPullBudgetBytes { get; set; } = 8L * 1024 * 1024 * 1024;
 }
 
 public sealed class GuestManagementConfig
