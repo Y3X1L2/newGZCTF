@@ -183,9 +183,7 @@ public sealed class TeamLabManagedGuestNetworkTests
         var topology = await context.TeamLabTopologies.Include(item => item.Networks)
             .Include(item => item.Assets).ThenInclude(item => item.Interfaces).ThenInclude(item => item.Network)
             .SingleAsync(item => item.PublicId == draft.Id);
-        // No workers are registered: preparation records the release without external operations.
-        var distribution = new ImageDistributionService(context, null!, null!, null!, null!, null!, null!, null!, null!);
-        var releases = new TeamLabReleaseService(context, new TeamLabTopologyValidator(), new TeamLabReleaseImagePreparationService(context, distribution));
+        var releases = new TeamLabReleaseService(context, new TeamLabTopologyValidator());
         var released = await releases.PublishAsync(topology, draft.Revision, owner, null, CancellationToken.None);
         var snapshot = await context.TeamLabTopologyReleases.SingleAsync(item => item.Id == released.Id);
         Assert.Equal(VmNetworkMode.ManagedStatic, TeamLabReleaseCodec.DecodeExecution(2, snapshot.CanonicalJson).Assets[0].VmNetworkMode);

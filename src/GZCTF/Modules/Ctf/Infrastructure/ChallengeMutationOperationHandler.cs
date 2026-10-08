@@ -403,21 +403,6 @@ public sealed class ChallengeMutationOperationHandler(
     {
         if (job.Kind == ChallengeMutationKind.Import)
         {
-            await RequireLeaseAsync(
-                operationId, leaseOwner, "challenge-image-distributing", 3, 4, job.GameId, cancellationToken);
-            try
-            {
-                await distribution.DistributeGameAsync(job.GameId, cancellationToken);
-            }
-            catch (Exception exception) when (exception is not OperationCanceledException ||
-                                              !cancellationToken.IsCancellationRequested)
-            {
-                logger.LogWarning(
-                    exception,
-                    "Challenge import {OperationId} completed, but image pre-distribution for game {GameId} is pending reconciliation",
-                    operationId,
-                    job.GameId);
-            }
             await FlushScoreboardBestEffortAsync(job.GameId, operationId, cancellationToken);
             await UpdateProgressBestEffortAsync(
                 operationId, leaseOwner, "challenges-imported", 4, 4, job.GameId, cancellationToken);
@@ -427,7 +412,6 @@ public sealed class ChallengeMutationOperationHandler(
         try
         {
             await distribution.ReleaseGameReferencesAsync(job.GameId, cancellationToken);
-            await distribution.DistributeGameAsync(job.GameId, cancellationToken);
         }
         catch (Exception exception) when (exception is not OperationCanceledException ||
                                           !cancellationToken.IsCancellationRequested)

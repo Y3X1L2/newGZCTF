@@ -82,6 +82,8 @@ public sealed class OpenImageApiTests(GZCTFApplicationFactory factory) : IAsyncL
                     .SingleAsync(item => item.Id == job.ImageTemplateId);
                 Assert.Equal(issued.CreatorId, template.CreatedById);
                 Assert.StartsWith("gzctf-internal://", template.RegistryUrl);
+                Assert.False(await context.ImageDistributionRecords.AnyAsync(
+                    record => record.ImageTemplateId == template.Id));
                 var executor = scope.ServiceProvider.GetRequiredService<
                     Fixtures.FakeImageImportExecutor>();
                 Assert.Equal(1, executor.ExecutionCount(operationId));
@@ -99,6 +101,8 @@ public sealed class OpenImageApiTests(GZCTFApplicationFactory factory) : IAsyncL
                     .GetRequiredKeyedService<IApiOperationHandler>(ImageImportApplicationService.OperationKind);
                 await handler.ExecuteAsync(operationId, recoveryOwner, CancellationToken.None);
                 Assert.Equal(1, executor.ExecutionCount(operationId));
+                Assert.False(await context.ImageDistributionRecords.AnyAsync(
+                    record => record.ImageTemplateId == template.Id));
                 var operationService = recoveryScope.ServiceProvider
                     .GetRequiredService<ApiOperationService>();
                 Assert.True(await operationService.CompleteAsync(
