@@ -555,11 +555,11 @@ public class ImageDistributionService(
         var record = await QueueTemplateOnNodeAsync(template, node, reference, token);
         coordinator.Wake();
         record = await WaitForReadyAsync(record.Id, template.Name, node.Name, token);
-        return record.Status == ImageDistributionStatus.Ready
-            ? AgentVmImageDownloadResult.Ok(record.LastCheckedAt.HasValue, true, template.FileSize,
-                $"sha256:{template.ImageHash}")
-            : AgentVmImageDownloadResult.Failed(record.ErrorMessage ??
-                                                $"VM template {template.Name} ({template.Id}) is not ready on node {node.Name}.");
+        if (record.Status != ImageDistributionStatus.Ready)
+            throw PreparationFailure(record, "image.vm.ensure",
+                $"VM template {template.Name} ({template.Id}) is not ready on node {node.Name}.");
+        return AgentVmImageDownloadResult.Ok(record.LastCheckedAt.HasValue, true, template.FileSize,
+            $"sha256:{template.ImageHash}");
     }
 
     public Task EnsureDockerImageOnNodeAsync(string image, Guid nodeId, CancellationToken token) =>
@@ -585,9 +585,18 @@ public class ImageDistributionService(
         coordinator.Wake();
         record = await WaitForReadyAsync(record.Id, template.Name, node.Name, token);
         if (record.Status != ImageDistributionStatus.Ready)
-            throw new InvalidOperationException(record.ErrorMessage ??
-                                                $"Docker image {resolved} is not ready on node {node.Name}.");
+            throw PreparationFailure(record, "image.docker.ensure",
+                $"Docker image {resolved} is not ready on node {node.Name}.");
     }
+
+    static AgentClientException PreparationFailure(ImageDistributionRecord record, string operation,
+        string fallbackMessage) => new(new OperationalError(
+            record.ErrorCategory ?? OperationalErrorCategory.ImageTransfer,
+            string.IsNullOrWhiteSpace(record.LastErrorCode) ? OperationalErrorCodes.ImageTransferFailed : record.LastErrorCode,
+            string.IsNullOrWhiteSpace(record.ErrorMessage) ? fallbackMessage : record.ErrorMessage,
+            record.Retryable,
+            WorkerNodeId: record.WorkerNodeId,
+            Operation: operation));
 
     async Task<ImageDistributionReferenceKey?> ResolveCurrentExecutionReferenceAsync(CancellationToken token)
     {

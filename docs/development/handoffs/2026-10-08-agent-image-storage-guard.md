@@ -38,3 +38,5 @@ Agent Release 构建通过，0 警告/0 错误。定向 41/41 测试通过，覆
 第二个提交修正 `AgentClient.DownloadVmImageAsync` 与 `DownloadPreparedVmImageAsync`：非成功 HTTP 响应抛既有 `AgentClientException`，完整保留 Agent 的错误类别、代码、是否可重试、节点和 HTTP 状态。先前返回仅含 message 的 failed result，导致分发层再次包装为普通下载错误。节点不存在仍返回原来的 failed result，不改变该既有行为。
 
 实际 HTTP fake handler 驱动两条方法，8/8 定向测试通过：507 容量错误和永久 size mismatch 的分类/重试策略都保留，节点缺失不发请求，成功响应的大小/摘要/验证事实保持。直接调用方为 `ImageDistributionService.ProcessClaimedAsync` 和 `AgentClient.CreateVmAsync`；前者已有 typed exception 分发记录接线，后者直接传播。
+
+第三个提交在正常合并需求分发/引用回收分支后，补上 `EnsureVmTemplateOnNodeAsync` 和 `EnsureDockerImageOnNodeAsync` 等待失败分发记录的接线，抛既有 `AgentClientException` 并保留 record 的类别、代码、Retryable、Worker 和原错误消息；旧记录缺少类别/代码时仅使用保守的普通镜像传输失败 fallback，不能擅自宣布可重试。所选节点测试同时检查 runtime ticket 分类及 TeamLab failure projection 的代码与重试策略。相关分发、所选需求及 Agent HTTP 映射定向测试 38/38 通过。
