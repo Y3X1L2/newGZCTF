@@ -32,3 +32,9 @@ Agent Release 构建通过，0 警告/0 错误。定向 41/41 测试通过，覆
 测试 harness、日志、极小 Registry fixture 只保存到仓库外 `D:/Work/YINYU-TeamLab-Image-Storage-Guard-20261008/`；本任务创建的容器、卷、网络已清理，原有 Docker 资源保留。未做平台双环境验收，也未修改 `.27/.31`。
 
 无 EF migration、公开 HTTP DTO 或前端生成 API 改动。下一步将本提交与需求分发、引用回收提交集成，执行全量门禁，并在得到部署批准后记录两套环境新建/通信/销毁再建及低空间未选节点不写入的真实证据。
+
+## 主站 VM 下载错误接线
+
+第二个提交修正 `AgentClient.DownloadVmImageAsync` 与 `DownloadPreparedVmImageAsync`：非成功 HTTP 响应抛既有 `AgentClientException`，完整保留 Agent 的错误类别、代码、是否可重试、节点和 HTTP 状态。先前返回仅含 message 的 failed result，导致分发层再次包装为普通下载错误。节点不存在仍返回原来的 failed result，不改变该既有行为。
+
+实际 HTTP fake handler 驱动两条方法，8/8 定向测试通过：507 容量错误和永久 size mismatch 的分类/重试策略都保留，节点缺失不发请求，成功响应的大小/摘要/验证事实保持。直接调用方为 `ImageDistributionService.ProcessClaimedAsync` 和 `AgentClient.CreateVmAsync`；前者已有 typed exception 分发记录接线，后者直接传播。
