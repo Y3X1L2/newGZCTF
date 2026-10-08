@@ -44,3 +44,9 @@ Agent Release 构建通过，0 警告/0 错误。定向 41/41 测试通过，覆
 第四个提交补实际 Docker writer 的期限。隔离 dind 29.8.0 下 Registry 故意只发送 layer 的第一个 byte 后卡住：配置 2 秒后恰约 2.00 秒返回 typed timeout；daemon 日志记录 `context canceled`，下一次 pull 使用同一个 Agent budget 和 storage lock 正常完成。真实 Linux 同盘准入、VM/blob 实际写入、Docker 低空间拒绝、正常 pull 和 digest 缓存命中一并复测通过。临时资源已再次清理。默认及无效期限配置由原预算测试覆盖。
 
 最终组合定向验证 79/79 通过；完整原始测试输出与隔离 dind 证据保留在上述仓库外目录。最终 Agent Release 构建仍为 0 警告/0 错误。全量后端、集成、前端及服务器双环境验收由主会话在最终集成分支继续完成。
+
+## 公开契约同步
+
+整合门禁发现发布准备模型的 XML summary 已变更，但公开 OpenAPI 快照没有同步。以 `OpenApiTests.OpenV1_MatchesCommittedContract` 既有 `OPENAPI_CURRENT_PATH` 输出实际 TestServer 契约，重新生成 `docs/commercialization/openapi/open-v1.json`；未手工编辑 JSON。语义比较确认仅 `components.schemas.TeamLabReleasePreparationModel.description` 变化，paths、字段、类型、required 和 schema 形状均无差异，`verify-openapi-contract.ps1` 兼容性门禁通过。
+
+关闭生成输出选项后，OpenApiTests 与 OpenApiDocumentationTests 独立定向 14/14 通过。现行外部控制面契约和集成指南同步三状态 `onDemand` / `readyToStart` / `blocked`、缓存与创建准入的区别、显式预热和安全撤销语义。没有重新生成前端类型或新增数据库迁移。
