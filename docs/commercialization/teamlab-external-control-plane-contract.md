@@ -73,8 +73,19 @@ Idempotency-Key: customer-order-20260808-001
 
 - `GET /api/open/v1/teamlab/preparations/releases/{releaseId}`
 - `POST /api/open/v1/teamlab/preparations/releases/{releaseId}`
+- `DELETE /api/open/v1/teamlab/preparations/releases/{releaseId}`
 
-状态为 `planAvailable`、`preparing`、`readyToStart` 或 `blocked`。返回每个模板的适配节点数、就绪数、准备中数量和失败数量，不暴露节点地址。
+普通发布和创建运行环境不会自动预热所有节点。创建时先选择执行节点，再为这些节点准备缺少的镜像。`POST` 是显式预热，当前向所有适配节点排队；`DELETE` 撤销该发布版本的预热需求，仍被实例、其他需求或实际 backing 文件使用的节点缓存受到保护。
+
+当前 `state` 的语义如下；该字段是字符串，调用方应允许未认识的状态，不将其解析为固定枚举：
+
+| `state` | 含义 |
+| --- | --- |
+| `onDemand` | 模板和节点能力允许进入创建流程，但部分模板尚无就绪节点缓存；`readyToStart=true`，选定节点后按需下载 |
+| `readyToStart` | 每个模板已有至少一个适配节点缓存；`readyToStart=true`，仍须核对本次选定节点 |
+| `blocked` | 模板状态、发布版本冻结摘要或适配节点能力存在阻碍；`readyToStart=false` |
+
+`planAvailable` 表示存在适配节点能力，不代表 CPU、内存、磁盘或节点已经被预留。响应继续返回每个模板的适配节点数、就绪数、准备中数量和失败数量，不暴露节点地址；无关节点的失败缓存不阻断本次按需创建，实际选定节点准备失败会记录到运行任务。旧的 `planAvailable`、`preparing` 状态不再由当前聚合实现返回。
 
 ### 发布与切换
 

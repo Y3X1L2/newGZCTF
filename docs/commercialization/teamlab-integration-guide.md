@@ -116,9 +116,9 @@ GET /api/open/v1/operations/{id}
 
 ## 3. 标准调用流程
 
-### 3.1 预热模板
+### 3.1 可选镜像预热与创建条件
 
-活动开始前提交本次会使用的镜像模板：
+普通发布和创建运行环境按需下载：先选执行节点，再准备这些节点缺少的镜像。活动开始前若希望提前下载，可以显式提交本次会使用的镜像模板；当前预热接口会向所有适配节点排队，因此不是创建环境的必需步骤：
 
 ```http
 POST /api/open/v1/teamlab/preparations/templates
@@ -149,6 +149,10 @@ POST   /api/open/v1/teamlab/preparations/releases/{releaseId}
 GET    /api/open/v1/teamlab/preparations/releases/{releaseId}
 DELETE /api/open/v1/teamlab/preparations/releases/{releaseId}
 ```
+
+`GET` 返回的发布版本汇总 `state` 当前为 `onDemand`、`readyToStart` 或 `blocked`。`onDemand` 表示部分模板没有就绪缓存，仍允许创建且 `readyToStart=true`；`readyToStart` 表示每个模板至少有一个适配节点缓存，也不保证本次最终选定节点都已有副本。`blocked` 表示源模板状态、冻结摘要或节点能力不满足，`readyToStart=false`。旧的 `planAvailable`、`preparing` 状态不再由当前聚合实现返回。
+
+`planAvailable` 仅说明存在适配节点能力，CPU、内存和磁盘的实际预留仍在调度阶段完成。不要把无关节点的缓存失败当作本次创建失败；本次选定节点的下载或容量错误会进入实际运行任务。`DELETE` 只撤销发布版本预热需求，仍受实例、其他引用和实际 backing 文件使用保护的节点缓存会保留。
 
 ### 3.2 创建运行环境
 
