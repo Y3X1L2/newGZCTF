@@ -18,14 +18,17 @@ public class DockerService
     private readonly DockerConfig _config;
     private readonly ILogger<DockerService> _logger;
     private readonly AgentResourceLock _resourceLock;
+    private readonly AgentImageStorageBudget _imageStorageBudget;
     private readonly SemaphoreSlim _registryConfigurationLock = new(1, 1);
     private static readonly TimeSpan FabricCommandTimeout = TimeSpan.FromSeconds(15);
 
     public DockerService(IOptions<DockerConfig> config, AgentResourceLock resourceLock,
+        AgentImageStorageBudget imageStorageBudget,
         ILogger<DockerService> logger)
     {
         _config = config.Value;
         _resourceLock = resourceLock;
+        _imageStorageBudget = imageStorageBudget;
         _logger = logger;
         _client = new DockerClientConfiguration(new Uri(_config.Uri)).CreateClient();
     }
@@ -1003,6 +1006,17 @@ public class DockerService
 
     public async Task PullImageAsync(string image, string? registryAuth, CancellationToken token)
     {
+        // Only immutable digest references are safe cache hits; a tag can point at newer bytes.
+        if (image.Contains("@sha256:", StringComparison.OrdinalIgnoreCase) &&
+            await ImageExistsAsync(image, token)) return;
+        await using var storageLock = await _resourceLock.AcquireAsync("docker-image-transfer-storage", token);
+        var root = await GetDockerRootDirectoryAsync(token);
+        if (string.IsNullOrWhiteSpace(root))
+            throw new AgentOperationException("Storage", "image.storage_unavailable",
+                "Docker image storage cannot be measured before pull.", true,
+                StatusCodes.Status503ServiceUnavailable);
+        using var storage = _imageStorageBudget.Reserve(root, _imageStorageBudget.DockerPullBudgetBytes,
+            "docker-pull-conservative-admission");
         AuthConfig? authConfig = null;
         if (!string.IsNullOrEmpty(registryAuth))
         {
@@ -1014,10 +1028,30 @@ public class DockerService
             catch { /* ignore invalid auth */ }
         }
 
+        var progress = new DockerPullProgress();
         await _client.Images.CreateImageAsync(
             new ImagesCreateParameters { FromImage = image },
             authConfig,
-            new Progress<JSONMessage>(), token);
+            progress, token);
+        if (progress.Failed)
+            throw new AgentOperationException("ImageTransfer", "image.docker.pull_failed",
+                "Docker daemon rejected the image pull.", true);
+        // The caller uses the shared writer token: canceling a waiting HTTP request must not
+        // dispose this lease while Docker is still processing the pull response.
+        if (!await ImageExistsAsync(image, token))
+            throw new AgentOperationException("ImageTransfer", "image.docker.pull_incomplete",
+                "Docker pull returned without a verifiable local image.", true);
+        storage.CompleteWrites();
+        storage.CheckCapacity();
+    }
+
+    // Progress<T> posts asynchronously. A daemon error must be observed before treating the
+    // completed response (or an older mutable tag still on disk) as a successful pull.
+    internal sealed class DockerPullProgress : IProgress<JSONMessage>
+    {
+        public bool Failed { get; private set; }
+        public void Report(JSONMessage value) =>
+            Failed |= value.Error is not null;
     }
 
     public async Task DeleteImageAsync(string image, CancellationToken token)

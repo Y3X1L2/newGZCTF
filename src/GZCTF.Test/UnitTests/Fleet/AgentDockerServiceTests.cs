@@ -9,6 +9,19 @@ namespace GZCTF.Test.UnitTests.Fleet;
 public class AgentDockerServiceTests
 {
     [Fact]
+    public void PullProgress_ObservesDaemonFailureSynchronouslyWithoutRetainingRawErrorText()
+    {
+        var progress = new DockerService.DockerPullProgress();
+        progress.Report(new global::Docker.DotNet.Models.JSONMessage { Status = "Downloading" });
+        Assert.False(progress.Failed);
+        progress.Report(new global::Docker.DotNet.Models.JSONMessage
+        { Error = new global::Docker.DotNet.Models.JSONError { Message = "private registry diagnostic" } });
+        Assert.True(progress.Failed);
+        progress.Report(new global::Docker.DotNet.Models.JSONMessage { Status = "Done" });
+        Assert.True(progress.Failed);
+    }
+
+    [Fact]
     public void BuildContainerName_IncludesTeamSpecificFingerprint()
     {
         var request = new CreateContainerRequest
