@@ -1,5 +1,15 @@
 # YINYU 当前开发状态
 
+## 镜像按需分发候选与 .31 存储迁移（2026-10-08）
+
+- `codex/image-lifecycle-integration` 从 `origin/main 2ba6e8d8` 整合第一批修复，尚未合并 `main`、部署或进行新候选的双环境验收。普通导入、课程绑定、CTF 编辑/导入、TeamLab 发布/试运行与 rollout 不再隐含全节点分发；已选节点仍用既有队列和 Ensure。显式管理员预热保留，缓存缺失与无关节点失败不单独阻止正常启动。
+- Agent 候选按实际文件系统为下载做并发准入，VM 分块检查与续传只登记新增字节；Docker 为可配置 8 GiB 保守准入与 30 分钟 writer 期限，不是精确展开配额。容量错误保留到主站运行失败投影；共享 writer 结束自行清除记录，取消等待不提前归还预算。普通销毁、最后消费者、重置和较新的预热引用保护已接通；没有新迁移或 DTO 形状变化，公开 OpenAPI 说明由实际 TestServer 重新生成。
+- 整合 Release 构建通过；单元 **1385/1385**、PostgreSQL/Testcontainers 等集成 **306/306**、0 skip；前端完整 locale/lint/类型/架构/测试/构建/体积门禁通过。首次全量发现一个并发测试错误的完成信号和两处 OpenAPI 说明未同步，修正后重跑通过。现有依赖与测试分析器告警仍在，不宣称整个 solution 零警告。
+- 用户允许扩展存储后，PVE VM115 / `.31` 新增 `sdb-storage` 500 GiB 数据盘，镜像与 TeamLab 目录 bind 保持原路径。23 个文件全部双 SHA/大小/权限/属主/mtime 校验后，只释放根盘已确认重复字节；旧模板、Registry、PVE 源机/快照/备份保留。VM115 冷启动自动挂载、服务挂载依赖、原缓存和旧 Agent API 恢复通过，其他 VM 未重启。根盘约 **92.7 GiB**、数据盘约 **391.1 GiB** 可用，PVE thin pool **75.63%→53.08%**。
+- `.31` 最终 Online、`IsSchedulable=false`、该节点活动票据 0，仍为 `cc6c5737/9b2142e9…` 旧 Agent，继续把根盘约 99.45 GB 当 VM 可用量；须获准部署候选并核验真实数据盘后才恢复调度。主站仍为此前 `3efb948c` 发布，`.27/.30` Agent 仍为 `d5711da5…`；本轮没有发布任何源码。
+- 10/8 只读镜像清单：506 模板中 17 条 VM 仍为旧 `LocalFilePath` 格式，源文件实际约 81.94 GiB，14 个已有旧 Registry manifest/同长度 blob，2/4/117 未查到；这不等于已重新完整校验仓库内容。519–522 是新版制品；第一套 AD 的 504/505 仍属于旧格式。多数旧模板还有草稿/历史版本引用，用户允许关闭实例并未批准删除模板，本轮未退役它们。
+- 剩余机制需分步补齐：历史版本退休与源文件迁移、有限期预热/冷缓存策略、运行增长与下载预算协同、Registry 实际 blob GC。同组跨节点调度未实现；下一步是两套环境分别在 `.31/.27` 同时创建并验网络、重置、销毁再建。范围、证据和接手顺序见[候选交接](handoffs/2026-10-08-image-lifecycle-candidate.md)、[节点迁移](handoffs/2026-10-08-node31-data-storage-migration.md)；学习、原始脚本、制品与清单只留仓库外。
+
 ## TeamLab 分盘容量修复：已合并并部署，四机和 Docker 限定验收通过（2026-10-07）
 
 - PR #16 正常合并为 `main 1ec26826`，与候选 `3efb948c` 同树；PR/合并后 Quality 均 success。`.27` 新数据盘 release 原子切换成功，Main DLL `6a8c2979…`、前端 manifest 对应 `3efb948c`；Main/Agent PID 3477834/3478165、active/NRestarts 0。必要兼容修复经正式 Agent sync 扩到 `.30`，两节点实际 Agent SHA `d5711da5…`，`.31` 保留 `cc6c5737/9b2142e9…`。无新迁移、Registry/PVE/公网网关修改。
