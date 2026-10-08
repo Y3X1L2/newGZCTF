@@ -17,9 +17,9 @@
 
 Docker daemon 控制层下载和解包，当前接口不能预先给出可信的展开峰值，也没有活动 pull inventory。因此本期默认为每次缺失 Docker 镜像保留非零 8 GiB，节点内串行拉取，使用 daemon 返回的实际 data-root 测量，与同文件系统 VM/blob 共享账本，开始准入和成功后的实际余量检查；不可变 `@sha256:` 镜像已能 Inspect 时可跳过新下载预算，普通 tag 仍需拉取确认。
 
-配置位于 `Agent:ImageStorage`：`SafetyMarginBytes` 默认 `1073741824`（1 GiB），`DockerPullBudgetBytes` 默认 `8589934592`（8 GiB），两者必须正数。该 8 GiB 是可调整的保守允许量，**不是层的精确展开上界、磁盘 quota 或实例增长预算**。本期没有逐字节拦截 Docker daemon 的写入，不能声称未知大镜像解包或外部 Docker 写入绝不会填满硬盘。
+配置位于 `Agent:ImageStorage`：`SafetyMarginBytes` 默认 `1073741824`（1 GiB），`DockerPullBudgetBytes` 默认 `8589934592`（8 GiB），两者必须正数。`DockerPullTimeoutSeconds` 默认 `1800`（30 分钟），范围 `1–7200` 秒，为实际 writer 的独立总期限。该 8 GiB 是可调整的保守允许量，**不是层的精确展开上界、磁盘 quota 或实例增长预算**。本期没有逐字节拦截 Docker daemon 的写入，不能声称未知大镜像解包或外部 Docker 写入绝不会填满硬盘。
 
-共享 pull 不因等待者断开而主动取消 daemon 请求，租约保持到 pull await 完成，再核验实际 image 存在。未知 Engine 传输失败或进程退出后，不能单凭 HTTP task 失败证明 daemon 的所有后台写者都已停止；强保证仍需后续的层预算或 daemon 存储 quota/可靠终态对账。不得把这项限定实现写成完备 Docker 峰值容量保证。
+共享 pull 不因等待者断开而主动取消 daemon 请求，租约保持到 pull await 完成，再核验实际 image 存在。实际 writer 自有期限到期后取消并关闭 Engine 的 pull HTTP stream，待 await 退出后才归还租约和本机串行锁，返回可重试的 `image.transfer_timeout`/504。Docker 明确约定 pull HTTP 连接关闭会取消该 pull，见 [Moby ImageCreate 契约](https://github.com/moby/moby/blob/v27.5.1/api/swagger.yaml)。与其他外部消费者共享的 layer 工作、外部 Docker 写者和未完成缓存仍不受本机账本的精确 quota 控制；强保证仍需后续层预算或 daemon 存储 quota/终态对账。
 
 本机账本只包含下载 writer，**不包含主站尚未启动的 VM/Docker 长期增长承诺**；该部分由主站已有运行资源预留负责。目录保护也不能代替 PVE thin pool 的物理池容量门禁。
 
@@ -40,3 +40,7 @@ Agent Release 构建通过，0 警告/0 错误。定向 41/41 测试通过，覆
 实际 HTTP fake handler 驱动两条方法，8/8 定向测试通过：507 容量错误和永久 size mismatch 的分类/重试策略都保留，节点缺失不发请求，成功响应的大小/摘要/验证事实保持。直接调用方为 `ImageDistributionService.ProcessClaimedAsync` 和 `AgentClient.CreateVmAsync`；前者已有 typed exception 分发记录接线，后者直接传播。
 
 第三个提交在正常合并需求分发/引用回收分支后，补上 `EnsureVmTemplateOnNodeAsync` 和 `EnsureDockerImageOnNodeAsync` 等待失败分发记录的接线，抛既有 `AgentClientException` 并保留 record 的类别、代码、Retryable、Worker 和原错误消息；旧记录缺少类别/代码时仅使用保守的普通镜像传输失败 fallback，不能擅自宣布可重试。所选节点测试同时检查 runtime ticket 分类及 TeamLab failure projection 的代码与重试策略。相关分发、所选需求及 Agent HTTP 映射定向测试 38/38 通过。
+
+第四个提交补实际 Docker writer 的期限。隔离 dind 29.8.0 下 Registry 故意只发送 layer 的第一个 byte 后卡住：配置 2 秒后恰约 2.00 秒返回 typed timeout；daemon 日志记录 `context canceled`，下一次 pull 使用同一个 Agent budget 和 storage lock 正常完成。真实 Linux 同盘准入、VM/blob 实际写入、Docker 低空间拒绝、正常 pull 和 digest 缓存命中一并复测通过。临时资源已再次清理。默认及无效期限配置由原预算测试覆盖。
+
+最终组合定向验证 79/79 通过；完整原始测试输出与隔离 dind 证据保留在上述仓库外目录。最终 Agent Release 构建仍为 0 警告/0 错误。全量后端、集成、前端及服务器双环境验收由主会话在最终集成分支继续完成。

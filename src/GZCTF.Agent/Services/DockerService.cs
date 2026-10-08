@@ -1010,7 +1010,9 @@ public class DockerService
         if (image.Contains("@sha256:", StringComparison.OrdinalIgnoreCase) &&
             await ImageExistsAsync(image, token)) return;
         await using var storageLock = await _resourceLock.AcquireAsync("docker-image-transfer-storage", token);
-        var root = await GetDockerRootDirectoryAsync(token);
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(token);
+        deadline.CancelAfter(TimeSpan.FromSeconds(_imageStorageBudget.DockerPullTimeoutSeconds));
+        var root = await GetDockerRootDirectoryAsync(deadline.Token);
         if (string.IsNullOrWhiteSpace(root))
             throw new AgentOperationException("Storage", "image.storage_unavailable",
                 "Docker image storage cannot be measured before pull.", true,
@@ -1029,16 +1031,25 @@ public class DockerService
         }
 
         var progress = new DockerPullProgress();
-        await _client.Images.CreateImageAsync(
-            new ImagesCreateParameters { FromImage = image },
-            authConfig,
-            progress, token);
+        try
+        {
+            await _client.Images.CreateImageAsync(
+                new ImagesCreateParameters { FromImage = image },
+                authConfig, progress, deadline.Token);
+        }
+        catch (OperationCanceledException exception) when (deadline.IsCancellationRequested &&
+                                                         !token.IsCancellationRequested)
+        {
+            throw new AgentOperationException("ImageTransfer", "image.transfer_timeout",
+                "Docker image pull exceeded its permitted duration.", true,
+                StatusCodes.Status504GatewayTimeout, exception);
+        }
         if (progress.Failed)
             throw new AgentOperationException("ImageTransfer", "image.docker.pull_failed",
                 "Docker daemon rejected the image pull.", true);
         // The caller uses the shared writer token: canceling a waiting HTTP request must not
         // dispose this lease while Docker is still processing the pull response.
-        if (!await ImageExistsAsync(image, token))
+        if (!await ImageExistsAsync(image, deadline.Token))
             throw new AgentOperationException("ImageTransfer", "image.docker.pull_incomplete",
                 "Docker pull returned without a verifiable local image.", true);
         storage.CompleteWrites();
