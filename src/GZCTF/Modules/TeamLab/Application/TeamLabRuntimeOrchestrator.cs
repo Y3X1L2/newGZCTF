@@ -806,7 +806,13 @@ public sealed class TeamLabRuntimeOrchestrator(
     {
         var runtime = await LoadRuntimeAsync(runtimeId, cancellationToken);
         if (runtime.Status == TeamLabRuntimeStatus.Destroyed)
+        {
+            // A previous attempt may have persisted the terminal state before releasing cache
+            // demand. Both releases are idempotent, so retry the tail instead of leaking it.
+            await imageDistribution.ReleaseRuntimeAsync(runtime.Id, cancellationToken);
+            await cleanup.FinalizeDestroyedAsync(runtime, cancellationToken);
             return TeamLabNodeResult.Ok("Runtime is already destroyed.");
+        }
         runtime.Status = TeamLabRuntimeStatus.Destroying;
         runtime.IsOpenToPlayers = false;
         foreach (var envelope in runtime.SecretEnvelopes)
@@ -826,8 +832,7 @@ public sealed class TeamLabRuntimeOrchestrator(
         if (result.Success)
         {
             await imageDistribution.ReleaseRuntimeAsync(runtime.Id, cancellationToken);
-            await TeamLabRuntimeCleanupService.FinalizeGenerationAsync(
-                context, runtime, runtime.Generation, markRuntimeDestroyed: true, cancellationToken);
+            await cleanup.FinalizeDestroyedAsync(runtime, cancellationToken);
             eventRecorder.Record(
                 runtime,
                 "destroy",

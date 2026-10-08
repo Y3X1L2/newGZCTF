@@ -53,6 +53,9 @@ public sealed class TeamLabReleaseImagePreparationService(
     public Task ReleaseAsync(Guid releaseId, CancellationToken cancellationToken) =>
         distribution.ReleaseTeamLabReleaseReferencesAsync(releaseId, cancellationToken);
 
+    public Task ReleaseBeforeAsync(Guid releaseId, DateTimeOffset destroyedAt, CancellationToken cancellationToken) =>
+        distribution.ReleaseTeamLabReleaseReferencesBeforeAsync(releaseId, destroyedAt, cancellationToken);
+
     public async Task ReleaseScopeAsync(Guid scopeId, CancellationToken cancellationToken)
     {
         var releaseIds = await context.TeamLabTopologyReleases.AsNoTracking()

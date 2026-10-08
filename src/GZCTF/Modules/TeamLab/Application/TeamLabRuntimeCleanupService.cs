@@ -27,6 +27,13 @@ public sealed class TeamLabRuntimeCleanupService(
     TeamLabReleaseImagePreparationService preparation)
 {
     private readonly TeamLabReleaseImagePreparationService _preparation = preparation;
+
+    public Task FinalizeDestroyedAsync(TeamLabRuntime runtime, CancellationToken cancellationToken) =>
+        runtime.Status == TeamLabRuntimeStatus.Destroyed && runtime.UpdatedAt is null
+            ? Task.CompletedTask // No reliable cutoff for a historical terminal record; preserve explicit prewarm.
+            : FinalizeGenerationAsync(context, runtime, runtime.Generation, markRuntimeDestroyed: true,
+                cancellationToken, (releaseId, ct) => _preparation.ReleaseBeforeAsync(releaseId, runtime.UpdatedAt!.Value, ct));
+
     public Task<TeamLabNodeResult> CleanupAsync(
         TeamLabRuntime runtime,
         CancellationToken cancellationToken) =>
@@ -120,9 +127,11 @@ public sealed class TeamLabRuntimeCleanupService(
         var fabricLeaseCount = await context.TeamLabFabricLinkLeases
             .Where(item => item.RuntimeId == runtime.Id && item.Generation == generation && item.ReleasedAt == null)
             .CountAsync(cancellationToken);
+        // Reset also marks its previous generation Destroyed before planning the next one.
+        // Physical generation cleanup must not revoke its preparation demand. Full destruction
+        // goes through FinalizeDestroyedAsync after its runtime cache references are released.
         await FinalizeGenerationAsync(
-            context, runtime, generation, markDestroyedOnSuccess, cancellationToken,
-            onLastConsumerDestroyed: (releaseId, ct) => _preparation.ReleaseAsync(releaseId, ct));
+            context, runtime, generation, markDestroyedOnSuccess, cancellationToken);
         if (fabricLeaseCount > 0)
         {
             eventRecorder.Record(
@@ -287,7 +296,9 @@ public sealed class TeamLabRuntimeCleanupService(
         CancellationToken cancellationToken,
         Func<Guid, CancellationToken, Task>? onLastConsumerDestroyed = null)
     {
-        var now = DateTimeOffset.UtcNow;
+        var now = markRuntimeDestroyed && runtime.Status == TeamLabRuntimeStatus.Destroyed && runtime.UpdatedAt is { } destroyedAt
+            ? destroyedAt
+            : DateTimeOffset.UtcNow;
         foreach (var shard in runtime.Shards.Where(item => item.Generation == generation))
         {
             shard.Status = TeamLabRuntimeStatus.Destroyed;
@@ -389,15 +400,22 @@ public sealed class TeamLabRuntimeCleanupService(
         await context.SaveChangesAsync(cancellationToken);
 
         // Default closed-loop for prepared images: when the destroyed runtime was
-        // the last consumer of its release, release the release-scoped artifact
-        // references immediately. A later create simply re-queues preparation, so
-        // there is no reason to keep the cache warm at the platform level.
+        // the last consumer of its release, release the earlier preparation references.
+        // A later create prepares only its selected nodes; canonical artifact retention
+        // is owned by Content, independently of this node cache demand.
         if (markRuntimeDestroyed && onLastConsumerDestroyed is not null)
         {
-            var remainingConsumers = await context.TeamLabRuntimes.AsNoTracking()
-                .CountAsync(item => item.TopologyReleaseId == runtime.TopologyReleaseId &&
-                                    item.Status != TeamLabRuntimeStatus.Destroyed, cancellationToken);
-            if (remainingConsumers == 0)
+            var hasRemainingConsumer = await context.TeamLabRuntimes.AsNoTracking()
+                .AnyAsync(item => item.TopologyReleaseId == runtime.TopologyReleaseId &&
+                    (item.Status != TeamLabRuntimeStatus.Destroyed ||
+                     context.DeploymentQueueTickets.Any(ticket =>
+                         ticket.Kind == DeploymentQueueKind.TeamLabRuntime &&
+                         ticket.TeamLabRuntimeId == item.Id && ticket.Operation == RuntimeOperationKind.Reset &&
+                         (ticket.Status == DeploymentQueueTicketStatus.Pending ||
+                          ticket.Status == DeploymentQueueTicketStatus.Scheduling ||
+                          ticket.Status == DeploymentQueueTicketStatus.Scheduled ||
+                          ticket.Status == DeploymentQueueTicketStatus.Running))), cancellationToken);
+            if (!hasRemainingConsumer)
                 await onLastConsumerDestroyed(runtime.TopologyReleaseId, cancellationToken);
         }
     }

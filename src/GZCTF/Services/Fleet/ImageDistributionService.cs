@@ -136,6 +136,11 @@ public class ImageDistributionService(
     public Task ReleaseTeamLabReleaseReferencesAsync(Guid releaseId, CancellationToken token) =>
         ReleaseReferenceAsync(ImageDistributionReferenceKey.TeamLabRelease(releaseId), token);
 
+    public Task ReleaseTeamLabReleaseReferencesBeforeAsync(
+        Guid releaseId, DateTimeOffset destroyedAt, CancellationToken token) =>
+        ReleaseReferenceAsync(ImageDistributionReferenceKey.TeamLabRelease(releaseId), token,
+            createdBefore: destroyedAt);
+
     public async Task CleanupUnreferencedAsync(CancellationToken token)
     {
         await ReconcileReferencesAsync(token);
@@ -161,6 +166,19 @@ public class ImageDistributionService(
 
     public async Task ReconcileReferencesAsync(CancellationToken token)
     {
+        // A reset temporarily persists Destroyed after physical cleanup, before replanning.
+        // It is still a consumer; never turn that checkpoint into cache reclamation.
+        var resettingRuntimeIds = await context.DeploymentQueueTickets.AsNoTracking()
+            .Where(ticket => ticket.Kind == DeploymentQueueKind.TeamLabRuntime &&
+                             ticket.TeamLabRuntimeId != null && ticket.Operation == RuntimeOperationKind.Reset &&
+                             (ticket.Status == DeploymentQueueTicketStatus.Pending ||
+                              ticket.Status == DeploymentQueueTicketStatus.Scheduling ||
+                              ticket.Status == DeploymentQueueTicketStatus.Scheduled ||
+                              ticket.Status == DeploymentQueueTicketStatus.Running))
+            .Select(ticket => ticket.TeamLabRuntimeId!.Value)
+            .Distinct().ToArrayAsync(token);
+        await ReleaseEndedTeamLabPreparationAsync(resettingRuntimeIds, token);
+
         var records = await context.ImageDistributionRecords
             .Include(record => record.References)
             .Where(record => record.References.Any() ||
@@ -281,11 +299,13 @@ public class ImageDistributionService(
         }
         var runtimeReferences = (await context.TeamLabRuntimeAssets.AsNoTracking()
                 .Where(asset => runtimeIds.Contains(asset.RuntimeId) && asset.SourceTemplateId.HasValue &&
-                                asset.Runtime.Status != TeamLabRuntimeStatus.Destroyed)
-                .Select(asset => new { asset.RuntimeId, TemplateId = asset.SourceTemplateId!.Value })
+                    (resettingRuntimeIds.Contains(asset.RuntimeId) ||
+                     asset.Runtime.Status != TeamLabRuntimeStatus.Destroyed &&
+                     asset.Generation == asset.Runtime.Generation && asset.Status != TeamLabRuntimeStatus.Destroyed))
+                .Select(asset => new { asset.RuntimeId, TemplateId = asset.SourceTemplateId!.Value, asset.WorkerNodeId })
                 .Distinct()
                 .ToArrayAsync(token))
-            .Select(reference => (reference.RuntimeId, reference.TemplateId))
+            .Select(reference => (reference.RuntimeId, reference.TemplateId, reference.WorkerNodeId))
             .ToHashSet();
         var activeCertificationTemplates = await context.ImageTemplateCertificationJobs.AsNoTracking()
             .Where(job => certificationTemplateIds.Contains(job.ImageTemplateId) &&
@@ -320,7 +340,7 @@ public class ImageDistributionService(
                 ImageDistributionReferenceKind.Exercise =>
                     !exerciseReferences.Contains((reference.ResourceId, record.ImageTemplateId)),
                 ImageDistributionReferenceKind.TeamLabRuntime =>
-                    !runtimeReferences.Contains((reference.ResourceId, record.ImageTemplateId)),
+                    !runtimeReferences.Contains((reference.ResourceId, record.ImageTemplateId, record.WorkerNodeId)),
                 ImageDistributionReferenceKind.ImageCertification =>
                     reference.ResourceId != record.ImageTemplateId ||
                     !activeCertificationTemplateSet.Contains(reference.ResourceId),
@@ -331,6 +351,9 @@ public class ImageDistributionService(
                 ImageDistributionReferenceKind.TeamLabRelease =>
                     reference.ResourcePublicId is not { } releaseId ||
                     !activeReleaseIds.Contains(releaseId),
+                // Explicit template prewarming has no business entity to reconcile against.
+                // Bounded leases need their own contract; absence of a runtime is not cancellation.
+                ImageDistributionReferenceKind.TeamLabTemplatePreparation => false,
                 _ => true
             }).ToList();
             if (invalidReferences.Count > 0)
@@ -348,6 +371,32 @@ public class ImageDistributionService(
         }
 
         await context.SaveChangesAsync(token);
+    }
+
+    async Task ReleaseEndedTeamLabPreparationAsync(int[] resettingRuntimeIds, CancellationToken token)
+    {
+        var releaseIds = await context.ImageDistributionReferences.AsNoTracking()
+            .Where(reference => reference.Kind == ImageDistributionReferenceKind.TeamLabRelease &&
+                                reference.ResourcePublicId != null)
+            .Select(reference => reference.ResourcePublicId!.Value)
+            .Distinct().ToArrayAsync(token);
+        if (releaseIds.Length == 0) return;
+
+        var consumers = await context.TeamLabRuntimes.AsNoTracking()
+            .Where(runtime => releaseIds.Contains(runtime.TopologyReleaseId))
+            .Select(runtime => new { runtime.Id, runtime.TopologyReleaseId, runtime.Status, runtime.UpdatedAt })
+            .ToArrayAsync(token);
+        foreach (var group in consumers.GroupBy(runtime => runtime.TopologyReleaseId))
+        {
+            if (group.Any(runtime => runtime.Status != TeamLabRuntimeStatus.Destroyed || runtime.UpdatedAt == null ||
+                                     resettingRuntimeIds.Contains(runtime.Id)))
+                continue;
+
+            // Recover a missed destruction tail. A later administrator prewarm has a newer
+            // CreatedAt and survives this conditional release (including a concurrent renewal).
+            await ReleaseTeamLabReleaseReferencesBeforeAsync(
+                group.Key, group.Max(runtime => runtime.UpdatedAt)!.Value, token);
+        }
     }
 
     public async Task CleanupTemplateForDeletionAsync(int templateId, CancellationToken token)
@@ -1055,7 +1104,8 @@ public class ImageDistributionService(
     async Task ReleaseReferenceAsync(
         ImageDistributionReferenceKey reference,
         CancellationToken token,
-        int? templateId = null)
+        int? templateId = null,
+        DateTimeOffset? createdBefore = null)
     {
         var referenceQuery = context.ImageDistributionReferences
             .Where(item => item.Kind == reference.Kind &&
@@ -1063,6 +1113,8 @@ public class ImageDistributionService(
                            item.ResourcePublicId == reference.ResourcePublicId);
         if (templateId.HasValue)
             referenceQuery = referenceQuery.Where(item => item.DistributionRecord.ImageTemplateId == templateId.Value);
+        if (createdBefore.HasValue)
+            referenceQuery = referenceQuery.Where(item => item.CreatedAt <= createdBefore.Value);
 
         var candidates = await referenceQuery
             .Select(item => new
@@ -1091,9 +1143,15 @@ public class ImageDistributionService(
             .Include(item => item.ImageTemplate)
             .Where(item => recordIds.Contains(item.Id))
             .ToArrayAsync(token);
+        // SQL upserts can renew a prewarm while this DbContext still tracks its old timestamp.
+        // Refresh under the same distribution lock before applying the destruction cutoff.
+        if (createdBefore.HasValue && context.Database.IsRelational())
+            foreach (var item in records.SelectMany(record => record.References))
+                await context.Entry(item).ReloadAsync(token);
         var released = records.SelectMany(record => record.References
                 .Where(item => item.Kind == reference.Kind && item.ResourceId == reference.ResourceId &&
-                               item.ResourcePublicId == reference.ResourcePublicId)
+                               item.ResourcePublicId == reference.ResourcePublicId &&
+                               (createdBefore == null || item.CreatedAt <= createdBefore.Value))
                 .Select(item => (Record: record, Reference: item)))
             .ToArray();
         if (released.Length == 0)
@@ -1115,7 +1173,8 @@ public class ImageDistributionService(
                 "An image distribution reference was released.");
             var hasRemainingReference = record.References.Any(item =>
                 item.Kind != reference.Kind || item.ResourceId != reference.ResourceId ||
-                item.ResourcePublicId != reference.ResourcePublicId);
+                item.ResourcePublicId != reference.ResourcePublicId ||
+                createdBefore.HasValue && item.CreatedAt > createdBefore.Value);
             if (!hasRemainingReference)
                 cleanupQueued |= QueueCleanup(record);
         }
