@@ -13,6 +13,25 @@ namespace GZCTF.Test.UnitTests.Runtime;
 public sealed class ImageTransferSingleFlightLifecycleTests
 {
     [Fact]
+    public async Task AlreadyCanceledRequest_DoesNotStartWriter_AndNextRequestCanExecute()
+    {
+        var service = new ImageTransferSingleFlight();
+        using var canceled = new CancellationTokenSource();
+        canceled.Cancel();
+        var executions = 0;
+        Task<int> Transfer(CancellationToken _)
+        {
+            executions++;
+            return Task.FromResult(7);
+        }
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.RunAsync("image", Transfer, canceled.Token));
+        Assert.Equal(0, executions);
+        Assert.Equal(7, await service.RunAsync("image", Transfer, default));
+        Assert.Equal(1, executions);
+    }
+
+    [Fact]
     public async Task SoleWaiterCancellation_WriterFinishes_DeletedCacheIsPreparedAgain()
     {
         var service = new ImageTransferSingleFlight();

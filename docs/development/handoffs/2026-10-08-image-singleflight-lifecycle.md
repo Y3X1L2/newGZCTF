@@ -57,3 +57,9 @@
 - 标准镜像可走 Registry；仍有旧 LocalFilePath 唯一源，不能未经迁移/引用检查删除。
 
 本审计不重复已安排的 AgentClient VM Storage 分类丢失修正，也不声称真实两套环境已验收。
+
+## 已取消请求的入口边界补充
+
+进入 RunAsync 时 waiter token 已取消，会在创建或启动共享 writer 前直接抛出取消；
+不影响其它请求已经启动的 writer，也不添加末消费者停止下载机制。新增公开行为测试证明
+已取消请求的 operation 执行次数为 0，后续未取消请求正常执行。扩大定向结果 15/15 通过、0 skip，diff 通过。
