@@ -1503,17 +1503,16 @@ public class AgentClient
             digest = registryReference.Digest
         });
         using var deadline = CreateDeadline(token, TimeSpan.FromHours(2));
-        var response = await client.PostAsync("/api/images/download-vm",
+        using var response = await client.PostAsync("/api/images/download-vm",
             new StringContent(body, Encoding.UTF8, "application/json"), deadline.Token);
         if (!response.IsSuccessStatusCode)
         {
-            var error = await ReadAgentErrorAsync(
+            throw await CreateAgentExceptionAsync(
                 response,
                 "image.vm.download",
                 node.Id,
                 $"Agent VM image download failed on node {node.Name} ({node.HostAddress}) for template {templateId}.",
-                token);
-            return AgentVmImageDownloadResult.Failed(error.Message);
+                deadline.Token);
         }
 
         var result = await response.Content.ReadFromJsonAsync<AgentVmImageDownloadResult>(token);
@@ -1616,13 +1615,12 @@ public class AgentClient
             new StringContent(body, Encoding.UTF8, "application/json"), deadline.Token);
         if (!response.IsSuccessStatusCode)
         {
-            var error = await ReadAgentErrorAsync(
+            throw await CreateAgentExceptionAsync(
                 response,
                 "image.vm.download-prepared",
                 node.Id,
                 $"Agent prepared VM image download failed on node {node.Name} ({node.HostAddress}) for template {templateId}.",
-                token);
-            return AgentVmImageDownloadResult.Failed(error.Message);
+                deadline.Token);
         }
         return await response.Content.ReadFromJsonAsync<AgentVmImageDownloadResult>(token)
                ?? AgentVmImageDownloadResult.Failed(

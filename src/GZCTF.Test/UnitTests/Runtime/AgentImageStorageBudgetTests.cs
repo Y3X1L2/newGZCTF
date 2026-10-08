@@ -118,12 +118,15 @@ public sealed class AgentImageStorageBudgetTests
     {
         var budget = Create(_ => new AgentStorageSnapshot("device", 100));
         Assert.Equal(80, budget.DockerPullBudgetBytes);
+        Assert.Equal(1800, budget.DockerPullTimeoutSeconds);
         using var docker = budget.Reserve("docker", budget.DockerPullBudgetBytes, "docker");
         Assert.Throws<AgentOperationException>(() => budget.Reserve("images", 11, "download"));
         docker.CompleteWrites();
         using var vm = budget.Reserve("images", 90, "download");
         Assert.Throws<ArgumentOutOfRangeException>(() => new AgentImageStorageBudget(
             new AgentImageStorageConfig { DockerPullBudgetBytes = 0 }, _ => new AgentStorageSnapshot("device", 100)));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new AgentImageStorageBudget(
+            new AgentImageStorageConfig { DockerPullTimeoutSeconds = 0 }, _ => new AgentStorageSnapshot("device", 100)));
     }
 
     [Fact]

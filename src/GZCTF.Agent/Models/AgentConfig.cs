@@ -19,6 +19,7 @@ public sealed class AgentImageStorageConfig
     // Docker does not expose a trustworthy expanded-size bound before a pull. This is a
     // conservative admission allowance, not a disk quota or a runtime growth reservation.
     public long DockerPullBudgetBytes { get; set; } = 8L * 1024 * 1024 * 1024;
+    public int DockerPullTimeoutSeconds { get; set; } = 30 * 60;
 }
 
 public sealed class GuestManagementConfig

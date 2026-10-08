@@ -15,16 +15,20 @@ public sealed class AgentImageStorageBudget
     readonly Func<string, AgentStorageSnapshot> _probe;
     readonly long _safetyMargin;
     public long DockerPullBudgetBytes { get; }
+    public int DockerPullTimeoutSeconds { get; }
 
     public AgentImageStorageBudget(IOptions<AgentConfig> options)
         : this(options.Value.ImageStorage, AgentStorageProbe.Read) { }
 
     internal AgentImageStorageBudget(AgentImageStorageConfig config, Func<string, AgentStorageSnapshot> probe)
     {
-        if (config.SafetyMarginBytes <= 0 || config.DockerPullBudgetBytes <= 0)
-            throw new ArgumentOutOfRangeException(nameof(config), "Image storage budgets must be positive.");
+        if (config.SafetyMarginBytes <= 0 || config.DockerPullBudgetBytes <= 0 ||
+            config.DockerPullTimeoutSeconds is <= 0 or > 7200)
+            throw new ArgumentOutOfRangeException(nameof(config),
+                "Image storage budgets must be positive and Docker pull duration must be between 1 and 7200 seconds.");
         _safetyMargin = config.SafetyMarginBytes;
         DockerPullBudgetBytes = config.DockerPullBudgetBytes;
+        DockerPullTimeoutSeconds = config.DockerPullTimeoutSeconds;
         _probe = probe;
     }
 
