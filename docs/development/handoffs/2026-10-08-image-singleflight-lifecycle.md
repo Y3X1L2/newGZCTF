@@ -63,3 +63,9 @@
 进入 RunAsync 时 waiter token 已取消，会在创建或启动共享 writer 前直接抛出取消；
 不影响其它请求已经启动的 writer，也不添加末消费者停止下载机制。新增公开行为测试证明
 已取消请求的 operation 执行次数为 0，后续未取消请求正常执行。扩大定向结果 15/15 通过、0 skip，diff 通过。
+
+## 全量并发下的测试同步修正
+
+全量门禁暴露测试只等待 inner operation 完成后就模拟缓存回收，未等待 shared task 的 finally；
+定向通过不能证明该同步在并发压力下准确。现捕获已经启动的 Lazy.Value 并直接等待实际共享任务终态，
+不新增 RunAsync 等待者，不用 sleep，也不改变生产共享任务语义。

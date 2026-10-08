@@ -36,8 +36,8 @@ public sealed class ImageTransferSingleFlightLifecycleTests
     {
         var service = new ImageTransferSingleFlight();
         using var waiter = new CancellationTokenSource();
-        // Inline completion makes the writer's own completion cleanup observable before
-        // simulating a later cache eviction, without sleeps or another surviving waiter.
+        // The inner operation finishing does not guarantee the shared task's finally has
+        // run under thread-pool pressure. Capture and await the actual shared task below.
         var writer = new TaskCompletionSource<int>();
         var executions = 0;
         var path = Path.Combine(Path.GetTempPath(), $"singleflight-{Guid.NewGuid():N}.cache");
@@ -50,10 +50,16 @@ public sealed class ImageTransferSingleFlightLifecycleTests
                 File.WriteAllText(path, "first");
                 return writer.Task;
             }, waiter.Token);
+            var entries = (ConcurrentDictionary<string, Lazy<Task<object?>>>)typeof(ImageTransferSingleFlight)
+                .GetField("_operations", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(service)!;
+            // Await the already-started shared Task itself. This is not another RunAsync
+            // waiter, so it cannot conceal the original waiter-finally cleanup defect.
+            var sharedWriter = entries["image"].Value;
             waiter.Cancel();
             await Assert.ThrowsAnyAsync<OperationCanceledException>(() => first);
             Assert.False(writer.Task.IsCompleted);
             writer.SetResult(1);
+            await sharedWriter;
             File.Delete(path);
 
             var next = await service.RunAsync("image", _ =>
