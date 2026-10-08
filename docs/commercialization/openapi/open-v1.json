@@ -15349,7 +15349,7 @@
       },
       "TeamLabReleasePreparationModel": {
         "type": "object",
-        "description": "Release-level preparation state for external callers.",
+        "description": "Release admission and cache state. ReadyToStart allows missing cache to download\nafter node selection; onDemand distinguishes this from existing cached copies.\nPlanAvailable describes eligible capabilities, not reserved runtime resources.",
         "additionalProperties": false,
         "properties": {
           "releaseId": {

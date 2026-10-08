@@ -19,6 +19,7 @@ public class ImageController : ControllerBase
     private readonly ImageTransferSingleFlight _singleFlight;
     private readonly AgentOciArtifactUploader _ociUploader;
     private readonly VmImageBackingChainInspector _backingChain;
+    private readonly AgentImageDownloadWriter _downloadWriter;
     private readonly AgentTeamLabConfig _teamLab;
     private readonly KvmConfig _kvm;
     private readonly ILogger<ImageController> _logger;
@@ -26,6 +27,7 @@ public class ImageController : ControllerBase
     public ImageController(DockerService docker, AgentOperationGate gate, AgentResourceLock resourceLock,
         ImageTransferSingleFlight singleFlight, AgentOciArtifactUploader ociUploader,
         VmImageBackingChainInspector backingChain,
+        AgentImageDownloadWriter downloadWriter,
         IOptions<AgentTeamLabConfig> teamLabOptions,
         IOptions<KvmConfig> kvmOptions,
         ILogger<ImageController> logger)
@@ -36,6 +38,7 @@ public class ImageController : ControllerBase
         _singleFlight = singleFlight;
         _ociUploader = ociUploader;
         _backingChain = backingChain;
+        _downloadWriter = downloadWriter;
         _teamLab = teamLabOptions.Value;
         _kvm = kvmOptions.Value;
         _logger = logger;
@@ -98,7 +101,8 @@ public class ImageController : ControllerBase
                             request.TemplateId?.ToString() ?? request.Hash;
         var fileStem = request.TemplateId?.ToString() ?? request.Hash;
         var destination = Path.Combine(_kvm.ImageStoragePath, fileStem + ".qcow2");
-        var key = $"vm:{cacheIdentity}";
+        // Different template IDs still use different physical files, even for one digest.
+        var key = $"vm:{fileStem}:{cacheIdentity}";
         var result = await _singleFlight.RunAsync(key, async sharedToken =>
         {
             await using var cacheLock = await _resourceLock.AcquireAsync(
@@ -116,14 +120,20 @@ public class ImageController : ControllerBase
         var fileStem = request.TemplateId.HasValue ? request.TemplateId.Value.ToString() : request.Hash;
         var destPath = Path.Combine(storagePath, fileStem + ".qcow2");
         var expectedHash = NormalizeSha256(request.Digest) ?? NormalizeSha256(request.Hash);
+        if (expectedHash is null)
+            throw new ArgumentException("VM image SHA-256 digest is required.", nameof(request));
         var expectedDigest = string.IsNullOrWhiteSpace(expectedHash) ? null : $"sha256:{expectedHash}";
         if (System.IO.File.Exists(destPath))
         {
             var currentHash = await ComputeSha256Async(destPath, token);
-            if (string.IsNullOrWhiteSpace(expectedHash) ||
-                string.Equals(currentHash, expectedHash, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(currentHash, expectedHash, StringComparison.OrdinalIgnoreCase))
+            {
+                if (request.ExpectedSize is > 0 && new FileInfo(destPath).Length != request.ExpectedSize.Value)
+                    throw new AgentOperationException("ImageTransfer", "image.size_mismatch",
+                        "VM image cache size does not match the requested artifact size.", false);
                 return new DownloadVmImageResponse(true, "Image already exists", true, true,
                     new FileInfo(destPath).Length, $"sha256:{currentHash}");
+            }
 
             IReadOnlyList<VmImageBackingReference> references;
             try
@@ -147,7 +157,12 @@ public class ImageController : ControllerBase
 
         Directory.CreateDirectory(storagePath);
         var tempPath = destPath + ".part";
-        await DownloadVmImagePayloadAsync(request, tempPath, token);
+        if (!await IsCompleteVerifiedPartialAsync(tempPath, request.ExpectedSize, expectedHash, token))
+        {
+            if (request.ExpectedSize is > 0 && System.IO.File.Exists(tempPath) &&
+                new FileInfo(tempPath).Length >= request.ExpectedSize.Value) TryDelete(tempPath);
+            await DownloadVmImagePayloadAsync(request, tempPath, token);
+        }
         var actualHash = await ComputeSha256Async(tempPath, token);
         if (!string.IsNullOrWhiteSpace(expectedHash) &&
             !string.Equals(actualHash, expectedHash, StringComparison.OrdinalIgnoreCase))
@@ -321,6 +336,15 @@ public class ImageController : ControllerBase
         }
         Directory.CreateDirectory(directory);
         var temporary = destination + ".part";
+        if (await IsCompleteVerifiedPartialAsync(temporary, request.ExpectedSize, digest, token))
+        {
+            System.IO.File.Move(temporary, destination, true);
+            return new DownloadBootstrapArtifactResponse(
+                true, "Bootstrap artifact downloaded.", false, true, destination,
+                request.ExpectedSize, $"sha256:{digest}");
+        }
+        if (System.IO.File.Exists(temporary) && new FileInfo(temporary).Length >= request.ExpectedSize)
+            TryDelete(temporary);
         var registry = NormalizeRegistryAddress(request.RegistryAddress);
         var repository = request.Repository.Trim().Trim('/');
         if (string.IsNullOrWhiteSpace(registry) || string.IsNullOrWhiteSpace(repository))
@@ -335,7 +359,7 @@ public class ImageController : ControllerBase
         var append = existingBytes > 0 && response.StatusCode == HttpStatusCode.PartialContent;
         if (existingBytes > 0 && !append) TryDelete(temporary);
         response.EnsureSuccessStatusCode();
-        await CopyResponseToFileAsync(response, temporary, digest, append, token);
+        await CopyResponseToFileAsync(response, temporary, digest, append, request.ExpectedSize, token);
         var actual = await ComputeSha256Async(temporary, token);
         var size = new FileInfo(temporary).Length;
         if (!string.Equals(actual, digest, StringComparison.Ordinal) || size != request.ExpectedSize)
@@ -405,7 +429,7 @@ public class ImageController : ControllerBase
             TryDelete(tempPath);
 
         response.EnsureSuccessStatusCode();
-        await CopyResponseToFileAsync(response, tempPath, request.Hash, append, token);
+        await CopyResponseToFileAsync(response, tempPath, request.Hash, append, request.ExpectedSize, token);
     }
 
     static bool HasRegistryReference(DownloadVmImageRequest request) =>
@@ -414,37 +438,19 @@ public class ImageController : ControllerBase
         !string.IsNullOrWhiteSpace(request.Digest ?? request.Hash);
 
     async Task CopyResponseToFileAsync(HttpResponseMessage response, string tempPath, string hash, bool append,
-        CancellationToken token)
+        long? expectedSize, CancellationToken token)
     {
-        var existingBytes = append && System.IO.File.Exists(tempPath) ? new FileInfo(tempPath).Length : 0;
-        var totalBytes = response.Content.Headers.ContentRange?.Length ??
-                         (response.Content.Headers.ContentLength is { } length ? existingBytes + length : -1L);
-        await using var fs = new FileStream(tempPath, append ? FileMode.Append : FileMode.Create,
-            FileAccess.Write, FileShare.None, 8192, true);
-        var buffer = new byte[81920];
-        long bytesRead = existingBytes;
         var lastReportPercent = -1;
-
-        await using var stream = await response.Content.ReadAsStreamAsync(token);
-        int read;
-        while ((read = await stream.ReadAsync(buffer, token)) > 0)
+        await _downloadWriter.CopyAsync(response, tempPath, append, expectedSize, token, (bytesRead, totalBytes) =>
         {
-            await fs.WriteAsync(buffer.AsMemory(0, read), token);
-            bytesRead += read;
-
-            if (totalBytes <= 0)
-                continue;
-
             var percent = (int)(bytesRead * 100 / totalBytes);
             if (percent == lastReportPercent || percent % 10 != 0)
-                continue;
+                return;
 
             _logger.LogInformation("VM image download progress: {Hash} {Percent}% ({MB}/{TotalMB}MB)",
                 hash, percent, bytesRead / 1024 / 1024, totalBytes / 1024 / 1024);
             lastReportPercent = percent;
-        }
-
-        await fs.FlushAsync(token);
+        });
     }
 
     static async Task<string> ComputeSha256Async(string path, CancellationToken token)
@@ -454,6 +460,12 @@ public class ImageController : ControllerBase
         return Convert.ToHexString(hash).ToLowerInvariant();
     }
 
+    static async Task<bool> IsCompleteVerifiedPartialAsync(string path, long? size, string? digest,
+        CancellationToken token) =>
+        size is > 0 && !string.IsNullOrWhiteSpace(digest) && System.IO.File.Exists(path) &&
+        new FileInfo(path).Length == size.Value &&
+        string.Equals(await ComputeSha256Async(path, token), digest, StringComparison.OrdinalIgnoreCase);
+
     static string? NormalizeSha256(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -461,7 +473,7 @@ public class ImageController : ControllerBase
         value = value.Trim();
         if (value.StartsWith("sha256:", StringComparison.OrdinalIgnoreCase))
             value = value["sha256:".Length..];
-        return value.Length == 64 ? value.ToLowerInvariant() : null;
+        return value.Length == 64 && value.All(Uri.IsHexDigit) ? value.ToLowerInvariant() : null;
     }
 
     static string? NormalizeDigest(string? value)

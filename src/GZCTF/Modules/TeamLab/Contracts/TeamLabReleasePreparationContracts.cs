@@ -11,7 +11,11 @@ public sealed record TeamLabReleaseImagePreparationModel(
     int FailedNodeCount,
     OpenTeamLabFailureModel? Failure);
 
-/// <summary>Release-level preparation state for external callers.</summary>
+/// <summary>
+/// Release admission and cache state. ReadyToStart allows missing cache to download
+/// after node selection; onDemand distinguishes this from existing cached copies.
+/// PlanAvailable describes eligible capabilities, not reserved runtime resources.
+/// </summary>
 public sealed record TeamLabReleasePreparationModel(
     Guid ReleaseId,
     string State,

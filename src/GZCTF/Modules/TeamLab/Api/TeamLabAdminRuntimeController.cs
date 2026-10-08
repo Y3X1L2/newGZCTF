@@ -23,7 +23,6 @@ public sealed class TeamLabAdminRuntimeController(
     TeamLabRuntimeProjectionService projections,
     TeamLabOpenDiscoveryService discovery,
     TeamLabAdminQueryService queries,
-    TeamLabReleaseImagePreparationService imagePreparation,
     TeamLabTrafficApplicationService traffic,
     TeamLabCaptureArtifactStore captureArtifacts,
     TeamLabAuthorizationService authorization,
@@ -108,7 +107,6 @@ public sealed class TeamLabAdminRuntimeController(
         var key = ExternalIdempotencyKey.Normalize(idempotencyKey);
         var ownerId = await queries.RequireReleaseOwnerAsync(
             model.ReleaseId, actor.Id, actor.Role >= Role.Admin, cancellationToken);
-        await imagePreparation.QueueAsync(model.ReleaseId, cancellationToken);
         var command = new CreateTeamLabRuntimeModel(
             model.ReleaseId,
             model.ExternalReference,

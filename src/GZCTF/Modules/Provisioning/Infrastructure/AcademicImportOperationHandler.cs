@@ -6,11 +6,9 @@ using GZCTF.Modules.Exercise.Application;
 using GZCTF.Modules.Provisioning.Application;
 using GZCTF.Modules.Provisioning.Contracts;
 using GZCTF.Modules.Provisioning.Domain;
-using GZCTF.Modules.Runtime.Domain;
 using GZCTF.Modules.Theory.Application;
 using GZCTF.Modules.Training.Domain;
 using GZCTF.Services;
-using GZCTF.Services.Fleet;
 using Microsoft.EntityFrameworkCore;
 
 namespace GZCTF.Modules.Provisioning.Infrastructure;
@@ -20,7 +18,6 @@ public sealed class AcademicImportOperationHandler(
     TheoryExamService theoryService,
     ITheoryQuestionCatalog questionCatalog,
     TheoryStatisticsProjectionService statistics,
-    ImageDistributionService imageDistribution,
     IExerciseManagementService exerciseManagement) : IApiOperationHandler
 {
     const int MaxCaptainTeams = 3;
@@ -281,10 +278,6 @@ public sealed class AcademicImportOperationHandler(
                 course.UpdatedAt = now;
                 await context.SaveChangesAsync(cancellationToken);
             }
-
-            foreach (var templateId in templateIds)
-                await imageDistribution.DistributeTemplateAsync(
-                    templateId, ImageDistributionReferenceKey.TrainingCourse(course.Id), cancellationToken);
         }
         return result;
     }

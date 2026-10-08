@@ -30,6 +30,194 @@ namespace GZCTF.Test.UnitTests.Fleet;
 
 public class ImageDistributionServiceTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ReconcileReferencesAsync_RecoversDestroyedPreparationButKeepsLaterExplicitPrewarm(bool laterPrewarm)
+    {
+        await using var context = CreateContext();
+        var node = SeedNode(context, "kvm-node", NodeCapability.Kvm);
+        var template = SeedVmTemplate(context);
+        var release = new TeamLabTopologyRelease();
+        var destroyedAt = DateTimeOffset.UtcNow.AddMinutes(-5);
+        var runtime = new TeamLabRuntime
+        {
+            TopologyReleaseId = release.Id, Status = TeamLabRuntimeStatus.Destroyed, UpdatedAt = destroyedAt
+        };
+        var record = new ImageDistributionRecord
+        {
+            ImageTemplateId = template.Id, WorkerNodeId = node.Id,
+            ImageHash = template.ImageHash!, ImageType = template.ImageType, Status = ImageDistributionStatus.Ready,
+            References = [new()
+            {
+                Kind = ImageDistributionReferenceKind.TeamLabRelease, ResourcePublicId = release.Id,
+                CreatedAt = destroyedAt.AddMinutes(laterPrewarm ? 1 : -1)
+            }]
+        };
+        context.AddRange(release, runtime, record);
+        await context.SaveChangesAsync();
+
+        await CreateService(context, new RecordingAgentClient()).ReconcileReferencesAsync(default);
+
+        Assert.Equal(laterPrewarm ? 1 : 0, await context.ImageDistributionReferences.CountAsync());
+        Assert.Equal(laterPrewarm ? ImageDistributionStatus.Ready : ImageDistributionStatus.CleanupPending, record.Status);
+        Assert.Equal(ImageStatus.Ready, template.Status);
+    }
+
+    [Fact]
+    public async Task ReconcileReferencesAsync_KeepsExplicitPrewarmWithoutRuntime()
+    {
+        await using var context = CreateContext();
+        var node = SeedNode(context, "kvm-node", NodeCapability.Kvm);
+        var template = SeedVmTemplate(context);
+        var release = new TeamLabTopologyRelease();
+        var record = new ImageDistributionRecord
+        {
+            ImageTemplateId = template.Id, WorkerNodeId = node.Id,
+            ImageHash = template.ImageHash!, ImageType = template.ImageType, Status = ImageDistributionStatus.Ready,
+            References =
+            [
+                new() { Kind = ImageDistributionReferenceKind.TeamLabRelease, ResourcePublicId = release.Id },
+                new() { Kind = ImageDistributionReferenceKind.TeamLabTemplatePreparation }
+            ]
+        };
+        context.AddRange(release, record);
+        await context.SaveChangesAsync();
+
+        await CreateService(context, new RecordingAgentClient()).ReconcileReferencesAsync(default);
+
+        Assert.Equal(2, await context.ImageDistributionReferences.CountAsync());
+        Assert.Equal(ImageDistributionStatus.Ready, record.Status);
+    }
+
+    [Fact]
+    public async Task ReconcileReferencesAsync_ProtectsResetCheckpointThenReleasesOnlyOldNodeGeneration()
+    {
+        await using var context = CreateContext();
+        var oldNode = SeedNode(context, "old-node", NodeCapability.Kvm);
+        var newNode = SeedNode(context, "new-node", NodeCapability.Kvm);
+        var template = SeedVmTemplate(context);
+        var release = new TeamLabTopologyRelease();
+        var runtime = new TeamLabRuntime
+        {
+            TopologyReleaseId = release.Id, Generation = 2, Status = TeamLabRuntimeStatus.Destroyed,
+            Assets =
+            [
+                new() { SourceTemplateId = template.Id, Generation = 1, WorkerNodeId = oldNode.Id,
+                    Kind = TeamLabResourceKind.Vm, Status = TeamLabRuntimeStatus.Destroyed },
+                new() { SourceTemplateId = template.Id, Generation = 2, WorkerNodeId = newNode.Id,
+                    Kind = TeamLabResourceKind.Vm, Status = TeamLabRuntimeStatus.Scheduled }
+            ]
+        };
+        context.AddRange(release, runtime);
+        await context.SaveChangesAsync();
+        var reset = new DeploymentQueueTicket
+        {
+            Kind = DeploymentQueueKind.TeamLabRuntime, TeamLabRuntimeId = runtime.Id,
+            Operation = RuntimeOperationKind.Reset, Status = DeploymentQueueTicketStatus.Running, Generation = 2
+        };
+        var records = new[] { oldNode, newNode }.Select(node => new ImageDistributionRecord
+        {
+            ImageTemplateId = template.Id, WorkerNodeId = node.Id,
+            ImageHash = template.ImageHash!, ImageType = template.ImageType, Status = ImageDistributionStatus.Ready,
+            References =
+            [
+                new() { Kind = ImageDistributionReferenceKind.TeamLabRelease, ResourcePublicId = release.Id },
+                new() { Kind = ImageDistributionReferenceKind.TeamLabRuntime, ResourceId = runtime.Id }
+            ]
+        }).ToArray();
+        context.AddRange(reset);
+        context.ImageDistributionRecords.AddRange(records);
+        await context.SaveChangesAsync();
+        var service = CreateService(context, new RecordingAgentClient());
+
+        await service.ReconcileReferencesAsync(default);
+        Assert.Equal(4, await context.ImageDistributionReferences.CountAsync());
+        Assert.All(records, record => Assert.Equal(ImageDistributionStatus.Ready, record.Status));
+
+        // The explicit release prewarm is cancelled independently; runtime cache demand survives.
+        await service.ReleaseTeamLabReleaseReferencesAsync(release.Id, default);
+        reset.Status = DeploymentQueueTicketStatus.Succeeded;
+        runtime.Status = TeamLabRuntimeStatus.Running;
+        await context.SaveChangesAsync();
+        await service.ReconcileReferencesAsync(default);
+
+        Assert.Equal(newNode.Id, (await context.ImageDistributionReferences.Include(item => item.DistributionRecord)
+            .SingleAsync()).DistributionRecord.WorkerNodeId);
+        Assert.Equal(ImageDistributionStatus.CleanupPending, records.Single(item => item.WorkerNodeId == oldNode.Id).Status);
+        Assert.Equal(ImageDistributionStatus.Ready, records.Single(item => item.WorkerNodeId == newNode.Id).Status);
+    }
+
+    [Fact]
+    public async Task ReleaseReferences_DoesNotReclaimSharedActiveTransferUntilWriterFinishes()
+    {
+        await using var context = CreateContext();
+        var node = SeedNode(context, "kvm-node", NodeCapability.Kvm);
+        var template = SeedVmTemplate(context);
+        var record = new ImageDistributionRecord
+        {
+            ImageTemplateId = template.Id, WorkerNodeId = node.Id,
+            ImageHash = template.ImageHash!, ImageType = template.ImageType, Status = ImageDistributionStatus.Pulling,
+            ClaimOwner = "writer", ClaimExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5),
+            References =
+            [
+                Reference(ImageDistributionReferenceKind.TeamLabRuntime, 1),
+                Reference(ImageDistributionReferenceKind.TeamLabRuntime, 2)
+            ]
+        };
+        context.Add(record);
+        await context.SaveChangesAsync();
+        var agent = new RecordingAgentClient();
+        var service = CreateService(context, agent);
+
+        await service.ReleaseTeamLabRuntimeReferencesAsync(1, default);
+        Assert.Single(await context.ImageDistributionReferences.ToArrayAsync());
+        await service.ReleaseTeamLabRuntimeReferencesAsync(2, default);
+        Assert.Equal(ImageDistributionStatus.Pulling, record.Status);
+        Assert.Equal("writer", record.ClaimOwner);
+        Assert.Empty(agent.DeletedVmNodes);
+
+        await service.ProcessClaimedAsync(record.Id, "writer", default);
+        Assert.Equal(ImageDistributionStatus.Ready, record.Status);
+        await service.CleanupUnreferencedAsync(default);
+        Assert.Equal(ImageDistributionStatus.CleanupPending, record.Status);
+        Assert.Empty(agent.DeletedVmNodes);
+    }
+
+    [Theory]
+    [InlineData(TeamLabRuntimeStatus.Stopped)]
+    [InlineData(TeamLabRuntimeStatus.Failed)]
+    public async Task Cleanup_ProtectsStoppedAndFailedTeamLabVmWithoutPreparation(TeamLabRuntimeStatus status)
+    {
+        await using var context = CreateContext();
+        var node = SeedNode(context, "kvm-node", NodeCapability.Kvm);
+        var template = SeedVmTemplate(context);
+        var runtime = new TeamLabRuntime
+        {
+            Status = status, Assets = [new()
+            {
+                WorkerNodeId = node.Id, SourceTemplateId = template.Id, Kind = TeamLabResourceKind.Vm, Status = status
+            }]
+        };
+        var record = new ImageDistributionRecord
+        {
+            ImageTemplateId = template.Id, WorkerNodeId = node.Id,
+            ImageHash = template.ImageHash!, ImageType = template.ImageType,
+            Operation = ImageDistributionOperation.Cleanup, Status = ImageDistributionStatus.CleanupPending,
+            ClaimOwner = "cleanup", ClaimExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5)
+        };
+        context.AddRange(runtime, record);
+        await context.SaveChangesAsync();
+        var agent = new RecordingAgentClient();
+
+        await CreateService(context, agent).ProcessClaimedAsync(record.Id, "cleanup", default);
+
+        Assert.Empty(agent.DeletedVmNodes);
+        Assert.Equal("image.vm.cache_in_use", record.LastErrorCode);
+        Assert.True(record.Retryable);
+        Assert.NotNull(await context.ImageDistributionRecords.FindAsync(record.Id));
+    }
+
     [Fact]
     public async Task DistributeTemplateAsync_QueuesOnlyCapabilityMatchingNodes()
     {

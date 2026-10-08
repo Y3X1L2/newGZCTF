@@ -9,8 +9,7 @@ namespace GZCTF.Modules.TeamLab.Application;
 
 public sealed class TeamLabReleaseService(
     AppDbContext context,
-    TeamLabTopologyValidator validator,
-    TeamLabReleaseImagePreparationService imagePreparation)
+    TeamLabTopologyValidator validator)
 {
     private static readonly JsonSerializerOptions EditorJsonOptions = new()
     {
@@ -92,7 +91,6 @@ public sealed class TeamLabReleaseService(
         if (existing is not null)
         {
             if (transaction is not null) await transaction.CommitAsync(cancellationToken);
-            await imagePreparation.QueueAsync(existing.Id, cancellationToken);
             return ToModel(existing, topology.PublicId);
         }
 
@@ -115,7 +113,6 @@ public sealed class TeamLabReleaseService(
         context.TeamLabTopologyReleases.Add(release);
         await context.SaveChangesAsync(cancellationToken);
         if (transaction is not null) await transaction.CommitAsync(cancellationToken);
-        await imagePreparation.QueueAsync(release.Id, cancellationToken);
         return ToModel(release, topology.PublicId);
     }
 

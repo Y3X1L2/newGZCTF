@@ -154,7 +154,7 @@ public sealed class TeamLabExternalApiClosureTests
     private static (TeamLabTopologyApplicationService Topologies, TeamLabReleaseService Releases) CreateTopologyService(AppDbContext context)
     {
         var validator = new TeamLabTopologyValidator();
-        var releases = new TeamLabReleaseService(context, validator, null!);
+        var releases = new TeamLabReleaseService(context, validator);
         var topologyService = new TeamLabTopologyApplicationService(
             context, validator, releases, new TeamLabControlScopeService(context), new NodeCapacitySnapshotService(context));
         return (topologyService, releases);

@@ -36,7 +36,6 @@ public class ImageTemplateController : ControllerBase
     private readonly UserManager<UserInfo> _userManager;
     private readonly ImageTemplateDeletionService _deletionService;
     private readonly ImageImportApplicationService _imageImports;
-    private readonly ImageDistributionService _imageDistribution;
     private readonly ImageTemplateCertificationService _certifications;
     private readonly ImageRemoteAccessService _remoteAccess;
     private readonly ILogger<ImageTemplateController> _logger;
@@ -44,7 +43,7 @@ public class ImageTemplateController : ControllerBase
     public ImageTemplateController(AppDbContext context, ImageStorage storage, IArchiveExtractor archiveExtractor,
         DockerImageRegistryService dockerRegistry,
         UserManager<UserInfo> userManager, ImageTemplateDeletionService deletionService,
-        ImageImportApplicationService imageImports, ImageDistributionService imageDistribution,
+        ImageImportApplicationService imageImports,
         ImageTemplateCertificationService certifications, ImageRemoteAccessService remoteAccess,
         ILogger<ImageTemplateController> logger)
     {
@@ -55,7 +54,6 @@ public class ImageTemplateController : ControllerBase
         _userManager = userManager;
         _deletionService = deletionService;
         _imageImports = imageImports;
-        _imageDistribution = imageDistribution;
         _certifications = certifications;
         _remoteAccess = remoteAccess;
         _logger = logger;
@@ -98,9 +96,6 @@ public class ImageTemplateController : ControllerBase
 
             _logger.LogInformation("Image template {Name} (ID:{Id}) uploaded by {User}",
                 imageTemplate.Name, imageTemplate.Id, User.Identity?.Name);
-
-            await _imageDistribution.DistributeToCapableNodesAsync(
-                imageTemplate, HttpContext.RequestAborted);
 
             return CreatedAtAction(nameof(GetById), new { id = imageTemplate.Id }, new
             {
@@ -254,9 +249,6 @@ public class ImageTemplateController : ControllerBase
             var template = await importer.ImportFromLocalPathAsync(
                 request.LocalPath, request.DisplayName, actor.Id);
 
-            await _imageDistribution.DistributeToCapableNodesAsync(
-                template, HttpContext.RequestAborted);
-
             return Ok(new
             {
                 template.Id, template.Name, template.OSType, template.ImageType,
@@ -301,7 +293,6 @@ public class ImageTemplateController : ControllerBase
                 token);
             var template = await _context.ImageTemplates.SingleAsync(
                 item => item.Id == imported.Id, token);
-            await _imageDistribution.DistributeToCapableNodesAsync(template, token);
             return Ok(new { template.Id, template.Name, template.OSType, template.ImageType });
         }
         catch (ApiOperationTerminalException exception)
@@ -362,7 +353,6 @@ public class ImageTemplateController : ControllerBase
                 token);
             var template = await _context.ImageTemplates.SingleAsync(
                 item => item.Id == imported.Id, token);
-            await _imageDistribution.DistributeToCapableNodesAsync(template, token);
 
             return Ok(new
             {
@@ -433,8 +423,6 @@ public class ImageTemplateController : ControllerBase
 
             if (!result.Success)
                 return BadRequest(new { message = result.Error });
-
-            await _imageDistribution.DistributeToCapableNodesAsync(result.Template!, token);
 
             return Ok(new { result.Template!.Id, result.Template.Name, result.Template.OSType, result.Template.ImageType, result.Template.FileSize });
         }

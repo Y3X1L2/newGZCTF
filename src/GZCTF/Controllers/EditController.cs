@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 using System.Net.Mime;
 using GZCTF.Extensions;
 using GZCTF.Middlewares;
@@ -7,8 +7,8 @@ using GZCTF.Models.Request.Game;
 using GZCTF.Models.Request.Info;
 using GZCTF.Repositories.Interface;
 using GZCTF.Services;
-using GZCTF.Infrastructure.Cache;
 using GZCTF.Services.Fleet;
+using GZCTF.Infrastructure.Cache;
 using GZCTF.Services.Transfer;
 using GZCTF.Modules.Content.Application;
 using GZCTF.Modules.Penetration.Application;
@@ -49,7 +49,6 @@ public class EditController(
     IStringLocalizer<Program> localizer,
     DeploymentQueueService deploymentQueue,
     ImageRemoteAccessService imageRemoteAccess,
-    IServiceScopeFactory scopeFactory,
     IExerciseManagementService exerciseManagement) : Controller
 {
     bool HasContainerRuntimeConfig(GameChallenge challenge) =>
@@ -87,26 +86,6 @@ public class EditController(
             return (null, StatusCode(StatusCodes.Status403Forbidden,
                 new RequestResponse("You do not manage this game.", StatusCodes.Status403Forbidden)));
         return (game, null);
-    }
-
-    void QueueGameImageDistribution(int gameId, string reason)
-    {
-        _ = Task.Run(async () =>
-        {
-            await using var scope = scopeFactory.CreateAsyncScope();
-            var distribution = scope.ServiceProvider.GetRequiredService<ImageDistributionService>();
-            var scopedLogger = scope.ServiceProvider.GetRequiredService<ILogger<EditController>>();
-            try
-            {
-                await distribution.DistributeGameAsync(gameId, CancellationToken.None);
-            }
-            catch (Exception ex) when (ex is InvalidOperationException or HttpRequestException or IOException)
-            {
-                scopedLogger.LogWarning(ex,
-                    "Failed to queue image distribution for game {GameId} after {Reason}.",
-                    gameId, reason);
-            }
-        });
     }
 
     /// <summary>
@@ -300,7 +279,6 @@ public class EditController(
 
         game!.Update(model);
         await gameRepository.UpdateGame(game, token);
-        QueueGameImageDistribution(game.Id, "game update");
 
         return Ok(GameInfoModel.FromGame(game));
     }
@@ -666,7 +644,6 @@ public class EditController(
 
         await cacheHelper.InvalidateAsync(CachePolicyCatalog.Scoreboard, id.ToString(), token);
         await exerciseManagement.CollectGameChallengeAsync(res.Id, token);
-        QueueGameImageDistribution(game!.Id, "challenge create");
 
         return Ok(ChallengeEditDetailModel.FromChallenge(res));
     }
@@ -846,7 +823,6 @@ public class EditController(
         // Always flush scoreboard
         await cacheHelper.InvalidateAsync(CachePolicyCatalog.Scoreboard, game.Id.ToString(), token);
         await exerciseManagement.CollectGameChallengeAsync(res.Id, token);
-        QueueGameImageDistribution(game.Id, "challenge update");
 
         return Ok(ChallengeEditDetailModel.FromChallenge(res));
     }

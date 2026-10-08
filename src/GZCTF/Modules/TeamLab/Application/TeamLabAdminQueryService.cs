@@ -232,6 +232,8 @@ public sealed class TeamLabAdminQueryService(
         string? planningBlocker = null;
         try
         {
+            await TeamLabTopologyApplicationService.ValidateImageTemplatesAsync(
+                context, execution, cancellationToken);
             plan = await topologies.PlanAsync(
                 topologyId, releaseId, actorUserId, administrator, cancellationToken);
         }
@@ -242,6 +244,11 @@ public sealed class TeamLabAdminQueryService(
                 context, execution, cancellationToken);
             planningBlocker = DescribePlanningBlocker(execution,
                 await LoadPlanningCapacityAsync(cancellationToken), requiredFeatures);
+        }
+        catch (TeamLabApiContractException exception) when (exception.Code is
+            "image_template_unavailable" or "image_template_digest_changed")
+        {
+            planningBlocker = exception.Message;
         }
         var requirements = execution.Assets
             .GroupBy(item => item.ImageTemplateId)

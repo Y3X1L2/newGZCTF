@@ -92,6 +92,8 @@ builder.Services.AddSingleton<AgentCapabilityService>();
 builder.Services.AddSingleton<AgentOperationGate>();
 builder.Services.AddSingleton<AgentResourceLock>();
 builder.Services.AddSingleton<ImageTransferSingleFlight>();
+builder.Services.AddSingleton<AgentImageStorageBudget>();
+builder.Services.AddSingleton<AgentImageDownloadWriter>();
 builder.Services.AddSingleton<GuestCertificateAuthority>();
 builder.Services.AddSingleton<GuestEnrollmentStore>();
 builder.Services.AddSingleton<GuestManagementNetworkService>();
