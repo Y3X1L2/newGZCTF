@@ -99,7 +99,6 @@ public class EditControllerTests
             Mock.Of<IStringLocalizer<Program>>(),
             queue,
             new ImageRemoteAccessService(context, new EphemeralDataProtectionProvider()),
-            provider.GetRequiredService<IServiceScopeFactory>(),
             Mock.Of<IExerciseManagementService>())
         {
             ControllerContext = new ControllerContext

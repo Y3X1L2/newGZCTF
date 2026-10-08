@@ -87,7 +87,23 @@ describe('TeamLabReleasesPage', () => {
     fireEvent.click(screen.getByText('镜像分发详情'))
     expect(screen.getByText('已缓存 / 合格节点')).toBeInTheDocument()
     expect(screen.getByText('1/2')).toBeInTheDocument()
-    expect(screen.getByText(/其他节点未缓存不单独阻止启动/)).toBeInTheDocument()
+    expect(screen.getByText(/其他节点未缓存或分发失败不单独阻止启动/)).toBeInTheDocument()
+  })
+
+  it('allows cold-cache startup and explains that only selected nodes download', () => {
+    render(<MemoryRouter><ReleaseReadinessPanel
+      readiness={{
+        topologyId: release.topologyId, releaseId: release.id, ready: true, plan: null,
+        images: [{ imageTemplateId: 1, name: 'Windows 模板', imageType: 'qcow2', eligibleNodeCount: 2, readyNodeCount: 0, pendingNodeCount: 0, failedNodeCount: 0 }],
+        latestTrialRuntime: null, blockingReasons: [],
+      }}
+      creatingTrial={false} preparingImages={false} onCreateTrial={vi.fn()} onPrepareImages={vi.fn()}
+    /></MemoryRouter>)
+
+    expect(screen.getByRole('button', { name: '启动环境' })).toBeEnabled()
+    expect(screen.getByText(/缺少的缓存将在选定节点下载/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '预热合格节点' })).toBeEnabled()
+    expect(screen.getByText(/手动预热会向所有合格节点分发/)).toBeInTheDocument()
   })
 
   it('keeps start available when only one of two eligible nodes has a cached image', () => {
