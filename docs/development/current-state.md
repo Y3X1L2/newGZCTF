@@ -1,5 +1,13 @@
 # YINYU 当前开发状态
 
+## TeamLab 历史测试记录已清理，四组比赛关联仍保护（2026-10-10）
+
+- 用户授权直接数据库清理历史测试资料，仅保留最新版 VM118–121 四机场景。已先释放精确旧 runtime98/g1 的 OVN switch/4ports和旧版本8条预热引用，再经一次有备份、FK与精确ID门禁的事务删除 **63拓扑、75旧版本、94历史runtime、32测试scope**及关联记录，共 **5,553,063行**；90份审计小文件已精确备份后释放。没有删除镜像模板/Registry来源、PVE原机/快照、教学网络或课程/练习/CTF资料，也没有新增删除按钮、部署或数据库迁移。
+- 当前实际仍有 **5个场景**：核心Topology97及比赛关联Topology1/33/34/39；4个剩余runtime31/32/34/39均Destroyed，唯一scope为Platform。四组业务关联对应Games24/60/61/66，存在参与/提交事实，未解除绑定、未删除比赛/用户/报名/提交，等待用户明确该范围；因此**尚未达到只剩1个场景**。其余已确认集合不再等待或重复清理。
+- 核心PublicId `01a1021a-b3b3-7fd2-96f5-cc9aa22a2ea5`、唯一latest usable release `01a10261-890a-718f-ae86-250e4db86746`/v2及draft revision2保持，519–522四VM/5NIC和两段网络定义正确、canonical hash保持 `3211caea…`。**核心当前无运行副本，本轮未新建实例验收**。原A g5/B g3此前已由正常Destroy票据成功清资源，此次只删除其历史实体；下节两套Ready是15:48历史验收时间点。
+- 实际流量/observation/aggregate均0、活动队列/导入0、迁移150；最后正式API library返回5场景、核心详情4VM/5NIC通过。Main/Agent原发布身份、PID和健康保持，PG/Redis/Guacamole/Guacd正常，7条普通CTF Guac连接保护，`.30`教学两容器运行/restarts0、教学3LS1LR保持。`.27`仍停止新调度但服务运行，`.30/.31`可调度；旧Windows许可自行关机与CPU单位语义缺口仍为独立backlog，未修改。
+- 本轮仅精确私有行备份：44表、同一exported READ ONLY snapshot、300,546,693字节压缩数据及90文件/54,309字节，COPY/全gzip CRC/摘要/同snapshot计数通过，**未做新全库恢复**。备份目录 `/srv/yinyu-data/backups/teamlab-test-record-cleanup-20261010-4a87dcc694a51b12-pre`；详情见[测试记录清理交接](handoffs/2026-10-10-teamlab-test-record-cleanup.md)。软件源码未改，未重跑全量软件测试，工程文档仅本地提交，未自动推送。
+
 ## 第二批与删除查询小补丁已发布，历史源与 Registry 回收完成（2026-10-09）
 
 - 第二批源码 `9a04916e` 已部署；随后 Main-only 修补源码 `c25752ce`（main `334cca0e` 同树）已在 `.27` 新独立 release 原子切换：Main DLL `4fca4909…`、前端 `9a04916e`；三节点已通过正式 sync，安装文件、实际进程与心跳均为 Agent `af2567d0…`。主站 PID 337484、本机 Agent 同一 PID 264484 的实际身份/首页、Config、manifest 200 已核，原配置、共享附件、旧 release/回滚、PVE 源机与教学容器保留。
