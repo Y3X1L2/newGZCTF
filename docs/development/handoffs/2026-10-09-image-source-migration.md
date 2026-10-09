@@ -33,6 +33,8 @@ HTTP 408/429/5xx、连接/验证超时或暂时无法证明文件未使用，保
 
 首次 PostgreSQL 尝试被未运行的 Docker 阻断；Daemon 恢复后，测试进程使用 `DOCKER_HOST=npipe://./pipe/dockerDesktopLinuxEngine` 完成真实 PostgreSQL 校验。没有用 mock 代替 PostgreSQL。全量后端、全量前端与真实 Linux 文件身份/Agent 根目录/普通 Windows 创建、联网、销毁验收交给组合候选与服务器发布任务；本地通过不能称生产迁移完成。
 
+交叉审查发现 Linux 中源文件直接位于 image 根目录时，原子重命名后的缺失路径会解析成父目录本身，原边界条件误把 `parent == root` 拒绝为越界。已最小修正：只有缺失文件允许其实际父目录等于配置根目录，存在文件仍须实际位于根目录之下。新用例执行隔离文件恢复、删除完成后的重复删除；在现有 `aspnet:10.0` Linux 容器内以真实 libc `statx/realpath` 跑来源测试 **12/12**（0 skip），仓库和 runner 只读挂载、容器断网，所有文件操作仅在容器 `/tmp`。实际服务器 Agent 配置/backing 清理仍待生产验收。
+
 ## 发布与接手
 
 生产写者在组合候选审查、完整备份与原子 release 切换后，先核对模板 1 的实际模式/凭据能力和全部绑定，再声明实际 Agent 配置路径，通过正常管理员 API 提交来源迁移。必须报告固定来源的真实 digest/size、旧源与 numeric cache 区别、完整 Registry 核验、清理结果和实际磁盘回收。完成普通 Windows 在无该模板 cache 节点上的正常创建/访问/销毁；不能仅以 operation succeeded 或进程 running 签收。

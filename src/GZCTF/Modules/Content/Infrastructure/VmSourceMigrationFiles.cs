@@ -81,9 +81,12 @@ public sealed class VmSourceMigrationFiles(IOptions<KvmSettings> options, IVmSou
             throw Rejected("Legacy source symbolic links are not accepted.");
         if (OperatingSystem.IsLinux())
         {
-            var actual = File.Exists(full) ? RealPath(full) : RealPath(Path.GetDirectoryName(full)!);
+            var exists = File.Exists(full);
+            var actual = exists ? RealPath(full) : RealPath(Path.GetDirectoryName(full)!);
             var root = RealPath(_root).TrimEnd('/');
-            if (!actual.StartsWith(root + "/", StringComparison.Ordinal))
+            // After atomic quarantine (or completed cleanup), the missing file resolves through
+            // its parent. A file directly in the image root therefore has parent == root.
+            if (!actual.StartsWith(root + "/", StringComparison.Ordinal) && (exists || actual != root))
                 throw Rejected("Legacy source resolves outside the configured image directory.");
         }
         else
