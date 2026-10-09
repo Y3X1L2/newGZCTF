@@ -276,6 +276,10 @@ public class DeploymentExecutionService
             return DeploymentExecutionResult.Failed("VM control ticket has a stale runtime generation.");
         if (ticket.Operation is not (RuntimeOperationKind.Stop or RuntimeOperationKind.Destroy))
             return DeploymentExecutionResult.Failed($"VM operation {ticket.Operation} is not supported.");
+        if (ticket.TargetNodeId is not { } targetNodeId)
+            return DeploymentExecutionResult.Failed("VM control target node is unavailable.");
+        using var execution = _executionContext.Push(new DeploymentExecutionContext(
+            targetNodeId, false, ticket.Id, ticket.Generation));
         await _fleetVmService.DestroyVmAsync(vm, token);
         return vm.Status == VmInstanceStatus.Destroyed
             ? DeploymentExecutionResult.Completed()

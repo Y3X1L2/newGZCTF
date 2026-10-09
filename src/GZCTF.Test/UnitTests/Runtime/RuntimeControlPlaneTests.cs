@@ -20,6 +20,8 @@ using GZCTF.Modules.TeamLab.Application;
 using GZCTF.Modules.TeamLab.Contracts;
 using GZCTF.Modules.TeamLab.Domain;
 using GZCTF.Services.Fleet;
+using GZCTF.Services.Vm;
+using GZCTF.Repositories.Interface;
 using GZCTF.Utils;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -243,6 +245,104 @@ public sealed class RuntimeControlPlaneTests
         var ticket = await context.DeploymentQueueTickets.SingleAsync();
         Assert.Equal(eligible.Id, ticket.TargetNodeId);
         Assert.Equal(eligible.Id, (await context.FleetCapacityReservations.SingleAsync()).WorkerNodeId);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Scheduler_LegacyDestroyResolvesOnlyItsHistoricalOrExplicitLocalOwner(bool remoteHistory)
+    {
+        await using var context = CreateContext();
+        var local = SeedVmNode(context, "local", true, [AgentFeatureIds.Kvm]);
+        var remote = SeedVmNode(context, "remote", false, [AgentFeatureIds.Kvm, AgentFeatureIds.VmDownload]);
+        var user = Guid.NewGuid();
+        var vm = new VmInstance { UserId = user, ChallengeId = 40, VmName = $"vm_c40_u{user}", ProviderName = "KVM",
+            RuntimeGeneration = remoteHistory ? 3 : 1, Status = VmInstanceStatus.Error };
+        context.Add(vm);
+        var request = DeploymentQueueRequest.Vm(1, user, 40, vm.Id);
+        if (remoteHistory)
+        {
+            var history = DeploymentQueueTicket.Create(request with { TargetNodeId = remote.Id, Generation = 3 });
+            history.Status = DeploymentQueueTicketStatus.Failed;
+            context.Add(history);
+        }
+        var ticket = DeploymentQueueTicket.Create(request with { Operation = RuntimeOperationKind.Destroy, Generation = vm.RuntimeGeneration });
+        context.Add(ticket);
+        await context.SaveChangesAsync();
+        Assert.Equal(1, await CreateScheduler(context).SchedulePendingAsync(default));
+        Assert.Equal(remoteHistory ? remote.Id : local.Id, ticket.TargetNodeId);
+        Assert.Empty(await context.FleetCapacityReservations.ToArrayAsync());
+    }
+
+    [Theory]
+    [InlineData(2, false)]
+    [InlineData(1, true)]
+    public async Task Scheduler_UnknownDestroyOwnerDoesNotUseLocalAsAGenericFallback(int generation, bool duplicateLocal)
+    {
+        await using var context = CreateContext();
+        SeedVmNode(context, "local", true, [AgentFeatureIds.Kvm]);
+        if (duplicateLocal) SeedVmNode(context, "another-local", true, [AgentFeatureIds.Kvm]);
+        var user = Guid.NewGuid();
+        var vm = new VmInstance { UserId = user, ChallengeId = 40, VmName = $"vm_c40_u{user}", ProviderName = "KVM",
+            RuntimeGeneration = generation, Status = VmInstanceStatus.Error };
+        context.Add(vm);
+        var ticket = DeploymentQueueTicket.Create(DeploymentQueueRequest.Vm(1, user, 40, vm.Id) with
+        { Operation = RuntimeOperationKind.Destroy, Generation = generation });
+        context.Add(ticket);
+        await context.SaveChangesAsync();
+        Assert.Equal(0, await CreateScheduler(context).SchedulePendingAsync(default));
+        Assert.Null(ticket.TargetNodeId);
+        Assert.Equal(DeploymentQueueTicketStatus.Pending, ticket.Status);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RestoredRemoteDestroyOwnerReachesAgentAndProtectsANewerActiveGeneration(bool newerActive)
+    {
+        await using var context = CreateContext();
+        var node = SeedVmNode(context, "remote", false, [AgentFeatureIds.Kvm]);
+        var user = Guid.NewGuid();
+        var vm = new VmInstance { UserId = user, ChallengeId = 40, VmName = $"vm_c40_u{user}",
+            ProviderName = "KVM", RuntimeGeneration = 3, Status = VmInstanceStatus.Error };
+        context.Add(vm);
+        if (newerActive) context.Add(new VmInstance { UserId = user, ChallengeId = 40, VmName = vm.VmName,
+            NodeId = node.Id, RuntimeGeneration = 4, Status = VmInstanceStatus.Running });
+        await context.SaveChangesAsync();
+        var accessor = new DeploymentExecutionContextAccessor();
+        var nodes = new Mock<INodeRepository>();
+        nodes.Setup(item => item.GetNodeByIdAsync(node.Id, It.IsAny<CancellationToken>())).ReturnsAsync(node);
+        var provider = new Mock<IVirtualMachineProvider>(MockBehavior.Strict);
+        var agent = new LegacyDestroyAgent();
+        var fleet = new FleetVmService(agent, nodes.Object, provider.Object, null!, null!, null!, Options.Create(new KvmSettings()),
+            context, null!, accessor, NullLogger<FleetVmService>.Instance);
+        var execution = new DeploymentExecutionService(context, fleet, accessor, NullLogger<DeploymentExecutionService>.Instance);
+        var ticket = DeploymentQueueTicket.Create(DeploymentQueueRequest.Vm(1, user, 40, vm.Id) with
+        { Operation = RuntimeOperationKind.Destroy, Generation = 3, TargetNodeId = node.Id });
+        if (newerActive)
+        {
+            await Assert.ThrowsAsync<InvalidOperationException>(() => execution.ExecuteAsync(ticket, default));
+            Assert.Null(agent.NodeId);
+            Assert.Equal(VmInstanceStatus.Error, vm.Status);
+        }
+        else
+        {
+            Assert.True((await execution.ExecuteAsync(ticket, default)).Success);
+            Assert.Equal(node.Id, agent.NodeId);
+            Assert.Equal(3, agent.Generation);
+            Assert.Equal(VmInstanceStatus.Destroyed, vm.Status);
+            Assert.Equal(node.Id, vm.NodeId);
+        }
+        provider.VerifyNoOtherCalls();
+        Assert.Null(accessor.Current);
+    }
+
+    sealed class LegacyDestroyAgent() : AgentClient(null!, null!, new ConfigurationBuilder().Build(), NullLogger<AgentClient>.Instance)
+    {
+        public Guid? NodeId;
+        public int? Generation;
+        public override Task DestroyVmAsync(Guid nodeId, string name, int? generation, string? nativeId, CancellationToken token)
+        { NodeId = nodeId; Generation = generation; return Task.CompletedTask; }
     }
 
     [Fact]
