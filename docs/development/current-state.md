@@ -1,6 +1,16 @@
 # YINYU 当前开发状态
 
-## 第二批候选已合并，发布遇到内网连接中断（2026-10-09）
+## 第二批与删除查询小补丁已发布，历史源与 Registry 回收完成（2026-10-09）
+
+- 第二批源码 `9a04916e` 已部署；随后 Main-only 修补源码 `c25752ce`（main `334cca0e` 同树）已在 `.27` 新独立 release 原子切换：Main DLL `4fca4909…`、前端 `9a04916e`；三节点已通过正式 sync，安装文件、实际进程与心跳均为 Agent `af2567d0…`。主站 PID 337484、本机 Agent 同一 PID 264484 的实际身份/首页、Config、manifest 200 已核，原配置、共享附件、旧 release/回滚、PVE 源机与教学容器保留。
+- 新鲜 v3 两库使用实际 exported snapshot 绑定 schema、迁移、计数和 dump；全文读取、完整隔离恢复及快照台账一致通过，新验证副本已停止。Main 一致捕获仅暂停 **17.77 秒**，Agent/教学容器未停止。原备份最终失败源于恢复后错误比较 live 行数，原 dump、clone 和失败证据保留，没有伪造恢复证明。
+- 历史 runtime 103 已正常 Destroyed；34 条旧 VM 的原 DELETE/队列实际成功 32 条，另两条保留 Error，无对应域/实例盘/XML/Agent 标记。ID 1 真实 backing 使用者已清空，正常 source-migration `01a12099-60b9-7ba8-a0c3-2e4d5e2465ed` 成功：固定 Registry 内容 `81e45879…` / 6040518656 字节，旧源/隔离文件消失，5 题/4 练习、原 Opaque/DHCP/RDP 能力与 numeric cache 保持。
+- 当前保留 B / `.31` generation **3** Ready，四域实读 Running；A / `.27` 最终 generation **4** Failed，补偿后无域/资产，**当前两套同时 Ready 的交付目标未满足**。A generation2 曾以 `guest-network-verify/guest_network_control_failed` 失败，受控g3曾完整网络/HTTP/隔离通过，之后旧2008R2自行shutdown；B g2也在约两小时处发生已知许可关机后正常恢复g3。最后一次授权A g4正常reset在15:22:16–15:24:23 UTC复现同generic来宾回读失败，未再连续重试，没SQL改终态。现有安全事件未细到asset/exceptiontype，需独立小诊断补丁，不能将重试成功当根因已修复，也不能将A3约80分钟关机未经再读OS事件硬归因精确两小时。正常reset从冻结池重新分配CIDR/IP，运行ID/网络key保持，旧Windows许可/自行关机限制未改。
+- 57 旧 release 已正常归档且 canonical hash 保持；45 个草稿经正常 revision PUT 清除退役镜像引用。指定 16 模板原 DELETE 进入 Deleting 后遭遇共同 EF 查询翻译错误；Main-only 修补切换后由原后台 reconcile 全部正常删除，原 local 源、两 Worker 精确 numeric/hash cache/.part 均无残留，保留五缓存身份未变（额外官方 Agent 删除调用为0）。官方 Registry dry-run/execute 精确回收26无引用 blobs，allocated **76028284928 字节（70.81 GiB）**，1453跨仓库共享blob和五来源前后完整摘要/长度/inode保持；服务/原配置恢复、无缺失live引用、未rawrm/未delete-untagged/未处理upload遗留。PR #19 已正常合并为 `334cca0e`，源码 `c25752ce` 与其同树，仅将查询排序移到 entity 投影之前，真实 PostgreSQL 3/3、定向单元 32/32、Release/Quality 通过，无迁移、前端/Agent 源码变化。
+- Main 修补制品已核完整 700 文件与真实 Main Agent 摘要探针：Main `4fca4909…`；4 个实际发布差异，前端/完整 Agent/guest-supervisor 逐字节复用 9a。首次在线备份因附件metadata变化失败，partial保留；恢复连接后唯一新 capture-v2 身份短停Main **17.779 秒**捕获快照/附件并恢复，随后两库完整dump解码/SHA/schema/head与已实恢复v3一致，明确没有再次fullrestore。5.2 MB/4file delta服务器摘要及全部700文件核验通过；Main原子切换窗口 **13.103 秒**，9a回滚目录/原备份、配置/附件、Agent PID及PVE/教学保持。
+- 用户要求优先收尾后，普通 Windows 冷缓存创建、完整桌面登录及其销毁附加验收暂停，均为 **NOT_RUN**。现有 Accepted 身份和 RDP 能力已只读确认；两个 KVM 节点的 ID 1 存量 Ready/Game23 缓存引用仍保留，没有绕过引用删 cache/改报名或比赛时间。当前六个管理员/课程 VM 导入入口仍可能写 `LocalFilePath`，历史清理不代表以后不会再生成本地主副本；统一持久导入入口收口是下一阶段独立工作。
+
+以下保留第二批最初连接中断 checkpoint 的历史过程，最新已证事实以上述与[第二批交接](handoffs/2026-10-09-image-lifecycle-second-rollout.md)为准。
 
 - PR #18 正常合并为 `main 32356555`，与源码 `9a04916e` 完整 Git tree 一致。本地串行单元 **1471/1471**、集成 **325/325**、0 skip；PR Quality 的后端、EF 模型、查询计划、OpenAPI 和前端 **118 文件 / 399 测试**全部通过。无新增数据库迁移。
 - 冻结源码已生成最终前端 `9a04916e` 的 223 文件制品，完整 Main/Agent publish 和真实 Main 内部 Agent 摘要探针通过；独立归档 **700/700** 核验通过。第二批 Main DLL `18e617ab…`、Agent `af2567d0…` 已准备，尚未执行 Main 软链接切换。已在 `.27` 建立完整 SHA 专属 staging；relay/backup 启动请求遇到连接超时或 SSH 错误，没有确认收到后台启动身份。恢复连接后须先读取这两个专属 unit、制品和备份证明，不能直接重发。
