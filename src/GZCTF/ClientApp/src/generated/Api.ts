@@ -16,13 +16,6 @@ export enum BootstrapProfileStatus {
   Deleted = 2,
 }
 
-export enum ApiOperationStatus {
-  Pending = 0,
-  Running = 1,
-  Succeeded = 2,
-  Failed = 3,
-}
-
 /** Training course resource type */
 export enum TrainingCourseResourceType {
   File = "File",
@@ -525,6 +518,13 @@ export enum Role {
   Monitor = "Teacher",
   Admin = "Admin",
   SuperAdmin = "SuperAdmin",
+}
+
+export enum ApiOperationStatus {
+  Pending = 0,
+  Running = 1,
+  Succeeded = 2,
+  Failed = 3,
 }
 
 export enum ImageType {
@@ -2140,6 +2140,35 @@ export interface ProblemDetails {
   detail?: string | null;
   instance?: string | null;
   [key: string]: any;
+}
+
+export interface ApiOperationModel {
+  /** @format guid */
+  id?: string;
+  kind?: string;
+  status?: ApiOperationStatus;
+  stage?: string;
+  resourceType?: string | null;
+  resourceId?: string | null;
+  /** @format guid */
+  deploymentQueueTicketId?: string | null;
+  /** @format int64 */
+  currentProgress?: number;
+  /** @format int64 */
+  totalProgress?: number;
+  /** @format int32 */
+  attemptCount?: number;
+  errorCode?: string | null;
+  errorDetail?: string | null;
+  result?: any;
+  /** @format uint64 */
+  createdAt?: number;
+  /** @format uint64 */
+  startedAt?: number | null;
+  /** @format uint64 */
+  updatedAt?: number;
+  /** @format uint64 */
+  completedAt?: number | null;
 }
 
 /** Public account capabilities used to compose authentication pages. */
@@ -7236,7 +7265,11 @@ export interface PrepareTeamLabTemplatesModel {
   templateIds?: number[];
 }
 
-/** Release-level preparation state for external callers. */
+/**
+ * Release admission and cache state. ReadyToStart allows missing cache to download
+ * after node selection; onDemand distinguishes this from existing cached copies.
+ * PlanAvailable describes eligible capabilities, not reserved runtime resources.
+ */
 export interface TeamLabReleasePreparationModel {
   /** @format guid */
   releaseId?: string;
@@ -7272,35 +7305,6 @@ export interface OpenTeamLabFailureModel {
   resourceType?: string | null;
   resourceId?: string | null;
   detail?: string | null;
-}
-
-export interface ApiOperationModel {
-  /** @format guid */
-  id?: string;
-  kind?: string;
-  status?: ApiOperationStatus;
-  stage?: string;
-  resourceType?: string | null;
-  resourceId?: string | null;
-  /** @format guid */
-  deploymentQueueTicketId?: string | null;
-  /** @format int64 */
-  currentProgress?: number;
-  /** @format int64 */
-  totalProgress?: number;
-  /** @format int32 */
-  attemptCount?: number;
-  errorCode?: string | null;
-  errorDetail?: string | null;
-  result?: any;
-  /** @format uint64 */
-  createdAt?: number;
-  /** @format uint64 */
-  startedAt?: number | null;
-  /** @format uint64 */
-  updatedAt?: number;
-  /** @format uint64 */
-  completedAt?: number | null;
 }
 
 export interface OpenTeamLabRemoteAuditSummaryModel {
@@ -13266,6 +13270,82 @@ export class Api<
       this.request<void, ProblemDetails>({
         path: `/api/tokens/${id}`,
         method: "DELETE",
+        ...params,
+      }),
+  };
+  imageSourceMigration = {
+    /**
+     * No description
+     *
+     * @tags ImageSourceMigration
+     * @name ImageSourceMigrationGet
+     * @request GET:/api/v1/image-templates/{templateId}/source-migrations/{operationId}
+     */
+    imageSourceMigrationGet: (
+      templateId: number,
+      operationId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<ApiOperationModel, any>({
+        path: `/api/v1/image-templates/${templateId}/source-migrations/${operationId}`,
+        method: "GET",
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags ImageSourceMigration
+     * @name ImageSourceMigrationGet
+     * @request GET:/api/v1/image-templates/{templateId}/source-migrations/{operationId}
+     */
+    useImageSourceMigrationGet: (
+      templateId: number,
+      operationId: string,
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<ApiOperationModel, any>(
+        doFetch
+          ? `/api/v1/image-templates/${templateId}/source-migrations/${operationId}`
+          : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags ImageSourceMigration
+     * @name ImageSourceMigrationGet
+     * @request GET:/api/v1/image-templates/{templateId}/source-migrations/{operationId}
+     */
+    mutateImageSourceMigrationGet: (
+      templateId: number,
+      operationId: string,
+      data?: ApiOperationModel | Promise<ApiOperationModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<ApiOperationModel>(
+        `/api/v1/image-templates/${templateId}/source-migrations/${operationId}`,
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags ImageSourceMigration
+     * @name ImageSourceMigrationSubmit
+     * @request POST:/api/v1/image-templates/{templateId}/source-migrations
+     */
+    imageSourceMigrationSubmit: (
+      templateId: number,
+      params: RequestParams = {},
+    ) =>
+      this.request<ApiOperationModel, any>({
+        path: `/api/v1/image-templates/${templateId}/source-migrations`,
+        method: "POST",
+        format: "json",
         ...params,
       }),
   };

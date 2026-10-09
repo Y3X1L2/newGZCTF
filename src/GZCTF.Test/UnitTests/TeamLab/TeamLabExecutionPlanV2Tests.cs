@@ -150,6 +150,19 @@ public sealed class TeamLabExecutionPlanV2Tests
 
         Assert.False(plan.IsValid(out var error));
         Assert.Contains("DNS hostname", error, StringComparison.OrdinalIgnoreCase);
+        plan = WithDigests(plan);
+        var immutableBytes = JsonSerializer.Serialize(plan);
+        Assert.True(plan.IsValidForCleanup(out error), error);
+        Assert.False(plan.IsValid(out _));
+        Assert.Equal(immutableBytes, JsonSerializer.Serialize(plan));
+        Assert.False((plan with { RuntimePublicId = Guid.Empty }).IsValidForCleanup(out _));
+        Assert.False((plan with { PlanDigest = "sha256:wrong" }).IsValidForCleanup(out _));
+        Assert.False((plan with { Assets = [plan.Assets[0] with { AssetKey = "../../outside" }] })
+            .IsValidForCleanup(out _));
+        Assert.False((plan with { Networks = [plan.Networks[0] with
+        {
+            Ports = [plan.Networks[0].Ports[0] with { MacAddress = "../../outside" }]
+        }] }).IsValidForCleanup(out _));
     }
 
     [Fact]

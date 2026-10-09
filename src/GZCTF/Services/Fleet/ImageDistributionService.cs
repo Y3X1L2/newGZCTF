@@ -317,7 +317,8 @@ public class ImageDistributionService(
         var activeCertificationTemplateSet = activeCertificationTemplates.ToHashSet();
         var activeRolloutIds = await context.TeamLabRollouts.AsNoTracking()
             .Where(rollout => rolloutIds.Contains(rollout.Id) &&
-                              rollout.Status != TeamLabRolloutStatus.Completed)
+                              rollout.Status != TeamLabRolloutStatus.Completed &&
+                              rollout.Status != TeamLabRolloutStatus.Archived)
             .Select(rollout => rollout.Id)
             .ToHashSetAsync(token);
         var activeTopologyIds = await context.TeamLabTopologies.AsNoTracking()
@@ -326,6 +327,7 @@ public class ImageDistributionService(
             .ToHashSetAsync(token);
         var activeReleaseIds = await context.TeamLabTopologyReleases.AsNoTracking()
             .Where(release => releaseIds.Contains(release.Id) &&
+                              !release.IsArchived &&
                               (release.ControlScopeId == null || !release.ControlScope!.IsArchived))
             .Select(release => release.Id)
             .ToHashSetAsync(token);

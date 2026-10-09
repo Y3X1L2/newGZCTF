@@ -36,6 +36,10 @@ public sealed class TeamLabReleaseImagePreparationService(
 
     public async Task QueueAsync(Guid releaseId, CancellationToken cancellationToken)
     {
+        await using var transaction = context.Database.IsRelational()
+            ? await context.Database.BeginTransactionAsync(cancellationToken) : null;
+        await TeamLabReleaseLifecycle.LockAsync(context, releaseId, cancellationToken);
+        await TeamLabReleaseLifecycle.RequireStartableAsync(context, releaseId, cancellationToken);
         var release = await context.TeamLabTopologyReleases.AsNoTracking()
             .SingleOrDefaultAsync(item => item.Id == releaseId, cancellationToken)
             ?? throw new TeamLabApiContractException("release_not_found", "未找到拓扑版本", 404);
@@ -45,6 +49,7 @@ public sealed class TeamLabReleaseImagePreparationService(
         var templateIds = execution.Assets.Select(item => item.ImageTemplateId)
             .Distinct().OrderBy(item => item).ToArray();
         await distribution.DistributeTemplatesAsync(templateIds, reference, cancellationToken);
+        if (transaction is not null) await transaction.CommitAsync(cancellationToken);
     }
 
     public Task ReleaseAsync(Guid releaseId, CancellationToken cancellationToken) =>
@@ -154,7 +159,9 @@ public sealed class TeamLabReleaseImagePreparationService(
                         failed.Any(item => item.Retryable)));
         }).OrderBy(item => item.TemplateId).ToArray();
 
-        var planAvailable = images.All(item => item.EligibleNodeCount > 0);
+        if (release.IsArchived)
+            blockers.Add("拓扑版本已归档，无法创建新的运行环境。");
+        var planAvailable = !release.IsArchived && images.All(item => item.EligibleNodeCount > 0);
         if (!planAvailable)
             blockers.AddRange(images.Where(item => item.EligibleNodeCount == 0)
                 .Select(item => $"{item.TemplateName} 没有具备对应能力的可调度节点。"));

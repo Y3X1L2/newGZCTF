@@ -388,6 +388,28 @@ public sealed class RuntimeSchedulingService(
     {
         if (ticket.TargetNodeId is { } nodeId)
             return nodeId;
+        if (ticket.Kind == DeploymentQueueKind.VirtualMachine &&
+            ticket.Operation == RuntimeOperationKind.Destroy && ticket.VmInstanceId is { } vmId)
+        {
+            var vm = await context.VmInstances.AsNoTracking().SingleOrDefaultAsync(item => item.Id == vmId, token);
+            if (vm is null || vm.RuntimeGeneration != ticket.Generation) return null;
+            if (vm.NodeId is { } owner) return owner;
+            var priorOwners = await context.DeploymentQueueTickets.AsNoTracking()
+                .Where(item => item.Kind == DeploymentQueueKind.VirtualMachine && item.VmInstanceId == vmId &&
+                               item.Generation == ticket.Generation && item.Operation == RuntimeOperationKind.Create &&
+                               item.TargetNodeId != null)
+                .Select(item => item.TargetNodeId!.Value).Distinct().ToArrayAsync(token);
+            if (priorOwners.Length == 1) return priorOwners[0];
+            if (priorOwners.Length > 1 || vm.RuntimeGeneration != 1 || vm.RuntimeNativeId is not null ||
+                vm.ProviderName != "KVM" || vm.Status != VmInstanceStatus.Error ||
+                vm.VmName != $"vm_c{vm.ChallengeId}_u{vm.UserId}") return null;
+            // Only the pre-dispatch, legacy local generation has no persisted remote owner.
+            // Resolve the explicit local registration; never choose a spare remote node.
+            var localOwners = await context.WorkerNodes.AsNoTracking()
+                .Where(item => item.IsLocal && (item.Capabilities & NodeCapability.Kvm) != 0)
+                .Select(item => item.Id).ToArrayAsync(token);
+            return localOwners.Length == 1 ? localOwners[0] : null;
+        }
         if (ticket.Kind == DeploymentQueueKind.ChallengeTestContainer &&
             ticket.GameId is { } gameId && ticket.ChallengeId is { } challengeId)
         {

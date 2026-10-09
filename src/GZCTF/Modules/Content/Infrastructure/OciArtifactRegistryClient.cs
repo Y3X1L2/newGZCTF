@@ -14,6 +14,13 @@ public sealed record OciArtifactReference(
     string Digest,
     long Size);
 
+public sealed class OciArtifactRegistryFailureException(string message, HttpStatusCode statusCode)
+    : InvalidOperationException(message)
+{
+    public bool Retryable => statusCode == HttpStatusCode.RequestTimeout ||
+                             statusCode == HttpStatusCode.TooManyRequests || (int)statusCode >= 500;
+}
+
 public sealed class OciArtifactRegistryClient(
     IHttpClientFactory httpClientFactory,
     ILogger<OciArtifactRegistryClient> logger)
@@ -104,6 +111,73 @@ public sealed class OciArtifactRegistryClient(
         logger.LogInformation("Pushed OCI artifact {Repository}:{Tag} to {Registry}.",
             reference.Repository, reference.Tag, reference.RegistryAddress);
         return reference;
+    }
+
+    /// <summary>Verifies the manifest and every blob byte before relinquishing an old source.</summary>
+    public async Task VerifyBytesAsync(OciArtifactReference reference, CancellationToken cancellationToken)
+    {
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        deadline.CancelAfter(TimeSpan.FromHours(2));
+        var token = deadline.Token;
+        if (reference.Size <= 0)
+            throw new InvalidOperationException("OCI artifact source is unavailable.");
+        var manifestDigest = await VerifyManifestBytesAsync(reference, token);
+        var client = httpClientFactory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Get,
+            $"http://{reference.RegistryAddress}/v2/{reference.Repository}/blobs/{reference.Digest}");
+        using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, token);
+        if (!response.IsSuccessStatusCode)
+            throw await RegistryFailureAsync("verify OCI artifact bytes", reference, response, token);
+        if (response.Content.Headers.ContentLength is { } length && length != reference.Size)
+            throw new InvalidOperationException("OCI artifact blob size differs from its source identity.");
+        await using var stream = await response.Content.ReadAsStreamAsync(token);
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        var buffer = new byte[81920];
+        long bytes = 0;
+        int read;
+        while ((read = await stream.ReadAsync(buffer, token)) > 0)
+        {
+            if (read > reference.Size - bytes)
+                throw new InvalidOperationException("OCI artifact blob exceeds its declared size.");
+            hash.AppendData(buffer, 0, read);
+            bytes += read;
+        }
+        var actual = Convert.ToHexStringLower(hash.GetHashAndReset());
+        if (bytes != reference.Size || !string.Equals(actual, NormalizeDigest(reference.Digest), StringComparison.Ordinal))
+            throw new InvalidOperationException("OCI artifact blob SHA-256 or size verification failed.");
+        // A mutable tag must still name these bytes when the source change is committed.
+        if (await VerifyManifestBytesAsync(reference, token) != manifestDigest)
+            throw new InvalidOperationException("OCI artifact manifest changed during verification.");
+    }
+
+    async Task<string> VerifyManifestBytesAsync(OciArtifactReference reference, CancellationToken token)
+    {
+        var client = httpClientFactory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Get, ManifestUrl(reference));
+        request.Headers.Accept.ParseAdd(ManifestMediaType);
+        using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, token);
+        if (!response.IsSuccessStatusCode)
+            throw await RegistryFailureAsync("verify OCI artifact manifest", reference, response, token);
+        await using var stream = await response.Content.ReadAsStreamAsync(token);
+        using var body = new MemoryStream();
+        var buffer = new byte[8192];
+        int read;
+        while ((read = await stream.ReadAsync(buffer, token)) > 0)
+        {
+            if (body.Length + read > 1024 * 1024)
+                throw new InvalidOperationException("OCI artifact manifest exceeds the verification limit.");
+            body.Write(buffer, 0, read);
+        }
+        var bytes = body.ToArray();
+        var digest = "sha256:" + Convert.ToHexStringLower(SHA256.HashData(bytes));
+        if (!response.Headers.TryGetValues("Docker-Content-Digest", out var values) || values.SingleOrDefault() != digest)
+            throw new InvalidOperationException("OCI artifact manifest SHA-256 verification failed.");
+        using var document = JsonDocument.Parse(bytes);
+        if (!document.RootElement.TryGetProperty("layers", out var layers) || layers.ValueKind != JsonValueKind.Array ||
+            layers.GetArrayLength() != 1 || layers[0].GetProperty("digest").GetString() != reference.Digest ||
+            layers[0].GetProperty("size").GetInt64() != reference.Size)
+            throw new InvalidOperationException("OCI artifact manifest points to unexpected content.");
+        return digest;
     }
 
     public async Task DeleteAsync(OciArtifactReference reference, CancellationToken cancellationToken)
@@ -227,8 +301,8 @@ public sealed class OciArtifactRegistryClient(
     {
         var body = await response.Content.ReadAsStringAsync(cancellationToken);
         if (body.Length > 1024) body = body[..1024];
-        return new InvalidOperationException(
+        return new OciArtifactRegistryFailureException(
             $"Failed to {operation} {reference.RegistryAddress}/{reference.Repository}:{reference.Tag}: " +
-            $"{(int)response.StatusCode} {response.StatusCode}. {body}");
+            $"{(int)response.StatusCode} {response.StatusCode}. {body}", response.StatusCode);
     }
 }

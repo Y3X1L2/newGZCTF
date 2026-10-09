@@ -364,7 +364,7 @@ public sealed class TeamLabOvnNetworkProvider(
         TeamLabExecutionPlanV2 plan,
         CancellationToken cancellationToken)
     {
-        if (!plan.IsValid(out var validationError))
+        if (!plan.IsValidForCleanup(out var validationError))
             return TeamLabOvnApplyResult.Failed("validation", validationError!);
         if (!plan.NetworkOwner)
             return new TeamLabOvnApplyResult(true, false, "cleanup",
