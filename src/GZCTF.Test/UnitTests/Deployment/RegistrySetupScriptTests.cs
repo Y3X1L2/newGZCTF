@@ -94,11 +94,12 @@ public sealed class RegistrySetupScriptTests
             factory.Object,
             NullLogger<OciArtifactRegistryClient>.Instance);
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => registry.DeleteAsync(
+        var exception = await Assert.ThrowsAsync<OciArtifactRegistryFailureException>(() => registry.DeleteAsync(
             new OciArtifactReference("registry.internal:5000", "ctf/test", "latest", new string('a', 64), 1),
             CancellationToken.None));
 
         Assert.Contains("405", exception.Message, StringComparison.Ordinal);
+        Assert.False(exception.Retryable);
         Assert.Equal([HttpMethod.Head, HttpMethod.Delete], handler.Methods);
     }
 
