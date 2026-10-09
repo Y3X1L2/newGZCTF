@@ -405,14 +405,14 @@ public class ImageDistributionService(
     {
         var candidates = await context.ImageDistributionRecords.AsNoTracking()
             .Where(record => record.ImageTemplateId == templateId)
+            .OrderBy(record => record.ImageTemplateId)
+            .ThenBy(record => record.WorkerNodeId)
             .Select(record => new TemplateCleanupCandidate(
                 record.Id,
                 record.ImageTemplateId,
                 record.WorkerNodeId,
                 record.Operation,
                 record.Status))
-            .OrderBy(record => record.ImageTemplateId)
-            .ThenBy(record => record.WorkerNodeId)
             .ToArrayAsync(token);
         if (candidates.Length == 0)
             return;
