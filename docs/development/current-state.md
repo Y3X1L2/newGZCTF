@@ -1,5 +1,14 @@
 # YINYU 当前开发状态
 
+## 第二批候选已合并，发布遇到内网连接中断（2026-10-09）
+
+- PR #18 正常合并为 `main 32356555`，与源码 `9a04916e` 完整 Git tree 一致。本地串行单元 **1471/1471**、集成 **325/325**、0 skip；PR Quality 的后端、EF 模型、查询计划、OpenAPI 和前端 **118 文件 / 399 测试**全部通过。无新增数据库迁移。
+- 冻结源码已生成最终前端 `9a04916e` 的 223 文件制品，完整 Main/Agent publish 和真实 Main 内部 Agent 摘要探针通过；独立归档 **700/700** 核验通过。第二批 Main DLL `18e617ab…`、Agent `af2567d0…` 已准备，尚未执行 Main 软链接切换。已在 `.27` 建立完整 SHA 专属 staging；relay/backup 启动请求遇到连接超时或 SSH 错误，没有确认收到后台启动身份。恢复连接后须先读取这两个专属 unit、制品和备份证明，不能直接重发。
+- 已通过管理员正常队列接口取消精确 31 条本轮历史 Pending Destroy，票据/VM/代次逐项保存，实际活动队列归零；没有 SQL 写入，也没有把这些 VM 声称为销毁完成。历史 runtime 103、旧差异盘、ID 1 来源迁移、16 模板退役及 Registry GC 均仍待第二批发布后执行。
+- 两份保留环境的同款 Windows Server 2008 R2 在启动约两小时后由 `wlms.exe` 自行关机，许可证状态 Notification、宽限期 0；平台试运行未设置短 TTL。通过正常单资产 start 启动两 Windows，八个 native UUID 与 generation 1 保持，独立四机/五网卡网络回读通过。最后实读八资产 Running，但两个 runtime/shard 汇总仍 Failed；现行单资产操作不自动恢复聚合，不能称当前 runtime Ready 或长时稳定。后续最终版本验收通过各一次正常 reset 恢复聚合，保留许可限制。
+- Registry 只读核实真实 systemd backend、909 repositories / 7084 blobs、1443 跨仓库共享 blob，当前全部有 revision 引用，无缺失引用；1 与 519–522 五个 payload 已完整 SHA/长度核验。约 2.75 GB upload 遗留与 blob GC 分开处理，尚未执行物理回收。16 旧 local 来源与 ID 1 源路径/inode 不共享，删除前仍须重读。
+- 网络中断后的服务和后台任务状态尚未重验；线上版本最后实读仍为第一批 `99e923cd` / Agent `ef1ce307…`。具体制品、限制、未知接受状态和恢复顺序见[第二批发布 checkpoint](handoffs/2026-10-09-image-lifecycle-second-rollout.md)。
+
 ## 镜像按需分发已部署，双四机场景生命周期验收（2026-10-09）
 
 - PR #17 正常合并 `main 240ea370`；已审查源码 `99e923cd` 的完整候选经 GitHub 中转、服务器归档摘要和 **700/700** 文件核验后，在 `.27` 新 release 原子切换。Main DLL `5e632d02…`、前端来源 `99e923cd`；三个节点均正式同步 Agent `ef1ce307…`，心跳、实际进程与 Fabric 健康通过。新完整备份两库实际隔离恢复及迁移兼容性通过；旧发布、回滚入口、附件、PVE 源机和快照保留。
