@@ -20,6 +20,12 @@ public static class ContentModuleRegistration
         services.AddScoped<IImageTemplateArtifactCleaner, ImageTemplateArtifactCleaner>();
         services.AddScoped<ImageTemplateReferenceService>();
         services.AddScoped<ImageTemplateDeletionService>();
+        services.AddScoped<ImageSourceMigrationService>();
+        services.AddScoped<IImageSourceMigrationStore, EfImageSourceMigrationStore>();
+        services.AddScoped<VmSourceMigrationFiles>();
+        services.AddScoped<IVmSourceBackingInspector, VmSourceBackingInspector>();
+        services.AddOptions<ImageSourceMigrationOptions>().BindConfiguration(ImageSourceMigrationOptions.SectionName);
+        services.AddKeyedScoped<IApiOperationHandler, ImageSourceMigrationOperationHandler>(ImageSourceMigrationService.OperationKind);
         services.AddScoped<ImageTemplateDeletionReconciler>();
         services.AddScoped<IImageTemplateReferenceProvider, CtfImageTemplateReferenceProvider>();
         services.AddScoped<IImageTemplateReferenceProvider, ExerciseImageTemplateReferenceProvider>();

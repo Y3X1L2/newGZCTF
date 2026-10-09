@@ -175,6 +175,13 @@ public sealed class ApiOperationWorker : BackgroundService
                     stoppingToken))
                 await handler.OnTerminalFailureAsync(operation.Id, stoppingToken);
         }
+        catch (ApiOperationRetryableException exception)
+        {
+            var persisted = await MarkFailedAsync(operation.Id, exception.Code, exception.Message, MaxAttempts,
+                stoppingToken, TimeSpan.FromSeconds(Math.Min(60, Math.Pow(2, operation.AttemptCount))));
+            if (operation.AttemptCount >= MaxAttempts && persisted)
+                await handler.OnTerminalFailureAsync(operation.Id, stoppingToken);
+        }
         catch (Exception exception)
         {
             _logger.LogError(exception, "External API operation {OperationId} failed", operation.Id);

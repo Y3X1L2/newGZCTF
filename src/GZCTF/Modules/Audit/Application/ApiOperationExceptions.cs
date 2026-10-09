@@ -28,6 +28,12 @@ public class ApiOperationTerminalException(string code, string message) : Except
     public string Code { get; } = code;
 }
 
+/// <summary>A transient failure retaining its code while using the worker's existing bounded retry policy.</summary>
+public sealed class ApiOperationRetryableException(string code, string message) : Exception(message)
+{
+    public string Code { get; } = code;
+}
+
 public sealed class ApiOperationDeferredException(
     string stage,
     string code,

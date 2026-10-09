@@ -292,8 +292,10 @@ public class ImageDistributionServiceTests
         Assert.Contains(OperationalEventCodes.Image.DistributionReady, eventCodes);
     }
 
-    [Fact]
-    public async Task ProcessClaimedAsync_PreparedVmUsesImmutableRegistryProvenance()
+    [Theory]
+    [InlineData(VmRuntimeMode.Managed)]
+    [InlineData(VmRuntimeMode.Opaque)]
+    public async Task ProcessClaimedAsync_PreparedVmUsesImmutableRegistryProvenance(VmRuntimeMode runtimeMode)
     {
         await using var context = CreateContext();
         var node = SeedNode(context, "kvm-node", NodeCapability.Kvm);
@@ -319,7 +321,7 @@ public class ImageDistributionServiceTests
             FileSize = artifact.ArtifactSize,
             Status = ImageStatus.Ready,
             VmArtifactStatus = VmArtifactStatus.Ready,
-            VmRuntimeMode = VmRuntimeMode.Managed,
+            VmRuntimeMode = runtimeMode,
             PreparedArtifact = artifact
         };
         artifact.DerivedImageTemplate = prepared;
