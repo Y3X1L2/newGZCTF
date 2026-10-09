@@ -1,10 +1,22 @@
-# 第二批镜像生命周期发布 checkpoint
+# 第二批镜像生命周期发布交接
 
 ## 目标与当前状态
 
-用户已授权第二批发布、通过正式 API 恢复旧实例、先迁移 ID 1 后释放 local 来源、退役列明的 16 个模板、受控 Registry GC，以及最终两保留 runtime 各一次正常 reset 验收。生产操作由唯一执行者顺序进行；本记录为内网连接中断时的 checkpoint，任务尚未完成。
+用户已授权第二批发布、通过正式 API 恢复旧实例、先迁移 ID 1 后释放 local 来源、退役列明的 16 个模板、受控 Registry GC，以及最终保留环境恢复验收。唯一生产执行者已完成发布、来源退休、GC和两套同时Ready验收；普通Windows附加验收按用户要求暂停，明确缺口见下文。
 
 本节原记录是首次网络中断 checkpoint；后续恢复实证见下节。不能把尚未安装的修补候选或未知备份完成状态写成已经发布/已回收。
+
+## 最新两套同时Ready交付（15:49 UTC）
+
+A `01a11e28-b860-7c4e-a373-06cac79bbb30` 从失败g4经一次正常reset迁到稳定Worker `.31`，票据 `01a12158-7854-7485-9ef3-c59057baef12` 于15:46:48.532566–15:48:11.69313 UTC成功，当前g5 Ready。B `01a11e2b-db7f-7fd7-873f-32f7a860b96b` 保持g3 Ready，未reset、原四native UUID全部保持。15:48:35实际八域全部Running，两套各四机/五网卡QGA MAC/IP/前缀/DNS/无默认网关及限定管理TCP回读、两HTTP200和跨runtime隔离通过，`.27` A g4域/overlay无残留，519–522缓存inode/大小/mtime复用。A5四native分别为OA `301ff24b-575d-b553-a3e5-e0fb37c5e068`、WEB `23b507b0-cac0-6c56-b9ca-24221b5eff49`、旧Windows `9e904deb-d865-4c5e-a01b-004495b506ff`、DC `58f0d7d5-28d4-c853-a368-2fe158bb0884`。
+
+迁移前真实`.31`为8 logical CPU、31,066MiB总内存、18,471MiB可用内存，VM盘452.68GiB可用，CPU约2%、swap0、队列/导入/预留0；每套配置8vCPU/14,336MiB/80GiB。主任务明确接受本次轻量测试8核共享16vCPU的2:1配置，不扩PVE、不伪造物理指标、不改maxVms，也不把主站80cpuUnits预算当80vCPU容量。自动容量已开启，EffectiveMaxVms=1000，原maxVms4没有阻塞。部署前同时满足物理额外14GiB加2GiB余量和API已扣安全余量的16,009MiB；部署后MemAvailable8,130,985,984字节（7,754.31MiB）、CPU6.28%、load2.21/1.25/0.70、swap32KiB、IO PSI avg10 some1.10/full0.93、VM盘485,709,975,552字节可用，未触发内存低于2GiB或明显swap压力的正常销毁保护。这是当前轻量验收实证，不保证并发满载或旧Windows长时许可。
+
+为避开`.27`两次复现的guest回读失败并减少主站实验压力，仅通过正常Node PATCH将`.27` `isSchedulable=false`；该机Main/Agent服务仍active，PID337484/264484、NRestarts0。`.30`调度全程保持true，教学`yy-route-b`/`yy-geneve-b`运行且restarts0；`.31`保持true。15:49:38最终两runtime分别5/3 Ready、活动queue/import0、LocalFilePath/Deleting0、迁移150、三节点Online且Fabric/Tunnel healthy、五保留来源Ready/LocalNull、首页/Config/manifest200，PG/Redis/Guacamole/Guacd正常。此调度隔离不是`.27`根因修复，也不是同组跨节点调度实现；恢复`.27`须先独立验证问题消除，再用正常 `/api/v1/nodes/02ec0080-77ef-4030-b075-4bce445ea2f3` PATCH `isSchedulable=true`，不要关闭其服务或改DB绕过。
+
+独立缺口：VM冻结`cpuUnits=2`实际执行为每机2vCPU，而NodeCapacitySnapshot按logicalCPU×10计算容量，四机8cpuUnits与8核80units的语义不同；应独立统一VM预算和执行含义，不在本次冻结发布中修改。`.27`安全失败事件缺asset/exceptiontype仍需独立诊断补丁，旧2008R2许可/自行关机限制仍保留。原A2/A4失败证据、A3通过后关机、B2许可关机和B3恢复证据不覆盖；新恢复成功不替代根因证明。
+
+最新证据：`rollout/evidence/v2-a-move-worker31-ledger.json`、`v2-worker31-move-capacity.json`、`v2-final-after-worker31-move-platform.json`、`v2-final-after-worker31-move-tickets.json`及两套network/HTTP-isolation证明。以下15:27 Failed结果及连接中断内容仅为历史过程。
 
 ## 修补发布与回收最终结果
 
@@ -31,7 +43,7 @@ B generation2在14:54 UTC实查旧2008R2独自shutdown（另3机running），保
 - 在线新备份 unit `yinyu-image-delete-backup-c25752ce3786f39e8253805aa98b9075c2d3ffcb-20261009T1405Z` 已收到 accepted 身份，目录 `/srv/yinyu-data/backups/image-delete-query-c25752ce3786f39e8253805aa98b9075c2d3ffcb-20261009T1405Z-online-pre`。方案是同 exported snapshots 的 dumps/全文/摘要、当前附件前后 metadata与tar、9a配置/发布归档，逐库 schema/head 对照已 fullrestore v3；不重复整个副本恢复，明确 `newSnapshotFullRestoreExecuted=false`。随后 `.27` SSH/API 均真实 connect timeout，unit 完成 proof 未读回；delta SCP 未成功。**没有安装/切换修补版、没有重发 backup launcher、没有 GC**，最新运行版本仍最后实证9a，当前网络中断时的服务实时状态未知。
 - 新 root 工具已审且独立白名单：`launch-deletion-hotfix-online-backup.py`，以及 `stage-deletion-hotfix-candidate.py` / `install-deletion-hotfix-candidate.py` / `switch-deletion-hotfix-main.py`。它们使用独立新 release 与9a rollback，不覆盖任何旧发布；切换前重核 exact16Deleting、live consumers0、保留五源 inode alias保护、备份和全700发布物。网络恢复后先读取既有 unit/proof/partialupload身份，然后续正常 reconcile→实际删除/文件/Registry分别核验→受保护官方 dry-run/GC。不能因为模板已 Deleting 就称退休或字节回收完成。
 
-### 最终现场状态与明确缺口
+### 15:27迁移前现场状态与明确缺口（历史checkpoint）
 
 15:22:16 UTC 对A仅做最后一次授权正常恢复至generation4；票据 `01a12142-03ac-74ad-8322-27aa5844fda0` 于15:24:23以同 `guest_network_control_failed` /category12/retryablefalse失败并正常补偿，未再重reset。15:27:36–15:27:42的真实final：Main c257/4fca、front9a/afAgent与原PID264484、3节点Online/sched/Fabric/Tunnel3、5来源Ready/LocalNull、local/deleting/queue/import0、migration150、首页/Config/manifest200；A4Failed、实际域0，B3Ready且4域全部Running/4唯一native，PG/Redis/Guacamole/Guacd以及`.30`教学两容器healthy/running/restarts0。没有将此前两套网/HTTP/隔离通过的时间点冒充当前8域同时Running，最终两套同时Ready目标未完成。
 
