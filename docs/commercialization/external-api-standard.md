@@ -202,8 +202,8 @@ Docker archive 上传流程：
 2. 边读取边计算 SHA-256，写入受控 staging 路径；
 3. 校验 `Content-Digest`、扩展名、大小和归档结构；
 4. 创建持久化 operation 并返回 202；
-5. worker 导入 Registry、创建 ImageTemplate、触发预分发；
-6. operation 记录 `image-importing`、`image-ready`、`image-distributing`、`image-distributed`；
+5. worker 导入 Registry 并创建 ImageTemplate，不自动向全部 Worker 复制镜像；
+6. operation 记录 `image-importing`、`image-ready`；镜像来源就绪和节点缓存状态分别表达，实际部署按既有队列选择的节点准备缓存；
 7. 成功后返回 resource location，失败后删除 staging 文件并保留脱敏错误。
 
 `docker-references` 首版只接受平台内部 Registry `10.24.0.28:5000` 中的引用或无需凭据的公开引用，不接受 `registryAuth`。私有第三方 Registry 凭据需要独立 secret store 和轮换机制，不复用 `ImageTemplate.RegistryAuth` 明文列。
@@ -222,7 +222,7 @@ POST   /api/open/v1/games/{gameId}/challenges/batch-delete
 - 导入和删除均返回持久化 operation；服务重启后恢复，不使用裸 `Task.Run`。
 - 批量导入限制 1-100 题，先完成整批语义校验，再在单个数据库事务中创建题目、Flag、附件关系和已启用题目的实例事实。
 - `externalId` 只用于调用方关联批次结果，不作为平台题目主键；operation `result` 返回 `externalId -> challengeId`。
-- 数据库提交后触发比赛镜像预分发；分发失败重试时不重复创建题目。
+- 数据库提交后保留题目与镜像绑定；实际启动按既有队列选择的节点准备镜像，不自动触发全节点预分发。管理员显式预热仍是独立操作。
 - 删除先停止运行实例和测试环境，再删除题目；不存在的题目作为幂等成功记录在 `result.missing`。
 - 完整字段、枚举、curl 示例和轮询流程见 `docs/commercialization/open-api-v1-guide.md`。
 
