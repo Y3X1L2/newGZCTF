@@ -1,5 +1,25 @@
 # YINYU 当前开发状态
 
+## 第二批与删除查询小补丁已发布，历史源与 Registry 回收完成（2026-10-09）
+
+- 第二批源码 `9a04916e` 已部署；随后 Main-only 修补源码 `c25752ce`（main `334cca0e` 同树）已在 `.27` 新独立 release 原子切换：Main DLL `4fca4909…`、前端 `9a04916e`；三节点已通过正式 sync，安装文件、实际进程与心跳均为 Agent `af2567d0…`。主站 PID 337484、本机 Agent 同一 PID 264484 的实际身份/首页、Config、manifest 200 已核，原配置、共享附件、旧 release/回滚、PVE 源机与教学容器保留。
+- 新鲜 v3 两库使用实际 exported snapshot 绑定 schema、迁移、计数和 dump；全文读取、完整隔离恢复及快照台账一致通过，新验证副本已停止。Main 一致捕获仅暂停 **17.77 秒**，Agent/教学容器未停止。原备份最终失败源于恢复后错误比较 live 行数，原 dump、clone 和失败证据保留，没有伪造恢复证明。
+- 历史 runtime 103 已正常 Destroyed；34 条旧 VM 的原 DELETE/队列实际成功 32 条，另两条保留 Error，无对应域/实例盘/XML/Agent 标记。ID 1 真实 backing 使用者已清空，正常 source-migration `01a12099-60b9-7ba8-a0c3-2e4d5e2465ed` 成功：固定 Registry 内容 `81e45879…` / 6040518656 字节，旧源/隔离文件消失，5 题/4 练习、原 Opaque/DHCP/RDP 能力与 numeric cache 保持。
+- 当前两套均保留在 `.31`：A generation **5**、B generation **3** Ready，15:48:35 UTC 实读八域全部 Running；A 正常 reset 票据 `01a12158-7854-7485-9ef3-c59057baef12` 于15:46:48–15:48:11成功，B 未reset且四native UUID保持。两套四机/五网卡QGA网络回读、HTTP200、跨runtime隔离通过，A原 `.27` g4域/overlay无残留，519–522缓存复用。轻量验收明确接受真实8核共享16vCPU，合计28,672MiB配置内存；验收后实际MemAvailable7,754MiB、CPU6.28%、swap仅32KiB、VM盘可用485,709,975,552字节，无明显资源压力。`.27` 仅停止新调度以避开已复现来宾回读失败，Main/Agent仍active且PID保持；`.30` Docker调度和教学容器全程保持、`.31`可调度，15:49:38最终queue/import0、三节点Online/Fabric/Tunnel healthy、首页/Config/manifest200。未改maxVms、物理资源或源码，未执行SQL写入。
+- A此前 `.27` g2/g4以 `guest-network-verify/guest_network_control_failed` 失败，g3曾完整验收后旧2008R2自行shutdown；本次移到稳定Worker通过不代表 `.27` 根因已修复，也不是同组跨节点功能。正常reset按冻结池重新分配CIDR/IP；运行ID/网络key保持，旧Windows许可/自行关机限制未改，不能保证长时持续运行。现有安全事件缺asset/exceptiontype的诊断粒度仍需独立补丁；另记录VM执行CPU语义缺口：冻结四机8cpuUnits实际8vCPU，而节点容量按8核×10报80units，自动容量开启时maxVms4也不是硬限。本次容量判断只使用真实CPU/内存/磁盘，不使用该80units当可承载80vCPU依据。`.27`恢复调度须先验证独立修补或节点问题已消除，再经正常Node PATCH设isSchedulable=true。
+- 57 旧 release 已正常归档且 canonical hash 保持；45 个草稿经正常 revision PUT 清除退役镜像引用。指定 16 模板原 DELETE 进入 Deleting 后遭遇共同 EF 查询翻译错误；Main-only 修补切换后由原后台 reconcile 全部正常删除，原 local 源、两 Worker 精确 numeric/hash cache/.part 均无残留，保留五缓存身份未变（额外官方 Agent 删除调用为0）。官方 Registry dry-run/execute 精确回收26无引用 blobs，allocated **76028284928 字节（70.81 GiB）**，1453跨仓库共享blob和五来源前后完整摘要/长度/inode保持；服务/原配置恢复、无缺失live引用、未rawrm/未delete-untagged/未处理upload遗留。PR #19 已正常合并为 `334cca0e`，源码 `c25752ce` 与其同树，仅将查询排序移到 entity 投影之前，真实 PostgreSQL 3/3、定向单元 32/32、Release/Quality 通过，无迁移、前端/Agent 源码变化。
+- Main 修补制品已核完整 700 文件与真实 Main Agent 摘要探针：Main `4fca4909…`；4 个实际发布差异，前端/完整 Agent/guest-supervisor 逐字节复用 9a。首次在线备份因附件metadata变化失败，partial保留；恢复连接后唯一新 capture-v2 身份短停Main **17.779 秒**捕获快照/附件并恢复，随后两库完整dump解码/SHA/schema/head与已实恢复v3一致，明确没有再次fullrestore。5.2 MB/4file delta服务器摘要及全部700文件核验通过；Main原子切换窗口 **13.103 秒**，9a回滚目录/原备份、配置/附件、Agent PID及PVE/教学保持。
+- 用户要求优先收尾后，普通 Windows 冷缓存创建、完整桌面登录及其销毁附加验收暂停，均为 **NOT_RUN**。现有 Accepted 身份和 RDP 能力已只读确认；两个 KVM 节点的 ID 1 存量 Ready/Game23 缓存引用仍保留，没有绕过引用删 cache/改报名或比赛时间。当前六个管理员/课程 VM 导入入口仍可能写 `LocalFilePath`，历史清理不代表以后不会再生成本地主副本；统一持久导入入口收口是下一阶段独立工作。
+
+以下保留第二批最初连接中断 checkpoint 的历史过程，最新已证事实以上述与[第二批交接](handoffs/2026-10-09-image-lifecycle-second-rollout.md)为准。
+
+- PR #18 正常合并为 `main 32356555`，与源码 `9a04916e` 完整 Git tree 一致。本地串行单元 **1471/1471**、集成 **325/325**、0 skip；PR Quality 的后端、EF 模型、查询计划、OpenAPI 和前端 **118 文件 / 399 测试**全部通过。无新增数据库迁移。
+- 冻结源码已生成最终前端 `9a04916e` 的 223 文件制品，完整 Main/Agent publish 和真实 Main 内部 Agent 摘要探针通过；独立归档 **700/700** 核验通过。第二批 Main DLL `18e617ab…`、Agent `af2567d0…` 已准备，尚未执行 Main 软链接切换。已在 `.27` 建立完整 SHA 专属 staging；relay/backup 启动请求遇到连接超时或 SSH 错误，没有确认收到后台启动身份。恢复连接后须先读取这两个专属 unit、制品和备份证明，不能直接重发。
+- 已通过管理员正常队列接口取消精确 31 条本轮历史 Pending Destroy，票据/VM/代次逐项保存，实际活动队列归零；没有 SQL 写入，也没有把这些 VM 声称为销毁完成。历史 runtime 103、旧差异盘、ID 1 来源迁移、16 模板退役及 Registry GC 均仍待第二批发布后执行。
+- 两份保留环境的同款 Windows Server 2008 R2 在启动约两小时后由 `wlms.exe` 自行关机，许可证状态 Notification、宽限期 0；平台试运行未设置短 TTL。通过正常单资产 start 启动两 Windows，八个 native UUID 与 generation 1 保持，独立四机/五网卡网络回读通过。最后实读八资产 Running，但两个 runtime/shard 汇总仍 Failed；现行单资产操作不自动恢复聚合，不能称当前 runtime Ready 或长时稳定。后续最终版本验收通过各一次正常 reset 恢复聚合，保留许可限制。
+- Registry 只读核实真实 systemd backend、909 repositories / 7084 blobs、1443 跨仓库共享 blob，当前全部有 revision 引用，无缺失引用；1 与 519–522 五个 payload 已完整 SHA/长度核验。约 2.75 GB upload 遗留与 blob GC 分开处理，尚未执行物理回收。16 旧 local 来源与 ID 1 源路径/inode 不共享，删除前仍须重读。
+- 网络中断后的服务和后台任务状态尚未重验；线上版本最后实读仍为第一批 `99e923cd` / Agent `ef1ce307…`。具体制品、限制、未知接受状态和恢复顺序见[第二批发布 checkpoint](handoffs/2026-10-09-image-lifecycle-second-rollout.md)。
+
 ## 镜像按需分发已部署，双四机场景生命周期验收（2026-10-09）
 
 - PR #17 正常合并 `main 240ea370`；已审查源码 `99e923cd` 的完整候选经 GitHub 中转、服务器归档摘要和 **700/700** 文件核验后，在 `.27` 新 release 原子切换。Main DLL `5e632d02…`、前端来源 `99e923cd`；三个节点均正式同步 Agent `ef1ce307…`，心跳、实际进程与 Fabric 健康通过。新完整备份两库实际隔离恢复及迁移兼容性通过；旧发布、回滚入口、附件、PVE 源机和快照保留。
