@@ -271,7 +271,7 @@ public sealed partial class TeamLabExecutionPlanExecutor(
         TeamLabExecutionPlanV2 plan,
         CancellationToken cancellationToken)
     {
-        if (!plan.IsValid(out var validationError))
+        if (!plan.IsValidForCleanup(out var validationError))
             return CleanupFailure(plan, "validation", validationError!);
 
         using var executionLock = await executionLocks.AcquireAsync(

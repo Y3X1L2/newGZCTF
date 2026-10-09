@@ -19,7 +19,12 @@ public sealed record TeamLabExecutionPlanV2(
     IReadOnlyList<TeamLabObservationIntentV2> ObservationPoints,
     TeamLabNetworkControlIntentV2? NetworkControl = null)
 {
-    public bool IsValid(out string? error)
+    public bool IsValid(out string? error) => Validate(out error, requireUniqueDnsHostnames: true);
+
+    /// <summary>Retains cleanup identity and resource safety checks for already-applied plans.</summary>
+    public bool IsValidForCleanup(out string? error) => Validate(out error, requireUniqueDnsHostnames: false);
+
+    private bool Validate(out string? error, bool requireUniqueDnsHostnames)
     {
         if (RuntimeId <= 0 || RuntimePublicId == Guid.Empty || Generation <= 0)
         {
@@ -56,7 +61,7 @@ public sealed record TeamLabExecutionPlanV2(
             return false;
         }
 
-        if (Networks.Any(network => network.DnsRecords is { } records && records
+        if (requireUniqueDnsHostnames && Networks.Any(network => network.DnsRecords is { } records && records
                 .GroupBy(record => record.Hostname, StringComparer.OrdinalIgnoreCase)
                 .Any(group => group.Count() != 1)))
         {
