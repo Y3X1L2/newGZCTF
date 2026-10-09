@@ -5,13 +5,16 @@ using GZCTF.Models.Internal;
 using GZCTF.Modules.Audit.Application;
 using GZCTF.Modules.Audit.Infrastructure;
 using GZCTF.Modules.Runtime.Application;
+using GZCTF.Modules.Runtime.Contracts;
 using GZCTF.Modules.Runtime.Domain;
 using GZCTF.Modules.Runtime.Infrastructure;
 using GZCTF.Modules.TeamLab.Application;
 using GZCTF.Services.Fleet;
+using GZCTF.Repositories;
 using GZCTF.Utils;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using Testcontainers.PostgreSql;
 using Xunit;
@@ -71,5 +74,86 @@ public sealed class LegacyVmControlOwnerPostgresTests : IAsyncLifetime
         Assert.Equal(blocked ? null : historicalRemote ? remote.Id : local.Id, stored.TargetNodeId);
         Assert.Equal(blocked ? DeploymentQueueTicketStatus.Pending : DeploymentQueueTicketStatus.Scheduled, stored.Status);
         Assert.Empty(await context.FleetCapacityReservations.ToArrayAsync());
+    }
+
+    [Theory]
+    [InlineData(true, true, VmInstanceStatus.Running, false, false, 0, true)]
+    [InlineData(true, true, VmInstanceStatus.Error, false, true, 0, true)]
+    [InlineData(true, true, VmInstanceStatus.Error, true, false, 2, true)]
+    [InlineData(false, true, VmInstanceStatus.Error, true, false, 2, false)]
+    [InlineData(false, false, VmInstanceStatus.Error, true, false, 2, false)]
+    [InlineData(false, true, VmInstanceStatus.Error, false, false, 0, false)]
+    [InlineData(false, true, VmInstanceStatus.Error, true, false, 1, false)]
+    [InlineData(false, true, VmInstanceStatus.Destroyed, false, true, 2, false)]
+    public async Task SameHostOtherWorkerRuntimeEvidenceFencesLegacyDestroyInPostgres(
+        bool localTarget, bool sameHost, VmInstanceStatus otherStatus, bool missingOwner, bool nativeId,
+        int dispatchedGeneration, bool blocked)
+    {
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(postgres.GetConnectionString()).Options;
+        await using var context = new AppDbContext(options);
+        await context.Database.EnsureCreatedAsync();
+        var user = new UserInfo { UserName = "host-" + Guid.NewGuid().ToString("N")[..8], Role = Role.Admin };
+        var game = new Game { Title = "same host fixture" };
+        var challenge = new GameChallenge { Title = "same host fixture", Game = game };
+        var owner = new WorkerNode { Name = "legacy-owner", HostAddress = "192.0.2.27", IsLocal = localTarget,
+            Status = NodeStatus.Online, Capabilities = NodeCapability.Kvm };
+        var managed = new WorkerNode { Name = "managed-worker", HostAddress = sameHost ? "::ffff:192.0.2.27" : "192.0.2.31",
+            Status = NodeStatus.Online, Capabilities = NodeCapability.Kvm };
+        context.AddRange(user, challenge, owner, managed);
+        await context.SaveChangesAsync();
+        var legacy = new VmInstance { UserId = user.Id, ChallengeId = challenge.Id, ProviderName = "KVM",
+            VmName = $"vm_c{challenge.Id}_u{user.Id}", RuntimeGeneration = 1, Status = VmInstanceStatus.Error };
+        var other = new VmInstance { UserId = user.Id, ChallengeId = challenge.Id, ProviderName = "KVM",
+            VmName = legacy.VmName, NodeId = missingOwner ? null : managed.Id, RuntimeGeneration = 2,
+            Status = otherStatus, RuntimeNativeId = nativeId ? Guid.NewGuid().ToString() : null };
+        context.AddRange(legacy, other);
+        if (dispatchedGeneration > 0)
+        {
+            var history = DeploymentQueueTicket.Create(DeploymentQueueRequest.Vm(game.Id, user.Id, challenge.Id, other.Id) with
+            { Generation = dispatchedGeneration, TargetNodeId = managed.Id });
+            history.Status = DeploymentQueueTicketStatus.Failed;
+            context.Add(history);
+        }
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+        var events = new EfOperationalEventWriter(context, NullLogger<EfOperationalEventWriter>.Instance);
+        var agent = new RecordingDestroyAgent();
+        var accessor = new DeploymentExecutionContextAccessor();
+        var fleet = new FleetVmService(agent, new NodeRepository(context, events), null!, null!, null!, null!,
+            Options.Create(new KvmSettings()), context, null!, accessor, NullLogger<FleetVmService>.Instance);
+        var execution = new DeploymentExecutionService(context, fleet, accessor, NullLogger<DeploymentExecutionService>.Instance);
+        var ticket = DeploymentQueueTicket.Create(DeploymentQueueRequest.Vm(game.Id, user.Id, challenge.Id, legacy.Id) with
+        { Operation = RuntimeOperationKind.Destroy, Generation = 1, TargetNodeId = owner.Id });
+
+        if (blocked)
+        {
+            var error = await Assert.ThrowsAsync<InvalidOperationException>(() => execution.ExecuteAsync(ticket, default));
+            Assert.Contains("Another VM generation", error.Message, StringComparison.Ordinal);
+        }
+        else
+        {
+            Assert.True((await execution.ExecuteAsync(ticket, default)).Success);
+            // RuntimeExecutionService persists the tracked VM with the ticket's terminal commit.
+            await context.SaveChangesAsync();
+        }
+
+        await using var verify = new AppDbContext(options);
+        var stored = await verify.VmInstances.SingleAsync(item => item.Id == legacy.Id);
+        Assert.Equal(blocked ? VmInstanceStatus.Error : VmInstanceStatus.Destroyed, stored.Status);
+        Assert.Equal(blocked ? null : (Guid?)owner.Id, stored.NodeId);
+        Assert.Equal(blocked, stored.DestroyedAt is null);
+        var retained = await verify.VmInstances.SingleAsync(item => item.Id == other.Id);
+        Assert.Equal(otherStatus, retained.Status);
+        Assert.Equal(other.RuntimeNativeId, retained.RuntimeNativeId);
+        Assert.Equal(blocked ? null : (Guid?)owner.Id, agent.NodeId);
+        Assert.Empty(await verify.FleetCapacityReservations.ToArrayAsync());
+        Assert.Null(accessor.Current);
+    }
+
+    sealed class RecordingDestroyAgent() : AgentClient(null!, null!, new ConfigurationBuilder().Build(), NullLogger<AgentClient>.Instance)
+    {
+        public Guid? NodeId;
+        public override Task DestroyVmAsync(Guid nodeId, string name, int? generation, string? nativeId, CancellationToken token)
+        { NodeId = nodeId; return Task.CompletedTask; }
     }
 }
