@@ -835,9 +835,23 @@ public sealed class TeamLabManagedVmNetworkTests
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(15));
         var output = process.StandardOutput.ReadToEndAsync(deadline.Token);
         var error = process.StandardError.ReadToEndAsync(deadline.Token);
-        await process.StandardInput.WriteAsync(input.AsMemory(), deadline.Token);
-        process.StandardInput.Close();
-        try { await process.WaitForExitAsync(deadline.Token); }
+        try
+        {
+            try
+            {
+                await process.StandardInput.WriteAsync(input.AsMemory(), deadline.Token);
+                process.StandardInput.Close();
+            }
+            catch (IOException) when (clearEnvironment)
+            {
+                // Only this deliberate empty-environment negative case may exit before stdin.
+                // Verify its real nonzero exit before collecting the startup error; inherited
+                // environment failures and real timeouts still propagate to the test runner.
+                await process.WaitForExitAsync(deadline.Token);
+                if (process.ExitCode == 0) throw;
+            }
+            await process.WaitForExitAsync(deadline.Token);
+        }
         catch (OperationCanceledException)
         {
             if (!process.HasExited) process.Kill(entireProcessTree: true);
