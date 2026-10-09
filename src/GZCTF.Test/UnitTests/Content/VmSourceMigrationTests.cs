@@ -95,6 +95,20 @@ public sealed class VmSourceMigrationTests : IDisposable
     }
 
     [Fact]
+    public async Task SourceDirectlyInConfiguredRoot_MissingPathCanResumeQuarantineThenRepeatCleanup()
+    {
+        await File.WriteAllBytesAsync(SourcePath, _payload);
+        var files = Files();
+        var cleanupId = Guid.NewGuid();
+        var source = Capture(files) with { CleanupId = cleanupId };
+        File.Move(SourcePath, Path.Combine(_root, $".source-migration-{cleanupId:N}.pending-delete"));
+        Assert.False(File.Exists(SourcePath));
+        await Files().DeleteAsync(Guid.NewGuid(), source, Digest, 100, default);
+        await Files().DeleteAsync(Guid.NewGuid(), source, Digest, 100, default);
+        Assert.Empty(Directory.EnumerateFileSystemEntries(_root));
+    }
+
+    [Fact]
     public async Task NonAdministrator_CannotSubmitOrReadMigrationState()
     {
         var store = new Mock<IImageSourceMigrationStore>(MockBehavior.Strict);
