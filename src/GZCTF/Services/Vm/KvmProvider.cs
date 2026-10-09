@@ -130,13 +130,17 @@ public class KvmProvider : IVirtualMachineProvider
             var disk = Path.Combine(root, vmName + ".qcow2");
             var xml = Path.Combine(root, vmName + ".xml");
             var quarantine = Path.Combine(root, ".legacy-vm-" + vmName + ".pending-delete");
+            RequireLegacyArtifacts(root, vmName);
             foreach (var path in new[] { disk, xml, quarantine }) RequireRegular(path);
             var captured = File.Exists(xml) ? XDocument.Load(xml) : null;
             var xmlIdentity = captured is null ? null : await FileIdentityAsync(xml, token);
             if (captured is not null)
             {
+                RequireLegacyDomain(captured);
                 if (captured.Root?.Element("name")?.Value != vmName)
                     throw new IOException("Captured VM XML does not own the expected instance disk.");
+                if (expectedNativeId is not null && captured.Root?.Element("uuid")?.Value != expectedNativeId)
+                    throw new IOException("Captured VM XML native identity differs from the requested instance.");
                 RequireOwnedDisk(captured, disk);
             }
             var domains = await InventoryAsync(token);
@@ -149,9 +153,11 @@ public class KvmProvider : IVirtualMachineProvider
                     throw new IOException("VM native identity cannot be proven; the domain and files are retained.");
                 foreach (var definition in targets)
                 {
+                    RequireLegacyDomain(definition);
                     if (definition.Root?.Element("uuid")?.Value != uuid) throw new IOException("VM native identity is ambiguous.");
                     RequireOwnedDisk(definition, disk);
                 }
+                RequireLegacyArtifacts(root, vmName);
                 var state = await CheckedAsync("virsh", $"-c {_libvirtUri} domstate {uuid}", token);
                 if (state.Trim() is "running" or "paused")
                     await CheckedAsync("virsh", $"-c {_libvirtUri} destroy {uuid}", token);
@@ -178,6 +184,7 @@ public class KvmProvider : IVirtualMachineProvider
                     RequireRegular(quarantine);
                     if (identity != await FileIdentityAsync(quarantine, token))
                         throw new IOException("Instance disk identity changed during cleanup.");
+                    RequireLegacyArtifacts(root, vmName);
                     File.Delete(quarantine);
                 }
                 catch
@@ -192,6 +199,7 @@ public class KvmProvider : IVirtualMachineProvider
                 if (XDocument.Load(xml).ToString() != captured!.ToString() ||
                     xmlIdentity != await FileIdentityAsync(xml, token))
                     throw new IOException("VM ownership XML changed during cleanup.");
+                RequireLegacyArtifacts(root, vmName);
                 File.Delete(xml);
             }
             return VmOperationResult.Ok(vmName);
@@ -205,6 +213,31 @@ public class KvmProvider : IVirtualMachineProvider
     {
         if (Directory.Exists(path) || File.Exists(path) && (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0)
             throw new IOException("VM cleanup only accepts its own regular files.");
+    }
+
+    void RequireLegacyArtifacts(string root, string vmName)
+    {
+        // Main's legacy provider and the managed Agent can share the same image directory.
+        // Agent artifacts prove that cleanup must use its generation-aware identity path,
+        // including a failed create that has not yet written the generation sidecar.
+        var markers = new[]
+        {
+            Path.Combine(root, vmName + ".generation"),
+            Path.Combine(root, "cloud-init", vmName),
+            Path.Combine(root, "runtime-injection", vmName),
+            AgentRuntimeDirectory(vmName)
+        };
+        if (markers.Any(path => File.Exists(path) || Directory.Exists(path)))
+            throw new IOException("Agent-owned VM artifacts require the Agent identity-aware cleanup path.");
+    }
+
+    internal virtual string AgentRuntimeDirectory(string vmName) => Path.Combine("/var/lib/gzctf/vm-runtime", vmName);
+
+    static void RequireLegacyDomain(XDocument domain)
+    {
+        if (domain.Descendants("description").Any(item => item.Value.Contains("gzctf-generation=", StringComparison.Ordinal)) ||
+            domain.Descendants("metadata").Any())
+            throw new IOException("Managed VM runtime metadata requires the Agent cleanup path.");
     }
 
     static void RequireOwnedDisk(XDocument domain, string disk)
@@ -236,15 +269,23 @@ public class KvmProvider : IVirtualMachineProvider
 
     async Task RequireUnusedAsync(string vmName, string disk, string quarantine, CancellationToken token)
     {
+        RequireLegacyArtifacts(Path.GetFullPath(_imageStoragePath), vmName);
+        var images = new HashSet<string>(StringComparer.Ordinal);
         foreach (var domain in await InventoryAsync(token))
         {
             if (domain.Root?.Element("name")?.Value == vmName)
                 throw new IOException("VM domain remains present after cleanup.");
             foreach (var source in domain.Descendants("disk").Elements("source").Attributes("file"))
+            {
                 if (await SameFileAsync(source.Value, disk, token) || await SameFileAsync(source.Value, quarantine, token))
                     throw new IOException("Another VM still uses the instance disk.");
+                // Runtime disks may live outside ImageStoragePath and still depend on this overlay.
+                images.Add(Path.GetFullPath(source.Value));
+            }
         }
-        foreach (var image in Directory.EnumerateFiles(Path.GetFullPath(_imageStoragePath), "*.qcow2", SearchOption.AllDirectories))
+        images.UnionWith(Directory.EnumerateFiles(Path.GetFullPath(_imageStoragePath), "*.qcow2", SearchOption.AllDirectories)
+            .Select(Path.GetFullPath));
+        foreach (var image in images)
         {
             if (Path.GetFullPath(image) == disk) continue;
             using var chain = JsonDocument.Parse(await CheckedAsync("qemu-img",
@@ -253,7 +294,12 @@ public class KvmProvider : IVirtualMachineProvider
             foreach (var node in nodes)
                 if (node.TryGetProperty("backing-filename", out var backing) && backing.GetString() is { } path)
                 {
-                    var full = Path.IsPathRooted(path) ? path : Path.Combine(Path.GetDirectoryName(image)!, path);
+                    var nodeFile = node.TryGetProperty("filename", out var filename) && filename.GetString() is { } value
+                        ? Path.IsPathRooted(value) ? value : Path.Combine(Path.GetDirectoryName(image)!, value)
+                        : image;
+                    var full = node.TryGetProperty("full-backing-filename", out var resolved) && resolved.GetString() is { } absolute
+                        ? Path.GetFullPath(absolute)
+                        : Path.IsPathRooted(path) ? path : Path.Combine(Path.GetDirectoryName(nodeFile)!, path);
                     if (await SameFileAsync(full, disk, token) || await SameFileAsync(full, quarantine, token))
                         throw new IOException("Another qcow2 image still backs onto the instance disk.");
                 }

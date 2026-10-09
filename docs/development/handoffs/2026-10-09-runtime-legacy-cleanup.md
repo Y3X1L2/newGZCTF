@@ -22,3 +22,19 @@ Release 定向测试 **47/47**（0 skip、exit 0），覆盖 contract、OVN prov
 最终定向单元 **46/46**、真实 PostgreSQL owner 调度 **3/3**（均 0 skip、exit 0）；Release Main/测试编译与 diff check 通过。覆盖 remote owner 到实际 Agent 调用、本机 legacy、未知/歧义 owner、较新活跃代次、缺域幂等、UUID 冲突、目录外 XML、其他域与 inactive 定义/backing 使用、inode 变更和重入。首次 PostgreSQL fixture 预先缓存 seed 票据导致 SQL claim 后读取旧 tracked entity，改为生产实际 fresh scope 后通过；未为测试修改调度行为。
 
 Linux 的真实 libvirt/stat/backing 回收与磁盘差值尚未执行，不能把 command fixture 和 PostgreSQL 通过当作物理回收已完成。生产由唯一写者通过原 DELETE/queue 重入，确认 domain、实例盘/XML、缓存引用、ID 1 来源迁移和 Registry GC 各阶段；全量组合门禁仍由主会话执行。现场原始证据与退休清单在仓库外，不包含凭据或完整计划正文。
+
+## 审查后的本机清理身份保护
+
+在 `0607433a` 上继续收口防误删边界；没有迁移或 API 形状变化，未操作生产。
+
+- 缺 libvirt 域时，调用方提供的 native UUID 必须与捕获 XML 的 UUID 一致；冲突或 XML 缺少该 UUID 均保留差异盘/XML。匹配的 UUID 和原本无 native UUID 的自有旧孤盘仍能幂等回收。
+- 旧本机清理发现同名 Agent `.generation`、`cloud-init`、`runtime-injection`、`/var/lib/gzctf/vm-runtime` 文件/目录，或 XML 中的代次 description/runtime metadata 时，明确拒绝并要求 Agent 身份清理。删除前重新检查标记；标记在原子改名期间出现时，恢复原盘并保留 XML、基盘和标记。目录检查使用实际 Agent 路径，不新建恢复表或泛化清理目录。
+- 同名活跃 VM 保护按 Worker 的规范化 HostAddress、本机/loopback 身份识别同一主机，避免旧 local 与本机 managed Agent 使用不同 Worker ID 时漏检。仅旧本机 provider 额外保护有本代 Create 派发目标或 native 身份的 Error；早期 Agent 失败后 NodeId 清空仍受本代票据保护。没有派发/native 证据的历史 Error 和 Destroyed 行不互锁，另一主机的证据也不阻止本机清理。
+- 远程 Error 继续交 Agent 的 native/generation fencing；三个同名远程失败代次按 4→3→2 进入正式 Agent RPC 的正例通过，未通过主站查询让它们相互永久阻断。
+- backing 检查覆盖所有现存 active/inactive 域的 file-backed 磁盘，即使磁盘位于 ImageStoragePath 外；与原镜像目录扫描合并去重，不扫描整个宿主。多级链优先使用 full-backing-filename，否则按各链节点 filename 目录解析相对 backing。任何命令/链检查失败保留实例文件。
+
+最终 Release 定向单元 **117/117**（0 skip、exit 0）通过，涵盖 `LegacyKvmCleanupTests`、`RuntimeControlPlaneTests`、`KvmProviderTests` 和 `VmGuestControlTests`。实际临时文件验证 UUID 冲突、合法匹配、有效/空/损坏 sidecar、Agent 目录/metadata、清理中出现标记及域外 active/inactive/多级相对 backing 均保留原字节；既有 owner 恢复、底盘保留和重入正例保持通过。
+
+真实 PostgreSQL/Testcontainers 定向 **11/11**（0 skip、exit 0）通过，包含既有三项 owner 调度和新增八项 Fleet 执行/状态回读，证明相关 EF 同主机/本代派发查询能翻译并按实际数据库事实拒绝或放行。最终报告为 `legacy-guard-unit-passed.trx`、`legacy-guard-postgres-accepted.trx`。首次因 Docker 未启动/default pipe 不可达而在 fixture 初始化失败；恢复本地 Linux engine 并仅在测试进程指定 endpoint 后，修正夹具用户名长度及与实际 RuntimeExecutionService 一致的终态 SaveChanges 边界，再通过完整定向回读；未为测试改变生产执行或查询。
+
+Main、Agent、contracts 和两测试工程 Release 编译、`git diff --check` 通过，既有依赖/分析器告警保留。本子任务未运行 solution/后端/前端全量门禁、未验收真实 Linux libvirt/stat/qemu-img 回收、未合并 main 或部署；最终组合门禁、生产回收和状态文档由主会话整合。TRX/日志仅留仓库外。

@@ -4,6 +4,7 @@ using GZCTF.Repositories.Interface;
 using GZCTF.Services;
 using GZCTF.Services.Vm;
 using GZCTF.Modules.Runtime.Contracts;
+using GZCTF.Modules.Runtime.Domain;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
@@ -227,11 +228,25 @@ public class FleetVmService
         var node = await _nodeRepo.GetNodeByIdAsync(ownerId, token)
             ?? throw new InvalidOperationException("VM control owner no longer exists.");
         var isLocal = node.IsLocal;
+        var registrations = await _context.WorkerNodes.AsNoTracking()
+            .Select(item => new { item.Id, item.HostAddress, item.IsLocal }).ToArrayAsync(token);
+        var sameHostOwnerIds = registrations.Where(item => item.Id == ownerId ||
+                isLocal && item.IsLocal || SameHostAddress(node.HostAddress, item.HostAddress) ||
+                isLocal && IsLoopbackHost(item.HostAddress))
+            .Select(item => item.Id).ToArray();
+        // The legacy local provider cannot fence managed Agent artifacts by generation. Failed
+        // creates may have cleared NodeId before writing a sidecar, so retain same-host dispatch
+        // evidence here. Remote failed generations use the Agent's identity-aware cleanup instead.
         if (await _context.VmInstances.AsNoTracking().AnyAsync(item => item.Id != vmInstance.Id &&
-            item.VmName == vmInstance.VmName && (item.NodeId == ownerId || isLocal && item.NodeId == null) &&
-            (item.Status == VmInstanceStatus.Creating || item.Status == VmInstanceStatus.Running ||
-             item.Status == VmInstanceStatus.Stopped), token))
-            throw new InvalidOperationException("Another active VM generation still owns this resource name.");
+            item.VmName == vmInstance.VmName &&
+            item.Status != VmInstanceStatus.Destroyed &&
+            (((item.NodeId != null && sameHostOwnerIds.Contains(item.NodeId.Value) || isLocal && item.NodeId == null) &&
+                (item.Status == VmInstanceStatus.Creating || item.Status == VmInstanceStatus.Running || item.Status == VmInstanceStatus.Stopped)) ||
+             isLocal && ((item.NodeId != null && sameHostOwnerIds.Contains(item.NodeId.Value) && item.RuntimeNativeId != null && item.RuntimeNativeId != "") ||
+                 _context.DeploymentQueueTickets.Any(ticket => ticket.VmInstanceId == item.Id &&
+                     ticket.Generation == item.RuntimeGeneration && ticket.Operation == RuntimeOperationKind.Create &&
+                     ticket.TargetNodeId != null && sameHostOwnerIds.Contains(ticket.TargetNodeId.Value)))), token))
+            throw new InvalidOperationException("Another VM generation still owns this resource name.");
 
         var hadCapacityReservation = vmInstance.NodeId.HasValue
             && vmInstance.Status is VmInstanceStatus.Creating or VmInstanceStatus.Running;
@@ -298,4 +313,16 @@ public class FleetVmService
         _logger.SystemLog($"Destroyed VM {vmInstance.VmName}.", TaskStatus.Success, LogLevel.Information);
     }
 
+    internal static bool SameHostAddress(string left, string right)
+    {
+        if (string.IsNullOrWhiteSpace(left) || string.IsNullOrWhiteSpace(right)) return false;
+        left = left.Trim().TrimEnd('.');
+        right = right.Trim().TrimEnd('.');
+        if (System.Net.IPAddress.TryParse(left, out var a) && System.Net.IPAddress.TryParse(right, out var b))
+            return a.MapToIPv6().Equals(b.MapToIPv6()) || System.Net.IPAddress.IsLoopback(a) && System.Net.IPAddress.IsLoopback(b);
+        return string.Equals(left, right, StringComparison.OrdinalIgnoreCase) || IsLoopbackHost(left) && IsLoopbackHost(right);
+    }
+
+    static bool IsLoopbackHost(string host) => string.Equals(host.Trim().TrimEnd('.'), "localhost", StringComparison.OrdinalIgnoreCase) ||
+        System.Net.IPAddress.TryParse(host.Trim(), out var address) && System.Net.IPAddress.IsLoopback(address);
 }

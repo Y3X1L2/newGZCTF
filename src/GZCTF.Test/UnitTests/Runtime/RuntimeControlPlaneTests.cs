@@ -337,12 +337,126 @@ public sealed class RuntimeControlPlaneTests
         Assert.Null(accessor.Current);
     }
 
+    [Theory]
+    [InlineData(true, "192.0.2.27", VmInstanceStatus.Running, "none", true)]
+    [InlineData(true, "::ffff:192.0.2.27", VmInstanceStatus.Stopped, "none", true)]
+    [InlineData(true, "localhost", VmInstanceStatus.Creating, "none", true)]
+    [InlineData(false, "192.0.2.27", VmInstanceStatus.Running, "none", true)]
+    [InlineData(false, "192.0.2.31", VmInstanceStatus.Running, "none", false)]
+    [InlineData(false, "192.0.2.27", VmInstanceStatus.Error, "dispatch", false)]
+    [InlineData(false, "192.0.2.27", VmInstanceStatus.Error, "orphan-dispatch", false)]
+    [InlineData(true, "192.0.2.27", VmInstanceStatus.Error, "native", true)]
+    [InlineData(true, "192.0.2.27", VmInstanceStatus.Error, "dispatch", true)]
+    [InlineData(true, "192.0.2.27", VmInstanceStatus.Error, "orphan-dispatch", true)]
+    [InlineData(true, "192.0.2.31", VmInstanceStatus.Error, "orphan-dispatch", false)]
+    [InlineData(true, "192.0.2.27", VmInstanceStatus.Error, "older-dispatch", false)]
+    [InlineData(true, "192.0.2.27", VmInstanceStatus.Error, "none", false)]
+    [InlineData(true, "192.0.2.27", VmInstanceStatus.Error, "orphan-none", false)]
+    [InlineData(true, "192.0.2.27", VmInstanceStatus.Destroyed, "dispatch", false)]
+    public async Task OtherWorkerOnSamePhysicalHostProtectsOnlyCurrentRuntimeEvidence(
+        bool localTarget, string otherHost, VmInstanceStatus otherStatus, string evidence, bool blocked)
+    {
+        await using var context = CreateContext();
+        var node = SeedVmNode(context, "legacy-owner", localTarget, [AgentFeatureIds.Kvm]);
+        node.HostAddress = "192.0.2.27";
+        var managed = SeedVmNode(context, "another-worker", false, [AgentFeatureIds.Kvm]);
+        managed.HostAddress = otherHost;
+        var user = Guid.NewGuid();
+        var vm = new VmInstance { UserId = user, ChallengeId = 40, VmName = $"vm_c40_u{user}",
+            ProviderName = "KVM", RuntimeGeneration = 1, Status = VmInstanceStatus.Error };
+        var other = new VmInstance { UserId = user, ChallengeId = 40, VmName = vm.VmName,
+            NodeId = evidence.StartsWith("orphan", StringComparison.Ordinal) ? null : managed.Id,
+            RuntimeGeneration = 2, Status = otherStatus,
+            RuntimeNativeId = evidence == "native" ? Guid.NewGuid().ToString() : null };
+        context.AddRange(vm, other);
+        if (evidence.EndsWith("dispatch", StringComparison.Ordinal))
+        {
+            var history = DeploymentQueueTicket.Create(DeploymentQueueRequest.Vm(1, user, 40, other.Id) with
+            { Generation = evidence == "older-dispatch" ? 1 : 2, TargetNodeId = managed.Id });
+            history.Status = DeploymentQueueTicketStatus.Failed;
+            context.Add(history);
+        }
+        await context.SaveChangesAsync();
+        var nodes = new Mock<INodeRepository>();
+        nodes.Setup(item => item.GetNodeByIdAsync(node.Id, It.IsAny<CancellationToken>())).ReturnsAsync(node);
+        var provider = new Mock<IVirtualMachineProvider>(MockBehavior.Strict);
+        provider.Setup(item => item.DestroyAsync(vm.VmName, null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(VmOperationResult.Ok(vm.VmName));
+        var agent = new LegacyDestroyAgent();
+        var accessor = new DeploymentExecutionContextAccessor();
+        var fleet = new FleetVmService(agent, nodes.Object, provider.Object, null!, null!, null!, Options.Create(new KvmSettings()),
+            context, null!, accessor, NullLogger<FleetVmService>.Instance);
+        var execution = new DeploymentExecutionService(context, fleet, accessor, NullLogger<DeploymentExecutionService>.Instance);
+        var ticket = DeploymentQueueTicket.Create(DeploymentQueueRequest.Vm(1, user, 40, vm.Id) with
+        { Operation = RuntimeOperationKind.Destroy, Generation = 1, TargetNodeId = node.Id });
+
+        if (blocked)
+        {
+            var error = await Assert.ThrowsAsync<InvalidOperationException>(() => execution.ExecuteAsync(ticket, default));
+            Assert.Contains("Another VM generation", error.Message, StringComparison.Ordinal);
+            Assert.Equal(VmInstanceStatus.Error, vm.Status); Assert.Null(vm.NodeId); Assert.Null(vm.DestroyedAt);
+        }
+        else
+        {
+            Assert.True((await execution.ExecuteAsync(ticket, default)).Success);
+            Assert.Equal(VmInstanceStatus.Destroyed, vm.Status);
+        }
+        provider.Verify(item => item.DestroyAsync(vm.VmName, null, It.IsAny<CancellationToken>()),
+            !blocked && localTarget ? Times.Once() : Times.Never());
+        Assert.Equal(!blocked && !localTarget ? node.Id : (Guid?)null, agent.NodeId);
+        Assert.Equal(otherStatus, other.Status);
+        Assert.Null(accessor.Current);
+    }
+
     sealed class LegacyDestroyAgent() : AgentClient(null!, null!, new ConfigurationBuilder().Build(), NullLogger<AgentClient>.Instance)
     {
         public Guid? NodeId;
         public int? Generation;
+        public readonly System.Collections.Generic.List<int?> Generations = [];
         public override Task DestroyVmAsync(Guid nodeId, string name, int? generation, string? nativeId, CancellationToken token)
-        { NodeId = nodeId; Generation = generation; return Task.CompletedTask; }
+        { NodeId = nodeId; Generation = generation; Generations.Add(generation); return Task.CompletedTask; }
+    }
+
+    [Fact]
+    public async Task ThreeFailedRemoteGenerationsWithHistoricalOwnersReachAgentIdentityCleanupWithoutInterlocking()
+    {
+        await using var context = CreateContext();
+        var node = SeedVmNode(context, "remote", false, [AgentFeatureIds.Kvm]);
+        var user = Guid.NewGuid();
+        var vms = Enumerable.Range(2, 3).Select(generation => new VmInstance
+        {
+            UserId = user, ChallengeId = 40, VmName = $"vm_c40_u{user}", ProviderName = "KVM",
+            RuntimeGeneration = generation, Status = VmInstanceStatus.Error
+        }).ToArray();
+        foreach (var vm in vms)
+        {
+            context.Add(vm);
+            var history = DeploymentQueueTicket.Create(DeploymentQueueRequest.Vm(1, user, 40, vm.Id) with
+            { Generation = vm.RuntimeGeneration, TargetNodeId = node.Id });
+            history.Status = DeploymentQueueTicketStatus.Failed;
+            context.Add(history);
+        }
+        await context.SaveChangesAsync();
+        var nodes = new Mock<INodeRepository>();
+        nodes.Setup(item => item.GetNodeByIdAsync(node.Id, It.IsAny<CancellationToken>())).ReturnsAsync(node);
+        var provider = new Mock<IVirtualMachineProvider>(MockBehavior.Strict);
+        var agent = new LegacyDestroyAgent();
+        var accessor = new DeploymentExecutionContextAccessor();
+        var fleet = new FleetVmService(agent, nodes.Object, provider.Object, null!, null!, null!, Options.Create(new KvmSettings()),
+            context, null!, accessor, NullLogger<FleetVmService>.Instance);
+        var execution = new DeploymentExecutionService(context, fleet, accessor, NullLogger<DeploymentExecutionService>.Instance);
+
+        foreach (var vm in vms.OrderByDescending(item => item.RuntimeGeneration))
+        {
+            var ticket = DeploymentQueueTicket.Create(DeploymentQueueRequest.Vm(1, user, 40, vm.Id) with
+            { Operation = RuntimeOperationKind.Destroy, Generation = vm.RuntimeGeneration, TargetNodeId = node.Id });
+            Assert.True((await execution.ExecuteAsync(ticket, default)).Success);
+            Assert.Equal(node.Id, vm.NodeId); Assert.Equal(VmInstanceStatus.Destroyed, vm.Status);
+        }
+
+        Assert.Equal(new int?[] { 4, 3, 2 }, agent.Generations);
+        provider.VerifyNoOtherCalls();
+        Assert.Null(accessor.Current);
     }
 
     [Fact]
