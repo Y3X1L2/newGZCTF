@@ -219,15 +219,19 @@ public class FleetVmService
 
     public async Task DestroyVmAsync(VmInstance vmInstance, CancellationToken token)
     {
-        // Try to actually destroy the VM regardless of NodeId
-        // If NodeId is null or points to a local node, destroy locally
-        var isLocal = true;
-        WorkerNode? node = null;
-        if (vmInstance.NodeId.HasValue)
-        {
-            node = await _nodeRepo.GetNodeByIdAsync(vmInstance.NodeId.Value, token);
-            isLocal = node?.IsLocal ?? true;
-        }
+        var scheduledNodeId = _executionContext.Current?.TargetNodeId;
+        if (vmInstance.NodeId is { } recordedOwner && scheduledNodeId is { } scheduledOwner && recordedOwner != scheduledOwner)
+            throw new InvalidOperationException("VM control owner differs from its recorded node.");
+        var ownerId = vmInstance.NodeId ?? scheduledNodeId
+            ?? throw new InvalidOperationException("VM control owner is unknown.");
+        var node = await _nodeRepo.GetNodeByIdAsync(ownerId, token)
+            ?? throw new InvalidOperationException("VM control owner no longer exists.");
+        var isLocal = node.IsLocal;
+        if (await _context.VmInstances.AsNoTracking().AnyAsync(item => item.Id != vmInstance.Id &&
+            item.VmName == vmInstance.VmName && (item.NodeId == ownerId || isLocal && item.NodeId == null) &&
+            (item.Status == VmInstanceStatus.Creating || item.Status == VmInstanceStatus.Running ||
+             item.Status == VmInstanceStatus.Stopped), token))
+            throw new InvalidOperationException("Another active VM generation still owns this resource name.");
 
         var hadCapacityReservation = vmInstance.NodeId.HasValue
             && vmInstance.Status is VmInstanceStatus.Creating or VmInstanceStatus.Running;
@@ -237,7 +241,7 @@ public class FleetVmService
             {
                 _logger.SystemLog($"Destroying VM {vmInstance.VmName}.", TaskStatus.Pending, LogLevel.Information);
                 _logger.LogInformation("Destroying local VM {VmName}", vmInstance.VmName);
-                var result = await _vmProvider.DestroyAsync(vmInstance.VmName, token);
+                var result = await _vmProvider.DestroyAsync(vmInstance.VmName, vmInstance.RuntimeNativeId, token);
                 if (!result.Success)
                     throw new InvalidOperationException(result.ErrorMessage ?? "Local VM destruction failed.");
             }
@@ -255,7 +259,7 @@ public class FleetVmService
             {
                 _logger.SystemLog($"Destroying VM {vmInstance.VmName}.", TaskStatus.Pending, LogLevel.Information);
                 await _agentClient.DestroyVmAsync(
-                    vmInstance.NodeId!.Value,
+                    ownerId,
                     vmInstance.VmName,
                     vmInstance.RuntimeGeneration,
                     vmInstance.RuntimeNativeId,
@@ -282,6 +286,7 @@ public class FleetVmService
         vmInstance.GuacamoleConnectionId = null;
         vmInstance.RdpUrl = null;
         vmInstance.Status = VmInstanceStatus.Destroyed;
+        vmInstance.NodeId ??= ownerId;
         vmInstance.DestroyedAt = DateTimeOffset.UtcNow;
 
         if (hadCapacityReservation && node is not null)

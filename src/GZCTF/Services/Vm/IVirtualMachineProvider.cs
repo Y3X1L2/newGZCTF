@@ -15,6 +15,9 @@ public interface IVirtualMachineProvider
     Task<VmOperationResult> StartAsync(string vmName, CancellationToken token);
     Task<VmOperationResult> ShutdownAsync(string vmName, CancellationToken token);
     Task<VmOperationResult> DestroyAsync(string vmName, CancellationToken token);
+    Task<VmOperationResult> DestroyAsync(string vmName, string? expectedNativeId, CancellationToken token) =>
+        expectedNativeId is null ? DestroyAsync(vmName, token) :
+            Task.FromResult(VmOperationResult.Fail(vmName, "Provider cannot verify the VM native identity."));
     Task<VmOperationResult> CreateSnapshotAsync(string vmName, string snapshotName, CancellationToken token);
     Task<VmOperationResult> SnapshotRevertAsync(string vmName, CancellationToken token);
     Task<VmConnectionInfo?> GetConnectionInfoAsync(string vmName, CancellationToken token);
