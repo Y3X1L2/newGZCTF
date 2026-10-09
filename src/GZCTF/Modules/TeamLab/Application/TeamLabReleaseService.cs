@@ -9,7 +9,9 @@ namespace GZCTF.Modules.TeamLab.Application;
 
 public sealed class TeamLabReleaseService(
     AppDbContext context,
-    TeamLabTopologyValidator validator)
+    TeamLabTopologyValidator validator,
+    TeamLabReleaseImagePreparationService? preparation = null,
+    TeamLabRuntimeOperationPayloadProtector? operationPayloads = null)
 {
     private static readonly JsonSerializerOptions EditorJsonOptions = new()
     {
@@ -173,13 +175,28 @@ public sealed class TeamLabReleaseService(
     /// </summary>
     public async Task ArchiveAsync(Guid releaseId, CancellationToken cancellationToken)
     {
-        var release = await context.TeamLabTopologyReleases
-            .SingleOrDefaultAsync(item => item.Id == releaseId, cancellationToken)
-            ?? throw new TeamLabApiContractException("release_not_found", "未找到拓扑版本", 404);
-        if (release.IsArchived) return;
-        release.IsArchived = true;
-        release.ArchivedAt = DateTimeOffset.UtcNow;
-        await context.SaveChangesAsync(cancellationToken);
+        await using (var transaction = context.Database.IsRelational()
+            ? await context.Database.BeginTransactionAsync(cancellationToken) : null)
+        {
+            await TeamLabReleaseLifecycle.LockAsync(context, releaseId, cancellationToken);
+            var release = await context.TeamLabTopologyReleases
+                .SingleOrDefaultAsync(item => item.Id == releaseId, cancellationToken)
+                ?? throw new TeamLabApiContractException("release_not_found", "未找到拓扑版本", 404);
+            if (context.Database.IsRelational())
+                await context.Entry(release).ReloadAsync(cancellationToken);
+            if (!release.IsArchived)
+            {
+                await TeamLabReleaseLifecycle.RequireNoActiveResetAsync(context, releaseId, operationPayloads, cancellationToken);
+                release.IsArchived = true;
+                release.ArchivedAt = DateTimeOffset.UtcNow;
+                await context.SaveChangesAsync(cancellationToken);
+            }
+            if (transaction is not null) await transaction.CommitAsync(cancellationToken);
+        }
+        // Retry the tail even for an already archived version. Its immutable definition stays
+        // readable; only this release's prewarm demand is withdrawn, never runtime consumers.
+        if (preparation is not null)
+            await preparation.ReleaseAsync(releaseId, cancellationToken);
     }
 
     public static TeamLabReleaseModel ToModel(

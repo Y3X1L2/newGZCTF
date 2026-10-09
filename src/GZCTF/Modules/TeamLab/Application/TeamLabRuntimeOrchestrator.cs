@@ -405,12 +405,16 @@ public sealed class TeamLabRuntimeOrchestrator(
         if (runtime.Status is TeamLabRuntimeStatus.Destroying or TeamLabRuntimeStatus.CleanupPending)
             throw new TeamLabApiContractException("runtime_cleanup_pending", "运行时清理已在进行中", 409);
         var releaseId = command.ReleaseId ?? runtime.TopologyReleaseId;
+        await using var transaction = context.Database.IsRelational()
+            ? await context.Database.BeginTransactionAsync(cancellationToken) : null;
+        await TeamLabReleaseLifecycle.LockAsync(context, releaseId, cancellationToken);
+        await TeamLabReleaseLifecycle.RequireStartableAsync(context, releaseId, cancellationToken);
         var dockerSlots = runtime.Assets.Count(item => item.Generation == runtime.Generation && item.Kind == TeamLabResourceKind.Docker);
         var vmSlots = runtime.Assets.Count(item => item.Generation == runtime.Generation && item.Kind == TeamLabResourceKind.Vm);
         var payload = new TeamLabRuntimeOperationPayload(null, runtime.PublicId, command);
         var protectedPayload = operationPayloads.Protect(payload);
         var payloadHash = $"sha256:{Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(payload)))}";
-        var queued = await queue.EnqueueAsync(new TeamLabQueueRequest(
+        var request = new TeamLabQueueRequest(
             runtime.Id,
             dockerSlots,
             vmSlots,
@@ -424,7 +428,13 @@ public sealed class TeamLabRuntimeOrchestrator(
             RuntimeOperationKind.Reset,
             null,
             protectedPayload,
-            payloadHash), cancellationToken);
+            payloadHash);
+        // Publishing the reset ticket under the same target-release lock gives its destructive
+        // phase a stable permit: Archive rejects active tickets instead of holding a DB transaction
+        // across cleanup RPCs. The protected payload also identifies cross-release reset targets.
+        var queued = transaction is null
+            ? await queue.EnqueueAsync(request, cancellationToken)
+            : await queue.EnqueueInCurrentTransactionAsync(request, cancellationToken);
         eventRecorder.Record(
             runtime,
             "reset",
@@ -434,6 +444,11 @@ public sealed class TeamLabRuntimeOrchestrator(
             "Runtime reset queued.");
         await context.SaveChangesAsync(cancellationToken);
         await LinkOperationAsync(operationId, runtime, queued.TicketId, cancellationToken);
+        if (transaction is not null)
+        {
+            await transaction.CommitAsync(cancellationToken);
+            await queue.NotifyAsync(queued.TicketId, cancellationToken);
+        }
         return new TeamLabRuntimeCreateResult(runtime.Id, runtime.PublicId, false);
     }
 
@@ -461,6 +476,10 @@ public sealed class TeamLabRuntimeOrchestrator(
             .SingleAsync(item => item.Id == ticketId, cancellationToken);
         if (ticket.TeamLabRuntimeId != runtime.Id || ticket.Operation != RuntimeOperationKind.Reset)
             return TeamLabNodeResult.Failed("TeamLab reset ticket does not own this runtime.");
+        // A queued reset may predate retirement. Refuse before physical cleanup, preserving
+        // its current resources; replanning also checks under the release lifecycle lock.
+        await TeamLabReleaseLifecycle.RequireStartableAsync(
+            context, command.ReleaseId ?? runtime.TopologyReleaseId, cancellationToken);
         var targetGeneration = ticket.Generation;
         var checkpoint = TeamLabResetCheckpointFacts.Get(runtime, ticketId);
         using var activity = PlatformTelemetry.TeamLabActivitySource.StartActivity(

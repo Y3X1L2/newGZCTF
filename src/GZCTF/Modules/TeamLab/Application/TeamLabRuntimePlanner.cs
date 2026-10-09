@@ -112,10 +112,12 @@ public sealed class TeamLabRuntimePlanner(
         CancellationToken cancellationToken)
     {
         var definition = TeamLabReleaseCodec.DecodeExecution(release.SchemaVersion, release.CanonicalJson);
-        await TeamLabTopologyApplicationService.ValidateImageTemplatesAsync(context, definition, cancellationToken);
         try
         {
             await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+            await TeamLabReleaseLifecycle.LockAsync(context, release.Id, cancellationToken);
+            await TeamLabReleaseLifecycle.RequireStartableAsync(context, release.Id, cancellationToken);
+            await TeamLabTopologyApplicationService.ValidateImageTemplatesAsync(context, definition, cancellationToken);
             var runtime = new TeamLabRuntime
             {
                 TopologyReleaseId = release.Id,
@@ -258,8 +260,10 @@ public sealed class TeamLabRuntimePlanner(
                 "目标拓扑版本不属于运行时所有者",
                 403);
         var definition = TeamLabReleaseCodec.DecodeExecution(release.SchemaVersion, release.CanonicalJson);
-        await TeamLabTopologyApplicationService.ValidateImageTemplatesAsync(context, definition, cancellationToken);
         await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+        await TeamLabReleaseLifecycle.LockAsync(context, release.Id, cancellationToken);
+        await TeamLabReleaseLifecycle.RequireStartableAsync(context, release.Id, cancellationToken);
+        await TeamLabTopologyApplicationService.ValidateImageTemplatesAsync(context, definition, cancellationToken);
         runtime.Generation++;
         runtime.TopologyReleaseId = release.Id;
         runtime.ControlScopeId = release.ControlScopeId;

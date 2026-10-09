@@ -202,8 +202,10 @@ public sealed class OpenTeamLabTopologiesController(
     public async Task<IActionResult> ArchiveRelease(Guid topologyId, Guid releaseId, CancellationToken cancellationToken)
     {
         var actor = Actor();
-        await scopeAuthorization.RequireTopologyScopeAsync(topologyId, actor.TokenId, IsAdministrator(), true, cancellationToken);
-        await scopeAuthorization.RequireReleaseScopeAsync(releaseId, actor.TokenId, IsAdministrator(), true, cancellationToken);
+        // Retirement drains an existing definition. The write-token policy and resource grants
+        // still apply, but an archived parent scope must not pin its images forever.
+        await scopeAuthorization.RequireTopologyScopeAsync(topologyId, actor.TokenId, IsAdministrator(), false, cancellationToken);
+        await scopeAuthorization.RequireReleaseScopeAsync(releaseId, actor.TokenId, IsAdministrator(), false, cancellationToken);
         await releases.ArchiveAsync(releaseId, cancellationToken);
         return NoContent();
     }
