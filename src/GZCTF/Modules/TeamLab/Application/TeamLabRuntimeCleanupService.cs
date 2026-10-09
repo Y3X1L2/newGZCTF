@@ -194,7 +194,7 @@ public sealed class TeamLabRuntimeCleanupService(
                 snapshot.ShardId.ToString(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal) ||
             (snapshot.CurrentPlanJson is null &&
              !string.Equals(plan.PlanDigest, snapshot.PlanDigest, StringComparison.Ordinal)) ||
-            !plan.IsValid(out _))
+            !plan.IsValidForCleanup(out _))
             throw new TeamLabRuntimeExecutionException(
                 $"Execution-plan cleanup snapshot is invalid for shard {snapshot.ShardId}.");
         return plan;
