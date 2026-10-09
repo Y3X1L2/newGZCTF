@@ -14,6 +14,43 @@ namespace GZCTF.Test.UnitTests.Services;
 
 public sealed class ApiOperationWorkerTests
 {
+    [Theory]
+    [InlineData(1, false)]
+    [InlineData(5, true)]
+    public async Task CodedTransientFailure_UsesExistingBoundedRetryAndOnlyCleansUpAtLimit(int attempt, bool terminal)
+    {
+        var operation = new ApiOperation { Kind = CodedFailureHandler.OperationKind, AttemptCount = attempt };
+        var state = new TerminalFailureState();
+        var claimed = 0;
+        var store = new Mock<IApiOperationStore>();
+        store.Setup(item => item.ClaimAsync(It.IsAny<string>(), It.IsAny<TimeSpan>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(() => Interlocked.Increment(ref claimed) == 1 ? new[] { operation } : Array.Empty<ApiOperation>());
+        store.Setup(item => item.RetryOrFailAsync(operation.Id, It.IsAny<string>(), 5,
+                "source_migration_cleanup_unproven", "captured source retained", It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()))
+            .Callback(() => state.FailurePersisted.TrySetResult()).ReturnsAsync(true);
+        var services = new ServiceCollection();
+        services.AddSingleton(store.Object);
+        services.AddScoped<ApiOperationService>();
+        services.AddSingleton(state);
+        services.AddKeyedScoped<IApiOperationHandler, CodedFailureHandler>(CodedFailureHandler.OperationKind);
+        await using var provider = services.BuildServiceProvider();
+        using var worker = new ApiOperationWorker(provider.GetRequiredService<IServiceScopeFactory>(), NullLogger<ApiOperationWorker>.Instance);
+        try
+        {
+            await worker.StartAsync(default);
+            await state.FailurePersisted.Task.WaitAsync(TimeSpan.FromSeconds(3));
+            if (terminal) await state.TerminalFailureNotified.Task.WaitAsync(TimeSpan.FromSeconds(3));
+        }
+        finally
+        {
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+            await worker.StopAsync(timeout.Token);
+        }
+        Assert.Equal(terminal, state.TerminalFailureNotified.Task.IsCompleted);
+        store.Verify(item => item.RetryOrFailAsync(operation.Id, It.IsAny<string>(), 5,
+            "source_migration_cleanup_unproven", "captured source retained", It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
     [Fact]
     public async Task RenewalInfrastructureFailure_CancelsHandlerWithoutStoppingWorker()
     {
@@ -221,6 +258,20 @@ public sealed class ApiOperationWorkerTests
             new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource TerminalFailureNotified { get; } =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
+    }
+
+    private sealed class CodedFailureHandler(TerminalFailureState state) : IApiOperationHandler
+    {
+        public const string OperationKind = "test.coded-transient";
+        public string Kind => OperationKind;
+        public Task ExecuteAsync(Guid operationId, string leaseOwner, CancellationToken cancellationToken) =>
+            throw new ApiOperationRetryableException("source_migration_cleanup_unproven", "captured source retained");
+        public Task OnTerminalFailureAsync(Guid operationId, CancellationToken cancellationToken)
+        {
+            Assert.True(state.FailurePersisted.Task.IsCompleted);
+            state.TerminalFailureNotified.TrySetResult();
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class MissingHandlerDependency;
