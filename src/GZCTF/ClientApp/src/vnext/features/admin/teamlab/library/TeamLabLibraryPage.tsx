@@ -18,6 +18,8 @@ import { TeamLabSceneTable } from './TeamLabSceneTable'
 import { useTeamLabCatalog, type TeamLabSceneOwnerFilter, type TeamLabSceneStatusFilter } from './useTeamLabCatalog'
 import styles from './TeamLabLibraryPage.module.css'
 import { TeamLabWorkspaceNav } from '../shared/TeamLabWorkspaceNav'
+import { TeamLabDeleteDialog } from '../shared/TeamLabDeleteDialog'
+import { useTeamLabDeletion } from '../shared/useTeamLabDeletion'
 
 export function TeamLabLibraryPage() {
   const [params] = useSearchParams()
@@ -34,6 +36,9 @@ function TeamLabSceneLibrary() {
   const navigate = useNavigate()
   const catalog = useTeamLabCatalog()
   const [createOpen, setCreateOpen] = useState(false)
+  const deletion = useTeamLabDeletion(() => {
+    if (catalog.page?.items.length === 1 && catalog.cursor.canGoBack) catalog.cursor.reset()
+  })
   useVNextPageTitle('组网场景库')
 
   const forbidden = catalog.error instanceof RuntimeApiError && catalog.error.status === 403
@@ -92,7 +97,7 @@ function TeamLabSceneLibrary() {
         </>
       ) : (
         <>
-          <TeamLabSceneTable scenes={catalog.page?.items ?? []} />
+          <TeamLabSceneTable scenes={catalog.page?.items ?? []} onDelete={scene => deletion.open({ kind: 'scene', id: scene.id, name: scene.name })} />
           <CursorPaginationBar
             hasNext={Boolean(catalog.page?.nextCursor)}
             label="场景分页"
@@ -112,6 +117,7 @@ function TeamLabSceneLibrary() {
         }}
         open={createOpen}
       />
+      <TeamLabDeleteDialog deletion={deletion} />
     </div>
   )
 }

@@ -176,6 +176,10 @@ export function createTeamLabRuntimeApi(client: RuntimeJsonClient = runtimeJsonC
       return parseTeamLabRuntime(await client.deleteJson(`${root}/${runtimeId}`))
     },
 
+    async deleteRuntimeRecord(runtimeId: string) {
+      await client.delete(`${root}/${runtimeId}/record`)
+    },
+
     async createAccessGrant(runtimeId: string) {
       return parseTeamLabAccessGrant(
         await client.postJson(`${root}/${runtimeId}/access-grants`, { type: 'WireGuard' })

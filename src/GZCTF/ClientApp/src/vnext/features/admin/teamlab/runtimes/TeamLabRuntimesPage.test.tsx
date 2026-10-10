@@ -1,8 +1,9 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { SWRConfig } from 'swr'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { teamLabAdminApi, type TeamLabTopologyDetail } from '../api'
+import { teamLabAdminApi, teamLabRuntimeApi, type TeamLabTopologyDetail } from '../api'
 import { useTeamLabScene } from '../shared/TeamLabSceneShell'
 import { TeamLabRuntimeStatusBadge } from '../shared/TeamLabStatusBadge'
 import { TeamLabRuntimesPage } from './TeamLabRuntimesPage'
@@ -52,9 +53,25 @@ function renderPage() {
 
 describe('TeamLabRuntimesPage', () => {
   beforeEach(() => {
+    vi.restoreAllMocks()
     vi.mocked(useTeamLabScene).mockReturnValue({ scene })
     vi.spyOn(window, 'scrollTo').mockImplementation(() => undefined)
     vi.spyOn(teamLabAdminApi, 'listReleases').mockResolvedValue([])
+  })
+
+  it('deletes Destroyed history instead of invoking Destroy again', async () => {
+    vi.spyOn(teamLabAdminApi, 'listTrialRuntimes').mockResolvedValue({ items: [{ ...runtime, status: 'destroyed' }], nextCursor: null })
+    const remove = vi.spyOn(teamLabRuntimeApi, 'deleteRuntimeRecord').mockResolvedValue(undefined)
+    const destroy = vi.spyOn(teamLabRuntimeApi, 'destroyRuntime')
+    renderPage()
+    const removeButton = await screen.findByRole('button', { name: '删除运行记录' })
+    removeButton.focus()
+    await userEvent.keyboard('{Enter}')
+    const dialog = screen.getByRole('dialog', { name: '删除运行记录' })
+    expect(dialog).toHaveTextContent(runtime.id)
+    fireEvent.click(within(dialog).getByRole('button', { name: '删除运行记录' }))
+    await waitFor(() => expect(remove).toHaveBeenCalledWith(runtime.id))
+    expect(destroy).not.toHaveBeenCalled()
   })
 
   it('renders server-paged runtimes and opens the selected detail', async () => {
