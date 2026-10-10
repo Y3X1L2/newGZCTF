@@ -49,7 +49,8 @@ public sealed class TeamLabRecordReferenceQuery(AppDbContext context) : ITeamLab
              item.Status == DeploymentQueueTicketStatus.Scheduled || item.Status == DeploymentQueueTicketStatus.Running ||
              item.ClaimOwner != null && item.ClaimExpiresAt > now), token) ||
             await context.FleetCapacityReservations.AnyAsync(item => item.DeploymentQueueTicket.TeamLabRuntimeId == runtimeId &&
-                (item.Status == CapacityReservationStatus.Active || item.Status == CapacityReservationStatus.Confirmed), token) ||
+                (item.Status == CapacityReservationStatus.Active ||
+                 item.Status == CapacityReservationStatus.Confirmed && item.ReleasedAt == null), token) ||
             await context.ImageDistributionReferences.AnyAsync(item => item.Kind == ImageDistributionReferenceKind.TeamLabRuntime && item.ResourceId == runtimeId, token) ||
             await context.ApiOperations.AnyAsync(item => item.ResourceType == "teamlab-runtime" && item.ResourceId == resourceId &&
                 (item.Status == ApiOperationStatus.Pending || item.Status == ApiOperationStatus.Running), token);
