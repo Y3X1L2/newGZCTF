@@ -15,8 +15,10 @@
 | 当前Main | `61ff70155b2fae774b6b462a818fed589123bd65ddb421f06e0fad1b19a69ae9`，PID662195、NRestarts0 |
 | 前端 | 源 `a63937c6`；manifest SHA `b9fc7f20ed0487af24cca6442bfe747700d4cdf56dce9a8c0189da01d3ca5a7d` |
 | 三节点Agent | `87e011cfe91a09c525efbdbdaa6194191517a6f53595339f6ba9da3ace2097fe`；`.27/.30/.31`实际PID641728/1856800/129813 |
-| 完整包 | 700文件、215681313字节；SHA `a35c47a7d33dd7ea0b96a2a86a817f4b70b4e9a68cf58bc0e0d427b43dfc08ed` |
+| a639基础完整包 | 700文件、215681313字节；SHA `a35c47a7d33dd7ea0b96a2a86a817f4b70b4e9a68cf58bc0e0d427b43dfc08ed` |
 | Main补丁delta | 14成员、5380252字节；SHA `9be3afe4ed160448d00031290b52d31c6e0f284bd9d1a3ebb57ef5a4032fc38b`，其余686文件复用 |
+
+当前700文件发布物由a639基础包与14成员Main补丁delta组成，基础包归档摘要不代表当前Main补丁后的整包摘要。
 
 当前发布目录：
 
@@ -42,7 +44,7 @@
 | --- | --- |
 | 正常创建、发布、试运行 | Running；容器标签159/g1/web一致，经 `tlsg159-entry` 私网HTTP200 |
 | Running删除记录 / 有运行记录时删场景 | 两者409；原实体、代次及资产身份保持 |
-| 正常Destroy | Destroyed/g1；对应容器、网关、运行盘/XML、OVS Port/Interface、10类OVN资源均无残留 |
+| 正常Destroy | Destroyed/g1；对应容器、网关、OVS Port/Interface、10类OVN资源均无残留；本次未创建VM |
 | 删除记录 / 重复删除 / GET | 204 / 204 / 404 |
 | 原创建key延迟重放 | 410，不重新发放 |
 | 删除已发布场景 / 重复删除 / GET | 204 / 204 / 404 |
