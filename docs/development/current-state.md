@@ -1,12 +1,13 @@
 # YINYU 当前开发状态
 
-## TeamLab 历史测试记录已清理，四组比赛关联仍保护（2026-10-10）
+## TeamLab 历史测试记录清理完成，场景库仅保留核心四机场景（2026-10-10）
 
 - 用户授权直接数据库清理历史测试资料，仅保留最新版 VM118–121 四机场景。已先释放精确旧 runtime98/g1 的 OVN switch/4ports和旧版本8条预热引用，再经一次有备份、FK与精确ID门禁的事务删除 **63拓扑、75旧版本、94历史runtime、32测试scope**及关联记录，共 **5,553,063行**；90份审计小文件已精确备份后释放。没有删除镜像模板/Registry来源、PVE原机/快照、教学网络或课程/练习/CTF资料，也没有新增删除按钮、部署或数据库迁移。
-- 当前实际仍有 **5个场景**：核心Topology97及比赛关联Topology1/33/34/39；4个剩余runtime31/32/34/39均Destroyed，唯一scope为Platform。四组业务关联对应Games24/60/61/66，存在参与/提交事实，未解除绑定、未删除比赛/用户/报名/提交，等待用户明确该范围；因此**尚未达到只剩1个场景**。其余已确认集合不再等待或重复清理。
-- 核心PublicId `01a1021a-b3b3-7fd2-96f5-cc9aa22a2ea5`、唯一latest usable release `01a10261-890a-718f-ae86-250e4db86746`/v2及draft revision2保持，519–522四VM/5NIC和两段网络定义正确、canonical hash保持 `3211caea…`。**核心当前无运行副本，本轮未新建实例验收**。原A g5/B g3此前已由正常Destroy票据成功清资源，此次只删除其历史实体；下节两套Ready是15:48历史验收时间点。
-- 实际流量/observation/aggregate均0、活动队列/导入0、迁移150；最后正式API library返回5场景、核心详情4VM/5NIC通过。Main/Agent原发布身份、PID和健康保持，PG/Redis/Guacamole/Guacd正常，7条普通CTF Guac连接保护，`.30`教学两容器运行/restarts0、教学3LS1LR保持。`.27`仍停止新调度但服务运行，`.30/.31`可调度；旧Windows许可自行关机与CPU单位语义缺口仍为独立backlog，未修改。
+- 用户随后明确授权解除Games24/60/61/66的四组历史关联，第二次小事务已精确删除Topology1/33/34/39、3release、旧runtime31/32/34/39及8binding，共199行；比赛本体4条、参与5条、UserParticipation5条、目标11条、提交4条及GameEvents完整行摘要保持。两次累计删除 **67测试拓扑、78旧版本、98历史runtime、32scope**，场景库现在**只剩核心Topology97和最新版v2**，唯一scope为Platform，不再有待确认的比赛绑定。
+- 核心PublicId `01a1021a-b3b3-7fd2-96f5-cc9aa22a2ea5`、唯一latest usable release `01a10261-890a-718f-ae86-250e4db86746`/v2及draft revision2保持，519–522四VM/5NIC和两段网络定义正确、canonical hash保持 `3211caea…`。清理期间用户新建的核心runtime158/PublicId `01a12348-e40d-75bd-97cb-ab4b6988f768`始终受保护；01:02 UTC曾Ready，随后用户侧状态已Destroyed，最终01:18:29 UTC正式API为generation1/Destroyed。**本任务未对核心执行create/reset/destroy，也未新建实例验收**。原A g5/B g3此前已由正常Destroy票据成功清资源，此次只删除其历史实体；下节两套Ready是15:48历史验收时间点。
+- 01:18:29 UTC最终正式API library返回1场景、核心详情4VM/5NIC通过，四组旧绑定均无残留、上述业务事实及核心记录保持；活动队列/导入0、迁移150，Main/Agent原发布身份、PID和健康保持。此前已核PG/Redis/Guacamole/Guacd、7条普通CTF Guac连接及`.30`教学两容器/OVN保持；小事务仅碰旧4组记录，没有新增镜像或教学清理。`.27`仍停止新调度但服务运行，`.30/.31`可调度；旧Windows许可自行关机与CPU单位语义缺口仍为独立backlog，未修改。
 - 本轮仅精确私有行备份：44表、同一exported READ ONLY snapshot、300,546,693字节压缩数据及90文件/54,309字节，COPY/全gzip CRC/摘要/同snapshot计数通过，**未做新全库恢复**。备份目录 `/srv/yinyu-data/backups/teamlab-test-record-cleanup-20261010-4a87dcc694a51b12-pre`；详情见[测试记录清理交接](handoffs/2026-10-10-teamlab-test-record-cleanup.md)。软件源码未改，未重跑全量软件测试，工程文档仅本地提交，未自动推送。
+- 四组补充清理仅备份42表的199行（16,615字节、artifact0），目录 `/srv/yinyu-data/backups/teamlab-business-binding-delta-20261010-d63668233c04389e-pre`；没有重复前500万行备份。固定小事务具备同snapshot计数、业务完整摘要、核心保护、匹配应用锁、brief admission fence及COMMIT确认门禁，已正常提交，未部署。
 
 ## 第二批与删除查询小补丁已发布，历史源与 Registry 回收完成（2026-10-09）
 
