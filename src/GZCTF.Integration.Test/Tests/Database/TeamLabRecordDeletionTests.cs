@@ -36,6 +36,12 @@ public sealed class TeamLabRecordDeletionTests : IAsyncLifetime
         var (runtime, owner, node) = await SeedAsync(context);
         var other = new TeamLabRuntime { TopologyReleaseId = runtime.TopologyReleaseId, Status = TeamLabRuntimeStatus.Destroyed };
         context.Add(other);
+        // Normal successful creation confirms the capacity reservation and sets
+        // ReleasedAt: the terminal history is not an active runtime reference.
+        var creationTicket = new DeploymentQueueTicket { Kind = DeploymentQueueKind.TeamLabRuntime,
+            TeamLabRuntimeId = runtime.Id, Status = DeploymentQueueTicketStatus.Succeeded };
+        context.Add(new FleetCapacityReservation { DeploymentQueueTicket = creationTicket, WorkerNodeId = node,
+            Status = CapacityReservationStatus.Confirmed, ReleasedAt = DateTimeOffset.UtcNow });
         var networkLease = new TeamLabNetworkLease { RuntimeId = runtime.Id, TopologyReleaseId = runtime.TopologyReleaseId,
             NetworkKey = "inside", AllocatedCidr = System.Net.IPNetwork.Parse("10.45.1.0/24") };
         context.Add(networkLease);
@@ -286,6 +292,31 @@ public sealed class TeamLabRecordDeletionTests : IAsyncLifetime
             Service(context, leaseProvider: leases.Object).DeleteRuntimeAsync(runtime.PublicId, owner, true, default));
         Assert.Equal("record_delete_conflict", error.Code);
         Assert.True(await context.TeamLabRuntimes.AnyAsync(item => item.Id == runtime.Id));
+    }
+
+    [Theory]
+    [InlineData(CapacityReservationStatus.Active, false)]
+    [InlineData(CapacityReservationStatus.Active, true)]
+    [InlineData(CapacityReservationStatus.Confirmed, false)]
+    public async Task OutstandingCapacityReservation_StillPreventsRecordDeletion(CapacityReservationStatus status, bool released)
+    {
+        await using var context = await ContextAsync();
+        var (runtime, owner, node) = await SeedAsync(context);
+        var ticket = new DeploymentQueueTicket { Kind = DeploymentQueueKind.TeamLabRuntime,
+            TeamLabRuntimeId = runtime.Id, Status = DeploymentQueueTicketStatus.Succeeded };
+        context.Add(new FleetCapacityReservation { DeploymentQueueTicket = ticket, WorkerNodeId = node,
+            Status = status, ReleasedAt = released ? DateTimeOffset.UtcNow : null });
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+        var executor = Executor();
+
+        var error = await Assert.ThrowsAsync<TeamLabApiContractException>(() =>
+            Service(context, executor).DeleteRuntimeAsync(runtime.PublicId, owner, true, default));
+
+        Assert.Equal("runtime_cleanup_pending", error.Code);
+        Assert.True(await context.TeamLabRuntimes.AnyAsync(item => item.Id == runtime.Id));
+        Assert.Single(await context.FleetCapacityReservations.ToArrayAsync());
+        executor.Verify(item => item.GetRuntimeInventoryAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     private static async Task<(TeamLabRuntime, Guid, Guid)> SeedAsync(AppDbContext context)
