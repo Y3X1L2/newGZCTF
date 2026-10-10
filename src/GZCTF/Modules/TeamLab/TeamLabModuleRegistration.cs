@@ -87,6 +87,11 @@ public static class TeamLabModuleRegistration
         services.AddScoped<TeamLabRuntimeRecoveryPolicy>();
         services.AddScoped<TeamLabShardDeploymentService>();
         services.AddScoped<TeamLabRuntimeCleanupService>();
+        services.AddScoped<TeamLabRecordDeletionService>();
+        services.AddScoped<GZCTF.Modules.Runtime.Contracts.ITeamLabRecordReferenceQuery,
+            GZCTF.Modules.Runtime.Application.TeamLabRecordReferenceQuery>();
+        services.AddScoped<GZCTF.Modules.Runtime.Contracts.ITeamLabCreationHistory,
+            GZCTF.Modules.Runtime.Application.TeamLabRecordReferenceQuery>();
         services.AddScoped<ITeamLabRuntimeApplicationService, TeamLabRuntimeOrchestrator>();
         services.AddScoped<TeamLabAccessGrantService>();
         services.AddScoped<ITeamLabRolloutApplicationService, TeamLabRolloutApplicationService>();

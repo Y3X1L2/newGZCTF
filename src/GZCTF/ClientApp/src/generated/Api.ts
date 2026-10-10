@@ -10058,6 +10058,24 @@ export class Api<
      * No description
      *
      * @tags TeamLabAdminRuntime
+     * @name TeamLabAdminRuntimeDeleteRecord
+     * @summary Deletes a fully destroyed runtime record and its owned history. Images remain.
+     * @request DELETE:/api/admin/teamlab/runtimes/{runtimeId}/record
+     */
+    teamLabAdminRuntimeDeleteRecord: (
+      runtimeId: string,
+      params: RequestParams = {},
+    ) =>
+      this.request<void, any>({
+        path: `/api/admin/teamlab/runtimes/${runtimeId}/record`,
+        method: "DELETE",
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags TeamLabAdminRuntime
      * @name TeamLabAdminRuntimeDestroy
      * @request DELETE:/api/admin/teamlab/runtimes/{runtimeId}
      */

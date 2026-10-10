@@ -78,19 +78,27 @@ public sealed class AgentTeamLabNodeExecutor(
             NodeDispatchCategory.Probe,
             operationToken => agent.GetRuntimeInventoryAsync(workerNodeId, operationToken),
             cancellationToken);
-        static TeamLabNodeInventoryResource Map(GZCTF.Modules.Runtime.Contracts.AgentRuntimeInventoryResource item) =>
-            new(item.NativeId, item.StableName, item.Generation, item.State, item.RuntimeId);
         // A missing response is a protocol failure and must stay distinguishable from a node that
         // genuinely holds nothing; reporting it as an empty inventory would let deployment
         // verification blame the assets instead of the unreachable node.
         if (inventory is null)
             throw new TeamLabRuntimeExecutionException(
                 $"WorkerNode {workerNodeId} returned no runtime inventory.");
+        return MapRuntimeInventory(inventory);
+    }
+
+    internal static TeamLabNodeRuntimeInventory MapRuntimeInventory(
+        GZCTF.Modules.Runtime.Contracts.AgentRuntimeInventoryResponse inventory)
+    {
+        static TeamLabNodeInventoryResource Map(GZCTF.Modules.Runtime.Contracts.AgentRuntimeInventoryResource item) =>
+            new(item.NativeId, item.StableName, item.Generation, item.State, item.RuntimeId);
         return new TeamLabNodeRuntimeInventory(
             (inventory.Containers ?? []).Select(Map).ToArray(),
             (inventory.Vms ?? []).Select(Map).ToArray(),
             (inventory.TeamLabResources ?? []).Select(Map).ToArray(),
-            inventory.ObservedAt);
+            // These wire fields are named Supported for compatibility, but the Agent
+            // sets them to false when that inventory reader fails, even on a capable node.
+            inventory.ObservedAt, inventory.DockerSupported, inventory.KvmSupported);
     }
 
     public async Task<TeamLabNodeInfrastructureResult> ApplyInfrastructureAsync(

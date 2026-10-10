@@ -1,7 +1,7 @@
 import { ArrowLeft, CheckCircle2, FileClock, Network, Pause, Play, RefreshCw, RotateCcw, Shield, Trash2 } from 'lucide-react'
 import { ActionMenu } from '../../../../shared/ActionMenu'
 import { useCallback, useState } from 'react'
-import { Link, useLocation, useParams, useSearchParams } from 'react-router'
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router'
 import { ActionButton, InlineFeedback, VNextConfirmDialog, VNextDrawer } from '../../../../shared/Interaction'
 import { DataState } from '../../../../shared/Primitives'
 import { errorMessage } from '../../../../shared/errors'
@@ -22,6 +22,8 @@ import { useRuntimeUpdatePreview } from './useRuntimeUpdatePreview'
 import { emptyTeamLabEventFilters, type TeamLabEventFilters } from './useRuntimeEvents'
 import { isRuntimeTransitioning } from './runtimePresentation'
 import styles from './TeamLabRuntimeDetailPage.module.css'
+import { TeamLabDeleteDialog } from '../shared/TeamLabDeleteDialog'
+import { useTeamLabDeletion } from '../shared/useTeamLabDeletion'
 
 type RuntimeTab = 'assets' | 'access' | 'activity'
 const tabs = [
@@ -32,6 +34,7 @@ const tabs = [
 export function TeamLabRuntimeDetailPage() {
   const { runtimeId = '' } = useParams()
   const location = useLocation()
+  const navigate = useNavigate()
   const [params, setParams] = useSearchParams()
   const requestedTab = params.get('tab')
   const tab: RuntimeTab = requestedTab === 'events' || requestedTab === 'logs' || requestedTab === 'capture' ? 'activity'
@@ -44,6 +47,7 @@ export function TeamLabRuntimeDetailPage() {
   const [eventFilters, setEventFilters] = useState<TeamLabEventFilters>(emptyTeamLabEventFilters)
   const state = useTeamLabRuntime(runtimeId)
   const runtime = state.runtime
+  const deletion = useTeamLabDeletion(() => navigate('/admin/teamlab/runtimes', { replace: true }))
   const sceneId = runtime?.topologyId || ''
   const update = useRuntimeUpdatePreview(sceneId, runtimeId, runtime?.releaseId, !!sceneId && !runtime?.managedRolloutId)
   useVNextPageTitle(`${runtime?.topologyName || '运行环境'} · 运行环境`)
@@ -81,6 +85,7 @@ export function TeamLabRuntimeDetailPage() {
   const canReset = !runtime.managedRolloutId && !queueActive && ['running', 'failed', 'paused'].includes(runtime.status)
   const cleanup = runtime.status === 'cleanup-pending'
   const canDestroy = !runtime.managedRolloutId && !['scheduled', 'running'].includes(runtime.queueStatus ?? '') && !['destroying', 'destroyed'].includes(runtime.status)
+  const canDeleteRecord = !runtime.managedRolloutId && runtime.status === 'destroyed' && !queueActive
   const hasUpdate = update.latestRelease && update.latestRelease.id !== runtime.releaseId
   const canUpdate = hasUpdate && update.preview && (update.preview.canApply ? runtime.status === 'running' && !queueActive : canReset)
   const transitioning = isRuntimeTransitioning(runtime.status)
@@ -108,11 +113,13 @@ export function TeamLabRuntimeDetailPage() {
           ...(hasUpdate ? [{ label: `更新到 v${update.latestRelease!.version}`, disabled: !canUpdate || acting, onSelect: () => setConfirmation('update') }] : []),
           { label: '重置环境', disabled: !canReset || acting, separator: true, icon: <RotateCcw size={15} />, onSelect: () => setConfirmation('reset') },
           { label: canCancel ? '取消创建' : cleanup ? '继续清理' : '销毁环境', disabled: !canDestroy || acting, danger: true, icon: <Trash2 size={15} />, onSelect: () => setConfirmation('destroy') },
+          { label: '删除运行记录', disabled: !canDeleteRecord || acting, danger: true, icon: <Trash2 size={15} />, onSelect: () => deletion.open({ kind: 'runtime', id: runtime.id, name: runtime.topologyName || '运行环境' }) },
         ]} />
       </div>
     </header>
     {transitioning || runtime.failure || runtime.error ? <RuntimeTaskPanel runtime={runtime} onInspect={() => inspect({ generation: runtime.generation, stage: '' })} /> : null}
     {actionError ? <InlineFeedback tone="danger">{errorMessage(actionError, '环境操作失败。')}</InlineFeedback> : null}
+    {runtime.status === 'destroyed' ? <p className={styles.ownership}>环境已销毁，可在“更多环境操作”中删除运行记录；镜像和场景会保留。</p> : null}
     <nav aria-label="运行环境详情" className={styles.tabs}>{tabs.map(({ key, label, icon: Icon }) => <button key={key} aria-current={tab === key ? 'page' : undefined}
       onClick={() => selectTab(key)} type="button"><Icon size={17} />{label}</button>)}</nav>
     <div className={styles.content}>
@@ -128,6 +135,7 @@ export function TeamLabRuntimeDetailPage() {
         <RuntimeShardTable runtime={runtime} onInspectFailure={filters => { setDrawer(null); inspect(filters) }} />
       </> : null}
     </VNextDrawer>
+    <TeamLabDeleteDialog deletion={deletion} />
     <VNextConfirmDialog open={confirmation !== null} onClose={() => setConfirmation(null)} onConfirm={() => act(confirmation!)}
       title={confirmation === 'update' ? `更新到 v${update.latestRelease?.version}` : confirmation === 'reset' ? '重置环境' : canCancel ? '取消创建' : cleanup ? '继续清理' : '销毁环境'}
       confirmLabel={confirmation === 'destroy' ? canCancel ? '取消创建' : cleanup ? '继续清理' : '销毁环境' : '确认'} tone={confirmation === 'destroy' ? 'danger' : 'primary'}

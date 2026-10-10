@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { TeamLabRuntime } from '../api'
+import { teamLabRuntimeApi, type TeamLabRuntime } from '../api'
 import { TeamLabRuntimeDetailPage } from './TeamLabRuntimeDetailPage'
 import { useRuntimeEvents } from './useRuntimeEvents'
 import { useRuntimeUpdatePreview } from './useRuntimeUpdatePreview'
@@ -58,6 +58,7 @@ const runtime: TeamLabRuntime = {
 
 describe('TeamLabRuntimeDetailPage', () => {
   beforeEach(() => {
+    vi.restoreAllMocks()
     vi.mocked(useRuntimeUpdatePreview).mockReturnValue({
       latestRelease: undefined,
       preview: undefined,
@@ -96,6 +97,35 @@ describe('TeamLabRuntimeDetailPage', () => {
         mutate: vi.fn(),
       },
     })
+  })
+
+  it.each(['running', 'cleanup-pending', 'destroying'] as const)('does not allow deleting %s runtime records', async status => {
+    vi.mocked(useTeamLabRuntime).mockReturnValue({ runtime: { ...runtime, status }, error: undefined, isLoading: false, isRefreshing: false, mutate: vi.fn() })
+    render(<MemoryRouter initialEntries={[`/admin/teamlab/runtimes/${runtime.id}`]}><Routes>
+      <Route path="/admin/teamlab/runtimes/:runtimeId" element={<TeamLabRuntimeDetailPage />} />
+    </Routes></MemoryRouter>)
+    fireEvent.click(screen.getByRole('button', { name: '更多环境操作' }))
+    expect(await screen.findByRole('menuitem', { name: '删除运行记录' })).toBeDisabled()
+  })
+
+  it('deletes a Destroyed record after confirmation and returns to the runtime list', async () => {
+    const remove = vi.spyOn(teamLabRuntimeApi, 'deleteRuntimeRecord').mockResolvedValue(undefined)
+    const destroy = vi.spyOn(teamLabRuntimeApi, 'destroyRuntime')
+    vi.mocked(useTeamLabRuntime).mockReturnValue({ runtime: { ...runtime, status: 'destroyed', queueStatus: 'succeeded' }, error: undefined, isLoading: false, isRefreshing: false, mutate: vi.fn() })
+    render(<MemoryRouter initialEntries={[`/admin/teamlab/runtimes/${runtime.id}`]}><Routes>
+      <Route path="/admin/teamlab/runtimes/:runtimeId" element={<TeamLabRuntimeDetailPage />} />
+      <Route path="/admin/teamlab/runtimes" element={<h2>运行环境列表</h2>} />
+    </Routes></MemoryRouter>)
+    fireEvent.click(screen.getByRole('button', { name: '更多环境操作' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: '删除运行记录' }))
+    expect(remove).not.toHaveBeenCalled()
+    const dialog = screen.getByRole('dialog', { name: '删除运行记录' })
+    expect(dialog).toHaveTextContent(runtime.id)
+    expect(dialog).toHaveTextContent('流量、审计和抓包历史')
+    fireEvent.click(screen.getByRole('button', { name: '删除运行记录' }))
+    expect(await screen.findByRole('heading', { name: '运行环境列表' })).toBeInTheDocument()
+    expect(remove).toHaveBeenCalledWith(runtime.id)
+    expect(destroy).not.toHaveBeenCalled()
   })
 
   it('shows the environment summary without identifiers or shard tables', () => {

@@ -596,10 +596,15 @@ public class KvmService
         return result.Split('\n', StringSplitOptions.RemoveEmptyEntries).Length;
     }
 
-    public async Task<IReadOnlyList<RuntimeInventoryResource>> GetManagedRuntimeInventoryAsync(
-        CancellationToken token)
+    public Task<IReadOnlyList<RuntimeInventoryResource>> GetManagedRuntimeInventoryAsync(CancellationToken token) =>
+        ReadManagedRuntimeInventoryAsync((command, cancellation) => RunCommandAsync(command, cancellation), token);
+
+    internal static async Task<IReadOnlyList<RuntimeInventoryResource>> ReadManagedRuntimeInventoryAsync(
+        Func<string, CancellationToken, Task<string>> read, CancellationToken token)
     {
-        var result = await RunCommandAsync("virsh list --all --name 2>/dev/null", token, throwOnError: false);
+        // Every read here is strict. A failed libvirt enumeration is unknown inventory,
+        // never proof of an empty node. RuntimeController exposes the failure flag.
+        var result = await read("virsh list --all --name", token);
         List<RuntimeInventoryResource> inventory = [];
         foreach (var vmName in result.Split('\n',
                      StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
@@ -607,15 +612,19 @@ public class KvmService
             token.ThrowIfCancellationRequested();
             if (!SafeNamePattern.IsMatch(vmName))
                 continue;
-            var generation = await ReadDomainGenerationAsync(vmName, token);
+            var xml = await read($"virsh dumpxml {ShellEscape(vmName)}", token);
+            var description = System.Xml.Linq.XDocument.Parse(xml).Root?.Element("description")?.Value ?? string.Empty;
+            var generation = ParseDomainGeneration(description);
             if (generation is null or < 1)
+            {
+                if (vmName.StartsWith("gzctf-tl-", StringComparison.Ordinal))
+                    throw new InvalidDataException("A TeamLab domain has no readable managed generation.");
                 continue;
-            var domainId = (await RunCommandAsync(
-                $"virsh domuuid {ShellEscape(vmName)} 2>/dev/null", token, throwOnError: false)).Trim();
-            if (string.IsNullOrWhiteSpace(domainId))
-                continue;
-            var state = (await RunCommandAsync(
-                $"virsh domstate {ShellEscape(vmName)} 2>/dev/null", token, throwOnError: false)).Trim();
+            }
+            var domainId = (await read($"virsh domuuid {ShellEscape(vmName)}", token)).Trim();
+            if (!Guid.TryParse(domainId, out _))
+                throw new InvalidDataException("A managed domain returned no valid native identity.");
+            var state = (await read($"virsh domstate {ShellEscape(vmName)}", token)).Trim();
             inventory.Add(new RuntimeInventoryResource(
                 domainId,
                 vmName,
@@ -1202,7 +1211,11 @@ public class KvmService
         psi.ArgumentList.Add("-c");
         psi.ArgumentList.Add(cmd);
         using var process = Process.Start(psi);
-        if (process is null) return "";
+        if (process is null)
+        {
+            if (throwOnError) throw new InvalidOperationException("Unable to start the command process.");
+            return "";
+        }
         var stdoutTask = process.StandardOutput.ReadToEndAsync(token);
         var stderrTask = process.StandardError.ReadToEndAsync(token);
         await process.WaitForExitAsync(token);

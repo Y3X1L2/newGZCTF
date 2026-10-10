@@ -119,7 +119,9 @@ public sealed record TeamLabNodeRuntimeInventory(
     IReadOnlyList<TeamLabNodeInventoryResource> Containers,
     IReadOnlyList<TeamLabNodeInventoryResource> Vms,
     IReadOnlyList<TeamLabNodeInventoryResource> Infrastructure,
-    DateTimeOffset ObservedAt);
+    DateTimeOffset ObservedAt,
+    bool? DockerAvailable = null,
+    bool? KvmAvailable = null);
 
 public sealed record TeamLabNodeAssetCreateRequest(
     int RuntimeId,

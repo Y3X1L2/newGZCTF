@@ -1,8 +1,9 @@
-import { render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { RuntimeApiError } from '../../api/runtimeJsonClient'
-import type { TeamLabAdminSceneSummary } from '../api'
+import { teamLabAdminApi, type TeamLabAdminSceneSummary } from '../api'
 import { TeamLabLibraryPage } from './TeamLabLibraryPage'
 import { useTeamLabCatalog } from './useTeamLabCatalog'
 
@@ -58,7 +59,37 @@ function catalog(overrides: Partial<ReturnType<typeof useTeamLabCatalog>> = {}):
 }
 
 describe('TeamLabLibraryPage', () => {
-  beforeEach(() => vi.mocked(useTeamLabCatalog).mockReturnValue(catalog()))
+  beforeEach(() => { vi.restoreAllMocks(); vi.mocked(useTeamLabCatalog).mockReturnValue(catalog()) })
+
+  it('explains why a scene referenced by a game cannot be deleted', () => {
+    render(<MemoryRouter><TeamLabLibraryPage /></MemoryRouter>)
+    const row = screen.getByRole('row', { name: /企业域演练/ })
+    expect(within(row).getByRole('button', { name: '删除场景 企业域演练' })).toBeDisabled()
+    expect(within(row).getByText('请先解除比赛引用')).toBeInTheDocument()
+  })
+
+  it('requires explicit confirmation and keeps the dialog open on a server conflict', async () => {
+    const remove = vi.spyOn(teamLabAdminApi, 'deleteTopology').mockRejectedValue(new RuntimeApiError('仍有课程引用，请先解除。', { kind: 'http', status: 409, code: 'topology_in_use' }))
+    vi.mocked(useTeamLabCatalog).mockReturnValue(catalog({ page: { items: [{ ...scene, gameReferenceCount: 0 }], nextCursor: null } }))
+    render(<MemoryRouter><TeamLabLibraryPage /></MemoryRouter>)
+    const row = screen.getByRole('row', { name: /企业域演练/ })
+    fireEvent.click(within(row).getByRole('button', { name: '删除场景 企业域演练' }))
+    const dialog = screen.getByRole('dialog', { name: '删除场景' })
+    expect(dialog).toHaveTextContent('镜像模板、镜像文件及比赛数据保留')
+    expect(remove).not.toHaveBeenCalled()
+    fireEvent.click(within(dialog).getByRole('button', { name: '删除场景' }))
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('仍有课程引用，请先解除。')
+    expect(dialog).toHaveAttribute('open')
+  })
+
+  it('opens delete confirmation by keyboard without activating the surrounding table row', async () => {
+    vi.mocked(useTeamLabCatalog).mockReturnValue(catalog({ page: { items: [{ ...scene, gameReferenceCount: 0 }], nextCursor: null } }))
+    render(<MemoryRouter><TeamLabLibraryPage /></MemoryRouter>)
+    const row = screen.getByRole('row', { name: /企业域演练/ })
+    within(row).getByRole('button', { name: '删除场景 企业域演练' }).focus()
+    await userEvent.keyboard('{Enter}')
+    expect(screen.getByRole('dialog', { name: '删除场景' })).toBeVisible()
+  })
 
   it('renders the server-ordered scene projection', () => {
     render(<MemoryRouter><TeamLabLibraryPage /></MemoryRouter>)

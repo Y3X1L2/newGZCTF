@@ -23,6 +23,13 @@ function runtimeClient(overrides: Partial<RuntimeJsonClient> = {}): RuntimeJsonC
   }
 }
 
+it('deletes only the completed runtime record through its separate endpoint', async () => {
+  const remove = vi.fn().mockResolvedValue(undefined)
+  const api = createTeamLabRuntimeApi(runtimeClient({ delete: remove }))
+  await api.deleteRuntimeRecord('runtime-a')
+  expect(remove).toHaveBeenCalledWith('/api/admin/teamlab/runtimes/runtime-a/record')
+})
+
 const runtimeWire = {
   id: '019f0000-0000-7000-8000-000000000101',
   releaseId: '019f0000-0000-7000-8000-000000000102',

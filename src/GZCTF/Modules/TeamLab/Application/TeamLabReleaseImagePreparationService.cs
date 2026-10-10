@@ -55,6 +55,9 @@ public sealed class TeamLabReleaseImagePreparationService(
     public Task ReleaseAsync(Guid releaseId, CancellationToken cancellationToken) =>
         distribution.ReleaseTeamLabReleaseReferencesAsync(releaseId, cancellationToken);
 
+    public Task ReleaseTopologyAsync(int topologyId, CancellationToken cancellationToken) =>
+        distribution.ReleaseTeamLabTopologyReferencesAsync(topologyId, cancellationToken);
+
     public Task ReleaseBeforeAsync(Guid releaseId, DateTimeOffset destroyedAt, CancellationToken cancellationToken) =>
         distribution.ReleaseTeamLabReleaseReferencesBeforeAsync(releaseId, destroyedAt, cancellationToken);
 

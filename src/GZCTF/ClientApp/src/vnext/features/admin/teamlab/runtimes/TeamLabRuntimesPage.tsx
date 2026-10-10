@@ -13,6 +13,8 @@ import { useTeamLabScene } from '../shared/TeamLabSceneShell'
 import { TeamLabAccessStatusBadge, TeamLabRuntimeStatusBadge } from '../shared/TeamLabStatusBadge'
 import { isRuntimeTerminal, isRuntimeTransitioning } from './runtimePresentation'
 import styles from './TeamLabRuntimesPage.module.css'
+import { TeamLabDeleteDialog } from '../shared/TeamLabDeleteDialog'
+import { useTeamLabDeletion } from '../shared/useTeamLabDeletion'
 
 const pageSize = 30
 
@@ -33,6 +35,9 @@ export function TeamLabRuntimesPage() {
       refreshInterval: (latest) => latest?.items.some((runtime) => isRuntimeTransitioning(runtime.status)) ? 6_000 : 0,
     }
   )
+  const deletion = useTeamLabDeletion(() => {
+    if (request.data?.items.length === 1 && cursor.canGoBack) cursor.reset()
+  })
   const columns = useMemo<AdminDataColumn<TeamLabAdminRuntimeSummary>[]>(() => [
     {
       id: 'runtime',
@@ -46,17 +51,19 @@ export function TeamLabRuntimesPage() {
     { id: 'updated', header: '最后更新', visibility: 'desktop', render: (runtime) => formatAdminDate(runtime.updatedAt ?? runtime.createdAt) },
     {
       id: 'actions', header: '操作', width: 'wide', align: 'right', render: (runtime) => (
-        <div className={styles.rowActions} onClick={(event) => event.stopPropagation()}>
+        <div className={styles.rowActions} onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
           <ActionButton aria-label="进入环境" icon={<Wrench size={15} />} onClick={() => navigate(`/admin/teamlab/runtimes/${runtime.id}`)} title="进入环境" type="button" />
+          {runtime.status === 'destroyed' ? <ActionButton aria-label="删除运行记录" icon={<Trash2 size={15} />}
+            onClick={() => deletion.open({ kind: 'runtime', id: runtime.id, name: scene.definition.name })} tone="danger" type="button">删除记录</ActionButton> :
           <ActionButton aria-label={isWaitingForNode(runtime.status) ? '取消创建' : '销毁运行实例'}
             disabled={isRuntimeTerminal(runtime.status) || runtime.status === 'destroying' || runtime.status === 'cleanup-pending' || isNodeExecutionActive(runtime.status)}
             icon={<Trash2 size={15} />} onClick={() => { setDestroyError(null); setDestroying(runtime) }}
-            title={isWaitingForNode(runtime.status) ? '取消创建' : '销毁运行实例'} tone="danger" type="button" />
+            title={isWaitingForNode(runtime.status) ? '取消创建' : '销毁运行实例'} tone="danger" type="button" />}
           <ArrowRight aria-hidden="true" size={16} />
         </div>
       ),
     },
-  ], [navigate, scene.id, scene.definition.name, releases.data])
+  ], [navigate, scene.id, scene.definition.name, releases.data, deletion.open])
 
   const destroy = async () => {
     if (!destroying || acting) return false
@@ -112,6 +119,7 @@ export function TeamLabRuntimesPage() {
         title={destroying && isWaitingForNode(destroying.status) ? '取消创建' : '销毁运行实例'}
         tone="danger"
       />
+      <TeamLabDeleteDialog deletion={deletion} />
     </section>
   )
 }
