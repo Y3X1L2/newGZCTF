@@ -1,9 +1,14 @@
 # YINYU 当前开发状态
 
-## 场景与已销毁运行记录删除候选已完成，尚未部署（2026-10-10）
+## 场景与已销毁运行记录删除已部署并完成实机验收（2026-10-10）
 
-- 独立本地分支 `codex/teamlab-delete-integration` 已整合前端 `f231fec1` 与后端 `a877ab34`。管理端场景DELETE支持无引用的发布场景；新增runtime `/record` DELETE，仅完全销毁且无业务/执行引用时真正删除历史。旧runtime DELETE保持异步销毁语义；镜像来源和比赛事实保留，无新增数据库迁移。尚未推送、合并main或部署，服务器当前版本仍如下述实际发布记录。
-- 引用/权限/并发、审计文件真实删除、库存读取失败与原创建key延迟重放均有保护；必要Agent修正不再把libvirt库存读取失败当作零VM。后端单元1475/1475、完整集成343/343通过，最后租约忙错误映射另做PostgreSQL定向1/1。前端整合后119文件/412测试、locale/lint/类型/架构/构建/体积通过；Release构建通过，日夜/4视口/键盘检查通过。真实新删除接口节点验收NOT_RUN，发布需用户确认并正式同步Agent。详细边界见[删除入口整合交接](handoffs/2026-10-10-teamlab-delete-integration-and-mechanism-review.md)；完整机制学习说明仅本地保存。
+- PR #21 正常合并为 `main e75e5292`，发布源 `a63937c6` 与其完整 Git tree 相同。场景删除支持无引用的已发布场景；新 runtime `/record` DELETE 删除已销毁且资源与引用均清理完成的记录，原 runtime DELETE 仍负责异步销毁。删除按钮已随正式前端上线，镜像来源与比赛事实保留，无新增迁移。
+- 首次现场验收发现已完成分配的容量预留仍保留 `Confirmed`，但 `ReleasedAt` 已有值；删除检查误把这条历史事实当作活跃预留。PR #22 源 `49948764`、合并 `main c2416f6f` 同树，修正为 Active 始终阻断、Confirmed 仅尚未释放时阻断；没有改生产预留记录或绕过正常接口。修正已经部署。
+- `.27` 当前独立 release 为 `/srv/yinyu-data/releases/teamlab-delete-reservation-49948764bd0715142911d5b22c68852ab3d38bb8-20261010T0645Z/publish`。Main DLL `61ff7015…`、前端 `a63937c6`；三节点先经正式 sync 升级为 Agent `87e011cf…`，安装文件、实际进程与心跳均一致。随后 Main-only 补丁复用完整前端、Agent 和 guest-supervisor 字节，700 文件/模式/摘要全部通过，仅传输 5.38 MB / 14 个 Main 区域文件；补丁未再次同步或重启 Agent。
+- 真实模板495单机 Docker 在 `.31` 正常创建、发布、启动并通过私网 HTTP200；Running 记录删除和引用场景删除均409且原实体/资源保持。正常 Destroy 后容器、网关、运行盘/XML、OVS Port/Interface及10类OVN资源均无本次残留；同一 runtime159 的 `/record` DELETE204、重复204、GET404、原创建key重放410；同一已发布测试场景 DELETE204、重复204、GET404。仅删除本轮临时对象，未重建或重销毁核心四机。
+- 07:26:32 UTC（北京时间15:26:32）最终 Main PID662195/NRestarts0，首页、Config、manifest均200；`.27/.30/.31` Agent实际PID分别641728/1856800/129813，三节点Online、Fabric/Tunnel健康，恢复本轮原调度旗标均true。迁移仍150，活动队列/导入/镜像写者0；场景库仅核心97/v2，draft2、519–522四VM/5NIC、核心runtime158历史及五份镜像元数据保持，`.30`原两教学容器运行且重启次数未变。实际Agent服务库存也验证`.27/.31` Docker/KVM可读，`.30` Docker可读/KVM不支持，不能将不支持误写为清单读取成功。
+- 首次新两库备份已完整隔离恢复并核同snapshot结构/迁移/计数；Main-only补丁的新 capture-v3 两库dump全文解码、摘要及同结构/迁移核验通过，**未再次完整恢复该新快照**。在线捕获失败源于共享logs持续写，旧capture-v2又因exporter读取迁移表持锁阻断旧Main启动；仅停止精确自有备份unit释放快照后恢复HTTP。修正后的exporter仅持快照，元数据由短import事务读取并关闭，实际公共表读锁0；capture-v3至HTTP恢复23.952秒，最终Main切换窗口12.886秒。失败证据、旧release、回滚、附件与配置原路径均保留，备份用法与限制见[部署验收交接](handoffs/2026-10-10-teamlab-delete-rollout.md)。
+- 独立门禁与PR #22完整CI均通过：Release、单元1475、集成347（0 skip）、前端119文件/412测试及locale/lint/类型/架构/构建/体积；新预留边界PostgreSQL定向19项通过。本轮没有重复四机新建/重置或Windows图形登录。维护期间曾观察`.27`旗标在Main重启后由false回到true，原因未单独核实，不能称cordon全窗口持续有效；原`.27`来宾网络问题、CPU单位/磁盘硬配额与2008R2许可限制仍是独立事项。工程记录可提交，学习笔记和前端会话提示词仍仅本地保存。
 
 ## TeamLab 历史测试记录清理完成，场景库仅保留核心四机场景（2026-10-10）
 
