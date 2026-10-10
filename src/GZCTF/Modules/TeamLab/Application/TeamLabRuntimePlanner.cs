@@ -10,6 +10,7 @@ using GZCTF.Models.Data;
 using GZCTF.Models.Internal;
 using GZCTF.Modules.Audit.Application;
 using GZCTF.Modules.Audit.Domain;
+using GZCTF.Modules.Runtime.Contracts;
 using GZCTF.Modules.TeamLab.Contracts;
 using GZCTF.Modules.TeamLab.Domain;
 using GZCTF.TeamLab.Contracts;
@@ -24,7 +25,8 @@ public sealed class TeamLabRuntimePlanner(
     TeamLabRuntimeOverlayService overlayService,
     TeamLabEventRecorder eventRecorder,
     TeamLabConnectorService connectors,
-    IOptions<TeamLabNetworkConfig> networkOptions)
+    IOptions<TeamLabNetworkConfig> networkOptions,
+    ITeamLabCreationHistory creationHistory)
 {
     private readonly TeamLabNetworkConfig _network = networkOptions.Value;
     public async Task<TeamLabRuntimeCreateResult> CreateAsync(
@@ -53,6 +55,7 @@ public sealed class TeamLabRuntimePlanner(
             : ExternalIdempotencyKey.Normalize(creationIdempotencyKey);
         if (normalizedIdempotencyKey is not null)
         {
+            await RequireCreationKeyAsync(runtimeOwnerUserId, normalizedIdempotencyKey, requestHash, cancellationToken);
             var existing = await context.TeamLabRuntimes.AsNoTracking()
                 .SingleOrDefaultAsync(item => item.CreatedById == runtimeOwnerUserId &&
                                               item.CreationIdempotencyKey == normalizedIdempotencyKey,
@@ -117,6 +120,19 @@ public sealed class TeamLabRuntimePlanner(
             await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
             await TeamLabReleaseLifecycle.LockAsync(context, release.Id, cancellationToken);
             await TeamLabReleaseLifecycle.RequireStartableAsync(context, release.Id, cancellationToken);
+            if (creationIdempotencyKey is not null)
+            {
+                await creationHistory.LockAsync(runtimeOwnerUserId, creationIdempotencyKey, cancellationToken);
+                await RequireCreationKeyAsync(runtimeOwnerUserId, creationIdempotencyKey, requestHash, cancellationToken);
+                var prior = await context.TeamLabRuntimes.AsNoTracking().SingleOrDefaultAsync(item =>
+                    item.CreatedById == runtimeOwnerUserId && item.CreationIdempotencyKey == creationIdempotencyKey, cancellationToken);
+                if (prior is not null)
+                {
+                    if (prior.CreateRequestHash != requestHash) throw new IdempotencyConflictException();
+                    await transaction.CommitAsync(cancellationToken);
+                    return new TeamLabRuntimeCreateResult(prior.Id, prior.PublicId, true);
+                }
+            }
             await TeamLabTopologyApplicationService.ValidateImageTemplatesAsync(context, definition, cancellationToken);
             var runtime = new TeamLabRuntime
             {
@@ -227,6 +243,13 @@ public sealed class TeamLabRuntimePlanner(
             admitPlannedRuntime: admitPlannedRuntime,
             cancellationToken: cancellationToken);
 
+    private async Task RequireCreationKeyAsync(Guid ownerId, string key, string requestHash, CancellationToken token)
+    {
+        if (await creationHistory.GetRetiredRequestHashAsync(ownerId, key, token) is not { } retiredHash) return;
+        if (retiredHash != requestHash) throw new IdempotencyConflictException();
+        throw new TeamLabApiContractException("runtime_record_deleted", "此创建请求对应的运行记录已删除，请使用新的创建请求。", 410);
+    }
+
     private async Task<TeamLabRuntimeCreateResult> ResetCoreAsync(
         Guid runtimePublicId,
         IReadOnlyList<TeamLabRuntimeOverlayModel>? runtimeOverlays,
@@ -263,6 +286,9 @@ public sealed class TeamLabRuntimePlanner(
         await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
         await TeamLabReleaseLifecycle.LockAsync(context, release.Id, cancellationToken);
         await TeamLabReleaseLifecycle.RequireStartableAsync(context, release.Id, cancellationToken);
+        await TeamLabRecordMutationLock.LockAsync(context, runtime.Id, runtime.PublicId, cancellationToken);
+        if (!await context.TeamLabRuntimes.AsNoTracking().AnyAsync(item => item.Id == runtime.Id, cancellationToken))
+            throw new TeamLabApiContractException("runtime_not_found", "运行记录已删除。", 404);
         await TeamLabTopologyApplicationService.ValidateImageTemplatesAsync(context, definition, cancellationToken);
         runtime.Generation++;
         runtime.TopologyReleaseId = release.Id;

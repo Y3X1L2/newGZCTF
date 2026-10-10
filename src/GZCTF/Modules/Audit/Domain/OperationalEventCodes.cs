@@ -113,6 +113,8 @@ public static class OperationalEventCodes
 
     public static class TeamLab
     {
+        public const string SceneDeleted = "teamlab.scene.deleted";
+        public const string RuntimeRecordDeleted = "teamlab.runtime.record_deleted";
         public const string RemoteSessionCreated = "teamlab.remote_session.created";
         public const string RemoteSessionConnected = "teamlab.remote_session.connected";
         public const string RemoteSessionEnded = "teamlab.remote_session.ended";

@@ -13,7 +13,8 @@ public sealed class TeamLabAdminTopologyController(
     ITeamLabTopologyApplicationService topologies,
     TeamLabAdminQueryService queries,
     TeamLabReleaseImagePreparationService imagePreparation,
-    UserManager<UserInfo> users) : ControllerBase
+    UserManager<UserInfo> users,
+    TeamLabRecordDeletionService deletion) : ControllerBase
 {
     [HttpGet("capabilities")]
     public TeamLabCapabilitiesModel Capabilities() => topologies.GetCapabilities();
@@ -72,7 +73,7 @@ public sealed class TeamLabAdminTopologyController(
     public async Task<IActionResult> Delete(Guid topologyId, CancellationToken cancellationToken)
     {
         var actor = await ActorAsync();
-        await topologies.DeleteAsync(topologyId, actor.Id, actor.Role >= Role.Admin, cancellationToken);
+        await deletion.DeleteTopologyAsync(topologyId, actor.Id, actor.Role >= Role.Admin, cancellationToken);
         return NoContent();
     }
 

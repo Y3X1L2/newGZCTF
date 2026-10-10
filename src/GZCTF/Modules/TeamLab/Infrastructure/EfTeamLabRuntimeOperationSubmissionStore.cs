@@ -21,6 +21,26 @@ public sealed class EfTeamLabRuntimeOperationSubmissionStore(
         await using var transaction = context.Database.IsRelational()
             ? await context.Database.BeginTransactionAsync(cancellationToken)
             : null;
+        if (submission.AdmissionTopologyId is { } topologyPublicId)
+        {
+            var topologyId = await context.TeamLabTopologies.AsNoTracking().Where(topology => topology.PublicId == topologyPublicId)
+                .Select(topology => (int?)topology.Id).SingleOrDefaultAsync(cancellationToken)
+                ?? throw new TeamLabApiContractException("topology_not_found", "未找到场景。", 404);
+            if (transaction is not null && context.Database.IsNpgsql())
+            {
+                var topologyLock = $"teamlab:topology-release:{topologyId}";
+                await context.Database.ExecuteSqlInterpolatedAsync(
+                    $"SELECT pg_advisory_xact_lock(hashtextextended({topologyLock}, 0))", cancellationToken);
+            }
+            if (!await context.TeamLabTopologies.AnyAsync(topology => topology.Id == topologyId, cancellationToken))
+                throw new TeamLabApiContractException("topology_not_found", "场景已删除。", 404);
+        }
+        if (submission.AdmissionReleaseId is { } releaseId)
+        {
+            await TeamLabReleaseLifecycle.LockAsync(context, releaseId, cancellationToken);
+            if (!await context.TeamLabTopologyReleases.AnyAsync(release => release.Id == releaseId, cancellationToken))
+                throw new TeamLabApiContractException("release_not_found", "场景版本已删除。", 404);
+        }
         if (transaction is not null && context.Database.IsNpgsql() && submission is
             { ResourceType: "teamlab-runtime", ResourceId: not null })
         {
@@ -36,6 +56,9 @@ public sealed class EfTeamLabRuntimeOperationSubmissionStore(
         }
         if (submission is { ResourceType: "teamlab-runtime", ResourceId: not null })
         {
+            if (Guid.TryParse(submission.ResourceId, out var runtimePublicId) &&
+                !await context.TeamLabRuntimes.AsNoTracking().AnyAsync(runtime => runtime.PublicId == runtimePublicId, cancellationToken))
+                throw new TeamLabApiContractException("runtime_not_found", "运行记录已删除。", 404);
             var active = await context.ApiOperations.AsNoTracking().AnyAsync(operation =>
                 operation.Kind == TeamLabRuntimeOperationApplicationService.OperationKind &&
                 operation.ResourceType == submission.ResourceType && operation.ResourceId == submission.ResourceId &&

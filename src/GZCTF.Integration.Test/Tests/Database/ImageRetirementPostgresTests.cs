@@ -260,7 +260,7 @@ public sealed class ImageRetirementPostgresTests : IAsyncLifetime
 
     private static TeamLabRuntimePlanner Planner(AppDbContext context) => new(context,
         new TeamLabRuntimeOverlayService(new EphemeralDataProtectionProvider()), Recorder(context), null!,
-        Options.Create(new TeamLabNetworkConfig()));
+        Options.Create(new TeamLabNetworkConfig()), new GZCTF.Modules.Runtime.Application.TeamLabRecordReferenceQuery(context));
 
     private static async Task<Fixture> SeedAsync(AppDbContext context, bool draft = false)
     {

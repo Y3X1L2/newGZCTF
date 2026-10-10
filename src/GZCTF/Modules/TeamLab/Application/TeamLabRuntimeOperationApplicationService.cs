@@ -51,7 +51,11 @@ public sealed record TeamLabRuntimeOperationSubmission(
     string RequestHash,
     string ResourceType,
     string? ResourceId,
-    TeamLabRuntimeOperationJob Job);
+    TeamLabRuntimeOperationJob Job)
+{
+    public Guid? AdmissionReleaseId { get; init; }
+    public Guid? AdmissionTopologyId { get; init; }
+}
 
 public interface ITeamLabControlPlaneOperationService
 {
@@ -634,7 +638,11 @@ public sealed class TeamLabRuntimeOperationApplicationService(
         var (resourceType, resourceId) = ResolveResource(kind, payload);
         return submissions.SubmitAsync(new TeamLabRuntimeOperationSubmission(
             apiTokenId, actorUserId, payload.ControlScopeId, $"{routeKey.Trim()}#{identity}", normalizedKey, requestHash,
-            resourceType, resourceId, job), cancellationToken);
+            resourceType, resourceId, job)
+        {
+            AdmissionReleaseId = payload.ReleaseId ?? payload.Create?.ReleaseId ?? payload.Reset?.ReleaseId ?? payload.CreateRollout?.ReleaseId,
+            AdmissionTopologyId = payload.TopologyId
+        }, cancellationToken);
     }
 
     private static (string Type, string? Id) ResolveResource(
