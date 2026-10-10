@@ -31,7 +31,8 @@ public sealed class TeamLabAdminRuntimeController(
     TeamLabLinkPolicyService linkPolicies,
     ILogRepository logs,
     UserManager<UserInfo> users,
-    TeamLabAssetDiagnosticsService diagnostics) : ControllerBase
+    TeamLabAssetDiagnosticsService diagnostics,
+    TeamLabRecordDeletionService deletion) : ControllerBase
 {
     [HttpGet("{runtimeId:guid}/grants")]
     public async Task<IReadOnlyList<TeamLabRuntimeGrantModel>> ListRuntimeGrants(
@@ -235,6 +236,16 @@ public sealed class TeamLabAdminRuntimeController(
         var actor = await ActorAsync();
         return Accepted($"/api/admin/teamlab/runtimes/{runtimeId:D}",
             await runtimes.EnqueueLifecycleAsync(runtimeId, false, actor.Id, cancellationToken));
+    }
+
+    /// <summary>Deletes a fully destroyed runtime record and its owned history. Images remain.</summary>
+    [HttpDelete("{runtimeId:guid}/record")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> DeleteRecord(Guid runtimeId, CancellationToken cancellationToken)
+    {
+        var actor = await ActorAsync();
+        await deletion.DeleteRuntimeAsync(runtimeId, actor.Id, actor.Role >= Role.Admin, cancellationToken);
+        return NoContent();
     }
 
     [HttpDelete("{runtimeId:guid}")]

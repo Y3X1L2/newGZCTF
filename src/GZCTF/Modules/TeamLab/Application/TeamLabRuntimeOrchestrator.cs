@@ -409,6 +409,9 @@ public sealed class TeamLabRuntimeOrchestrator(
             ? await context.Database.BeginTransactionAsync(cancellationToken) : null;
         await TeamLabReleaseLifecycle.LockAsync(context, releaseId, cancellationToken);
         await TeamLabReleaseLifecycle.RequireStartableAsync(context, releaseId, cancellationToken);
+        await TeamLabRecordMutationLock.LockAsync(context, runtime.Id, runtime.PublicId, cancellationToken);
+        if (!await context.TeamLabRuntimes.AsNoTracking().AnyAsync(item => item.Id == runtime.Id, cancellationToken))
+            throw new TeamLabApiContractException("runtime_not_found", "运行记录已删除。", 404);
         var dockerSlots = runtime.Assets.Count(item => item.Generation == runtime.Generation && item.Kind == TeamLabResourceKind.Docker);
         var vmSlots = runtime.Assets.Count(item => item.Generation == runtime.Generation && item.Kind == TeamLabResourceKind.Vm);
         var payload = new TeamLabRuntimeOperationPayload(null, runtime.PublicId, command);
@@ -793,7 +796,12 @@ public sealed class TeamLabRuntimeOrchestrator(
         CancellationToken cancellationToken)
     {
         var runtime = await LoadRuntimeByPublicIdAsync(runtimeId, cancellationToken);
-        return await queue.EnqueueAsync(new TeamLabQueueRequest(
+        await using var transaction = context.Database.IsRelational()
+            ? await context.Database.BeginTransactionAsync(cancellationToken) : null;
+        await TeamLabRecordMutationLock.LockAsync(context, runtime.Id, runtime.PublicId, cancellationToken);
+        if (!await context.TeamLabRuntimes.AsNoTracking().AnyAsync(item => item.Id == runtime.Id, cancellationToken))
+            throw new TeamLabApiContractException("runtime_not_found", "运行记录已删除。", 404);
+        var request = new TeamLabQueueRequest(
             runtime.Id,
             0,
             0,
@@ -808,7 +816,16 @@ public sealed class TeamLabRuntimeOrchestrator(
             "destroy runtime",
             runtime.Generation,
             RuntimeOperationKind.Destroy,
-            null), cancellationToken);
+            null);
+        var queued = transaction is null
+            ? await queue.EnqueueAsync(request, cancellationToken)
+            : await queue.EnqueueInCurrentTransactionAsync(request, cancellationToken);
+        if (transaction is not null)
+        {
+            await transaction.CommitAsync(cancellationToken);
+            await queue.NotifyAsync(queued.TicketId, cancellationToken);
+        }
+        return queued;
     }
 
     private async Task RequireDirectLifecycleControlAsync(Guid runtimeId, CancellationToken cancellationToken)
