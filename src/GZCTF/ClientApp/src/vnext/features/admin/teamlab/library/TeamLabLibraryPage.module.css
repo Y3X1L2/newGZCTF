@@ -113,6 +113,8 @@
 .sceneActions a { display: inline-flex; align-items: center; gap: 5px; padding: var(--yn-space-2); color: var(--yn-color-text-secondary); text-decoration: none; white-space: nowrap; }
 .sceneActions a:hover, .sceneActions a:focus-visible { color: var(--yn-color-text); outline-color: var(--yn-color-brand); }
 .maintenanceNote { color: var(--yn-color-text-secondary); }
+.runtimeSearchTable { min-width: 720px; }
+.runtimeRowActions { display: flex; align-items: center; justify-content: flex-end; gap: var(--yn-space-2); white-space: nowrap; }
 .mobileSceneList { display: none; }
 
 .dialogForm {
