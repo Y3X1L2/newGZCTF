@@ -2423,6 +2423,8 @@ export interface ConfigEditModel {
   globalConfig?: GlobalConfig | null;
   /** Game policy */
   containerPolicy?: ContainerPolicy | null;
+  /** Training container quota, independent of public exercise policy */
+  trainingContainerPolicy?: TrainingContainerPolicy | null;
 }
 
 /** Account policy */
@@ -2489,6 +2491,18 @@ export interface ContainerPolicy {
    * @max 360
    */
   renewalWindow?: number;
+}
+
+/** Training runtime policy, configured independently of public exercise containers. */
+export interface TrainingContainerPolicy {
+  /**
+   * Maximum running and queued training containers per user across courses.
+   * Zero means unlimited. Reaching the limit never evicts an existing lab.
+   * @format int32
+   * @min 0
+   * @max 2147483647
+   */
+  maxContainerCountPerUser?: number;
 }
 
 /** List response */
@@ -4814,46 +4828,24 @@ export interface BloodBonus {
   noBonus?: boolean;
 }
 
-/** Represents a user in the identity system */
 export interface IdentityUserOfGuid {
-  /**
-   * Gets or sets the primary key for this user.
-   * @format guid
-   */
+  /** @format guid */
   id?: string;
-  /** Gets or sets the user name for this user. */
   userName?: string | null;
-  /** Gets or sets the normalized user name for this user. */
   normalizedUserName?: string | null;
-  /** Gets or sets the email address for this user. */
   email?: string | null;
-  /** Gets or sets the normalized email address for this user. */
   normalizedEmail?: string | null;
-  /** Gets or sets a flag indicating if a user has confirmed their email address. */
   emailConfirmed?: boolean;
-  /** Gets or sets a salted and hashed representation of the password for this user. */
   passwordHash?: string | null;
-  /** A random value that must change whenever a users credentials change (password changed, login removed) */
   securityStamp?: string | null;
-  /** A random value that must change whenever a user is persisted to the store */
   concurrencyStamp?: string | null;
-  /** Gets or sets a telephone number for the user. */
   phoneNumber?: string | null;
-  /** Gets or sets a flag indicating if a user has confirmed their telephone address. */
   phoneNumberConfirmed?: boolean;
-  /** Gets or sets a flag indicating if two factor authentication is enabled for this user. */
   twoFactorEnabled?: boolean;
-  /**
-   * Gets or sets the date and time, in UTC, when any user lockout ends.
-   * @format uint64
-   */
+  /** @format uint64 */
   lockoutEnd?: number | null;
-  /** Gets or sets a flag indicating if the user could be locked out. */
   lockoutEnabled?: boolean;
-  /**
-   * Gets or sets the number of failed login attempts for the current user.
-   * @format int32
-   */
+  /** @format int32 */
   accessFailedCount?: number;
 }
 
