@@ -1,6 +1,6 @@
 # YINYU 文档体系审计与维护方案
 
-日期：2026-10-11。源码基线：`origin/main 03440c51`；第一轮清理分支：`28a350e4`，尚未合入 main。本方案审计两者，归档仅列文件，不通读正文。最后的目录和自动化是推荐目标，不表示已经迁移或上线。
+日期：2026-10-11。初始源码基线：`origin/main 03440c51`；提交前已正常合入最新主线 `b1812d15`。第一轮清理为 `28a350e4`，整个文档任务仍未合入 main。本方案审计两者，归档仅列文件，不通读正文。目标目录与自动维护机制为推荐设计，已执行的修正和检查另行列明。
 
 ## 先读这一页
 
@@ -18,6 +18,8 @@
 
 本文件是治理方案审查材料，日常任务无需必读；实施完成后稳定规则进入 AGENTS/导航，审计记录封存。模块短说明、代码地图与维护门禁是验收目标，不以删掉多少文件为完成标准。
 
+按需阅读：[六项判断](#2-对六项顾虑的评估) · [目标结构](#3-推荐目标结构) · [自动维护](#5-自动化方案与边界) · [迁移与验收](#6-落地顺序与验收)。
+
 ## 1. 当前设计的目的、合理性与失效点
 
 以下目的依据已有文件声明与结构判断，不推测作者个人意图。现行模块化单体、独立 Agent、统一部署队列、独立 worktree、审查和部署授权规则继续保留。
@@ -32,9 +34,9 @@
 | archive/ + 事实优先级 | 保留历史证据，防止旧计划推翻现网 | 归档降低权威但未自动降低搜索噪声；“老”与“过期”仍容易混为一谈 |
 | 文档随代码更新、提交前检查 | 尽量让实现、测试和说明闭环 | 缺少明确责任与变更感知；靠提醒，无法发现“只改代码”的 PR 所遗漏的文档 |
 
-主线有 131 份非归档 Markdown、160 份归档；第一轮后非归档为 120 份、归档 165 份。120 份中 64 份 handoff、6 份测试资料，剩余 **50 份说明、规则和入口**。按目录看：development 75、commercialization 22、根目录 10、operations 8、modules 3、节点/Registry 各 1。其中 59 个文件名含 TeamLab，表明资料覆盖明显集中，不能把整个项目的文档覆盖等同于 TeamLab 覆盖。
+初始主线有 131 份非归档 Markdown、160 份归档；第一轮 28a350e4 后非归档为 120 份、归档 165 份。以下盘点固定于该统计点：120 份中 64 份 handoff、6 份测试资料，剩余 **50 份说明、规则和入口**。按目录看：development 75、commercialization 22、根目录 10、operations 8、modules 3、节点/Registry 各 1。其中 59 个文件名含 TeamLab，表明资料覆盖明显集中，不能把整个项目的文档覆盖等同于 TeamLab 覆盖。
 
-50 份中有 8 份至少 400 行、3 份至少 800 行。TeamLab 操作/API 手册 2673 行、对接指南 866 行；modules/ 实际只有索引、培训容器生命周期、TeamLab 运行事实契约。源码有 12 个 Modules 目录，Agent 另在独立项目。以上是文件/行数盘点，不能据此断言长文全部冗余或内容全部过期。
+50 份中有 8 份至少 400 行、3 份至少 800 行。TeamLab 操作/API 手册 2673 行、对接指南 866 行；modules/ 实际只有索引、培训容器生命周期、TeamLab 运行事实契约。源码有 12 个 Modules 目录，Agent 另在独立项目。以上是文件/行数盘点，不能据此断言长文全部冗余或内容全部过期。提交前同步 PR #26 后新增一个任务记录和练习分页说明，当前分支非归档为122份（51份说明/入口、65份handoff、6份测试资料），modules为4份；新增内容有明确价值，但统一短入口仍未补齐。
 
 还发现了一个语义冲突：[TeamLab 手册](../operations/teamlab-networking-operations-manual.md)原先将 ApiOperation 状态写作 queued/running/completed/failed/cancelled；当前 [枚举](../../src/GZCTF/Modules/Audit/Domain/ApiOperation.cs)与 [OpenAPI](../commercialization/openapi/open-v1.json)实际只有 Pending/Running/Succeeded/Failed，对应 0–3。本轮已修正该段。这种错误能通过文件链接检查，说明检查“文件存在”和“描述符合代码”是两件事。
 
@@ -142,7 +144,7 @@ flowchart LR
 
 短说明示例：培训让教师组织课程、章节、资料、实验和课后理论，学员报名后按章节学习，系统记录提交与学习进度。大体链路为“课程授权→课程拥有的实验题→学员独立实例→统一部署队列→节点容器→提交/进度”，课程不是另一套容器调度系统。
 
-说明只解释关键边界：课程与公共练习的实例额度隔离；课程默认每用户 3 个运行或排队实例，达到额度拒绝新建而不驱逐其他课程实验；动态 Flag 按实例隔离。软件验证与最近生产部署引用 10-11 证据，不能由这段介绍推断培训 VM、全部业务流程或所有故障已验收。
+说明只解释关键边界：课程与公共练习的实例额度隔离；课程默认每用户 3 个运行或排队实例，达到额度拒绝新建而不驱逐其他课程实验；动态 Flag 按实例隔离。动态额度已在新主线增加管理员设置入口，保存后影响下一次准入，不销毁既有实例。实例隔离的软件验证与已知生产部署引用 10-11 证据，不能由这段介绍推断培训 VM、全部业务流程或所有故障已验收。
 
 工程页对应的代码地图应是下表，读者能直接定位；这不是对整个培训模块已全面审计的声明。
 
@@ -152,6 +154,7 @@ flowchart LR
 | 页面和 feature API adapter | [training features](../../src/GZCTF/ClientApp/src/vnext/features/training)、[实验 adapter](../../src/GZCTF/ClientApp/src/vnext/features/training/chapter/trainingChapterApi.ts) |
 | 实例额度、幂等、Flag 初始化 | [ExerciseInstanceRepository](../../src/GZCTF/Repositories/ExerciseInstanceRepository.cs)、[TrainingContainerPolicy](../../src/GZCTF/Models/Internal/TrainingContainerPolicy.cs) |
 | 课程删除与内容引用 | [TrainingCourseDeletionService](../../src/GZCTF/Modules/Training/Application/TrainingCourseDeletionService.cs)、[模块实现](../../src/GZCTF/Modules/Training) |
+| 动态额度管理 | [AdminController](../../src/GZCTF/Controllers/AdminController.cs)、[设置面板](../../src/GZCTF/ClientApp/src/vnext/features/admin/system/TrainingContainerQuotaPanel.tsx)；已进入新主线，部署与实测另核 |
 | 容器执行票据 | [DeploymentQueueService](../../src/GZCTF/Services/Fleet/DeploymentQueueService.cs)，共享 Runtime/Agent 链路 |
 | 定向验证 | [生命周期单测](../../src/GZCTF.Test/UnitTests/Training/TrainingContainerLifecycleTests.cs)、[API/PG 并发额度](../../src/GZCTF.Integration.Test/Tests/Api/TrainingContainerQuotaTests.cs)、[真实 Docker](../../src/GZCTF.Integration.Test/Tests/Repository/TrainingContainerDockerTests.cs) |
 | 稳定规则与发布证据 | [课程生命周期](../modules/training-container-lifecycle.md)、[10-11 发布](handoffs/2026-10-11-training-runtime-mainline.md) |
@@ -189,9 +192,12 @@ catalog 不记录完整类/字段/文件清单；生成扫描结果可作为工�
   "watchPaths": [
     "src/GZCTF/Modules/Training/**",
     "src/GZCTF/Controllers/TrainingCourse*.cs",
+    "src/GZCTF/Controllers/AdminController.cs",
     "src/GZCTF/Repositories/ExerciseInstanceRepository.cs",
     "src/GZCTF/Models/Internal/TrainingContainerPolicy.cs",
-    "src/GZCTF/ClientApp/src/vnext/features/training/**"
+    "src/GZCTF/ClientApp/src/vnext/features/training/**",
+    "src/GZCTF/ClientApp/src/vnext/features/admin/system/TrainingContainerQuotaPanel.tsx",
+    "src/GZCTF/ClientApp/src/vnext/features/admin/system/useTrainingContainerQuota.ts"
   ],
   "reviewedCommit": "<实际复核的代码提交>",
   "reviewedScopeHash": "<关联路径与内容的稳定摘要>"
@@ -253,7 +259,9 @@ flowchart LR
 
 第一轮清理仍在本任务分支，未进入 main；本轮交付的是上述审计与推荐方案，并修正抽样发现的 ApiOperation 状态说明与 Provisioning 归属描述，补齐文档门禁对只改代码 PR 的触发。没有批量迁移所有模块，没有实现 catalog/语义门禁/定时机器人，没有新增生产操作。方案示例与未实施机制分别标明。
 
-现行入口仍是 [文档导航](../README.md)；第一轮状态摘要见 [current-state](current-state.md)，生产证据仍保留原任务记录。本方案的实施缺口归 [backlog](backlog.md) 的 DOC-01/DOC-02；六项问题的整体落实应另按阶段验收，不能由第一轮 9 份删除或一次链接检查宣布闭环。
+现行入口仍是 [文档导航](../README.md)；第一轮状态摘要见 [current-state](current-state.md)，生产证据仍保留原任务记录。同步时 PR #26 的实现已在 main，但其交接仍记录实施/验证阶段；本轮依据 Git 登记“已合入”，没有据此补写“已部署/已验收”。它再次说明状态必须关联事件与证据，不能只靠编辑人记得回写。
+
+本方案的实施缺口归 [backlog](backlog.md) 的 DOC-01/DOC-02；六项问题的整体落实应另按阶段验收，不能由第一轮 9 份删除或一次链接检查宣布闭环。
 
 本轮 Git、验证与交接见 [任务记录](handoffs/2026-10-11-docs-collaboration-audit.md)。当前读者可先看前述“一页结论”和结构图，工程审查者再看自动化/迁移细节，第一轮清理清单仅供追溯。
 

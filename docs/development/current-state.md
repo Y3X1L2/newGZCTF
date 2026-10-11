@@ -1,6 +1,6 @@
 # YINYU 当前开发状态
 
-整理日期：2026-10-11。源码审计起点：`origin/main 03440c51`。
+整理日期：2026-10-11。源码审计起点：`origin/main 03440c51`；任务提交前已同步 `b1812d15`。
 本页只保留当前摘要，更新时替换旧事实；完整测试、部署过程和授权边界放在任务记录中。最多 120 行。
 
 ## 代码与部署基线
@@ -9,6 +9,7 @@
 | --- | --- | --- |
 | 开发主线 | `main`；新任务从实时 fetch 后的 `origin/main` 创建分支 | SHA 以 Git 为准，本页不追写每次文档提交 |
 | 培训实例修复 | PR #24 合入 `60170a52`，PR #25 为后续部署记录；课程默认每用户 3 实例，公共练习和课程额度隔离 | [主线修复与发布](handoffs/2026-10-11-training-runtime-mainline.md)、[课程生命周期](../modules/training-container-lifecycle.md) |
+| 培训动态设置 / 练习分页 | PR #26 已合入 `b1812d15`；管理员可动态设置培训额度，练习/管理题库使用服务端分页 | Git 合入事实与[新任务记录](handoffs/2026-10-11-training-quota-settings.md)、[分页说明](../modules/exercise-catalog-pagination.md)；本轮未获得该变更的新部署/验收证据 |
 | 主站发布 | `.27` 的 `/opt/gzctf/publish` 指向 `/srv/yinyu-data/releases/training-runtime-quota-60170a5266f684581f21e95013687b0e7367515f-20261011/publish`；Main DLL SHA-256 `e2265545d6b26097d9dc888cbf1ee2a58dfd60d367ca5ed6d0ccca57f2b73710` | 本轮 2026-10-11 16:32–16:33（北京时间）只读 SSH 核对链接和文件摘要 |
 | 前端 / Agent | 前端源 `a63937c6`；三节点 Agent 最近记录为 `87e011cf…` | 10-10/10-11 发布交接；本轮仅核 `.27` Agent active，未重验其他节点文件 |
 | 数据库 | 最近记录 150 条历史，head `20261001145237_AddTeamLabManagedGuestNetwork`；培训修复无迁移 | 10-11 发布交接；本轮未查询生产数据库 |
