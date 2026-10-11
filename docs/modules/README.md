@@ -10,7 +10,7 @@
 | Awdp | `yinyu-awdp-manual-acceptance.md`、`yinyu-vnext-page-interaction-api-spec.md` | 功能验收可用 | 状态机、Checker/Flag/补丁 API、计分和运维总览 |
 | Content | `commercialization/module-boundary-map.md`、`commercialization/open-api-v1-guide.md`、镜像/附件运维文档 | 边界和接口较完整 | 题目资产、附件、镜像绑定、引用检查和删除生命周期总览 |
 | Ctf | `commercialization/open-api-v1-guide.md`、vNext 页面/API 规格 | 赛事入口和接口可查 | Flag、Submission、Scoreboard 数据流和出题操作规范 |
-| Exercise | vNext 页面/API 规格、总纲、Open API | 已实现且入口清晰 | 内容运营、来源导入和实例生命周期总览；核心生产验收已有记录 |
+| Exercise | vNext 页面/API 规格、总纲、Open API、[题库分页](exercise-catalog-pagination.md) | 已实现且入口清晰 | 内容运营、来源导入和实例生命周期总览；旧核心生产验收已有记录，新分页部署/验收另查对应交接 |
 | Identity | 总纲、Open API、认证页面/API 规格 | 入口和边界可查 | Portal SSO、角色权限、账号生命周期和故障排查手册 |
 | Penetration | `teamlab-api-foundation-contract.md`、`teamlab-networking-feature-guide.md`、页面/API 规格 | 边界和组网契约可查 | objective/submission/score/reset 的独立玩法说明 |
 | Provisioning | [批量导入应用](../../src/GZCTF/Modules/Provisioning/Application/AcademicImportApplicationService.cs)、Open API 使用指南 | 课程、理论题/试卷和战队批量导入；不等同于运行部署编排 | 批量导入、幂等 operation、授权与目标业务模块调用的独立说明 |

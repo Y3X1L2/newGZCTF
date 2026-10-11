@@ -11,6 +11,8 @@ public sealed record ExerciseManagementPage(
 
 public interface IExerciseManagementService
 {
+    Task<ExerciseCatalogPageModel> GetManagementCatalogPageAsync(ExerciseFilter? filter,
+        ExercisePagination pagination, CancellationToken token = default);
     Task<ExerciseChallenge?> CollectGameChallengeAsync(int gameChallengeId, CancellationToken token = default);
     Task<ExerciseChallenge?> CollectTrainingChallengeAsync(int exerciseChallengeId, CancellationToken token = default);
     Task<ExerciseChallenge?> CollectAwdpServiceAsync(int awdpServiceId, CancellationToken token = default);

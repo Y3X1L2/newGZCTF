@@ -78,6 +78,16 @@ export interface ExerciseInfoDto {
   poolSource?: 'Exercise' | 'Game' | 'Training'
 }
 
+export interface ExerciseCatalogPageDto {
+  items: ExerciseInfoDto[]
+  total: number
+  page: number
+  pageSize: number
+  enabledCount: number
+  containerCount: number
+  tags: string[]
+}
+
 async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, init)
   const body = await response.json().catch(() => null) as T | { message?: string; title?: string } | null
@@ -96,6 +106,16 @@ export function useExercises(filter?: string) {
     () => requestJson<ExerciseInfoDto[]>(filter ? `${BASE}?${filter}` : BASE)
   )
   return { data, error, mutate }
+}
+
+export function useExercisePage(filter: string, page: number, pageSize: number) {
+  const params = new URLSearchParams(filter)
+  params.set('Page', String(page))
+  params.set('PageSize', String(pageSize))
+  const url = `${BASE}/page?${params}`
+  return useSWR<ExerciseCatalogPageDto>(url, () => requestJson<ExerciseCatalogPageDto>(url), {
+    revalidateOnFocus: false,
+  })
 }
 
 export function useExerciseDetail(id: number) {

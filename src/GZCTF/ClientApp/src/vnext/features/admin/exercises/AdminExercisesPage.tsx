@@ -1,5 +1,8 @@
 import { Pencil, Plus, Search, Trash2 } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
+import { useSearchParams } from 'react-router'
+import { CatalogPagination } from '../../../shared/CatalogPagination'
+import { useCatalogPagination } from '../../../shared/useCatalogPagination'
 import { ActionButton, InlineFeedback, VNextConfirmDialog } from '../../../shared/Interaction'
 import { DataState } from '../../../shared/Primitives'
 import { errorMessage } from '../../../shared/errors'
@@ -20,20 +23,17 @@ import styles from './AdminExercisesPage.module.css'
 
 export function AdminExercisesPage() {
   useVNextPageTitle('练习题库管理')
-  const request = useAdminExercises()
-  const [query, setQuery] = useState('')
+  const [params, setParams] = useSearchParams()
+  const query = params.get('q') ?? ''
+  const pagination = useCatalogPagination()
+  const request = useAdminExercises(query, pagination.page, pagination.pageSize)
+  useCatalogPagination(request.data?.page)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editorOpen, setEditorOpen] = useState(false)
   const [deleting, setDeleting] = useState<{ id: number; title: string } | null>(null)
   const [failure, setFailure] = useState<string | null>(null)
 
-  const rows = useMemo(() => {
-    const keyword = query.trim().toLocaleLowerCase('zh-CN')
-    return (request.data ?? []).filter((exercise) =>
-      !keyword || `${exercise.title} ${exercise.category ?? ''} ${exercise.tags?.join(' ') ?? ''} ${exercise.id}`
-        .toLocaleLowerCase('zh-CN')
-        .includes(keyword))
-  }, [query, request.data])
+  const rows = request.data?.items ?? []
 
   const columns: AdminDataColumn<(typeof rows)[number]>[] = [
     {
@@ -99,15 +99,20 @@ export function AdminExercisesPage() {
         title="练习题库"
       />
       <MetricStrip>
-        <MetricItem detail="公共题目" label="题目总数" value={request.data?.length ?? 0} />
-        <MetricItem detail="学员可见" label="已启用" tone="success" value={request.data?.filter((item) => item.isEnabled).length ?? 0} />
-        <MetricItem detail="容器题型" label="动态环境" value={request.data?.filter((item) => item.type?.includes('Container')).length ?? 0} />
+        <MetricItem detail="符合筛选的公共题目" label="题目总数" value={request.data?.total ?? '—'} />
+        <MetricItem detail="符合筛选的启用题目" label="已启用" tone="success" value={request.data?.enabledCount ?? '—'} />
+        <MetricItem detail="符合筛选的容器题型" label="动态环境" value={request.data?.containerCount ?? '—'} />
       </MetricStrip>
       <FilterToolbar>
         <ToolbarGroup grow>
           <label className={styles.searchBox}>
             <Search size={16} />
-            <input aria-label="搜索练习题" onChange={(event) => setQuery(event.currentTarget.value)} placeholder="名称、分类、标签或编号" type="search" value={query} />
+            <input aria-label="搜索练习题" onChange={(event) => {
+              const next = new URLSearchParams(params)
+              next.set('q', event.currentTarget.value)
+              next.delete('page')
+              setParams(next, { replace: true })
+            }} placeholder="名称、分类、标签或编号" type="search" value={query} />
           </label>
         </ToolbarGroup>
       </FilterToolbar>
@@ -118,6 +123,7 @@ export function AdminExercisesPage() {
       ) : (
         <DataTable caption="公共练习题管理列表" columns={columns} emptyDescription="当前没有符合条件的公共练习题。" emptyTitle="没有练习题" rowKey={(exercise) => exercise.id} rows={rows} />
       )}
+      {request.data ? <CatalogPagination page={request.data.page} pageSize={pagination.pageSize} total={request.data.total} disabled={request.isValidating} onPageChange={pagination.setPage} onPageSizeChange={pagination.setPageSize} /> : null}
       <ExerciseEditorDrawer
         exerciseId={editingId}
         onClose={() => setEditorOpen(false)}

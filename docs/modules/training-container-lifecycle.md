@@ -8,7 +8,9 @@
 
 ## 数量限制
 
-课程使用独立配置 `TrainingContainerPolicy:MaxContainerCountPerUser`，默认 **3**，按用户跨课程统计；`0` 表示不限数量，负数导致启动校验失败。可在发布配置的 `TrainingContainerPolicy` 节设置 `MaxContainerCountPerUser`，或使用 `GZCTF_TrainingContainerPolicy__MaxContainerCountPerUser` 环境变量；系统设置页面暂未提供该字段。
+课程使用独立配置 `TrainingContainerPolicy:MaxContainerCountPerUser`，默认 **3**，按用户跨课程统计；`0` 表示不限个人数量，仍受节点容量与全局准入限制。管理员可在 `/admin/system` 的“培训容器额度”区段修改“每名用户培训容器上限”，单独保存，不会写入自主练习、账号或平台身份策略。`GET /api/Admin/Config` 返回 `trainingContainerPolicy`；`PUT /api/Admin/Config` 可只携带该节，值必须为 `0–2147483647` 的整数，负数、小数和溢出值返回400，非管理员不可读写。
+
+保存后配置持久化到数据库 `Configs` 并通过现有配置提供器重载，新请求的 `IOptionsSnapshot<TrainingContainerPolicy>` 立即使用新值，无需重启主站或 Agent。降低上限不停止、销毁或取消已有实例与票据，只限制后续新建；已有有效运行实例仍可复用。配置文件的 `TrainingContainerPolicy` 节或 `GZCTF_TrainingContainerPolicy__MaxContainerCountPerUser` 环境变量可提供初始值；数据库中已保存的同名配置优先，负数初始值会被启动校验拒绝。
 
 - 已关联容器和未生成容器的活跃 Create 票据共同占用额度；同一实例只计一次。
 - 延期、停止、销毁和终态票据不额外占用创建额度。
@@ -28,4 +30,4 @@ Docker 执行面通过 `GZCTF_FLAG` 环境变量传递该值。镜像启动程�
 
 `TrainingContainerLifecycleTests` 覆盖额度隔离、跨用户隔离、不限额度、重复创建、排队计数、旧容器清理失败和缺失 Flag 修复；`TrainingContainerQuotaTests` 通过正式课程 API 和 PostgreSQL 验证并发四请求只允许三个入队、重复请求复用票据、公共练习与课程队列独立限额；`InstanceFlagIsolationTests` 验证 PostgreSQL 持久化和入队幂等；`TrainingContainerDockerTests` 使用无攻击内容的 BusyBox HTTP 服务验证三个实例同时运行、不同端口、注入值与数据库一致及单实例销毁隔离。
 
-本修复无数据库迁移、无 Agent 协议变化、无前端布局或生成 API 结构变化。发布遵循 [维护窗口流程](../operations/vnext-maintenance-window-rollout.md)。完成源码测试不等于现有主站已经更新；现场状态与验收范围见对应任务交接记录。
+动态设置回归覆盖保存后下一次创建立即生效、0不限数量、降低额度保留已有票据与运行容器、局部配置保存与权限拒绝；页面覆盖0值回读、空值/负数/小数/溢出、保存失败和其他区段草稿保留。设置功能仅扩展内部管理契约与前端生成客户端，无数据库迁移或 Agent 协议变化。发布遵循 [维护窗口流程](../operations/vnext-maintenance-window-rollout.md)。完成源码测试不等于现有主站已经更新；现场状态与验收范围见对应任务交接记录。

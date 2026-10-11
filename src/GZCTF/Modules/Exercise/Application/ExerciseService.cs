@@ -13,6 +13,12 @@ public sealed class ExerciseService(
     DeploymentQueueService deploymentQueue,
     IOptionsSnapshot<ContainerPolicy> containerPolicy) : IExerciseService
 {
+    public Task<ExerciseCatalogPageModel> GetCatalogPageAsync(ExerciseFilter? filter, ExercisePagination pagination,
+        Guid userId, Role role, CancellationToken token = default) =>
+        ExerciseCatalogQuery.PageAsync(context, context.ExerciseChallenges.AsNoTracking()
+            .Where(exercise => exercise.IsEnabled && exercise.TrainingCourseId == null && exercise.MinimumVisibleRole <= role),
+            filter, pagination, userId, token);
+
     public async Task<ExerciseChallenge[]> GetExercisesAsync(CancellationToken token = default) =>
         await context.ExerciseChallenges
             .AsNoTracking()

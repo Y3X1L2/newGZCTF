@@ -35,6 +35,24 @@ public class ExerciseController(
     public async Task<IActionResult> GetExercisesForManagement(CancellationToken token) =>
         Ok(await managementService.GetExerciseManagementListAsync(token));
 
+    /// <summary>Get a bounded page of visible public exercises</summary>
+    [HttpGet("page")]
+    [ProducesResponseType(typeof(ExerciseCatalogPageModel), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetExercisePage([FromQuery] ExerciseFilter? filter,
+        [FromQuery] ExercisePagination pagination, CancellationToken token)
+    {
+        var user = await CurrentUser();
+        return Ok(await exerciseService.GetCatalogPageAsync(filter, pagination, user.Id, user.Role, token));
+    }
+
+    /// <summary>Get a bounded management page including disabled public exercises</summary>
+    [HttpGet("manage/page")]
+    [RequireTeacher]
+    [ProducesResponseType(typeof(ExerciseCatalogPageModel), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetManagementExercisePage([FromQuery] ExerciseFilter? filter,
+        [FromQuery] ExercisePagination pagination, CancellationToken token) =>
+        Ok(await managementService.GetManagementCatalogPageAsync(filter, pagination, token));
+
     [HttpGet("{id:int}")]
     public async Task<IActionResult> GetExercise(int id, CancellationToken token)
     {

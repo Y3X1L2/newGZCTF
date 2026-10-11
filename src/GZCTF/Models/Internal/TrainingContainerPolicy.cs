@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace GZCTF.Models.Internal;
 
 /// <summary>
@@ -9,5 +11,6 @@ public sealed class TrainingContainerPolicy
     /// Maximum running and queued training containers per user across courses.
     /// Zero means unlimited. Reaching the limit never evicts an existing lab.
     /// </summary>
+    [Range(0, int.MaxValue)]
     public int MaxContainerCountPerUser { get; set; } = 3;
 }
