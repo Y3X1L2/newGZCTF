@@ -10,9 +10,10 @@
 | Awdp | `yinyu-awdp-manual-acceptance.md`、`yinyu-vnext-page-interaction-api-spec.md` | 功能验收可用 | 状态机、Checker/Flag/补丁 API、计分和运维总览 |
 | Content | `commercialization/module-boundary-map.md`、`commercialization/open-api-v1-guide.md`、镜像/附件运维文档 | 边界和接口较完整 | 题目资产、附件、镜像绑定、引用检查和删除生命周期总览 |
 | Ctf | `commercialization/open-api-v1-guide.md`、vNext 页面/API 规格 | 赛事入口和接口可查 | Flag、Submission、Scoreboard 数据流和出题操作规范 |
-| Exercise | vNext 页面/API 规格、总纲、Open API | 已实现且入口清晰 | 生产验收、内容运营、来源导入和实例生命周期总览 |
+| Exercise | vNext 页面/API 规格、总纲、Open API | 已实现且入口清晰 | 内容运营、来源导入和实例生命周期总览；核心生产验收已有记录 |
 | Identity | 总纲、Open API、认证页面/API 规格 | 入口和边界可查 | Portal SSO、角色权限、账号生命周期和故障排查手册 |
 | Penetration | `teamlab-api-foundation-contract.md`、`teamlab-networking-feature-guide.md`、页面/API 规格 | 边界和组网契约可查 | objective/submission/score/reset 的独立玩法说明 |
+| Provisioning | `commercialization/module-boundary-map.md`、统一运行链及相关 application 源码 | 实际模块已存在，原矩阵漏列 | 按当前源码明确配置/编排职责、公开调用和与 Runtime 的所有权边界 |
 | Runtime | Agent 能力协议、调度/恢复手册、节点部署文档 | 较完整 | 面向业务模块的 command/query 速查表 |
 | TeamLab | TeamLab 契约、功能说明、基础验收手册、页面/API 规格 | 较完整 | 双 Worker 故障、长期流量和规模验收手册 |
 | Theory | 总纲、页面/API 规格、Open API | 业务入口可查 | JSON 出题格式、答卷快照、判分和重试策略总览 |
@@ -32,7 +33,7 @@ Agent 不在 `Modules` 目录，但执行面文档覆盖较好：
 3. Theory 与 Training：业务已投入使用，规则需要从页面和契约集中整理。
 4. Ctf 与 Content：补齐 Flag、附件、镜像、引用和删除的统一资产视图。
 5. Penetration：提炼当前最小玩法契约，避免依赖历史大方案。
-6. Exercise：补生产部署、内容运营和规模验收记录。
+6. Exercise：补内容运营、来源与生命周期说明，引用现有部署证据及规模验收边界。
 
 ## 模块文档最低结构
 
