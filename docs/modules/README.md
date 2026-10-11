@@ -13,7 +13,7 @@
 | Exercise | vNext 页面/API 规格、总纲、Open API | 已实现且入口清晰 | 内容运营、来源导入和实例生命周期总览；核心生产验收已有记录 |
 | Identity | 总纲、Open API、认证页面/API 规格 | 入口和边界可查 | Portal SSO、角色权限、账号生命周期和故障排查手册 |
 | Penetration | `teamlab-api-foundation-contract.md`、`teamlab-networking-feature-guide.md`、页面/API 规格 | 边界和组网契约可查 | objective/submission/score/reset 的独立玩法说明 |
-| Provisioning | `commercialization/module-boundary-map.md`、统一运行链及相关 application 源码 | 实际模块已存在，原矩阵漏列 | 按当前源码明确配置/编排职责、公开调用和与 Runtime 的所有权边界 |
+| Provisioning | [批量导入应用](../../src/GZCTF/Modules/Provisioning/Application/AcademicImportApplicationService.cs)、Open API 使用指南 | 课程、理论题/试卷和战队批量导入；不等同于运行部署编排 | 批量导入、幂等 operation、授权与目标业务模块调用的独立说明 |
 | Runtime | Agent 能力协议、调度/恢复手册、节点部署文档 | 较完整 | 面向业务模块的 command/query 速查表 |
 | TeamLab | TeamLab 契约、功能说明、基础验收手册、页面/API 规格 | 较完整 | 双 Worker 故障、长期流量和规模验收手册 |
 | Theory | 总纲、页面/API 规格、Open API | 业务入口可查 | JSON 出题格式、答卷快照、判分和重试策略总览 |

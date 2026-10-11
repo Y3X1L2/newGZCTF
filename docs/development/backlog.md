@@ -16,7 +16,7 @@
 | ACC-02 | 普通 Windows 冷缓存、完整 RDP/Guacamole 桌面、剪贴板及隔离销毁的最新版本附加验收为 NOT_RUN；旧 2008 R2 许可导致自行关机；当前 runtime 契约不支持 Windows SFTP/files | [第二批发布](handoffs/2026-10-09-image-lifecycle-second-rollout.md)、[运行事实契约](../modules/teamlab-runtime-capability-contract.md)；合格镜像、双实例与桌面实测 |
 | ACC-03 | AWDP 真实攻击/修补/异常恢复与 Portal SSO 跨网联调仍需专门验收；外部门户不在本仓库 | [AWDP 手册](../yinyu-awdp-manual-acceptance.md)、Identity 模块与目标门户契约 |
 | ACC-04 | 自主练习内容运营、真实应用回退及节点整机重启持久性仍缺最新完整签收 | [稳定基线历史](handoffs/2026-09-08-stable-baseline.md)、[最新培训发布](handoffs/2026-10-11-training-runtime-mainline.md)；保留现有用户实例，单独安排授权验收 |
-| DOC-01 | TeamLab 旧长手册、页面/API 规格与业务模块说明仍需逐模块复核；Provisioning 原覆盖矩阵遗漏，本轮已登记 | [模块索引](../modules/README.md)、[文档审计](documentation-audit.md)；先核源码/契约，再合并重复手册，不能按日期批量删除 |
+| DOC-01 | 模块短说明、真实代码地图与文档变更感知门禁尚未落地；旧手册和规格需按功能/阅读层次提炼迁移。原 Provisioning 覆盖缺口已登记并核对批量导入职责 | [模块索引](../modules/README.md)、[文档审计](documentation-audit.md)；按审计方案 A–E 分阶段验收；先补可读入口/事实映射与维护触发，再迁移旧材料，不能按日期批量删除 |
 | DOC-02 | 旧商业能力地图的会话重启清理/退避/URL恢复、批量UI、H02持续监督及协议事件仍需逐项重核，不能因旧计划归档就当已闭环 | 原审计材料保留到历史目录；按当前 application、Agent 持久化与故障恢复实测核对，明确已替代/仍缺/已验收，禁止直接恢复旧实现 |
 
 同一事项只有一个当前描述。前端专属接口细项继续维护在 [前端契约缺口](../yinyu-vnext-deferred-contract-gaps.md)，这里仅引用，不复制其清单。任务分配和执行过程放在对应 handoff 或 PR；未声明接手者的条目为未分配，不据此声称有人正在实施。
