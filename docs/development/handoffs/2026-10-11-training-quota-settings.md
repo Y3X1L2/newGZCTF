@@ -20,3 +20,5 @@
 状态：`in progress / IMPLEMENTED`。新增后端正式 API/PostgreSQL 配置、动态准入和分页回归、运行实例保留单测和页面交互回归。培训额度切片Release和1493单测、前端locale/lint/类型/架构/120文件418测试/生产构建与体积门禁通过；追加分页后正在重新验证完整门禁。PR、视觉验收和发布结果待执行后补录；未完成的检查不视作通过。
 
 本机 Docker Desktop 不可用，完整 PostgreSQL/Docker 集成由 GitHub Linux Quality 验证，必须等待通过才合并与部署。Git 外证据目录：`D:/Work/YINYU-Training-Settings-20261011`。
+
+第一轮CI366项集成中364通过、2项新增分页用例返回500。Npgsql查询编译复现：标签列为JSON文本value converter，新增标签搜索 `Any` 和元数据 `SelectMany` 无法翻译为SQL。已改为在PostgreSQL展开标签元数据，再通过EF组合可见性/筛选，不在客户端加载题库；等待修正后的完整CI。该轮未合并、未备份停机或切换服务器。另一次本地全量单测的未改动调度并发用例1秒超时，定向5/5及最终全量1493/1493复跑通过，失败证据保留。

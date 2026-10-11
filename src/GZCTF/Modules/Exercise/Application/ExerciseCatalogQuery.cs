@@ -22,8 +22,8 @@ internal static class ExerciseCatalogQuery
             ContainerCount = await query.CountAsync(exercise =>
                 exercise.Type == ChallengeType.StaticContainer || exercise.Type == ChallengeType.DynamicContainer, token),
             // Filter choices span the visible catalog, not just the current page.
-            Tags = await visible.Where(exercise => exercise.Tags != null).SelectMany(exercise => exercise.Tags!)
-                .Distinct().OrderBy(tag => tag).ToArrayAsync(token)
+            Tags = await TagRows(context).Where(tag => visible.Any(exercise => exercise.Id == tag.ExerciseId))
+                .Select(tag => tag.Tag).Distinct().OrderBy(tag => tag).ToArrayAsync(token)
         };
     }
 
@@ -37,16 +37,21 @@ internal static class ExerciseCatalogQuery
             var pattern = "%" + search.Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_") + "%";
             int.TryParse(search.TrimStart('#'), out var id);
             var hasCategory = Enum.TryParse<ChallengeCategory>(search, true, out var category);
+            var matchingTags = TagRows(context).Where(tag => EF.Functions.ILike(tag.Tag, pattern, "\\"))
+                .Select(tag => tag.ExerciseId);
             query = query.Where(exercise => exercise.Id == id || (hasCategory && exercise.Category == category) ||
                 EF.Functions.ILike(exercise.Title, pattern, "\\") || EF.Functions.ILike(exercise.Content, pattern, "\\") ||
-                (exercise.Tags != null && exercise.Tags.Any(tag => EF.Functions.ILike(tag, pattern, "\\"))));
+                matchingTags.Contains(exercise.Id));
         }
         if (filter.Categories is { Length: > 0 })
             query = query.Where(exercise => filter.Categories.Contains(exercise.Category));
         if (filter.Difficulties is { Length: > 0 })
             query = query.Where(exercise => filter.Difficulties.Contains(exercise.Difficulty));
         if (filter.Tags is { Length: > 0 })
-            query = query.Where(exercise => exercise.Tags != null && exercise.Tags.Any(tag => filter.Tags.Contains(tag)));
+        {
+            var matchingTags = TagRows(context).Where(tag => filter.Tags.Contains(tag.Tag)).Select(tag => tag.ExerciseId);
+            query = query.Where(exercise => matchingTags.Contains(exercise.Id));
+        }
         if (filter.Credit is { } credit)
             query = query.Where(exercise => exercise.Credit == credit);
         if (filter.Sources is { Length: > 0 })
@@ -56,6 +61,22 @@ internal static class ExerciseCatalogQuery
                 instance.UserId == userId.Value && instance.ExerciseId == exercise.Id &&
                 instance.SolveTimeUtc > DateTimeOffset.FromUnixTimeSeconds(0)) == solved);
         return query;
+    }
+
+    // Tags use an existing JSON-to-text value converter, not an EF primitive collection.
+    // Expand only tag metadata in PostgreSQL, then compose visibility/filter predicates in EF.
+    static IQueryable<ExerciseCatalogTagRow> TagRows(AppDbContext context) =>
+        context.Database.SqlQuery<ExerciseCatalogTagRow>($"""
+            SELECT exercise."Id" AS "ExerciseId", tag.value AS "Tag"
+            FROM "ExerciseChallenges" AS exercise
+            CROSS JOIN LATERAL jsonb_array_elements_text(
+                COALESCE(NULLIF(NULLIF(exercise."Tags", ''), 'null'), '[]')::jsonb) AS tag(value)
+            """);
+
+    sealed class ExerciseCatalogTagRow
+    {
+        public int ExerciseId { get; set; }
+        public string Tag { get; set; } = string.Empty;
     }
 
     public static IQueryable<ExerciseInfoModel> InfoModels(AppDbContext context,
