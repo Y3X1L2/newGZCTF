@@ -3882,6 +3882,21 @@ export interface ExerciseInfoModel {
   userSubmissionCount?: number;
 }
 
+export interface ExerciseCatalogPageModel {
+  items?: ExerciseInfoModel[];
+  /** @format int32 */
+  total?: number;
+  /** @format int32 */
+  page?: number;
+  /** @format int32 */
+  pageSize?: number;
+  /** @format int32 */
+  enabledCount?: number;
+  /** @format int32 */
+  containerCount?: number;
+  tags?: string[];
+}
+
 /** Flag submission */
 export interface FlagSubmitModel {
   /**
@@ -16753,6 +16768,122 @@ export class Api<
      * No description
      *
      * @tags Exercise
+     * @name ExerciseGetExercisePage
+     * @summary Get a bounded page of visible public exercises
+     * @request GET:/api/Exercise/page
+     */
+    exerciseGetExercisePage: (
+      query?: {
+        Search?: string | null;
+        Categories?: ChallengeCategory[] | null;
+        Difficulties?: Difficulty[] | null;
+        Tags?: string[] | null;
+        Credit?: boolean | null;
+        Sources?: ExercisePoolSource[] | null;
+        Solved?: boolean | null;
+        /**
+         * @format int32
+         * @min 1
+         * @max 1000000
+         */
+        Page?: number;
+        /**
+         * @format int32
+         * @min 1
+         * @max 100
+         */
+        PageSize?: number;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<ExerciseCatalogPageModel, RequestResponse>({
+        path: `/api/Exercise/page`,
+        method: "GET",
+        query: query,
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags Exercise
+     * @name ExerciseGetExercisePage
+     * @summary Get a bounded page of visible public exercises
+     * @request GET:/api/Exercise/page
+     */
+    useExerciseGetExercisePage: (
+      query?: {
+        Search?: string | null;
+        Categories?: ChallengeCategory[] | null;
+        Difficulties?: Difficulty[] | null;
+        Tags?: string[] | null;
+        Credit?: boolean | null;
+        Sources?: ExercisePoolSource[] | null;
+        Solved?: boolean | null;
+        /**
+         * @format int32
+         * @min 1
+         * @max 1000000
+         */
+        Page?: number;
+        /**
+         * @format int32
+         * @min 1
+         * @max 100
+         */
+        PageSize?: number;
+      },
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<ExerciseCatalogPageModel, RequestResponse>(
+        doFetch ? [`/api/Exercise/page`, query] : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags Exercise
+     * @name ExerciseGetExercisePage
+     * @summary Get a bounded page of visible public exercises
+     * @request GET:/api/Exercise/page
+     */
+    mutateExerciseGetExercisePage: (
+      query?: {
+        Search?: string | null;
+        Categories?: ChallengeCategory[] | null;
+        Difficulties?: Difficulty[] | null;
+        Tags?: string[] | null;
+        Credit?: boolean | null;
+        Sources?: ExercisePoolSource[] | null;
+        Solved?: boolean | null;
+        /**
+         * @format int32
+         * @min 1
+         * @max 1000000
+         */
+        Page?: number;
+        /**
+         * @format int32
+         * @min 1
+         * @max 100
+         */
+        PageSize?: number;
+      },
+      data?: ExerciseCatalogPageModel | Promise<ExerciseCatalogPageModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<ExerciseCatalogPageModel>(
+        [`/api/Exercise/page`, query],
+        data,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags Exercise
      * @name ExerciseGetExercises
      * @request GET:/api/Exercise
      */
@@ -16764,6 +16895,7 @@ export class Api<
         Tags?: string[] | null;
         Credit?: boolean | null;
         Sources?: ExercisePoolSource[] | null;
+        Solved?: boolean | null;
       },
       params: RequestParams = {},
     ) =>
@@ -16788,6 +16920,7 @@ export class Api<
         Tags?: string[] | null;
         Credit?: boolean | null;
         Sources?: ExercisePoolSource[] | null;
+        Solved?: boolean | null;
       },
       options?: SWRConfiguration,
       doFetch: boolean = true,
@@ -16812,6 +16945,7 @@ export class Api<
         Tags?: string[] | null;
         Credit?: boolean | null;
         Sources?: ExercisePoolSource[] | null;
+        Solved?: boolean | null;
       },
       data?: any | Promise<any>,
       options?: MutatorOptions,
@@ -16858,6 +16992,122 @@ export class Api<
       data?: ExerciseInfoModel[] | Promise<ExerciseInfoModel[]>,
       options?: MutatorOptions,
     ) => mutate<ExerciseInfoModel[]>(`/api/Exercise/manage`, data, options),
+
+    /**
+     * No description
+     *
+     * @tags Exercise
+     * @name ExerciseGetManagementExercisePage
+     * @summary Get a bounded management page including disabled public exercises
+     * @request GET:/api/Exercise/manage/page
+     */
+    exerciseGetManagementExercisePage: (
+      query?: {
+        Search?: string | null;
+        Categories?: ChallengeCategory[] | null;
+        Difficulties?: Difficulty[] | null;
+        Tags?: string[] | null;
+        Credit?: boolean | null;
+        Sources?: ExercisePoolSource[] | null;
+        Solved?: boolean | null;
+        /**
+         * @format int32
+         * @min 1
+         * @max 1000000
+         */
+        Page?: number;
+        /**
+         * @format int32
+         * @min 1
+         * @max 100
+         */
+        PageSize?: number;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<ExerciseCatalogPageModel, RequestResponse>({
+        path: `/api/Exercise/manage/page`,
+        method: "GET",
+        query: query,
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags Exercise
+     * @name ExerciseGetManagementExercisePage
+     * @summary Get a bounded management page including disabled public exercises
+     * @request GET:/api/Exercise/manage/page
+     */
+    useExerciseGetManagementExercisePage: (
+      query?: {
+        Search?: string | null;
+        Categories?: ChallengeCategory[] | null;
+        Difficulties?: Difficulty[] | null;
+        Tags?: string[] | null;
+        Credit?: boolean | null;
+        Sources?: ExercisePoolSource[] | null;
+        Solved?: boolean | null;
+        /**
+         * @format int32
+         * @min 1
+         * @max 1000000
+         */
+        Page?: number;
+        /**
+         * @format int32
+         * @min 1
+         * @max 100
+         */
+        PageSize?: number;
+      },
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<ExerciseCatalogPageModel, RequestResponse>(
+        doFetch ? [`/api/Exercise/manage/page`, query] : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags Exercise
+     * @name ExerciseGetManagementExercisePage
+     * @summary Get a bounded management page including disabled public exercises
+     * @request GET:/api/Exercise/manage/page
+     */
+    mutateExerciseGetManagementExercisePage: (
+      query?: {
+        Search?: string | null;
+        Categories?: ChallengeCategory[] | null;
+        Difficulties?: Difficulty[] | null;
+        Tags?: string[] | null;
+        Credit?: boolean | null;
+        Sources?: ExercisePoolSource[] | null;
+        Solved?: boolean | null;
+        /**
+         * @format int32
+         * @min 1
+         * @max 1000000
+         */
+        Page?: number;
+        /**
+         * @format int32
+         * @min 1
+         * @max 100
+         */
+        PageSize?: number;
+      },
+      data?: ExerciseCatalogPageModel | Promise<ExerciseCatalogPageModel>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<ExerciseCatalogPageModel>(
+        [`/api/Exercise/manage/page`, query],
+        data,
+        options,
+      ),
 
     /**
      * No description

@@ -17,12 +17,12 @@ describe('exerciseAdminApi', () => {
   afterEach(() => vi.unstubAllGlobals())
 
   it('loads the management route and retains disabled exercises', async () => {
-    const rows = [{ id: 7, title: 'draft', isEnabled: false }]
+    const rows = { items: [{ id: 7, title: 'draft', isEnabled: false }], total: 27, page: 2, pageSize: 20 }
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => rows })
     vi.stubGlobal('fetch', fetchMock)
 
-    expect(await exerciseAdminApi.list()).toEqual(rows)
-    expect(fetchMock).toHaveBeenCalledWith('/api/exercise/manage', undefined)
+    expect(await exerciseAdminApi.list('draft', 2, 20)).toEqual(rows)
+    expect(fetchMock).toHaveBeenCalledWith('/api/exercise/manage/page?Page=2&PageSize=20&Search=draft', undefined)
   })
 
   it('does not turn a denied management response into an empty list', async () => {
