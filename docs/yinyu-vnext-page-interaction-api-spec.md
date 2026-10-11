@@ -101,7 +101,7 @@
 | `/practice/challenge/:id` | 单题练习 | 附件、实例、Flag 提交和结果回读 |
 | `/practice/stats` | 练习统计 | 查看分类分布、趋势和完成情况 |
 
-练习模块已实现，前端统一使用 `features/practice/api/practiceApi.ts`，后端开放接口位于 Exercise 模块。练习事实不能从比赛页面的临时状态推导；统计和历史只展示接口真实返回值。
+练习模块已实现，前端统一使用 `features/practice/api/practiceApi.ts`，后端开放接口位于 Exercise 模块。`/practice` 与 `/practice/browse` 使用 `/api/exercise/page` 服务端分页，后台题库使用 `/api/exercise/manage/page`；每页默认20，可选20/50/100，筛选在分页前执行。详情见[题库分页](modules/exercise-catalog-pagination.md)。练习事实不能从比赛页面的临时状态推导；统计和历史只展示接口真实返回值。
 
 ### 3.5 培训
 

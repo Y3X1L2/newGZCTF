@@ -8,4 +8,5 @@ public class ExerciseFilter
     public string[]? Tags { get; set; }
     public bool? Credit { get; set; }
     public ExercisePoolSource[]? Sources { get; set; }
+    public bool? Solved { get; set; }
 }

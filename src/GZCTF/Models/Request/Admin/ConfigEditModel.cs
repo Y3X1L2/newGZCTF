@@ -21,4 +21,9 @@ public class ConfigEditModel
     /// Game policy
     /// </summary>
     public ContainerPolicy? ContainerPolicy { get; set; }
+
+    /// <summary>
+    /// Training container quota, independent of public exercise policy
+    /// </summary>
+    public TrainingContainerPolicy? TrainingContainerPolicy { get; set; }
 }

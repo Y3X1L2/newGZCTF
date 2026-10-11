@@ -66,7 +66,8 @@ public class AdminController(
         {
             AccountPolicy = serviceProvider.GetRequiredService<IOptionsSnapshot<AccountPolicy>>().Value,
             GlobalConfig = serviceProvider.GetRequiredService<IOptionsSnapshot<GlobalConfig>>().Value,
-            ContainerPolicy = serviceProvider.GetRequiredService<IOptionsSnapshot<ContainerPolicy>>().Value
+            ContainerPolicy = serviceProvider.GetRequiredService<IOptionsSnapshot<ContainerPolicy>>().Value,
+            TrainingContainerPolicy = serviceProvider.GetRequiredService<IOptionsSnapshot<TrainingContainerPolicy>>().Value
         };
 
         return Ok(config);

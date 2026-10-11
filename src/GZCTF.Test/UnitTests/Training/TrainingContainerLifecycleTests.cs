@@ -27,6 +27,22 @@ namespace GZCTF.Test.UnitTests.Training;
 public sealed class TrainingContainerLifecycleTests
 {
     [Fact]
+    public async Task LoweredTrainingQuota_PreservesRunningContainersAndAllowsReuse()
+    {
+        await using var fixture = new Fixture();
+        var labs = await fixture.AddInstances(4, training: true);
+        foreach (var lab in labs.Take(3)) await fixture.Create(lab);
+        var ids = labs.Take(3).Select(lab => lab.ContainerId).ToArray();
+        fixture.TrainingPolicy.MaxContainerCountPerUser = 1;
+        Assert.Equal(TaskStatus.Denied, (await fixture.Create(labs[3])).Status);
+        foreach (var lab in labs.Take(3))
+            Assert.Equal(lab.ContainerId, (await fixture.Create(lab)).Result?.Id);
+        Assert.Equal(ids, labs.Take(3).Select(lab => lab.ContainerId).ToArray());
+        Assert.Equal(3, fixture.Created.Count);
+        fixture.Containers.VerifyNoOtherCalls();
+    }
+
+    [Fact]
     public async Task ThreeChapterLabs_CoexistWithoutEvictingEarlierInstances()
     {
         await using var fixture = new Fixture();
@@ -219,6 +235,7 @@ public sealed class TrainingContainerLifecycleTests
         public UserInfo User { get; } = new() { Id = Guid.NewGuid(), UserName = "training-regression" };
         public Mock<IContainerRepository> Containers { get; } = new(MockBehavior.Strict);
         public List<ContainerConfig> Created { get; } = [];
+        public TrainingContainerPolicy TrainingPolicy { get; } = new();
         readonly ExerciseInstanceRepository _repository;
         readonly DeploymentExecutionContextAccessor _execution = new();
 
@@ -237,8 +254,8 @@ public sealed class TrainingContainerLifecycleTests
             var options = new Mock<IOptionsSnapshot<ContainerPolicy>>();
             options.SetupGet(item => item.Value).Returns(policy ?? new ContainerPolicy());
             var trainingOptions = new Mock<IOptionsSnapshot<TrainingContainerPolicy>>();
-            trainingOptions.SetupGet(item => item.Value)
-                .Returns(new TrainingContainerPolicy { MaxContainerCountPerUser = trainingLimit });
+            TrainingPolicy.MaxContainerCountPerUser = trainingLimit;
+            trainingOptions.SetupGet(item => item.Value).Returns(TrainingPolicy);
             var registry = new Mock<DockerImageRegistryService>(Options.Create(new DockerRegistrySettings()),
                 null!, null!, NullLogger<DockerImageRegistryService>.Instance, null!);
             registry.Setup(service => service.ResolveImageReferenceAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))

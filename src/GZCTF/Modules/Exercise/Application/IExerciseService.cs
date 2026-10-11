@@ -5,6 +5,8 @@ namespace GZCTF.Modules.Exercise.Application;
 
 public interface IExerciseService
 {
+    Task<ExerciseCatalogPageModel> GetCatalogPageAsync(ExerciseFilter? filter, ExercisePagination pagination,
+        Guid userId, Role role, CancellationToken token = default);
     Task<ExerciseChallenge[]> GetExercisesAsync(CancellationToken token = default);
     Task<ExerciseChallenge?> GetExerciseByIdAsync(int exerciseId, CancellationToken token = default);
     Task<ExerciseInfoModel[]> GetExerciseListAsync(

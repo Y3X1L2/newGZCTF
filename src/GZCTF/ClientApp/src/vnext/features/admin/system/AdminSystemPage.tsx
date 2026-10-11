@@ -1,6 +1,6 @@
 import { ImageUp, RotateCcw, Save } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
-import type { AccountPolicy, ContainerPolicy, GlobalConfig } from '@Api'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import type { AccountPolicy, ConfigEditModel, ContainerPolicy, GlobalConfig } from '@Api'
 import { FileField, TextAreaField, TextField, ToggleField } from '../../../shared/FormControls'
 import { ActionButton, InlineFeedback, VNextConfirmDialog } from '../../../shared/Interaction'
 import { DataState } from '../../../shared/Primitives'
@@ -10,6 +10,8 @@ import { commonAdminApi } from '../api'
 import { AdminEditorSection, AdminPageHeader, RefreshIndicator } from '../shared/AdminWorkbench'
 import styles from './AdminSystemPage.module.css'
 import { useAdminSystem } from './useAdminSystem'
+import { TrainingContainerQuotaPanel } from './TrainingContainerQuotaPanel'
+import { useTrainingContainerQuota } from './useTrainingContainerQuota'
 
 type Feedback = { tone: 'danger' | 'success'; message: string } | null
 
@@ -26,14 +28,21 @@ export function AdminSystemPage() {
   const [saving, setSaving] = useState<string | null>(null)
   const [feedback, setFeedback] = useState<Feedback>(null)
   const [resetLogoOpen, setResetLogoOpen] = useState(false)
+  const previousConfig = useRef<ConfigEditModel | undefined>(undefined)
+  const trainingQuota = useTrainingContainerQuota(request.config?.trainingContainerPolicy)
 
   useVNextPageTitle('系统设置')
 
   useEffect(() => {
     if (!request.config) return
-    setGlobalDraft({ ...request.config.globalConfig })
-    setAccountDraft({ ...request.config.accountPolicy })
-    setContainerDraft({ ...request.config.containerPolicy })
+    // A section save must not discard unsaved drafts in unchanged sections.
+    if (!sameValue(previousConfig.current?.globalConfig, request.config.globalConfig))
+      setGlobalDraft({ ...request.config.globalConfig })
+    if (!sameValue(previousConfig.current?.accountPolicy, request.config.accountPolicy))
+      setAccountDraft({ ...request.config.accountPolicy })
+    if (!sameValue(previousConfig.current?.containerPolicy, request.config.containerPolicy))
+      setContainerDraft({ ...request.config.containerPolicy })
+    previousConfig.current = request.config
   }, [request.config])
 
   const dirty = useMemo(() => ({
@@ -43,7 +52,7 @@ export function AdminSystemPage() {
   }), [accountDraft, containerDraft, globalDraft, request.config])
 
   const saveSection = async (
-    section: 'account' | 'container' | 'global',
+    section: 'account' | 'container' | 'global' | 'training',
     run: () => Promise<void>,
     success: string
   ) => {
@@ -163,7 +172,23 @@ export function AdminSystemPage() {
           </div>
         </AdminEditorSection>
 
-        <AdminEditorSection description="这些值直接影响用户实例数量、默认时长和延期窗口。" title="容器生命周期">
+        <TrainingContainerQuotaPanel
+          available={trainingQuota.available}
+          dirty={trainingQuota.dirty}
+          disabled={Boolean(saving)}
+          draft={trainingQuota.draft}
+          onChange={trainingQuota.setDraft}
+          onSave={() => {
+            if (!trainingQuota.valid || !trainingQuota.dirty) return
+            void saveSection('training', () => commonAdminApi.updateSystemConfig({
+              trainingContainerPolicy: { maxContainerCountPerUser: trainingQuota.limit },
+            }), '培训容器额度已保存，新建请求立即生效。')
+          }}
+          saving={saving === 'training'}
+          valid={trainingQuota.valid}
+        />
+
+        <AdminEditorSection description="练习数量与自动清理仅适用于自主练习；时长和延期窗口由容器实例共享。" title="容器生命周期">
           <div className={styles.sectionBody}>
             <ToggleField checked={containerDraft.autoDestroyOnLimitReached ?? false} description="达到上限时，创建新实例前自动销毁最早的练习实例。" label="达到上限时自动清理" onChange={(autoDestroyOnLimitReached) => setContainerDraft({ ...containerDraft, autoDestroyOnLimitReached })} />
             <div className={styles.twoColumns}>

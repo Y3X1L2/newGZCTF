@@ -9,10 +9,10 @@ import api, {
   FlagScoreMode,
   NetworkMode,
 } from '@Api'
-import { ExerciseInfoDto } from '../../practice/api/practiceApi'
+import { ExerciseCatalogPageDto } from '../../practice/api/practiceApi'
 
 const BASE = '/api/exercise'
-const MANAGEMENT_LIST = `${BASE}/manage`
+const MANAGEMENT_LIST = `${BASE}/manage/page`
 
 export interface ExerciseAdminFlag {
   id?: number | null
@@ -85,8 +85,8 @@ async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
   return body as T
 }
 
-export function useAdminExercises() {
-  return useSWR<ExerciseInfoDto[]>(MANAGEMENT_LIST, () => exerciseAdminApi.list(), {
+export function useAdminExercises(search = '', page = 1, pageSize = 20) {
+  return useSWR<ExerciseCatalogPageDto>([MANAGEMENT_LIST, search, page, pageSize], () => exerciseAdminApi.list(search, page, pageSize), {
     revalidateOnFocus: false,
   })
 }
@@ -99,8 +99,10 @@ export async function uploadExerciseAsset(file: File) {
 }
 
 export const exerciseAdminApi = {
-  list() {
-    return requestJson<ExerciseInfoDto[]>(MANAGEMENT_LIST)
+  list(search = '', page = 1, pageSize = 20) {
+    const params = new URLSearchParams({ Page: String(page), PageSize: String(pageSize) })
+    if (search.trim()) params.set('Search', search.trim())
+    return requestJson<ExerciseCatalogPageDto>(`${MANAGEMENT_LIST}?${params}`)
   },
   detail(id: number) {
     return requestJson<ExerciseAdminDraft>(`${BASE}/${id}/manage`)

@@ -1,7 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useSearchParams } from 'react-router'
 import { Check, ChevronDown, Search, Star, Tag } from 'lucide-react'
-import { useExercises } from './api/practiceApi'
+import { useExercisePage } from './api/practiceApi'
+import { CatalogPagination } from '../../shared/CatalogPagination'
+import { useCatalogPagination } from '../../shared/useCatalogPagination'
 import { useCurrentAccount } from '../account/useCurrentAccount'
 import { useVNextPageTitle } from '../../shared/useVNextPageTitle'
 import { DataState, PageHeading } from '../../shared/Primitives'
@@ -57,34 +59,28 @@ export function PracticeBrowsePage() {
 
   const [showFilters, setShowFilters] = useState(true)
   const [localQuery, setLocalQuery] = useState(query)
+  useEffect(() => setLocalQuery(query), [query])
+  const pagination = useCatalogPagination()
 
   const filterStr = useMemo(() => {
     const params = new URLSearchParams()
     if (query) params.set('Search', query)
     selectedCats.forEach(c => params.append('Categories', c))
     selectedDiffs.forEach(d => params.append('Difficulties', d))
+    selectedTags.forEach(tag => params.append('Tags', tag))
+    if (selectedStatus === 'solved' || selectedStatus === 'unsolved') params.set('Solved', String(selectedStatus === 'solved'))
     if (isTeacher) selectedSources.forEach(source => params.append('Sources', source))
     return params.toString()
-  }, [query, selectedCats, selectedDiffs, selectedSources, isTeacher])
+  }, [query, selectedCats, selectedDiffs, selectedTags, selectedStatus, selectedSources, isTeacher])
 
-  const { data: exercises, error } = useExercises(filterStr)
-
-  const allTags = useMemo(() => {
-    if (!exercises) return []
-    return [...new Set(exercises.flatMap(e => e.tags ?? []))].sort()
-  }, [exercises])
-
-  const filtered = useMemo(() => {
-    if (!exercises) return []
-    return exercises.filter(exercise => {
-      const matchesTags = selectedTags.length === 0 || selectedTags.some(tag => exercise.tags?.includes(tag))
-      const matchesStatus = selectedStatus === 'all' || (selectedStatus === 'solved' ? exercise.solved : !exercise.solved)
-      return matchesTags && matchesStatus
-    })
-  }, [exercises, selectedStatus, selectedTags])
+  const { data: catalog, error, isValidating } = useExercisePage(filterStr, pagination.page, pagination.pageSize)
+  useCatalogPagination(catalog?.page)
+  const exercises = catalog?.items
+  const allTags = catalog?.tags ?? []
 
   const updateParam = (key: string, values: string[]) => {
     const next = new URLSearchParams(searchParams)
+    next.delete('page')
     next.delete(key)
     values.forEach(v => next.append(key, v))
     setSearchParams(next, { replace: true })
@@ -99,6 +95,7 @@ export function PracticeBrowsePage() {
 
   const toggleDifficulty = (stars: number) => {
     const next = new URLSearchParams(searchParams)
+    next.delete('page')
     next.delete('difficulty')
     next.delete('difficultyStars')
     if (stars > 0) next.set('difficultyStars', String(stars))
@@ -121,6 +118,7 @@ export function PracticeBrowsePage() {
 
   const setStatus = (status: ExerciseStatus) => {
     const next = new URLSearchParams(searchParams)
+    next.delete('page')
     if (status === 'all') next.delete('status')
     else next.set('status', status)
     setSearchParams(next, { replace: true })
@@ -129,6 +127,7 @@ export function PracticeBrowsePage() {
   const search = (value: string) => {
     setLocalQuery(value)
     const next = new URLSearchParams(searchParams)
+    next.delete('page')
     if (value.trim()) next.set('q', value.trim())
     else next.delete('q')
     setSearchParams(next, { replace: true })
@@ -272,9 +271,9 @@ export function PracticeBrowsePage() {
         <DataState description="正在读取题目和筛选条件。" loading title="题库加载中" />
       ) : error ? (
         <DataState description="练习题库暂时不可用，请稍后刷新。" title="题库加载失败" />
-      ) : filtered.length ? (
+      ) : exercises?.length ? (
         <div className={styles.challengeList}>
-          {filtered.map((ex) => (
+          {exercises.map((ex) => (
             <Link key={ex.id} to={`/practice/challenge/${ex.id}`} className={styles.challengeCard}>
               <div className={styles.challengeHeader}>
                 <span className={styles.challengeCategory}>{categoryLabels[ex.category as string] ?? ex.category}</span>
@@ -312,6 +311,7 @@ export function PracticeBrowsePage() {
           <div><strong>没有符合条件的题目</strong><p>调整关键词或筛选条件后重试。</p></div>
         </div>
       )}
+      {catalog ? <CatalogPagination page={catalog.page} pageSize={pagination.pageSize} total={catalog.total} disabled={isValidating} onPageChange={pagination.setPage} onPageSizeChange={pagination.setPageSize} /> : null}
     </div>
   )
 }

@@ -321,6 +321,11 @@ public sealed class ExerciseManagementService(
                 SubmissionCount = context.ExerciseSubmissions.Count(submission => submission.ExerciseChallengeId == exercise.Id)
             }).ToArrayAsync(token);
 
+    public Task<ExerciseCatalogPageModel> GetManagementCatalogPageAsync(ExerciseFilter? filter,
+        ExercisePagination pagination, CancellationToken token = default) =>
+        ExerciseCatalogQuery.PageAsync(context, context.ExerciseChallenges.AsNoTracking()
+            .Where(exercise => exercise.TrainingCourseId == null), filter, pagination, null, token);
+
     public async Task<ExerciseManagementPage> GetExercisePageAsync(
         ExerciseFilter? filter,
         int limit,
