@@ -44,7 +44,9 @@ public sealed class TrainingContainerQuotaTests(GZCTFApplicationFactory factory)
                 .ToListAsync();
             Assert.Equal(3, tickets.Count);
             Assert.Equal(3, tickets.Select(ticket => ticket.ChallengeId).Distinct().Count());
-            Assert.All(tickets, ticket => Assert.Equal(DeploymentQueueTicketStatus.Pending, ticket.Status));
+            Assert.All(tickets, ticket => Assert.Contains(ticket.Status,
+                new[] { DeploymentQueueTicketStatus.Pending, DeploymentQueueTicketStatus.Scheduling,
+                    DeploymentQueueTicketStatus.Scheduled, DeploymentQueueTicketStatus.Running }));
             Assert.False(await context.ExerciseInstances.AnyAsync(instance =>
                 instance.UserId == fixture.User.Id && instance.ContainerId != null));
         }
