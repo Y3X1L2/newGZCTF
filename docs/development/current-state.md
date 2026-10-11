@@ -1,5 +1,13 @@
 # YINYU 当前开发状态
 
+## 培训章节实例修复已合并 main 并部署（2026-10-11）
+
+- [PR #24](https://github.com/Y3X1L2/newGZCTF/pull/24) 已正常合并为 `main 60170a5266f684581f21e95013687b0e7367515f`，与最终审查 head `1bdfff83` 完整 tree 相同。修复与回归用例已进入主线：课程独立每用户默认 3 实例，达到额度拒绝新建；公共练习仅显式开启自动清理时驱逐其他公共练习；动态容器新建前补齐缺失实例 Flag。统一队列、授权、节点容量、现有有效实例与 Flag 保留，无模型、迁移、API 数据结构或 Agent/前端源码变更。
+- 最终 Quality 全部通过：Release、单元1492、PostgreSQL/Docker全量集成352（0 skip）、前端119文件/412测试及全部门禁、EF模型/OpenAPI向后兼容/查询计划。本地课程与旧Flag定向25/25通过；此前两项新测试403是夹具缺少课程教师关系，已补齐正常授权并新增未报名学员不得创建的回归，没有放宽生产权限。
+- `.27` 在08:01:30 UTC（北京时间16:01）完成17.671秒Main-only原子切换，当前release `/srv/yinyu-data/releases/training-runtime-quota-60170a5266f684581f21e95013687b0e7367515f-20261011/publish`，Main DLL `e2265545…`，699 payload文件与模式/摘要核验通过。前端仍为 `a63937c6`、Agent仍 `87e011cf…`，本机Agent同一PID641728，未同步或重启Agent；迁移仍150/head `20261001145237_AddTeamLabManagedGuestNetwork`。
+- 正式API复用原629，创建627/630并独立停止重建新627后，三实例均在`.31` Running/Ready，端口分别627→30001、629→30000、630→30002；原629记录与容器ID保持，三容器注入配置与各自数据库值匹配，只记录布尔结果。三条公网TCP握手、首页/Config200、三节点新鲜心跳、队列0和共享PNG328781字节摘要一致通过。未解题、读取题目Flag文件或提交Flag，三个课程实例留给用户继续测试。
+- 新备份 `/srv/yinyu-data/backups/training-runtime-mainline-d2ca4019-20261011-pre-v3` 两库dump、稳定附件、全文解码及摘要通过，**这两份新dump已完整隔离恢复**并核同snapshot结构/迁移/计数，临时恢复容器和数据目录已清理。日期分区轮换使昨日恢复证明不能直接复用；前两次失败记录保留，Main均恢复，没有生产恢复或业务清理。完整回滚仍为上一 `teamlab-delete-reservation-49948764…` release；既有健康200/Degraded及其他模块未验收边界保留。详见[主线修复与发布交接](handoffs/2026-10-11-training-runtime-mainline.md)。
+
 ## 场景与已销毁运行记录删除已部署并完成实机验收（2026-10-10）
 
 - PR #21 正常合并为 `main e75e5292`，发布源 `a63937c6` 与其完整 Git tree 相同。场景删除支持无引用的已发布场景；新 runtime `/record` DELETE 删除已销毁且资源与引用均清理完成的记录，原 runtime DELETE 仍负责异步销毁。删除按钮已随正式前端上线，镜像来源与比赛事实保留，无新增迁移。
