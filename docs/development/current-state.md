@@ -1,5 +1,13 @@
 # YINYU 当前开发状态
 
+## 培训动态额度与题库分页已上线（2026-10-11）
+
+- [PR #26](https://github.com/Y3X1L2/newGZCTF/pull/26) 已合并为 `main b1812d150f674ba1d6d73ec6685d5621b883c94c`，与审查/发布源 `06930b095cb0511d31bf06d8971477fa71f0aeb8` 完整 tree 相同。系统设置增加独立培训每用户容器额度，默认3、0不限个人数量、保存动态生效；练习与后台题库默认20/最大100服务端分页，数据库先筛选再分页，正确返回总数与标签。无迁移、无 Agent 或现有调度/Flag逻辑变更。
+- 最终 Quality 全部通过：Release、单元1493、PostgreSQL/Docker集成366（0 skip）、前端122文件422测试及全部门禁、EF模型、OpenAPI兼容和查询计划。第一轮两项新分页用例500由JSON文本标签的LINQ翻译失败导致，已改为PostgreSQL展开标签；失败证据和未改动并发用例一次超时/成功复跑记录保留。
+- `.27` 于09:32:02 UTC（北京时间17:32）完成14.657秒主站/前端原子切换，release `/srv/yinyu-data/releases/training-settings-06930b095cb0511d31bf06d8971477fa71f0aeb8-20261011/publish`，Main DLL `0d3ea1e2…`，368新文件及224前端制品校验通过，5份旧Agent/guest-supervisor文件复用；Agent仍 `87e011cf…`、PID641728，Main PID1111627/NRestarts0。迁移仍150/head `20261001145237_AddTeamLabManagedGuestNetwork`；完整回退为上一 `training-runtime-quota-60170a52…` release。
+- 正式API保存1后立即拒绝新准入，原两实例仍可复用且ID/端口保持；0回读、负数/小数400、其他配置保持，最终额度恢复3且保存期间Main PID未变。练习539/后台540题默认均只返回20题，5条分页无重复、标签跨页一致、空搜索与非法页大小通过，正式页面翻到第2页显示2/27。课程634/636 Running/Ready、端口42761/42760保持，三节点新鲜心跳、494镜像状态保持、队列0，首页/Config/manifest/共享PNG200与摘要通过，无新服务错误日志；既有健康指标200/Degraded保留。没有访问题目服务、读取题目Flag文件或提交Flag。
+- 新备份 `/srv/yinyu-data/backups/training-settings-06930b095cb0511d31bf06d8971477fa71f0aeb8-20261011-pre` 两库完整导出/解码及**新快照完整隔离恢复**通过，核同snapshot结构/迁移/计数并清理临时资源；捕获至HTTP恢复33.058秒。无迁移改动采用了较重的全库恢复与流量索引重建，耗时取舍已记录。旧数组接口及 `/practice/stats` 保持兼容，聚合统计优化属于后续事项；详见[本次交接](handoffs/2026-10-11-training-quota-settings.md)。
+
 ## 培训章节实例修复已合并 main 并部署（2026-10-11）
 
 - [PR #24](https://github.com/Y3X1L2/newGZCTF/pull/24) 已正常合并为 `main 60170a5266f684581f21e95013687b0e7367515f`，与最终审查 head `1bdfff83` 完整 tree 相同。修复与回归用例已进入主线：课程独立每用户默认 3 实例，达到额度拒绝新建；公共练习仅显式开启自动清理时驱逐其他公共练习；动态容器新建前补齐缺失实例 Flag。统一队列、授权、节点容量、现有有效实例与 Flag 保留，无模型、迁移、API 数据结构或 Agent/前端源码变更。
