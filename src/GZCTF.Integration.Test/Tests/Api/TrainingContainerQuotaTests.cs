@@ -19,6 +19,21 @@ public sealed class TrainingContainerQuotaTests(GZCTFApplicationFactory factory)
     private const string Password = "Training@Test123";
 
     [Fact]
+    public async Task StudentWithoutCourseEnrollment_CannotCreateCourseRuntime()
+    {
+        var fixture = await CreateFixtureAsync();
+        var student = await TestDataSeeder.CreateUserAsync(factory.Services,
+            TestDataSeeder.RandomName(), Password, role: Role.Student);
+        using var client = await LoginAsync(student);
+        using var response = await client.PostAsync(Route(fixture, fixture.TrainingIds[0]), null);
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        await using var scope = factory.Services.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        Assert.False(await context.DeploymentQueueTickets.AnyAsync(ticket => ticket.OwnerUserId == student.Id));
+        Assert.False(await context.ExerciseInstances.AnyAsync(instance => instance.UserId == student.Id));
+    }
+
+    [Fact]
     public async Task ConcurrentChapterCreates_AdmitThreeAndRejectFourthWithoutReplacingTickets()
     {
         var fixture = await CreateFixtureAsync();
@@ -101,6 +116,8 @@ public sealed class TrainingContainerQuotaTests(GZCTFApplicationFactory factory)
         var chapter = new TrainingCourseChapter { Title = "four concurrent labs", Course = course };
         context.Add(chapter);
         await context.SaveChangesAsync();
+        context.Add(new TrainingCourseTeacher
+            { CourseId = course.Id, TeacherId = user.Id, Role = TrainingCourseTeacherRole.Owner });
         ExerciseChallenge MakeExercise(int? courseId) => new()
         {
             Title = "quota fixture " + Guid.NewGuid().ToString("N"), Content = "platform lifecycle regression",
