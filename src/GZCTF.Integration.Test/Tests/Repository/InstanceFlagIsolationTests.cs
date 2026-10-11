@@ -13,6 +13,45 @@ namespace GZCTF.Integration.Test.Tests.Repository;
 public class InstanceFlagIsolationTests(GZCTFApplicationFactory factory)
 {
     [Fact]
+    public async Task LoadedDynamicInstanceWithoutFlag_IsRepairedBeforeQueueAdmission()
+    {
+        using var scope = factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var repository = scope.ServiceProvider.GetRequiredService<IExerciseInstanceRepository>();
+        var user = CreateUser($"repair{Guid.NewGuid():N}"[..16]);
+        var instance = new ExerciseInstance
+        {
+            User = user, IsLoaded = true,
+            Exercise = new ExerciseChallenge
+            {
+                Title = "missing instance flag regression", Content = "platform injection test",
+                Type = ChallengeType.DynamicContainer, FlagTemplate = null, IsEnabled = true,
+                ContainerImage = "example.test/injection:latest", ExposePort = 80
+            }
+        };
+        context.Add(instance);
+        await context.SaveChangesAsync();
+        var loaded = await repository.GetInstance(user, instance.ExerciseId);
+        Assert.NotNull(loaded);
+        Assert.Null(loaded.FlagId);
+
+        var result = await repository.CreateContainer(loaded, user);
+        Assert.IsType<QueuedTaskResult<Container>>(result);
+        context.ChangeTracker.Clear();
+        var persisted = await context.ExerciseInstances.Include(item => item.FlagContext)
+            .SingleAsync(item => item.UserId == user.Id && item.ExerciseId == instance.ExerciseId);
+        Assert.NotNull(persisted.FlagContext);
+        Assert.False(string.IsNullOrWhiteSpace(persisted.FlagContext.Flag));
+        Assert.Null(persisted.FlagContext.ExerciseId);
+        Assert.Null(persisted.ContainerId);
+        var flagId = persisted.FlagId;
+        await repository.CreateContainer(persisted, user);
+        Assert.Equal(flagId, persisted.FlagId);
+        Assert.Equal(1, await context.DeploymentQueueTickets.CountAsync(ticket =>
+            ticket.OwnerUserId == user.Id && ticket.ChallengeId == instance.ExerciseId));
+    }
+
+    [Fact]
     public async Task TrainingDynamicFlags_AreUniqueInstanceOwnedAndCrossSubmissionFails()
     {
         using var scope = factory.Services.CreateScope();
