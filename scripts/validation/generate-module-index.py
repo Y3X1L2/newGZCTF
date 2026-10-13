@@ -3,10 +3,11 @@
 import argparse
 from pathlib import Path
 
-from documentation import generated_index, load_catalog, read_text
+from documentation import configure_cli_output, generated_index, load_catalog, read_text
 
 
 def main():
+    configure_cli_output()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[2])
     parser.add_argument("--check", action="store_true")

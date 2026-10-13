@@ -7,11 +7,20 @@ from pathlib import Path
 import posixpath
 import re
 import subprocess
+import sys
 import unicodedata
 from urllib.parse import unquote, urlsplit
 
 CATALOG_PATH = "docs/catalog.json"
 IGNORED_DIRS = {".git", "node_modules", "bin", "obj", "dist", "coverage", "__pycache__"}
+
+
+def configure_cli_output():
+    """Windows 控制台/管道均输出 UTF-8；StringIO 等捕获流无需重配置。"""
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if callable(reconfigure):
+            reconfigure(encoding="utf-8")
 
 
 def read_text(path):

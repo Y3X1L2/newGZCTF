@@ -3,7 +3,7 @@
 import argparse
 from pathlib import Path
 
-from documentation import check_catalog, check_links, generated_index, length_warnings, read_text
+from documentation import check_catalog, check_links, configure_cli_output, generated_index, length_warnings, read_text
 
 
 def check(root):
@@ -23,6 +23,7 @@ def check(root):
 
 
 def main():
+    configure_cli_output()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[2])
     parser.add_argument("--report", type=Path, help="同时保存 UTF-8 Markdown 报告")

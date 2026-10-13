@@ -1,7 +1,9 @@
 """真实临时目录/Git 仓库回归；不把 fixture 当作项目文档提交。"""
 
 import importlib.util
+import io
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -287,6 +289,21 @@ class ImpactTests(Fixture):
         pr = self.write("pr.json", json.dumps({"pull_request": {"body": self.body()}}))
         result = self.run_tool("documentation-impact.py", "--base", self.base, "--event-file", str(pr))
         self.assertEqual(result.returncode, 1)
+
+    def test_cli_bytes_are_utf8_even_when_process_default_is_cp936(self):
+        env = dict(os.environ, PYTHONUTF8="0", PYTHONIOENCODING="cp936")
+        for tool, args in [("check-documentation.py", []), ("generate-module-index.py", ["--check"]),
+                           ("documentation-impact.py", ["--base", self.base])]:
+            with self.subTest(tool=tool):
+                result = subprocess.run([sys.executable, str(TOOLS / tool), "--root", str(self.root), *args],
+                                        capture_output=True, env=env)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertRegex(result.stdout.decode("utf-8"), r"通过|报告")
+        code = "import sys; from documentation import configure_cli_output; configure_cli_output(); sys.stderr.write('中文错误')"
+        result = subprocess.run([sys.executable, "-c", code], cwd=TOOLS, capture_output=True, env=env)
+        self.assertEqual(result.stderr.decode("utf-8"), "中文错误")
+        with patch("documentation.sys.stdout", io.StringIO()), patch("documentation.sys.stderr", io.StringIO()):
+            docs.configure_cli_output()  # 无 reconfigure 的捕获流同样可用。
 
     def test_pr_body_is_data_and_never_executes_commands(self):
         payload = "$(touch PWNED); `python -c 'open(\"PWNED\",\"w\")'`"

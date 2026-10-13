@@ -4,10 +4,11 @@ import argparse
 import json
 from pathlib import Path
 
-from documentation import check_catalog, impact, impact_report, load_catalog, read_text, review_impact
+from documentation import check_catalog, configure_cli_output, impact, impact_report, load_catalog, read_text, review_impact
 
 
 def main():
+    configure_cli_output()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[2])
     parser.add_argument("--base", required=True, help="Git 引用；以它与 head 的 merge-base 比较")
