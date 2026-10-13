@@ -1,6 +1,6 @@
 # TeamLab 镜像与平台网络如何配合
 
-2026-10-02。本说明对应 `codex/teamlab-managed-network`，已部署到10.24.0.27并完成限定实机验收；详细结果见[交接](../development/handoffs/2026-10-02-teamlab-managed-network.md)。新网络策略当前选择`.27`作为网络owner及Worker，`.30/.31`未升级。
+2026-10-02。本说明对应 `codex/teamlab-managed-network`，已部署到10.24.0.27并完成限定实机验收；详细结果见[交接](../../../records/2026-10-02-teamlab-managed-network.md)。新网络策略当前选择`.27`作为网络owner及Worker，`.30/.31`未升级。
 
 ## 先理解分工
 

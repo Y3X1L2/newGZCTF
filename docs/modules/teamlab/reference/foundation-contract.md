@@ -86,15 +86,14 @@ TeamLab 不负责：
     {
       "key": "jump-host",
       "name": "Jump Host",
-      "kind": "Docker",
+      "kind": 0,
       "imageTemplateId": 42,
       "resources": { "cpuUnits": 10, "memoryMiB": 512, "storageMiB": 2048 },
       "interfaces": [
         { "key": "eth0", "networkKey": "entry", "hostOffset": 10, "primary": true },
         { "key": "eth1", "networkKey": "core", "hostOffset": 10, "primary": false }
       ],
-      "routingEnabled": true,
-      "healthCheck": { "kind": "Tcp", "port": 22 }
+      "healthCheck": { "kind": 0, "port": 22 }
     }
   ],
   "connections": [
@@ -102,6 +101,8 @@ TeamLab 不负责：
   ]
 }
 ```
+
+拓扑示例为兼容 schema v1 的更新定义片段；不作为完整 schema v2 创建请求。默认数字枚举及 Unix 毫秒时间依据 [公开模型](../../../../src/GZCTF/Modules/TeamLab/Contracts/TeamLabTopologyContracts.cs) 与 [序列化配置](../../../../src/GZCTF/Extensions/OtherExtensions.cs)，完整新场景按 [拓扑参考](topology-release.md) 的 schema v2 制作。
 
 ### 4.2 拓扑规则
 
@@ -206,26 +207,26 @@ Failed  -> CleanupPending -> Destroying -> Destroyed
 - `Stopped` 只用于平台明确支持可恢复暂停的资产；不能把已清理 runtime 标记为 Stopped。
 - runtime 聚合状态由 shard 和关键基础设施事实计算，不能只读取单个 WorkerNode。
 
-Runtime response：
+Runtime response（部分字段，完整响应见 [OpenTeamLabContracts](../../../../src/GZCTF/Modules/TeamLab/Contracts/OpenTeamLabContracts.cs)）：
 
 ```json
 {
   "id": "019...",
   "releaseId": "019...",
   "generation": 1,
-  "status": "Running",
+  "status": 5,
   "stage": "ready",
   "openForAccess": true,
   "shards": [
     {
       "id": "019...",
-      "status": "Running",
+      "status": 5,
       "networkKeys": ["entry"],
       "assetKeys": ["jump-host"]
     }
   ],
-  "createdAt": "2026-07-10T00:00:00Z",
-  "updatedAt": "2026-07-10T00:03:00Z",
+  "createdAt": 1783641600000,
+  "updatedAt": 1783641780000,
   "error": null
 }
 ```
@@ -379,16 +380,19 @@ Agent 地址。返回的 `suggestedAction` 直接用于现有单资产控制接�
 {
   "apiVersion": "v1",
   "topologySchemaVersions": [1, 2],
-  "assetKinds": ["Docker", "Vm"],
+  "assetKinds": [0, 1],
   "networkModel": "L3RoutedFabric",
   "features": {
     "multiNode": true,
     "linuxVm": true,
     "windowsVm": true,
     "trafficFlows": true,
-    "trafficPaths": true,
     "onDemandPcap": true,
-    "bootstrapProfiles": true
+    "editorLayout": true,
+    "editorLayoutVersion": 1,
+    "networkRegions": true,
+    "rollouts": true,
+    "pauseResume": true
   },
   "limits": {
     "networksPerTopology": 32,
@@ -397,6 +401,8 @@ Agent 地址。返回的 `suggestedAction` 直接用于现有单资产控制接�
   }
 }
 ```
+
+能力字段与限制依据 [TeamLabTopologyApplicationService](../../../../src/GZCTF/Modules/TeamLab/Application/TeamLabTopologyApplicationService.cs) 和 TeamLabTopologyValidator；布尔能力不等于目标环境已经验收。
 
 在现有 v1 中启用已支持的 `windowsVm` 不需要发布 v2。删除 asset kind、改变 network model 或收紧已发布 topology schema 需要新 API 主版本。
 
