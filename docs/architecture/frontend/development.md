@@ -8,11 +8,11 @@
 
 1. 当前运行行为、真实请求和浏览器证据；
 2. 当前 `main` 源码、OpenAPI 和自动化测试；
-3. `AGENTS.md` 与 `docs/development/current-state.md`；
-4. [页面交互与 API 规格](./yinyu-vnext-page-interaction-api-spec.md)；
-5. [前端组件边界](./commercialization/frontend-component-boundary.md)；
-6. [前端样式 Token 契约](./commercialization/frontend-style-token-contract.md)；
-7. [前端设计语言规范](./yinyu-vnext-design-language-draft.md)。
+3. `AGENTS.md` 与 `docs/current-state.md`；
+4. [页面交互与 API 规格](page-api-map.md)；
+5. [前端组件边界](component-boundary.md)；
+6. [前端样式 Token 契约](style-tokens.md)；
+7. [前端设计语言规范](design-language.md)。
 
 `docs/archive/`、废弃原型目录和历史页面只用于追溯，不能直接复制回正式依赖图。
 

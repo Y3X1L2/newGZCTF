@@ -1,0 +1,293 @@
+{
+  "version": 1,
+  "modules": [
+    {
+      "id": "ctf",
+      "title": "CTF赛事与渗透玩法",
+      "overview": "docs/modules/ctf/README.md",
+      "development": "docs/modules/ctf/development.md",
+      "code": [
+        "src/GZCTF/Modules/Ctf/**",
+        "src/GZCTF/Modules/Penetration/**",
+        "src/GZCTF/Controllers/Game*.cs",
+        "src/GZCTF/Controllers/EditController.cs",
+        "src/GZCTF/Controllers/Penetration*.cs",
+        "src/GZCTF/Repositories/Game*.cs",
+        "src/GZCTF/Repositories/ParticipationRepository.cs",
+        "src/GZCTF/Repositories/SubmissionRepository.cs",
+        "src/GZCTF/Repositories/DivisionRepository.cs",
+        "src/GZCTF/Models/Data/Game*.cs",
+        "src/GZCTF/Models/Data/*Participation*.cs",
+        "src/GZCTF/Models/Request/Game/**",
+        "src/GZCTF/ClientApp/src/vnext/features/games/**",
+        "src/GZCTF/ClientApp/src/vnext/features/admin/games/**",
+        "src/GZCTF.Test/**/Game*.cs"
+      ],
+      "docs": [
+        "docs/modules/ctf/**"
+      ]
+    },
+    {
+      "id": "awdp",
+      "title": "AWDP攻防",
+      "overview": "docs/modules/awdp/README.md",
+      "development": "docs/modules/awdp/development.md",
+      "code": [
+        "src/GZCTF/Modules/Awdp/**",
+        "src/GZCTF/Controllers/Awdp*.cs",
+        "src/GZCTF/Repositories/AwdpRepository.cs",
+        "src/GZCTF/Services/Awdp*.cs",
+        "src/GZCTF/Models/Data/Awdp*.cs",
+        "src/GZCTF/ClientApp/src/vnext/features/awdp/**",
+        "src/GZCTF/ClientApp/src/vnext/features/admin/awdp/**",
+        "src/GZCTF.Test/**/Awdp*.cs"
+      ],
+      "docs": [
+        "docs/modules/awdp/**"
+      ]
+    },
+    {
+      "id": "theory",
+      "title": "理论考试",
+      "overview": "docs/modules/theory/README.md",
+      "development": "docs/modules/theory/development.md",
+      "code": [
+        "src/GZCTF/Modules/Theory/**",
+        "src/GZCTF/Controllers/Theory*.cs",
+        "src/GZCTF/Services/Theory*.cs",
+        "src/GZCTF/Models/Data/Theory*.cs",
+        "src/GZCTF/ClientApp/src/vnext/features/theory/**",
+        "src/GZCTF/ClientApp/src/vnext/features/admin/theory/**",
+        "src/GZCTF.Test/**/Theory*.cs"
+      ],
+      "docs": [
+        "docs/modules/theory/**"
+      ]
+    },
+    {
+      "id": "training",
+      "title": "培训课程",
+      "overview": "docs/modules/training/README.md",
+      "development": "docs/modules/training/development.md",
+      "code": [
+        "src/GZCTF/Modules/Training/**",
+        "src/GZCTF/Controllers/Training*.cs",
+        "src/GZCTF/Controllers/AdminController.cs",
+        "src/GZCTF/Services/Training/**",
+        "src/GZCTF/Models/Data/Training*.cs",
+        "src/GZCTF/Models/Request/Training/**",
+        "src/GZCTF/Models/Internal/TrainingContainerPolicy.cs",
+        "src/GZCTF/Repositories/ExerciseInstanceRepository.cs",
+        "src/GZCTF/ClientApp/src/vnext/features/training/**",
+        "src/GZCTF/ClientApp/src/vnext/features/admin/system/TrainingContainerQuotaPanel.tsx",
+        "src/GZCTF/ClientApp/src/vnext/features/admin/system/useTrainingContainerQuota.ts",
+        "src/GZCTF.Test/UnitTests/Training/**",
+        "src/GZCTF.Integration.Test/**/Training*.cs"
+      ],
+      "docs": [
+        "docs/modules/training/**"
+      ]
+    },
+    {
+      "id": "exercise",
+      "title": "自主练习",
+      "overview": "docs/modules/exercise/README.md",
+      "development": "docs/modules/exercise/development.md",
+      "code": [
+        "src/GZCTF/Modules/Exercise/**",
+        "src/GZCTF/Controllers/ExerciseController.cs",
+        "src/GZCTF/Repositories/Exercise*.cs",
+        "src/GZCTF/Models/Data/Exercise*.cs",
+        "src/GZCTF/Models/Request/Exercise/**",
+        "src/GZCTF/ClientApp/src/vnext/features/practice/**",
+        "src/GZCTF/ClientApp/src/vnext/features/admin/exercises/**",
+        "src/GZCTF.Integration.Test/**/Exercise*.cs"
+      ],
+      "docs": [
+        "docs/modules/exercise/**"
+      ]
+    },
+    {
+      "id": "identity",
+      "title": "用户与权限",
+      "overview": "docs/modules/identity/README.md",
+      "development": "docs/modules/identity/development.md",
+      "code": [
+        "src/GZCTF/Modules/Identity/**",
+        "src/GZCTF/Controllers/AccountController.cs",
+        "src/GZCTF/Controllers/UsersController.cs",
+        "src/GZCTF/Controllers/TeamController.cs",
+        "src/GZCTF/Controllers/StudentGroupAdminController.cs",
+        "src/GZCTF/Repositories/TeamRepository.cs",
+        "src/GZCTF/Models/Data/User*.cs",
+        "src/GZCTF/Models/Data/Team*.cs",
+        "src/GZCTF/ClientApp/src/vnext/features/auth/**",
+        "src/GZCTF/ClientApp/src/vnext/features/account/**",
+        "src/GZCTF/ClientApp/src/vnext/features/profile/**",
+        "src/GZCTF/ClientApp/src/vnext/features/settings/**",
+        "src/GZCTF/ClientApp/src/vnext/features/teams/**",
+        "src/GZCTF/ClientApp/src/vnext/features/admin/users/**",
+        "src/GZCTF/ClientApp/src/vnext/features/admin/student-groups/**",
+        "src/GZCTF/ClientApp/src/vnext/features/admin/teams/**"
+      ],
+      "docs": [
+        "docs/modules/identity/**"
+      ]
+    },
+    {
+      "id": "provisioning",
+      "title": "批量导入",
+      "overview": "docs/modules/provisioning/README.md",
+      "development": "docs/modules/provisioning/development.md",
+      "code": [
+        "src/GZCTF/Modules/Provisioning/**",
+        "src/GZCTF.Test/**/Academic*.cs"
+      ],
+      "docs": [
+        "docs/modules/provisioning/**"
+      ]
+    },
+    {
+      "id": "teamlab",
+      "title": "TeamLab组网",
+      "overview": "docs/modules/teamlab/README.md",
+      "development": "docs/modules/teamlab/development.md",
+      "code": [
+        "src/GZCTF/Modules/TeamLab/**",
+        "src/GZCTF/Services/TeamLab/**",
+        "src/GZCTF/ClientApp/src/vnext/features/admin/teamlab/**",
+        "src/GZCTF.Agent/Services/TeamLab/**",
+        "src/GZCTF.Agent/**/TeamLab*.cs",
+        "src/GZCTF.Test/**/TeamLab*.cs",
+        "src/GZCTF.Integration.Test/**/TeamLab*.cs",
+        "scripts/validation/teamlab/**",
+        "scripts/validation/teamlab-match/**"
+      ],
+      "docs": [
+        "docs/modules/teamlab/**"
+      ]
+    },
+    {
+      "id": "content",
+      "title": "内容与镜像",
+      "overview": "docs/modules/content/README.md",
+      "development": "docs/modules/content/development.md",
+      "code": [
+        "src/GZCTF/Modules/Content/**",
+        "src/GZCTF/Controllers/AssetsController.cs",
+        "src/GZCTF/Controllers/ImageTemplateController.cs",
+        "src/GZCTF/Repositories/BlobRepository.cs",
+        "src/GZCTF/Models/Data/*Image*.cs",
+        "src/GZCTF/Models/Data/*Attachment*.cs",
+        "src/GZCTF/Services/Fleet/Image*.cs",
+        "src/GZCTF/Services/Vm/*Image*.cs",
+        "src/GZCTF/ClientApp/src/vnext/features/admin/images/**",
+        "docs/registry-server/*.sh",
+        "src/GZCTF.Test/**/Image*.cs"
+      ],
+      "docs": [
+        "docs/modules/content/**",
+        "docs/operations/registry-deployment.md"
+      ]
+    },
+    {
+      "id": "runtime",
+      "title": "运行底座与节点",
+      "overview": "docs/modules/runtime/README.md",
+      "development": "docs/modules/runtime/development.md",
+      "code": [
+        "src/GZCTF/Modules/Runtime/**",
+        "src/GZCTF/Services/Fleet/**",
+        "src/GZCTF/Services/Container/**",
+        "src/GZCTF/Services/Vm/**",
+        "src/GZCTF/Controllers/DeploymentQueueController.cs",
+        "src/GZCTF/Controllers/NodesController.cs",
+        "src/GZCTF/Controllers/ProxyController.cs",
+        "src/GZCTF/Repositories/ContainerRepository.cs",
+        "src/GZCTF/Repositories/NodeRepository.cs",
+        "src/GZCTF.Agent/**",
+        "src/GZCTF/ClientApp/src/vnext/features/challenge-runtime/**",
+        "src/GZCTF/ClientApp/src/vnext/features/admin/nodes/**",
+        "src/GZCTF/ClientApp/src/vnext/features/admin/queue/**",
+        "src/GZCTF/ClientApp/src/vnext/features/admin/instances/**",
+        "docs/node-deployment/*.sh",
+        "scripts/deployment/**",
+        "src/GZCTF.Test/**/Deployment*.cs"
+      ],
+      "docs": [
+        "docs/modules/runtime/**",
+        "docs/operations/runtime-scheduling-and-recovery.md",
+        "docs/operations/node-deployment.md",
+        "docs/operations/windows-vm*.md",
+        "docs/operations/agent-guest-network-recovery.md",
+        "docs/architecture/agent-capability-protocol.md"
+      ]
+    },
+    {
+      "id": "audit",
+      "title": "日志与异步操作",
+      "overview": "docs/modules/audit/README.md",
+      "development": "docs/modules/audit/development.md",
+      "code": [
+        "src/GZCTF/Modules/Audit/**",
+        "src/GZCTF/Controllers/OperationsController.cs",
+        "src/GZCTF/Repositories/LogRepository.cs",
+        "src/GZCTF/ClientApp/src/vnext/features/admin/logs/**"
+      ],
+      "docs": [
+        "docs/modules/audit/**",
+        "docs/architecture/event-taxonomy.md",
+        "docs/operations/observability-audit-recovery.md"
+      ]
+    },
+    {
+      "id": "platform",
+      "title": "共用架构与工具",
+      "overview": "docs/architecture/README.md",
+      "development": "docs/architecture/development.md",
+      "code": [
+        "src/GZCTF/Infrastructure/**",
+        "src/GZCTF/Composition/**",
+        "src/GZCTF/Extensions/**",
+        "src/GZCTF/Utils/**",
+        "src/GZCTF/Models/Internal/Configs.cs",
+        "src/GZCTF/Models/Request/Admin/**",
+        "src/GZCTF/Controllers/AdminController.cs",
+        "src/GZCTF/Controllers/InfoController.cs",
+        "src/GZCTF/Controllers/InternalController.cs",
+        "src/GZCTF/Controllers/ErrorController.cs",
+        "src/GZCTF/Program.cs",
+        "src/GZCTF/Services/Config/**",
+        "src/GZCTF/Services/HealthCheck/**",
+        "src/GZCTF/Services/CronJob/**",
+        "src/GZCTF/Services/Mail/**",
+        "src/GZCTF/Migrations/**",
+        "src/GZCTF/ClientApp/src/vnext/app/**",
+        "src/GZCTF/ClientApp/src/vnext/shared/**",
+        "src/GZCTF/ClientApp/src/vnext/design/**",
+        "src/GZCTF/ClientApp/src/vnext/features/admin/system/**",
+        "src/GZCTF/ClientApp/src/vnext/features/home/**",
+        "src/GZCTF/ClientApp/src/vnext/features/posts/**",
+        "src/GZCTF/ClientApp/src/api-client/**",
+        "src/GZCTF/ClientApp/src/generated/**",
+        "src/GZCTF/ClientApp/scripts/**",
+        "src/GZCTF.AppHost/**",
+        "src/Directory.*",
+        "src/*.slnx",
+        ".github/**",
+        "scripts/validation/*documentation*.py",
+        "scripts/verify-openapi-contract.ps1",
+        "scripts/database/**"
+      ],
+      "docs": [
+        "docs/architecture/**",
+        "docs/operations/**",
+        "docs/README.md",
+        "docs/overview.md",
+        "AGENTS.md",
+        "README.md",
+        "docs/catalog.json"
+      ]
+    }
+  ]
+}

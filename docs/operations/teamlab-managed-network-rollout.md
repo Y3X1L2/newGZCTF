@@ -11,7 +11,7 @@
 - Windows双卡及路由、Ubuntu24双卡、DHCP/AD核心访问、Docker HTTP、新建/重置/不同地址段隔离/销毁均通过。Server2008R2缺QGA负例已正确分类。图形RDP登录、同CIDR/VRF及跨Worker未测。
 - 本次9个验收runtime已按平台正常流程销毁并审计无归属残留；原8台VM保留且关机，源镜像/PVE/快照/旧release/备份保留。
 
-发布物摘要、逐项结果和限制以 [实际交接](../development/handoffs/2026-10-02-teamlab-managed-network.md) 为准。
+发布物摘要、逐项结果和限制以 [实际交接](../records/2026-10-02-teamlab-managed-network.md) 为准。
 
 ## 发布前基线（历史预检，不是当前版本）
 

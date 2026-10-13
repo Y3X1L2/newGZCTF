@@ -1,6 +1,6 @@
 # GZCTF 镜像管理服务器部署指南
 
-本目录用于把一台 Ubuntu Server 配置为 GZCTF 内网 Docker 镜像仓库。
+本页与 `docs/registry-server/` 中的脚本用于把一台 Ubuntu Server 配置为 GZCTF 内网 Docker 镜像仓库。
 
 平台当前的镜像使用流程是：
 

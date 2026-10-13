@@ -14,7 +14,7 @@ YINYU 是基于 GZCTF 演进的安全综合演练平台，面向 CTF 竞赛、AW
 | TeamLab | 拓扑、发布、计划、runtime、组网、流量、抓包与受审计远程操作 | 核心链路已进入主线，规模与故障场景继续验收 |
 | 自主练习 | 独立题库、筛选、附件、Flag、容器实例、提交、统计与后台管理 | 已发布并完成核心业务验收，内容运营等后续范围见当前状态 |
 
-准确的当前提交、环境、阶段和已知缺口见 [当前开发状态](docs/development/current-state.md)。
+准确的当前提交、环境、阶段和已知缺口见 [当前开发状态](docs/current-state.md)。
 
 ## 系统组成
 
@@ -104,24 +104,20 @@ pnpm build
 生产环境不是简单执行 `docker compose up`。正式发布需要数据库备份、迁移检查、独立 release 目录、原子切换、节点与镜像验证以及业务冒烟测试。
 
 - 主站发布：[维护窗口部署手册](docs/operations/vnext-maintenance-window-rollout.md)
-- WorkerNode：[节点部署说明](docs/node-deployment/README.md)
-- Registry：[镜像仓库部署说明](docs/registry-server/README.md)
+- WorkerNode：[节点部署说明](docs/operations/node-deployment.md)
+- Registry：[镜像仓库部署说明](docs/operations/registry-deployment.md)
 - Windows VM：[镜像制作与部署简明指南](docs/operations/windows-vm-quick-deployment-guide.md)
 
 根目录和 `scripts/` 中的历史一键部署脚本不得直接用于生产。
 
 ## 文档
 
-- [文档导航与生命周期](docs/README.md)
-- [项目协作规范](AGENTS.md)
-- [当前开发状态](docs/development/current-state.md)
-- [平台架构与产品总纲](docs/platform-commercialization-master-plan.md)
-- [模块边界](docs/commercialization/module-boundary-map.md)
-- [外部 API 标准](docs/commercialization/external-api-standard.md)
-- [模块文档覆盖矩阵](docs/modules/README.md)
-
-`docs/archive/` 只用于保存历史证据和旧方案，不作为当前实现依据。
+- [项目概览与功能图](docs/overview.md)
+- [按功能找说明和代码](docs/modules/README.md)
+- [文档总入口](docs/README.md)
+- [当前状态与任务起点](docs/current-state.md)
+- [部署与运维](docs/operations/README.md)
 
 ## 协作
 
-开始任务前阅读 `AGENTS.md` 和 `docs/development/current-state.md`，从最新 `origin/main` 创建独立任务分支。代码、测试和必要文档应在同一变更中闭环；部署或项目状态发生变化时同步更新当前状态文档。
+开始任务前阅读 `AGENTS.md` 和 `docs/current-state.md`，从最新 `origin/main` 创建独立任务分支。代码、测试和必要文档应在同一变更中闭环；部署或项目状态发生变化时同步更新当前状态文档。

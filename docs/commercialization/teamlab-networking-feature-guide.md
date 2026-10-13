@@ -132,7 +132,7 @@ GET /api/open/v1/operations/{operationId}
 
 查询阶段、进度和结果。完整字段、权限范围和请求示例见：
 
-- `docs/commercialization/open-api-v1-guide.md`
+- `docs/operations/open-api-integration.md`
 - `docs/commercialization/teamlab-api-foundation-contract.md`
 - 部署后的中文 API 页面：`/api-docs/`
 

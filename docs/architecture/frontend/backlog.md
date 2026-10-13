@@ -94,13 +94,13 @@ Docker 和 Windows VM 已有运行链路，Linux VM SSH 尚未形成正式产品
 
 TeamLab 已有拓扑、发布、计划、runtime、远程访问、流量和管理/选手路由。仍需持续验证多节点故障、双 Worker 竞争、长时间流量采集、PCAP、资源残留和容量上限。
 
-退出条件：按 [TeamLab 基础验收手册](./commercialization/runbooks/teamlab-foundation-acceptance.md) 在真实节点完成规模、故障和清理验收，并记录可重复证据。
+退出条件：按 [TeamLab 基础验收手册](../../commercialization/runbooks/teamlab-foundation-acceptance.md) 在真实节点完成规模、故障和清理验收，并记录可重复证据。
 
 ### 5.2 AWDP 手工验收
 
 AWDP 的管理和选手流程已有实现，但本机自动执行攻击、补丁和恢复可能触发安全软件。代码门禁不能替代授权环境中的完整比赛流程。
 
-退出条件：测试人员按 [AWDP 手工验收指南](./yinyu-awdp-manual-acceptance.md) 完成启动、攻击、修补、重置、恢复、计分和停止，并核对审计日志。
+退出条件：测试人员按 [AWDP 手工验收指南](../../yinyu-awdp-manual-acceptance.md) 完成启动、攻击、修补、重置、恢复、计分和停止，并核对审计日志。
 
 ## 6. 认证、日志和安全事实
 

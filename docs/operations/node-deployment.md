@@ -19,7 +19,7 @@ Agent 在 Worker 上执行本机 Docker/KVM 操作。建议在 PVE 中建立专�
 sudo bash scripts/prepare-agent-node.sh --check-only
 ```
 
-需要安装依赖时使用本目录的初始化脚本；它准备系统，不直接安装平台注册的 Agent：
+需要安装依赖时使用 `docs/node-deployment/` 的初始化脚本；它准备系统，不直接安装平台注册的 Agent：
 
 ```bash
 sudo bash docs/node-deployment/setup-gzctf-worker-node.sh   --insecure-registry <REGISTRY_HOST>:5000

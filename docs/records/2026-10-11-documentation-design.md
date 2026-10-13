@@ -157,7 +157,7 @@ flowchart LR
 | 动态额度管理 | [AdminController](../../src/GZCTF/Controllers/AdminController.cs)、[设置面板](../../src/GZCTF/ClientApp/src/vnext/features/admin/system/TrainingContainerQuotaPanel.tsx)；已进入新主线，部署与实测另核 |
 | 容器执行票据 | [DeploymentQueueService](../../src/GZCTF/Services/Fleet/DeploymentQueueService.cs)，共享 Runtime/Agent 链路 |
 | 定向验证 | [生命周期单测](../../src/GZCTF.Test/UnitTests/Training/TrainingContainerLifecycleTests.cs)、[API/PG 并发额度](../../src/GZCTF.Integration.Test/Tests/Api/TrainingContainerQuotaTests.cs)、[真实 Docker](../../src/GZCTF.Integration.Test/Tests/Repository/TrainingContainerDockerTests.cs) |
-| 稳定规则与发布证据 | [课程生命周期](../modules/training-container-lifecycle.md)、[10-11 发布](handoffs/2026-10-11-training-runtime-mainline.md) |
+| 稳定规则与发布证据 | [课程生命周期](../modules/training-container-lifecycle.md)、[10-11 发布](2026-10-11-training-runtime-mainline.md) |
 
 同样的结构用于每个模块。自动扫描模块目录可生成候选路径，但这些跨目录共享入口必须经过责任人确认；接口字段继续从 OpenAPI 获取，不在工程页再复制整份 DTO。
 
@@ -259,11 +259,11 @@ flowchart LR
 
 第一轮清理仍在本任务分支，未进入 main；本轮交付的是上述审计与推荐方案，并修正抽样发现的 ApiOperation 状态说明与 Provisioning 归属描述，补齐文档门禁对只改代码 PR 的触发。没有批量迁移所有模块，没有实现 catalog/语义门禁/定时机器人，没有新增生产操作。方案示例与未实施机制分别标明。
 
-现行入口仍是 [文档导航](../README.md)；第一轮状态摘要见 [current-state](current-state.md)，生产证据仍保留原任务记录。同步时 PR #26 的实现已在 main，但其交接仍记录实施/验证阶段；本轮依据 Git 登记“已合入”，没有据此补写“已部署/已验收”。它再次说明状态必须关联事件与证据，不能只靠编辑人记得回写。
+现行入口仍是 [文档导航](../README.md)；第一轮状态摘要见 [current-state](../current-state.md)，生产证据仍保留原任务记录。同步时 PR #26 的实现已在 main，但其交接仍记录实施/验证阶段；本轮依据 Git 登记“已合入”，没有据此补写“已部署/已验收”。它再次说明状态必须关联事件与证据，不能只靠编辑人记得回写。
 
-本方案的实施缺口归 [backlog](backlog.md) 的 DOC-01/DOC-02；六项问题的整体落实应另按阶段验收，不能由第一轮 9 份删除或一次链接检查宣布闭环。
+本方案的实施缺口归 [backlog](../backlog.md) 的 DOC-01/DOC-02；六项问题的整体落实应另按阶段验收，不能由第一轮 9 份删除或一次链接检查宣布闭环。
 
-本轮 Git、验证与交接见 [任务记录](handoffs/2026-10-11-docs-collaboration-audit.md)。当前读者可先看前述“一页结论”和结构图，工程审查者再看自动化/迁移细节，第一轮清理清单仅供追溯。
+本轮 Git、验证与交接见 [任务记录](2026-10-11-docs-collaboration-audit.md)。当前读者可先看前述“一页结论”和结构图，工程审查者再看自动化/迁移细节，第一轮清理清单仅供追溯。
 
 <details>
 <summary>附录：第一轮已经执行的清理清单与原文追溯</summary>

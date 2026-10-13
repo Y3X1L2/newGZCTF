@@ -21,7 +21,7 @@
 
 工作状态：`complete`（第一轮清理已交付，第二轮审计与推荐方案完成；全量目录/维护机制实施仍是后续任务）；证据状态：文档与本地门禁 `VERIFIED`，现场只读范围 `VERIFIED`，部署 `NOT_RUN`。合入审查属于下一步，不能把本分支文档写成已进入 main。
 
-详细判断、清理依据与简明协作方案见 [审计结论](../documentation-audit.md)。非归档 docs Markdown 从 131 份变为 120 份，旧 archive 160 份保留，新增五份历史材料；状态页 365→51 行。现行规则集中于 AGENTS，状态集中于 current-state，未决事项集中于 backlog；复杂任务一份 handoff，短任务 PR 说明。
+详细判断、清理依据与简明协作方案见 [审计结论](2026-10-11-documentation-design.md)。非归档 docs Markdown 从 131 份变为 120 份，旧 archive 160 份保留，新增五份历史材料；状态页 365→51 行。现行规则集中于 AGENTS，状态集中于 current-state，未决事项集中于 backlog；复杂任务一份 handoff，短任务 PR 说明。
 
 ## 现场证据与范围
 

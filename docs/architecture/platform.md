@@ -103,7 +103,7 @@ HTTP / Frontend
 
 ## 8. 进度与后续建设
 
-本总纲维护稳定产品边界，不重复记录发布状态与待办。最新基线和验收范围见 [当前状态](development/current-state.md)，未决事项见 [后续事项](development/backlog.md)，模块说明缺口见 [模块索引](modules/README.md)。
+本总纲维护稳定产品边界，不重复记录发布状态与待办。最新基线和验收范围见 [当前状态](../current-state.md)，未决事项见 [后续事项](../backlog.md)，模块说明缺口见 [模块索引](../modules/README.md)。
 
 任务排序先看真实故障与用户目标，再看运行/数据风险和专项验收；新能力不能绕过现有队列、授权或事实源。独立产品拆分属于待论证目标，不因历史计划被批准为现行架构。
 
@@ -111,4 +111,4 @@ HTTP / Frontend
 
 文档和代码提交至少执行 `git diff --check`。前端改动执行 locale、lint、TypeScript、架构检查、测试和 build；后端改动执行 Release build、单元测试和受影响的集成测试。迁移、调度、镜像、Agent、VM、TeamLab、AWDP 和公网入口必须补充真实环境验收，不能只以 mock 通过为完成。
 
-生产发布必须使用备份、独立 release 目录、迁移前检查、原子切换、业务冒烟和明确回退路径。详细步骤见 [生产发布与回滚手册](operations/vnext-maintenance-window-rollout.md)。
+生产发布必须使用备份、独立 release 目录、迁移前检查、原子切换、业务冒烟和明确回退路径。详细步骤见 [生产发布与回滚手册](../operations/vnext-maintenance-window-rollout.md)。

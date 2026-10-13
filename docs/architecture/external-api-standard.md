@@ -224,7 +224,7 @@ POST   /api/open/v1/games/{gameId}/challenges/batch-delete
 - `externalId` 只用于调用方关联批次结果，不作为平台题目主键；operation `result` 返回 `externalId -> challengeId`。
 - 数据库提交后保留题目与镜像绑定；实际启动按既有队列选择的节点准备镜像，不自动触发全节点预分发。管理员显式预热仍是独立操作。
 - 删除先停止运行实例和测试环境，再删除题目；不存在的题目作为幂等成功记录在 `result.missing`。
-- 完整字段、枚举、curl 示例和轮询流程见 `docs/commercialization/open-api-v1-guide.md`。
+- 完整字段、枚举、curl 示例和轮询流程见 `docs/operations/open-api-integration.md`。
 
 ## 8.2 公共练习题目接口
 

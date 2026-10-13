@@ -7,9 +7,9 @@
 - 路由：`src/GZCTF/ClientApp/src/vnext/app/VNextApp.tsx`
 - 导航：`src/GZCTF/ClientApp/src/vnext/app/shell/moduleRegistry.ts`
 - 页面实现：`src/GZCTF/ClientApp/src/vnext/features/`
-- 生成客户端：`src/GZCTF/ClientApp/src/api/`
-- 外部 API：[Open API v1 使用指南](./commercialization/open-api-v1-guide.md)
-- 已知缺口：[vNext 已知契约与验收缺口](./yinyu-vnext-deferred-contract-gaps.md)
+- 生成客户端：`src/GZCTF/ClientApp/src/generated/`
+- 外部 API：[Open API v1 使用指南](../../operations/open-api-integration.md)
+- 已知缺口：[vNext 已知契约与验收缺口](backlog.md)
 
 页面不得绕过 feature adapter 直接依赖生成客户端。文档与源码冲突时先验证运行行为，再修正文档。
 
@@ -101,7 +101,7 @@
 | `/practice/challenge/:id` | 单题练习 | 附件、实例、Flag 提交和结果回读 |
 | `/practice/stats` | 练习统计 | 查看分类分布、趋势和完成情况 |
 
-练习模块已实现，前端统一使用 `features/practice/api/practiceApi.ts`，后端开放接口位于 Exercise 模块。`/practice` 与 `/practice/browse` 使用 `/api/exercise/page` 服务端分页，后台题库使用 `/api/exercise/manage/page`；每页默认20，可选20/50/100，筛选在分页前执行。详情见[题库分页](modules/exercise-catalog-pagination.md)。练习事实不能从比赛页面的临时状态推导；统计和历史只展示接口真实返回值。
+练习模块已实现，前端统一使用 `features/practice/api/practiceApi.ts`，后端开放接口位于 Exercise 模块。`/practice` 与 `/practice/browse` 使用 `/api/exercise/page` 服务端分页，后台题库使用 `/api/exercise/manage/page`；每页默认20，可选20/50/100，筛选在分页前执行。详情见[题库分页](../../modules/exercise-catalog-pagination.md)。练习事实不能从比赛页面的临时状态推导；统计和历史只展示接口真实返回值。
 
 ### 3.5 培训
 
@@ -176,7 +176,7 @@ TeamLab 通过 `features/admin/teamlab/api/` 的管理、运行、远程访问�
 4. 运行页面流程，核对请求顺序、响应字段、权限拒绝和失败终态。
 5. 删除已失效的兼容分支，并同步更新本文和缺口文档。
 
-外部系统集成使用 `/api/open/v1`、Bearer API token、scope 和幂等键；浏览器内部 Cookie 接口不能当作稳定外部 API。完整规则见 [外部 API 标准](./commercialization/external-api-standard.md)。
+外部系统集成使用 `/api/open/v1`、Bearer API token、scope 和幂等键；浏览器内部 Cookie 接口不能当作稳定外部 API。完整规则见 [外部 API 标准](../external-api-standard.md)。
 
 ## 5. 页面完成定义
 
