@@ -114,6 +114,23 @@ class LinkTests(Fixture):
         anchors = docs.markdown_anchors("标题\n===\n## A\n## A\n## A-1\n## A\n## 名称：测试！\n")
         self.assertTrue({"标题", "a", "a-1", "a-1-1", "a-2", "名称测试"}.issubset(anchors))
 
+    def test_nested_list_links_are_checked_but_real_code_examples_excluded(self):
+        content = "- parent\n    - [broken](missing.md)\n        [continuation](also-missing.md)\n"
+        content += "\n          [nested code](ignore.md)\n\n- next\n\n      [list code](ignore2.md)\n"
+        content += "    ```markdown\n    [fenced](ignore3.md)\n    ```\n"
+        content += "\nend\n\n    [top code](ignore4.md)\n\t[tab code](ignore5.md)\n"
+        self.assertEqual(list(docs.markdown_links(content)), [(2, "missing.md"), (3, "also-missing.md")])
+        self.write("README.md", content)
+        self.assertEqual(len(self.errors()), 2)
+
+    def test_setext_inline_code_and_reference_link_heading_anchors(self):
+        self.write("docs/guide.md", "API `Token`\n-----------\n# [Foo][ref]\n# [中文 标签][]\n"
+                   "# [Undefined][missing]\n\n[ref]: https://example.com\n[中文 标签]: https://example.com\n")
+        self.write("README.md", "[setext](docs/guide.md#api-token) [atx](docs/guide.md#foo)\n"
+                   "[collapsed](docs/guide.md#中文-标签) [plain](docs/guide.md#undefinedmissing)\n")
+        self.assertEqual(self.errors(), [])
+        self.assertNotIn("fooref", docs.markdown_anchors(docs.read_text(self.root / "docs/guide.md")))
+
 
 class CatalogTests(Fixture):
     def test_schema_globs_and_directory_coverage(self):
@@ -286,6 +303,8 @@ class ImpactTests(Fixture):
         result = self.run_tool("documentation-impact.py", "--base", self.base, "--event-file", str(event), "--report", str(report))
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("只读报告模式", report.read_text(encoding="utf-8"))
+        self.assertIn("最新一次提交（HEAD^ → HEAD）", report.read_text(encoding="utf-8"))
+        self.assertIn(self.git("rev-parse", "HEAD").stdout.strip(), report.read_text(encoding="utf-8"))
         pr = self.write("pr.json", json.dumps({"pull_request": {"body": self.body()}}))
         result = self.run_tool("documentation-impact.py", "--base", self.base, "--event-file", str(pr))
         self.assertEqual(result.returncode, 1)

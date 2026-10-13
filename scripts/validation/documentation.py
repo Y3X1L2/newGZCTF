@@ -30,20 +30,32 @@ def read_text(path):
 def without_examples(content, inline=True):
     """保留行号，忽略围栏、行内代码和注释中的示例链接。"""
     content = re.sub(r"<!--.*?-->", lambda m: "\n" * m.group().count("\n"), content, flags=re.S)
-    fence = None
+    fence, fence_indent = None, 0
+    list_indents = []
     lines = []
     for line in content.splitlines():
-        marker = re.match(r"^ {0,3}(`{3,}|~{3,})", line)
+        expanded = line.expandtabs(4)
+        indent = len(expanded) - len(expanded.lstrip(" "))
+        if fence is None and line.strip():
+            while list_indents and indent < list_indents[-1]:
+                list_indents.pop()
+        container_indent = fence_indent if fence is not None else list_indents[-1] if list_indents else 0
+        relative = expanded[container_indent:] if indent >= container_indent else expanded
+        marker = re.match(r"^ {0,3}(`{3,}|~{3,})", relative)
         if marker:
             token = marker.group(1)
             if fence is None:
-                fence = token
-            elif token[0] == fence[0] and len(token) >= len(fence) and not line[marker.end():].strip():
+                fence, fence_indent = token, container_indent
+            elif token[0] == fence[0] and len(token) >= len(fence) and not relative[marker.end():].strip():
                 fence = None
             lines.append("")
-        elif fence is not None or line.startswith(("    ", "\t")):
+        elif fence is not None or indent >= container_indent + 4:
             lines.append("")
         else:
+            # 列表的内容缩进不是代码；代码块需再缩进四格。
+            item = re.match(r"^ *(?:[-+*]|\d+[.)]) +", expanded)
+            if item:
+                list_indents.append(item.end())
             lines.append(re.sub(r"(`+)(.+?)\1(?!`)", "", line) if inline else line)
     return "\n".join(lines)
 
@@ -98,21 +110,22 @@ def markdown_links(content):
 
 def markdown_anchors(content):
     """GitHub 常用标题锚点（含重复标题）及显式 HTML id/name。"""
-    text = without_examples(content)
+    text = without_examples(content, inline=False)
     anchors = set(re.findall(r"\b(?:id|name)\s*=\s*[\"']([^\"']+)[\"']", text, flags=re.I))
+    references = {" ".join(m.group(1).split()).casefold() for m in re.finditer(r"(?m)^ {0,3}\[([^\]\n]+)\]:", text)}
     headings = []
     lines = text.splitlines()
     for index, line in enumerate(lines):
         match = re.match(r"^ {0,3}#{1,6}(?:[ \t]+|$)(.*?)(?:[ \t]+#+[ \t]*)?$", line)
         if match:
-            # Read inline code from the original heading; it contributes to its slug.
-            original = content.splitlines()[index] if index < len(content.splitlines()) else line
-            headings.append(re.sub(r"^ {0,3}#{1,6}[ \t]*|[ \t]+#+[ \t]*$", "", original))
+            headings.append(match.group(1))
         elif index + 1 < len(lines) and line.strip() and re.match(r"^ {0,3}(?:=+|-+)[ \t]*$", lines[index + 1]):
             headings.append(line)
     used = set()
     for heading in headings:
         heading = html.unescape(re.sub(r"<[^>]+>", "", heading))
+        heading = re.sub(r"!?\[([^\]]+)\]\[([^\]]*)\]",
+                         lambda m: m[1] if " ".join((m[2] or m[1]).split()).casefold() in references else m[0], heading)
         heading = re.sub(r"!?\[([^\]]+)\]\([^)]*\)", r"\1", heading).strip().lower()
         slug = "".join(c for c in heading if c in "_- " or unicodedata.category(c)[0] in "LMN")
         slug = slug.replace(" ", "-")
@@ -355,7 +368,7 @@ def diff_changes(root, base, head="HEAD"):
             changes.append((status, path, None))
         else:
             changes.append((status, None if status == "A" else path, path))
-    return common, changes
+    return common, head_sha, changes
 
 
 def base_catalog(root, base):
@@ -379,7 +392,7 @@ def code_path(path):
 
 
 def impact(root, base, modules, head="HEAD"):
-    common, changes = diff_changes(root, base, head)
+    common, head_sha, changes = diff_changes(root, base, head)
     previous = base_catalog(root, common)
     affected, unmapped, changed_docs = {}, [], set()
     for status, old_path, new_path in changes:
@@ -401,7 +414,7 @@ def impact(root, base, modules, head="HEAD"):
         module_id = item["module"]["id"]
         candidates = [m for m in [*modules, *previous] if m["id"] == module_id]
         item["updated_docs"] = sorted(path for path in changed_docs if any(owners(path, [m], "docs") for m in candidates))
-    return {"base": common, "changes": changes, "affected": affected, "unmapped": sorted(set(unmapped)), "changed_docs": sorted(changed_docs)}
+    return {"base": common, "head": head_sha, "changes": changes, "affected": affected, "unmapped": sorted(set(unmapped)), "changed_docs": sorted(changed_docs)}
 
 
 def pr_review(body, valid_ids):
@@ -456,7 +469,8 @@ def review_impact(result, body, modules):
 
 
 def impact_report(result, reasons=None, errors=None, is_pr=False):
-    lines = ["# 文档影响报告", "", f"比较起点（merge-base）：`{result['base']}`。共 {len(result['changes'])} 个文件变化。",
+    lines = ["# 文档影响报告", "", f"比较范围（merge-base → head）：`{result['base']}` → `{result['head']}`。共 {len(result['changes'])} 个文件变化。",
+             "", "影响报告只汇总上述区间的文件变化。手动/每周 CI 默认比较最新一次提交（HEAD^ → HEAD）；静态文档检查覆盖全部现行说明。",
              "", "PR 模式：要求相关说明变更或明确复核理由。" if is_pr else "只读报告模式：未收到 PR 正文，不要求 PR 复核声明。", ""]
     if not result["affected"]:
         lines.extend(["未识别到已登记模块的源码变化。", ""])
