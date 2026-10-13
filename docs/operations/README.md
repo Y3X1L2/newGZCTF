@@ -1,6 +1,6 @@
 # 部署与运维
 
-运维手册说明如何完成一次操作。执行前核对 [当前状态](../current-state.md)、现场身份、授权和回退；历史记录中的服务器配置或许可不自动适用于本次任务。
+运维手册说明如何完成一次操作。执行前核对 [当前状态](../current-state.md)、现场身份、授权和回退；历史记录用于追溯，操作范围由本次授权确定。
 
 | 任务 | 手册 |
 | --- | --- |
@@ -16,4 +16,4 @@
 | TeamLab专项操作 | [模块指南](../modules/teamlab/README.md) |
 | AWDP真实攻击与修补验收 | [人工验收](../modules/awdp/guides/manual-acceptance.md) |
 
-节点与Registry安装脚本仍在 `docs/node-deployment/` 和 `docs/registry-server/`，路径被现有测试和运维命令使用；本轮只集中其阅读入口。生成OpenAPI快照仍在 `docs/commercialization/openapi/`，由现有生成/兼容门禁维护，不手工修改。
+节点与Registry安装脚本仍在 `docs/node-deployment/` 和 `docs/registry-server/`，路径被现有测试和运维命令使用；本轮只集中其阅读入口。生成OpenAPI快照仍在 `docs/commercialization/openapi/`，由现有生成工具更新，并通过兼容门禁核验。

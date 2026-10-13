@@ -21,7 +21,18 @@
         "src/GZCTF/Models/Request/Game/**",
         "src/GZCTF/ClientApp/src/vnext/features/games/**",
         "src/GZCTF/ClientApp/src/vnext/features/admin/games/**",
-        "src/GZCTF.Test/**/Game*.cs"
+        "src/GZCTF.Test/**/Game*.cs",
+        "src/GZCTF/Repositories/Interface/IGame*.cs",
+        "src/GZCTF/Repositories/Interface/IParticipationRepository.cs",
+        "src/GZCTF/Repositories/Interface/ISubmissionRepository.cs",
+        "src/GZCTF/Repositories/Interface/IDivisionRepository.cs",
+        "src/GZCTF/Services/FlagChecker.cs",
+        "src/GZCTF/Services/GamePhaseService.cs",
+        "src/GZCTF/Services/Transfer/**",
+        "src/GZCTF/Models/Data/Submission.cs",
+        "src/GZCTF/Models/Data/PenetrationEntities.cs",
+        "src/GZCTF/Infrastructure/Cache/ScoreboardHybridCacheSerializer.cs",
+        "src/GZCTF/ClientApp/src/vnext/features/admin/api/gameAdminApi.ts"
       ],
       "docs": [
         "docs/modules/ctf/**"
@@ -40,7 +51,10 @@
         "src/GZCTF/Models/Data/Awdp*.cs",
         "src/GZCTF/ClientApp/src/vnext/features/awdp/**",
         "src/GZCTF/ClientApp/src/vnext/features/admin/awdp/**",
-        "src/GZCTF.Test/**/Awdp*.cs"
+        "src/GZCTF.Test/**/Awdp*.cs",
+        "src/GZCTF/Repositories/Interface/IAwdpRepository.cs",
+        "src/GZCTF/Modules/Ctf/Api/OpenAwdpServicesController.cs",
+        "src/GZCTF/ClientApp/src/vnext/features/games/awdp/**"
       ],
       "docs": [
         "docs/modules/awdp/**"
@@ -58,7 +72,10 @@
         "src/GZCTF/Models/Data/Theory*.cs",
         "src/GZCTF/ClientApp/src/vnext/features/theory/**",
         "src/GZCTF/ClientApp/src/vnext/features/admin/theory/**",
-        "src/GZCTF.Test/**/Theory*.cs"
+        "src/GZCTF.Test/**/Theory*.cs",
+        "src/GZCTF/Models/Request/Game/TheoryModels.cs",
+        "src/GZCTF/ClientApp/src/vnext/features/games/theory/**",
+        "src/GZCTF/ClientApp/src/vnext/features/admin/api/theoryAdminApi.ts"
       ],
       "docs": [
         "docs/modules/theory/**"
@@ -101,7 +118,8 @@
         "src/GZCTF/Models/Request/Exercise/**",
         "src/GZCTF/ClientApp/src/vnext/features/practice/**",
         "src/GZCTF/ClientApp/src/vnext/features/admin/exercises/**",
-        "src/GZCTF.Integration.Test/**/Exercise*.cs"
+        "src/GZCTF.Integration.Test/**/Exercise*.cs",
+        "src/GZCTF/Repositories/Interface/IExercise*.cs"
       ],
       "docs": [
         "docs/modules/exercise/**"
@@ -128,7 +146,10 @@
         "src/GZCTF/ClientApp/src/vnext/features/teams/**",
         "src/GZCTF/ClientApp/src/vnext/features/admin/users/**",
         "src/GZCTF/ClientApp/src/vnext/features/admin/student-groups/**",
-        "src/GZCTF/ClientApp/src/vnext/features/admin/teams/**"
+        "src/GZCTF/ClientApp/src/vnext/features/admin/teams/**",
+        "src/GZCTF/Services/PortalSsoService.cs",
+        "src/GZCTF/Services/UserProfileQueryService.cs",
+        "src/GZCTF/Repositories/Interface/ITeamRepository.cs"
       ],
       "docs": [
         "docs/modules/identity/**"
@@ -161,7 +182,11 @@
         "src/GZCTF.Test/**/TeamLab*.cs",
         "src/GZCTF.Integration.Test/**/TeamLab*.cs",
         "scripts/validation/teamlab/**",
-        "scripts/validation/teamlab-match/**"
+        "scripts/validation/teamlab-match/**",
+        "src/GZCTF.TeamLab.Contracts/**",
+        "src/GZCTF.Agent/Services/Observation/**",
+        "src/GZCTF.Agent/Controllers/TeamLab*.cs",
+        "src/GZCTF/ClientApp/src/vnext/features/games/teamlab/**"
       ],
       "docs": [
         "docs/modules/teamlab/**"
@@ -183,7 +208,12 @@
         "src/GZCTF/Services/Vm/*Image*.cs",
         "src/GZCTF/ClientApp/src/vnext/features/admin/images/**",
         "docs/registry-server/*.sh",
-        "src/GZCTF.Test/**/Image*.cs"
+        "src/GZCTF.Test/**/Image*.cs",
+        "src/GZCTF/Models/Data/Challenge.cs",
+        "src/GZCTF/Models/Data/FlagContext.cs",
+        "src/GZCTF/Models/Data/LocalFile.cs",
+        "src/GZCTF/Models/Data/ImageDistributionRecord.cs",
+        "src/GZCTF/Models/Data/Attachment.cs"
       ],
       "docs": [
         "docs/modules/content/**",
@@ -212,7 +242,8 @@
         "src/GZCTF/ClientApp/src/vnext/features/admin/instances/**",
         "docs/node-deployment/*.sh",
         "scripts/deployment/**",
-        "src/GZCTF.Test/**/Deployment*.cs"
+        "src/GZCTF.Test/**/Deployment*.cs",
+        "src/GZCTF/Models/Data/DeploymentQueueTicket.cs"
       ],
       "docs": [
         "docs/modules/runtime/**",
@@ -277,7 +308,10 @@
         ".github/**",
         "scripts/validation/*documentation*.py",
         "scripts/verify-openapi-contract.ps1",
-        "scripts/database/**"
+        "scripts/database/**",
+        "src/GZCTF/Modules/ModuleAssemblyMarker.cs",
+        "scripts/validation/generate-module-index.py",
+        "src/GZCTF/Models/AppDbContext.cs"
       ],
       "docs": [
         "docs/architecture/**",

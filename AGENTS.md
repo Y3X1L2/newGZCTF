@@ -18,7 +18,7 @@
 - 前端边界：`docs/architecture/frontend/component-boundary.md`
 - 前端视觉契约：`docs/architecture/frontend/style-tokens.md`
 - vNext 设计与开发边界：`docs/architecture/frontend/development.md`
-- 组网/TeamLab 执行面：`docs/development/teamlab-networking-best-practices.md`
+- 组网/TeamLab 执行面：`docs/modules/teamlab/reference/networking-practices.md`
 - 生产发布：`docs/operations/vnext-maintenance-window-rollout.md`
 
 `docs/archive/` 只保存历史材料，不是当前设计或实现依据。历史计划中的路径、分支、测试数量和部署状态不得直接当作当前事实。
@@ -172,7 +172,7 @@ dotnet test src/GZCTF.Integration.Test/GZCTF.Integration.Test.csproj -c Release
 - 小改动可以先跑定向测试，但最终报告必须明确哪些全量测试未执行。
 - 数据迁移必须在 PostgreSQL Testcontainers 或生产数据库副本上验证升级和恢复。
 - Docker、VM、镜像、Agent、TeamLab、AWDP 和公网入口不能只靠 mock 判断完成；真实基础设施验收单独记录。
-- AWDP 自动操作可能触发本机安全软件时，保留自动化代码门禁，把真实攻击/修补流程交给授权测试人员按 `docs/yinyu-awdp-manual-acceptance.md` 执行。
+- AWDP 自动操作可能触发本机安全软件时，保留自动化代码门禁，把真实攻击/修补流程交给授权测试人员按 `docs/modules/awdp/guides/manual-acceptance.md` 执行。
 
 ## 8. 部署规则
 

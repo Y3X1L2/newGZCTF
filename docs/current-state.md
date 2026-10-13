@@ -8,8 +8,8 @@
 | 项目 | 最新已知事实 | 依据与时效 |
 | --- | --- | --- |
 | 开发主线 | `main`；新任务从实时 fetch 后的 `origin/main` 创建分支 | SHA 以 Git 为准，本页不追写每次文档提交 |
-| 培训实例修复 | PR #24 合入 `60170a52`，PR #25 为后续部署记录；课程默认每用户 3 实例，公共练习和课程额度隔离 | [主线修复与发布](records/2026-10-11-training-runtime-mainline.md)、[课程生命周期](modules/training-container-lifecycle.md) |
-| 培训动态设置 / 练习分页 | PR #26 已合入 `b1812d15`，PR #27记录已部署；管理员可动态设置培训额度，练习/管理题库使用服务端分页 | Git 合入事实与[新任务记录](records/2026-10-11-training-quota-settings.md)、[分页说明](modules/exercise-catalog-pagination.md)；10-11发布交接已确认API与页面分页验收；本轮未重新实测 |
+| 培训实例修复 | PR #24 合入 `60170a52`，PR #25 为后续部署记录；课程默认每用户 3 实例，公共练习和课程额度隔离 | [主线修复与发布](records/2026-10-11-training-runtime-mainline.md)、[课程生命周期](modules/training/reference/container-lifecycle.md) |
+| 培训动态设置 / 练习分页 | PR #26 已合入 `b1812d15`，PR #27记录已部署；管理员可动态设置培训额度，练习/管理题库使用服务端分页 | Git 合入事实与[新任务记录](records/2026-10-11-training-quota-settings.md)、[分页说明](modules/exercise/reference/catalog-pagination.md)；10-11发布交接已确认API与页面分页验收；本轮未重新实测 |
 | 主站发布 | `.27` 的 `/opt/gzctf/publish` 指向 `/srv/yinyu-data/releases/training-settings-06930b095cb0511d31bf06d8971477fa71f0aeb8-20261011/publish`；Main DLL摘要前缀 `0d3ea1e2…` | [10-11 17:32发布记录](records/2026-10-11-training-quota-settings.md)；本轮未重新核验文件 |
 | 前端 / Agent | 前端随 `06930b09` 发布；三节点 Agent 最近记录为 `87e011cf…` | 10-10/10-11 发布交接；本轮未重验节点文件与进程 |
 | 数据库 | 最近记录 150 条历史，head `20261001145237_AddTeamLabManagedGuestNetwork`；培训修复无迁移 | 10-11 发布交接；本轮未查询生产数据库 |
@@ -18,16 +18,16 @@
 | 服务与页面 | Main / 本机 Agent active/running、NRestarts=0；首页、Config 200；指标 healthz 200/Degraded | 10-11 17:32发布交接；当前现场状态须按需重验 |
 | 节点与调度 | 最近交接三节点 Online；`.27/.31` Docker/KVM，`.30` Docker；10-10 记录恢复三节点调度开关 | 有能力或调度开关不代表 `.27` 来宾网络故障已修复；本轮未重验节点库存 |
 
-`stable-20260908` 是固定历史标签，不能代表现网。生产操作前重新核对现场、授权、候选身份、备份和回退；[本轮只读核验范围](records/2026-10-11-docs-collaboration-audit.md)与既有发布证据分别记录。
+`stable-20260908` 保留用于历史复现，现网身份以最新发布记录和现场回读为准。生产操作前重新核对现场、授权、候选身份、备份和回退；[10-11文档核验记录](records/2026-10-11-docs-collaboration-audit.md)与既有发布证据分别记录。
 
 ## 已有能力与验收边界
 
 | 领域 | 当前实现与限定验收 | 接手入口 |
 | --- | --- | --- |
-| CTF / 理论 / 培训 / 练习 | 已有业务入口；练习核心生产测试已有用户确认；10-11 课程三容器、独立端口与停止重建验收通过 | [模块索引](modules/README.md)、[课程生命周期](modules/training-container-lifecycle.md) |
-| TeamLab | 场景、发布、runtime、逐资产操作、受管网络、文件/会话、流量/抓包；10-09 两套四机生命周期限定验收，10-10 无引用场景和已销毁记录删除验收 | [制作导入](teamlab-authoring-guide.md)、[运行事实契约](modules/teamlab-runtime-capability-contract.md)、[记录删除发布](records/2026-10-10-teamlab-delete-rollout.md) |
+| CTF / 理论 / 培训 / 练习 | 已有业务入口；练习核心生产测试已有用户确认；10-11 课程三容器、独立端口与停止重建验收通过 | [模块索引](modules/README.md)、[课程生命周期](modules/training/reference/container-lifecycle.md) |
+| TeamLab | 场景、发布、runtime、逐资产操作、受管网络、文件/会话、流量/抓包；10-09 两套四机生命周期限定验收，10-10 无引用场景和已销毁记录删除验收 | [制作导入](modules/teamlab/guides/authoring.md)、[运行事实契约](modules/teamlab/reference/runtime-capabilities.md)、[记录删除发布](records/2026-10-10-teamlab-delete-rollout.md) |
 | 镜像与运行底座 | 统一队列、按需节点准备、下载容量守卫、最后消费者缓存释放；历史来源迁移、模板退役和受控 Registry GC 已执行 | [第二批发布](records/2026-10-09-image-lifecycle-second-rollout.md)；自动 GC、冷缓存 TTL 不由该次手工回收证明 |
-| 身份 / AWDP | 本地登录、Portal SSO 接口与 AWDP 操作已存在；跨系统 SSO 和真实攻防仍需目标环境验收 | [Open API](operations/open-api-integration.md)、[AWDP 人工验收](yinyu-awdp-manual-acceptance.md) |
+| 身份 / AWDP | 本地登录、Portal SSO 接口与 AWDP 操作已存在；跨系统 SSO 和真实攻防仍需目标环境验收 | [Open API](operations/open-api-integration.md)、[AWDP 人工验收](modules/awdp/guides/manual-acceptance.md) |
 
 正式前端路由以 `src/GZCTF/ClientApp/src/vnext/app/VNextApp.tsx` 与 `app/shell/moduleRegistry.ts` 为准。运行配置地址、`Ready`、模板连接设置均不能代替真实网络和桌面登录验证。
 
@@ -44,7 +44,7 @@
 
 ## 协作与任务入口
 
-正在实施：[模块文档与自动维护](records/2026-10-14-documentation-implementation.md)，[Draft PR #28](https://github.com/Y3X1L2/newGZCTF/pull/28)。本任务分支的文档改动尚未进入main。
+待审查：[模块文档与自动维护](records/2026-10-14-documentation-implementation.md)，[Draft PR #28](https://github.com/Y3X1L2/newGZCTF/pull/28)。本分支已完成11个功能入口、专题拆分与自动检查，等待PR审查合入；定期Actions巡检随默认分支配置启用。
 
 1. [AGENTS.md](../AGENTS.md)：规则、Git 隔离、验证和发布边界。
 2. [文档导航](README.md)：按任务选择契约、模块或操作手册。

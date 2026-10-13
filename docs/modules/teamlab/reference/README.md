@@ -26,4 +26,4 @@
 
 专题级稳定边界另见 [基座契约](foundation-contract.md)、[外部控制面](external-control-plane.md)、[运行事实和工具能力](runtime-capabilities.md)、[组网原则](networking-practices.md)。接口字段以源码 Contracts/Controller 和生成 OpenAPI 为准，修改接口时一起更新对应专题。
 
-[受管网络发布记录](managed-network-rollout-record.md) 保留当时的备份、限定验收和回退证明，不代表当前版本或新部署授权。当前已知现场与未决问题见 [当前状态](../../../current-state.md)。
+[受管网络发布记录](../../../records/2026-10-02-teamlab-managed-network-rollout-plan.md) 保留当时的备份、限定验收和回退证明，不代表当前版本或新部署授权。当前已知现场与未决问题见 [当前状态](../../../current-state.md)。

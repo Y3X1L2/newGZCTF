@@ -77,4 +77,4 @@ Linux v1虽生成正确网络文件，实际IPv4为空。镜像离线清理删�
 
 本轮不实现同固定IP多副本VRF/地址池，也不自动修复AD信任或改造所有旧模板。第二套VM118–121的原始四机环境未作为整套重新发布验收；旧509缺QGA需在独立制作副本补组件，Linux原镜像也须满足工具前提。当前验收证明准备合格镜像后的平台网络链路，不能泛化为所有旧镜像、八网卡或跨Worker已通过。
 
-后续使用见[镜像准备说明](../operations/teamlab-managed-network-authoring.md)。部署/回退见[维护记录](../operations/teamlab-managed-network-rollout.md)。应用回退保留新增列；停止新模式待执行/恢复任务，不让旧Agent执行ManagedStatic计划。恢复完整备份涉及另行维护窗口和数据范围确认。
+后续使用见[镜像准备说明](../modules/teamlab/guides/managed-network-authoring.md)。部署/回退见[维护记录](2026-10-02-teamlab-managed-network-rollout-plan.md)。应用回退保留新增列；停止新模式待执行/恢复任务，不让旧Agent执行ManagedStatic计划。恢复完整备份涉及另行维护窗口和数据范围确认。

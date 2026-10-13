@@ -38,7 +38,7 @@
 
 50 份中有 8 份至少 400 行、3 份至少 800 行。TeamLab 操作/API 手册 2673 行、对接指南 866 行；modules/ 实际只有索引、培训容器生命周期、TeamLab 运行事实契约。源码有 12 个 Modules 目录，Agent 另在独立项目。以上是文件/行数盘点，不能据此断言长文全部冗余或内容全部过期。提交前同步 PR #26 后新增一个任务记录和练习分页说明，当前分支非归档为122份（51份说明/入口、65份handoff、6份测试资料），modules为4份；新增内容有明确价值，但统一短入口仍未补齐。
 
-还发现了一个语义冲突：[TeamLab 手册](../operations/teamlab-networking-operations-manual.md)原先将 ApiOperation 状态写作 queued/running/completed/failed/cancelled；当前 [枚举](../../src/GZCTF/Modules/Audit/Domain/ApiOperation.cs)与 [OpenAPI](../commercialization/openapi/open-v1.json)实际只有 Pending/Running/Succeeded/Failed，对应 0–3。本轮已修正该段。这种错误能通过文件链接检查，说明检查“文件存在”和“描述符合代码”是两件事。
+还发现了一个语义冲突：[TeamLab 手册](../modules/teamlab/reference/README.md)原先将 ApiOperation 状态写作 queued/running/completed/failed/cancelled；当前 [枚举](../../src/GZCTF/Modules/Audit/Domain/ApiOperation.cs)与 [OpenAPI](../commercialization/openapi/open-v1.json)实际只有 Pending/Running/Succeeded/Failed，对应 0–3。本轮已修正该段。这种错误能通过文件链接检查，说明检查“文件存在”和“描述符合代码”是两件事。
 
 另外，[Provisioning 实现](../../src/GZCTF/Modules/Provisioning/Application/AcademicImportApplicationService.cs)实际处理课程、理论题/试卷、战队的批量导入，不能因模块名称就称它为 VM/容器部署编排。培训关键入口还位于 Controllers/Repositories/Services，自动把 `Modules/Training` 全部内容当作完整培训实现会漏掉主链路。
 
@@ -157,7 +157,7 @@ flowchart LR
 | 动态额度管理 | [AdminController](../../src/GZCTF/Controllers/AdminController.cs)、[设置面板](../../src/GZCTF/ClientApp/src/vnext/features/admin/system/TrainingContainerQuotaPanel.tsx)；已进入新主线，部署与实测另核 |
 | 容器执行票据 | [DeploymentQueueService](../../src/GZCTF/Services/Fleet/DeploymentQueueService.cs)，共享 Runtime/Agent 链路 |
 | 定向验证 | [生命周期单测](../../src/GZCTF.Test/UnitTests/Training/TrainingContainerLifecycleTests.cs)、[API/PG 并发额度](../../src/GZCTF.Integration.Test/Tests/Api/TrainingContainerQuotaTests.cs)、[真实 Docker](../../src/GZCTF.Integration.Test/Tests/Repository/TrainingContainerDockerTests.cs) |
-| 稳定规则与发布证据 | [课程生命周期](../modules/training-container-lifecycle.md)、[10-11 发布](2026-10-11-training-runtime-mainline.md) |
+| 稳定规则与发布证据 | [课程生命周期](../modules/training/reference/container-lifecycle.md)、[10-11 发布](2026-10-11-training-runtime-mainline.md) |
 
 同样的结构用于每个模块。自动扫描模块目录可生成候选路径，但这些跨目录共享入口必须经过责任人确认；接口字段继续从 OpenAPI 获取，不在工程页再复制整份 DTO。
 

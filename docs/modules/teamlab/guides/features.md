@@ -133,7 +133,7 @@ GET /api/open/v1/operations/{operationId}
 查询阶段、进度和结果。完整字段、权限范围和请求示例见：
 
 - `docs/operations/open-api-integration.md`
-- `docs/commercialization/teamlab-api-foundation-contract.md`
+- `docs/modules/teamlab/reference/foundation-contract.md`
 - 部署后的中文 API 页面：`/api-docs/`
 
 ## 13. 已验证示例
