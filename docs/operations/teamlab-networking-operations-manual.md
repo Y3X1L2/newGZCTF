@@ -42,7 +42,9 @@ GET /api/open/v1/operations/{operationId}
 Authorization: Bearer <token>
 ```
 
-操作状态一般包括 `queued`、`running`、`completed`、`failed`、`cancelled`（以实际返回为准）。操作完成后，`resourceUrl` 或返回内容中的 `resourceId` 指向创建出的资源。不要用固定 sleep 猜测完成时间。
+`ApiOperationModel.status` 使用整数枚举：`Pending=0`、`Running=1`、`Succeeded=2`、`Failed=3`，以 [当前枚举](../../src/GZCTF/Modules/Audit/Domain/ApiOperation.cs) 与 [生成 OpenAPI](../commercialization/openapi/open-v1.json) 为准。`stage` 表达执行阶段，部署票据与 runtime 还有各自状态，不能混为一套枚举，也不能把 `cancelled` 当作 ApiOperationStatus。
+
+成功后根据响应中的 `resourceType`、`resourceId` 与 `result` 读取对应资源；结果内容依具体操作契约而定，不假设所有响应都有 `resourceUrl`。不要用固定 sleep 猜测完成时间。
 
 ### 1.3 幂等键
 

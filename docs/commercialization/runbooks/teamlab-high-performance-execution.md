@@ -26,3 +26,13 @@
 ## 回滚
 
 在 V2 验收未通过前，不删除旧执行路径。关闭 V2 capability admission 后，保留现有 runtime 事实和节点 inventory，按维护窗口的数据库与发布物回滚流程恢复。不得通过重建运行时覆盖或清除仍在运行的队伍环境。
+
+## 控制面负载检查
+
+`scripts/load/teamlab-control-plane.js` 只测试 Open API 控制面，不登录节点、不调用 Agent，也不修改远端配置。运行前设置 `BASE_URL`、`API_TOKEN`、`READ_TOPOLOGY_ID`、`READ_RUNTIME_ID`、`READ_OPERATION_ID`、至少两个逗号分隔的 `DISTINCT_TOPOLOGY_IDS`，以及专供冲突测试的草稿 `CONFLICT_TOPOLOGY_ID`；Token 需要相应 TeamLab 读写与 operation 读取 scope。冲突场景会对该草稿提交一次更新，因此不得使用正在编辑或准备发布的拓扑。
+
+```bash
+k6 run scripts/load/teamlab-control-plane.js
+```
+
+脚本分别输出控制面请求和 2xx 受理延迟，并独立计数 2xx、409、429、5xx；它不代表 Agent 执行、运行时就绪或网络数据面的性能结论。

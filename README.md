@@ -12,7 +12,7 @@ YINYU 是基于 GZCTF 演进的安全综合演练平台，面向 CTF 竞赛、AW
 | AWDP | 服务、轮次、Checker、攻击、修补、重置、恢复和态势数据 | 已实现，真实流程按专项手册验收 |
 | 节点与镜像 | Agent 注册、Docker/KVM 能力、镜像导入与分发、多节点调度、容量和恢复 | 已投入使用 |
 | TeamLab | 拓扑、发布、计划、runtime、组网、流量、抓包与受审计远程操作 | 核心链路已进入主线，规模与故障场景继续验收 |
-| 自主练习 | 独立题库、筛选、附件、Flag、容器实例、提交、统计与后台管理 | 已进入主线并完成本地核心验收，待生产发布验收 |
+| 自主练习 | 独立题库、筛选、附件、Flag、容器实例、提交、统计与后台管理 | 已发布并完成核心业务验收，内容运营等后续范围见当前状态 |
 
 准确的当前提交、环境、阶段和已知缺口见 [当前开发状态](docs/development/current-state.md)。
 
@@ -115,7 +115,7 @@ pnpm build
 - [文档导航与生命周期](docs/README.md)
 - [项目协作规范](AGENTS.md)
 - [当前开发状态](docs/development/current-state.md)
-- [商业化与架构总纲](docs/platform-commercialization-master-plan.md)
+- [平台架构与产品总纲](docs/platform-commercialization-master-plan.md)
 - [模块边界](docs/commercialization/module-boundary-map.md)
 - [外部 API 标准](docs/commercialization/external-api-standard.md)
 - [模块文档覆盖矩阵](docs/modules/README.md)

@@ -1,373 +1,52 @@
 # YINYU 当前开发状态
 
-## 培训动态额度与题库分页已上线（2026-10-11）
+整理日期：2026-10-11。本轮源码基线：`origin/main 9bc3db66`。生产事实引用10月11日已提交的发布记录，本轮没有重新连接服务器。
+本页只保留当前摘要，更新时替换旧事实；完整测试、部署过程和授权边界放在任务记录中。最多 120 行。
 
-- [PR #26](https://github.com/Y3X1L2/newGZCTF/pull/26) 已合并为 `main b1812d150f674ba1d6d73ec6685d5621b883c94c`，与审查/发布源 `06930b095cb0511d31bf06d8971477fa71f0aeb8` 完整 tree 相同。系统设置增加独立培训每用户容器额度，默认3、0不限个人数量、保存动态生效；练习与后台题库默认20/最大100服务端分页，数据库先筛选再分页，正确返回总数与标签。无迁移、无 Agent 或现有调度/Flag逻辑变更。
-- 最终 Quality 全部通过：Release、单元1493、PostgreSQL/Docker集成366（0 skip）、前端122文件422测试及全部门禁、EF模型、OpenAPI兼容和查询计划。第一轮两项新分页用例500由JSON文本标签的LINQ翻译失败导致，已改为PostgreSQL展开标签；失败证据和未改动并发用例一次超时/成功复跑记录保留。
-- `.27` 于09:32:02 UTC（北京时间17:32）完成14.657秒主站/前端原子切换，release `/srv/yinyu-data/releases/training-settings-06930b095cb0511d31bf06d8971477fa71f0aeb8-20261011/publish`，Main DLL `0d3ea1e2…`，368新文件及224前端制品校验通过，5份旧Agent/guest-supervisor文件复用；Agent仍 `87e011cf…`、PID641728，Main PID1111627/NRestarts0。迁移仍150/head `20261001145237_AddTeamLabManagedGuestNetwork`；完整回退为上一 `training-runtime-quota-60170a52…` release。
-- 正式API保存1后立即拒绝新准入，原两实例仍可复用且ID/端口保持；0回读、负数/小数400、其他配置保持，最终额度恢复3且保存期间Main PID未变。练习539/后台540题默认均只返回20题，5条分页无重复、标签跨页一致、空搜索与非法页大小通过，正式页面翻到第2页显示2/27。课程634/636 Running/Ready、端口42761/42760保持，三节点新鲜心跳、494镜像状态保持、队列0，首页/Config/manifest/共享PNG200与摘要通过，无新服务错误日志；既有健康指标200/Degraded保留。没有访问题目服务、读取题目Flag文件或提交Flag。
-- 新备份 `/srv/yinyu-data/backups/training-settings-06930b095cb0511d31bf06d8971477fa71f0aeb8-20261011-pre` 两库完整导出/解码及**新快照完整隔离恢复**通过，核同snapshot结构/迁移/计数并清理临时资源；捕获至HTTP恢复33.058秒。无迁移改动采用了较重的全库恢复与流量索引重建，耗时取舍已记录。旧数组接口及 `/practice/stats` 保持兼容，聚合统计优化属于后续事项；详见[本次交接](handoffs/2026-10-11-training-quota-settings.md)。
+## 代码与部署基线
 
-## 培训章节实例修复已合并 main 并部署（2026-10-11）
+| 项目 | 最新已知事实 | 依据与时效 |
+| --- | --- | --- |
+| 开发主线 | `main`；新任务从实时 fetch 后的 `origin/main` 创建分支 | SHA 以 Git 为准，本页不追写每次文档提交 |
+| 培训实例修复 | PR #24 合入 `60170a52`，PR #25 为后续部署记录；课程默认每用户 3 实例，公共练习和课程额度隔离 | [主线修复与发布](handoffs/2026-10-11-training-runtime-mainline.md)、[课程生命周期](../modules/training-container-lifecycle.md) |
+| 培训动态设置 / 练习分页 | PR #26 已合入 `b1812d15`，PR #27记录已部署；管理员可动态设置培训额度，练习/管理题库使用服务端分页 | Git 合入事实与[新任务记录](handoffs/2026-10-11-training-quota-settings.md)、[分页说明](../modules/exercise-catalog-pagination.md)；10-11发布交接已确认API与页面分页验收；本轮未重新实测 |
+| 主站发布 | `.27` 的 `/opt/gzctf/publish` 指向 `/srv/yinyu-data/releases/training-settings-06930b095cb0511d31bf06d8971477fa71f0aeb8-20261011/publish`；Main DLL摘要前缀 `0d3ea1e2…` | [10-11 17:32发布记录](handoffs/2026-10-11-training-quota-settings.md)；本轮未重新核验文件 |
+| 前端 / Agent | 前端随 `06930b09` 发布；三节点 Agent 最近记录为 `87e011cf…` | 10-10/10-11 发布交接；本轮未重验节点文件与进程 |
+| 数据库 | 最近记录 150 条历史，head `20261001145237_AddTeamLabManagedGuestNetwork`；培训修复无迁移 | 10-11 发布交接；本轮未查询生产数据库 |
+| 应用回退 | `/opt/gzctf/publish.previous` 指向 `/srv/yinyu-data/releases/training-runtime-quota-60170a5266f684581f21e95013687b0e7367515f-20261011/publish` | 10-11培训设置发布交接；真实应用回退演练未完成 |
+| 备份 | `/srv/yinyu-data/backups/training-settings-06930b095cb0511d31bf06d8971477fa71f0aeb8-20261011-pre`；两份新 dump 完整隔离恢复通过 | 10-11 发布交接；本轮未重新读取或恢复备份 |
+| 服务与页面 | Main / 本机 Agent active/running、NRestarts=0；首页、Config 200；指标 healthz 200/Degraded | 10-11 17:32发布交接；当前现场状态须按需重验 |
+| 节点与调度 | 最近交接三节点 Online；`.27/.31` Docker/KVM，`.30` Docker；10-10 记录恢复三节点调度开关 | 有能力或调度开关不代表 `.27` 来宾网络故障已修复；本轮未重验节点库存 |
 
-- [PR #24](https://github.com/Y3X1L2/newGZCTF/pull/24) 已正常合并为 `main 60170a5266f684581f21e95013687b0e7367515f`，与最终审查 head `1bdfff83` 完整 tree 相同。修复与回归用例已进入主线：课程独立每用户默认 3 实例，达到额度拒绝新建；公共练习仅显式开启自动清理时驱逐其他公共练习；动态容器新建前补齐缺失实例 Flag。统一队列、授权、节点容量、现有有效实例与 Flag 保留，无模型、迁移、API 数据结构或 Agent/前端源码变更。
-- 最终 Quality 全部通过：Release、单元1492、PostgreSQL/Docker全量集成352（0 skip）、前端119文件/412测试及全部门禁、EF模型/OpenAPI向后兼容/查询计划。本地课程与旧Flag定向25/25通过；此前两项新测试403是夹具缺少课程教师关系，已补齐正常授权并新增未报名学员不得创建的回归，没有放宽生产权限。
-- `.27` 在08:01:30 UTC（北京时间16:01）完成17.671秒Main-only原子切换，当前release `/srv/yinyu-data/releases/training-runtime-quota-60170a5266f684581f21e95013687b0e7367515f-20261011/publish`，Main DLL `e2265545…`，699 payload文件与模式/摘要核验通过。前端仍为 `a63937c6`、Agent仍 `87e011cf…`，本机Agent同一PID641728，未同步或重启Agent；迁移仍150/head `20261001145237_AddTeamLabManagedGuestNetwork`。
-- 正式API复用原629，创建627/630并独立停止重建新627后，三实例均在`.31` Running/Ready，端口分别627→30001、629→30000、630→30002；原629记录与容器ID保持，三容器注入配置与各自数据库值匹配，只记录布尔结果。三条公网TCP握手、首页/Config200、三节点新鲜心跳、队列0和共享PNG328781字节摘要一致通过。未解题、读取题目Flag文件或提交Flag，三个课程实例留给用户继续测试。
-- 新备份 `/srv/yinyu-data/backups/training-runtime-mainline-d2ca4019-20261011-pre-v3` 两库dump、稳定附件、全文解码及摘要通过，**这两份新dump已完整隔离恢复**并核同snapshot结构/迁移/计数，临时恢复容器和数据目录已清理。日期分区轮换使昨日恢复证明不能直接复用；前两次失败记录保留，Main均恢复，没有生产恢复或业务清理。完整回滚仍为上一 `teamlab-delete-reservation-49948764…` release；既有健康200/Degraded及其他模块未验收边界保留。详见[主线修复与发布交接](handoffs/2026-10-11-training-runtime-mainline.md)。
+`stable-20260908` 是固定历史标签，不能代表现网。生产操作前重新核对现场、授权、候选身份、备份和回退；[本轮只读核验范围](handoffs/2026-10-11-docs-collaboration-audit.md)与既有发布证据分别记录。
 
-## 场景与已销毁运行记录删除已部署并完成实机验收（2026-10-10）
+## 已有能力与验收边界
 
-- PR #21 正常合并为 `main e75e5292`，发布源 `a63937c6` 与其完整 Git tree 相同。场景删除支持无引用的已发布场景；新 runtime `/record` DELETE 删除已销毁且资源与引用均清理完成的记录，原 runtime DELETE 仍负责异步销毁。删除按钮已随正式前端上线，镜像来源与比赛事实保留，无新增迁移。
-- 首次现场验收发现已完成分配的容量预留仍保留 `Confirmed`，但 `ReleasedAt` 已有值；删除检查误把这条历史事实当作活跃预留。PR #22 源 `49948764`、合并 `main c2416f6f` 同树，修正为 Active 始终阻断、Confirmed 仅尚未释放时阻断；没有改生产预留记录或绕过正常接口。修正已经部署。
-- `.27` 当前独立 release 为 `/srv/yinyu-data/releases/teamlab-delete-reservation-49948764bd0715142911d5b22c68852ab3d38bb8-20261010T0645Z/publish`。Main DLL `61ff7015…`、前端 `a63937c6`；三节点先经正式 sync 升级为 Agent `87e011cf…`，安装文件、实际进程与心跳均一致。随后 Main-only 补丁复用完整前端、Agent 和 guest-supervisor 字节，700 文件/模式/摘要全部通过，仅传输 5.38 MB / 14 个 Main 区域文件；补丁未再次同步或重启 Agent。
-- 真实模板495单机 Docker 在 `.31` 正常创建、发布、启动并通过私网 HTTP200；Running 记录删除和引用场景删除均409且原实体/资源保持。正常 Destroy 后容器、网关、OVS Port/Interface及10类OVN资源均无本次残留；本次未创建VM，不将空目录检查算作VM运行盘回收验收。同一 runtime159 的 `/record` DELETE204、重复204、GET404、原创建key重放410；同一已发布测试场景 DELETE204、重复204、GET404。仅删除本轮临时对象，未重建或重销毁核心四机。
-- 07:26:32 UTC（北京时间15:26:32）最终 Main PID662195/NRestarts0，首页、Config、manifest均200；`.27/.30/.31` Agent实际PID分别641728/1856800/129813，三节点Online、Fabric/Tunnel健康，恢复本轮原调度旗标均true。迁移仍150，活动队列/导入/镜像写者0；场景库仅核心97/v2，draft2、519–522四VM/5NIC、核心runtime158历史及五份镜像元数据保持，`.30`原两教学容器运行且重启次数未变。实际Agent服务库存也验证`.27/.31` Docker/KVM可读，`.30` Docker可读/KVM不支持，不能将不支持误写为清单读取成功。
-- 首次新两库备份已完整隔离恢复并核同snapshot结构/迁移/计数；Main-only补丁的新 capture-v3 两库dump全文解码、摘要及同结构/迁移核验通过，**未再次完整恢复该新快照**。在线捕获失败源于共享logs持续写，旧capture-v2又因exporter读取迁移表持锁阻断旧Main启动；仅停止精确自有备份unit释放快照后恢复HTTP。修正后的exporter仅持快照，元数据由短import事务读取并关闭，实际公共表读锁0；capture-v3至HTTP恢复23.952秒，最终Main切换窗口12.886秒。失败证据、旧release、回滚、附件与配置原路径均保留，备份用法与限制见[部署验收交接](handoffs/2026-10-10-teamlab-delete-rollout.md)。
-- 独立门禁与PR #22完整CI均通过：Release、单元1475、集成347（0 skip）、前端119文件/412测试及locale/lint/类型/架构/构建/体积；新预留边界PostgreSQL定向19项通过。本轮没有重复四机新建/重置或Windows图形登录。维护期间曾观察`.27`旗标在Main重启后由false回到true，原因未单独核实，不能称cordon全窗口持续有效；原`.27`来宾网络问题、CPU单位/磁盘硬配额与2008R2许可限制仍是独立事项。工程记录可提交，学习笔记和前端会话提示词仍仅本地保存。
+| 领域 | 当前实现与限定验收 | 接手入口 |
+| --- | --- | --- |
+| CTF / 理论 / 培训 / 练习 | 已有业务入口；练习核心生产测试已有用户确认；10-11 课程三容器、独立端口与停止重建验收通过 | [模块索引](../modules/README.md)、[课程生命周期](../modules/training-container-lifecycle.md) |
+| TeamLab | 场景、发布、runtime、逐资产操作、受管网络、文件/会话、流量/抓包；10-09 两套四机生命周期限定验收，10-10 无引用场景和已销毁记录删除验收 | [制作导入](../teamlab-authoring-guide.md)、[运行事实契约](../modules/teamlab-runtime-capability-contract.md)、[记录删除发布](handoffs/2026-10-10-teamlab-delete-rollout.md) |
+| 镜像与运行底座 | 统一队列、按需节点准备、下载容量守卫、最后消费者缓存释放；历史来源迁移、模板退役和受控 Registry GC 已执行 | [第二批发布](handoffs/2026-10-09-image-lifecycle-second-rollout.md)；自动 GC、冷缓存 TTL 不由该次手工回收证明 |
+| 身份 / AWDP | 本地登录、Portal SSO 接口与 AWDP 操作已存在；跨系统 SSO 和真实攻防仍需目标环境验收 | [Open API](../commercialization/open-api-v1-guide.md)、[AWDP 人工验收](../yinyu-awdp-manual-acceptance.md) |
 
-## TeamLab 历史测试记录清理完成，场景库仅保留核心四机场景（2026-10-10）
+正式前端路由以 `src/GZCTF/ClientApp/src/vnext/app/VNextApp.tsx` 与 `app/shell/moduleRegistry.ts` 为准。运行配置地址、`Ready`、模板连接设置均不能代替真实网络和桌面登录验证。
 
-- 用户授权直接数据库清理历史测试资料，仅保留最新版 VM118–121 四机场景。已先释放精确旧 runtime98/g1 的 OVN switch/4ports和旧版本8条预热引用，再经一次有备份、FK与精确ID门禁的事务删除 **63拓扑、75旧版本、94历史runtime、32测试scope**及关联记录，共 **5,553,063行**；90份审计小文件已精确备份后释放。没有删除镜像模板/Registry来源、PVE原机/快照、教学网络或课程/练习/CTF资料，也没有新增删除按钮、部署或数据库迁移。
-- 用户随后明确授权解除Games24/60/61/66的四组历史关联，第二次小事务已精确删除Topology1/33/34/39、3release、旧runtime31/32/34/39及8binding，共199行；比赛本体4条、参与5条、UserParticipation5条、目标11条、提交4条及GameEvents完整行摘要保持。两次累计删除 **67测试拓扑、78旧版本、98历史runtime、32scope**，场景库现在**只剩核心Topology97和最新版v2**，唯一scope为Platform，不再有待确认的比赛绑定。
-- 核心PublicId `01a1021a-b3b3-7fd2-96f5-cc9aa22a2ea5`、唯一latest usable release `01a10261-890a-718f-ae86-250e4db86746`/v2及draft revision2保持，519–522四VM/5NIC和两段网络定义正确、canonical hash保持 `3211caea…`。清理期间用户新建的核心runtime158/PublicId `01a12348-e40d-75bd-97cb-ab4b6988f768`始终受保护；01:02 UTC曾Ready，随后用户侧状态已Destroyed，最终01:18:29 UTC正式API为generation1/Destroyed。**本任务未对核心执行create/reset/destroy，也未新建实例验收**。原A g5/B g3此前已由正常Destroy票据成功清资源，此次只删除其历史实体；下节两套Ready是15:48历史验收时间点。
-- 01:18:29 UTC最终正式API library返回1场景、核心详情4VM/5NIC通过，四组旧绑定均无残留、上述业务事实及核心记录保持；活动队列/导入0、迁移150，Main/Agent原发布身份、PID和健康保持。此前已核PG/Redis/Guacamole/Guacd、7条普通CTF Guac连接及`.30`教学两容器/OVN保持；小事务仅碰旧4组记录，没有新增镜像或教学清理。`.27`仍停止新调度但服务运行，`.30/.31`可调度；旧Windows许可自行关机与CPU单位语义缺口仍为独立backlog，未修改。
-- 本轮仅精确私有行备份：44表、同一exported READ ONLY snapshot、300,546,693字节压缩数据及90文件/54,309字节，COPY/全gzip CRC/摘要/同snapshot计数通过，**未做新全库恢复**。备份目录 `/srv/yinyu-data/backups/teamlab-test-record-cleanup-20261010-4a87dcc694a51b12-pre`；详情见[测试记录清理交接](handoffs/2026-10-10-teamlab-test-record-cleanup.md)。软件源码未改，未重跑全量软件测试，工程文档仅本地提交，未自动推送。
-- 四组补充清理仅备份42表的199行（16,615字节、artifact0），目录 `/srv/yinyu-data/backups/teamlab-business-binding-delta-20261010-d63668233c04389e-pre`；没有重复前500万行备份。固定小事务具备同snapshot计数、业务完整摘要、核心保护、匹配应用锁、brief admission fence及COMMIT确认门禁，已正常提交，未部署。
+## 未解决事项
 
-## 第二批与删除查询小补丁已发布，历史源与 Registry 回收完成（2026-10-09）
+技术缺口统一记录在 [后续事项](backlog.md)，本页只列重点：
 
-- 第二批源码 `9a04916e` 已部署；随后 Main-only 修补源码 `c25752ce`（main `334cca0e` 同树）已在 `.27` 新独立 release 原子切换：Main DLL `4fca4909…`、前端 `9a04916e`；三节点已通过正式 sync，安装文件、实际进程与心跳均为 Agent `af2567d0…`。主站 PID 337484、本机 Agent 同一 PID 264484 的实际身份/首页、Config、manifest 200 已核，原配置、共享附件、旧 release/回滚、PVE 源机与教学容器保留。
-- 新鲜 v3 两库使用实际 exported snapshot 绑定 schema、迁移、计数和 dump；全文读取、完整隔离恢复及快照台账一致通过，新验证副本已停止。Main 一致捕获仅暂停 **17.77 秒**，Agent/教学容器未停止。原备份最终失败源于恢复后错误比较 live 行数，原 dump、clone 和失败证据保留，没有伪造恢复证明。
-- 历史 runtime 103 已正常 Destroyed；34 条旧 VM 的原 DELETE/队列实际成功 32 条，另两条保留 Error，无对应域/实例盘/XML/Agent 标记。ID 1 真实 backing 使用者已清空，正常 source-migration `01a12099-60b9-7ba8-a0c3-2e4d5e2465ed` 成功：固定 Registry 内容 `81e45879…` / 6040518656 字节，旧源/隔离文件消失，5 题/4 练习、原 Opaque/DHCP/RDP 能力与 numeric cache 保持。
-- 当前两套均保留在 `.31`：A generation **5**、B generation **3** Ready，15:48:35 UTC 实读八域全部 Running；A 正常 reset 票据 `01a12158-7854-7485-9ef3-c59057baef12` 于15:46:48–15:48:11成功，B 未reset且四native UUID保持。两套四机/五网卡QGA网络回读、HTTP200、跨runtime隔离通过，A原 `.27` g4域/overlay无残留，519–522缓存复用。轻量验收明确接受真实8核共享16vCPU，合计28,672MiB配置内存；验收后实际MemAvailable7,754MiB、CPU6.28%、swap仅32KiB、VM盘可用485,709,975,552字节，无明显资源压力。`.27` 仅停止新调度以避开已复现来宾回读失败，Main/Agent仍active且PID保持；`.30` Docker调度和教学容器全程保持、`.31`可调度，15:49:38最终queue/import0、三节点Online/Fabric/Tunnel healthy、首页/Config/manifest200。未改maxVms、物理资源或源码，未执行SQL写入。
-- A此前 `.27` g2/g4以 `guest-network-verify/guest_network_control_failed` 失败，g3曾完整验收后旧2008R2自行shutdown；本次移到稳定Worker通过不代表 `.27` 根因已修复，也不是同组跨节点功能。正常reset按冻结池重新分配CIDR/IP；运行ID/网络key保持，旧Windows许可/自行关机限制未改，不能保证长时持续运行。现有安全事件缺asset/exceptiontype的诊断粒度仍需独立补丁；另记录VM执行CPU语义缺口：冻结四机8cpuUnits实际8vCPU，而节点容量按8核×10报80units，自动容量开启时maxVms4也不是硬限。本次容量判断只使用真实CPU/内存/磁盘，不使用该80units当可承载80vCPU依据。`.27`恢复调度须先验证独立修补或节点问题已消除，再经正常Node PATCH设isSchedulable=true。
-- 57 旧 release 已正常归档且 canonical hash 保持；45 个草稿经正常 revision PUT 清除退役镜像引用。指定 16 模板原 DELETE 进入 Deleting 后遭遇共同 EF 查询翻译错误；Main-only 修补切换后由原后台 reconcile 全部正常删除，原 local 源、两 Worker 精确 numeric/hash cache/.part 均无残留，保留五缓存身份未变（额外官方 Agent 删除调用为0）。官方 Registry dry-run/execute 精确回收26无引用 blobs，allocated **76028284928 字节（70.81 GiB）**，1453跨仓库共享blob和五来源前后完整摘要/长度/inode保持；服务/原配置恢复、无缺失live引用、未rawrm/未delete-untagged/未处理upload遗留。PR #19 已正常合并为 `334cca0e`，源码 `c25752ce` 与其同树，仅将查询排序移到 entity 投影之前，真实 PostgreSQL 3/3、定向单元 32/32、Release/Quality 通过，无迁移、前端/Agent 源码变化。
-- Main 修补制品已核完整 700 文件与真实 Main Agent 摘要探针：Main `4fca4909…`；4 个实际发布差异，前端/完整 Agent/guest-supervisor 逐字节复用 9a。首次在线备份因附件metadata变化失败，partial保留；恢复连接后唯一新 capture-v2 身份短停Main **17.779 秒**捕获快照/附件并恢复，随后两库完整dump解码/SHA/schema/head与已实恢复v3一致，明确没有再次fullrestore。5.2 MB/4file delta服务器摘要及全部700文件核验通过；Main原子切换窗口 **13.103 秒**，9a回滚目录/原备份、配置/附件、Agent PID及PVE/教学保持。
-- 用户要求优先收尾后，普通 Windows 冷缓存创建、完整桌面登录及其销毁附加验收暂停，均为 **NOT_RUN**。现有 Accepted 身份和 RDP 能力已只读确认；两个 KVM 节点的 ID 1 存量 Ready/Game23 缓存引用仍保留，没有绕过引用删 cache/改报名或比赛时间。当前六个管理员/课程 VM 导入入口仍可能写 `LocalFilePath`，历史清理不代表以后不会再生成本地主副本；统一持久导入入口收口是下一阶段独立工作。
+- `.27` 来宾网络回读根因、运行失败诊断粒度、CPU 单位与执行 vCPU 语义、磁盘硬配额。
+- 迁移来源漂移、指标并发、既有健康降级；历史问题须重新定位，不能套用旧迁移数量或旧依赖版本。
+- 镜像持久导入入口收口、自动 Blob GC、冷缓存策略和运行增长预算。
+- 多 Worker 故障恢复、完整跨节点/物理设备、长期监督与规模验收；普通 Windows 冷缓存及桌面链路、AWDP/SSO、运营与真实回退验收。
 
-以下保留第二批最初连接中断 checkpoint 的历史过程，最新已证事实以上述与[第二批交接](handoffs/2026-10-09-image-lifecycle-second-rollout.md)为准。
+已不再作为待办：9 月 `teamlab-flow` SQL 42601 修复及三节点旧混合版本。9 月后的实际修复与验收不代表所有故障场景闭环。
 
-- PR #18 正常合并为 `main 32356555`，与源码 `9a04916e` 完整 Git tree 一致。本地串行单元 **1471/1471**、集成 **325/325**、0 skip；PR Quality 的后端、EF 模型、查询计划、OpenAPI 和前端 **118 文件 / 399 测试**全部通过。无新增数据库迁移。
-- 冻结源码已生成最终前端 `9a04916e` 的 223 文件制品，完整 Main/Agent publish 和真实 Main 内部 Agent 摘要探针通过；独立归档 **700/700** 核验通过。第二批 Main DLL `18e617ab…`、Agent `af2567d0…` 已准备，尚未执行 Main 软链接切换。已在 `.27` 建立完整 SHA 专属 staging；relay/backup 启动请求遇到连接超时或 SSH 错误，没有确认收到后台启动身份。恢复连接后须先读取这两个专属 unit、制品和备份证明，不能直接重发。
-- 已通过管理员正常队列接口取消精确 31 条本轮历史 Pending Destroy，票据/VM/代次逐项保存，实际活动队列归零；没有 SQL 写入，也没有把这些 VM 声称为销毁完成。历史 runtime 103、旧差异盘、ID 1 来源迁移、16 模板退役及 Registry GC 均仍待第二批发布后执行。
-- 两份保留环境的同款 Windows Server 2008 R2 在启动约两小时后由 `wlms.exe` 自行关机，许可证状态 Notification、宽限期 0；平台试运行未设置短 TTL。通过正常单资产 start 启动两 Windows，八个 native UUID 与 generation 1 保持，独立四机/五网卡网络回读通过。最后实读八资产 Running，但两个 runtime/shard 汇总仍 Failed；现行单资产操作不自动恢复聚合，不能称当前 runtime Ready 或长时稳定。后续最终版本验收通过各一次正常 reset 恢复聚合，保留许可限制。
-- Registry 只读核实真实 systemd backend、909 repositories / 7084 blobs、1443 跨仓库共享 blob，当前全部有 revision 引用，无缺失引用；1 与 519–522 五个 payload 已完整 SHA/长度核验。约 2.75 GB upload 遗留与 blob GC 分开处理，尚未执行物理回收。16 旧 local 来源与 ID 1 源路径/inode 不共享，删除前仍须重读。
-- 网络中断后的服务和后台任务状态尚未重验；线上版本最后实读仍为第一批 `99e923cd` / Agent `ef1ce307…`。具体制品、限制、未知接受状态和恢复顺序见[第二批发布 checkpoint](handoffs/2026-10-09-image-lifecycle-second-rollout.md)。
+## 协作与任务入口
 
-## 镜像按需分发已部署，双四机场景生命周期验收（2026-10-09）
+1. [AGENTS.md](../../AGENTS.md)：规则、Git 隔离、验证和发布边界。
+2. [文档导航](../README.md)：按任务选择契约、模块或操作手册。
+3. [任务记录索引](handoffs/README.md)：本任务接手和最新发布证据。
+4. [文档审计结论与清理清单](documentation-audit.md)：本次治理依据和后续审查范围。
 
-- PR #17 正常合并 `main 240ea370`；已审查源码 `99e923cd` 的完整候选经 GitHub 中转、服务器归档摘要和 **700/700** 文件核验后，在 `.27` 新 release 原子切换。Main DLL `5e632d02…`、前端来源 `99e923cd`；三个节点均正式同步 Agent `ef1ce307…`，心跳、实际进程与 Fabric 健康通过。新完整备份两库实际隔离恢复及迁移兼容性通过；旧发布、回滚入口、附件、PVE 源机和快照保留。
-- `.31` / VM115 保持已迁入 500 GiB 数据盘，CPU/内存扩为 **8 核 / 32 GiB**，磁盘/网卡未改；节点 API 将旧 `maxVms=2` 改为 **4**。目标门禁实读真实 VM 文件系统、CPU、内存和执行面能力后才暂开调度。机器间 `Agent:ServerPublicUrl` 收口为 `http://10.24.0.27:8080`，保存受保护旧配置，不改业务公网入口或 Guacamole。
-- 使用新版模板 **519–522** 同一冻结版本，两个四机/五网卡副本分别在 `.27/.31` 冷创建并同时 Ready。独立 QGA 回读 MAC/IP/掩码/DNS/无网关通过，内网 SSH/RPC/RDP/DNS/LDAP TCP、HTTP HEAD 200、跨副本不可达通过。两份正常重置到 generation 2 后重复通过，八个 native UUID 更新、MAC 合法稳定；缓存 inode/mtime/字节复用、前代域/差异盘无残留。
-- 两份随后正常 Destroyed；当前代域/差异盘无残留，519–522 最后消费者缓存及 `.part` 在两节点均自动消失，未手动删文件。最终新 UUID 冷再建也全部通过独立网络/HTTP/隔离回读，保留 `.27` 的 `01a11e28-b860-7c4e-a373-06cac79bbb30` 与 `.31` 的 `01a11e2b-db7f-7fd7-873f-32f7a860b96b`。`.27/.30` 恢复原调度开关，`.31` 门禁后启用，三节点 Online/healthy；两个 KVM 节点各四 VM、预留零。全部 guest 网络由平台正常初始化，未手修 guest 或读取靶机业务文件；未验攻击式二层隔离/AD 业务登录。
-- 历史清理另行闭环：旧 13 个非 Destroyed TeamLab 已正常清理 12 个；最早 103 的冻结快照因重复 DNS hostname 被当前创建校验拒绝清理。旧 40 条 Error VM 的正常销毁有六条完成，31 条缺 NodeId 不能定位目标，另三条 `.27` 缺域但仍有约 2.37 GB overlay/XML，backing 指向 ID 1 旧 local 源。未直接写 SQL 标 Destroyed、未删除仍被依赖的旧源，后续来源迁移/历史退役/Registry GC 不属于本批已完成能力。
-- 第一批源码本地门禁见 10/8 候选记录；本次真实证据、发布物身份和限制见[发布验收交接](handoffs/2026-10-09-image-lifecycle-rollout.md)。学习、操作脚本、原始证据、镜像及凭据留 Git 外。首次 `.27` 同步客户端期限中断已按既有恢复与正常重试闭环，没有 SQL 绕过节点更新事实。
-
-## 镜像按需分发候选阶段与 .31 存储迁移（历史：2026-10-08）
-
-- `codex/image-lifecycle-integration` 从 `origin/main 2ba6e8d8` 整合第一批修复，尚未合并 `main`、部署或进行新候选的双环境验收。普通导入、课程绑定、CTF 编辑/导入、TeamLab 发布/试运行与 rollout 不再隐含全节点分发；已选节点仍用既有队列和 Ensure。显式管理员预热保留，缓存缺失与无关节点失败不单独阻止正常启动。
-- Agent 候选按实际文件系统为下载做并发准入，VM 分块检查与续传只登记新增字节；Docker 为可配置 8 GiB 保守准入与 30 分钟 writer 期限，不是精确展开配额。容量错误保留到主站运行失败投影；共享 writer 结束自行清除记录，取消等待不提前归还预算。普通销毁、最后消费者、重置和较新的预热引用保护已接通；没有新迁移或 DTO 形状变化，公开 OpenAPI 说明由实际 TestServer 重新生成。
-- 整合 Release 构建通过；单元 **1385/1385**、PostgreSQL/Testcontainers 等集成 **306/306**、0 skip；前端完整 locale/lint/类型/架构/测试/构建/体积门禁通过。首次全量发现一个并发测试错误的完成信号和两处 OpenAPI 说明未同步，修正后重跑通过。现有依赖与测试分析器告警仍在，不宣称整个 solution 零警告。
-- 用户允许扩展存储后，PVE VM115 / `.31` 新增 `sdb-storage` 500 GiB 数据盘，镜像与 TeamLab 目录 bind 保持原路径。23 个文件全部双 SHA/大小/权限/属主/mtime 校验后，只释放根盘已确认重复字节；旧模板、Registry、PVE 源机/快照/备份保留。VM115 冷启动自动挂载、服务挂载依赖、原缓存和旧 Agent API 恢复通过，其他 VM 未重启。根盘约 **92.7 GiB**、数据盘约 **391.1 GiB** 可用，PVE thin pool **75.63%→53.08%**。
-- `.31` 最终 Online、`IsSchedulable=false`、该节点活动票据 0，仍为 `cc6c5737/9b2142e9…` 旧 Agent，继续把根盘约 99.45 GB 当 VM 可用量；须获准部署候选并核验真实数据盘后才恢复调度。主站仍为此前 `3efb948c` 发布，`.27/.30` Agent 仍为 `d5711da5…`；本轮没有发布任何源码。
-- 10/8 只读镜像清单：506 模板中 17 条 VM 仍为旧 `LocalFilePath` 格式，源文件实际约 81.94 GiB，14 个已有旧 Registry manifest/同长度 blob，2/4/117 未查到；这不等于已重新完整校验仓库内容。519–522 是新版制品；第一套 AD 的 504/505 仍属于旧格式。多数旧模板还有草稿/历史版本引用，用户允许关闭实例并未批准删除模板，本轮未退役它们。
-- 剩余机制需分步补齐：历史版本退休与源文件迁移、有限期预热/冷缓存策略、运行增长与下载预算协同、Registry 实际 blob GC。同组跨节点调度未实现；下一步是两套环境分别在 `.31/.27` 同时创建并验网络、重置、销毁再建。范围、证据和接手顺序见[候选交接](handoffs/2026-10-08-image-lifecycle-candidate.md)、[节点迁移](handoffs/2026-10-08-node31-data-storage-migration.md)；学习、原始脚本、制品与清单只留仓库外。
-
-## TeamLab 分盘容量修复：已合并并部署，四机和 Docker 限定验收通过（2026-10-07）
-
-- PR #16 正常合并为 `main 1ec26826`，与候选 `3efb948c` 同树；PR/合并后 Quality 均 success。`.27` 新数据盘 release 原子切换成功，Main DLL `6a8c2979…`、前端 manifest 对应 `3efb948c`；Main/Agent PID 3477834/3478165、active/NRestarts 0。必要兼容修复经正式 Agent sync 扩到 `.30`，两节点实际 Agent SHA `d5711da5…`，`.31` 保留 `cc6c5737/9b2142e9…`。无新迁移、Registry/PVE/公网网关修改。
-- `.27` 独立磁盘与 manifest 回读证明 Docker 根卷约 69.5 GiB、VM 数据盘约 176–177 GiB，两个 VM 目录同卷不相加；`.30` Docker 根卷约 79.4 GiB、无 KVM/VM 指标 0，纯 Docker 正常。新完整备份放数据盘，两个 dump 全文解码、六关键摘要、隔离两库完整恢复/schema/迁移/核心行数一致；仅销毁本任务临时恢复副本。Main 一致备份暂停 214 秒、正式切换约 22 秒，原备份/发布/资源保留。
-- 正常创建 Lab2 runtime `01a11644-670e-7c8f-894b-a6c7601a2589` generation 1，四 VM 仅 `.27`，五张当前 MAC/原 IP/前缀/DNS/无默认路由及限定内部 TCP、OA→入口隔离、平台 router 0 全部只读验收通过。仅修了首次验收脚本读取 MAC 的问题，未手工调整来宾或重置，四机保留运行。独立 Docker 首次因 `.30` 旧 Agent 摘要不兼容失败，升级后正常清理旧自有实例并一次新建 `.30` Docker，HTTP 200/文件往返/正常销毁/容器残留 0/队列 0 通过；不能称 `.27` Docker 生命周期已实测。
-- 本次四机创建触发全 KVM 节点预分发，向未被选中的 `.31` 新缓存 519–522，约 14.56 GB，将其根盘可用量压到 0。已确认无本节点 VM/backing/运行引用，用正常 preparation 撤销与 Agent 安全清理收回四个自有新副本；旧十五缓存 metadata、旧 Agent/PID、`.27` 当前四机/缓存和 Registry 主副本保持，`.31` 实际可用恢复约 10.73 GiB。**全节点预分发与下载峰值容量保护源码仍未修，再次创建仍可能触发。**
-- 最终首页/Config/manifest 200、迁移 150、队列 0、三节点在线/可调度/Fabric healthy；Main 三条 Error 对应首次旧摘要失败，未处理/Fatal 0，不宣称所有日志 0。未验收业务/AD 账号、图形登录、公网、双副本、四机 reset/destroy、跨节点 VM 或新版 GUI 真实视口。完整身份、回退、范围变化、副作用和证据见[发布交接](handoffs/2026-10-07-teamlab-workload-storage-rollout.md)。学习与原始制品/证据仅本地。
-
-## .27 双存储扩展与发布前候选预检（2026-10-07）
-
-本节保留发布前的时间点；当前发布事实以上一节为准。
-
-- 只读核验确认 `.27` 根文件系统约 70 GiB 可用，`/dev/sdb1` ext4 数据盘约 590 GiB 总量、180 GiB 可用；Docker 的 `/var/lib/docker` 在根盘，KVM 镜像与 TeamLab 运行目录绑定到数据盘。Main/Agent 仍为原发布，扩盘本身未更新其容量上报或调度代码。用户确认此前失败实例已同步并清理；本任务未重复清理，也未证明 OVN 全部残留为零。
-- `codex/workload-storage-integration` 是从 `origin/main 7a1f554d` 建立的未合并、未部署候选：Agent 分别上报 Docker/VM 可用空间，主站按 workload 类型调度，TeamLab 预览和准备诊断使用同一存储预算。旧 Agent 缺 Docker 字段时回退原指标，显式 `0` 表示不可用。混合请求使用两预算较小值，并从两者都扣除所有活动存储预留，可能保守低估容量；尚未实现精确分盘预留或完成真实四 VM 复测。证据、验证和后续发布边界见[候选交接](handoffs/2026-10-07-teamlab-workload-storage-candidate.md)。
-
-## TeamLab 第一轮工作区与运行事实兼容：已合并 main 并部署 .27（2026-10-06）
-
-- 用户明确批准后，PR #13 正常合并为 `main d3b8c954`，PR #14 的运行摘要兼容与界面收口正常合并为 `main 33983541`。普通组网入口收敛为场景与运行环境，草稿、不可变版本和实例仍为不同事实；旧 URL 有兼容去向。已部署活动目录 `/opt/gzctf/releases/teamlab-runtime-clarity-b2af7def-20261006/publish`：Main DLL SHA256 `b92a849dfa4946c23e1a590a69e0b60063b2ac223519bfab8d82f0ee861077e9`，前端 manifest 对应 `b2af7def`。Agent 继续使用 `cc6c5737` 的 SHA256 `9b2142e9731d77495322e20a100432a728cf3d86f87dc67abebf85ed58a9b3e8`、同一 PID 1650376，未升级 `.30/.31`；无数据库迁移、Registry/PVE/公网网关修改。
-- [PR #14 Quality](https://github.com/Y3X1L2/newGZCTF/actions/runs/37449290029) completed/success：后端单测 1296/1296、PostgreSQL/Testcontainers 集成 305/305（0 skip），EF 模型、查询计划和 OpenAPI 兼容通过；前端 118 文件/396 测试及 locale/lint/类型/架构/构建通过。线上旧四机曾因执行计划 `sha256:<64 hex>` 与运行资产原始 64 位摘要被直接字符串比较而显示 OS unknown/网卡空；PR #14 严格规范化相同 SHA-256 后，正式管理员 API 对原 generation 4 四机返回 2 Windows、2 Linux 和 5 张逐网卡 assigned，IP/前缀/DNS/网关/路由逐项与冻结执行计划一致，`observed` 仍为 null，不能称来宾实测。Windows 文件请求实际返回 422 `files.unsupported`；未配置的 RDP/SSH/SFTP 明确为 `unconfigured`。
-- 发布前完整备份 `/opt/gzctf/backups/teamlab-core-workflow-d3b8c954-20261006-pre` 与修正版在线完整备份 `/opt/gzctf/backups/teamlab-runtime-clarity-b2af7def-20261006-pre` 均完成两份数据库 dump 全文读取、附件/配置摘要校验；前者备份任务 5 分 37 秒、Main 暂停约 5 分 29 秒，后者在线完成且未停 Main。两次原子切换分别 18.86 秒和 20.16 秒通过，旧 release/备份/日志保留。最终 Main/Agent active、NRestarts 0，首页/Config/manifest 200，迁移 150、队列 0、三节点在线可调度且 Fabric healthy、模板 519–522 Ready；原 Lab2 四 VM generation 4 的数据库身份未变，本机四域仍 running。独立模板 495 Docker 正常创建、私网 HTTP 200、文件上传下载字节一致并删除、运行实例正常销毁且容器消失，临时节点调度设置已恢复；场景/版本元数据留作审计。
-- 最终启动窗口宽正则匹配 1 条 INFO，经固定审计模板和时间与 Windows 文件 422 负测同刻核对，属于预期失败操作审计；未处理异常/Fatal/stack 为 0，不能把“日志匹配 1”写成所有日志 0。正式最新版 GUI 因 IAB 不可用且 Chrome 扩展不支持当前认证，未完成线上截图/交互验收；旧合成 fixture 截图不能证明本次部署。未验真实图形登录、SSH/RDP/SFTP连通、来宾网络回读或靶机业务。脱敏发布证据与原始学习资料只留仓库外及服务器受保护目录。详见[发布交接](handoffs/2026-10-06-teamlab-runtime-clarity-rollout.md)。
-
-## TeamLab 资产界面修正：已合并 main 并部署 .27（2026-10-04）
-
-- PR #12 正常合并到 `main cc58169d`，与候选 `8fd26c22` 同树；修正重复兄弟 key 导致多组 VNC 残留，改为整组按 runtime/generation/asset 替换；连接/服务上下排列、地址单行、概览图标区分。前端完整114文件/378测试及门禁通过，GitHub Quality 37206599605 success（后端1284/304通过）。
-- 用户批准后 `.27` 活动目录为 `/opt/gzctf/releases/teamlab-asset-ui-8fd26c22-20261004/publish`：前端8fd26c22，原Main3090b98a和Agentcc6c5737二进制保持；所有非前端文件/链接/权限/所有者比较一致，Agent同一PID1650376。新完整备份两个dump全文可读、附件/五摘要通过，位于 `/opt/gzctf/backups/teamlab-asset-ui-8fd26c22-20261004`。首次启动检查等待不足触发自动回退，修正仓库外脚本后最终切换12.58秒通过，旧发布/回退记录保留；无数据库迁移、日志删除或VM操作。
-- 正式站点九次切换均一组VNC/连接/服务，四宽度、日夜、键盘及浏览器error/warn0；上下布局和图标通过。带地址排版仅本地样本验证，现场未开放端口。Main/Agent active、NRestarts0，首页/Config200，队列0，三节点在线可调度，519–522 Ready；原四机generation4和域运行标识/状态保持。学习与原始验收资料只留本地。详见[资产界面修正交接](handoffs/2026-10-04-teamlab-asset-panel-fixes.md)。
-
-## TeamLab 管理后台与受管网络：已合并 main 并部署 .27（2026-10-04）
-
-- PR #11 已正常合并到 `main 3090b98a04eecb74fbe47de36d10d3e56d5c47b4`，与集成候选 b486e703 源码树相同，保留完整历史；main Quality CI 37188421017 success。候选后端单元 1284/1284、集成 304/304、Release 构建通过；本地前端 113 文件/376 测试及完整门禁通过。
-- 用户明确批准部署，`.27` 该次主站/前端发布目录 `/opt/gzctf/releases/teamlab-admin-3090b98a-20261004/publish`（最新前端发布见上节），前端 manifest 为 3090b98a；Main DLL SHA256 `2846d6f795a5e8796b7c3dca6997e30735ed52c62cde2f7639cc1ff68b0f332a`。Agent 保留 cc6c5737，SHA256 `9b2142e9731d77495322e20a100432a728cf3d86f87dc67abebf85ed58a9b3e8`，同一 PID 未重启；`.30/.31` 未升级。
-- 新完整备份 `/opt/gzctf/backups/teamlab-admin-3090b98a-20261004` 全文读取/五摘要通过，完整恢复到独立副本并验证仅补缺失日志资源索引：149→150 migration、pending 0、核心表行数及全列结构保持、父及五分区索引 valid/ready。副本迁移 102.09 秒，生产新增索引及原子切换维护 140.2 秒；生产不执行已暴露解析错误的全历史脚本，采用 EF 官方缺失索引 delta。只删除本任务验证库；原备份/发布/日志保留。
-- 实际服务 Main/Agent active、NRestarts 0，首页/Config 200、队列 0、节点在线及恢复可调度、519–522 镜像 Ready。真实新版 GUI 管理员登录、设计/试运行/概览/资产/网络/活动页通过；DC 与旧 Windows 的 VNC 临时会话创建/连接地址/关闭通过，未做桌面登录。
-- 原 Lab2 runtime `01a1022f-7e91-7ad3-8309-833af4771430` generation 4、四 VM 同一身份持续运行，部署前后 QGA/MAC/IP/DNS/路由与限定通信 passed；没有重置或再配置网络。独立 Docker 测试正常创建、私网 HTTP 200、测试文件上传下载删除一致、正常销毁且容器残留 0；临时拓扑/发布记录保留复用，原四机/PVE/快照/镜像/Registry/公网网关保留。学习资料只留本地。
-- 最终根盘约 77.7 GiB、images/teamlab 独立盘约 80.2 GiB 可用。真实图形登录、四机重置/双副本、跨节点故障、公网与其它业务链本轮未验收；远端旧 Agent、容量上报根盘缺口和全历史 SQL 解析缺口待独立处理。完整身份、回退、实机范围及证据见[main 发布交接](handoffs/2026-10-04-teamlab-admin-main-rollout.md)。
-
-## TeamLab网卡就绪等待：Agent已部署，Lab2四机基础网络通过（2026-10-03）
-
-- Lab2限定重试中Server2008R2的QGA43.6秒回应，网卡62.8秒才可见，旧执行检查49.3秒已结束；Linux单/双卡和DC最终均出现本次MAC。现Agent第一次读缺MAC立即失败，证据支持设备初始化时序缺口。候选改为在原ReadyTimeout三分钟总预算内只读等待全部MAC，不增加镜像自启动代码/计划HTTP期限，保留多卡完整性、重复MAC失败、身份校验和取消。
-- 源码cc6c5737，定向82/82（包括计划期限回归）、单元1282/1282、Agent linux-x64发布及diff检查通过。用户批准后已部署.27的teamlab-nic-ready-cc6c5737-20261003，实际/内置SHA2569b2142e9731d77495322e20a100432a728cf3d86f87dc67abebf85ed58a9b3e8；主站/Agent active、NRestarts0、首页/Config成功，主站fa97187c/前端4fccca67和迁移头保持。新完整备份两dump全文可读、5项SHA通过；旧release保留。无DTO/迁移/前端变化，未重复完整solution/数据库集成/前端门禁。
-- 首正常reset gen2在placement拒绝：Agent误上报根盘余量，而非bind在images的大盘，差约100MB未到80GiB。仅本次新dump1.5GiB另存大盘，原入口/摘要保留；此容量上报缺口仍待独立修复。gen3随后在DC网卡Put改名失败，单机原IP/DNS写入成功且省略名字后退出0；正常修改草稿只省略两Windows友好名，Linuxens18/19保留，发布新场景release01a10261-890a-718f-ae86-250e4db86746，正常reset到gen4 ready。
-- runtime01a1022f-7e91-7ad3-8309-833af4771430四机仅.27，独立QGA/MAC实读IP/DNS/掩码/无默认路由全部通过；web/OA到内网SSH/RPC/RDP管理TCP路径通过，OA到入口不可达、平台关联路由器0，保持原两网段关系。诊断副本全部正常销毁，.31恢复true；最终留四机运行，原PVE/快照/镜像/旧发布/备份保留。未验收图形登录、业务、AD账号/共享、双副本或ready后再次reset，不能外推完整生命周期。证据与方案见[网卡就绪交接](handoffs/2026-10-03-teamlab-nic-readiness.md)。
-
-## Lab2 release-v2：仓库迁移、四图导入和基础网络启动完成（2026-10-03）
-
-- PVE118–121 release-v2及实际QGA脚本前提通过，四机正常关机导出，check/compare/SHA及传输后复核通过，共约13.6GiB。用户明确批准正常销毁旧Lab2以沿用原IP，旧runtime已destroyed；原PVE/快照/旧模板/其它环境保留。四图经正常API导入为ManagedStatic模板519–522，临时导入Token已撤销。
-- 导入首图时PVE共享pve/data428.66GiB达到Data100%，112/113/114 io-error；宿主和来宾df空闲不能代表thin pool余量。已VG备份后增加8GiB缓冲、恢复三VM及fstrim，池436.66GiB且92.28%，VG仍余8GiB。主站/Agent active、Config200、Registry active/v2 200，原教学容器Up；没有文件/快照清理。
-- 用户明确批准113存储迁移：新增sdb-storage 500GiB盘，Registry工作目录与独立回退副本迁入/srv/yinyu-registry-data，原服务路径bind保留。25,049文件/111,092,947,185字节三份逐文件摘要与元数据核验通过，实际manifest/blob读取及冷开机自动挂载通过，才释放旧根盘重复数据。113根盘120→16GiB、PVE共享池92.35%→68.60%。112上传暂存仍在根盘，其它VM系统盘仍用共享池，容量监控缺口保留。
-- 拓扑01a1021a-b3b3-7fd2-96f5-cc9aa22a2ea5原release01a1021a-b760-7d01-87d2-a3da4a190dae曾因MAC就绪和Windows改名失败；最终新release和实机结果见上节。两交换机、web双卡、其它仅内网、无平台路由器；内网/23保留DC原IP。两专用Windows写入诊断均已销毁，源机快照与四镜像不需要重导出。
-- .31最终恢复可调度。原PVE、镜像、快照、备份保留；存储迁移阶段无源码/发布变化，后续Agent修正与场景正常发布单独记录，没有直接写业务数据库。真实证据和未完成项见同一交接。
-- 本轮无源码/发布/数据库写入（指定operation只读核验），真实证据/限制/接手入口见[release-v2存储交接](handoffs/2026-10-03-lab2-release-v2-storage-block.md)。下述Agent部署事实仍有效，不能把镜像导出成功当作四机场景签收。
-
-## 旧Windows可选网络执行宿主：Agent已部署，普通Windows回归通过（2026-10-03）
-
-- codex/teamlab-managed-network新增固定Program Files可选宿主选择，现代Windows保持原路径；同次read/apply/verify统一执行方式，不在写失败后换程序重写。工具源和镜像制作配方在scripts/guest-tools/windows-legacy-network；无DTO/迁移/前端变更。
-- 真实VM121（Server2008R2）QGA基本功能正常，原PowerShell后台ConsoleHost的GetActiveScreenBufferHandle异常已定位。新宿主直接调用已安装引擎，正式路径执行实际平台只读脚本退出0，原IP/DNS保持；Program Files目录Users仅读取/执行。原型错误流、空输入和原生命令检查通过。
-- 子代理最终单元1276/1276、定向112/112及Agent Release构建通过；主任务集成定向112/112、linux-x64发布通过。数据库集成因本机Docker不可用未跑，前端未改未重复门禁。四机新镜像及完整旧系统写入/回读链尚未验收，VSS仍未修复。
-- 用户批准后通过GitHub制品下载到.27，已切换到/opt/gzctf/releases/teamlab-legacy-8637e087-20261003/publish，Agent源码8637e087，实际及内置SHA256均2ed4a2114d7ef0b681fe66ad6cca62aee358395a362bdf2b6ca85aa69fda5bb2。主站fa97187c、前端4fccca67保持原内容；服务active/NRestarts0、首页/Config200、迁移头不变。完整备份在/opt/gzctf/backups/teamlab-legacy-8637e087-20261003，两个数据库全部压缩内容可读，5项摘要检查通过。
-- 普通Windows模板507（Server2022）经正常平台创建双卡runtime01a100e6-0bb4-79fe-93c4-b8f711272e26，仅在.27执行；新建与正常重置generation1→2的独立QGA回读均通过：入口192.168.224.10/24无DNS，内网192.168.226.10/24、DNS127.0.0.1，两卡无默认网关/路由，均无helper。VM原生UUID和启动时间随重置变化。正常销毁后assets为空、VM/运行qcow2/所属10类OVN及OVS接口残留0，节点VM占用和预留0。
-- VPN频繁断连，部署和回归改为服务器独立任务，结果已取回。原镜像、PVE、快照和旧release保留；本轮未验收图形登录、数据面服务访问、双实例隔离或完整四机/旧系统新镜像，不将Server2022结果当作Win10实机正例。详细证据与部署边界见[旧Windows交接](handoffs/2026-10-03-teamlab-windows-legacy-network-agent.md)。
-
-## TeamLab 自动网络配置：已部署并完成限定实机验收（2026-10-02）
-
-- 分支 `codex/teamlab-managed-network` 从 `origin/main bc3599aa` 建立并合入当前服务器在用的 Windows 网络分支；主工作区和本地教学问答分支保留，未合并 main。实现 DHCP/平台静态两种新建方式、VM逐网卡IP/DNS/网关/路由、发布冻结/重置/更新、QGA应用与真实回读；新要求仅用于VM，Docker保持既有行为。旧预配置模式只保留存量读取，不增加复杂修补系统。
-- 用户明确批准部署 `.27` 并允许关闭测试实例。活动目录为 `/opt/gzctf/releases/teamlab-managed-fa97187c-20261002/publish`：主站源码 `fa97187c`、Agent `bb09393c`、前端 `4fccca67`；实际与内置Agent SHA256均为 `c7b66c3408e3328bcc56f2577a9e363abc06f129c597d6c7acd4009ebb52ede8`。服务active、NRestarts=0，首页/Config200，根盘约85GiB可用。
-- 完整数据库及附件备份保留在 `/opt/gzctf/backups/teamlab-managed-4fccca67-20261002`；压缩备份全文可读取，生产结构及迁移历史已恢复到独立验证库并验证前向升级。迁移 `20261001145237_AddTeamLabManagedGuestNetwork` 已应用，添加五个可空列；旧release、原模板、PVE虚拟机和快照保留。
-- 最终源码门禁：后端单元1251/1251、集成302/302，前端110文件373测试及完整门禁通过，Release构建通过（已有警告保留）。真实 `.27` 验收通过现代Windows双卡/明确路由、Ubuntu24双卡、DHCP/AD域解析与普通用户系统认证/共享读取、Docker HTTP，以及新建/重置/不同地址段双实例隔离/销毁。未做图形RDP登录；Linux测试DNS只验证配置，未验证解析服务；同地址段多副本VRF不在范围内。
-- Server2008R2原镜像缺QGA，已验证明确返回 `guest_qga_unavailable / guest-ready`，不能列为旧系统正例。Linux新模板518已Ready并通过实测；v1清理时删除machine-id导致网络服务不能初始化，v2仅修正镜像准备状态后通过。
-- 本次9个专用验收runtime全部销毁；原8台VM定义和磁盘保留、已关机。`.27/.30/.31`心跳在线并恢复可调度，只有`.27`升级；`.30/.31`仍为旧Agent，不在它们上运行进阶逐卡DHCP新策略。后续新场景应明确选择`.27`作为网络owner及Worker。统一证据、限制和回退见 [自动网络交接](handoffs/2026-10-02-teamlab-managed-network.md)。
-
-## TeamLab 网络运行链部署（2026-09-27）
-
-- 分支 `codex/teamlab-windows-network`、提交 `279f259` 已推送；`10.24.0.27` 当前 release 为 `/opt/gzctf/releases/teamlab-net-279f259-20260927/publish`。本次仅上传主站 DLL、TeamLab 契约 DLL、前端静态文件和一个 Agent 程序；`.30/.31` 从 `.27` 内网取得同一 Agent。
-- `.27/.30/.31` Agent SHA-256 均为 `993f00ce4874b0e41131ca8cb596e9e3bb76997984008fca795fa9a45963f475`，服务均为 active；`.27` 主站 active，`/api/Config` 返回 200。迁移头为 `20260927121625_AddTeamLabNetworkDnsAsset`。用户要求不做整库备份，本次未备份数据库；旧 release 保留。现有运行环境未执行销毁操作。
-- TeamLab 定向测试 505/505、前端测试 348/348、前端生产构建通过。用户要求仅部署，本次未新建真实 OVN/VM 环境进行业务验收。
-
-文档整理日期：2026-09-21
-最近一次生产核验：2026-09-21（北京时间）
-
-本文件仅保留最新已知基线、功能边界、未解决事项和接手入口。生产信息是上述核验时点的记录，不能代替下一次操作前的现场检查。长期协作规则见 [AGENTS.md](../../AGENTS.md)。
-
-## TeamLab Windows VM 启动修复（2026-09-23）
-
-- 提交 `a0a3a5815ffc96314b55b41d302206ee43d59ccf` 已部署到 `10.24.0.27`，活动 release 为 `teamlab-windows-vm-a0a3a58-20260923`；`10.24.0.27/.30/.31` Agent SHA-256 均为 `9eddf4df8d61a44a5af05378780628d6a2d8cb723f7b275c9c01d6f6d1848ba4`。
-- V2 执行计划现携带来宾系统类型。Windows VM 使用 ACPI/APIC、SATA 系统盘和 `e1000e` 网卡；默认 Linux 类型不写入计划 JSON，既有计划摘要保持不变。
-- 既有运行 `01a0c9b8-3106-71bb-b931-ac539a02ed36` 已从计划摘要失败状态恢复并成功销毁。验证运行 `01a0ca00-2207-7e3e-8e52-eb7b9d67f96f` 到达 `ready`，Windows Server 进入锁屏，随后通过正式接口销毁；对应域、容器和运行文件已清理。
-
-## TeamLab 运行环境授权界面修复（2026-09-21）
-
-- 运行环境授权复选框不再在 React 状态更新回调中读取已释放的事件对象，点击“允许操作”中的任意权限不会再触发 `Cannot read properties of null (reading 'checked')`。
-- 前端 release 已切换到 `/opt/gzctf/releases/teamlab-grant-checkbox-bc7ae08-20260921/publish`，仅替换 `wwwroot`；原 release 保留为回退。主站 active、`NRestarts=0`，首页和 `/api/Config` 均返回 200；数据库和 Agent 未变更。
-
-## TeamLab WireGuard 资产访问修复（2026-09-21）
-
-- 远端 `main` 已包含提交 `4dbcd43`。WireGuard 访问统一为 Linux 三层转发与 NAT，不再把 WireGuard 接口挂入 OVS，也不再把资产网段路由到 WireGuard 接口；WireGuard 仅承载客户端地址，资产网段继续经场景网关进入 OVN。
-- `10.24.0.27`、`.30`、`.31` Agent 已统一为 SHA-256 `025660e2a99534f9d84323a45f2b1a3368479a6700ea5bf80c960678cbb26f5a`，服务均为 active、`NRestarts=0`。
-- 运行环境 `01a0c32d-31d1-7607-b2ed-23b6dea2a7b7` 在 `.30` 实测：`10.110.1.10` 经 `tlsg108-entry`，客户端 `10.110.1.2` 经 `tlwg108`，OVS 中不存在 `tlwg108` 端口；Worker 到资产 HTTP 返回 200。Windows 重新获取并配置 WireGuard 后访问 `http://10.110.1.10:8080/` 返回 200，首字节约 0.218 秒、总耗时约 0.225 秒。
-- 同批提交已将部署阶段健康检查改为运行后观测，不再因服务启动较慢阻断或回滚已经完成网络接入的资产；多网卡资产的 DNS 记录按所属网段编译。主站未在本次单独重发，数据库无迁移。
-
-## TeamLab 远程运维修复（2026-09-20）
-
-- `10.24.0.27` 主站已发布到 `/opt/gzctf/releases/remote-access-6be5cf7-20260920/publish`，主站与 Agent 均为 active，`/api/Config` 返回 200。本次没有数据库迁移。
-- VM 远程会话已统一按 TeamLab 的 libvirt 域身份校验。带管理网卡的 VM 继续使用管理地址；没有管理网卡的 VM 使用运行资产的场景地址，并将 Agent 中继连接绑定到对应场景接口，避免同网段 WireGuard 路由选错出口。
-- Guacamole 服务账号仅增加临时会话创建所需的 `CREATE_USER`，与既有 `CREATE_CONNECTION` 配合使用，没有授予管理权限。
-- 生产 Linux VM 的 SSH 与 VNC 均已通过创建会话、取得连接地址和关闭会话；会话最终状态为已关闭，Guacamole 临时 connection 和 user 均为 0。生产暂无合适的 Windows VM，RDP 未做 Windows 实机画面验证。
-
-## TeamLab 底座收敛候选（2026-09-19）
-
-- 分支 `codex/teamlab-foundation-convergence` 已把运行中资产新增、替换和移除统一到 `POST /api/open/v1/teamlab/runtimes/{runtimeId}/asset-changes`。接口复用原部署队列、容量预留、Worker 分片及 Docker/VM/OVN 执行链；直接资产变更只递增 `planRevision`，不改变 `generation` 和来源 release。
-- 新增通用 Runtime Grant，统一支持用户、API Token、整环境和单资产权限。赛事专用授权实体、授权服务、管理接口和前端已删除；API Token 不继承创建者的管理员或运行环境所有者权限。
-- 新增模板批量预热入口 `POST /api/open/v1/teamlab/preparations/templates`，复用现有镜像分发记录和节点缓存。运行详情页已增加资产编排与运行环境授权面板，设备模板继续使用现有结构化参数编辑器。
-- 前向迁移 `20260919082706_ConvergeTeamLabRuntimeFoundation` 创建通用授权表、迁移旧赛事授权及所有者权限，然后删除旧授权表和 `TeamLabRuntimes.IsScenarioBuild`。PostgreSQL 16 Testcontainers 迁移测试已通过，模型没有待应用迁移。
-- 提交 `609f635` 已推送到远端分支 `codex/teamlab-foundation-convergence`，并部署到 `10.24.0.27` 的 `/opt/gzctf/releases/teamlab-foundation-609f635-20260919/publish`。发布前完整数据库和共享文件备份位于 `/opt/gzctf/backups/teamlab-foundation-609f635-20260919-pre`；迁移头为 `20260919082706_ConvergeTeamLabRuntimeFoundation`，主站维护窗口 8 秒，主站和 Agent 均为 active 且 `NRestarts=0`。
-- TeamLab 定向测试 471/471、迁移专项 1/1、OpenAPI 快照生成与一致性测试 1/1 通过；主后端和集成测试项目 Release 编译均为 0 警告、0 错误，前端类型检查、lint、架构检查、347/347 测试和生产构建通过。生产环境使用同一发布版本真实创建 Modbus Docker 与 Linux VM，随后同批新增、替换、移除 Docker/VM，再销毁整场；五个任务分别耗时 6.72、5.24、10.08、7.88、9.30 秒，运行代次始终为 1，计划修订从 0 递增到 3。销毁后容量、网络租约、服务映射、抓包、队列、Docker、libvirt、OVN 和 OVS 活动残留均为 0，临时 Runtime Grant 已清空，验收 Token 已撤销。
-- 模板批量预热已对镜像模板 116 和 487 实际调用，2 个模板生成 5 条节点分发记录，现场记录均为完成且无错误。
-- 提交 `ed03d20` 修复 VM 镜像引用检查与 `teamlab-flow` 分区保留 SQL，并已部署到 `/opt/gzctf/releases/teamlab-maintenance-ed03d20-20260919/publish`。`.27/.30/.31` Agent 摘要均为 `b5843af94fd977f384dc9550de9e71b42753de25bb7c78aecaed85356652f6f9`；`.31` 对模板 115、121 的清理请求均返回 200，主站数据治理周期不再出现 PostgreSQL `42601`。主站与三台 Agent 均为 active、`NRestarts=0`。
-
-## TeamLab 热更新资源身份收敛（2026-09-19）
-
-- 候选分支 `codex/teamlab-auto-capacity-hot-update` 当前提交为 `597f20b`。Docker、OVS 和 libvirt 现场资源统一使用运行实例、代次、分片及资产或网络键作为稳定身份；可变的计划摘要只用于整份计划版本和执行日志，不再参与资源归属、控制或销毁。
-- 已删除单资产派生计划、派生分片键、派生摘要以及旧容器代次兼容；本次资源身份修正净删除 63 行。Agent Release 构建通过，0 警告、0 错误；资源代次定向测试 4/4 通过。
-- `10.24.0.27`、`.30`、`.31` 已同步 Agent，SHA-256 均为 `d29d9e687bc4cbcc650bee78d2eb82b704ba2d48adfed9baf956a0b516f5c1cb`，服务均为 active。主站未重新发布。
-- 真实 Docker、VM、OVN/OVS 验收已通过：初始 Docker 与 VM 创建 3.09 秒；Docker/VM 新增和替换 12.73 秒；4 个抓包分段启停 2.11 秒；Docker/VM 移除 9.18 秒；运行代次始终为 1，计划修订从 0 递增到 2；最终整场销毁成功。
-- 本次验收及此前两个失败验收运行实例均为 `destroyed`。现场核对对应 Docker 容器、libvirt VM、OVS 接口和运行目录文件均为 0；此前由旧摘要格式创建的两台 VM 已一次性清理，没有为其保留兼容执行代码。
-
-## TeamLab 自动容量与热更新修正（2026-09-18）
-
-- 候选分支 `codex/teamlab-auto-capacity-hot-update` 为 Worker 增加自动容量模式。现有容量快照、候选筛选、容量预留和 `DeploymentQueueTicket` 流程保持不变；自动模式取消人工 Docker/VM 数量上限，由 Agent 上报的 CPU、总内存、实时负载以及数据库中的实际占用和预留决定是否可放置。普通题目容器、VM 和 TeamLab 继续共用同一容量事实。人工数量上限保留，关闭自动模式后生效，再次开启即回到自动模式。
-- 节点详情把 CPU、内存百分比改为已用/总量的核数和 GiB，现有实例数量与页面布局保持不变。迁移 `20260918115451_AddWorkerNodeAutomaticCapacity` 将既有节点直接设为自动模式。
-- 运行中资产热更新现在先持久化部署中/销毁中状态，现场删除成功后才提交新身份或销毁终态；Docker 与 VM 新增、替换会同步工作负载观测点，移除资产会停用旧观测点。Agent 批量停止抓包分段改为并行执行，仍使用原控制操作额度。
-- 已通过主站 Release 构建、Agent Release 构建、容量/节点/镜像/热更新定向测试 70/70、前端测试 348/348、类型检查、架构检查、生产构建和迁移 SQL 生成。本次未部署生产，也未执行真实 Docker/VM 热更新和抓包停止性能复测。
-
-## TeamLab HostGateway 回程修复（2026-09-18）
-
-- 双队仿真中蓝队 Web 的 4188 次 `asset_access` 超时确认由 HostGateway 的 OVN 端口 MAC 与 Linux internal 接口 MAC 不一致导致。Agent 现在把计划 MAC 持久写入 OVS Interface，并在现有状态探测中核对 Linux 接口 MAC。
-- `10.24.0.27`、`.30`、`.31` 已同步 Agent，SHA-256 均为 `51d9dab2504a5ee5dad26455da26ea85eafe61cddf01148dd561ba5e1cd4dc8a`，服务均为 active。现有蓝队网关已收敛到计划 MAC，修复后 20 秒内蓝队成功请求增加 283，失败数保持 4188，最后故障时间停留在 15:06:38。Agent 同时修复 TeamLab VM 文件接口误用通用 KVM 身份规则的问题；真实 SFTP 回归尚未完成。此次仅更新 Agent，无数据库迁移或主站切换。
-- 正式两小时仿真已执行：两队各 20 个混合资产，共 169,670 次请求，成功 165,482 次，P50 11.08 ms、P95 56.82 ms。4,188 次失败全部来自上述蓝队 HostGateway MAC 问题。红队 20 资产 35.48 秒进入 Ready；蓝队等待节点容量 453.30 秒，容量可用后的实际部署用时 33.84 秒；两队销毁分别用时 7.81 秒和 9.15 秒。完整数据与覆盖边界见 [生产仿真与容量测试汇总](test-reports/2026-09-18-teamlab-production-and-capacity-summary.md)。
-
-## TeamLab Fabric 与比赛仿真准备（2026-09-17）
-
-- `10.24.0.27` 已发布 `2c1e14ed5f94cbdb795c473662c8c08b1ff1e1f1`，目录为 `/opt/gzctf/releases/teamlab-fabric-check-2c1e14e-20260917/publish`。兼容性检测现在使用本次 Agent 返回的 Fabric 结果，不再把刚写入的 `Probing` 状态误判为不可调度。
-- `.27`、`.30`、`.31` 均 Online、可调度且 Fabric Healthy；三台 Agent SHA-256 均为 `f2ea24f472b71997afa3c3c191fa55350f76defe0cf7a266a7e4526e5d4da5a2`。`.27`、`.31` 可承载 Docker 与 VM；`.30` 没有 `/dev/kvm`，只承载 Docker。
-- 生产调用兼容性检测后 `.27` 仍保持 Tunnel/Fabric Healthy，Docker 与 VM 均可调度。回归单测 1/1、前端测试 347/347、完整发布包构建通过。
-- 双队比赛仿真测试计划及轻量框架位于 `docs/development/teamlab-competition-simulation-test-plan.md` 和 `scripts/validation/teamlab-match/`。生产短流程已通过正式 Open API 部署 Modbus Docker、Linux VM 和 Windows VM，Modbus 实际读回寄存器 `12/34/56/78`，状态检查一致；正式两小时仿真也已完成并清理。高并发数据面后续只使用 10.24 内网入口，不再使用临时公网网关作为容量测试路径。
-
-## TeamLab 热更新生产发布（2026-09-17）
-
-- `10.24.0.27` 已原子切换到 `/opt/gzctf/releases/teamlab-hot-update-3d11dd968375-20260917/publish`，运行源码为 `3d11dd968375af8429f6f84c04f555e27bdd55b8`。`publish.previous` 指向切换前的 `training-ui-12e2c1a09dee1be4571e1349a2bd489cf3a2ca56-20260916/publish`，主站与本机 Agent 均从新目录启动。
-- 发布前备份位于 `/opt/gzctf/backups/teamlab-hot-update-3d11dd968375-20260917-pre`：初始数据库备份约 802 MiB、停止写入后的最终数据库备份约 803 MiB、共享附件备份约 304 MiB，摘要写入该目录的 `checksums.sha256`；两份数据库备份目录均可读取，最终备份包含 2184 个目录条目。
-- 同一生产备份先恢复到隔离数据库并执行候选 `efbundle`，核心业务计数保持一致；临时数据库随后删除。生产迁移从 140 条前向到 143 条，当前迁移头为 `20260917063722_AddTeamLabRuntimeHotUpdate`。
-- `gzctf.service` 与 `gzctf-agent.service` 均为 active/running、`NRestarts=0`；首页、`/api/Config`、`/api-docs/` 和 `/openapi/open-v1.json` 均返回 200，公开 OpenAPI 已包含运行时更新预览与提交接口。发布前后活动部署票据均为 0，原有 1 个运行中普通容器实例仍保留，TeamLab 无活动运行环境。
-- 三个节点均 Online 且可调度；`.30`、`.31` 的 TeamLab Fabric 为 Healthy。本机 Agent 能力探测正常，但 `gzctf-fabric` 接口当前不存在，因此本机 Fabric 保持 Disabled；本次未伪造数据库健康状态，也未改变既有 Fabric 拓扑。
-- 本次完成发布与基础冒烟，没有在生产创建 TeamLab 运行环境或执行在线资产更新。真实多 Worker 热更新仍需使用可清理场景单独验收。
-
-## TeamLab API 底座在研状态（2026-09-15）
-
-TeamLab API 候选位于分支 `codex/teamlab-api-product-integration`，P3 性能优化基线为 `d944a10`。P1 已用正式发布包、真实 Agent 和真实 OVN/OVS 跑通完整 API 流程；P2 已完成 Open API、默认布局、画布配色、状态表达、会话审计、服务开放、文件运维、连接器登记等产品与调用闭环，并删除无价值的启动依赖和端点采集链。
-
-P3 候选已完成控制面和 Docker 执行面的并发定位与优化。20 秒、约 600 req/s 的四 Token 混合负载中，总 P95 从 323.56 ms 降至 11.87 ms，5xx、429、请求中断和数据库死锁为 0；没有降低 PostgreSQL 连接池上限。真实执行面已完成单环境 80/100 资产，以及 5 个环境共 100 资产的创建、暂停、恢复、链路策略、抓包和销毁；5 x 20 并发创建 41.69 秒，销毁 8.17 秒。双 Worker 补充测试使用两个独立 Docker daemon、OVS 和 OVN chassis，80 个资产按两个网段和两个分片各放置 40 个；经受管路由器的双向 ICMP 和 TCP/70 均通过，创建 29.73 秒、暂停 1.77 秒、恢复 1.99 秒、销毁 5.05 秒，两个 Agent 和 OVN 最终无运行残留。主站和 Agent Release 构建通过，后端单元测试 1145/1145、Open Operations API 与 SFTP 定向集成测试 7/7 通过。详见 [P1 验证记录](test-reports/2026-09-14-teamlab-api-p1.md)和 [P3 并发记录](test-reports/2026-09-15-teamlab-api-p3.md)。VM、现场物理网卡、三个以上 Worker、跨节点故障恢复和生产规模容量尚未在本候选上回归，因此当前结果不能表述为“支持大型赛事”；生产部署和独立产品拆分也尚未由本阶段执行。
-
-运行中资产热更新候选位于分支 `codex/teamlab-runtime-hot-update`。新增、移除和替换资产继续使用 `DeploymentQueueTicket`；网络结构不变时由 Agent 在一笔 OVN 事务中切换资产端口，运行代次保持不变并递增计划修订号。网段、路由、基础设施、现场连接器或既有资产节点归属变化仍要求完整重置。管理端和 Open API 均已提供更新预览与提交入口，运行详情页可展示差异并选择在线更新或完整重置。主站与 Agent Release 构建、TeamLab 定向测试 509/509、前端测试 347/347 与生产构建、OpenAPI 契约测试和 EF 模型迁移一致性检查通过；尚未在真实 OVN/OVS 和多 Worker 环境执行本功能，因此不能记录为现场验收完成。
-
-## 测试环境部署事实（2026-09-09）
-
-- 用户授权对测试服务器 `10.0.7.118` / `10.0.7.125` 部署与清理；生产 10.24 环境未改动。
-- `10.0.7.118` 已原子切换至 `teamlab-full-af20f9bb-20260909`：gitCommit `af20f9bb9eebdf6e3223f405202f22dfd6bd814d`，manifest 1010 文件，archive SHA-256 `220d960b8df909fb9db80c93add2286f6f923e25c02e9c559140cc477a65a7bd`。efbundle 前向应用 9 条迁移（`AddAssetAndChallengeOwnership`、`AddExerciseCreatorTracking` 及 7 条 TeamLab 迁移）。`publish.previous` 保留旧 release `teamlab-capture-restore-fix-20260824-01`。冒烟：主站 active、首页 200、`/api/Config` 200。
-- 部署前数据库备份：`/opt/gzctf/backups/gzctf-pre-af20f9bb-20260909T1129Z.dump`（670,764,978 bytes，2,101 个 catalog 条目，SHA-256 `95c697111dc8e897cc507c5bd6d88b835d88e9bf201c30a411477ee290db16e4`）。`.118` 的 `/opt/gzctf/shared/files` 已建为指向 `/opt/gzctf/persistent/files` 的软链接（本机真实附件存储位置），以满足发布激活脚本前置检查。
-- `.118` 磁盘从 99%（1.5G 可用）恢复至约 87%（16G 可用）：删除 4 个非当前/非回退旧 release、`/var/crash` 转储、home 下 15 个 6-8 月旧 tarball（886M）及 nuget/npm 缓存；对 internal registry 执行 `registry garbage-collect --delete-untagged` 清理无 tag 引用的孤儿 blobs（blobs 曾达 40G）。6 个 `yinyu-pentest-*` 仍带 tag 的镜像保留。
-- `.118` 与 `.125` 的 `gzctf-agent` 此前均因主机缺少 `gzmgt0 / 100.127.0.1/16` 管理网桥以 `SocketException (99)` 崩溃循环（`.118` 重启计数 4065）。已按 `docs/operations/agent-guest-network-recovery.md` 在两台安装 `restore-agent-guest-network.py` 与 `gzctf-agent.service.d/20-guest-network.conf` drop-in，恢复网桥与 `gzctf_guest_mgmt` nft 隔离规则并持久化；重启后两台 agent 均 active/running、NRestarts=0，心跳到 `10.0.7.118:8080` 全部 200。整机重启持久化未经真实重启验证。
-- 上述 `.118` 数据库迁移仅在生产 10.24 副本策略之外、于测试服务器直接前向应用，不构成生产迁移验证；Agent 同步与节点调度实测见下节。
-
-## TeamLab 测试环境运行修复（2026-09-10）
-
-- `.118` 测试主站已切换到 `/opt/gzctf/releases/teamlab-gateway-healthfix-20260910/publish`，`publish.previous` 指向 `teamlab-full-af20f9bb-20260909`。主站与本机 Agent 均 active，`/api/Config` 返回 200；本次没有数据库迁移。
-- `.118` 与 `.125` Agent 已统一为 SHA-256 `738ff2630cf292bf7ce0b88eca4359960171bcbfc8bf43dccefd22b8ee35e72e`。容器健康检查改由 Agent 自身进入容器网络命名空间执行，并在 10 秒启动窗口内重试，不再依赖工作负载镜像包含 bash、curl、nc 或 Python。
-- 公网 UDP 网关同步会在规则写入前确保共享 nftables 表及 `prerouting`、`postrouting` NAT 基础链存在；销毁仅按运行映射注释删除规则，不删除共享链。隔离 nftables 测试覆盖空状态建链、双映射隔离、单映射删除和最终清理。
-- 正式 API 连续完成两次 v5 工控演示场景创建与销毁。运行 `01a086f1-6490-743b-974a-eb6b0848241f` 和 `01a086f3-b1e0-7466-9a6d-f2f333b98bba` 均到达 `ready`，两个资产均为 Running；销毁后运行及资产均为 Destroyed、错误为空。第二次运行中核对 DNAT/SNAT 两条规则存在，销毁后映射规则为 0；节点上对应 runtime 232/233 的容器、network namespace、OVS 资源和状态文件无残留。
-- 网关定向测试 6/6、主站及 Agent Release 构建通过。全量单测 1119/1121；两条既有调度观察点计数断言失败，单独复跑仍失败，未经过本次网关或 Agent 探测代码。该门禁缺口不得记录为全绿。
-- H03 测试服务器全链路已通过：运行 `01a0870a-6bc4-7c7e-8bc4-fb5300ea2986` 经正式队列在 `.125` 创建 Docker PLC、隔离 SCADA、libvirt VM 和 H01 受管网卡连接器。现场 namespace 端点读取 Modbus TCP 寄存器 `12/34/56/78`；PLC、VM 与现场端点双向互通，`field` 与 `isolated` 保持隔离。平台抓包得到 23,782 字节、两段 PCAP，下载归档内摘要与平台一致。
-- H03 验收补齐 libvirt VM NoCloud CIDATA 静态网络配置和 QEMU Guest Agent channel；VM 回报计划 MAC 和 `10.96.1.20/24`，ICMP、SSH banner 与反向 QGA ping 均通过。删除连接器 OVS port 后协议链路超时，正式 reset 在 generation 4 自动恢复；`ovn-controller` 重启后链路保持可用；第二运行被 `connector_occupied` 明确拒绝。
-- H03 最终通过正式 API 销毁：运行、分片和资产均为 Destroyed，容器、libvirt 域、qcow2/seed 文件及运行 OVS 接口无残留；专建的模拟 namespace/veth 已删除，Agent 与 OVN Controller 保持 active。拓扑、发布、设备包和已销毁运行历史保留供平台查看。抓包在销毁前已下载验签，销毁后抓包接口为 404，不表述为长期留存附件。详见 `docs/development/handoffs/2026-09-08-h03-hybrid-datapath.md`。
-
-## 本地在研补充（尚未合并/发布）
-
-2026-09-14 TeamLab 旧端点采集链已在独立任务分支中完整删除，覆盖拓扑/API、运行时、Agent、来宾组件、持久化、前端与发布链；packet flow、网络/工作负载 observation point 和 asset-scope PCAP 保留，工作负载 observation point 由已放置资产自动创建。Release 编译、相关后端单测 156/156、前端相关测试 31/31 和 TypeScript 严格检查通过；尚未合并、推送或部署，真实基础设施未在本轮重新验收。
-
-2026-09-14 TeamLab 产品化改造位于独立工作树 `D:\newgz\newGZCTF-teamlab-product-usability`、分支 `codex/teamlab-product-usability`，基线为 `origin/main 4bef377`，尚未提交、推送或部署。改动已闭环链路策略多资产执行与失败恢复、A07 服务开放、A04 文件运维、运行及会话表达、设备模板结构化登记、现场网卡选择与按需状态读取、协议事件基础校验。后端相关定向测试 76/76、前端相关定向测试 16/16 通过；完整前端测试首次 319/327，其余 8 项测试夹具修正后相关 14/14 通过；后端 Release 构建和前端生产制品构建通过。真实公网入口、VM SFTP、容器文件通道及现场网卡没有在本轮重新部署实测，不能记录为已发布能力。详细记录见 `docs/development/handoffs/2026-09-13-teamlab-product-usability.md`。
-
-首批远端分支已推送：`codex/teamlab-foundation-v1-20260908` 指向 `98d9d839fa5f72a863c4775cc0e680b354c3d9d7`，已通过远端引用回读核对。仅包含第一笔提交及其历史，未包含工作区未提交的前端和验收改动；未合并 main，未部署生产，未发送 QQ 消息。
-
-2026-09-08 首批本地提交：`98d9d83`（`feat(teamlab): add runtime operations and device execution foundation`），包含运行底座、资产操作、终端/文件/VM 控制台、会话审计、设备执行与监督契约、迁移和后端测试。用户随后要求停止验收并优先提交；本次仅完成这一笔本地提交，没有推送或发送 QQ 消息。前端集成、模拟设备/混合环境夹具和后续验收文档仍留在工作区。H03 已通过正式队列部署及实际互通、隔离；完整抓包、故障恢复和最终销毁验收不得标记为全部通过。
-
-H01/H02 后续在研（2026-09-08）：专用网卡 provider 已加入不可变网络计划及 Agent 接入/探测/解绑，主站按登记节点约束调度；登记表单新增节点选择、网卡名称与 MAC，未支持类型不可选。真实 OVN/OVS/QEMU＋该 provider 的互通、隔离、断开恢复、另一 runtime 抢占拒绝、解绑保留网卡专项通过；主站驱动的全流程尚未验收。新增可构建 Modbus TCP 设备源代码及原始 TCP 协议测试，参数、寄存器/线圈状态、异常、实例隔离和重启语义已有真实验证。前端完整门禁 324/324、相关后端 475/475、混合网络/Modbus 联合专项 2/2 通过。H02 持续监督、协议事件自动采集、H03 主站全链路仍未完成；未推送稳定分支。用户已明确排除 A06，并要求 H01–H03 与协议模拟全部闭环后才作为稳定版本推送。
-
-H03 最新专项（2026-09-08）：真实 OVN/OVS＋QEMU Linux 来宾＋namespace 外部端点模拟的数据面集成测试 1/1 通过（31 秒），覆盖 HTTP、同地址段逻辑网络隔离、PCAP、端口断开/重接、ovn-controller 重启、精确清理及另一 runtime 保留。代码新增重复 apply 的网络/端口复查，并修复 VM-only inventory 误依赖 Docker。该专项直接调用网络 provider；未通过主站队列和 H01 连接器创建，不能签收完整 H03。详细证据与剩余项见 [H03 混合数据面验收](handoffs/2026-09-08-h03-hybrid-datapath.md)。
-
-本轮收尾事实（2026-09-08）：主站现运行仓库外 `teamlab-main-recovery-20260908` 制品，前端为 5173 的 Vite 服务；本地 Guacamole 测试配置已在受控主站进程中恢复。最终单元测试 1114/1114、前端完整门禁 323/323 通过；恢复后完整集成测试 286/286 通过，之后失败场景文件运维增量另经单测与真实 API/Edge 读取、删除验证，未再重复整套集成。设备包停用/启用详情不更新、归档提前关闭及失败信息被弹窗遮挡已修复；操作结果直接使用接口回读。测试设备包已归档，两份容器内临时验收文件已通过页面删除（本地原件保留）；临时浏览器账号已退出并禁用，保留审计身份，原账号未重置。两个 Agent 活动远程会话、Guacamole 临时连接和临时用户均为 0。
-
-最新本地验收（2026-09-08）：Edge 已完成真实登录、资产暂停/恢复、差异识别与原队列修复、中文文件上传/取消覆盖/确认覆盖、标准附件下载事件、终端中文输入输出/尺寸同步/显式中断/重新创建/关闭回收，以及会话审计文件展示与下载事件。设备包登记、镜像自动匹配、参数表单与 JSON 一致性已在浏览器验证；验收草稿已撤销回 0 个资产并保存，修订号正常增长至 7，未修改既有发布版本。登记表单错位、诊断审计白名单导致的 500、本地 `/api` WebSocket 代理缺失、匿名课程误报加载失败已修复。文件附件 GET 复用原文件服务，真实字节比对通过。
-
-重启后已补证：恢复 Guacamole 原测试配置后，Edge 经主站创建 VNC 会话并显示真实 BIOS 画面；结束后主站显示已结束、两个 Agent 活动会话均为 0、Guacamole 临时连接和临时用户均为 0。该测试域仍是无来宾网络、无系统盘的专用控制台域，不能代替 H03。TCG 节点 inventory 500 已修复：能力清单确认 Docker 守护进程可达，聚合资源查询隔离单个计算提供方故障并保留取消语义；实测主 Agent Docker=True/KVM=False，libvirt Agent Docker=False/KVM=True，均返回 200。Alpine 模拟容器使用仓库外的 linux-musl-x64 Agent 制品。
-
-当前尚未完成：H03 完整混合场景及物理端点实测，H01 provider 和能力地图中已注明的软件缺口。另发现资产恢复后运行/分片仍保留 resource_not_running 失败状态，需要补有实际网络证据的显式重对账恢复，不能直接修改数据库状态伪造成功。文件运维已允许失败场景中的有效资产进入排障流程，仍验证权限、代次、资源身份与操作冲突。
-
-最近门禁：后端单元测试 1113/1113、前端完整门禁 321/321；最后失败场景文件运维增量另做真实审计写入器参与的定向单测。登记排版已核验 390/1366/1920/2560。曾出现集成测试 97 通过/189 失败；诊断发现 PostgreSQL 容器内部正常、Windows 经 Docker 映射端口超时、Docker 引擎初始化接口失去响应。电脑重启并恢复服务后，同一批完整集成测试 286/286 通过（3 分 33 秒）；报告在仓库外 teamlab-recovery-tests-20260908/recovery-full.trx。数据卷未删除，开发库 TCP SQL 探针、两种 Agent inventory 与 VNC 浏览器链路均已重新验证。
-
-2026-09-08 后续恢复：Edge 浏览器控制已经恢复。原包含环境变量注入和隐藏后台启动的复合命令被工具拒绝，未提供具体触发条件；使用现有配置在受控终端前台启动主站成功。主站制品位于仓库外 `teamlab-main-network-device-20260908`，`http://127.0.0.1:8080/api/Config` 实测 200，Docker Agent inventory 实测 200；前端 `http://127.0.0.1:5173/` 已在 Edge 打开，赛事和通知能够返回真实数据，课程区仍显示加载失败，不能宣称首页全部通过。当前进程依赖本地终端会话，不是生产部署。未注入此前临时 Guacamole 管理账号配置，因此远程图形会话仍需单独复核。
-
-本轮 A07/O01/H02 增量已落代码，边界见商业清单及组网操作手册第 9.0 节：资产差异检查与原队列修复、NAT 归属和端口级执行修复、设备包参数/制品/资源校验及编辑器绑定改善。H01 provider、完整端口入口分配/冲突/探测、持续设备监督与 H03 物理验收仍未完成。开发库已在仓库外备份后应用 `20260908024141_TeamLabLinkPolicyGeneration`；旧策略的代次保持未知，不猜测回填。新代码尚未提交、推送或生产发布。
-
-本地在研基线已快进至 `origin/main 3a70126`。R05/A01/A04/A05 的前后端实现已接入：A01 复用部署票据，包含原节点身份、阶段继续执行、电源期望状态、生命周期权限和会话/文件协调；A04 包含容器文件与 VM SFTP、覆盖确认、SSH 身份登记/更新及超时暂存回收。真实主站登录、文件往返、单资产队列操作、终端、审计归档下载及 SHA-256 校验通过。A05 已通过真实 libvirt/QEMU TCG → Agent → Guacamole 图形数据接收及关闭清理，域没有来宾网络；不是硬件 KVM 验收。OpenSSH 协议测试通过，完整 VM 管理网络、OVN 网络重接和硬件 KVM 仍须现场验收。浏览器工具初始化连续报运行文件路径缺失（os error 3），有数据的多尺寸/主题/键盘视觉验收尚未完成。
-
-本地已在备份后应用 `20260907154522_TeamLabAssetPowerIntent`、`20260907162107_TeamLabSftpHostIdentity`；隔离 PostgreSQL 前向升级、旧数据保留和回退专项通过。备份在仓库外，未删除数据卷。最新代码门禁与制品路径见 [商业能力补齐清单](teamlab-commercial-closure-plan.md) 的最终验证记录。原临时浏览器管理员保留用于复核；新增 API 验收账号已禁用并保留审计身份，未重置原管理员。所有改动尚未提交、推送或生产部署。
-
-最终门禁：后端全量单测 1086/1086，前端 312/312 与完整构建通过，全量集成 284/284。最后文件错误映射增量另做 16 项定向测试和真实 API/Agent 验证；未重跑该增量后的全量集成。主站与 Agent 已更新，实际远程会话和 Guacamole 临时连接均已清零；上述环境/浏览器现场验收仍未签收。
-
-2026-09-07 在 `D:\newgz\newGZCTF-main`，基于 `origin/main bbd5a5d` 的 `codex/teamlab-commercial-closure` 分支进行商业能力补齐，改动尚未提交。已实现的本地变更、验证结果、集成测试失败及未完成能力见 [商业能力补齐清单](teamlab-commercial-closure-plan.md)。CodeGraph 已初始化；本地 Docker 模拟 Agent 已更新，真实终端的中文输入输出、尺寸调整、Ctrl-C、取消及进程回收已验证。该结果不代表前后端全部链路、多 Worker、KVM、OVN 或物理端点通过；未对生产做修改。下列生产记录仍为此前核验事实，不能视作本次远程复核结果。
-
-## 1. 基线
-
-| 项目 | 最新已知事实 |
-| --- | --- |
-| 仓库 / 开发分支 | `https://github.com/Y3X1L2/newGZCTF.git` / `main`；开发从最新 `origin/main` 创建任务分支 |
-| 固定发布标签 | `stable-20260908` → `ab2bd54b7e16d454e3a8f54960c4bb4689047c4a`；已推送 annotated tag，不移动标签 |
-| 主站发布 | `10.24.0.27` 的主站及本机 Agent 使用 `/opt/gzctf/releases/pr9-converged-ab2bd54b7e16d454e3a8f54960c4bb4689047c4a-20260908/publish`；994 个 manifest 文件长度/摘要匹配 |
-| 持久化附件 | `/opt/gzctf/publish/files` → `/opt/gzctf/shared/files` |
-| 数据库 | 134 条迁移历史，head `20260816192540_TeamLabCapabilityClosure`；当前发布无新增迁移 |
-| 应用回退 | `/opt/gzctf/publish.previous` → `/opt/gzctf/releases/practice-validation-9eef8ac12c626672081e81fadbde39946e7d2237/publish` |
-| 备份 | `/opt/gzctf/backups/pr9-rollout-pre-ab2bd54b-20260908T080802Z`；预备与最终数据库备份均实际恢复验证，最终数据库/附件备份摘要复核通过 |
-| 执行节点 | 最近核验三节点均 Online/Stable/schedulable，Fabric Disabled；Agent 摘要前缀：`.27` `d93cf212...`、`.30` `3747f353...`、`.31` `2f12bca5...`，远端版本未完全统一 |
-| 健康状态 | 指标端口 `3001/healthz` 为 HTTP 200 / Degraded；业务端口 `8080/healthz` 按契约返回 404；降级原因见未解决事项 |
-| 技术栈 | .NET 10、ASP.NET Core、EF Core、PostgreSQL、Redis、React 19、TypeScript、Vite、pnpm |
-
-版本关系以实时 `git fetch origin --prune`、`git status` 和 `git log` 为准。需要复现该次生产源码时使用固定标签；`main` 后续是否仅有文档变化，应重新比较，不能长期假定。发布包摘要、回退边界和验收依据集中在 [稳定基线说明](handoffs/2026-09-08-stable-baseline.md)。
-
-## 2. 当前功能边界
-
-### 已存在的代码能力
-
-- **CTF 赛事**：赛事、战队、题目、附件、静态/动态 Flag、Docker、KVM/Windows VM、提交、计分和榜单。
-- **理论考试**：题库、组卷、单选/多选/判断、草稿、最终提交、成绩和答案回顾。
-- **培训课程**：课程、共同教师、报名审核、章节、资源、实验、课后理论、学习进度和学员详情。
-- **自主练习**：`/practice`、题库浏览、筛选、来源导入、附件、多 Flag、Docker 实例、提交、统计和后台题库管理；实例继续复用 `DeploymentQueueTicket`。
-- **AWDP**：服务、轮次、Checker、攻击、修补、重置、恢复、停止、计分和日志；真实攻击/修补流程按人工验收文档执行。
-- **运行底座**：Docker/KVM 节点、镜像模板、镜像导入与分发、容量预留、统一部署队列、实例、事件、日志和恢复。
-- **TeamLab**：场景草稿、校验、不可变发布版本、试运行、混合资产、执行计划 V2、OVN/OVS 数据面、访问授权、远程运维、链路策略、连接器、设备包、资源池、流量和抓包基础能力。
-- **身份与通用管理**：本地登录、Portal SSO、用户、战队、学员组、系统设置、个人主页和主要管理页面。
-
-### 前端事实
-
-正式前端入口位于 `src/GZCTF/ClientApp/src/vnext`。路由注册以以下文件为准：
-
-- `src/GZCTF/ClientApp/src/vnext/app/VNextApp.tsx`
-- `src/GZCTF/ClientApp/src/vnext/app/shell/moduleRegistry.ts`
-
-新增页面必须使用 vNext 壳层、feature API adapter、CSS Module 和语义 Token；未实现能力显示真实空态，不加载旧页面套壳，不伪造数据。
-
-## 3. 运行架构
-
-主站为模块化单体，Agent 为独立执行面；PostgreSQL 保存业务和运行事实，Redis 承载缓存、协调和高频缓冲。Docker、VM、培训、AWDP 和 TeamLab 共用 `DeploymentQueueTicket`。
-
-依赖方向、模块所有权和前端边界遵循 [AGENTS.md](../../AGENTS.md) 与 [模块边界图](../commercialization/module-boundary-map.md)，不在状态文档重复维护另一套规则。
-
-## 4. 未解决事项
-
-- **指标并发**：2026-09-08 观察到一次指标持久化 `DbUpdateConcurrencyException`，后续心跳/指标恢复；仍需并发和失败批次重试回归，不能将自动恢复等同于根因已修复。
-- **迁移来源**：`20260604165857_AddTheoryExamEntities`、`20260604193010_SyncTheoryExam` 的来源仍未恢复，导致 134 条数据库历史与 132 条可发现迁移存在差异。另有 `20260802023000_RemoveDestroyedTeamLabUdpMappings.cs` 缺少迁移元数据，不能按源码文件数认定 bundle 会执行。禁止伪造或删除历史；后续迁移须在新鲜生产备份副本验证。详见 [迁移交接](handoffs/2026-09-02-migration-drift-reconciliation.md) 与 [发布核验](handoffs/2026-09-08-pr9-production-rollout.md)。
-- **依赖与存储回收**：SSH.NET 已知依赖风险和 Blob 自动 GC 缺口仍未处理；风险范围见 [PR 审计](handoffs/2026-09-07-pr9-review-merge.md)。
-- **节点一致性与持久性**：远端 Worker Agent 仍为兼容的混合版本；如需统一，应另开维护任务逐节点同步。已安装的 `.31` 网桥恢复机制尚未完成整机重启验收。
-- **自主练习与回退**：核心业务测试已完成并由用户确认；内容运营验收和真实应用回退演练仍未完成。
-- **TeamLab**：双 Worker 故障接管、长期流量、复杂服务注入、规模并发和完整跨节点场景仍需现场签收；Fabric Disabled 不代表组网验收通过。
-- **Windows VM**：当前仅按比赛场景支持，仍需合格镜像双实例、RDP/Guacamole、剪贴板、隔离与销毁清理验收。
-- **AWDP / Portal SSO**：AWDP 真实攻击、修补和异常恢复按 [人工验收手册](../yinyu-awdp-manual-acceptance.md) 执行；门户源码不在本仓库，SSO 跨网联调仍需目标环境验证。
-
-## 5. 验证依据
-
-- 固定发布提交已通过完整 CI、隔离真实 Docker 生命周期及附件引用保护验证；测试数量和运行编号见 [候选交接](handoffs/2026-09-07-pr9-runtime-convergence.md)，不作为未来提交已通过验证的依据。
-- 生产发布完成两份数据库备份恢复、制品/进程核验、关键 API 和共享附件核验；用户接手完成业务测试并删除临时题，随后只读确认对应题目、实例和容器记录不存在。详见 [生产发布交接](handoffs/2026-09-08-pr9-production-rollout.md)。
-- 已修复缺陷、旧版本切换、测试过程、旧计数和会话流水移出当前状态；需追溯时查看 [环境核验历史](../archive/implementation-records/2026-09-08-environment-verification-history.md)。归档不参与当前执行决策。
-
-## 6. 文档入口
-
-| 需要了解什么 | 入口 |
-| --- | --- |
-| 固定生产基线、发布物与版本关系 | [稳定基线说明](handoffs/2026-09-08-stable-baseline.md) |
-| 本次部署、备份、回退及人工验收 | [生产发布交接](handoffs/2026-09-08-pr9-production-rollout.md) |
-| 选择功能、接口和专项文档 | [文档导航](../README.md) |
-| 开发与模块边界 | [AGENTS.md](../../AGENTS.md)、[模块边界图](../commercialization/module-boundary-map.md) |
-| 发布流程 | [生产发布与回滚手册](../operations/vnext-maintenance-window-rollout.md) |
-
-## 7. 新任务起点
-
-1. 核对用户当前目标、权限范围、工作树及最新远端提交；不要继承历史交接中的一次性授权或限制。
-2. 优先处理数据保留 SQL 缺陷和指标并发回归，再按任务范围推进专项验收；从最新 `origin/main` 创建独立任务分支。
-3. 以当前源码、合同、测试及必要的现场证据确认问题；发布使用新候选、新标签和新鲜备份，不原地覆盖固定基线。
-4. 完成后更新本文件的最新基线或未解决事项；修复过程、运行编号、完整测试与部署记录写入对应 handoff，避免再次向本文件追加时间线。
+源码、测试、生产验收分开记录；无关小任务不修改本页。当前状态由集成或发布负责人在合入时更新，禁止向页首不断追加历史流水。
