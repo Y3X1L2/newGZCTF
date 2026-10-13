@@ -7,11 +7,11 @@
 1. `AGENTS.md`
 2. `docs/development/current-state.md`
 3. `docs/README.md`
-4. `README.md`
-5. `docs/platform-commercialization-master-plan.md`
-6. 与任务直接相关的模块文档
+4. 与任务直接相关的模块文档或指定任务交接。
 
-涉及架构、前端或部署时还必须阅读：
+首次本地启动补读 `README.md`；产品范围或架构调整补读 `docs/platform-commercialization-master-plan.md`。按任务选读，不要求每次通读产品概览、所有专项文档与历史交接。
+
+按影响范围补读以下契约（只选相关项）：
 
 - 架构边界：`docs/commercialization/module-boundary-map.md`
 - API 标准：`docs/commercialization/external-api-standard.md`
@@ -110,7 +110,7 @@ git log -5 --oneline --decorate
 - 每个功能、缺陷或文档任务使用一个 `codex/<task-name>` 分支；任务分支从最新 `origin/main` 创建。
 - 并行任务必须使用不同的 worktree 和不同的分支。两个 AI 不得共用同一工作目录，也不得同时检出同一分支。
 - 主工作区可以继续用于一个任务；额外任务使用 `git worktree add` 创建到仓库外的目录。
-- 任务完成后先提交并推送分支，经过审查后合并到 `main`；确认合并成功且不再需要时，删除远端和本地任务分支，并执行 `git worktree remove` 清理对应 worktree。
+- 任务完成后先提交并推送分支；审查通过且有合并授权后合入 `main`，部署仍需明确授权；确认合并成功且不再需要时，删除远端和本地任务分支，并执行 `git worktree remove` 清理对应 worktree。
 - 删除分支前必须确认：工作树干净、提交已推送、合并提交已在 `main`、没有未交接的修改。未合并任务不得删除分支。
 
 标准并行流程：
@@ -192,14 +192,23 @@ dotnet test src/GZCTF.Integration.Test/GZCTF.Integration.Test.csproj -c Release
 1. 读取本文件和 `current-state.md`。
 2. 核对 Git、远端和用户最新要求，不延续聊天中的过时假设。
 3. 对照当前代码验证任务涉及的真实入口、API 和测试。
-4. 大任务先建立可落盘、可更新的计划文档；小修复直接实现并验证。
+4. 复杂或跨会话任务用一个 `docs/development/handoffs/YYYY-MM-DD-<task>.md` 记录目标、计划、进度、证据和下一步；小修复用 PR/提交说明，不机械新增计划文件。
+5. 并行任务先确定集成负责人、文件/模块所有权与合入顺序。契约、生成客户端、迁移快照先协调；各任务只改自己的工作区和记录。共享状态由集成/发布负责人合入时统一更新，避免多个任务追加流水。
 
 任务结束：
 
 1. 记录最终提交、改动范围和测试结果。
 2. 如部署，记录环境、发布物身份、备份和冒烟结果。
-3. 如项目状态发生变化，更新 `docs/development/current-state.md`。
-4. 未完成事项写入现有缺口文档或任务交接记录，不只留在聊天中。
+3. 项目基线、能力或重要缺口变化时，由集成/发布负责人替换 `docs/development/current-state.md` 对应事实；无关小任务不更新。该页最多 120 行，完整测试和部署过程链接到任务记录。
+4. 未完成事项集中到 `docs/development/backlog.md` 或既有专项缺口文档，任务记录引用；写清验证边界，关闭要有证据，不重复维护多个待办清单。
 5. 使用 `docs/development/task-handoff-template.md` 交接跨会话或跨人员工作。
 
 `current-state.md` 只记录已经证实的当前事实。不要写计划中的功能为“已完成”，不要复制整段聊天记录，也不要保存凭据。
+
+## 10. 文档生命周期
+
+- 现行说明使用简体中文；代码标识、命令、API 路径和协议名保留原文。
+- `docs/README.md` 是唯一导航；规则在本文件，当前事实在 current-state，任务过程在 handoffs，未决事项在 backlog，稳定行为在模块/契约/操作手册。相同事实只维护一处，其余引用。
+- 完成任务后先回写现行说明和未决事项，再封存交接。被完整替代的计划删除，唯一历史证据才归档；契约、运维脚本、当前发布/备份/回退证明不得按日期批量删除。
+- 文档变更执行 `python scripts/validation/check-documentation.py` 与 `git diff --check`；删除还须搜索旧路径引用。链接检查不替代 API、源码和现场核验。
+- 从 Git 历史定向恢复旧文档；归档与任务记录中的一次性授权不适用于后续任务。
