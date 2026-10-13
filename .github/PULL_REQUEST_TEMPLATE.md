@@ -16,5 +16,5 @@
 <!-- 示例（删除注释后填写，不要保留示例冒充复核）：
 无需修改模块：training
 无需修改理由：
-training: 仅拆分 `TrainingRuntimeService` 的内部方法，额度和授权行为未变；现行 development 已覆盖该链路，相关单元测试通过。
+training: 本次仅为TrainingContainerQuotaTests中现有额度拒绝路径增加回归用例，接口、配置与运行行为未改变，已核对培训开发页。
 -->
