@@ -30,4 +30,4 @@ Docker 执行面通过 `GZCTF_FLAG` 环境变量传递该值。镜像启动程�
 
 `TrainingContainerLifecycleTests` 覆盖额度隔离、跨用户隔离、不限额度、重复创建、排队计数、旧容器清理失败和缺失 Flag 修复；`TrainingContainerQuotaTests` 通过正式课程 API 和 PostgreSQL 验证并发四请求只允许三个入队、重复请求复用票据、公共练习与课程队列独立限额；`InstanceFlagIsolationTests` 验证 PostgreSQL 持久化和入队幂等；`TrainingContainerDockerTests` 使用无攻击内容的 BusyBox HTTP 服务验证三个实例同时运行、不同端口、注入值与数据库一致及单实例销毁隔离。
 
-动态设置回归覆盖保存后下一次创建立即生效、0不限数量、降低额度保留已有票据与运行容器、局部配置保存与权限拒绝；页面覆盖0值回读、空值/负数/小数/溢出、保存失败和其他区段草稿保留。设置功能仅扩展内部管理契约与前端生成客户端，无数据库迁移或 Agent 协议变化。发布遵循 [维护窗口流程](../operations/vnext-maintenance-window-rollout.md)。完成源码测试不等于现有主站已经更新；现场状态与验收范围见对应任务交接记录。
+动态设置回归覆盖保存后下一次创建立即生效、0不限数量、降低额度保留已有票据与运行容器、局部配置保存与权限拒绝；页面覆盖0值回读、空值/负数/小数/溢出、保存失败和其他区段草稿保留。设置功能仅扩展内部管理契约与前端生成客户端，无数据库迁移或 Agent 协议变化。发布遵循 [维护窗口流程](../../../operations/vnext-maintenance-window-rollout.md)。10月11日的发布身份、动态设置与分页现场验收见 [发布记录](../../../records/2026-10-11-training-quota-settings.md)，课程三实例生命周期验收见 [主线修复记录](../../../records/2026-10-11-training-runtime-mainline.md)。这些记录限定于当次环境，当前状态见 [状态页](../../../current-state.md)。
