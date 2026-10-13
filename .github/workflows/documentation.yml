@@ -4,7 +4,10 @@ on:
   push:
     branches: [main]
   pull_request:
+    types: [opened, synchronize, reopened, edited, ready_for_review]
   workflow_dispatch:
+  schedule:
+    - cron: '23 2 * * 1'
 
 permissions:
   contents: read
@@ -12,15 +15,50 @@ permissions:
 jobs:
   documentation:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 8
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: '3.x'
-      - name: Check documentation validator
-        run: python -m unittest discover -s scripts/validation -p test_check_documentation.py
+      - name: Check documentation tools
+        run: python -m unittest discover -s scripts/validation -p 'test_documentation*.py' -v
       - name: Check current documentation
-        run: python scripts/validation/check-documentation.py
+        if: always()
+        run: python scripts/validation/check-documentation.py --report artifacts/documentation/check.md
+      - name: Check generated module navigation
+        if: always()
+        run: python scripts/validation/generate-module-index.py --check
+      - name: Report changes and check PR review
+        if: always()
+        env:
+          DOC_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        shell: bash
+        run: |
+          base="$DOC_BASE"
+          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ]; then
+            # Manual/scheduled inspection reports the most recent commit, without PR requirements.
+            base=$(git rev-parse HEAD^ 2>/dev/null || git rev-parse HEAD)
+          fi
+          python scripts/validation/documentation-impact.py --base "$base" --event-file "$GITHUB_EVENT_PATH" --report artifacts/documentation/impact.md
       - name: Check whitespace
-        run: git show --format= --check HEAD
+        if: always()
+        env:
+          DOC_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        shell: bash
+        run: |
+          base="$DOC_BASE"
+          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ]; then
+            base=$(git rev-parse HEAD^ 2>/dev/null || git rev-parse HEAD)
+          fi
+          git diff --check "$(git merge-base "$base" HEAD)" HEAD
+      - name: Save documentation reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: documentation-${{ github.sha }}
+          path: artifacts/documentation/*.md
+          if-no-files-found: warn
+      # Generated APIs and OpenAPI compatibility remain owned by the Quality workflow.
