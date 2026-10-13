@@ -22,4 +22,4 @@
 
 Controller只负责认证、查询绑定和应用用例调用。查询与投影在 Exercise Application 中复用，没有修改公开 token API 的 cursor 分页契约、数据库模型、来源导入、附件管理、动态实例或统一调度队列。
 
-`ExerciseCatalogPaginationTests` 在PostgreSQL通过正式API验证默认上限、分页顺序、总数、停用/教师/课程隔离、页码校正、完成与标签筛选、非法参数和管理权限拒绝。页面回归验证分页请求、全库计数、筛选/页大小复位和无效URL规范化。发布需要同时更新Main与前端，按[维护窗口流程](../operations/vnext-maintenance-window-rollout.md)执行。
+`ExerciseCatalogPaginationTests` 在PostgreSQL通过正式API验证默认上限、分页顺序、总数、停用/教师/课程隔离、页码校正、完成与标签筛选、非法参数和管理权限拒绝。页面回归验证分页请求、全库计数、筛选/页大小复位和无效URL规范化。发布需要同时更新Main与前端，按[维护窗口流程](../../../operations/vnext-maintenance-window-rollout.md)执行。10月11日的API与页面分页验收见[发布记录](../../../records/2026-10-11-training-quota-settings.md)，当前部署基线见[状态页](../../../current-state.md)。
