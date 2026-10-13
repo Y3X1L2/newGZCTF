@@ -308,4 +308,4 @@ Content-Type: application/json
 | 画布 | 网段和资产位置已提交，页面无重叠 |
 | 发布 | 场景校验通过，发布 operation 成功，已取得 `releaseId` |
 
-完整字段定义见 [`commercialization/openapi/open-v1.json`](commercialization/openapi/open-v1.json)。
+完整字段定义见 [`commercialization/openapi/open-v1.json`](../../../commercialization/openapi/open-v1.json)。

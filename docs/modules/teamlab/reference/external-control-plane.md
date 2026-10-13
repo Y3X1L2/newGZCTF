@@ -14,10 +14,10 @@ TeamLab 使用以下 API scope：
 
 | Scope | 权限 |
 | --- | --- |
-| `teamlab.topologies:read` | 读取能力、拓扑和发布版本 |
-| `teamlab.topologies:write` | 创建、更新、校验、发布拓扑 |
-| `teamlab.runtimes:read` | 读取镜像准备、rollout、runtime 和事件 |
-| `teamlab.runtimes:write` | 准备镜像、管理 rollout/runtime 和访问授权 |
+| `teamlab.topologies:read` | 读取能力、拓扑、发布版本和 rollout |
+| `teamlab.topologies:write` | 创建、更新、校验、发布拓扑；rollout 定义、targets、prepare/archive 等目录命令 |
+| `teamlab.runtimes:read` | 读取镜像准备、runtime 和事件 |
+| `teamlab.runtimes:write` | 准备镜像、部署类 rollout 命令、runtime 和访问授权 |
 | `teamlab.traffic:read` | 查询流量与路径 |
 | `teamlab.capture:read` | 查询和下载抓包 |
 | `teamlab.capture:write` | 创建和停止抓包 |
@@ -51,7 +51,7 @@ Idempotency-Key: customer-order-20260808-001
 9. 比赛结束先 close-access，再 drain；所有目标清理后 archive rollout。
 10. 不再接受新工作时归档 scope。发布预热引用被释放，仍由活动 rollout/runtime 持有的镜像不会删除。
 
-发布版本保存执行定义和画布布局两个快照。布局变化会产生新修订和新发布版本，但不会改变执行摘要；已有 runtime 永远使用创建时指定的发布版本。
+发布版本保存执行定义和画布布局两个快照。布局变化会产生新修订和新发布版本，但不会改变执行摘要；已有 runtime 不受草稿或新发布影响；只有显式更新/重置命令可以切换来源版本，并保留执行快照与修订事实。
 
 ## 4. 接口清单
 
@@ -96,6 +96,8 @@ Idempotency-Key: customer-order-20260808-001
 - `POST .../{rolloutId}/targets/{targetId}/rebuild|pause|resume|restart`
 
 Rollout 只描述一批部署目标。单个目标失败不会删除其他已就绪目标；恢复必须由调用方显式选择重建目标、移除目标或排空 rollout。
+
+Rollout 的 API scope 按具体命令区分，不能只凭这一表推断：定义及 targets 使用 topologies:write；open-access/close-access/drain/pause/resume 使用 runtimes:write；prepare/archive 及单 target 操作以 [Controller](../../../../src/GZCTF/Modules/TeamLab/Api/OpenTeamLabRolloutsController.cs) 为准。
 
 ### Runtime 与访问
 
