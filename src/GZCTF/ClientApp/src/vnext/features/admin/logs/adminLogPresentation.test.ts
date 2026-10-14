@@ -129,6 +129,7 @@ describe('readable log facts', () => {
   it('distinguishes absent request IP from explicit background events', () => {
     expect(adminLogIp({ ...log, ip: null }, text)).toBe('IP 未记录')
     expect(adminLogIp({ ...log, ip: null, actorKind: 'System' }, text)).toBe('后台事件，无请求 IP')
+    expect(adminLogIp({ ...log, ip: null, actorKind: 'Agent' }, text)).toBe('IP 未记录')
     expect(adminLogIp({ ...log, ip: null, actorKind: 'User' }, text)).toBe('IP 未记录')
     expect(adminLogIp(log, text)).toBe('10.24.0.27')
   })
