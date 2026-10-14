@@ -35,7 +35,17 @@ function isLogEntry(value: unknown): value is AdminLogEntry {
     isOptionalString(value.deploymentTicketId) &&
     isOptionalString(value.resourceType) &&
     isOptionalString(value.resourceId) &&
-    isOptionalString(value.resourceDisplayName)
+    isOptionalString(value.resourceDisplayName) &&
+    isOptionalString(value.actorKind) &&
+    isOptionalString(value.actorUserId) &&
+    isOptionalString(value.actorDisplayName) &&
+    (value.currentDisplayNames == null ||
+      (Array.isArray(value.currentDisplayNames) &&
+        value.currentDisplayNames.every((item) => typeof item === 'string'))) &&
+    isOptionalString(value.logger) &&
+    isOptionalString(value.outcome) &&
+    (value.retryable == null || typeof value.retryable === 'boolean') &&
+    (value.detail == null || isRecord(value.detail))
   )
 }
 
