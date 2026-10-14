@@ -17,6 +17,8 @@
 
 主站管理日志 UI 在 `src/GZCTF/ClientApp/src/vnext/features/admin/logs/`；TeamLab 会话证据由 TeamLabRemoteAuditService 管理，扩展到命令审计时同步更新安全与存储契约。通用事件分类见 [事件契约](../../architecture/event-taxonomy.md)。
 
+管理日志的请求身份由认证后的 `RequestLogContextMiddleware` 和可信连接地址记录；后台事件不借用资源所有者或用户最近登录 IP。结构化 writer 同时保存精确 outcome、可重试性和脱敏名称快照；名称缺失时由批量 display query 补全现存资源名称，并以 `currentDisplayNames` 的 actor/node/resource 项标识当前名称，原始 name 保留。历史记录的 actor、IP 和 outcome 不按关联 ID 推断。无明确结果的普通日志不默认成功；管理写请求使用实际 action result 状态，202 表示受理。数据库日志与实时推送共用 `LogMessageModel.FromLogModel` 投影。
+
 ## 新增一种异步操作
 
 1. 在业务 Application 中完成权限、资源状态和请求规范化，使用 IdempotencyService。
@@ -35,5 +37,6 @@ worker 当前常量为并发批次 8、最大尝试 5、租约 30 秒、10 秒�
 | worker/租约/handler | `UnitTests/Services/ApiOperationWorkerTests.cs`；`src/GZCTF.Integration.Test/Tests/Api/ApiOperationWorkerDirectTests.cs`、`ApiOperationHandlerResolutionTests.cs` |
 | 持久化与幂等 | `Tests/Api/ApiOperationPersistenceTests.cs`、`ApiOperationWorkerMinimalTests.cs` |
 | 业务集成与请求审计 | `Tests/Api/OpenImageApiTests.cs`、`OpenTeamLabOperationsApiTests.cs`；`Base/ExternalApiAuditAssertions.cs` |
+| 日志身份、名称与结果 | `UnitTests/Observability/LoggingObservabilityTests.cs`、`AdminMutationAuditTests.cs`；`Tests/Database/LogIdentityMigrationTests.cs` 验证 PostgreSQL 分区加列与备份恢复 |
 
 审计日志、请求摘要和 result 都不得保存 token、Flag、Cookie、密码、私钥、Registry 凭据或完整 user-data。测试快照同样脱敏。日志保留与故障排查走 [观测与审计恢复](../../operations/observability-audit-recovery.md)；数据库运维走 [治理手册](../../operations/database-governance-operations.md)。本次文档整理保留既有现场证据；worker 多进程故障和生产恢复的验收状态见 [当前状态](../../current-state.md)。

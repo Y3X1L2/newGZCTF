@@ -22,17 +22,22 @@ internal static class LogModelFactory
         logEvent.Properties.TryGetValue("ResourceType", out var resourceType);
         logEvent.Properties.TryGetValue("ResourceId", out var resourceId);
         logEvent.Properties.TryGetValue("ResourceDisplayName", out var resourceDisplayName);
+        logEvent.Properties.TryGetValue("ActorUserId", out var actorUserId);
+        logEvent.Properties.TryGetValue("ActorKind", out var actorKind);
+        logEvent.Properties.TryGetValue("Outcome", out var outcome);
+        logEvent.Properties.TryGetValue("Retryable", out var retryable);
+        logEvent.Properties.TryGetValue("DetailJson", out var detailJson);
 
         return new LogModel
         {
             TimeUtc = logEvent.Timestamp.ToUniversalTime(),
             Level = logEvent.Level.ToString(),
             Message = logEvent.RenderMessageWithExceptions(),
-            UserName = LogHelper.GetLogPropertyValue(userName, "Anonymous"),
+            UserName = LogHelper.GetLogPropertyValue<string>(userName, null),
             Logger = LogHelper.GetLogPropertyValue<string>(sourceContext, "Unknown") ?? string.Empty,
             RemoteIP = LogHelper.GetLogPropertyValue<IPAddress>(ip, null),
             Status = logEvent.Exception is null
-                ? LogHelper.GetLogPropertyValue(status, TaskStatus.Success)
+                ? LogHelper.GetLogPropertyValue<TaskStatus?>(status, null)
                 : TaskStatus.Failed,
             Exception = logEvent.Exception?.ToString(),
             CorrelationId = LogHelper.GetLogPropertyValue<Guid?>(correlationId, null),
@@ -45,7 +50,12 @@ internal static class LogModelFactory
             DeploymentTicketId = LogHelper.GetLogPropertyValue<Guid?>(deploymentTicketId, null),
             ResourceType = LogHelper.GetLogPropertyValue<string>(resourceType, null),
             ResourceId = LogHelper.GetLogPropertyValue<string>(resourceId, null),
-            ResourceDisplayName = LogHelper.GetLogPropertyValue<string>(resourceDisplayName, null)
+            ResourceDisplayName = LogHelper.GetLogPropertyValue<string>(resourceDisplayName, null),
+            ActorUserId = LogHelper.GetLogPropertyValue<Guid?>(actorUserId, null),
+            ActorKind = LogHelper.GetLogPropertyValue<string>(actorKind, null),
+            Outcome = LogHelper.GetLogPropertyValue<string>(outcome, null),
+            Retryable = LogHelper.GetLogPropertyValue<bool?>(retryable, null),
+            DetailJson = LogHelper.GetLogPropertyValue<string>(detailJson, null)
         };
     }
 }
