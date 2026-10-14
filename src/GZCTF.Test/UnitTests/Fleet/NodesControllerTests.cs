@@ -681,8 +681,11 @@ public class NodesControllerTests
         }));
 
         Assert.Equal(NodeCapability.Docker, node.Capabilities);
-        Assert.Equal(OperationalEventCodes.Node.CapabilityChanged,
-            (await context.OperationalEvents.SingleAsync()).EventCode);
+        var capabilityEvent = await context.OperationalEvents.SingleAsync();
+        Assert.Equal(OperationalEventCodes.Node.CapabilityChanged, capabilityEvent.EventCode);
+        Assert.Null(capabilityEvent.ActorUserId);
+        using var detail = JsonDocument.Parse(capabilityEvent.DetailJson!);
+        Assert.Equal("Agent", detail.RootElement.GetProperty("actorKind").GetString());
 
         Assert.IsType<OkObjectResult>(await controller.Heartbeat(node.Id, new HeartbeatRequest
         {

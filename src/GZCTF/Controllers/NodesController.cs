@@ -763,7 +763,7 @@ public class NodesController : ControllerBase
                     ["previousStatus"] = previousCapabilities.ToString(),
                     ["currentStatus"] = node.Capabilities.ToString(),
                     ["capability"] = node.CapabilityHash ?? previousCapabilityHash
-                }));
+                }) with { ActorKind = "Agent" });
         }
         if (stateChanged)
             await _context.SaveChangesAsync(HttpContext.RequestAborted);
