@@ -105,7 +105,7 @@ export function adminLogObject(log: AdminLogEntry, text: LogText) {
 
 export function adminLogIp(log: AdminLogEntry, text: LogText) {
   if (log.ip) return log.ip
-  return text(['system', 'agent'].includes(log.actorKind?.toLowerCase() || '') ? 'ip_background' : 'ip_unrecorded')
+  return text(log.actorKind?.toLowerCase() === 'system' ? 'ip_background' : 'ip_unrecorded')
 }
 
 export function adminLogErrorCategory(log: AdminLogEntry, text: LogText) {
