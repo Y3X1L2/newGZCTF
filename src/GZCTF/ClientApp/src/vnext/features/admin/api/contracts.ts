@@ -273,6 +273,14 @@ export interface AdminLogEntry {
   resourceType?: string | null
   resourceId?: string | null
   resourceDisplayName?: string | null
+  actorKind?: string | null
+  actorUserId?: string | null
+  actorDisplayName?: string | null
+  currentDisplayNames?: string[] | null
+  logger?: string | null
+  outcome?: string | null
+  retryable?: boolean | null
+  detail?: Record<string, unknown> | null
 }
 
 export interface AdminLogPage {
