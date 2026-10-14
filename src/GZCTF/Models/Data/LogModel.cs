@@ -58,4 +58,17 @@ public class LogModel
 
     [MaxLength(256)]
     public string? ResourceDisplayName { get; set; }
+
+    public Guid? ActorUserId { get; set; }
+
+    [MaxLength(32)]
+    public string? ActorKind { get; set; }
+
+    [MaxLength(32)]
+    public string? Outcome { get; set; }
+
+    public bool? Retryable { get; set; }
+
+    [MaxLength(8192)]
+    public string? DetailJson { get; set; }
 }

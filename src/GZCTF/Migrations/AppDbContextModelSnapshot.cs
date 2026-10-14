@@ -1906,11 +1906,22 @@ namespace GZCTF.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
 
+                    b.Property<string>("ActorKind")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<Guid?>("ActorUserId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid?>("CorrelationId")
                         .HasColumnType("uuid");
 
                     b.Property<Guid?>("DeploymentTicketId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("DetailJson")
+                        .HasMaxLength(8192)
+                        .HasColumnType("character varying(8192)");
 
                     b.Property<string>("ErrorCategory")
                         .HasMaxLength(64)
@@ -1941,6 +1952,10 @@ namespace GZCTF.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("Outcome")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
                     b.Property<IPAddress>("RemoteIP")
                         .HasColumnType("inet");
 
@@ -1955,6 +1970,9 @@ namespace GZCTF.Migrations
                     b.Property<string>("ResourceType")
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
+
+                    b.Property<bool?>("Retryable")
+                        .HasColumnType("boolean");
 
                     b.Property<string>("Status")
                         .HasMaxLength(10)
@@ -4213,8 +4231,8 @@ namespace GZCTF.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<string>("DetailJson")
-                        .HasMaxLength(4096)
-                        .HasColumnType("character varying(4096)");
+                        .HasMaxLength(8192)
+                        .HasColumnType("character varying(8192)");
 
                     b.Property<byte?>("ErrorCategory")
                         .HasColumnType("smallint");

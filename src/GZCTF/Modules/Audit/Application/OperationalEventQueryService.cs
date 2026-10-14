@@ -273,15 +273,17 @@ public sealed class OperationalEventQueryService(AppDbContext context)
         public OperationalEventLabels For(OperationalEvent item)
         {
             var challenge = ResolveChallenge(item);
+            var snapshots = ParseDetail(item.DetailJson);
+            string? Snapshot(string key) => snapshots?.GetValueOrDefault(key) as string;
             return new OperationalEventLabels(
-                item.ActorUserId is { } actorId ? Users.GetValueOrDefault(actorId) : null,
+                Snapshot("actorDisplayName") ?? (item.ActorUserId is { } actorId ? Users.GetValueOrDefault(actorId) : null),
                 item.OwnerUserId is { } ownerId ? Users.GetValueOrDefault(ownerId) : null,
                 item.OwnerTeamId is { } teamId ? Teams.GetValueOrDefault(teamId) : null,
                 item.GameId is { } gameId ? Games.GetValueOrDefault(gameId) : null,
                 item.CourseId is { } courseId ? Courses.GetValueOrDefault(courseId) : null,
                 challenge,
                 item.ImageTemplateId is { } templateId ? Templates.GetValueOrDefault(templateId) : null,
-                item.WorkerNodeId is { } nodeId ? Nodes.GetValueOrDefault(nodeId) : null,
+                Snapshot("workerNodeName") ?? (item.WorkerNodeId is { } nodeId ? Nodes.GetValueOrDefault(nodeId) : null),
                 item.DeploymentTicketId is { } ticketId ? Tickets.GetValueOrDefault(ticketId) : null,
                 item.TeamLabRuntimeId is { } runtimeId ? Runtimes.GetValueOrDefault(runtimeId) : null,
                 item.VmInstanceId is { } vmId ? Vms.GetValueOrDefault(vmId) : null,
