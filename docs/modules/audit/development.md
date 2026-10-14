@@ -17,6 +17,25 @@
 
 主站管理日志 UI 在 `src/GZCTF/ClientApp/src/vnext/features/admin/logs/`；TeamLab 会话证据由 TeamLabRemoteAuditService 管理，扩展到命令审计时同步更新安全与存储契约。通用事件分类见 [事件契约](../../architecture/event-taxonomy.md)。
 
+## 管理日志读写与呈现
+
+结构化事件写入 `OperationalEvent` 后派生系统日志；普通应用日志经相同 factory 转为 `LogModel`，数据库 sink 和实时 sink 共享字段转换。`/api/admin/logs` 读取 Logs，不能用其 30 天保留期代替完整的 180 天结构化事件历史。
+
+| 修改位置 | 职责 |
+| --- | --- |
+| [事件 writer](../../../src/GZCTF/Modules/Audit/Infrastructure/EfOperationalEventWriter.cs) | 校验事件、脱敏、保留可信身份与对象快照，并传递原始 outcome |
+| [日志 factory](../../../src/GZCTF/Extensions/LogModelFactory.cs) / [响应模型](../../../src/GZCTF/Models/Request/Admin/LogMessageModel.cs) | 统一持久化与实时字段；没有结果时保持未知，不默认 Success |
+| [日志仓储](../../../src/GZCTF/Repositories/LogRepository.cs) | 有界查询、游标分页与名称补全；不按 correlation 猜测历史操作者 |
+| [公开名称查询](../../../src/GZCTF/Modules/Audit/Contracts/IOperationalLogDisplayQuery.cs) / [全站显示投影](../../../src/GZCTF/Infrastructure/Observability/EfOperationalLogDisplayQuery.cs) | 每页最多 200 条的批量只读名称补全；只修改本次响应 DTO，不写业务实体，不参与权限、调度或恢复决策 |
+| [日志 adapter](../../../src/GZCTF/ClientApp/src/vnext/features/admin/api/adminLogApi.ts) | 响应归一化和实时消息转换，页面不直接操作生成 API |
+| [可读呈现](../../../src/GZCTF/ClientApp/src/vnext/features/admin/logs/adminLogPresentation.ts) | 动作、身份、对象、结果与诊断语义；机器代码保留在技术信息 |
+
+新增事件仍先登记稳定 code，再补前端对应的中英文动作名称；可读文字不参与业务状态判断。管理 mutation 的 operation 用于区分具体动作，未知事件/动作保留原文且采用保守标题，不从文本猜测成功。
+
+名称查询属于全站展示投影，通过 Audit 的公开 query 端口调用。保留原始 `name` 与已记录快照，仅补展示字段；`currentDisplayNames` 的 actor/node/resource 标记告知页面哪些名称来自当前对象。查询不使用日志正文、IP 或 detail 推断资源，泛化的 challenge ID 不猜题库归属；未找到名字时显示真实缺失状态。
+
+修改日志时覆盖：请求与后台身份、IP 缺失、快照优先与对象删除、Observed/失败/受阻/取消、未知事件、历史错误默认值、错误区条件展示、连续实时消息及刷新后的去重。日志新增持久字段必须同步模型、迁移、快照、DTO 和生成客户端；迁移在隔离 PostgreSQL 验证，不修改生产历史记录。
+
 ## 新增一种异步操作
 
 1. 在业务 Application 中完成权限、资源状态和请求规范化，使用 IdempotencyService。
