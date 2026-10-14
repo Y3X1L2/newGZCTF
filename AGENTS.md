@@ -1,24 +1,24 @@
 # YINYU 项目协作规范
 
-本文件适用于整个仓库。开发者、Codex 和其他 AI 在开始任务前必须先阅读本文件。它只保存长期稳定的规则；会变化的提交、部署和进度信息维护在 `docs/development/current-state.md`。
+本文件适用于整个仓库。开发者、Codex 和其他 AI 在开始任务前必须先阅读本文件。它只保存长期稳定的规则；会变化的提交、部署和进度信息维护在 `docs/current-state.md`。
 
 ## 1. 必读顺序
 
 1. `AGENTS.md`
-2. `docs/development/current-state.md`
+2. `docs/current-state.md`
 3. `docs/README.md`
-4. `README.md`
-5. `docs/platform-commercialization-master-plan.md`
-6. 与任务直接相关的模块文档
+4. 与任务直接相关的模块文档或指定任务交接。
 
-涉及架构、前端或部署时还必须阅读：
+首次本地启动补读 `README.md`；产品范围或架构调整补读 `docs/architecture/platform.md`。按任务选读，不要求每次通读产品概览、所有专项文档与历史交接。
 
-- 架构边界：`docs/commercialization/module-boundary-map.md`
-- API 标准：`docs/commercialization/external-api-standard.md`
-- 前端边界：`docs/commercialization/frontend-component-boundary.md`
-- 前端视觉契约：`docs/commercialization/frontend-style-token-contract.md`
-- vNext 设计与开发边界：`docs/yinyu-vnext-development-guardrails.md`
-- 组网/TeamLab 执行面：`docs/development/teamlab-networking-best-practices.md`
+按影响范围补读以下契约（只选相关项）：
+
+- 架构边界：`docs/architecture/module-boundary-map.md`
+- API 标准：`docs/architecture/external-api-standard.md`
+- 前端边界：`docs/architecture/frontend/component-boundary.md`
+- 前端视觉契约：`docs/architecture/frontend/style-tokens.md`
+- vNext 设计与开发边界：`docs/architecture/frontend/development.md`
+- 组网/TeamLab 执行面：`docs/modules/teamlab/reference/networking-practices.md`
 - 生产发布：`docs/operations/vnext-maintenance-window-rollout.md`
 
 `docs/archive/` 只保存历史材料，不是当前设计或实现依据。历史计划中的路径、分支、测试数量和部署状态不得直接当作当前事实。
@@ -30,7 +30,7 @@
 1. 当前运行行为和真实请求/日志
 2. 当前 `main` 源码与数据库迁移
 3. 当前自动化测试
-4. `docs/development/current-state.md`
+4. `docs/current-state.md`
 5. 现行架构、契约和阶段文档
 6. README、历史记录和归档文档
 
@@ -41,7 +41,7 @@
 - 主仓库：`https://github.com/Y3X1L2/newGZCTF.git`
 - 稳定分支：`main`
 - 后端：`.NET 10 / ASP.NET Core / EF Core / PostgreSQL / Redis`
-- 前端：`React 19 / TypeScript / Vite / Mantine / pnpm`
+- 前端：`React 19 / TypeScript / Vite / pnpm；正式 vNext 使用本仓库 shared/design，不新增 Mantine 依赖`
 - 执行面：`GZCTF.Agent / Docker / KVM / libvirt / Guacamole`
 - 架构形态：模块化单体主站加独立 Agent 执行面
 
@@ -102,6 +102,7 @@ git log -5 --oneline --decorate
 - 从最新 `origin/main` 创建 `codex/<task-name>` 分支；小型紧急修复也要保持提交边界清晰。
 - 不覆盖或回滚他人的未提交改动，不使用 force push，不改写已共享历史。
 - 一个提交只表达一个可验证意图；源码、测试和必要文档一起提交。
+- 复杂任务首个有效提交后创建 Draft PR，持续更新，验证完成再转 Ready；小改动可验证后直接创建普通 PR。
 - 合并前检查远端是否前进，使用快进、正常 merge 或经过审查的 rebase，不覆盖远端。
 - 禁止把本地归档、发布制品、数据库副本、镜像、凭据和测试 Cookie 提交到仓库。
 
@@ -110,15 +111,13 @@ git log -5 --oneline --decorate
 - 每个功能、缺陷或文档任务使用一个 `codex/<task-name>` 分支；任务分支从最新 `origin/main` 创建。
 - 并行任务必须使用不同的 worktree 和不同的分支。两个 AI 不得共用同一工作目录，也不得同时检出同一分支。
 - 主工作区可以继续用于一个任务；额外任务使用 `git worktree add` 创建到仓库外的目录。
-- 任务完成后先提交并推送分支，经过审查后合并到 `main`；确认合并成功且不再需要时，删除远端和本地任务分支，并执行 `git worktree remove` 清理对应 worktree。
+- 任务完成后先提交并推送分支；审查通过且有合并授权后合入 `main`，部署仍需明确授权；确认合并成功且不再需要时，删除远端和本地任务分支，并执行 `git worktree remove` 清理对应 worktree。
 - 删除分支前必须确认：工作树干净、提交已推送、合并提交已在 `main`、没有未交接的修改。未合并任务不得删除分支。
 
 标准并行流程：
 
 ```powershell
 git fetch origin --prune
-git switch main
-git pull --ff-only
 git worktree add ..\newGZCTF-feature -b codex/feature-a origin/main
 git worktree add ..\newGZCTF-bugfix -b codex/bugfix-b origin/main
 ```
@@ -173,7 +172,7 @@ dotnet test src/GZCTF.Integration.Test/GZCTF.Integration.Test.csproj -c Release
 - 小改动可以先跑定向测试，但最终报告必须明确哪些全量测试未执行。
 - 数据迁移必须在 PostgreSQL Testcontainers 或生产数据库副本上验证升级和恢复。
 - Docker、VM、镜像、Agent、TeamLab、AWDP 和公网入口不能只靠 mock 判断完成；真实基础设施验收单独记录。
-- AWDP 自动操作可能触发本机安全软件时，保留自动化代码门禁，把真实攻击/修补流程交给授权测试人员按 `docs/yinyu-awdp-manual-acceptance.md` 执行。
+- AWDP 自动操作可能触发本机安全软件时，保留自动化代码门禁，把真实攻击/修补流程交给授权测试人员按 `docs/modules/awdp/guides/manual-acceptance.md` 执行。
 
 ## 8. 部署规则
 
@@ -192,14 +191,25 @@ dotnet test src/GZCTF.Integration.Test/GZCTF.Integration.Test.csproj -c Release
 1. 读取本文件和 `current-state.md`。
 2. 核对 Git、远端和用户最新要求，不延续聊天中的过时假设。
 3. 对照当前代码验证任务涉及的真实入口、API 和测试。
-4. 大任务先建立可落盘、可更新的计划文档；小修复直接实现并验证。
+4. 复杂或跨会话任务用一个 `docs/records/YYYY-MM-DD-<task>.md` 记录目标、计划、进度、证据和下一步；小修复用 PR/提交说明，不机械新增计划文件。
+5. 并行任务先确定集成负责人、文件/模块所有权与合入顺序。契约、生成客户端、迁移快照先协调；各任务只改自己的工作区和记录。共享状态由集成/发布负责人合入时统一更新，避免多个任务追加流水。
 
 任务结束：
 
 1. 记录最终提交、改动范围和测试结果。
 2. 如部署，记录环境、发布物身份、备份和冒烟结果。
-3. 如项目状态发生变化，更新 `docs/development/current-state.md`。
-4. 未完成事项写入现有缺口文档或任务交接记录，不只留在聊天中。
-5. 使用 `docs/development/task-handoff-template.md` 交接跨会话或跨人员工作。
+3. 项目基线、能力或重要缺口变化时，由集成/发布负责人替换 `docs/current-state.md` 对应事实；无关小任务不更新。该页目标 120 行以内，完整测试和部署过程链接到任务记录。
+4. 未完成事项集中到 `docs/backlog.md` 或既有专项缺口文档，任务记录引用；写清验证边界，关闭要有证据，不重复维护多个待办清单。
+5. 使用 `docs/records/task-template.md` 交接跨会话或跨人员工作。
 
 `current-state.md` 只记录已经证实的当前事实。不要写计划中的功能为“已完成”，不要复制整段聊天记录，也不要保存凭据。
+
+## 10. 文档生命周期
+
+- 现行说明使用简体中文；代码标识、命令、API 路径和协议名保留原文。
+- `docs/README.md` 是唯一导航；规则在本文件，当前事实在 current-state，任务过程在 handoffs，未决事项在 backlog，稳定行为在模块/契约/操作手册。相同事实只维护一处，其余引用。
+- 完成任务后先回写现行说明和未决事项，再封存交接。被完整替代的计划删除，唯一历史证据才归档；契约、运维脚本、当前发布/备份/回退证明不得按日期批量删除。
+- 文档变更执行 `python scripts/validation/check-documentation.py`、`python scripts/validation/generate-module-index.py --check`、`python scripts/validation/documentation-impact.py --base origin/main` 与 `git diff --check`；删除还须搜索旧路径引用。链接检查不替代 API、源码和现场核验。
+- 从 Git 历史定向恢复旧文档；归档与任务记录中的一次性授权不适用于后续任务。
+
+文档的用途分层、拆分条件、catalog维护和PR复核格式见 `docs/architecture/documentation.md`。development超过200行只提醒，按独立链路拆分，不能为过门禁删关键条件。
