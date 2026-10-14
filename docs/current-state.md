@@ -1,6 +1,6 @@
 # YINYU 当前开发状态
 
-整理日期：2026-10-14。本轮源码基线：`origin/main 9bc3db66`。生产事实引用10月11日已提交的发布记录，本轮没有重新连接服务器。
+整理日期：2026-10-14。核验主线：`origin/main fe35746e`。生产事实引用10月11日已提交的发布记录，本轮没有重新连接服务器。
 本页只保留当前摘要，更新时替换旧事实；完整测试、部署过程和授权边界放在任务记录中。目标120行以内，超长时提炼摘要。
 
 ## 代码与部署基线
@@ -44,7 +44,7 @@
 
 ## 协作与任务入口
 
-待审查：[模块文档与自动维护](records/2026-10-14-documentation-implementation.md)，[Draft PR #28](https://github.com/Y3X1L2/newGZCTF/pull/28)。本分支已完成11个功能入口、专题拆分与自动检查，等待PR审查合入；定期Actions巡检随默认分支配置启用。
+已合入：[模块文档与自动维护](records/2026-10-14-documentation-implementation.md)，[PR #28](https://github.com/Y3X1L2/newGZCTF/pull/28) 于2026-10-14北京时间08:36合并为 `fe35746e`。11个功能入口、专题与自动检查已进入主线，主线Documentation/Quality和手动巡检均通过；定期巡检配置已启用，每周一北京时间10:23运行。
 
 1. [AGENTS.md](../AGENTS.md)：规则、Git 隔离、验证和发布边界。
 2. [文档导航](README.md)：按任务选择契约、模块或操作手册。

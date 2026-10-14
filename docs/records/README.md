@@ -4,7 +4,7 @@
 
 | 用途 | 记录 |
 | --- | --- |
-| 进行中：模块文档与自动维护 | [2026-10-14 实施记录](2026-10-14-documentation-implementation.md) |
+| 已完成：模块文档与自动维护及合并核验 | [2026-10-14 实施记录](2026-10-14-documentation-implementation.md) |
 | 最新已知主站/前端发布、备份与回退 | [2026-10-11 培训动态设置与分页](2026-10-11-training-quota-settings.md) |
 | 培训独立额度与实例隔离修复 | [2026-10-11 主线修复](2026-10-11-training-runtime-mainline.md) |
 | TeamLab删除边界与Agent身份 | [2026-10-10 删除发布](2026-10-10-teamlab-delete-rollout.md) |
