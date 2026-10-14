@@ -25,6 +25,8 @@ Redis 观测缓存与 PostgreSQL 回退实现管理观测读路径，数据库�
 - Agent Docker 在 [Docker 执行服务](../../../src/GZCTF.Agent/Services/DockerService.cs)，TeamLab 网络在 Services/TeamLab/；所有调用经机器接口鉴权与能力检查。
 - 前端节点页面在 `ClientApp/src/vnext/features/admin/nodes/`，玩家实例展示在 `features/challenge-runtime/`；API adapter 在对应 feature 目录。
 
+节点心跳的完整 manifest/hash 保留实测可用磁盘，容量变化仍更新；日志中的 `node.capability.changed` 只表示稳定能力变化，不再随磁盘波动或 Fabric 健康变化产生。能力比较和协议 hash 的职责见 [能力协商](../../architecture/agent-capability-protocol.md)；修改时同时验证容量刷新与事件触发，不能为降噪停掉真实容量更新。
+
 ## 修改边界
 
 运行请求携带规范化资源需求与身份，计分、课程和 Flag 判定由业务模块负责。Docker/KVM 独立适配；容量判断同时看预留与 inventory，在线状态与资源余量分别检查。取消、恢复、销毁按资源归属和 generation 处理，数据库保留待处理任务，Redis 唤醒可由轮询补充。

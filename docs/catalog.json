@@ -263,6 +263,12 @@
         "src/GZCTF/Modules/Audit/**",
         "src/GZCTF/Controllers/OperationsController.cs",
         "src/GZCTF/Repositories/LogRepository.cs",
+        "src/GZCTF/Infrastructure/Observability/**",
+        "src/GZCTF/Extensions/LogModelFactory.cs",
+        "src/GZCTF/Utils/LogHelper.cs",
+        "src/GZCTF/Models/Data/LogModel.cs",
+        "src/GZCTF.Test/UnitTests/Observability/**",
+        "src/GZCTF.Integration.Test/Tests/Database/LogIdentityMigrationTests.cs",
         "src/GZCTF/ClientApp/src/vnext/features/admin/logs/**"
       ],
       "docs": [

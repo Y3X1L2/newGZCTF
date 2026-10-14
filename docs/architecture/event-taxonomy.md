@@ -310,3 +310,11 @@ Generic mutation code:
 - 事件聚合不复制 message/detail，只聚合 event code、outcome、error category、node 和时间桶。
 - 删除业务对象不删除事件；display snapshot 保留。
 - 任何 retention 清理必须写 `DataGovernanceRun`，不得静默删除。
+
+## 17. 管理日志投影
+
+`/admin/logs` 读取系统日志，结构化事件在派生日志时保留原始 outcome、可信 actor、对象快照及诊断信息。未指定结果不默认成功；Observed 不等于 Succeeded，202 受理不等于异步操作完成。旧结构化日志缺少 outcome 时，其旧 Success 默认值不能充当结果证据。
+
+writer 管理的 `actorKind`、`actorDisplayName`、`remoteIp`、`workerNodeName` 是受控上下文元数据，覆盖同名 detail 输入；来源只取明确 draft 身份或匹配的可信请求。Owner 不替代 actor，后台事件不继承无关请求身份，IP 无记录时保持缺失。显示名称和元数据按写入规则脱敏，不接受任意请求头、正文或异常对象。
+
+系统日志和实时推送是诊断投影，可能先于业务事务提交产生；是否最终生效仍查持久事件和业务状态。名称补全只读当前对象，优先保留写入快照，不按 correlation 将不同事件的身份、IP 或结果混填。
