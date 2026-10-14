@@ -46,3 +46,16 @@ describe('admin log buffer', () => {
     expect(result.dropped).toBe(1)
   })
 })
+
+it('retains consecutive SignalR events with id zero and deduplicates only identical payloads', () => {
+  const first = { ...createLog(1), id: 0 }
+  const second = { ...createLog(2), id: 0 }
+  const third = { ...createLog(3), id: 0 }
+  let result = appendAdminLogBuffer([], first)
+  result = appendAdminLogBuffer(result.items, second)
+  result = appendAdminLogBuffer(result.items, third)
+  expect(result.items).toHaveLength(3)
+  expect(appendAdminLogBuffer(result.items, third).items).toBe(result.items)
+  const differentOutcome = { ...third, outcome: 'Failed' }
+  expect(appendAdminLogBuffer(result.items, differentOutcome).items).toHaveLength(4)
+})

@@ -1,10 +1,11 @@
 import { AlertTriangle, ArrowRight, RefreshCw } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 import { ActionButton } from '../../../shared/Interaction'
 import { DataState } from '../../../shared/Primitives'
 import type { AdminLogEntry, DeploymentTask, GlobalInstanceItem, NodeSummary } from '../api'
 import { instanceContextLabel, instanceKindLabel, instanceStatusMeta } from '../instances/instancePresentation'
-import { adminLogResource, adminLogSource } from '../logs/adminLogPresentation'
+import { adminLogActor, adminLogTitle } from '../logs/adminLogPresentation'
 import { nodeStatusMeta } from '../nodes/useAdminNodes'
 import { deploymentStageLabel, deploymentStatusMeta } from '../queue/deploymentQueuePresentation'
 import { formatAdminDate } from '../shared/adminFormat'
@@ -103,6 +104,8 @@ function InstanceRows({ instances }: { instances: GlobalInstanceItem[] }) {
 }
 
 function ErrorRows({ logs }: { logs: AdminLogEntry[] }) {
+  const { t } = useTranslation('admin')
+  const text = (key: string) => t(`logs.${key}`)
   if (!logs.length) return <DataState description="最近查询范围内没有 Error 日志。" title="没有最近错误" />
   return (
     <div className={styles.errorRows}>
@@ -110,8 +113,8 @@ function ErrorRows({ logs }: { logs: AdminLogEntry[] }) {
         <Link className={styles.errorRow} key={log.id ?? `${log.time}:${index}`} to={`/admin/logs?level=Error`}>
           <AlertTriangle size={16} />
           <div className={styles.rowIdentity}>
-            <strong>{log.msg || adminLogResource(log)}</strong>
-            <small>{adminLogSource(log)} · {formatAdminDate(log.time)}</small>
+            <strong>{adminLogTitle(log, text)}</strong>
+            <small>{adminLogActor(log, text)} · {formatAdminDate(log.time)}</small>
           </div>
         </Link>
       ))}
