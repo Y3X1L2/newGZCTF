@@ -6,7 +6,6 @@ using GZCTF.Extensions.Startup;
 using GZCTF.Models.Internal;
 using Microsoft.Extensions.Options;
 using Serilog;
-using Serilog.Context;
 using Serilog.Events;
 using Serilog.Filters;
 using Serilog.Sinks.File.Archive;
@@ -36,9 +35,9 @@ public static class LogHelper
         /// <param name="msg">message</param>
         /// <param name="status">task status</param>
         /// <param name="level">log level</param>
-        public void SystemLog(string msg, TaskStatus status = TaskStatus.Success,
+        public void SystemLog(string msg, TaskStatus? status = null,
             LogLevel? level = null) =>
-            Log(logger, msg, "System", null, status, level ?? LogLevel.Information);
+            Log(logger, msg, "System", null, status, level ?? LogLevel.Information, "System");
 
         /// <summary>
         /// Log an error, no formatting
@@ -63,8 +62,12 @@ public static class LogHelper
         /// <param name="level">log level</param>
         /// <param name="user">the user</param>
         public void Log(string msg, UserInfo? user, TaskStatus status,
-            LogLevel? level = null) =>
-            Log(logger, msg, user?.UserName ?? "Anonymous", user?.IP, status, level);
+            LogLevel? level = null)
+        {
+            using var scope = logger.BeginScope(new Dictionary<string, object?> { ["ActorUserId"] = user?.Id });
+            Log(logger, msg, user?.UserName, null, status, level,
+                user is null ? "Unknown" : "User");
+        }
 
         /// <summary>
         /// Record a log
@@ -76,9 +79,14 @@ public static class LogHelper
         public void Log(string msg, HttpContext? context, TaskStatus status,
             LogLevel? level = null)
         {
-            var username = context?.User.Identity?.Name ?? "Anonymous";
-
-            Log(logger, msg, username, context?.Connection.RemoteIpAddress, status, level);
+            var username = context?.User.Identity?.Name;
+            var actorId = Guid.TryParse(context?.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value,
+                out var id) ? id : (Guid?)null;
+            using var scope = logger.BeginScope(new Dictionary<string, object?> { ["ActorUserId"] = actorId });
+            Log(logger, msg, username, context?.Connection.RemoteIpAddress, status, level,
+                context is null ? "Unknown" : context.User.HasClaim(claim =>
+                    claim.Type == GZCTF.Modules.Identity.Application.ApiTokenClaimTypes.TokenId) ? "ApiToken" :
+                    context.User.Identity?.IsAuthenticated == true ? "User" : "Anonymous");
         }
 
         /// <summary>
@@ -90,7 +98,7 @@ public static class LogHelper
         /// <param name="ip">ip</param>
         public void Log(string msg, IPAddress? ip, TaskStatus status,
             LogLevel? level = null)
-            => Log(logger, msg, "Anonymous", ip, status, level);
+            => Log(logger, msg, null, ip, status, level, "Anonymous");
 
         /// <summary>
         /// Record a log
@@ -100,15 +108,20 @@ public static class LogHelper
         /// <param name="level">log level</param>
         /// <param name="uname">user name</param>
         /// <param name="ip">ip</param>
-        public void Log(string msg, string uname, IPAddress? ip, TaskStatus status,
-            LogLevel? level = null)
+        /// <param name="actorKind">explicit source of the log</param>
+        public void Log(string msg, string? uname, IPAddress? ip, TaskStatus? status,
+            LogLevel? level = null, string? actorKind = null)
         {
-            using (LogContext.PushProperty("UserName", uname))
-            using (LogContext.PushProperty("IP", ip))
-            using (LogContext.PushProperty("Status", status))
+            var properties = new Dictionary<string, object?>
             {
-                logger.Log(level ?? LogLevel.Information, "{msg:l}", msg);
-            }
+                ["ActorKind"] = actorKind ?? (uname is null ? "Unknown" : "User"),
+                ["UserName"] = uname,
+                ["Status"] = status
+            };
+            if (ip is not null || actorKind == "System") properties["IP"] = ip;
+            if (actorKind == "System") properties["ActorUserId"] = null;
+            using var scope = logger.BeginScope(properties);
+            logger.Log(level ?? LogLevel.Information, "{msg:l}", msg);
         }
     }
 

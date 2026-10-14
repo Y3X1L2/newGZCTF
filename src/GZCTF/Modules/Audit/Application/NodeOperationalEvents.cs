@@ -31,5 +31,6 @@ public static class NodeOperationalEvents
             SubjectDisplayName: node.Name,
             ResourceType: "worker-node",
             ResourceId: node.Id.ToString(),
-            ResourceDisplayName: node.Name);
+            ResourceDisplayName: node.Name,
+            WorkerNodeName: node.Name);
 }

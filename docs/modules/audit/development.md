@@ -23,6 +23,7 @@
 
 | 修改位置 | 职责 |
 | --- | --- |
+| [请求上下文](../../../src/GZCTF/Modules/Audit/Infrastructure/RequestLogContextMiddleware.cs) | 在认证后记录请求身份和可信连接地址，后台事件不借用用户最近登录 IP |
 | [事件 writer](../../../src/GZCTF/Modules/Audit/Infrastructure/EfOperationalEventWriter.cs) | 校验事件、脱敏、保留可信身份与对象快照，并传递原始 outcome |
 | [日志 factory](../../../src/GZCTF/Extensions/LogModelFactory.cs) / [响应模型](../../../src/GZCTF/Models/Request/Admin/LogMessageModel.cs) | 统一持久化与实时字段；没有结果时保持未知，不默认 Success |
 | [日志仓储](../../../src/GZCTF/Repositories/LogRepository.cs) | 有界查询、游标分页与名称补全；不按 correlation 猜测历史操作者 |
@@ -54,5 +55,6 @@ worker 当前常量为并发批次 8、最大尝试 5、租约 30 秒、10 秒�
 | worker/租约/handler | `UnitTests/Services/ApiOperationWorkerTests.cs`；`src/GZCTF.Integration.Test/Tests/Api/ApiOperationWorkerDirectTests.cs`、`ApiOperationHandlerResolutionTests.cs` |
 | 持久化与幂等 | `Tests/Api/ApiOperationPersistenceTests.cs`、`ApiOperationWorkerMinimalTests.cs` |
 | 业务集成与请求审计 | `Tests/Api/OpenImageApiTests.cs`、`OpenTeamLabOperationsApiTests.cs`；`Base/ExternalApiAuditAssertions.cs` |
+| 日志身份、名称与结果 | `UnitTests/Observability/LoggingObservabilityTests.cs`、`AdminMutationAuditTests.cs`；`Tests/Database/LogIdentityMigrationTests.cs` 验证 PostgreSQL 分区加列与备份恢复 |
 
 审计日志、请求摘要和 result 都不得保存 token、Flag、Cookie、密码、私钥、Registry 凭据或完整 user-data。测试快照同样脱敏。日志保留与故障排查走 [观测与审计恢复](../../operations/observability-audit-recovery.md)；数据库运维走 [治理手册](../../operations/database-governance-operations.md)。本次文档整理保留既有现场证据；worker 多进程故障和生产恢复的验收状态见 [当前状态](../../current-state.md)。

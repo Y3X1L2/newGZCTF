@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using GZCTF.Models;
 using GZCTF.Modules.Audit.Application;
 using GZCTF.Modules.Audit.Contracts;
 using GZCTF.Modules.Audit.Domain;
@@ -10,7 +11,8 @@ namespace GZCTF.Modules.Audit.Infrastructure;
 
 public sealed class EfOperationalEventWriter(
     AppDbContext context,
-    ILogger<EfOperationalEventWriter> logger) : IOperationalEventWriter
+    ILogger<EfOperationalEventWriter> logger,
+    IHttpContextAccessor? httpContextAccessor = null) : IOperationalEventWriter
 {
     private const int MaxMessageLength = 1024;
     private const int MaxDisplayNameLength = 256;
@@ -32,7 +34,8 @@ public sealed class EfOperationalEventWriter(
         "assetId", "protocol", "actorUserId", "auditFileId", "filePath", "destinationPath", "ticketId",
         "tail", "truncated", "logsAvailable",
         "protocolEventType", "protocolEventSource", "protocolEventOccurredAt",
-        "protocolEventParameterCount", "protocolEventParameters"
+        "protocolEventParameterCount", "protocolEventParameters",
+        "actorKind", "actorDisplayName", "remoteIp", "workerNodeName"
     };
     private static readonly string[] SensitiveFragments =
     [
@@ -51,7 +54,39 @@ public sealed class EfOperationalEventWriter(
     public OperationalEvent Append(OperationalEventDraft draft)
     {
         Validate(draft);
+        // Keep the caller's existing 4 KiB budget separate from bounded identity snapshots.
+        _ = SerializeDetail(draft.Detail);
         var correlationId = draft.CorrelationId ?? Guid.CreateVersion7();
+        var request = httpContextAccessor?.HttpContext;
+        var requestActorId = Guid.TryParse(request?.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value,
+            out var requestId) ? requestId : (Guid?)null;
+        var actorId = draft.ActorUserId ?? (draft.ActorKind is "System" or "Agent" ? null : requestActorId);
+        var requestMatchesActor = draft.ActorKind is not "System" and not "Agent" &&
+            (draft.ActorUserId is null || draft.ActorUserId == requestActorId);
+        var actorKind = draft.ActorKind ?? (actorId is not null ? "User" :
+            request is null ? "System" : request.User.Identity?.IsAuthenticated == true ? "User" : "Anonymous");
+        if (draft.ActorKind is null && requestMatchesActor && request?.User.HasClaim(claim =>
+                claim.Type == GZCTF.Modules.Identity.Application.ApiTokenClaimTypes.TokenId) == true)
+            actorKind = "ApiToken";
+        var actorName = draft.ActorDisplayName ??
+            (requestMatchesActor ? request?.User.Identity?.Name : null) ??
+            (actorKind == "System" ? "System" : null);
+        var ip = requestMatchesActor || draft.ActorKind == "Agent" ? request?.Connection.RemoteIpAddress : null;
+        var nodeName = draft.WorkerNodeName ??
+            (draft.ResourceType == "worker-node" ? draft.ResourceDisplayName : null);
+        var detail = draft.Detail?.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal)
+            ?? new Dictionary<string, object?>(StringComparer.Ordinal);
+        foreach (var key in detail.Keys.Where(key => key.Equals("actorUserId", StringComparison.OrdinalIgnoreCase) ||
+                     key.Equals("actorKind", StringComparison.OrdinalIgnoreCase) ||
+                     key.Equals("actorDisplayName", StringComparison.OrdinalIgnoreCase) ||
+                     key.Equals("remoteIp", StringComparison.OrdinalIgnoreCase) ||
+                     key.Equals("workerNodeName", StringComparison.OrdinalIgnoreCase)).ToArray())
+            detail.Remove(key);
+        if (actorId is not null) detail["actorUserId"] = actorId;
+        detail["actorKind"] = actorKind;
+        if (actorName is not null) detail["actorDisplayName"] = SanitizeText(actorName, Limits.MaxUserNameLength);
+        if (ip is not null) detail["remoteIp"] = ip.ToString();
+        if (nodeName is not null) detail["workerNodeName"] = SanitizeText(nodeName, 128);
         var entity = new OperationalEvent
         {
             OccurredAt = DateTimeOffset.UtcNow,
@@ -64,8 +99,8 @@ public sealed class EfOperationalEventWriter(
             ErrorCode = Trim(draft.ErrorCode, 128),
             Retryable = draft.Retryable,
             Message = SanitizeText(draft.Message, MaxMessageLength),
-            DetailJson = SerializeDetail(draft.Detail),
-            ActorUserId = draft.ActorUserId,
+            DetailJson = SerializeDetail(detail, 8192),
+            ActorUserId = actorId,
             OwnerUserId = draft.OwnerUserId,
             OwnerTeamId = draft.OwnerTeamId,
             GameId = draft.GameId,
@@ -78,15 +113,15 @@ public sealed class EfOperationalEventWriter(
             VmInstanceId = draft.VmInstanceId,
             SubjectType = Trim(draft.SubjectType, 64),
             SubjectId = Trim(draft.SubjectId, 128),
-            SubjectDisplayName = Trim(draft.SubjectDisplayName, MaxDisplayNameLength),
+            SubjectDisplayName = draft.SubjectDisplayName is null ? null : SanitizeText(draft.SubjectDisplayName, MaxDisplayNameLength),
             ResourceType = Trim(draft.ResourceType, 64),
             ResourceId = Trim(draft.ResourceId, 128),
-            ResourceDisplayName = Trim(draft.ResourceDisplayName, MaxDisplayNameLength)
+            ResourceDisplayName = draft.ResourceDisplayName is null ? null : SanitizeText(draft.ResourceDisplayName, MaxDisplayNameLength)
         };
 
         context.Set<OperationalEvent>().Add(entity);
         PlatformTelemetry.RecordEvent(entity.EventCode, entity.Outcome);
-        WriteStructuredLog(entity);
+        WriteStructuredLog(entity, actorKind, actorName, ip, nodeName);
         return entity;
     }
 
@@ -112,7 +147,8 @@ public sealed class EfOperationalEventWriter(
             throw new ArgumentException("Operational error category requires an error code.", nameof(draft));
     }
 
-    private static string? SerializeDetail(IReadOnlyDictionary<string, object?>? detail)
+    private static string? SerializeDetail(IReadOnlyDictionary<string, object?>? detail,
+        int maxLength = MaxDetailLength)
     {
         if (detail is null || detail.Count == 0)
             return null;
@@ -131,8 +167,8 @@ public sealed class EfOperationalEventWriter(
             item => SanitizeDetailValue(item.Value),
             StringComparer.Ordinal);
         var json = JsonSerializer.Serialize(sanitized);
-        if (json.Length > MaxDetailLength)
-            throw new ArgumentException($"Operational event detail exceeds {MaxDetailLength} characters.", nameof(detail));
+        if (json.Length > maxLength)
+            throw new ArgumentException($"Operational event detail exceeds {maxLength} characters.", nameof(detail));
         return json;
     }
 
@@ -143,7 +179,7 @@ public sealed class EfOperationalEventWriter(
         _ => value
     };
 
-    private static string SanitizeText(string value, int maxLength)
+    internal static string SanitizeText(string value, int maxLength)
     {
         var sanitized = BearerPattern.Replace(value, "Bearer [REDACTED]");
         sanitized = SensitiveAssignmentPattern.Replace(sanitized,
@@ -151,19 +187,37 @@ public sealed class EfOperationalEventWriter(
         return Trim(sanitized, maxLength) ?? string.Empty;
     }
 
-    private void WriteStructuredLog(OperationalEvent entity)
+    private void WriteStructuredLog(OperationalEvent entity, string actorKind, string? actorName,
+        System.Net.IPAddress? ip, string? nodeName)
     {
         using var scope = logger.BeginScope(new Dictionary<string, object?>
         {
             ["CorrelationId"] = entity.CorrelationId,
             ["TraceId"] = entity.TraceId,
             ["EventCode"] = entity.EventCode,
+            ["ActorUserId"] = entity.ActorUserId,
+            ["ActorKind"] = actorKind,
+            ["UserName"] = actorName is null ? null : SanitizeText(actorName, Limits.MaxUserNameLength),
+            ["IP"] = ip,
+            ["Outcome"] = entity.Outcome.ToString(),
+            ["Retryable"] = entity.ErrorCategory is null ? null : (bool?)entity.Retryable,
+            ["DetailJson"] = entity.DetailJson,
+            ["Status"] = entity.Outcome switch
+            {
+                OperationalEventOutcome.Started or OperationalEventOutcome.Pending => (TaskStatus?)TaskStatus.Pending,
+                OperationalEventOutcome.Blocked => TaskStatus.Degraded,
+                OperationalEventOutcome.Succeeded => TaskStatus.Success,
+                OperationalEventOutcome.Failed => TaskStatus.Failed,
+                _ => null
+            },
             ["ErrorCategory"] = entity.ErrorCategory?.ToString(),
             ["ErrorCode"] = entity.ErrorCode,
             ["WorkerNodeId"] = entity.WorkerNodeId,
+            ["WorkerNodeName"] = nodeName is null ? null : SanitizeText(nodeName, 128),
             ["DeploymentTicketId"] = entity.DeploymentTicketId,
             ["ResourceType"] = entity.ResourceType,
-            ["ResourceId"] = entity.ResourceId
+            ["ResourceId"] = entity.ResourceId,
+            ["ResourceDisplayName"] = entity.ResourceDisplayName
         });
         logger.Log(ToLogLevel(entity.Severity), "{OperationalEventMessage}", entity.Message);
     }

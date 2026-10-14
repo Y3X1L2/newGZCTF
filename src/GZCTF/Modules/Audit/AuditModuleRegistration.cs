@@ -1,5 +1,7 @@
 using GZCTF.Infrastructure.Api;
 using GZCTF.Modules.Audit.Application;
+using GZCTF.Modules.Audit.Contracts;
+using GZCTF.Infrastructure.Observability;
 using GZCTF.Modules.Audit.Infrastructure;
 using GZCTF.Modules.Identity.Application;
 using Microsoft.AspNetCore.Authorization;
@@ -11,6 +13,8 @@ public static class AuditModuleRegistration
 {
     public static IServiceCollection AddAuditModule(this IServiceCollection services)
     {
+        services.AddHttpContextAccessor();
+        services.AddScoped<IOperationalLogDisplayQuery, EfOperationalLogDisplayQuery>();
         services.AddScoped<IApiOperationStore, EfApiOperationStore>();
         services.AddScoped<IdempotencyService>();
         services.AddScoped<ExternalApiAuditContext>();

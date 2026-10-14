@@ -28,7 +28,10 @@ public sealed record OperationalEventDraft(
     string? SubjectDisplayName = null,
     string? ResourceType = null,
     string? ResourceId = null,
-    string? ResourceDisplayName = null);
+    string? ResourceDisplayName = null,
+    string? ActorKind = null,
+    string? ActorDisplayName = null,
+    string? WorkerNodeName = null);
 
 public sealed record OperationalEventModel(
     long Id,
