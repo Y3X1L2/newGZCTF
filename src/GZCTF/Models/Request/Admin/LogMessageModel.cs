@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.Net;
 using System.Text.Json.Serialization;
+using System.Text.Json;
 
 namespace GZCTF.Models.Request.Admin;
 
@@ -63,6 +64,15 @@ public class LogMessageModel
     [JsonPropertyName("resourceDisplayName")]
     public string? ResourceDisplayName { get; set; }
 
+    public Guid? ActorUserId { get; set; }
+    public string? ActorKind { get; set; }
+    public string? ActorDisplayName { get; set; }
+    public string? Logger { get; set; }
+    public string? Outcome { get; set; }
+    public bool? Retryable { get; set; }
+    public IReadOnlyDictionary<string, JsonElement>? Detail { get; set; }
+    public string[]? CurrentDisplayNames { get; set; }
+
     public static LogMessageModel FromLogModel(LogModel logInfo) =>
         new()
         {
@@ -83,8 +93,30 @@ public class LogMessageModel
             DeploymentTicketId = logInfo.DeploymentTicketId,
             ResourceType = logInfo.ResourceType,
             ResourceId = logInfo.ResourceId,
-            ResourceDisplayName = logInfo.ResourceDisplayName
+            ResourceDisplayName = logInfo.ResourceDisplayName,
+            ActorUserId = logInfo.ActorUserId,
+            ActorKind = logInfo.ActorKind ?? "Unknown",
+            ActorDisplayName = logInfo.UserName == "Anonymous" && logInfo.ActorKind is not "User" and not "ApiToken"
+                ? null : logInfo.UserName,
+            Logger = logInfo.Logger,
+            Outcome = logInfo.Outcome,
+            Retryable = logInfo.Retryable,
+            Detail = ParseDetail(logInfo.DetailJson)
         };
+
+    private static IReadOnlyDictionary<string, JsonElement>? ParseDetail(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+            return null;
+        try
+        {
+            return JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(json);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
 }
 
 public sealed record LogMessagePageModel(IReadOnlyList<LogMessageModel> Items, string? NextCursor);

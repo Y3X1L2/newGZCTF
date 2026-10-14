@@ -1278,6 +1278,15 @@ export interface LogMessageModel {
   resourceType?: string | null;
   resourceId?: string | null;
   resourceDisplayName?: string | null;
+  /** @format guid */
+  actorUserId?: string | null;
+  actorKind?: string | null;
+  actorDisplayName?: string | null;
+  logger?: string | null;
+  outcome?: string | null;
+  retryable?: boolean | null;
+  detail?: Record<string, any>;
+  currentDisplayNames?: string[] | null;
 }
 
 export interface ResetTeamLabRuntimeModel {
@@ -4843,24 +4852,46 @@ export interface BloodBonus {
   noBonus?: boolean;
 }
 
+/** Represents a user in the identity system */
 export interface IdentityUserOfGuid {
-  /** @format guid */
+  /**
+   * Gets or sets the primary key for this user.
+   * @format guid
+   */
   id?: string;
+  /** Gets or sets the user name for this user. */
   userName?: string | null;
+  /** Gets or sets the normalized user name for this user. */
   normalizedUserName?: string | null;
+  /** Gets or sets the email address for this user. */
   email?: string | null;
+  /** Gets or sets the normalized email address for this user. */
   normalizedEmail?: string | null;
+  /** Gets or sets a flag indicating if a user has confirmed their email address. */
   emailConfirmed?: boolean;
+  /** Gets or sets a salted and hashed representation of the password for this user. */
   passwordHash?: string | null;
+  /** A random value that must change whenever a users credentials change (password changed, login removed) */
   securityStamp?: string | null;
+  /** A random value that must change whenever a user is persisted to the store */
   concurrencyStamp?: string | null;
+  /** Gets or sets a telephone number for the user. */
   phoneNumber?: string | null;
+  /** Gets or sets a flag indicating if a user has confirmed their telephone address. */
   phoneNumberConfirmed?: boolean;
+  /** Gets or sets a flag indicating if two factor authentication is enabled for this user. */
   twoFactorEnabled?: boolean;
-  /** @format uint64 */
+  /**
+   * Gets or sets the date and time, in UTC, when any user lockout ends.
+   * @format uint64
+   */
   lockoutEnd?: number | null;
+  /** Gets or sets a flag indicating if the user could be locked out. */
   lockoutEnabled?: boolean;
-  /** @format int32 */
+  /**
+   * Gets or sets the number of failed login attempts for the current user.
+   * @format int32
+   */
   accessFailedCount?: number;
 }
 

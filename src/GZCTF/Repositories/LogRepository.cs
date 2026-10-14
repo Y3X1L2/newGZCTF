@@ -2,10 +2,11 @@
 using GZCTF.Repositories.Interface;
 using Microsoft.EntityFrameworkCore;
 using GZCTF.Infrastructure.Persistence.Queries;
+using GZCTF.Modules.Audit.Contracts;
 
 namespace GZCTF.Repositories;
 
-public class LogRepository(AppDbContext context) : RepositoryBase(context), ILogRepository
+public class LogRepository(AppDbContext context, IOperationalLogDisplayQuery displays) : RepositoryBase(context), ILogRepository
 {
     public async Task<LogMessagePageModel> GetLogs(LogQueryModel query, CancellationToken token)
     {
@@ -44,30 +45,10 @@ public class LogRepository(AppDbContext context) : RepositoryBase(context), ILog
 
         var rows = await data.OrderByDescending(item => item.TimeUtc).ThenByDescending(item => item.Id)
             .Take(take + 1)
-            .Select(item => new LogMessageModel
-            {
-                Id = item.Id,
-                Time = item.TimeUtc,
-                Level = item.Level,
-                UserName = item.UserName,
-                IP = item.RemoteIP,
-                Msg = item.Message,
-                Status = item.Status,
-                CorrelationId = item.CorrelationId,
-                TraceId = item.TraceId,
-                EventCode = item.EventCode,
-                ErrorCategory = item.ErrorCategory,
-                ErrorCode = item.ErrorCode,
-                WorkerNodeId = item.WorkerNodeId,
-                WorkerNodeName = item.WorkerNodeName,
-                DeploymentTicketId = item.DeploymentTicketId,
-                ResourceType = item.ResourceType,
-                ResourceId = item.ResourceId,
-                ResourceDisplayName = item.ResourceDisplayName
-            })
             .ToArrayAsync(token);
 
-        var items = rows.Take(take).ToArray();
+        var items = rows.Take(take).Select(LogMessageModel.FromLogModel).ToArray();
+        await displays.EnrichAsync(items, token);
         var next = rows.Length > take && items.Length > 0
             ? new TimeCursor(items[^1].Time, items[^1].Id).Encode()
             : null;

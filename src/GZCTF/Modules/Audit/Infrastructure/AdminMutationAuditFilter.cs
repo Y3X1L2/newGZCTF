@@ -3,8 +3,10 @@ using GZCTF.Middlewares;
 using GZCTF.Modules.Audit.Application;
 using GZCTF.Modules.Audit.Contracts;
 using GZCTF.Modules.Audit.Domain;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Mvc.Filters;
+using Microsoft.AspNetCore.Mvc.Infrastructure;
 
 namespace GZCTF.Modules.Audit.Infrastructure;
 
@@ -27,7 +29,13 @@ public sealed class AdminMutationAuditFilter(
         context.HttpContext.Response.Headers["X-GZCTF-Correlation-Id"] = correlation.Ensure().ToString();
         var executed = await next();
         var statusCode = executed.Exception is null
-            ? executed.HttpContext.Response.StatusCode
+            ? executed.Result switch
+            {
+                ForbidResult => StatusCodes.Status403Forbidden,
+                ChallengeResult => StatusCodes.Status401Unauthorized,
+                IStatusCodeActionResult { StatusCode: { } resultStatus } => resultStatus,
+                _ => executed.HttpContext.Response.StatusCode
+            }
             : StatusCodes.Status500InternalServerError;
         var failed = executed.Exception is not null || statusCode >= 400;
         var descriptor = context.ActionDescriptor as ControllerActionDescriptor;
@@ -46,8 +54,9 @@ public sealed class AdminMutationAuditFilter(
                 failed
                     ? OperationalEventCodes.Audit.AdminMutationFailed
                     : OperationalEventCodes.Audit.AdminMutationSucceeded,
-                failed ? OperationalEventOutcome.Failed : OperationalEventOutcome.Succeeded,
-                $"{controller}.{action} {(failed ? "failed" : "succeeded")}.",
+                failed ? OperationalEventOutcome.Failed : statusCode == StatusCodes.Status202Accepted
+                    ? OperationalEventOutcome.Pending : OperationalEventOutcome.Succeeded,
+                $"{controller}.{action} {(failed ? "failed" : statusCode == StatusCodes.Status202Accepted ? "accepted" : "succeeded")}.",
                 failed ? OperationalEventSeverity.Warning : OperationalEventSeverity.Information,
                 correlation.Ensure(),
                 errorCategory,
@@ -123,19 +132,25 @@ public sealed class AdminMutationAuditFilter(
             Guid.TryParse(value.RouteData.Values[name]?.ToString(), out var parsed) ? parsed : null;
 
         var subjectId = context.RouteData.Values["id"]?.ToString()
+                        ?? context.RouteData.Values["userid"]?.ToString()
                         ?? context.RouteData.Values["challengeId"]?.ToString()
                         ?? context.RouteData.Values["templateId"]?.ToString()
                         ?? context.RouteData.Values["nodeId"]?.ToString();
         var resourceType = context.RouteData.Values.ContainsKey("challengeId") ? "challenge"
             : context.RouteData.Values.ContainsKey("templateId") ? "image-template"
             : context.RouteData.Values.ContainsKey("nodeId") ? "worker-node"
+            : context.RouteData.Values.ContainsKey("userid") ? "user"
+            : (context.ActionDescriptor as ControllerActionDescriptor)?.ControllerName == "Nodes" ? "worker-node"
+            : (context.ActionDescriptor as ControllerActionDescriptor)?.ControllerName == "ImageTemplate" ? "image-template"
             : null;
         return new AuditDimensions(
             IntRoute(context, "gameId"),
             IntRoute(context, "courseId"),
             IntRoute(context, "challengeId"),
             IntRoute(context, "templateId"),
-            GuidRoute(context, "nodeId") ?? GuidRoute(context, "id"),
+            GuidRoute(context, "nodeId") ??
+                ((context.ActionDescriptor as ControllerActionDescriptor)?.ControllerName == "Nodes"
+                    ? GuidRoute(context, "id") : null),
             subjectId,
             resourceType);
     }

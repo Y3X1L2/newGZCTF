@@ -192,6 +192,29 @@ describe('adminLogApi', () => {
     })
   })
 
+  it('preserves optional actor, outcome and diagnostics facts without requiring them on historical rows', async () => {
+    const structured = {
+      ...entry,
+      actorKind: 'ApiToken',
+      actorDisplayName: 'Lin',
+      actorUserId: 'user-id',
+      currentDisplayNames: ['actor'],
+      logger: 'GZCTF.Audit',
+      outcome: 'Failed',
+      retryable: true,
+      detail: { phase: 'inventory' },
+    }
+    const get = vi.fn().mockResolvedValue({ items: [entry, structured], nextCursor: null })
+    const adapter = createAdminLogApi(createClient({ get }))
+    await expect(adapter.list()).resolves.toMatchObject({ items: [entry, structured] })
+    get.mockResolvedValue({ items: [{ ...structured, retryable: 'yes' }], nextCursor: null })
+    await expect(adapter.list()).rejects.toThrow()
+    get.mockResolvedValue({ items: [{ ...structured, detail: 'unexpected text' }], nextCursor: null })
+    await expect(adapter.list()).rejects.toThrow()
+    get.mockResolvedValue({ items: [{ ...structured, currentDisplayNames: 'actor' }], nextCursor: null })
+    await expect(adapter.list()).rejects.toThrow()
+  })
+
   it('normalizes the newer cursor response without changing the page model', async () => {
     const get = vi.fn().mockResolvedValue({ items: [entry], nextCursor: 'cursor-2' })
     const adapter = createAdminLogApi(createClient({ get }))

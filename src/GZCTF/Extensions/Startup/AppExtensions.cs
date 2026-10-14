@@ -95,6 +95,7 @@ internal static class AppExtensions
             app.UseRouting();
 
             app.UseAuthentication();
+            app.UseMiddleware<RequestLogContextMiddleware>();
 
             if (app.Configuration.GetValue<bool>("DisableRateLimit") is not true)
                 app.UseRateLimiter();

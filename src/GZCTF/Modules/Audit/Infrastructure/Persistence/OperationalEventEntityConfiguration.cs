@@ -17,7 +17,7 @@ public sealed class OperationalEventEntityConfiguration : IEntityTypeConfigurati
         builder.Property(item => item.ErrorCategory).HasConversion<byte>();
         builder.Property(item => item.ErrorCode).HasMaxLength(128);
         builder.Property(item => item.Message).HasMaxLength(1024).IsRequired();
-        builder.Property(item => item.DetailJson).HasMaxLength(4096);
+        builder.Property(item => item.DetailJson).HasMaxLength(8192);
         builder.Property(item => item.SubjectType).HasMaxLength(64);
         builder.Property(item => item.SubjectId).HasMaxLength(128);
         builder.Property(item => item.SubjectDisplayName).HasMaxLength(256);

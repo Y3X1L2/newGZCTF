@@ -750,7 +750,7 @@ public class NodesController : ControllerBase
 
         var previousCapabilities = node.Capabilities;
         var previousCapabilityHash = node.CapabilityHash;
-        var capabilityChanged = ApplyReportedCapabilities(node, request);
+        var stateChanged = ApplyReportedCapabilities(node, request, out var capabilityChanged);
         if (capabilityChanged)
         {
             _events.Append(NodeOperationalEvents.Create(
@@ -763,9 +763,10 @@ public class NodesController : ControllerBase
                     ["previousStatus"] = previousCapabilities.ToString(),
                     ["currentStatus"] = node.Capabilities.ToString(),
                     ["capability"] = node.CapabilityHash ?? previousCapabilityHash
-                }));
-            await _context.SaveChangesAsync(HttpContext.RequestAborted);
+                }) with { ActorKind = "Agent" });
         }
+        if (stateChanged)
+            await _context.SaveChangesAsync(HttpContext.RequestAborted);
 
         var liveStateStore = HttpContext.RequestServices.GetRequiredService<INodeLiveStateStore>();
         var writeResult = await liveStateStore.WriteAsync(new NodeLiveState(
@@ -785,8 +786,10 @@ public class NodesController : ControllerBase
         return Ok(new { accepted = true, buffered = writeResult.UsedFallback });
     }
 
-    static bool ApplyReportedCapabilities(WorkerNode node, HeartbeatRequest request)
+    static bool ApplyReportedCapabilities(WorkerNode node, HeartbeatRequest request,
+        out bool capabilityChanged)
     {
+        capabilityChanged = false;
         var changed = false;
         if (!string.IsNullOrWhiteSpace(request.TeamLabFabricIp))
             changed |= SetIfChanged(node.TeamLabFabricIp, request.TeamLabFabricIp.Trim(),
@@ -802,13 +805,16 @@ public class NodesController : ControllerBase
             ? request.CapabilityManifest with { BinarySha256 = node.AgentBinarySha256 }
             : request.CapabilityManifest;
         var normalized = AgentCapabilityEvaluator.Normalize(effectiveManifest);
-        var capabilityChanged = !string.Equals(node.CapabilityHash, normalized.Hash, StringComparison.Ordinal);
+        var manifestChanged = !string.Equals(node.CapabilityHash, normalized.Hash, StringComparison.Ordinal);
+        if (manifestChanged)
+            capabilityChanged = AgentCapabilityEvaluator.HasStableCapabilityChange(
+                node.CapabilityManifestJson, normalized.Json);
         changed |= SetIfChanged(node.AgentVersion, effectiveManifest.AgentVersion,
             value => node.AgentVersion = value);
         if (!string.IsNullOrWhiteSpace(effectiveManifest.BinarySha256))
             changed |= SetIfChanged(node.AgentBinarySha256, effectiveManifest.BinarySha256,
                 value => node.AgentBinarySha256 = value);
-        if (capabilityChanged)
+        if (manifestChanged)
         {
             changed |= SetIfChanged(node.CapabilityManifestSchemaVersion,
                 effectiveManifest.ManifestSchemaVersion, value => node.CapabilityManifestSchemaVersion = value);

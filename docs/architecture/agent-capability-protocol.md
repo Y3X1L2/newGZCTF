@@ -18,6 +18,7 @@
 - `src/GZCTF.Agent/Controllers/StatusController.cs` 与 heartbeat 共用同一 manifest 生成器，并缓存计算 Agent binary SHA-256。
 - `src/GZCTF/Services/Fleet/AgentCapabilityEvaluator.cs` 只按 schema 和 required feature subset 判断能力；Normalize 排序 feature，并从持久化 JSON/hash 排除动态 `ObservedAt`。
 - `src/GZCTF/Controllers/NodesController.cs` 仅在 capability hash 变化时更新 manifest/coarse capability；旧 Agent 上报空 binary hash 时保留主站已知摘要。
+- 完整 manifest/hash 包含可用磁盘容量，随实测值更新。`node.capability.changed` 单独比较稳定能力：忽略观测时间和可用磁盘波动，TeamLab Fabric 运行健康变化也不复用能力变化事件。协议 hash、节点容量读取和调度判断不受日志降噪影响。
 - `src/GZCTF/Modules/Runtime/Application/NodeEligibilityEvaluator.cs` 将静态 feature、动态健康、Docker/KVM 独立槽位和过载门禁组合为可读不可调度原因。
 - `src/GZCTF/Modules/Runtime/Application/NodeDispatchLimiter.cs` 与 Agent 本机 operation gate 分别提供主站 dispatch 限流和节点最终保护。
 - `20260713014106/14659/15237` 三段迁移新增 manifest 字段、回填旧 Agent 版本事实并删除旧 protocol/capability 列。
@@ -208,7 +209,7 @@ public sealed record AgentHeartbeatRequest(
 ```
 
 - `Metrics` 进入 Redis live state 和分钟级 checkpoint。
-- `Manifest` 是低频持久事实；只有 `CapabilityHash` 变化时更新 PostgreSQL manifest 和 coarse projection。
+- `Manifest` 同时包含稳定能力和实测可用磁盘；`CapabilityHash` 变化时更新 PostgreSQL manifest 和 coarse projection。磁盘变化仍须保存，以便容量读取保持当前；是否记录能力变化事件由稳定字段比较决定，不能用完整 hash 变化直接触发。
 - `TeamLabHealth` 是动态运行健康，不能修改静态 feature set。
 - metric sequence 过期时拒绝旧 metric，但仍允许更新更高可信度的 manifest/hash 和 Agent version。
 - `ObservedAt` 与主站 receive time 同时保存；调度 freshness 使用主站 receive time，避免节点时钟漂移使节点永久在线。

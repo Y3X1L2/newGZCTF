@@ -11,6 +11,7 @@ using GZCTF.Models;
 using GZCTF.Models.Data;
 using GZCTF.Models.Internal;
 using GZCTF.Modules.Audit.Application;
+using GZCTF.Modules.Audit.Domain;
 using GZCTF.Modules.Audit.Infrastructure;
 using GZCTF.Modules.Runtime.Application;
 using GZCTF.Modules.Runtime.Contracts;
@@ -603,6 +604,96 @@ public class NodesControllerTests
         Assert.Equal(TeamLabFabricStatus.Healthy, reloaded.TeamLabFabricStatus);
         Assert.Equal(NodeCapability.Docker | NodeCapability.Kvm, reloaded.Capabilities);
         Assert.True(AgentCapabilityEvaluator.Supports(reloaded, AgentFeatureIds.Pcap));
+    }
+
+    [Fact]
+    public async Task Heartbeat_UpdatesStorageAndFabricWithoutCapabilityEvent()
+    {
+        await using var context = CreateContext();
+        var reportedManifest = CreateManifest(includeKvm: true);
+        var initialManifest = reportedManifest with
+        {
+            Host = reportedManifest.Host with
+            {
+                AvailableVmImageStorageBytes = 100,
+                AvailableDockerStorageBytes = 200
+            }
+        };
+        var initial = AgentCapabilityEvaluator.Normalize(initialManifest);
+        var node = new WorkerNode
+        {
+            Id = Guid.NewGuid(),
+            Name = "capacity-node",
+            HostAddress = "10.24.0.30",
+            AuthToken = "node-token",
+            Status = NodeStatus.Online,
+            Capabilities = initial.Capabilities,
+            CapabilityManifestJson = initial.Json,
+            CapabilityHash = initial.Hash,
+            TeamLabFabricStatus = TeamLabFabricStatus.Healthy
+        };
+        context.WorkerNodes.Add(node);
+        await context.SaveChangesAsync();
+        var services = new ServiceCollection()
+            .AddSingleton(context)
+            .AddLogging()
+            .AddSingleton<INodeLiveStateStore, TestNodeLiveStateStore>()
+            .BuildServiceProvider();
+        var controller = CreateNodesController(context, services);
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { RequestServices = services }
+        };
+        controller.Request.Headers.Authorization = "Bearer node-token";
+
+        var storageManifest = initialManifest with
+        {
+            Host = initialManifest.Host with
+            {
+                AvailableVmImageStorageBytes = 90,
+                AvailableDockerStorageBytes = 180
+            },
+            ObservedAt = initialManifest.ObservedAt.AddMinutes(1)
+        };
+        Assert.IsType<OkObjectResult>(await controller.Heartbeat(node.Id, new HeartbeatRequest
+        {
+            Sequence = 1,
+            CapabilityManifest = storageManifest,
+            TeamLabFabricIp = "10.251.0.3",
+            TeamLabFabricStatus = TeamLabFabricStatus.Error
+        }));
+
+        Assert.NotEqual(initial.Hash, node.CapabilityHash);
+        Assert.Equal(90, AgentCapabilityEvaluator.Parse(node.CapabilityManifestJson)!.Host.AvailableVmImageStorageBytes);
+        Assert.Equal(180, AgentCapabilityEvaluator.Parse(node.CapabilityManifestJson)!.Host.AvailableDockerStorageBytes);
+        Assert.Equal("10.251.0.3", node.TeamLabFabricIp);
+        Assert.Equal(TeamLabFabricStatus.Error, node.TeamLabFabricStatus);
+        Assert.Empty(await context.OperationalEvents.ToArrayAsync());
+
+        Assert.IsType<OkObjectResult>(await controller.Heartbeat(node.Id, new HeartbeatRequest
+        {
+            Sequence = 2,
+            CapabilityManifest = CreateManifest(includeKvm: false) with
+            {
+                Host = storageManifest.Host,
+                ObservedAt = storageManifest.ObservedAt.AddMinutes(1)
+            }
+        }));
+
+        Assert.Equal(NodeCapability.Docker, node.Capabilities);
+        var capabilityEvent = await context.OperationalEvents.SingleAsync();
+        Assert.Equal(OperationalEventCodes.Node.CapabilityChanged, capabilityEvent.EventCode);
+        Assert.Null(capabilityEvent.ActorUserId);
+        using var detail = JsonDocument.Parse(capabilityEvent.DetailJson!);
+        Assert.Equal("Agent", detail.RootElement.GetProperty("actorKind").GetString());
+
+        Assert.IsType<OkObjectResult>(await controller.Heartbeat(node.Id, new HeartbeatRequest
+        {
+            Sequence = 3,
+            TeamLabFabricStatus = TeamLabFabricStatus.Healthy
+        }));
+        Assert.Equal(TeamLabFabricStatus.Healthy, node.TeamLabFabricStatus);
+        Assert.Equal(1, await context.OperationalEvents.CountAsync());
     }
 
     [Fact]
