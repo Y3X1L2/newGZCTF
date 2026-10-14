@@ -37,6 +37,9 @@ public sealed class LogIdentityMigrationTests : IAsyncLifetime
             CREATE TABLE "Logs" (LIKE "Logs_old" INCLUDING ALL) PARTITION BY RANGE ("TimeUtc");
             CREATE TABLE "Logs_default" PARTITION OF "Logs" DEFAULT;
             DROP TABLE "Logs_old";
+            CREATE INDEX "IX_Logs_Resource_Time_Id" ON "Logs"
+                ("ResourceType", "ResourceId", "TimeUtc" DESC, "Id" DESC)
+                WHERE "ResourceType" IS NOT NULL AND "ResourceId" IS NOT NULL;
             INSERT INTO "Logs" ("TimeUtc", "Level", "Logger", "Message", "UserName", "Status")
             VALUES (now(), 'Information', 'old-writer', 'legacy-row', 'Anonymous', 'Success');
             """);
@@ -73,6 +76,10 @@ public sealed class LogIdentityMigrationTests : IAsyncLifetime
         var old = Assert.Single(page.Items, item => item.Msg == "legacy-row");
         Assert.Equal("Unknown", old.ActorKind);
         Assert.Null(old.IP);
+        Assert.Single(await restored.Database.SqlQueryRaw<string>("""
+            SELECT indexname AS "Value" FROM pg_indexes
+            WHERE tablename = 'Logs' AND indexname = 'IX_Logs_Resource_Time_Id'
+            """).ToArrayAsync());
         Assert.Equal(longEvent.DetailJson, (await restored.OperationalEvents.SingleAsync()).DetailJson);
         // Restore the pre-upgrade backup, then reapply the forward migration as an actual recovery path.
         await RestoreAsync("before_upgrade", "log_pre_restored");
