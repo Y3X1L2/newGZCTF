@@ -55,4 +55,27 @@ public static class AgentCapabilityEvaluator
             capabilities |= NodeCapability.Kvm;
         return (json, hash, capabilities);
     }
+
+    public static bool HasStableCapabilityChange(string? previousJson, string currentJson)
+    {
+        var previous = Parse(previousJson);
+        var current = Parse(currentJson);
+        if (previous is null || current is null)
+            return true;
+
+        return previous.AgentVersion != current.AgentVersion
+               || previous.BinarySha256 != current.BinarySha256
+               || previous.ManifestSchemaVersion != current.ManifestSchemaVersion
+               || !previous.Features.ToHashSet(StringComparer.Ordinal).SetEquals(current.Features)
+               || previous.ExecutionLimits != current.ExecutionLimits
+               || previous.Host with
+               {
+                   AvailableVmImageStorageBytes = 0,
+                   AvailableDockerStorageBytes = null
+               } != current.Host with
+               {
+                   AvailableVmImageStorageBytes = 0,
+                   AvailableDockerStorageBytes = null
+               };
+    }
 }
