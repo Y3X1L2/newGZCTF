@@ -60,3 +60,7 @@ worker 当前常量为并发批次 8、最大尝试 5、租约 30 秒、10 秒�
 | 日志身份、名称与结果 | `UnitTests/Observability/LoggingObservabilityTests.cs`、`AdminMutationAuditTests.cs`；`Tests/Database/LogIdentityMigrationTests.cs` 验证 PostgreSQL 分区加列与备份恢复 |
 
 审计日志、请求摘要和 result 都不得保存 token、Flag、Cookie、密码、私钥、Registry 凭据或完整 user-data。测试快照同样脱敏。日志保留与故障排查走 [观测与审计恢复](../../operations/observability-audit-recovery.md)；数据库运维走 [治理手册](../../operations/database-governance-operations.md)。本次文档整理保留既有现场证据；worker 多进程故障和生产恢复的验收状态见 [当前状态](../../current-state.md)。
+
+## vNext 翻译运行入口
+
+日志页面、详情和管理概览的 `useTranslation('admin')` 由正式 `App.tsx` 的 `I18nextProvider` 提供实例，初始化位于 `vnext/app/i18n.ts`；使用当前正式界面 zh-CN 和 en-US 兜底的 admin 资源，不依赖旧 Mantine 语言 Provider。`src/App.test.tsx` 通过真实 App 初始化渲染日志页面和抽屉，禁止用测试专用翻译 Provider 掩盖运行入口缺失。
