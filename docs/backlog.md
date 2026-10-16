@@ -9,6 +9,7 @@
 | RUN-03 | `guest_network_control_failed` 等诊断缺少精确资产 / 异常分类；Main 重启后调度旗标恢复原因未独立核实 | [第二批发布](records/2026-10-09-image-lifecycle-second-rollout.md)、[删除发布](records/2026-10-10-teamlab-delete-rollout.md)；结构化诊断与维护围栏回归 |
 | DATA-01 | 两条 Theory migration 来源尚未恢复；RemoveDestroyedTeamLabUdpMappings 缺元数据。源码仍存在该缺口，旧 134/132 计数已过时 | [迁移交接](records/2026-09-02-migration-drift-reconciliation.md)；新鲜备份上核 discoverable migrations / 历史差异，验证前向升级和恢复，禁止伪造历史 |
 | DATA-02 | 9 月曾有指标 DbUpdateConcurrencyException；没有找到根因已闭环证据。当前指标端口仍 Degraded，但本轮未读取健康详情，不能断言同一根因 | [历史审计](records/2026-09-07-pr9-review-merge.md)；定位最新健康项、失败批次重试与并发回归 |
+| OPS-01 | 发布脚本已支持只上传校验、SSH key 与免密 sudo；完整更新/回退入口、实际 release 路径和 main-only 激活、CI 完整制品及变更分类仍待收口，无停机更新尚未验证 | [发布流程方案](operations/release-workflow-improvement.md)；沿现有脚本完成单入口，验迁移失败、旧应用兼容回退、后台任务与旧前端资源，按阶段记录耗时 |
 | IMG-01 | 管理员/课程 VM 导入仍有写 LocalFilePath 的入口；既往来源迁移不能证明未来不生成本地主副本 | [第二批发布](records/2026-10-09-image-lifecycle-second-rollout.md)；统一持久来源、摘要固定、导入与重建回归 |
 | IMG-02 | 受控 Registry GC 已执行，自动 Blob GC、upload 遗留治理、冷缓存 TTL 与下载/运行增长预算未完整闭环 | [镜像发布](records/2026-10-09-image-lifecycle-rollout.md)、[第二批发布](records/2026-10-09-image-lifecycle-second-rollout.md)；活动/业务引用和 backing 保护、实际释放字节、失败重试 |
 | SEC-01 | 旧交接的 SSH.NET 风险需要重核；当前 src/Directory.Packages.props 已为 2026.0.0，不能继续认定旧版本风险未处理 | 对当前锁定版本重新检查公告与调用路径；本轮未运行依赖漏洞扫描 |
