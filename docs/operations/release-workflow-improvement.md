@@ -1,6 +1,31 @@
 # 发布流程改进方案
 
-基于 2026-10-14 PR #30 的源码、CI 与发布执行记录。生产步骤仍以[维护窗口手册](vnext-maintenance-window-rollout.md)为准；本页提出下一轮改进，尚未新增自动部署工具。
+基于 2026-10-14 PR #30 的源码、CI 与发布执行记录。生产步骤仍以[维护窗口手册](vnext-maintenance-window-rollout.md)为准；本页提出下一轮改进，尚未提供可靠的一键更新或一键回退。
+
+## 最简更新方向与本轮入口
+
+推荐单主站、独立 release、短维护窗口重启：构建、下载、上传、备份与副本验证提前完成，窗口内仅做必要迁移、切换与冒烟。当前会停止 Main，不属于无停机热更新；中断时间须现场计时，不能用构建时间代替。
+
+本轮只补现有上传入口的 `--stage-only` 与 `--sudo-n`：
+
+```powershell
+python scripts/deployment/deploy-gzctf-release.py <release.tar.gz> --host <host> --user <user> --key-file <private-key-path> --sudo-n --stage-only
+```
+
+`status=archive-staged` 仅表示 `/opt/gzctf/incoming/<release-id>.tar.gz` 已上传且远端 SHA-256 匹配。不会解包、迁移、停服务、切链接或上传 activate 脚本；不证明包内 manifest、CI 来源或应用可启动。账户须已有目录创建所需的免密 sudo 权限。摘要失败时停止，删除错误中指定的 **incoming 内该单个 tar.gz** 后重传；不要删除 release 或备份目录。
+
+**未传 `--stage-only` 仍为旧的上传即激活行为。** activate 的 canonical 路径、固定 Agent 更新、迁移连接参数与失败清理问题尚未修复，当前不推荐用默认调用执行生产更新。`--sudo-n` 仅改变认证方式。激活继续按维护窗口手册和本次审查脚本执行，本轮没有回退子命令。
+
+下一步只保留同一个入口的 `update <release-id>` / `rollback <release-id>`（拟议命令，尚不存在），内部接续 stage / activate，消费已审查完整主线 SHA 的制品，输出旧/新链接、迁移头与冒烟结果。操作者不必拼 SQL、复制 DLL 或重启未改变的 Agent。旧应用兼容当前 schema 时才切回旧 release 并重启；不兼容迁移进入备份恢复流程。纯前端沿同一 release 身份发布，不增加独立版本与发布事实。
+
+## 热更新边界
+
+- `.NET Hot Reload` 是开发迭代能力；支持的改动可以直接应用，不支持的改动仍会重启，不能替代生产制品、迁移和回退。[微软说明](https://learn.microsoft.com/en-us/dotnet/core/tools/dotnet-watch)
+- 生产滚动替换需新旧进程并存、检查后切代理、排空旧请求与长连接。当前没有经过验证的入口。Main 启动调度、执行、恢复、镜像、Cron 等后台任务；已有 Cron leader lease，仍不能证明所有 Worker、网关操作、队列租约和新旧协议可混跑。队列继续以数据库 `DeploymentQueueTicket` 为唯一事实。蓝绿会增加双进程协调与维护成本，本轮先不引入。
+- 新旧进程共用数据库需逐次审查兼容性，通常先增加兼容字段、迁移数据，再另一次删除旧字段；当前不能默认所有 migration 都满足。
+- `AppExtensions.DefaultStaticFileOptions` 对 HTML 设置 no-store，其他静态文件缓存 7 天。已打开页面仍可能懒加载旧 hash chunk；旧 release 目录存在，不代表切换后的同一 URL 仍能访问旧资源。[Vite 官方说明](https://vite.dev/guide/build.html#load-error-handling)下一步在同一发布流程保留前一版 hash assets 并验证跨版本导航，或使用带保留期的共享 assets；只处理 hash 资源，不覆盖新 HTML，不清理附件。当前未实现，刷新页面不能视为无感更新。
+
+优先减少重复构建前端、重复发布与重启未变化的 Agent/GuestSupervisor、同一备份重复恢复验证、重复计数与第二套发布状态。迁移头无变化时应跳过无变化升级包的生成和执行，保留明确的迁移判断。历史脚本等新入口覆盖真实更新/回退且引用清理后再删除，本轮不批量删有现场用途的脚本。
 
 ## 已核实的开销
 
