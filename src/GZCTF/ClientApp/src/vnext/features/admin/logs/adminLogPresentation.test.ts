@@ -98,6 +98,14 @@ describe('readable log facts', () => {
       '成功'
     )
     expect(adminLogResult({ ...log, name: 'System', actorKind: 'User' }, text).label).toBe('成功')
+    expect(adminLogResult({ ...log, name: 'Anonymous', actorKind: 'Unknown' }, text)).toMatchObject({
+      label: '结果未记录',
+      tone: 'neutral',
+    })
+    expect(adminLogResult({ ...log, name: 'Anonymous', actorKind: null, outcome: 'Succeeded' }, text).label).toBe(
+      '成功'
+    )
+    expect(adminLogResult({ ...log, name: 'Anonymous', actorKind: 'User' }, text).label).toBe('成功')
   })
   it('uses exact event and operation names while preserving an honest unknown fallback', () => {
     expect(adminLogTitle({ ...log, eventCode: 'agent.sync.succeeded' }, text)).toBe('节点 Agent 更新完成')

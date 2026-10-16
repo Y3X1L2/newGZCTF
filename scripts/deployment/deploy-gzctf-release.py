@@ -2,6 +2,7 @@
 import argparse
 import hashlib
 import os
+import re
 from pathlib import Path
 import shlex
 import sys
@@ -51,26 +52,31 @@ def main() -> int:
     parser.add_argument("--socks5", default=os.environ.get("GZCTF_DEPLOY_SOCKS5"))
     parser.add_argument("--release-id")
     parser.add_argument("--plan-only", action="store_true")
+    parser.add_argument("--stage-only", action="store_true", help="upload and verify archive only; do not extract, migrate or activate")
+    parser.add_argument("--sudo-n", action="store_true", help="use non-interactive sudo instead of supplying a sudo password")
     args = parser.parse_args()
 
     archive = args.archive.resolve()
     if not archive.is_file():
         parser.error(f"archive does not exist: {archive}")
     release_id = args.release_id or archive.name.removesuffix(".tar.gz")
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", release_id):
+        parser.error("release id must start with an alphanumeric character and contain only letters, digits, dot, underscore or hyphen")
     digest = sha256(archive)
     remote = f"/opt/gzctf/incoming/{release_id}.tar.gz"
     print(f"release={release_id} archive={archive} sha256={digest} remote={remote}")
     if args.plan_only:
         return 0
-    if not args.host or not args.password:
-        parser.error("host and sudo password are required through arguments or GZCTF_DEPLOY_* environment variables")
+    if not args.host or (not args.sudo_n and not args.password):
+        parser.error("host and either --sudo-n or a sudo password are required")
     if args.port not in range(1, 65536):
         parser.error("port must be between 1 and 65535")
     if args.key_file and not args.key_file.is_file():
         parser.error(f"key file does not exist: {args.key_file}")
 
     client = paramiko.SSHClient()
-    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    client.load_system_host_keys()
+    client.set_missing_host_key_policy(paramiko.RejectPolicy())
     proxy_socket = create_socks5_socket(args.socks5, args.host, args.port) if args.socks5 else None
     client.connect(
         args.host,
@@ -85,11 +91,13 @@ def main() -> int:
         look_for_keys=False,
         allow_agent=False,
     )
-    prepare = "sudo -S -p '' install -d -m 0750 -o " + shlex.quote(args.user) + \
+    sudo = "sudo -n " if args.sudo_n else "sudo -S -p '' "
+    prepare = sudo + "install -d -m 0750 -o " + shlex.quote(args.user) + \
               " -g " + shlex.quote(args.user) + " /opt/gzctf/incoming"
     stdin, stdout, stderr = client.exec_command(prepare, timeout=20)
-    stdin.write(args.password + "\n")
-    stdin.flush()
+    if not args.sudo_n:
+        stdin.write(args.password + "\n")
+        stdin.flush()
     if stdout.channel.recv_exit_status() != 0:
         raise RuntimeError(stderr.read().decode("utf-8", "replace"))
 
@@ -110,6 +118,17 @@ def main() -> int:
     finally:
         sftp.close()
 
+    # Verify even resumed uploads before allowing either stage completion or activation.
+    verify = "printf '%s  %s\n' " + shlex.quote(digest) + " " + shlex.quote(remote) + " | sha256sum -c -"
+    _, stdout, stderr = client.exec_command(verify, timeout=180)
+    if stdout.channel.recv_exit_status() != 0:
+        client.close()
+        raise RuntimeError("remote archive checksum failed; remove the staged archive at " + remote + " and retry the upload: " + stderr.read().decode("utf-8", "replace"))
+    if args.stage_only:
+        client.close()
+        print(f"release={release_id} status=archive-staged remote={remote} sha256={digest}; not extracted or activated")
+        return 0
+
     local_script = Path(__file__).with_name("activate-gzctf-release.sh")
     remote_script = "/tmp/activate-gzctf-release.sh"
     sftp = client.open_sftp()
@@ -117,12 +136,13 @@ def main() -> int:
         sftp.put(str(local_script), remote_script)
     finally:
         sftp.close()
-    command = "sudo -S -p '' bash " + " ".join(map(shlex.quote, [
+    command = sudo + "bash " + " ".join(map(shlex.quote, [
         remote_script, release_id, remote, digest
     ]))
     stdin, stdout, stderr = client.exec_command(command, timeout=180)
-    stdin.write(args.password + "\n")
-    stdin.flush()
+    if not args.sudo_n:
+        stdin.write(args.password + "\n")
+        stdin.flush()
     out = stdout.read().decode("utf-8", "replace")
     err = stderr.read().decode("utf-8", "replace")
     status = stdout.channel.recv_exit_status()

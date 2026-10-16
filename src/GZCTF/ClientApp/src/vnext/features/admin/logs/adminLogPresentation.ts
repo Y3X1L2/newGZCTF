@@ -131,13 +131,13 @@ export function adminLogTitle(log: AdminLogEntry, text: LogText) {
 }
 
 export function adminLogResult(log: AdminLogEntry, text: LogText) {
-  const historicalSystemDefault =
+  const historicalImplicitSuccess =
     !log.actorKind || log.actorKind.toLowerCase() === 'unknown'
-      ? log.name === 'System' && log.status?.toLowerCase() === 'success'
+      ? ['System', 'Anonymous'].includes(log.name || '') && log.status?.toLowerCase() === 'success'
       : false
-  // Historical structured events inherited a default Success, which is not an event outcome.
+  // Historical raw logs inherited a default Success, which is not evidence of an operation result.
   const value =
-    (log.outcome || (log.eventCode || historicalSystemDefault ? null : log.status))?.toLowerCase() || 'unknown'
+    (log.outcome || (log.eventCode || historicalImplicitSuccess ? null : log.status))?.toLowerCase() || 'unknown'
   const normalized =
     (
       {

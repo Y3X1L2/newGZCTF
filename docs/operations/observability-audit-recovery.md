@@ -59,6 +59,7 @@
 2. 保留 URL 中的 `correlationId`、`workerNodeId`、`deploymentTicketId` 或资源范围。文字、身份和结果筛选的本页范围以页面说明为准，不代表已检索全部历史。
 3. 点击日志查看详情；需要完整结构化历史时，通过下列受管理员授权的事件/关联 API 查询。系统日志保留期短于结构化事件，不能据此断言完整链路不存在。
 4. 失败事件的 `errorCategory`、`errorCode` 和 `retryable` 用于定位原因及重试判断；没有明确结果的普通日志不能作为操作成功证据。
+   历史 `System`/`Anonymous` 且缺少 actor kind、outcome 的 `Success` 可能只是旧版默认值，页面按结果未知展示。周期性成功端口映射 ACK 与 HttpClient Information 不进入管理日志；拒绝、失败与 Warning/Error 仍需排查。普通后台日志若未显式标记 actor kind，保持未知，不猜为系统。
 5. 怀疑服务重启、资源丢失或状态漂移时，查询恢复 API 和数据库当前事实，再决定是否执行重置、销毁或节点修复。
 6. 管理端信息不足时才使用本节只读 SQL；禁止先 SSH 修改数据库或 Agent 资源。
 
