@@ -21,6 +21,8 @@
 
 结构化事件写入 `OperationalEvent` 后派生系统日志；普通应用日志经相同 factory 转为 `LogModel`，数据库 sink 和实时 sink 共享字段转换。`/api/admin/logs` 读取 Logs，不能用其 30 天保留期代替完整的 180 天结构化事件历史。
 
+周期性公网端口映射成功 ACK 与 HttpClient 请求起止信息只属排查细节，不占用管理日志的 Information 流；ACK 拒绝与 HTTP Warning/Error 仍保留。旧版普通日志把缺失姓名/结果默认写成 `Anonymous`/`Success`，所以无明确 actor kind、outcome 的历史 `System` 或 `Anonymous` 成功状态只显示“结果未记录”；不回填数据库，也不据此猜成系统或访客操作。新日志仍按实际 actor kind 与明确 outcome 展示。
+
 | 修改位置 | 职责 |
 | --- | --- |
 | [请求上下文](../../../src/GZCTF/Modules/Audit/Infrastructure/RequestLogContextMiddleware.cs) | 在认证后记录请求身份和可信连接地址，后台事件不借用用户最近登录 IP |

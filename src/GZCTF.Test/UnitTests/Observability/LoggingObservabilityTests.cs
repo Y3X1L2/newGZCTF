@@ -30,6 +30,17 @@ namespace GZCTF.Test.UnitTests.Observability;
 public sealed class LoggingObservabilityTests
 {
     [Fact]
+    public void BootstrapLogger_DropsRoutineHttpClientMessagesButKeepsFailures()
+    {
+        var logger = LogHelper.GetInitLogger()
+            .ForContext("SourceContext", "System.Net.Http.HttpClient.Agent.LogicalHandler");
+
+        Assert.False(logger.IsEnabled(LogEventLevel.Information));
+        Assert.True(logger.IsEnabled(LogEventLevel.Warning));
+        Assert.True(logger.IsEnabled(LogEventLevel.Error));
+    }
+
+    [Fact]
     public void OperationalLog_PreservesCallerDetailBudgetAlongsideIdentityMetadata()
     {
         using var context = CreateContext();
