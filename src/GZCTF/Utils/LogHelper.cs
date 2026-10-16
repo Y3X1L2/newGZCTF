@@ -163,7 +163,8 @@ public static class LogHelper
                 .MinimumLevel.Debug()
                 .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
                 .MinimumLevel.Override("AspNetCoreRateLimit", LogEventLevel.Warning)
-                .MinimumLevel.Override("Microsoft.Hosting.Lifetime", LogEventLevel.Warning);
+                .MinimumLevel.Override("Microsoft.Hosting.Lifetime", LogEventLevel.Warning)
+                .MinimumLevel.Override("System.Net.Http.HttpClient", LogEventLevel.Warning);
 
             if (enableQueryLogging)
                 loggerConfig = loggerConfig.MinimumLevel.Override(EFCoreQuerySource, LogEventLevel.Information);
@@ -229,6 +230,7 @@ public static class LogHelper
             .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
             .MinimumLevel.Override("AspNetCoreRateLimit", LogEventLevel.Warning)
             .MinimumLevel.Override("Microsoft.Hosting.Lifetime", LogEventLevel.Warning)
+            .MinimumLevel.Override("System.Net.Http.HttpClient", LogEventLevel.Warning)
             .WriteTo.Async(t => t.Console(
                 new ExpressionTemplate(InitLogTemplate, theme: TemplateTheme.Literate),
                 LogEventLevel.Debug

@@ -89,7 +89,7 @@ public class InternalController : ControllerBase
             acknowledgedLeaseIds, status, publicationError, token);
 
         if (request.Succeeded)
-            _logger.LogInformation("Public gateway acknowledged port map {Revision} with {Count} routes",
+            _logger.LogDebug("Public gateway acknowledged port map {Revision} with {Count} routes",
                 currentRevision, updated);
         else
             _logger.LogWarning("Public gateway rejected port map {Revision}: {Error}",
