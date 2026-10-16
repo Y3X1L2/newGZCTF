@@ -8,11 +8,11 @@
 
 - 最终应用：`927ceef8d731f28f9c323d354d61990f1e6de8c2`，tree `40f08f865634cf535f4ccd4eccb9ed18928cde34`。
 - 10-16 12:21:20–12:21:44 UTC完成一次Main停服、同字节前向迁移、独立release原子切换与HTTP恢复；精确stop-to-HTTP耗时 **24.271秒**。
-- 基础发布通过；**UI验收尚未通过**：Chrome真实超级管理员会话可用，但新日志页显示原始 `logs.*` 翻译key。壳层中文正常，独立UI代理正在定位，未将其记为成功。
+- 基础发布通过；首次UI发现日志页显示原始 `logs.*` 翻译key、壳层中文正常。根因是正式App缺i18next初始化，随后仅前端PR #34已完成受审制品promotion，见末节；最终真实UI验收由独立UI记录维护，本记录不提前宣告通过。
 - 合法鉴权审计、正常UI写入与可清理Docker创建/入口/Flag/销毁链路等待该UI问题处理，证据由独立UI记录补充。未重置管理员密码、改数据库权限或构造Cookie。
 - 本次不升级/重启Agent，不停止既有用户实例，不修改公网网关、Registry或生产身份。
 
-## 现场与回退身份
+## 首次发布后现场与回退身份（12:22 UTC快照）
 
 | 项目 | 现场事实 |
 | --- | --- |
@@ -100,4 +100,19 @@ sudo原规则备份位于 `/var/backups/yinyu-sudoers/20261014T070222Z/`；`/etc
 
 ## 验收边界与后续
 
-日志页i18n阻断由父会话协调独立修复与交叉审查；未经受审制品promotion不手改publish。若扩大影响或不能及时恢复可用性，按实际old应用目录回退，兼容新增nullable schema。隔离容器及其专属volume尚保留待最终验收后清理；不删除旧release或唯一备份。UI真实审计与Docker链路未通过前，本次任务不记为整体验收完成。
+日志页i18n阻断由父会话协调独立修复与交叉审查；未经受审制品promotion不手改publish。若扩大影响或不能及时恢复可用性，按实际old应用目录回退，兼容新增nullable schema。隔离容器及其专属volume已按末节记录清理；旧release和唯一备份保留。UI真实审计与Docker链路未通过前，本次任务不记为整体验收完成。
+
+
+## PR #34前端单独promotion与最终执行状态
+
+日志页翻译根因由前端代理定位为正式App缺少i18next初始化；PR #34正常合并为 `966ca6081000035c6ac46b4289f44d13dfebf75d`。按前端变更范围复用既核Main、数据库备份和同字节演练，不等待无关后端重测，不重新构建Main、不重跑SQL或恢复。本次执行不手改原运行目录。
+
+- 新current：`/srv/yinyu-data/releases/logs-ui-966ca6081000035c6ac46b4289f44d13dfebf75d-main-927ceef8-20261016/publish`；previous为首次927release，10-11旧release仍保留，可按前文真实路径回退。
+- Main组件来源保持 `927ceef8d731f28f9c323d354d61990f1e6de8c2`，DLL摘要仍为 `90f2be135ee95562212fb0212023435d8e852bc4fd183c92d17882f71f48a263`，从已核release原样复制；原Agent/配置/共享files链接同时保持。
+- 前端来自CI run `38900693915`，合成提交 `6df7b3c446b1093fc19b434e758683ce04002dab`；PR head、CI、merge的ClientApp subtree均为 `699daa9181c61edafda6200b1e28931167be1251`。223文件一次逐项长度/SHA通过。
+- 前端tar摘要 `0fb067825ad9356b68290f5abb1705c24bbd62ee8b932dac5df2251925b71895`；frontend-manifest摘要 `ffe4055a0fa77bc484be61965b48b4880b0cd63affacbf68794de025ee19295e`。新release父目录的release-identity.json明确记录两个组件各自来源，不把Main伪标为前端commit构建。
+- 第二次短Main重启：12:33:36–12:33:48 UTC，stop-to-HTTP精确 **12.719秒**；Main PID3250837 active/NRestarts0，Agent PID2695400保持。首页/Config200后通知UI代理做一轮最终验收，发布侧不重复多层SSH/SQL检查。
+- 两次Main维护累计 **36.990秒**。只有第一次执行数据库迁移；第二次没有migration、备份或恢复操作。
+- 最终UI/i18n、鉴权审计与可清理业务链路由父会话统一引用独立UI记录和current-state，不再由发布代理等待或重复测试。
+
+按父会话授权于12:35:07 UTC清理本次独立恢复容器 `yinyu-logs-restore-20261016` 与其匿名专属volume `c54609f4cdf90488c595de110e90e5b1888557d25eafc5a299ff79f1c1cc0c24`。清理前核验network-none、备份只读bind、数据volume与生产PostgreSQL挂载完全不同；docker rm -f -v仅作用于本容器，并确认该专属volume不再存在。未删除其他容器、旧release、备份或已落盘证明。清理回执保存在原备份目录 `isolated-restore-cleanup.json`。
