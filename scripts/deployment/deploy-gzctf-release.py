@@ -75,7 +75,8 @@ def main() -> int:
         parser.error(f"key file does not exist: {args.key_file}")
 
     client = paramiko.SSHClient()
-    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    client.load_system_host_keys()
+    client.set_missing_host_key_policy(paramiko.RejectPolicy())
     proxy_socket = create_socks5_socket(args.socks5, args.host, args.port) if args.socks5 else None
     client.connect(
         args.host,

@@ -39,6 +39,8 @@ class StageTests(unittest.TestCase):
             key.touch()
             result, client, streams = self.run_stage(['--key-file', str(key)])
         self.assertEqual(0, result)
+        client.load_system_host_keys.assert_called_once_with()
+        self.assertIsInstance(client.set_missing_host_key_policy.call_args.args[0], deploy.paramiko.RejectPolicy)
         commands = [call.args[0] for call in client.exec_command.call_args_list]
         self.assertEqual(2, len(commands))
         self.assertTrue(commands[0].startswith('sudo -n install'))
@@ -50,6 +52,19 @@ class StageTests(unittest.TestCase):
             stream.write.assert_not_called()
         self.assertIsNone(client.connect.call_args.kwargs['password'])
         self.assertEqual(str(key), client.connect.call_args.kwargs['key_filename'])
+
+    def test_unknown_host_is_rejected(self):
+        client = MagicMock()
+        client.connect.side_effect = deploy.paramiko.SSHException('unknown host')
+        with tempfile.TemporaryDirectory() as directory:
+            archive = Path(directory) / 'release.tar.gz'
+            archive.touch()
+            with patch('sys.argv', ['deploy', str(archive), '--host', 'unknown.test', '--stage-only', '--sudo-n']), patch.object(deploy.paramiko, 'SSHClient', return_value=client):
+                with self.assertRaises(deploy.paramiko.SSHException):
+                    deploy.main()
+        self.assertIsInstance(client.set_missing_host_key_policy.call_args.args[0], deploy.paramiko.RejectPolicy)
+        client.open_sftp.assert_not_called()
+        client.exec_command.assert_not_called()
 
     def test_checksum_failure_does_not_activate(self):
         with self.assertRaisesRegex(RuntimeError, 'checksum failed'):

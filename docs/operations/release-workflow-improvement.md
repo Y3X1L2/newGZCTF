@@ -12,7 +12,7 @@
 python scripts/deployment/deploy-gzctf-release.py <release.tar.gz> --host <host> --user <user> --key-file <private-key-path> --sudo-n --stage-only
 ```
 
-`status=archive-staged` 仅表示 `/opt/gzctf/incoming/<release-id>.tar.gz` 已上传且远端 SHA-256 匹配。不会解包、迁移、停服务、切链接或上传 activate 脚本；不证明包内 manifest、CI 来源或应用可启动。账户须已有目录创建所需的免密 sudo 权限。摘要失败时停止，删除错误中指定的 **incoming 内该单个 tar.gz** 后重传；不要删除 release 或备份目录。
+`status=archive-staged` 仅表示 `/opt/gzctf/incoming/<release-id>.tar.gz` 已上传且远端 SHA-256 匹配。不会解包、迁移、停服务、切链接或上传 activate 脚本；不证明包内 manifest、CI 来源或应用可启动。账户须已有目录创建所需的免密 sudo 权限。脚本读取当前用户 `~/.ssh/known_hosts`，拒绝未知主机或密钥不匹配；首次使用前通过独立可信渠道核验指纹并预置信任记录，不再自动接受未知主机。摘要失败时停止，删除错误中指定的 **incoming 内该单个 tar.gz** 后重传；不要删除 release 或备份目录。
 
 **未传 `--stage-only` 仍为旧的上传即激活行为。** activate 的 canonical 路径、固定 Agent 更新、迁移连接参数与失败清理问题尚未修复，当前不推荐用默认调用执行生产更新。`--sudo-n` 仅改变认证方式。激活继续按维护窗口手册和本次审查脚本执行，本轮没有回退子命令。
 
@@ -57,7 +57,7 @@ PR 与合入 `main` 的 CI 分别核验各自提交，发布应绑定完整主�
 | 改动 | 解决的现有问题 | 最小实现边界 |
 | --- | --- | --- |
 | 制品身份核验 | release manifest 只有当前 HEAD 与文件摘要，未绑定 CI 来源。`SkipPublish` 新建空目录、没有载入已有 publish 的入口，并非可直接使用的复用模式。Artifact publish 只检查 `index.html` 存在 | 构建脚本接受前端 artifact 路径，传递已有 publish 属性；校验完整 SHA、CI run / artifact 来源及逐文件摘要。PR checkout 使用 merge SHA，不能拿 PR head 标签当产物来源。跨提交复用须证明相关源码 tree、lockfile、工具链一致，单独保留组件来源与摘要，不能整体改标来源 SHA |
-| 显式 stage / activate | [上传脚本](../../scripts/deployment/deploy-gzctf-release.py)上传后立即 activation；断线按大小续传，固定 180 秒会话缺少实际阶段回读 | 在同一脚本增加明确阶段参数。stage 只上传、完整校验并准备新目录，返回后停止；activate 在维护窗口显式调用。重试先检查远端摘要、目录与当前软链接，避免重传或重复切换 |
+| 显式 stage / activate | [上传脚本](../../scripts/deployment/deploy-gzctf-release.py)上传后立即 activation；断线按大小续传，固定 180 秒会话缺少实际阶段回读 | 在同一脚本增加明确阶段参数。stage 只上传并校验归档，返回后停止；本轮已提供该入口，解包及目录准备仍待后续激活改造；activate 在维护窗口显式调用。重试先检查远端摘要、目录与当前软链接，避免重传或重复切换 |
 | 路径与组件适配 | [activate](../../scripts/deployment/activate-gzctf-release.sh)把 canonical 旧目录限制在默认 `/opt/gzctf/releases`，现场目录实际位于 `/srv/yinyu-data/releases`；同时固定停止、替换 Agent | 区分稳定入口 root 与现场核验的 canonical release root；组件清单沿用 manifest，main-only 只触及 Main。失败时保留失败目录、输出和摘要供排查，继续保留旧 release |
 | 一份执行回执 | [备份](../../scripts/validation/preprod-database-backup.sh)与[恢复升级](../../scripts/validation/preprod-database-restore-migrate.sh)已有摘要和耗时，但后者 `diff || true` 只报告差异，activate 不核验备份/恢复证明；全表与核心计数还重复查询 | 每个 release 留一份脱敏执行报告，记录各阶段开始/结束、备份摘要、恢复与迁移头、旧/新链接和冒烟结果。核心计数从该次全表结果提取，减少重复往返。非预期差异阻止 activation；重试以现场事实和匹配的报告接续 |
 | CI 出一次可部署包 | frontend artifact 已有，server / efbundle 仍在发布阶段重做；组件复用依赖人工整理 | 主线 Quality 成功后复用该 SHA 前端 artifact，调用现有构建脚本产出主站、迁移包、组件清单与 manifest。审核后才推广；PR 仍执行质量门禁，正式发布消费主线的确定制品 |
