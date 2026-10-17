@@ -166,7 +166,7 @@ export function TrainingCourseEditorPage() {
               <ActionButton
                 disabled={changingStatus}
                 icon={<Undo2 size={16} />}
-                onClick={() => void changeStatus(TrainingCourseStatus.Draft)}
+                onClick={() => changeStatus(TrainingCourseStatus.Draft)}
                 type="button"
               >
                 转为草稿
@@ -176,7 +176,7 @@ export function TrainingCourseEditorPage() {
               <ActionButton
                 disabled={changingStatus}
                 icon={<Send size={16} />}
-                onClick={() => void changeStatus(TrainingCourseStatus.Published)}
+                onClick={() => changeStatus(TrainingCourseStatus.Published)}
                 tone="primary"
                 type="button"
               >
@@ -294,7 +294,7 @@ export function TrainingCourseEditorPage() {
                   <ActionButton
                     disabled={changingStatus}
                     icon={<Archive size={16} />}
-                    onClick={() => void changeStatus(TrainingCourseStatus.Archived)}
+                    onClick={() => changeStatus(TrainingCourseStatus.Archived)}
                     type="button"
                   >
                     归档课程
@@ -318,7 +318,7 @@ export function TrainingCourseEditorPage() {
         <EditorActionBar
           status={feedback?.message || (editing ? '保存后保留在当前编辑页面。' : '新课程将以草稿状态创建。')}
         >
-          <ActionButton disabled={saving} icon={<Save size={17} />} tone="primary" type="submit">
+          <ActionButton loading={saving} disabled={saving} icon={<Save size={17} />} tone="primary" type="submit">
             {saving ? '正在保存' : editing ? '保存课程' : '创建课程'}
           </ActionButton>
         </EditorActionBar>
@@ -335,7 +335,7 @@ export function TrainingCourseEditorPage() {
             <ActionButton
               disabled={changingStatus}
               icon={<Trash2 size={16} />}
-              onClick={() => void deleteCourse()}
+              onClick={() => deleteCourse()}
               tone="danger"
               type="button"
             >

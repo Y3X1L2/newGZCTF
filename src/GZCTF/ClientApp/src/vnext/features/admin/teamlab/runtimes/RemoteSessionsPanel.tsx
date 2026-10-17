@@ -63,7 +63,7 @@ export function RemoteSessionsPanel({ runtimeId }: { runtimeId?: string }) {
     <section className={styles.panel}>
       <header className={styles.panelHeader}>
         <h3>远程会话</h3>
-        <ActionButton icon={<RefreshCw size={16} />} onClick={() => void sessions.mutate()} type="button">
+        <ActionButton icon={<RefreshCw size={16} />} onClick={() => sessions.mutate()} type="button">
           刷新
         </ActionButton>
       </header>
@@ -128,7 +128,7 @@ export function RemoteSessionsPanel({ runtimeId }: { runtimeId?: string }) {
             type="checkbox"
           />
         </label>
-        <ActionButton icon={<Search size={16} />} type="submit">
+        <ActionButton icon={<Search size={16} />} loading={sessions.isValidating} type="submit">
           查询
         </ActionButton>
       </form>

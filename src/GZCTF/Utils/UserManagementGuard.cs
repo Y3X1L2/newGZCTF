@@ -8,6 +8,9 @@ public static class UserManagementGuard
     public static async Task<bool> CanManageUserRecordAsync(AppDbContext context, UserInfo actor, UserInfo target,
         CancellationToken token)
     {
+        if (actor.DeletedAtUtc is not null || target.DeletedAtUtc is not null)
+            return false;
+
         if (!RolePolicy.CanManageRole(actor.Role, target.Role))
             return false;
 

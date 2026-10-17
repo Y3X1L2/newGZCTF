@@ -126,7 +126,7 @@ export function TrainingTheoryPage() {
               <ActionButton
                 disabled={retrying}
                 icon={<RotateCcw size={16} />}
-                onClick={() => void retry()}
+                onClick={() => retry()}
                 type="button"
               >
                 {retrying ? '正在准备' : '重新作答'}

@@ -5,6 +5,14 @@ import styles from './TopologyNodeShell.module.css'
 export type NodeTone = 'switch' | 'router' | 'docker' | 'linux' | 'windows'
 
 const infrastructureTones = new Set<NodeTone>(['switch', 'router'])
+const routingHandles = [
+  { id: 'source-left', type: 'source', position: Position.Left },
+  { id: 'source-top', type: 'source', position: Position.Top },
+  { id: 'source-bottom', type: 'source', position: Position.Bottom },
+  { id: 'target-right', type: 'target', position: Position.Right },
+  { id: 'target-top', type: 'target', position: Position.Top },
+  { id: 'target-bottom', type: 'target', position: Position.Bottom },
+] as const
 
 export function TopologyNodeShell({
   icon,
@@ -31,6 +39,16 @@ export function TopologyNodeShell({
       className={`${styles.node} ${styles[tone]} ${shape} ${selected ? styles.selected : ''}`}
       data-tone={tone}
     >
+      {routingHandles.map(handle => <Handle
+        aria-hidden
+        className={styles.routingHandle}
+        id={handle.id}
+        isConnectable={false}
+        key={handle.id}
+        position={handle.position}
+        tabIndex={-1}
+        type={handle.type}
+      />)}
       <Handle
         className={styles.handle}
         id="target"

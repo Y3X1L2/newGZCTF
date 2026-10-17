@@ -12,7 +12,12 @@
   overflow-y: auto;
   border-right: 1px solid var(--yn-color-border);
   background: color-mix(in srgb, var(--yn-color-surface) 88%, transparent);
-  scrollbar-gutter: stable;
+  scrollbar-width: none;
+  overscroll-behavior: contain;
+}
+
+.sidebar::-webkit-scrollbar {
+  display: none;
 }
 
 .sidebar > header {
@@ -77,6 +82,12 @@
 .navLink:hover {
   background: var(--yn-color-surface-muted);
   color: var(--yn-color-text);
+}
+
+.navLink:focus-visible,
+.activeLink:focus-visible {
+  outline: 2px solid var(--yn-color-brand);
+  outline-offset: 2px;
 }
 
 .activeLink {

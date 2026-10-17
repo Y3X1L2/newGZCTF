@@ -54,7 +54,8 @@ public sealed class ImageTemplateOwnershipMigrationTests : IAsyncLifetime
                 CreatedById = ownerId,
                 UpdatedById = ownerId
             };
-            context.AddRange(owner, course);
+            await HistoricalUserFixture.InsertAsync(context, owner);
+            context.Add(course);
             await context.SaveChangesAsync();
             courseId = course.Id;
             boundTemplateId = 900001;

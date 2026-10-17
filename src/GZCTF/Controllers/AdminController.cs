@@ -3,6 +3,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Net.Mime;
 using GZCTF.Extensions;
 using GZCTF.Middlewares;
+using GZCTF.Modules.Identity.Application;
 using GZCTF.Models.Internal;
 using GZCTF.Models.Request.Account;
 using GZCTF.Models.Request.Admin;
@@ -32,6 +33,7 @@ namespace GZCTF.Controllers;
 public class AdminController(
     AppDbContext context,
     UserManager<UserInfo> userManager,
+    UserDeletionService userDeletion,
     ILogger<AdminController> logger,
     IBlobStorage storage,
     IPlatformCache cacheHelper,
@@ -453,7 +455,7 @@ public class AdminController(
     {
         var user = await userManager.FindByIdAsync(userid);
 
-        if (user is null)
+        if (user is null || user.DeletedAtUtc is not null)
             return NotFound(new RequestResponse(localizer[nameof(Resources.Program.Admin_UserNotFound)],
                 StatusCodes.Status404NotFound));
 
@@ -518,7 +520,7 @@ public class AdminController(
     {
         var user = await userManager.FindByIdAsync(userid);
 
-        if (user is null)
+        if (user is null || user.DeletedAtUtc is not null)
             return NotFound(new RequestResponse(localizer[nameof(Resources.Program.Admin_UserNotFound)],
                 StatusCodes.Status404NotFound));
 
@@ -547,38 +549,27 @@ public class AdminController(
     /// <response code="403">Forbidden</response>
     /// <response code="404">User not found</response>
     [HttpDelete("Users/{userid:guid}")]
+    [RequireAdmin]
     [ProducesResponseType(typeof(string), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(RequestResponse), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteUser(Guid userid, CancellationToken token = default)
     {
-        var user = await userManager.GetUserAsync(User);
-
-        if (user!.Id == userid)
-            return BadRequest(new RequestResponse(localizer[nameof(Resources.Program.Admin_SelfDeletionNotAllowed)]));
-
-        user = await userManager.FindByIdAsync(userid.ToString());
-
-        if (user is null)
-            return NotFound(new RequestResponse(localizer[nameof(Resources.Program.Admin_UserNotFound)],
-                StatusCodes.Status404NotFound));
-
         var actor = await userManager.GetUserAsync(User);
         if (actor is null)
             return Unauthorized();
 
-        if (!await UserManagementGuard.CanManageUserRecordAsync(context, actor, user, token))
-            return Forbid();
-
-        if (user.Role == Role.SuperAdmin && await userManager.Users.CountAsync(u => u.Role == Role.SuperAdmin, token) <= 1)
-            return BadRequest(new RequestResponse("不能删除最后一个超级管理员。"));
-
-        if (await teamRepository.CheckIsCaptain(user, token))
-            return BadRequest(
-                new RequestResponse(localizer[nameof(Resources.Program.Admin_CaptainDeletionNotAllowed)]));
-
-        await userManager.DeleteAsync(user);
-
-        return Ok();
+        var result = await userDeletion.DeleteAsync(actor.Id, userid, token);
+        return result switch
+        {
+            UserDeletionResult.Deleted => Ok(),
+            UserDeletionResult.NotFound => NotFound(new RequestResponse(
+                localizer[nameof(Resources.Program.Admin_UserNotFound)], StatusCodes.Status404NotFound)),
+            UserDeletionResult.SelfDeletion => BadRequest(new RequestResponse(
+                localizer[nameof(Resources.Program.Admin_SelfDeletionNotAllowed)])),
+            UserDeletionResult.LastSuperAdmin => BadRequest(new RequestResponse("不能删除最后一个超级管理员。")),
+            UserDeletionResult.Conflict => Conflict(new RequestResponse("用户或战队状态已变化，请刷新后重试。", StatusCodes.Status409Conflict)),
+            _ => Forbid()
+        };
     }
 
     /// <summary>
@@ -624,7 +615,7 @@ public class AdminController(
     {
         var user = await userManager.FindByIdAsync(userid);
 
-        if (user is null)
+        if (user is null || user.DeletedAtUtc is not null)
             return NotFound(new RequestResponse(localizer[nameof(Resources.Program.Admin_UserNotFound)],
                 StatusCodes.Status404NotFound));
 
@@ -823,7 +814,7 @@ public class AdminController(
     private IQueryable<UserInfo> FilterVisibleUsers(UserInfo actor, IQueryable<UserInfo> query, int? groupId = null)
     {
         var roles = RolePolicy.ViewableRoles(actor.Role);
-        query = query.Where(u => roles.Contains(u.Role));
+        query = query.Where(u => u.DeletedAtUtc == null && roles.Contains(u.Role));
 
         if (actor.Role < Role.Admin)
         {

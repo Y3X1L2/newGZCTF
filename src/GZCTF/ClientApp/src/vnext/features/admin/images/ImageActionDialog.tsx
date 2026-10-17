@@ -134,7 +134,7 @@ export function ImageActionDialog({
           <ActionButton disabled={submitting && !uploadMode} onClick={close} type="button">
             {submitting && uploadMode ? '取消上传' : '取消'}
           </ActionButton>
-          <ActionButton
+          <ActionButton loading={submitting}
             disabled={!valid || submitting}
             onClick={() => undefined}
             tone="primary"

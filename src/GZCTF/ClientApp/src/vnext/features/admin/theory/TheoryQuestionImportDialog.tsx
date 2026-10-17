@@ -101,7 +101,7 @@ export function TheoryQuestionImportDialog({
           {!plan ? (
             <ActionButton disabled={running || !jsonText.trim()} onClick={parse} tone="primary" type="button">解析预览</ActionButton>
           ) : (
-            <ActionButton disabled={running || !actionable.length} onClick={() => void runImport()} tone="primary" type="button">
+            <ActionButton disabled={running || !actionable.length} onClick={() => runImport()} tone="primary" type="button">
               {running ? `正在写入 ${completed}/${actionable.length}` : `执行 ${actionable.length} 个写入`}
             </ActionButton>
           )}

@@ -248,6 +248,7 @@ public sealed class LegacyTrainingMigrationTests : IAsyncLifetime
             Role = Role.Student,
             RegisterTimeUtc = DateTimeOffset.Parse("2026-01-01T00:00:00Z")
         };
+        await HistoricalUserFixture.InsertAsync(context, user);
         var group = new StudentGroup
         {
             Name = "Legacy learners",
@@ -384,7 +385,7 @@ public sealed class LegacyTrainingMigrationTests : IAsyncLifetime
             AnswerIndexes = [1]
         };
 
-        context.Users.Add(user);
+        await HistoricalUserFixture.InsertAsync(context, user);
         if (includeBankQuestions)
             context.TheoryQuestionBankItems.AddRange(firstQuestion, secondQuestion);
         await context.SaveChangesAsync();

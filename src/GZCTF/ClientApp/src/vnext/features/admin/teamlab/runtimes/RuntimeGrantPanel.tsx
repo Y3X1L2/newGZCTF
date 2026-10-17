@@ -68,7 +68,7 @@ export function RuntimeGrantPanel({ runtime }: { runtime: TeamLabRuntime }) {
     <header className={styles.header}><h3 id="runtime-grants-title">运行环境授权</h3></header>
     {failure ? <InlineFeedback tone="danger">{errorMessage(failure, '运行环境授权加载失败。')}</InlineFeedback> : null}
     {grants === null && !failure ? <DataState description="正在读取用户和 Token 授权。" loading title="授权加载中" /> : null}
-    {grants?.length ? <div className={styles.grantList}>{grants.map((grant, index) => <div key={`${grant.subjectType}:${grant.subjectId}:${grant.assetKey ?? '*'}:${index}`}><span>{grant.subjectType === 'user' ? '用户' : 'API Token'}</span><strong>{grant.subjectName}</strong><small>{grant.assetKey ? runtime.assets.find((asset) => asset.key === grant.assetKey)?.name ?? grant.assetKey : '整个运行环境'}</small><p>{grant.permissions.map((permission) => permissionOptions.find((item) => item.value === permission)?.label ?? permission).join('、')}</p><button aria-label={`删除 ${grant.subjectName} 的授权`} disabled={busy} onClick={() => void save(grants.filter((_, row) => row !== index))} type="button"><Trash2 size={15} /></button></div>)}</div> : grants ? <DataState description="可在下方为用户或 API Token 添加权限。" title="当前没有额外授权" /> : null}
+    {grants?.length ? <div className={styles.grantList}>{grants.map((grant, index) => <div key={`${grant.subjectType}:${grant.subjectId}:${grant.assetKey ?? '*'}:${index}`}><span>{grant.subjectType === 'user' ? '用户' : 'API Token'}</span><strong>{grant.subjectName}</strong><small>{grant.assetKey ? runtime.assets.find((asset) => asset.key === grant.assetKey)?.name ?? grant.assetKey : '整个运行环境'}</small><p>{grant.permissions.map((permission) => permissionOptions.find((item) => item.value === permission)?.label ?? permission).join('、')}</p><button aria-label={`删除 ${grant.subjectName} 的授权`} disabled={busy} onClick={() => save(grants.filter((_, row) => row !== index))} type="button"><Trash2 size={15} /></button></div>)}</div> : grants ? <DataState description="可在下方为用户或 API Token 添加权限。" title="当前没有额外授权" /> : null}
     <div className={styles.grantForm}>
       <label>授权对象<select value={subjectType} onChange={(event) => { setSubjectType(event.currentTarget.value as TeamLabRuntimeGrant['subjectType']); setSubjectId('') }}><option value="user">用户</option><option value="apiToken">API Token</option></select></label>
       <label>{subjectType === 'user' ? '用户' : 'API Token'}<select value={subjectId} onChange={(event) => setSubjectId(event.currentTarget.value)}><option value="">请选择</option>{(subjectType === 'user' ? users : tokens).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
@@ -77,7 +77,7 @@ export function RuntimeGrantPanel({ runtime }: { runtime: TeamLabRuntime }) {
         const checked = event.currentTarget.checked
         setPermissions((values) => checked ? [...values, item.value] : values.filter((value) => value !== item.value))
       }} type="checkbox" />{item.label}</label>)}</fieldset>
-      <ActionButton disabled={busy || !subjectId.trim() || permissions.length === 0} icon={<Plus size={16} />} onClick={() => void add()} tone="primary" type="button">添加授权</ActionButton>
+      <ActionButton disabled={busy || !subjectId.trim() || permissions.length === 0} icon={<Plus size={16} />} onClick={() => add()} tone="primary" type="button">添加授权</ActionButton>
     </div>
   </section>
 }

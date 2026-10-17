@@ -177,7 +177,7 @@ export function AdminTheoryBankPage() {
       <AdminPageHeader
         actions={
           <>
-            <ActionButton icon={<RefreshCw size={16} />} onClick={() => void request.mutate()} type="button">刷新</ActionButton>
+            <ActionButton icon={<RefreshCw size={16} />} onClick={() => request.mutate()} type="button">刷新</ActionButton>
             <ActionButton icon={<FileUp size={16} />} onClick={() => setImportOpen(true)} type="button">JSON 导入</ActionButton>
             <ActionButton icon={<Plus size={16} />} onClick={() => openEditor(null)} tone="primary" type="button">新建题目</ActionButton>
           </>

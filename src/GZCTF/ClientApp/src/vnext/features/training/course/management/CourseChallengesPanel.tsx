@@ -105,7 +105,7 @@ export function CourseChallengesPanel({
             <ActionButton
               disabled={saving}
               icon={<Trash2 size={16} />}
-              onClick={() => void remove()}
+              onClick={() => remove()}
               tone="danger"
               type="button"
             >

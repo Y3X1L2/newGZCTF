@@ -23,6 +23,9 @@ public partial class UserInfo : IdentityUser<Guid>
     [ProtectedPersonalData]
     public Role Role { get; set; } = Role.Student;
 
+    /// <summary>Account tombstone; historical business references remain intact.</summary>
+    public DateTimeOffset? DeletedAtUtc { get; set; }
+
     /// <summary>
     /// User's recent IP address
     /// </summary>

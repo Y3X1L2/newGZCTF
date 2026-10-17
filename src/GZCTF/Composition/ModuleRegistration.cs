@@ -13,6 +13,8 @@ using GZCTF.Modules.Runtime.Application;
 using GZCTF.Modules.Runtime.Infrastructure;
 using GZCTF.Infrastructure.Cache;
 using GZCTF.Services;
+using GZCTF.Hubs;
+using GZCTF.Modules.Identity.Contracts;
 using Microsoft.Extensions.Options;
 
 namespace GZCTF.Composition;
@@ -38,6 +40,9 @@ public static class ModuleRegistration
         services.AddScoped<DataRetentionExecutor>();
         services.AddHostedService<DataGovernanceWorker>();
         services.AddIdentityModule(configuration);
+        services.AddSingleton<UserHubAccountConnections>();
+        services.AddSingleton<IUserAccountRevocationParticipant>(provider => provider.GetRequiredService<UserHubAccountConnections>());
+        services.AddHostedService<UserHubAccountRevocationWorker>();
         services.AddAuditModule();
         services.AddContentModule();
         services.AddCtfModule();

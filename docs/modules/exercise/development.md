@@ -69,6 +69,7 @@
 管理页在 [admin/exercises](../../../src/GZCTF/ClientApp/src/vnext/features/admin/exercises)。
 `practiceApi.ts` / `exerciseAdminApi.ts` 是请求适配入口，
 `usePracticeInstance.ts` 管理实例状态。`/practice/stats` 仍兼容旧数组接口。
+共用 `InstanceControl` 在创建、延期、销毁和手动刷新期间显示等待状态，销毁未完成前阻止重复与冲突操作；状态完成依据服务端回读，不依据按钮动画。培训与比赛复用同一交互组件。
 筛选与页大小变化须复位页码，并规范化无效 URL 参数。
 
 | 改动 | 现有定向测试 |

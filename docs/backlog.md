@@ -1,6 +1,6 @@
 # 后续事项
 
-维护日期：2026-10-14。这里保存尚未闭环或需要重核的事项，不把历史计划中的所有条目自动继承为待办。接手时核对最新主线与现场，并在任务记录中声明负责人、范围和验收方法；关闭后保留证据链接，删除旧的待办描述。
+维护日期：2026-10-18。这里保存尚未闭环或需要重核的事项，不把历史计划中的所有条目自动继承为待办。接手时核对最新主线与现场，并在任务记录中声明负责人、范围和验收方法；关闭后保留证据链接，删除旧的待办描述。
 
 | 编号 | 事项与当前边界 | 接手时的验收 / 证据 |
 | --- | --- | --- |
@@ -16,7 +16,7 @@
 | ACC-01 | 多 Worker 故障接管、完整跨节点/现场物理设备、长期监督、复杂注入和生产规模签收不足；已有限定双 Worker / 模拟端点证据 | [9 月容量汇总](records/test-reports/2026-09-18-teamlab-production-and-capacity-summary.md)、[H03](records/2026-09-08-h03-hybrid-datapath.md)；区分模拟、控制面与实机范围 |
 | ACC-02 | 普通 Windows 冷缓存、完整 RDP/Guacamole 桌面、剪贴板及隔离销毁的最新版本附加验收为 NOT_RUN；旧 2008 R2 许可导致自行关机；当前 runtime 契约不支持 Windows SFTP/files | [第二批发布](records/2026-10-09-image-lifecycle-second-rollout.md)、[运行事实契约](modules/teamlab/reference/runtime-capabilities.md)；合格镜像、双实例与桌面实测 |
 | ACC-03 | AWDP 真实攻击/修补/异常恢复与 Portal SSO 跨网联调仍需专门验收；外部门户不在本仓库 | [AWDP 手册](modules/awdp/guides/manual-acceptance.md)、Identity 模块与目标门户契约 |
-| ACC-04 | 自主练习内容运营、真实应用回退及节点整机重启持久性仍缺最新完整签收；10-16题目92缺Ready镜像模板，Docker完整生命周期未通过，失败票据无活动容器且容量已释放 | [稳定基线历史](records/2026-09-08-stable-baseline.md)、[培训发布](records/2026-10-11-training-runtime-mainline.md)、[日志现场](records/2026-10-16-logs-browser-acceptance.md)；先校验题目镜像前置条件，再单独安排授权验收，保留现有用户实例 |
+| ACC-04 | 自主练习内容运营、真实应用回退及节点整机重启持久性仍缺最新完整签收；10-18课程4题88已完成Docker创建/入口200/Flag Accepted/停止清理；不代表10-16题92缺Ready模板的问题已修复 | [本轮限定验收](records/2026-10-18-platform-experience.md)、[日志现场](records/2026-10-16-logs-browser-acceptance.md)；独立修复题目镜像前置条件，并安排回退/整机重启验收，保留现有用户实例 |
 | DOC-02 | 旧商业能力地图的会话重启清理/退避/URL恢复、批量UI、H02持续监督及协议事件仍需逐项重核，不能因旧计划归档就当已闭环 | 原审计材料保留到历史目录；按当前 application、Agent 持久化与故障恢复实测核对，明确已替代/仍缺/已验收，禁止直接恢复旧实现 |
 
 同一事项只有一个当前描述。前端专属接口细项继续维护在 [前端契约缺口](architecture/frontend/backlog.md)，这里仅引用，不复制其清单。任务分配和执行过程放在对应 handoff 或 PR；未声明接手者的条目为未分配，不据此声称有人正在实施。

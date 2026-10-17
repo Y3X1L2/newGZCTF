@@ -59,7 +59,7 @@ export function AwdpActionPanel({
               value={flag}
             />
           </label>
-          <ActionButton
+          <ActionButton loading={operation === 'flag'}
             disabled={!flag.trim() || operation === 'flag'}
             icon={<Flag size={16} />}
             tone="primary"
@@ -89,7 +89,7 @@ export function AwdpActionPanel({
               type="file"
             />
           </label>
-          <ActionButton
+          <ActionButton loading={operation === `patch:${serviceId}`}
             disabled={!serviceId || !file || operation === `patch:${serviceId}`}
             icon={<FileUp size={16} />}
             tone="primary"

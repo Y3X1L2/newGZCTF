@@ -84,7 +84,7 @@ export function FlagEditorDialog({
       footer={
         <>
           <ActionButton disabled={submitting} onClick={onClose} type="button">取消</ActionButton>
-          <ActionButton disabled={submitting} form={formId} tone="primary" type="submit">
+          <ActionButton loading={submitting} disabled={submitting} form={formId} tone="primary" type="submit">
             {submitting ? '正在保存' : editing ? '保存 Flag' : '添加 Flag'}
           </ActionButton>
         </>

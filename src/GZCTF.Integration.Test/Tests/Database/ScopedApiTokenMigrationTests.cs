@@ -36,7 +36,7 @@ public sealed class ScopedApiTokenMigrationTests : IAsyncLifetime
         {
             var migrator = context.Database.GetService<IMigrator>();
             await migrator.MigrateAsync(PreviousMigration);
-            context.Users.Add(new UserInfo
+            await HistoricalUserFixture.InsertAsync(context, new UserInfo
             {
                 Id = ownerId,
                 UserName = "phase1owner",
@@ -47,8 +47,6 @@ public sealed class ScopedApiTokenMigrationTests : IAsyncLifetime
                 Role = Role.Teacher,
                 RegisterTimeUtc = DateTimeOffset.Parse("2026-01-01T00:00:00Z")
             });
-            await context.SaveChangesAsync();
-
             await context.Database.ExecuteSqlInterpolatedAsync($$"""
                 ALTER TABLE "ApiTokens" ALTER COLUMN "CreatorId" DROP NOT NULL;
 

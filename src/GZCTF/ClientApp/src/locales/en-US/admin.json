@@ -487,6 +487,7 @@
     },
     "users": {
       "delete": "Are you sure you want to delete user {{name}} ?",
+        "delete_effects": "Deleting this account removes credentials and personal details and leaves all teams. Captaincy passes to another member; empty teams retain history and stop accepting members. Scoreboards and business history remain. You cannot delete yourself or the last super administrator.",
       "reset": {
         "content": "The user password has been reset, <strong>this password will only show up once</strong>, please save it properly.",
         "message": "Are you sure you want to reset the password for {{name}}?",

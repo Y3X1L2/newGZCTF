@@ -212,7 +212,7 @@ export function CourseResourcesPanel({
             </ActionButton>
             <ActionButton
               disabled={saving || !draft.title.trim()}
-              onClick={() => void save()}
+              onClick={() => save()}
               tone="primary"
               type="button"
             >
@@ -297,7 +297,7 @@ export function CourseResourcesPanel({
             <ActionButton
               disabled={saving}
               icon={<Trash2 size={16} />}
-              onClick={() => void deleteResource()}
+              onClick={() => deleteResource()}
               tone="danger"
               type="button"
             >

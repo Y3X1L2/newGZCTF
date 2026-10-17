@@ -3,7 +3,6 @@ import {
   applyNodeChanges,
   Background,
   BackgroundVariant,
-  MarkerType,
   ReactFlow,
   ReactFlowProvider,
   useReactFlow,
@@ -40,6 +39,7 @@ import styles from './TeamLabCanvas.module.css'
 import { TeamLabCanvasToolbar } from './TeamLabCanvasToolbar'
 import { TeamLabMiniMap } from './TeamLabMiniMap'
 import { edgeLayer, nodeLayer, regionLayer } from './topologyLayers'
+import { flowEdges } from './topologyFlowEdges'
 import { detailLevelClass, useCanvasDetailLevel } from './useCanvasDetailLevel'
 
 const paletteTypes = new Set<TopologyNodeType>(['switch', 'router', 'docker', 'linux-vm', 'windows-vm'])
@@ -231,6 +231,8 @@ function reconcileEdges(current: TeamLabFlowEdge[], next: TeamLabFlowEdge[]) {
       previous &&
       previous.source === edge.source &&
       previous.target === edge.target &&
+      previous.sourceHandle === edge.sourceHandle &&
+      previous.targetHandle === edge.targetHandle &&
       previous.type === edge.type &&
       previous.data?.connection === edge.data?.connection &&
       previous.data?.label === edge.data?.label &&
@@ -289,48 +291,6 @@ function selectionSignature(nodeKeys: readonly string[], connectionKeys: readonl
   return `${nodeKeys.toSorted().join(',')}|${connectionKeys.toSorted().join(',')}`
 }
 
-function flowEdges(document: TopologyDocument): TeamLabFlowEdge[] {
-  const edges: TeamLabFlowEdge[] = []
-  for (const connection of Object.values(document.connections)) {
-    if (connection.type === 'membership') {
-      edges.push({
-        id: connection.key,
-        source: connection.nodeKey,
-        target: connection.switchKey,
-        type: 'network',
-        selected: false,
-        zIndex: edgeLayer(false),
-        // A membership link inside one region needs no label: it would repeat the
-        // region title on every device. Only the primary NIC is worth marking.
-        data: {
-          connection,
-          label: connection.primary ? '主网卡' : '',
-          tone: 'membership',
-          networkKey: switchOf(document, connection.switchKey)?.networkKey ?? connection.switchKey,
-        },
-      })
-      continue
-    }
-    if (connection.type === 'route') {
-      edges.push({
-        id: connection.key,
-        source: connection.fromSwitchKey,
-        target: connection.toSwitchKey,
-        type: 'network',
-        selected: false,
-        zIndex: edgeLayer(false),
-        markerStart: connection.direction === 'bidirectional' ? { type: MarkerType.ArrowClosed } : undefined,
-        markerEnd: { type: MarkerType.ArrowClosed },
-        data: {
-          connection,
-          label: connection.direction === 'bidirectional' ? '双向路由' : '单向路由',
-          tone: 'route',
-        },
-      })
-    }
-  }
-  return edges
-}
 
 interface TeamLabCanvasProps {
   document: TopologyDocument

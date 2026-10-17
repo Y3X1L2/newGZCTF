@@ -1,5 +1,6 @@
-import { AlertTriangle, Cable, Check, Cloud, LoaderCircle, Network, Rocket, Save } from 'lucide-react'
+import { AlertTriangle, Cable, Check, Cloud, Network, Rocket, Save } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { ActionButton } from '../../../../shared/Interaction'
 import type { TeamLabImageOption } from '../api'
 import {
   addTopologyNode,
@@ -40,7 +41,7 @@ export interface TeamLabDesignPageProps {
   onDocumentChange?: (document: TopologyDocument) => void
   onSave?: (document: TopologyDocument) => void | Promise<void>
   onValidate?: () => void | Promise<void>
-  onPublish?: () => void
+  onPublish?: () => void | Promise<void>
   saveStatus?: 'saved' | 'dirty' | 'saving' | 'error' | 'conflict'
   validationIssueCount?: number
   publicationStatus?: string
@@ -242,8 +243,8 @@ export function TeamLabDesignPage({
     setLayoutRequest((value) => value + 1)
     setFeedback('已完成自动排版，布局将自动保存且不会产生新版本；可使用撤销恢复原布局。')
   }, [commitDocument, effectiveReadOnly])
-  const save = useCallback(() => void onSave?.(documentRef.current), [onSave])
-  const validate = useCallback(() => void onValidate?.(), [onValidate])
+  const save = useCallback(() => onSave?.(documentRef.current), [onSave])
+  const validate = useCallback(() => onValidate?.(), [onValidate])
   const undoDocument = useCallback(() => {
     if (!effectiveReadOnly) undo()
   }, [effectiveReadOnly, undo])
@@ -329,33 +330,38 @@ export function TeamLabDesignPage({
             </span>
           ) : null}
           {onValidate ? (
-            <button className={styles.validateButton} onClick={validate} type="button">
-              <AlertTriangle size={16} />
+            <ActionButton className={styles.validateButton} icon={<AlertTriangle size={16} />} onClick={validate} type="button">
               校验{validationIssueCount > 0 ? ` (${validationIssueCount})` : ''}
-            </button>
+            </ActionButton>
           ) : null}
           {onPublish ? (
-            <button
+            <ActionButton
               className={styles.publishButton}
               disabled={publishDisabled || publishing || saveStatus === 'conflict'}
+              icon={<Rocket size={16} />}
+              loading={publishing}
+              loadingLabel="发布中"
               onClick={onPublish}
               type="button"
             >
-              {publishing ? <LoaderCircle className={styles.spin} size={16} /> : <Rocket size={16} />}
-              {publishing ? '发布中' : '检查并发布'}
-            </button>
+              检查并发布
+            </ActionButton>
           ) : null}
           {onSave ? (
-            <button className={styles.saveButton} disabled={saveStatus === 'saving'} onClick={save} type="button">
-              {saveStatus === 'saving' ? (
-                <LoaderCircle className={styles.spin} size={16} />
-              ) : saveStatus === 'saved' ? (
+            <ActionButton
+              className={styles.saveButton}
+              loading={saveStatus === 'saving'}
+              loadingLabel="保存中"
+              onClick={save}
+              type="button"
+              icon={saveStatus === 'saved' ? (
                 <Check size={16} />
               ) : saveStatus === 'dirty' ? (
                 <Cloud size={16} />
               ) : (
                 <Save size={16} />
               )}
+            >
               {saveStatus === 'saving'
                 ? '保存中'
                 : saveStatus === 'saved'
@@ -365,7 +371,7 @@ export function TeamLabDesignPage({
                     : saveStatus === 'error'
                       ? '重试保存'
                       : '保存'}
-            </button>
+            </ActionButton>
           ) : null}
         </div>
       </header>

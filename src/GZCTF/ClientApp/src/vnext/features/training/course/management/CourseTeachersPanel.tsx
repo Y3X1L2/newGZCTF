@@ -130,7 +130,7 @@ export function CourseTeachersPanel({
             <ActionButton
               disabled={!selectedTeacherId || saving}
               icon={<UserPlus size={16} />}
-              onClick={() => void addTeacher()}
+              onClick={() => addTeacher()}
               tone="primary"
               type="button"
             >
@@ -145,7 +145,7 @@ export function CourseTeachersPanel({
       >
         <form className={styles.searchForm} onSubmit={(event) => void searchCandidates(event)}>
           <TextField label="搜索教师" onValueChange={setKeyword} placeholder="输入姓名或用户名" value={keyword} />
-          <ActionButton disabled={searching} icon={<Search size={16} />} type="submit">
+          <ActionButton loading={searching} disabled={searching} icon={<Search size={16} />} type="submit">
             {searching ? '搜索中' : '搜索'}
           </ActionButton>
         </form>

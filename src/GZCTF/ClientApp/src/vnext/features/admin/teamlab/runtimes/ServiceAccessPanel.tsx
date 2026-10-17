@@ -86,12 +86,12 @@ export function ServiceAccessPanel({ runtime, assetId }: { runtime: TeamLabRunti
         <label className={styles.serviceAccessToggle}><input checked={automaticPort} type="checkbox" onChange={event => setAutomaticPort(event.target.checked)} />自动分配公网端口</label>
         {!automaticPort ? <label>公网端口<input min={1} max={65535} type="number" value={publicPort} onChange={event => setPublicPort(Number(event.target.value))} /></label> : null}
         <ActionButton disabled={acting || runtime.status !== 'running' || !!runtime.managedRolloutId || !selectedInterface || internalPort < 1 || internalPort > 65535 || (!automaticPort && (publicPort < 1 || publicPort > 65535))}
-          icon={<Plus size={16} />} onClick={() => void create()} tone="primary" type="button">开放访问</ActionButton>
+          icon={<Plus size={16} />} onClick={() => create()} tone="primary" type="button">开放访问</ActionButton>
       </div> : null}
       {actionError ? <InlineFeedback tone="danger">{errorMessage(actionError, '服务开放操作失败。')}</InlineFeedback> : null}
       {!request.data && !request.error ? <DataState loading title="正在读取访问入口" />
         : request.error ? <InlineFeedback tone="danger">{errorMessage(request.error, '服务开放记录读取失败。')}
-            <ActionButton aria-label="重新读取访问入口" icon={<RefreshCw size={15} />} onClick={() => void request.mutate()} type="button" />
+            <ActionButton aria-label="重新读取访问入口" icon={<RefreshCw size={15} />} onClick={() => request.mutate()} type="button" />
           </InlineFeedback>
           : request.data?.some(item => item.revokedAt === null) ? <div className={styles.fileTable}><table><thead><tr><th>外部地址</th><th>目标机器 / 网卡 / 端口</th><th>映射状态</th><th>操作</th></tr></thead>
             <tbody>{request.data.filter(item => item.revokedAt === null).map(item => {
