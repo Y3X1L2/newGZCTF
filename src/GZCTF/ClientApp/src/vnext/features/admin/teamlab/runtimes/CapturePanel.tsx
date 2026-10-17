@@ -99,9 +99,9 @@ export function CapturePanel({ runtimeId, networks }: { runtimeId: string; netwo
           <label htmlFor={sizeId}><span>最大文件（MiB）</span><input disabled={Boolean(active)} id={sizeId} max={10240} min={1} onChange={(event) => setMaxMiB(event.currentTarget.valueAsNumber)} type="number" value={maxMiB} /></label>
           <label htmlFor={retentionId}><span>保留时间（小时）</span><input disabled={Boolean(active)} id={retentionId} max={168} min={1} onChange={(event) => setRetentionHours(event.currentTarget.valueAsNumber)} type="number" value={retentionHours} /></label></> : null}
           <div className={styles.captureActions}>
-            <ActionButton disabled={submitting || Boolean(active)} icon={<Radio size={16} />} tone="primary" type="submit">{submitting && !active ? '正在启动' : '开始抓包'}</ActionButton>
+            <ActionButton disabled={Boolean(active)} loading={submitting && !active} loadingLabel="正在启动" icon={<Radio size={16} />} tone="primary" type="submit">开始抓包</ActionButton>
             <ActionButton aria-label="抓包设置" title="抓包设置" aria-expanded={settingsOpen} icon={<SlidersHorizontal size={16} />} onClick={() => setSettingsOpen(value => !value)} type="button" />
-            {active ? <ActionButton disabled={submitting} icon={<Square size={15} />} onClick={() => void stop()} type="button">停止</ActionButton> : null}
+            {active ? <ActionButton disabled={submitting} icon={<Square size={15} />} onClick={() => stop()} type="button">停止</ActionButton> : null}
           </div>
         </form>
         <div className={styles.captureStatus}>
@@ -120,7 +120,7 @@ export function CapturePanel({ runtimeId, networks }: { runtimeId: string; netwo
           )}
         </div>
       </div>
-      <header className={styles.panelHeader}><h3>抓包历史</h3><ActionButton icon={<RefreshCw size={14} />} onClick={() => void history.mutate()} type="button">刷新历史</ActionButton></header>
+      <header className={styles.panelHeader}><h3>抓包历史</h3><ActionButton icon={<RefreshCw size={14} />} onClick={() => history.mutate()} type="button">刷新历史</ActionButton></header>
       <select aria-label="抓包历史状态" className={styles.filterSelect} value={statusFilter} onChange={(event) => setStatusFilter(event.currentTarget.value)}><option value="">全部状态</option>{Object.entries(captureStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
       {history.error ? <InlineFeedback tone="danger">{errorMessage(history.error, '抓包历史读取失败。')}</InlineFeedback> : history.isLoading ? <DataState loading title="正在读取历史" /> : <div className={styles.sessionTableScroll}><table className={styles.sessionTable}><thead><tr><th>创建时间</th><th>范围</th><th>状态</th><th>大小</th><th /></tr></thead><tbody>{history.data?.items.filter((item) => !statusFilter || item.status === statusFilter).map((item) => <tr key={item.id}><td>{formatAdminDate(item.createdAt)}</td><td>{networks.find(network => network.key === item.networkKey)?.name ?? '整个环境'}</td><td>{captureStatusLabels[item.status]}{item.error ? <small>{item.error}</small> : null}</td><td>{formatBytes(item.capturedBytes)}</td><td><ActionButton aria-label="查看详情" title="查看详情" icon={<Radio size={15} />} disabled={submitting} onClick={() => setCaptureId(item.id)} type="button" /></td></tr>)}</tbody></table></div>}
       <div className={styles.captureActions}>{after ? <ActionButton onClick={() => setAfter(undefined)} type="button">返回首页</ActionButton> : null}{history.data?.next ? <ActionButton onClick={() => setAfter(history.data!.next!)} type="button">下一页</ActionButton> : null}</div>

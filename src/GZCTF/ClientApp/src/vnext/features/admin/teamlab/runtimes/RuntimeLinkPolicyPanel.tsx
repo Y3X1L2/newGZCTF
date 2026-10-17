@@ -229,7 +229,7 @@ function ApplyLinkPolicyDialog({
       footer={
         <>
           <ActionButton disabled={submitting} onClick={onClose} type="button">取消</ActionButton>
-          <ActionButton disabled={submitting || !networkKey} onClick={() => void apply()} tone="primary" type="button">
+          <ActionButton disabled={submitting || !networkKey} onClick={() => apply()} tone="primary" type="button">
             {submitting ? '正在应用' : '确认应用'}
           </ActionButton>
         </>

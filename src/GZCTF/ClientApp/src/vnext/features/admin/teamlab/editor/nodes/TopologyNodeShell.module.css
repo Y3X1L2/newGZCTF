@@ -6,9 +6,8 @@
  * the laid-out box cannot drift — the previous mismatch let cards overlap their
  * neighbours' text.
  *
- * Each device type owns a distinguishable hue. Previously docker and Windows both
- * used `--yn-color-info` and Linux used the muted grey, so three of five types
- * were visually indistinguishable.
+ * Device types are identified by their icon and text. The accent stays in the
+ * icon, badge and selection state rather than painting a rail on every card.
  */
 .node {
   --node-width: 224px;
@@ -29,17 +28,6 @@
   transition:
     border-color var(--yn-motion-fast) var(--yn-ease-standard),
     box-shadow var(--yn-motion-fast) var(--yn-ease-standard);
-}
-
-/* A left accent rail reads at a glance and never steals vertical space. */
-.node::before {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  width: 3px;
-  background: var(--node-accent);
-  content: '';
 }
 
 .infrastructure {
@@ -90,7 +78,7 @@
   flex: 1;
   align-items: center;
   gap: var(--yn-space-2);
-  padding: var(--yn-space-2) var(--yn-space-3) var(--yn-space-2) calc(var(--yn-space-3) + 3px);
+  padding: var(--yn-space-2) var(--yn-space-3);
 }
 
 .icon {
@@ -149,7 +137,7 @@
   flex: 0 0 auto;
   align-items: center;
   gap: var(--yn-space-2);
-  padding: 0 var(--yn-space-3) 0 calc(var(--yn-space-3) + 3px);
+  padding: 0 var(--yn-space-3);
   border-top: 1px solid var(--yn-color-border);
   background: var(--yn-color-surface-muted);
   color: var(--yn-color-text-secondary);
@@ -176,6 +164,13 @@
   background: var(--node-accent);
   opacity: 0;
   transition: opacity var(--yn-motion-fast) var(--yn-ease-standard);
+}
+
+/* Passive anchors let existing links use the nearest card edge. The original
+ * left/right handles remain the explicit editing controls. */
+.routingHandle {
+  visibility: hidden;
+  pointer-events: none;
 }
 
 /* Connection handles appear on approach instead of speckling the whole canvas. */

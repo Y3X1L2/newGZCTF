@@ -15,7 +15,7 @@ export function RuntimeDifferencesPanel({ runtime }: { runtime: TeamLabRuntime }
   const controller = useRuntimeDifferences(runtime)
   return <section className={styles.panel} aria-labelledby={title}>
     <header className={styles.panelHeader}><h3 id={title}>运行状态检查</h3>
-      <ActionButton type="button" disabled={controller.busy} onClick={() => void controller.check()}>{controller.busy ? '检查与处理中…' : '检查差异'}</ActionButton>
+      <ActionButton type="button" disabled={controller.busy} onClick={() => controller.check()}>{controller.busy ? '检查与处理中…' : '检查差异'}</ActionButton>
     </header>
     {controller.error ? <InlineFeedback tone="danger">{errorMessage(controller.error, '检查或修复失败，请重试。')}</InlineFeedback> : null}
     {controller.preview?.operationInProgress ? <InlineFeedback tone="neutral">运行任务尚未结束，请完成后重新检查。</InlineFeedback> : null}
