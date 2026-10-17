@@ -49,7 +49,7 @@ public class TeamRepository(AppDbContext context) : RepositoryBase(context), ITe
     }
 
     public Task<Team?> GetTeamById(int id, CancellationToken token = default) =>
-        Context.Teams.Include(e => e.Members)
+        Context.Teams.Include(e => e.Members).Include(e => e.Captain)
             .FirstOrDefaultAsync(t => t.Id == id, token);
 
     public Task<Team[]> GetTeams(int count = 100, int skip = 0, CancellationToken token = default) =>
@@ -64,9 +64,9 @@ public class TeamRepository(AppDbContext context) : RepositoryBase(context), ITe
     {
         var loweredHint = hint.ToLower();
         var query = int.TryParse(hint, out var id)
-            ? Context.Teams.Include(t => t.Members)
+            ? Context.Teams.Include(t => t.Members).Where(t => t.Captain!.DeletedAtUtc == null)
                 .Where(item => item.Name.ToLower().Contains(loweredHint) || item.Id == id)
-            : Context.Teams.Include(t => t.Members).Where(item => item.Name.ToLower().Contains(loweredHint));
+            : Context.Teams.Include(t => t.Members).Where(t => t.Captain!.DeletedAtUtc == null).Where(item => item.Name.ToLower().Contains(loweredHint));
 
         return query.OrderBy(t => t.Id).Take(30).ToArrayAsync(token);
     }
@@ -100,6 +100,8 @@ public class TeamRepository(AppDbContext context) : RepositoryBase(context), ITe
     public async Task<bool> VerifyToken(int id, string inviteCode, CancellationToken token = default)
     {
         var team = await Context.Teams.FirstOrDefaultAsync(t => t.Id == id, token);
-        return team is not null && team.InviteCode == inviteCode;
+        return team is not null &&
+            await Context.Users.AnyAsync(u => u.Id == team.CaptainId && u.DeletedAtUtc == null, token) &&
+            team.InviteCode == inviteCode;
     }
 }

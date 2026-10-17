@@ -113,7 +113,7 @@ public class AccountController(
             user = createdUser;
         }
 
-        if (user.Role == Role.Banned)
+        if (user.DeletedAtUtc is not null || user.Role == Role.Banned)
             return Unauthorized(new RequestResponse(localizer[nameof(Resources.Program.Account_UserDisabled)],
                 StatusCodes.Status401Unauthorized));
 
@@ -403,7 +403,7 @@ public class AccountController(
                 localizer[nameof(Resources.Program.Account_IncorrectUserNameOrPassword)],
                 StatusCodes.Status401Unauthorized));
 
-        if (user.Role == Role.Banned)
+        if (user.DeletedAtUtc is not null || user.Role == Role.Banned)
             return Unauthorized(new RequestResponse(localizer[nameof(Resources.Program.Account_UserDisabled)],
                 StatusCodes.Status401Unauthorized));
 

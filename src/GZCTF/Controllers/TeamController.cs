@@ -197,7 +197,7 @@ public partial class TeamController(
         var user = await userManager.GetUserAsync(User);
         var team = await teamRepository.GetTeamById(id, token);
 
-        if (team is null)
+        if (team is null || team.Captain?.DeletedAtUtc is not null)
             return BadRequest(new RequestResponse(localizer[nameof(Resources.Program.Team_NotFound)]));
 
         if (team.Members.Any(m => m.Id == user!.Id))
@@ -553,7 +553,7 @@ public partial class TeamController(
         {
             var team = await teamRepository.GetTeamById(teamId, cancelToken);
 
-            if (team is null)
+            if (team is null || team.Captain?.DeletedAtUtc is not null)
                 return BadRequest(new RequestResponse(localizer[nameof(Resources.Program.Team_NameNotFound),
                     teamName]));
 

@@ -43,6 +43,9 @@ public sealed class UserProfileQueryService(AppDbContext context, IMemoryCache c
 
     public async Task<PublicUserProfileModel?> GetProfileAsync(Guid userId, CancellationToken token)
     {
+        if (!await context.Users.AnyAsync(u => u.Id == userId && u.DeletedAtUtc == null, token))
+            return null;
+
         var cacheKey = $"public-user-profile:{userId:N}";
         return await cache.GetOrCreateAsync(cacheKey, async entry =>
         {
@@ -107,7 +110,7 @@ public sealed class UserProfileQueryService(AppDbContext context, IMemoryCache c
         if (!TryResolveWindow(window, out var normalized, out var duration))
             return null;
 
-        if (!await context.Users.AsNoTracking().AnyAsync(item => item.Id == userId, token))
+        if (!await context.Users.AsNoTracking().AnyAsync(item => item.Id == userId && item.DeletedAtUtc == null, token))
             return null;
 
         var cacheKey = $"public-user-overview:{userId:N}:{normalized}";
@@ -208,7 +211,7 @@ public sealed class UserProfileQueryService(AppDbContext context, IMemoryCache c
     public async Task<List<UserActivityPointModel>?> GetActivityAsync(Guid userId, DateOnly from, DateOnly to,
         CancellationToken token)
     {
-        if (!await context.Users.AsNoTracking().AnyAsync(item => item.Id == userId, token))
+        if (!await context.Users.AsNoTracking().AnyAsync(item => item.Id == userId && item.DeletedAtUtc == null, token))
             return null;
 
         var start = new DateTimeOffset(from.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
@@ -226,7 +229,7 @@ public sealed class UserProfileQueryService(AppDbContext context, IMemoryCache c
     public async Task<UserProfileHistoryPageModel?> GetHistoryAsync(Guid userId, string? type, string? cursor,
         int count, CancellationToken token)
     {
-        if (!await context.Users.AsNoTracking().AnyAsync(item => item.Id == userId, token))
+        if (!await context.Users.AsNoTracking().AnyAsync(item => item.Id == userId && item.DeletedAtUtc == null, token))
             return null;
 
         var normalizedType = NormalizeHistoryType(type);
