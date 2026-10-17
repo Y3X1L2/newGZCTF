@@ -294,13 +294,14 @@ function selectionSignature(nodeKeys: readonly string[], connectionKeys: readonl
 
 function flowEdges(document: TopologyDocument): TeamLabFlowEdge[] {
   const edges: TeamLabFlowEdge[] = []
+  const obstacles = Object.values(document.nodes)
   for (const connection of Object.values(document.connections)) {
     if (connection.type === 'membership') {
       edges.push({
         id: connection.key,
         source: connection.nodeKey,
         target: connection.switchKey,
-        ...connectionHandles(document.nodes[connection.nodeKey], document.nodes[connection.switchKey]),
+        ...connectionHandles(document.nodes[connection.nodeKey], document.nodes[connection.switchKey], obstacles),
         type: 'network',
         selected: false,
         zIndex: edgeLayer(false),
@@ -320,7 +321,7 @@ function flowEdges(document: TopologyDocument): TeamLabFlowEdge[] {
         id: connection.key,
         source: connection.fromSwitchKey,
         target: connection.toSwitchKey,
-        ...connectionHandles(document.nodes[connection.fromSwitchKey], document.nodes[connection.toSwitchKey]),
+        ...connectionHandles(document.nodes[connection.fromSwitchKey], document.nodes[connection.toSwitchKey], obstacles),
         type: 'network',
         selected: false,
         zIndex: edgeLayer(false),

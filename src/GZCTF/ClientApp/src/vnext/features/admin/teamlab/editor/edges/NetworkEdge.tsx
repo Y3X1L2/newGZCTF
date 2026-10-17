@@ -1,6 +1,7 @@
 import { BaseEdge, getSmoothStepPath, type EdgeProps } from '@xyflow/react'
 import { networkColorSlot } from '../networkColor'
 import { EdgeLabel } from './EdgeLabel'
+import { networkPathOptions } from './connectionHandles'
 import styles from './TopologyEdge.module.css'
 import type { TeamLabFlowEdge } from './edgeTypes'
 
@@ -23,8 +24,7 @@ export function NetworkEdge({
     targetY,
     sourcePosition,
     targetPosition,
-    borderRadius: 10,
-    offset: 16,
+    ...networkPathOptions,
   })
   // A route between networks is the meaningful link; an intra-network membership
   // is structural context and stays visually quieter.
