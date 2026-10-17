@@ -75,6 +75,10 @@ Scope: teamlab.remote-sessions:write
 
 会话状态：`creating`、`ready`、`connected`、`ending`、`ended`、`failed`（字符串，因为该枚举自定义序列化）。
 
+账号注销时，TeamLab 通过 Identity 的 `IUserAccountRevocationParticipant` 参与撤销：先在注销事务内将该账号的活跃会话标为 `ending` 并使其到期，提交后取消容器终端、删除节点中继和 Guacamole 临时资源。清理失败保持可重试状态，由现有远程会话维护任务继续处理；后台也检查已禁用账号，覆盖提交后进程中断的情况。创建预留、会话激活和连接均回读账号可用性，避免注销期间仍在准备的会话重新变为可用。其他账号的会话与已结束审计记录保留。
+
+数据库撤销与真实通道关闭分别确认。节点或 Guacamole 不可达时不能将 `ending` 视为已断开，真实 PTY、RDP、SSH 与 VNC 通道关闭仍需在授权基础设施上验收。
+
 #### 查询远程会话
 
 ```http

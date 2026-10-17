@@ -4,6 +4,7 @@ using GZCTF.Models.Data;
 using GZCTF.Modules.Content.Application;
 using GZCTF.Modules.Content.Domain;
 using GZCTF.Modules.TeamLab.Contracts;
+using GZCTF.Modules.Identity.Contracts;
 using GZCTF.Modules.TeamLab.Domain.Runtime;
 using GZCTF.Services;
 using GZCTF.Modules.Audit.Domain;
@@ -25,7 +26,7 @@ public sealed class TeamLabRemoteAccessService(
     TeamLabEventRecorder events,
     IMemoryCache cache,
     ILogger<TeamLabRemoteAccessService> logger,
-    TeamLabRuntimeOperationPayloadProtector? operationPayloads = null) : ITeamLabRemoteAccessService
+    TeamLabRuntimeOperationPayloadProtector? operationPayloads = null) : ITeamLabRemoteAccessService, IUserAccountRevocationParticipant
 {
     private const int SessionMinutes = 30;
     private const int MaxActiveSessionsPerOperator = 5;
@@ -245,6 +246,7 @@ public sealed class TeamLabRemoteAccessService(
         Guid runtimeId, int assetId, Guid actorId, bool administrator, Guid? apiTokenId, string? reason, Guid? operationId,
         CancellationToken cancellationToken, bool vncConsole = false)
     {
+        await RequireActiveOperatorAsync(actorId, cancellationToken);
         var normalizedReason = reason?.Trim() ?? string.Empty;
         if (normalizedReason.Length > 500)
             throw new TeamLabApiContractException("remote_access_reason_invalid", "访问原因不能超过 500 个字符", 422);
@@ -511,6 +513,22 @@ public sealed class TeamLabRemoteAccessService(
     public async Task ExpireAsync(CancellationToken cancellationToken)
     {
         var now = DateTimeOffset.UtcNow;
+        // Recover a committed account revocation even if the process stopped before
+        // its post-commit cleanup callback, or infrastructure was unavailable then.
+        var revoked = await context.TeamLabRemoteSessions
+            .Where(item => (item.Status == TeamLabRemoteSessionStatus.Creating ||
+                            item.Status == TeamLabRemoteSessionStatus.Ready ||
+                            item.Status == TeamLabRemoteSessionStatus.Connected) &&
+                           context.Users.Any(user => user.Id == item.RequestedByUserId && user.Role == Role.Banned))
+            .ToArrayAsync(cancellationToken);
+        foreach (var session in revoked)
+        {
+            session.Status = TeamLabRemoteSessionStatus.Ending;
+            session.ExpiresAt = now;
+            session.EndReason = "account_revoked";
+            cache.Remove(ConnectUrlKey(session.PublicId));
+        }
+        if (revoked.Length > 0) await context.SaveChangesAsync(cancellationToken);
         await ReconcileSessionsAsync(now, cancellationToken);
         var upperBound = await context.TeamLabRemoteSessions.MaxAsync(item => (long?)item.Id, cancellationToken) ?? 0;
         long after = 0;
@@ -546,6 +564,48 @@ public sealed class TeamLabRemoteAccessService(
     public Task EndAssetSessionsAsync(int runtimeId, int assetId, int generation, string reason, CancellationToken cancellationToken) =>
         EndSessionsAsync(runtimeId, generation, assetId, reason, cancellationToken);
 
+    async Task IUserAccountRevocationParticipant.PrepareAsync(Guid userId, CancellationToken cancellationToken)
+    {
+        // Identity owns the surrounding deletion transaction. Share admission's
+        // operator lock, persist denial first, and leave external I/O after commit.
+        if (context.Database.IsRelational())
+            await LockSessionCapacityAsync(OperatorLockKey(userId), cancellationToken);
+        await MarkOperatorSessionsEndingAsync(userId, cancellationToken);
+    }
+
+    async Task IUserAccountRevocationParticipant.CompleteAsync(Guid userId, CancellationToken cancellationToken)
+    {
+        // A fresh read also catches reservations committed during the caller's
+        // serializable deletion snapshot. A banned account cannot activate them.
+        await MarkOperatorSessionsEndingAsync(userId, cancellationToken);
+        var sessions = await context.TeamLabRemoteSessions.Include(item => item.Runtime).Include(item => item.RuntimeAsset)
+            .Where(item => item.RequestedByUserId == userId && item.Status == TeamLabRemoteSessionStatus.Ending)
+            .ToArrayAsync(cancellationToken);
+        await CompleteEndingsAsync(sessions, _ => "account_revoked", Guid.Empty, cancellationToken);
+    }
+
+    private async Task MarkOperatorSessionsEndingAsync(Guid userId, CancellationToken cancellationToken)
+    {
+        var sessions = await context.TeamLabRemoteSessions.Where(item => item.RequestedByUserId == userId &&
+            (item.Status == TeamLabRemoteSessionStatus.Creating || item.Status == TeamLabRemoteSessionStatus.Ready ||
+             item.Status == TeamLabRemoteSessionStatus.Connected || item.Status == TeamLabRemoteSessionStatus.Ending))
+            .ToArrayAsync(cancellationToken);
+        foreach (var session in sessions)
+        {
+            session.Status = TeamLabRemoteSessionStatus.Ending;
+            session.ExpiresAt = DateTimeOffset.UtcNow;
+            session.EndReason = "account_revoked";
+            cache.Remove(ConnectUrlKey(session.PublicId));
+        }
+        if (sessions.Length > 0) await context.SaveChangesAsync(cancellationToken);
+    }
+
+    private async Task RequireActiveOperatorAsync(Guid userId, CancellationToken cancellationToken)
+    {
+        if (!await context.Users.AsNoTracking().AnyAsync(user => user.Id == userId && user.Role != Role.Banned, cancellationToken))
+            throw new TeamLabApiContractException("remote_access_account_unavailable", "账号当前不可使用远程访问。", 403);
+    }
+
     private async Task EndSessionsAsync(int runtimeId, int generation, int? assetId, string reason, CancellationToken cancellationToken)
     {
         var sessions = await context.TeamLabRemoteSessions.Include(item => item.Runtime).Include(item => item.RuntimeAsset)
@@ -580,6 +640,8 @@ public sealed class TeamLabRemoteAccessService(
         await LockSessionCapacityAsync(TeamLabRuntimeCleanupService.RuntimeLockKey(session.RuntimeId), cancellationToken);
         await LockSessionCapacityAsync(OperatorLockKey(session.RequestedByUserId), cancellationToken);
         await LockSessionCapacityAsync(NodeLockKey(session.WorkerNodeId), cancellationToken);
+
+        await RequireActiveOperatorAsync(session.RequestedByUserId, cancellationToken);
 
         await context.Entry(asset.Runtime).ReloadAsync(cancellationToken);
         if (session.Generation != asset.Runtime.Generation || !CanOpenSession(session.Protocol, asset.Runtime.Status) ||
@@ -687,6 +749,8 @@ public sealed class TeamLabRemoteAccessService(
     {
         await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
         await LockSessionCapacityAsync(TeamLabRuntimeCleanupService.RuntimeLockKey(runtime.Id), cancellationToken);
+        await LockSessionCapacityAsync(OperatorLockKey(session.RequestedByUserId), cancellationToken);
+        await RequireActiveOperatorAsync(session.RequestedByUserId, cancellationToken);
         await context.Entry(session).ReloadAsync(cancellationToken);
         await context.Entry(runtime).ReloadAsync(cancellationToken);
         if (session.Status != TeamLabRemoteSessionStatus.Creating || session.Generation != runtime.Generation || !CanOpenSession(session.Protocol, runtime.Status) ||
@@ -704,6 +768,8 @@ public sealed class TeamLabRemoteAccessService(
     {
         await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
         await LockSessionCapacityAsync(TeamLabRuntimeCleanupService.RuntimeLockKey(session.RuntimeId), cancellationToken);
+        await LockSessionCapacityAsync(OperatorLockKey(session.RequestedByUserId), cancellationToken);
+        await RequireActiveOperatorAsync(session.RequestedByUserId, cancellationToken);
         await context.Entry(session).ReloadAsync(cancellationToken);
         await context.Entry(session.Runtime).ReloadAsync(cancellationToken);
         if (session.Status != TeamLabRemoteSessionStatus.Ready || session.ExpiresAt <= DateTimeOffset.UtcNow ||
