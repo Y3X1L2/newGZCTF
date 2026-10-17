@@ -93,6 +93,13 @@ describe('connectionHandles', () => {
     }
   })
 
+  it.each(['dc01', 'oa01'])('keeps the unobstructed Lab2 %s star link facing the bottom of its switch', key => {
+    const route = renderedRoute(lab.find(node => node.key === key)!, lab[0], lab)
+    expect(route.hits, route.path).toEqual([])
+    expect(route.sourceHandle).toBe('source-top')
+    expect(route.targetHandle).toBe('target-bottom')
+  })
+
   it('recalculates the clear route when an author drags another card into the old corridor', () => {
     const source = lab.find(node => node.key === 'win7')!
     const before = renderedRoute(source, lab[0], lab)
