@@ -59,7 +59,7 @@ ExternalId 是导入请求中用来连接父子对象和返回结果的外部标
 - `ResolveImageTemplateAsync` 解析并检查可用镜像，课程只建 binding；不能创建第二份镜像主资产。
 - `ImportTheoryQuestionsAsync` 复用题库目录与标签接口。
 - `ImportTheoryPaperAsync` 要求 Theory/Mixed 比赛与有效来源题；存在 Submitted 答卷拒绝替换。
-- `ImportTeamsAsync` 再检查管理员角色、用户引用是否一致及队长既有战队数，每名队长最多3支战队。
+- `ImportTeamsAsync` 再检查管理员角色、用户引用是否一致及队长既有战队数，每名队长最多3支战队。执行时排除 `DeletedAtUtc` 非空的匿名历史账户，即使请求保存了旧用户 ID，也不能重新把已删除账户加入战队。
 
 失败时保留 operation ID、错误码和脱敏定位信息，不把202受理或部分日志当作成功。
 课程内容、理论判分和战队管理的稳定行为分别见[Training](../training/development.md)、
