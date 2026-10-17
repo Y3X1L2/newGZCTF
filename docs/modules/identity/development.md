@@ -17,6 +17,10 @@
 
 删除自动移除 `Team.Members`，交接队长并轮换邀请 token；孤队保留 `CaptainId` 指向墓碑以保留参赛历史，锁定且拒绝邀请/申请，不删除 `UserParticipation`、`Participation` 或提交。数据库迁移 `AddUserDeletionTombstone` 只增加可空字段。上线按生产手册先备份、隔离恢复并前向升级；应用回退保留新字段和墓碑，不执行删除字段的 Down 迁移，不恢复被清除的凭据。
 
+其他模块通过 [IUserAccountRevocationParticipant](../../../src/GZCTF/Modules/Identity/Contracts/IUserAccountRevocationParticipant.cs) 参与删号：`PrepareAsync` 在同一数据库事务内持久化禁止访问与待清理状态，`CompleteAsync` 在提交并释放事务后回收外部通道。后者失败不会恢复账号，参与模块必须提供持久重试。并发事务冲突返回409，管理员刷新后重试；不得绕过冲突强行覆盖队长或成员状态。
+
+`UserHubAccountConnections` 在提交后中断本机已登录用户的全部 SignalR 连接；后台每5秒回读连接用户状态，使其他 Main 进程持有的连接也能撤销。连接注册后再次核对账号状态，避免删号和建立私有战队推送之间的窗口；匿名公共推送与历史计分不受影响。
+
 验证见 [UserDeletionTests](../../../src/GZCTF.Integration.Test/Tests/Api/UserDeletionTests.cs)（管理员权限、队长交接、孤队、旧会话、匿名历史与登录键复用）和 [UserDeletionMigrationTests](../../../src/GZCTF.Integration.Test/Tests/Database/UserDeletionMigrationTests.cs)（真实 PostgreSQL 升级与备份恢复）。账号删除不等于销毁其业务运行实例；实例按所属模块的生命周期保留、过期或由管理员单独清理，跨系统门户会话仍须目标环境联调。
 
 ## 战队与学员组

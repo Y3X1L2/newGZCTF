@@ -6,9 +6,13 @@ using GZCTF.Utils;
 using GZCTF.Models.Data;
 using GZCTF.Models.Request.Account;
 using GZCTF.Modules.Identity.Domain;
+using GZCTF.Modules.Identity.Application;
+using GZCTF.Modules.Identity.Contracts;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 using SeededUser = GZCTF.Integration.Test.Base.TestDataSeeder.SeededUser;
 
@@ -125,6 +129,50 @@ public sealed class UserDeletionTests(GZCTFApplicationFactory factory)
         Assert.Equal(HttpStatusCode.BadRequest, (await client.DeleteAsync($"/api/Admin/Users/{actor.Id}")).StatusCode);
         using var anonymous = factory.CreateClient();
         Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.DeleteAsync($"/api/Admin/Users/{actor.Id}")).StatusCode);
+    }
+
+    [Fact]
+    public async Task RevocationParticipant_ExternalFailureCannotUndoCommittedDeletion()
+    {
+        var actor = await CreateUser(Role.Admin);
+        var victim = await CreateUser(Role.Student);
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var captain = await db.Users.SingleAsync(u => u.Id == actor.Id);
+        var member = await db.Users.SingleAsync(u => u.Id == victim.Id);
+        var team = new Team { Name = TestDataSeeder.RandomName(), Captain = captain, Members = [captain, member] };
+        db.Teams.Add(team);
+        await db.SaveChangesAsync();
+        using var cache = new MemoryCache(new MemoryCacheOptions());
+        var participant = new FailingChannelCleanup(db);
+        var service = new UserDeletionService(db, cache, [participant], NullLogger<UserDeletionService>.Instance);
+        Assert.Equal(UserDeletionResult.Deleted, await service.DeleteAsync(actor.Id, victim.Id, CancellationToken.None));
+        Assert.True(participant.Prepared);
+        Assert.True(participant.Completed);
+        db.ChangeTracker.Clear();
+        Assert.NotNull((await db.Users.SingleAsync(u => u.Id == victim.Id)).DeletedAtUtc);
+        var retainedTeam = await db.Teams.Include(t => t.Members).SingleAsync(t => t.Id == team.Id);
+        Assert.Equal(actor.Id, retainedTeam.CaptainId);
+        Assert.Equal(actor.Id, Assert.Single(retainedTeam.Members).Id);
+    }
+
+    private sealed class FailingChannelCleanup(AppDbContext db) : IUserAccountRevocationParticipant
+    {
+        public bool Prepared { get; private set; }
+        public bool Completed { get; private set; }
+        public Task PrepareAsync(Guid userId, CancellationToken cancellationToken)
+        {
+            Assert.NotNull(db.Database.CurrentTransaction);
+            Prepared = true;
+            return Task.CompletedTask;
+        }
+        public async Task CompleteAsync(Guid userId, CancellationToken cancellationToken)
+        {
+            Assert.Null(db.Database.CurrentTransaction);
+            Assert.NotNull((await db.Users.AsNoTracking().SingleAsync(u => u.Id == userId, cancellationToken)).DeletedAtUtc);
+            Completed = true;
+            throw new InvalidOperationException("External cleanup is temporarily unavailable");
+        }
     }
 
     private Task<SeededUser> CreateUser(Role role) => TestDataSeeder.CreateUserAsync(factory.Services,

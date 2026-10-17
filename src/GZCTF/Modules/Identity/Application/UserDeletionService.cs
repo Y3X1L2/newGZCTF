@@ -1,16 +1,33 @@
 using System.Data;
+using System.Data.Common;
 using System.Net;
+using GZCTF.Modules.Identity.Contracts;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 
 namespace GZCTF.Modules.Identity.Application;
 
-public enum UserDeletionResult { Deleted, NotFound, Forbidden, SelfDeletion, LastSuperAdmin }
+public enum UserDeletionResult { Deleted, NotFound, Forbidden, SelfDeletion, LastSuperAdmin, Conflict }
 
 /// <summary>Retires login identity without cascading through business history.</summary>
-public sealed class UserDeletionService(AppDbContext context, IMemoryCache cache)
+public sealed class UserDeletionService(AppDbContext context, IMemoryCache cache,
+    IEnumerable<IUserAccountRevocationParticipant> revocationParticipants, ILogger<UserDeletionService> logger)
 {
     public async Task<UserDeletionResult> DeleteAsync(Guid actorId, Guid userId, CancellationToken token)
+    {
+        try { return await ExecuteAsync(actorId, userId, token); }
+        catch (DbUpdateConcurrencyException) { return UserDeletionResult.Conflict; }
+        catch (DbUpdateException exception) when (exception.InnerException is DbException { SqlState: "40001" or "40P01" })
+        {
+            return UserDeletionResult.Conflict;
+        }
+        catch (DbException exception) when (exception.SqlState is "40001" or "40P01")
+        {
+            return UserDeletionResult.Conflict;
+        }
+    }
+
+    private async Task<UserDeletionResult> ExecuteAsync(Guid actorId, Guid userId, CancellationToken token)
     {
         // A concurrent captain transfer/member change must not leave an orphaned captain.
         await using var transaction = await context.Database.BeginTransactionAsync(IsolationLevel.Serializable, token);
@@ -68,7 +85,7 @@ public sealed class UserDeletionService(AppDbContext context, IMemoryCache cache
 
         user.DeletedAtUtc = now;
         user.Role = Role.Banned;
-        user.UserName = $"deleted-{user.Id.ToString("N")[^8..]}";
+        user.UserName = $"已删除-{user.Id.ToString("N")[^11..]}";
         // Null normalized keys release the previous username/email without creating a new login identity.
         user.NormalizedUserName = null;
         user.Email = user.NormalizedEmail = user.PhoneNumber = user.PasswordHash = user.AvatarHash = null;
@@ -79,9 +96,22 @@ public sealed class UserDeletionService(AppDbContext context, IMemoryCache cache
         user.LockoutEnd = DateTimeOffset.MaxValue;
         user.SecurityStamp = Guid.NewGuid().ToString("N");
         user.ConcurrencyStamp = Guid.NewGuid().ToString("N");
+        foreach (var participant in revocationParticipants)
+            await participant.PrepareAsync(userId, token);
         await context.SaveChangesAsync(token);
         await transaction.CommitAsync(token);
+        await transaction.DisposeAsync();
         cache.Remove($"public-user-profile:{userId:N}");
+        foreach (var participant in revocationParticipants)
+        {
+            try { await participant.CompleteAsync(userId, token); }
+            catch (Exception)
+            {
+                // The module owns durable cleanup/retry; an external outage cannot restore this account.
+                logger.LogWarning("Account {UserId} retired; external access cleanup by {Participant} requires retry",
+                    userId, participant.GetType().Name);
+            }
+        }
         return UserDeletionResult.Deleted;
     }
 }
