@@ -166,7 +166,7 @@ export function TrainingCourseEditorPage() {
               <ActionButton
                 disabled={changingStatus}
                 icon={<Undo2 size={16} />}
-                onClick={() => void changeStatus(TrainingCourseStatus.Draft)}
+                onClick={() => changeStatus(TrainingCourseStatus.Draft)}
                 type="button"
               >
                 转为草稿
@@ -176,7 +176,7 @@ export function TrainingCourseEditorPage() {
               <ActionButton
                 disabled={changingStatus}
                 icon={<Send size={16} />}
-                onClick={() => void changeStatus(TrainingCourseStatus.Published)}
+                onClick={() => changeStatus(TrainingCourseStatus.Published)}
                 tone="primary"
                 type="button"
               >
@@ -294,7 +294,7 @@ export function TrainingCourseEditorPage() {
                   <ActionButton
                     disabled={changingStatus}
                     icon={<Archive size={16} />}
-                    onClick={() => void changeStatus(TrainingCourseStatus.Archived)}
+                    onClick={() => changeStatus(TrainingCourseStatus.Archived)}
                     type="button"
                   >
                     归档课程
@@ -335,7 +335,7 @@ export function TrainingCourseEditorPage() {
             <ActionButton
               disabled={changingStatus}
               icon={<Trash2 size={16} />}
-              onClick={() => void deleteCourse()}
+              onClick={() => deleteCourse()}
               tone="danger"
               type="button"
             >

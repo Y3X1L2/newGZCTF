@@ -390,7 +390,7 @@ export function TrainingChapterEditorPage() {
             <ActionButton
               disabled={saving}
               icon={<Trash2 size={16} />}
-              onClick={() => void deleteChapter()}
+              onClick={() => deleteChapter()}
               tone="danger"
               type="button"
             >

@@ -554,7 +554,7 @@ export function AdminChallengeEditorPage() {
           <ActionButton
             disabled={saving || !dirty}
             icon={<Save size={17} />}
-            onClick={() => void save()}
+            onClick={() => save()}
             tone="primary"
             type="button"
           >

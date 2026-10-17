@@ -413,13 +413,13 @@ export function TrainingTheoryPaperEditorPage() {
       <EditorActionBar
         status={`当前 ${selectedQuestions.length} 题，总分 ${totalScore}，通过线 ${paper.passRate ?? 60}%`}
       >
-        <ActionButton disabled={saving} icon={<Save size={16} />} onClick={() => void save(false)} type="button">
+        <ActionButton disabled={saving} icon={<Save size={16} />} onClick={() => save(false)} type="button">
           保存草稿
         </ActionButton>
         <ActionButton
           disabled={saving}
           icon={<Save size={16} />}
-          onClick={() => void save(true)}
+          onClick={() => save(true)}
           tone="primary"
           type="button"
         >

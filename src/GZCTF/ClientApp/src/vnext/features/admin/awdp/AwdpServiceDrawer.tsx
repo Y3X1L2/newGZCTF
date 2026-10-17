@@ -85,7 +85,7 @@ export function AwdpServiceDrawer({
           <ActionButton
             disabled={saving}
             icon={<Save size={16} />}
-            onClick={() => void save()}
+            onClick={() => save()}
             tone="primary"
             type="button"
           >

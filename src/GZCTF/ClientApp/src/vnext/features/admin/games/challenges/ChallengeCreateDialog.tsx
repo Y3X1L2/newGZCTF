@@ -111,7 +111,7 @@ export function ChallengeCreateDialog({
       footer={
         <>
           <ActionButton disabled={saving} onClick={onClose} type="button">取消</ActionButton>
-          <ActionButton disabled={saving} icon={<Plus size={16} />} onClick={() => void create()} tone="primary" type="button">{saving ? '正在创建' : '创建并编辑'}</ActionButton>
+          <ActionButton disabled={saving} icon={<Plus size={16} />} onClick={() => create()} tone="primary" type="button">{saving ? '正在创建' : '创建并编辑'}</ActionButton>
         </>
       }
       onClose={onClose}

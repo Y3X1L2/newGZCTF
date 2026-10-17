@@ -108,7 +108,7 @@ export function AdminSystemPage() {
               <ActionButton
                 disabled={!dirty.global || Boolean(saving)}
                 icon={<Save size={16} />}
-                onClick={() => void saveSection('global', () => commonAdminApi.updateSystemConfig({ globalConfig: globalDraft }), '平台身份配置已保存并回读。')}
+                onClick={() => saveSection('global', () => commonAdminApi.updateSystemConfig({ globalConfig: globalDraft }), '平台身份配置已保存并回读。')}
                 tone="primary"
                 type="button"
               >{saving === 'global' ? '保存中' : '保存平台身份'}</ActionButton>
@@ -164,7 +164,7 @@ export function AdminSystemPage() {
               <ActionButton
                 disabled={!dirty.account || Boolean(saving)}
                 icon={<Save size={16} />}
-                onClick={() => void saveSection('account', () => commonAdminApi.updateSystemConfig({ accountPolicy: accountDraft }), '账号策略已保存并回读。')}
+                onClick={() => saveSection('account', () => commonAdminApi.updateSystemConfig({ accountPolicy: accountDraft }), '账号策略已保存并回读。')}
                 tone="primary"
                 type="button"
               >{saving === 'account' ? '保存中' : '保存账号策略'}</ActionButton>
@@ -203,7 +203,7 @@ export function AdminSystemPage() {
               <ActionButton
                 disabled={!dirty.container || !containerValid || Boolean(saving)}
                 icon={<Save size={16} />}
-                onClick={() => void saveSection('container', () => commonAdminApi.updateSystemConfig({ containerPolicy: containerDraft }), '容器生命周期策略已保存并回读。')}
+                onClick={() => saveSection('container', () => commonAdminApi.updateSystemConfig({ containerPolicy: containerDraft }), '容器生命周期策略已保存并回读。')}
                 tone="primary"
                 type="button"
               >{saving === 'container' ? '保存中' : '保存容器策略'}</ActionButton>

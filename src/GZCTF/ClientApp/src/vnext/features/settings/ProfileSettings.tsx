@@ -127,7 +127,7 @@ export function ProfileSettings() {
             </label>
             <ActionButton
               disabled={!avatarFile || saving}
-              onClick={() => void uploadAvatar()}
+              onClick={() => uploadAvatar()}
               tone="secondary"
               type="button"
             >
@@ -186,7 +186,7 @@ export function ProfileSettings() {
           <input onChange={(event) => setEmail(event.currentTarget.value)} type="email" value={email} />
           <ActionButton
             disabled={saving || !email.trim() || email === account.user.email}
-            onClick={() => void changeEmail()}
+            onClick={() => changeEmail()}
             type="button"
           >
             申请变更

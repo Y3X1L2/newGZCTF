@@ -27,6 +27,14 @@ function controller(overrides: Partial<RuntimeInstanceController> = {}): Runtime
 }
 
 describe('challenge runtime contract', () => {
+  it('keeps destruction visibly pending and prevents conflicting runtime actions', () => {
+    render(<InstanceControl controller={controller({ phase: 'stopping', busy: true, entry: 'example.test:8080' })} />)
+    expect(screen.getByRole('button', { name: '正在销毁' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '正在销毁' })).toHaveAttribute('aria-busy', 'true')
+    expect(screen.getByRole('button', { name: '延长时间' })).toBeDisabled()
+    expect(screen.getByText('正在销毁实例，完成后访问入口会关闭。页面会自动更新。')).toBeInTheDocument()
+  })
+
   it('invokes the shared instance controller without feature-specific dependencies', async () => {
     const runtime = controller()
     const user = userEvent.setup()

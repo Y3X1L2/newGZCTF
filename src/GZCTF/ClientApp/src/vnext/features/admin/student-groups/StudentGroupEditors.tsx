@@ -59,7 +59,7 @@ export function StudentGroupCreateDialog({
       footer={
         <>
           <ActionButton disabled={saving} onClick={onClose} type="button">取消</ActionButton>
-          <ActionButton disabled={!name.trim() || saving} icon={<UserPlus size={16} />} onClick={() => void create()} tone="primary" type="button">{saving ? '正在创建' : '创建学员组'}</ActionButton>
+          <ActionButton disabled={!name.trim() || saving} icon={<UserPlus size={16} />} onClick={() => create()} tone="primary" type="button">{saving ? '正在创建' : '创建学员组'}</ActionButton>
         </>
       }
       onClose={() => { if (!saving) onClose() }}
@@ -120,7 +120,7 @@ function PersonSearch({
             value={query}
           />
         </label>
-        <ActionButton disabled={query.trim().length < 2 || searching} onClick={() => void search()} type="button">{searching ? '搜索中' : '搜索'}</ActionButton>
+        <ActionButton disabled={query.trim().length < 2 || searching} onClick={() => search()} type="button">{searching ? '搜索中' : '搜索'}</ActionButton>
       </div>
       {failure ? <InlineFeedback tone="danger">{failure}</InlineFeedback> : null}
       {results.length ? (
@@ -210,7 +210,7 @@ export function StudentGroupDetailDrawer({
       footer={group && !archived ? (
         <div className={styles.drawerActions}>
           <ActionButton disabled={saving} icon={<Archive size={16} />} onClick={() => onRequestArchive(group)} tone="danger" type="button">归档学员组</ActionButton>
-          <ActionButton disabled={saving || !name.trim()} icon={<Save size={16} />} onClick={() => void save()} tone="primary" type="button">{saving ? '保存中' : '保存基本信息'}</ActionButton>
+          <ActionButton disabled={saving || !name.trim()} icon={<Save size={16} />} onClick={() => save()} tone="primary" type="button">{saving ? '保存中' : '保存基本信息'}</ActionButton>
         </div>
       ) : null}
       onClose={onClose}

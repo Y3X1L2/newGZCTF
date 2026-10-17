@@ -200,8 +200,8 @@ export function AdminGameInfoPage() {
       <AdminPageHeader
         actions={
           <>
-            <ActionButton disabled={auxiliaryPending} icon={<Clipboard size={16} />} onClick={() => void copyPublicKey()} type="button">复制公钥</ActionButton>
-            <ActionButton disabled={auxiliaryPending} icon={<Download size={16} />} onClick={() => void exportGame()} type="button">导出比赛</ActionButton>
+            <ActionButton disabled={auxiliaryPending} icon={<Clipboard size={16} />} onClick={() => copyPublicKey()} type="button">复制公钥</ActionButton>
+            <ActionButton disabled={auxiliaryPending} icon={<Download size={16} />} onClick={() => exportGame()} type="button">导出比赛</ActionButton>
           </>
         }
         description="维护比赛身份、时间、报名规则、运行限制、Writeup 和选手可见内容。"
@@ -261,7 +261,7 @@ export function AdminGameInfoPage() {
             <div className={styles.poster}><GeometricPoster alt={`${game.title} 海报`} src={game.poster} tone="green" /></div>
             <div className={styles.stack}>
               <FileField accept="image/png,image/jpeg,image/webp" hint={posterFile?.name} label="选择海报" onChange={setPosterFile} />
-              <ActionButton disabled={!posterFile || auxiliaryPending} icon={<Upload size={16} />} onClick={() => void uploadPoster()} type="button">上传海报</ActionButton>
+              <ActionButton disabled={!posterFile || auxiliaryPending} icon={<Upload size={16} />} onClick={() => uploadPoster()} type="button">上传海报</ActionButton>
             </div>
           </div>
         </AdminEditorSection>

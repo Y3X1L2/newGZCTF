@@ -283,7 +283,7 @@ export function CourseStudentsPanel({ course }: { course: TrainingCourseModel })
             <ActionButton
               disabled={!selectedUserId || saving}
               icon={<UserPlus size={16} />}
-              onClick={() => void addStudent()}
+              onClick={() => addStudent()}
               tone="primary"
               type="button"
             >

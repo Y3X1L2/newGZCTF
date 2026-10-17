@@ -113,7 +113,7 @@ export function CourseEnvironmentPanel({ course }: { course: TrainingCourseModel
             ? `课程镜像将同步至 ${registry.address ?? '内网 Registry'}${registry.namespace ? `/${registry.namespace}` : ''}`
             : '当前未检测到可用的内网 Docker Registry，注册和上传 Docker 镜像可能失败。'}
         </span>
-        <ActionButton icon={<RefreshCw size={15} />} onClick={() => void templatesRequest.mutate()} type="button">
+        <ActionButton icon={<RefreshCw size={15} />} onClick={() => templatesRequest.mutate()} type="button">
           刷新
         </ActionButton>
       </div>

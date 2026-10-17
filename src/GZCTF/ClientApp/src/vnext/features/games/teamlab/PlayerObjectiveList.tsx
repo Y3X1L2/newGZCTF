@@ -65,7 +65,7 @@ export function PlayerObjectiveList({
                         type="password"
                         value={flags[objective.id] ?? ''}
                       />
-                      <ActionButton disabled={!flags[objective.id]?.trim() || submitting !== null} onClick={() => void submit(objective.id)} tone="primary" type="button">
+                      <ActionButton disabled={!flags[objective.id]?.trim() || submitting !== null} onClick={() => submit(objective.id)} tone="primary" type="button">
                         {submitting === objective.id ? '提交中' : '提交'}
                       </ActionButton>
                     </div>

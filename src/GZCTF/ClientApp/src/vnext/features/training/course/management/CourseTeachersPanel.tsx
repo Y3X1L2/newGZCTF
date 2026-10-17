@@ -130,7 +130,7 @@ export function CourseTeachersPanel({
             <ActionButton
               disabled={!selectedTeacherId || saving}
               icon={<UserPlus size={16} />}
-              onClick={() => void addTeacher()}
+              onClick={() => addTeacher()}
               tone="primary"
               type="button"
             >

@@ -76,6 +76,7 @@
 `trainingLearnerApi.ts`、`trainingAdminApi.ts`、`trainingChapterApi.ts` 适配请求；
 `useTrainingChapterController`、`useTrainingInstance` 和 `useTrainingFlagSubmission`
 负责章节、实例和提交交互。共用视觉规则见[前端组件边界](../../architecture/frontend/component-boundary.md)。
+实例延期和销毁在服务器任务未结束时持续显示操作中；章节刷新及保存回调返回真实 Promise，共享按钮在请求期间锁定并显示等待标记。
 
 | 改动 | 现有定向测试 |
 | --- | --- |

@@ -118,7 +118,7 @@ export function DivisionEditorDrawer({
     <VNextDrawer
       description="配置报名策略、总榜权限和 CTF 题目级权限覆盖。"
       eyebrow="GAME DIVISION"
-      footer={(requestClose) => <><ActionButton disabled={saving} onClick={() => requestClose()} type="button">取消</ActionButton><ActionButton disabled={saving} onClick={() => void save(requestClose)} tone="primary" type="button">{saving ? '正在保存' : division ? '保存赛区' : '创建赛区'}</ActionButton></>}
+      footer={(requestClose) => <><ActionButton disabled={saving} onClick={() => requestClose()} type="button">取消</ActionButton><ActionButton disabled={saving} onClick={() => save(requestClose)} tone="primary" type="button">{saving ? '正在保存' : division ? '保存赛区' : '创建赛区'}</ActionButton></>}
       onClose={onClose}
       open={open}
       size="wide"

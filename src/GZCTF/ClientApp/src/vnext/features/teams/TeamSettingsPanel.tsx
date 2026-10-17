@@ -52,7 +52,7 @@ export function TeamSettingsPanel({
           <ActionButton
             disabled={submitting || !editName.trim()}
             icon={<Settings size={15} />}
-            onClick={() => void onSave()}
+            onClick={() => onSave()}
             tone="primary"
             type="button"
           >
@@ -74,7 +74,7 @@ export function TeamSettingsPanel({
             type="file"
           />
         </label>
-        <ActionButton disabled={!avatarFile || submitting} onClick={() => void onUploadAvatar()} type="button">
+        <ActionButton disabled={!avatarFile || submitting} onClick={() => onUploadAvatar()} type="button">
           上传
         </ActionButton>
       </section>

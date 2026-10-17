@@ -97,7 +97,7 @@ export function TheoryQuestionDialog({
       footer={
         <>
           <ActionButton disabled={loading} onClick={onClose} type="button">取消</ActionButton>
-          <ActionButton disabled={loading} onClick={() => void save()} tone="primary" type="button">
+          <ActionButton disabled={loading} onClick={() => save()} tone="primary" type="button">
             {loading ? '正在保存' : '保存题目'}
           </ActionButton>
         </>

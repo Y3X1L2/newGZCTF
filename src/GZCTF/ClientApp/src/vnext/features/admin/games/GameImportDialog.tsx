@@ -66,7 +66,7 @@ export function GameImportDialog({
       footer={
         <>
           <ActionButton disabled={saving} onClick={onClose} type="button">取消</ActionButton>
-          <ActionButton disabled={saving || !file || issues.length > 0} icon={<Upload size={16} />} onClick={() => void submit()} tone="primary" type="button">
+          <ActionButton disabled={saving || !file || issues.length > 0} icon={<Upload size={16} />} onClick={() => submit()} tone="primary" type="button">
             {saving ? `正在导入${progress ? ` ${progress}%` : ''}` : '确认导入'}
           </ActionButton>
         </>

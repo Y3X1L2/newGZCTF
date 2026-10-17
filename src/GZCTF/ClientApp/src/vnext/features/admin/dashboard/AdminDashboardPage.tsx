@@ -225,16 +225,6 @@ export function AdminDashboardPage() {
           }
         />
         <MetricItem
-          detail="最大值减已分配与预留"
-          label="Docker 可用槽位"
-          value={dashboard.nodes.nodes ? metrics.dockerAvailable : '—'}
-        />
-        <MetricItem
-          detail="最大值减已分配与预留"
-          label="VM 可用槽位"
-          value={dashboard.nodes.nodes ? metrics.vmAvailable : '—'}
-        />
-        <MetricItem
           detail={`节点覆盖 ${metrics.instanceCoverage}`}
           label="活跃实例"
           value={

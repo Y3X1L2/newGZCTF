@@ -407,7 +407,7 @@ export function TheoryExamWorkbench({
             <ActionButton
               disabled={session.saveState === 'saving' || session.submitting}
               icon={<Save size={17} />}
-              onClick={() => void session.saveDraftNow()}
+              onClick={() => session.saveDraftNow()}
               type="button"
             >
               保存草稿
@@ -456,7 +456,7 @@ export function TheoryExamWorkbench({
       {session.saveError ? (
         <div className={styles.feedbackRow}>
           <InlineFeedback tone="danger">{session.saveError}</InlineFeedback>
-          <ActionButton onClick={() => void session.saveDraftNow()} type="button">
+          <ActionButton onClick={() => session.saveDraftNow()} type="button">
             重试保存
           </ActionButton>
         </div>
@@ -557,7 +557,7 @@ export function TheoryExamWorkbench({
             <ActionButton
               disabled={session.submitting}
               icon={<Send size={17} />}
-              onClick={() => void confirmSubmit()}
+              onClick={() => confirmSubmit()}
               tone="primary"
               type="button"
             >
