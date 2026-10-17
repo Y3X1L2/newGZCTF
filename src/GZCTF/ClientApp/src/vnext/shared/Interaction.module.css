@@ -1,4 +1,5 @@
 .actionButton {
+  position: relative;
   display: inline-flex;
   min-height: 40px;
   align-items: center;
@@ -14,11 +15,61 @@
     background-color var(--yn-motion-fast) var(--yn-ease-standard),
     border-color var(--yn-motion-fast) var(--yn-ease-standard),
     color var(--yn-motion-fast) var(--yn-ease-standard),
+    box-shadow var(--yn-motion-fast) var(--yn-ease-standard),
     transform var(--yn-motion-fast) var(--yn-ease-standard);
 }
 
 .actionButton:hover:not(:disabled) {
   transform: translateY(-1px);
+}
+
+.actionButton:active:not(:disabled) {
+  transform: translateY(1px) scale(0.97);
+}
+
+.actionButton:focus-visible {
+  outline: 2px solid var(--yn-color-brand);
+  outline-offset: 3px;
+  box-shadow: var(--yn-shadow-focus);
+}
+
+.actionButton[aria-busy='true'] {
+  cursor: progress;
+  opacity: 0.85;
+}
+
+.actionButton > svg {
+  flex-shrink: 0;
+}
+
+.actionSpinner {
+  animation: action-spin calc(var(--yn-motion-expressive) * 2) linear infinite;
+}
+
+.actionSpinnerOverlay {
+  position: absolute;
+}
+
+.actionLabelPending {
+  opacity: 0;
+}
+
+.actionAnnouncement {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.actionError {
+  color: var(--yn-color-danger);
+  font-size: var(--yn-font-sm);
+}
+
+@keyframes action-spin {
+  to { transform: rotate(360deg); }
 }
 
 .actionButton_primary {
@@ -391,6 +442,19 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .actionButton {
+    transition: none;
+  }
+
+  .actionButton:hover:not(:disabled),
+  .actionButton:active:not(:disabled) {
+    transform: none;
+  }
+
+  .actionSpinner {
+    animation: none;
+  }
+
   .drawerPanel,
   .drawerOpening::backdrop,
   .drawerClosing::backdrop {
