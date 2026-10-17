@@ -9,7 +9,7 @@ export function instanceKindLabel(kind: string) {
   return kind || '未知资源'
 }
 
-export function instanceStatusMeta(instance: GlobalInstanceItem) {
+export function instanceStatusMeta(instance: Pick<GlobalInstanceItem, 'status' | 'isActive'>) {
   const status = instance.status.toLowerCase()
   if (status.includes('error') || status.includes('failed') || status.includes('orphaned')) {
     return { label: status.includes('orphaned') ? '孤儿资源' : '异常', tone: 'danger' as AdminStatusTone }

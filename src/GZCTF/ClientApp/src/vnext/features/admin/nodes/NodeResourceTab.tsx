@@ -1,4 +1,4 @@
-import { ExternalLink, Eye, Search, Trash2 } from 'lucide-react'
+import { Eye, Search, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { ActionButton, InlineFeedback, VNextConfirmDialog } from '../../../shared/Interaction'
 import { DataState } from '../../../shared/Primitives'
@@ -19,6 +19,8 @@ import {
 import { useAdminQueryState } from '../shared/useAdminQueryState'
 import styles from './NodeResourceTab.module.css'
 import { useNodeResources } from './useAdminNodes'
+import { NodeResourceEntry } from './NodeResourceEntry'
+import { instanceStatusMeta } from '../instances/instancePresentation'
 
 const PAGE_SIZE = 12
 
@@ -79,7 +81,7 @@ export function NodeResourceTab({ nodeId, onMutated }: { nodeId: string; onMutat
       header: '状态',
       width: 'compact',
       render: (resource) => (
-        <StatusBadge tone={resource.isActive ? 'success' : 'neutral'}>{resource.status}</StatusBadge>
+        <StatusBadge tone={instanceStatusMeta(resource).tone}>{instanceStatusMeta(resource).label}</StatusBadge>
       ),
     },
     {
@@ -87,18 +89,7 @@ export function NodeResourceTab({ nodeId, onMutated }: { nodeId: string; onMutat
       header: '入口',
       width: 'wide',
       visibility: 'wide',
-      render: (resource) =>
-        resource.entry ? (
-          <a className={styles.entry} href={resource.entry} rel="noreferrer" target="_blank">
-            {resource.entry}
-            <ExternalLink size={13} />
-          </a>
-        ) : (
-          <span className={styles.mono}>
-            {resource.ip || '—'}
-            {resource.port ? `:${resource.port}` : ''}
-          </span>
-        ),
+      render: (resource) => <NodeResourceEntry resource={resource} />,
     },
     {
       id: 'duration',
@@ -245,7 +236,7 @@ export function NodeResourceTab({ nodeId, onMutated }: { nodeId: string; onMutat
             </div>
             <div>
               <dt>运行状态</dt>
-              <dd>{selected.status}</dd>
+              <dd>{instanceStatusMeta(selected).label}</dd>
             </div>
             <div>
               <dt>业务上下文</dt>
@@ -272,7 +263,7 @@ export function NodeResourceTab({ nodeId, onMutated }: { nodeId: string; onMutat
             </div>
             <div className={styles.detailWide}>
               <dt>公开入口</dt>
-              <dd>{selected.entry || '—'}</dd>
+              <dd><NodeResourceEntry resource={selected} /></dd>
             </div>
             <div className={styles.detailWide}>
               <dt>资源标识</dt>
