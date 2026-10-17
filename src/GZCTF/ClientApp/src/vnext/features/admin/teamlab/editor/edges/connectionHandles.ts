@@ -6,6 +6,11 @@ export const networkPathOptions = { borderRadius: 10, offset: 16 } as const
 
 interface Point { x: number; y: number }
 interface Box extends Point { width: number; height: number }
+export interface ExistingSourceRoute {
+  sourceHandle: string
+  targetHandle: string
+  target: TopologyNode | undefined
+}
 
 const sides = [Position.Top, Position.Right, Position.Bottom, Position.Left] as const
 const sourceHandles = { top: 'source-top', right: 'source', bottom: 'source-bottom', left: 'source-left' }
@@ -53,11 +58,29 @@ function lowerScore(candidate: number[], current: number[]) {
   return false
 }
 
+function sharedLength(points: Point[], occupied: Point[]) {
+  let length = 0
+  for (let index = 1; index < points.length; index++) {
+    const a = points[index - 1]
+    const b = points[index]
+    for (let other = 1; other < occupied.length; other++) {
+      const c = occupied[other - 1]
+      const d = occupied[other]
+      if (a.x === b.x && c.x === d.x && Math.abs(a.x - c.x) < 0.01)
+        length += Math.max(0, Math.min(Math.max(a.y, b.y), Math.max(c.y, d.y)) - Math.max(Math.min(a.y, b.y), Math.min(c.y, d.y)))
+      else if (a.y === b.y && c.y === d.y && Math.abs(a.y - c.y) < 0.01)
+        length += Math.max(0, Math.min(Math.max(a.x, b.x), Math.max(c.x, d.x)) - Math.max(Math.min(a.x, b.x), Math.min(c.x, d.x)))
+    }
+  }
+  return length
+}
+
 /** Prefer a clear, short orthogonal route over the centre-to-centre direction. */
 export function connectionHandles(
   source: TopologyNode | undefined,
   target: TopologyNode | undefined,
-  nodes: readonly TopologyNode[] = []
+  nodes: readonly TopologyNode[] = [],
+  occupied: readonly ExistingSourceRoute[] = []
 ) {
   if (!source || !target) return { sourceHandle: 'source', targetHandle: 'target' }
   const a = { ...source.position, ...nodeSize(source) }
@@ -71,6 +94,17 @@ export function connectionHandles(
     : dy >= 0 ? [Position.Bottom, Position.Top] : [Position.Top, Position.Bottom]
   const obstacles = nodes.filter(node => node.key !== source.key && node.key !== target.key)
     .map(node => ({ ...node.position, ...nodeSize(node) }))
+  const occupiedPoints = occupied.flatMap(route => {
+    if (!route.target || route.target.key === target.key) return []
+    const from = sides.find(side => sourceHandles[side] === route.sourceHandle)
+    const to = sides.find(side => targetHandles[side] === route.targetHandle)
+    if (!from || !to) return []
+    const start = anchor(a, from)
+    const end = anchor({ ...route.target.position, ...nodeSize(route.target) }, to)
+    const [path] = getSmoothStepPath({ sourceX: start.x, sourceY: start.y, targetX: end.x, targetY: end.y,
+      sourcePosition: from, targetPosition: to, ...networkPathOptions, borderRadius: 0 })
+    return [orthogonalPoints(path)]
+  })
   let best: { sourceHandle: string; targetHandle: string; score: number[] } | undefined
   for (const from of sides) {
     for (const to of sides) {
@@ -94,7 +128,10 @@ export function connectionHandles(
       // side of the switch otherwise creates tiny return bends near its ports.
       // Safety always wins; a blocked facing route still yields to a clear one.
       const facingPenalty = Number(from !== preferred[0]) + Number(to !== preferred[1])
-      const score = [hits, tight, length + bends * 24 + facingPenalty * 64, bends]
+      // Different NIC networks must remain traceable from the same asset. Allow
+      // a short shared port approach, but discourage a long indistinguishable trunk.
+      const overlap = occupiedPoints.reduce((total, route) => total + Math.max(0, sharedLength(points, route) - 32), 0)
+      const score = [hits, tight, length + bends * 24 + facingPenalty * 64 + overlap * 2, bends]
       if (!best || lowerScore(score, best.score))
         best = { sourceHandle: sourceHandles[from], targetHandle: targetHandles[to], score }
     }

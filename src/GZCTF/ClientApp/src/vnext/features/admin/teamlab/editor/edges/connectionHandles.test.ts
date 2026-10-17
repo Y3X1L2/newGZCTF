@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { createEmptyTopologyDocument, type TopologyNode } from '../../model/topologyDocument'
 import { nodeSize } from '../../model/topologyGeometry'
 import { createTopologyNode } from '../nodeFactory'
-import { connectionHandles, networkPathOptions } from './connectionHandles'
+import { connectionHandles, networkPathOptions, type ExistingSourceRoute } from './connectionHandles'
 
 // Sample the actual rounded SVG rendered by React Flow, independently of the
 // zero-radius orthogonal collision checks used to rank candidates.
@@ -31,8 +31,8 @@ function renderedPoints(path: string) {
   return points
 }
 
-function renderedRoute(source: TopologyNode, target: TopologyNode, nodes: TopologyNode[]) {
-  const handles = connectionHandles(source, target, nodes)
+function renderedRoute(source: TopologyNode, target: TopologyNode, nodes: TopologyNode[], occupied: ExistingSourceRoute[] = []) {
+  const handles = connectionHandles(source, target, nodes, occupied)
   const side = (id: string, fallback: Position) => id.includes('-') ? id.split('-')[1] as Position : fallback
   const from = side(handles.sourceHandle, Position.Right)
   const to = side(handles.targetHandle, Position.Left)
@@ -108,5 +108,29 @@ describe('connectionHandles', () => {
     expect(after.hits, after.path).toEqual([])
     expect(after.sourceHandle).not.toBe(before.sourceHandle)
     expect(renderedRoute(source, lab[0], moved)).toEqual(after)
+  })
+
+  it.each([false, true])('keeps all five Lab2 links visible without a long shared web01 trunk (reverse=%s)', reverse => {
+    const entry = { ...network, key: 'switch-entry', position: { ...network.position, x: 24, y: -75.8 } }
+    const nodes = [...lab, entry]
+    const source = lab.find(node => node.key === 'web01')!
+    const targets = reverse ? [lab[0], entry] : [entry, lab[0]]
+    const first = renderedRoute(source, targets[0], nodes)
+    const second = renderedRoute(source, targets[1], nodes, [{ ...first, target: targets[0] }])
+    expect(first.hits, first.path).toEqual([])
+    expect(second.hits, second.path).toEqual([])
+    expect(second.sourceHandle).not.toBe(first.sourceHandle)
+    const a = new Set(renderedPoints(first.path).map(point => `${Math.round(point.x)},${Math.round(point.y)}`))
+    const commonPixels = new Set(renderedPoints(second.path)
+      .map(point => `${Math.round(point.x)},${Math.round(point.y)}`).filter(point => a.has(point)))
+    expect(commonPixels.size).toBeLessThan(32)
+    for (const key of ['dc01', 'oa01', 'win7']) {
+      const route = renderedRoute(lab.find(node => node.key === key)!, lab[0], nodes)
+      expect(route.hits, route.path).toEqual([])
+      if (key !== 'win7') {
+        expect(route.sourceHandle).toBe('source-top')
+        expect(route.targetHandle).toBe('target-bottom')
+      }
+    }
   })
 })
