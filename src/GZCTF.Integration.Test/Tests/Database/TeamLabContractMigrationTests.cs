@@ -46,7 +46,7 @@ public sealed class TeamLabContractMigrationTests : IAsyncLifetime
         await using (var context = CreateContext())
         {
             await context.Database.GetService<IMigrator>().MigrateAsync(previous);
-            context.Users.Add(CreateUser(owner, "managed-owner"));
+            await HistoricalUserFixture.InsertAsync(context, CreateUser(owner, "managed-owner"));
             context.TeamLabTopologies.Add(new TeamLabTopology { Id = 9551, Name = "Legacy managed network", OwnerUserId = owner, Revision = 1 });
             context.TeamLabTopologyNetworks.Add(new TeamLabTopologyNetwork
             {
@@ -203,7 +203,9 @@ public sealed class TeamLabContractMigrationTests : IAsyncLifetime
                 CreateRequestHash = "migration"
             };
 
-            context.AddRange(owner, operatorUser, game, team, topology, release, runtime);
+            await HistoricalUserFixture.InsertAsync(context, owner);
+            await HistoricalUserFixture.InsertAsync(context, operatorUser);
+            context.AddRange(game, team, topology, release, runtime);
             context.Add(new PenetrationTeamRuntimeBinding
             {
                 GameId = game.Id,
@@ -256,7 +258,7 @@ public sealed class TeamLabContractMigrationTests : IAsyncLifetime
         };
         var game = new Game { Id = 3101, Title = "Legacy TeamLab" };
         var team = new Team { Id = 3102, Name = "Legacy Team", CaptainId = user.Id };
-        context.Users.Add(user);
+        await HistoricalUserFixture.InsertAsync(context, user);
         context.Games.Add(game);
         context.Teams.Add(team);
         await context.SaveChangesAsync();
