@@ -197,8 +197,8 @@ function TeamLabDesignSession({
         onSave={async (document) => {
           await autosave.flush(document)
         }}
-        onPublish={() => void checkAndPublish()}
-        onValidate={() => void validate()}
+        onPublish={checkAndPublish}
+        onValidate={async () => { await validate() }}
         publicationState={publicationState}
         publicationStatus={publicationStatus}
         publishDisabled={!hasUnpublishedChanges || validating}

@@ -22,7 +22,7 @@ export function VmDiagnosticsPanel({ runtime, assetId }: { runtime: TeamLabRunti
     </button>
     {open ? <div className={styles.powerContent}>
       <ActionButton icon={<RefreshCw size={16} />} disabled={diagnostics.isValidating}
-        onClick={() => void diagnostics.mutate()} type="button">刷新电源状态</ActionButton>
+        onClick={() => diagnostics.mutate()} type="button">刷新电源状态</ActionButton>
       {diagnostics.error ? <InlineFeedback tone="danger">{errorMessage(diagnostics.error, '电源状态读取失败。')}</InlineFeedback>
         : diagnostics.isLoading || !diagnostics.data ? <DataState loading title="正在读取电源状态" />
         : <dl className={styles.diagnosticsFacts}>

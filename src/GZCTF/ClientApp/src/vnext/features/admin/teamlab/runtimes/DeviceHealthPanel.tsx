@@ -20,7 +20,7 @@ export function DeviceHealthPanel({ runtimeId, generation, assetId }: { runtimeI
   if (!request.error && !data?.length) return null
   return <section className={styles.panel} aria-labelledby={title}>
     <header className={styles.panelHeader}><h3 id={title}>设备状态</h3>
-      <ActionButton type="button" disabled={request.isValidating} onClick={() => void request.mutate()}>刷新结果</ActionButton>
+      <ActionButton type="button" disabled={request.isValidating} onClick={() => request.mutate()}>刷新结果</ActionButton>
     </header>
     {request.error ? <InlineFeedback tone="danger">{errorMessage(request.error, '设备监督结果读取失败，请重试。')}</InlineFeedback> : null}
     <div className={styles.sessionTableScroll} tabIndex={0} role="region" aria-label="设备监督结果"><table className={`${styles.sessionTable} ${styles.deviceHealthTable}`}>

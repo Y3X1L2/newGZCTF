@@ -31,10 +31,10 @@ export function TaskHistoryPanel({ runtimeId, generation, currentStatus }: { run
   const selectedFailure = selected?.errorCode ?? selected?.blockedReasonCode
   return <section aria-label="操作记录" className={styles.recordPanel}>
     <div className={styles.toolbar}><label><input type="checkbox" checked={history.currentOnly} onChange={event => history.setCurrentOnly(event.currentTarget.checked)} /> 当前运行</label>
-      <ActionButton aria-label="刷新操作记录" title="刷新操作记录" icon={<RefreshCw size={16} />} disabled={history.isValidating} onClick={() => void history.mutate()} type="button" /></div>
+      <ActionButton aria-label="刷新操作记录" title="刷新操作记录" icon={<RefreshCw size={16} />} disabled={history.isValidating} onClick={() => history.mutate()} type="button" /></div>
     <p className={styles.recordScope}>每条结果仅对应当次操作；当前环境状态以页首为准。</p>
     {history.error ? <InlineFeedback tone="danger">{errorMessage(history.error, '操作记录读取失败。')}
-        <ActionButton aria-label="重新读取操作记录" icon={<RefreshCw size={15} />} onClick={() => void history.mutate()} type="button" />
+        <ActionButton aria-label="重新读取操作记录" icon={<RefreshCw size={15} />} onClick={() => history.mutate()} type="button" />
       </InlineFeedback>
       : history.isLoading ? <DataState loading title="正在读取操作记录" /> : history.data?.items.length ? <ol className={styles.timeline}>
         {history.data.items.map(task => <li key={task.id}><button aria-haspopup="dialog" data-status={task.status} onClick={() => setSelected(task)} type="button">

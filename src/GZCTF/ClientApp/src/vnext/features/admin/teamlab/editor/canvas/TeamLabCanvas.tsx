@@ -26,6 +26,7 @@ import {
 } from '../../model/topologyGeometry'
 import type { TopologySelection } from '../../model/topologySelection'
 import { teamLabEdgeTypes } from '../edges'
+import { connectionHandles } from '../edges/connectionHandles'
 import type { TeamLabFlowEdge } from '../edges/edgeTypes'
 import { buildTopologyGraph, type TopologyGraph } from '../layout/topologyGraph'
 import { teamLabNodeTypes } from '../nodes'
@@ -231,6 +232,8 @@ function reconcileEdges(current: TeamLabFlowEdge[], next: TeamLabFlowEdge[]) {
       previous &&
       previous.source === edge.source &&
       previous.target === edge.target &&
+      previous.sourceHandle === edge.sourceHandle &&
+      previous.targetHandle === edge.targetHandle &&
       previous.type === edge.type &&
       previous.data?.connection === edge.data?.connection &&
       previous.data?.label === edge.data?.label &&
@@ -297,6 +300,7 @@ function flowEdges(document: TopologyDocument): TeamLabFlowEdge[] {
         id: connection.key,
         source: connection.nodeKey,
         target: connection.switchKey,
+        ...connectionHandles(document.nodes[connection.nodeKey], document.nodes[connection.switchKey]),
         type: 'network',
         selected: false,
         zIndex: edgeLayer(false),
@@ -316,6 +320,7 @@ function flowEdges(document: TopologyDocument): TeamLabFlowEdge[] {
         id: connection.key,
         source: connection.fromSwitchKey,
         target: connection.toSwitchKey,
+        ...connectionHandles(document.nodes[connection.fromSwitchKey], document.nodes[connection.toSwitchKey]),
         type: 'network',
         selected: false,
         zIndex: edgeLayer(false),

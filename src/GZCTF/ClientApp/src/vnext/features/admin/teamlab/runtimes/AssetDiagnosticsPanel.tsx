@@ -28,7 +28,7 @@ export function AssetDiagnosticsPanel({ runtime, assetId }: { runtime: TeamLabRu
     <header className={styles.panelHeader}>
       <h3 id={titleId}>容器诊断</h3>
       <ActionButton icon={<RefreshCw size={16} />} disabled={!asset || diagnostics.isValidating}
-        onClick={() => void diagnostics.mutate()} type="button">刷新诊断</ActionButton>
+        onClick={() => diagnostics.mutate()} type="button">刷新诊断</ActionButton>
     </header>
     {!asset ? <DataState title="暂无可诊断的容器资产" /> : <>
       <div className={styles.diagnosticsControls}>

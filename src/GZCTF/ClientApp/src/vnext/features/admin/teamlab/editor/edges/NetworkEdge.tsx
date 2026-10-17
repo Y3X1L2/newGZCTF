@@ -24,6 +24,7 @@ export function NetworkEdge({
     sourcePosition,
     targetPosition,
     borderRadius: 10,
+    offset: 16,
   })
   // A route between networks is the meaningful link; an intra-network membership
   // is structural context and stays visually quieter.
