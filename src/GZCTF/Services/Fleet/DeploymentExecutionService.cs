@@ -108,8 +108,20 @@ public class DeploymentExecutionService
     }
 
     public virtual async Task<DeploymentExecutionResult> ExecuteAsync(DeploymentQueueTicket ticket,
-        CancellationToken token) =>
-        ticket.Operation == RuntimeOperationKind.Create
+        CancellationToken token)
+    {
+        if (ticket.Operation == RuntimeOperationKind.Create && ticket.OwnerUserId is { } ownerId &&
+            (ticket.Kind is DeploymentQueueKind.ExerciseContainer or DeploymentQueueKind.TrainingContainer or
+                DeploymentQueueKind.VirtualMachine or DeploymentQueueKind.ChallengeTestContainer) &&
+            await _context.Users.AsNoTracking().AnyAsync(user => user.Id == ownerId && user.DeletedAtUtc != null, token))
+        {
+            const string message = "The owning account was deleted before this personal runtime could start.";
+            return DeploymentExecutionResult.Failed(message, new OperationalError(
+                OperationalErrorCategory.Authorization, OperationalErrorCodes.AuthorizationForbidden,
+                message, false, Operation: "runtime.execute"));
+        }
+
+        return ticket.Operation == RuntimeOperationKind.Create
             ? ticket.Kind switch
             {
                 DeploymentQueueKind.GameContainer => await ExecuteGameContainerAsync(ticket, token),
@@ -122,6 +134,7 @@ public class DeploymentExecutionService
                 _ => DeploymentExecutionResult.Failed($"Unsupported deployment queue kind {ticket.Kind}.")
             }
             : await ExecuteControlAsync(ticket, token);
+    }
 
     async Task<DeploymentExecutionResult> ExecuteControlAsync(DeploymentQueueTicket ticket,
         CancellationToken token) => ticket.Kind switch
