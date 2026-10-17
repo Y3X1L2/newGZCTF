@@ -31,6 +31,8 @@ Redis 观测缓存与 PostgreSQL 回退实现管理观测读路径，数据库�
 
 运行请求携带规范化资源需求与身份，计分、课程和 Flag 判定由业务模块负责。Docker/KVM 独立适配；容量判断同时看预留与 inventory，在线状态与资源余量分别检查。取消、恢复、销毁按资源归属和 generation 处理，数据库保留待处理任务，Redis 唤醒可由轮询补充。
 
+个人练习、培训、VM 与管理员测试容器的创建票据在实际执行前重新读取所属账号的 `DeletedAtUtc`。排队后账号已删除时，执行返回不可重试的授权失败，由统一队列写入 Failed 并释放容量预留；Identity 不直接修改票据。该守卫只阻止新的个人实例创建，已有实例的停止、销毁和正常生命周期继续执行，战队与 TeamLab runtime 使用各自的归属规则。回归见 `RuntimeControlPlaneTests.DeletedPersonalOwner_FailsScheduledCreateAndReleasesReservation`。
+
 入口公布使用自身 ACK/就绪语义；VM 按访问协议分别确认配置地址、QGA 初始化、RDP 服务、VNC 图形监听和真实用户登录。服务端错误必须脱敏。修复运行状态时依据数据库身份、目标意图和节点 inventory；日志用于追踪原因。
 
 ## 验证选择
