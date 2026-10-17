@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useAdminImages } from '../images/useAdminImages'
 import { useAdminInstances } from '../instances/useAdminInstances'
 import { useAdminLogs } from '../logs/useAdminLogs'
@@ -6,6 +7,7 @@ import { useDeploymentQueue } from '../queue/useDeploymentQueue'
 import { deriveDashboardMetrics } from './dashboardSelectors'
 
 export function useAdminDashboard() {
+  const [manualRefreshing, setManualRefreshing] = useState(false)
   const nodes = useAdminNodes()
   const images = useAdminImages({})
   const queue = useDeploymentQueue({ page: 1, pageSize: 20, cursor: null })
@@ -14,8 +16,14 @@ export function useAdminDashboard() {
   const metrics = deriveDashboardMetrics(nodes.nodes, images.images, instances.inventory)
 
   const refresh = async () => {
-    await Promise.all([nodes.mutate(), images.mutate(), queue.mutate(), instances.mutate(), logs.mutate()])
+    if (manualRefreshing) return
+    setManualRefreshing(true)
+    try {
+      await Promise.all([nodes.mutate(), images.mutate(), queue.mutate(), instances.mutate(), logs.mutate()])
+    } finally {
+      setManualRefreshing(false)
+    }
   }
 
-  return { nodes, images, queue, instances, logs, metrics, refresh }
+  return { nodes, images, queue, instances, logs, metrics, refresh, manualRefreshing }
 }
