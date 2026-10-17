@@ -1,4 +1,4 @@
-import { X } from 'lucide-react'
+import { LoaderCircle, X } from 'lucide-react'
 import { ReactNode, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import styles from './Interaction.module.css'
@@ -30,16 +30,59 @@ export function ActionButton({
   tone = 'secondary',
   icon,
   className,
+  loading = false,
+  loadingLabel,
+  disabled,
+  onClick,
   ...props
-}: React.ButtonHTMLAttributes<HTMLButtonElement> & {
+}: Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, 'onClick'> & {
   tone?: ActionTone
   icon?: ReactNode
+  loading?: boolean
+  loadingLabel?: string
+  onClick?: (event: React.MouseEvent<HTMLButtonElement>) => unknown
 }) {
+  const [pending, setPending] = useState(false)
+  const [failed, setFailed] = useState(false)
+  const pendingRef = useRef(false)
+  const busy = loading || pending
+  const handleClick = async (event: React.MouseEvent<HTMLButtonElement>) => {
+    if (disabled || loading || pendingRef.current) {
+      event.preventDefault()
+      return
+    }
+    setFailed(false)
+    try {
+      const result = onClick?.(event)
+      if (result && typeof (result as PromiseLike<unknown>).then === 'function') {
+        pendingRef.current = true
+        setPending(true)
+        await result
+      }
+    } catch {
+      // Feature controllers own domain errors. Keep an uncaught action failure visible too.
+      setFailed(true)
+    } finally {
+      pendingRef.current = false
+      setPending(false)
+    }
+  }
+
   return (
-    <button className={`${styles.actionButton} ${styles[`actionButton_${tone}`]} ${className ?? ''}`} {...props}>
-      {icon}
-      <span>{children}</span>
-    </button>
+    <>
+      <button
+        {...props}
+        aria-busy={busy || undefined}
+        className={`${styles.actionButton} ${styles[`actionButton_${tone}`]} ${className ?? ''}`}
+        disabled={disabled || busy}
+        onClick={handleClick}
+      >
+        {busy ? <LoaderCircle aria-hidden="true" className={`${styles.actionSpinner} ${!icon && !loadingLabel ? styles.actionSpinnerOverlay : ''}`} size={16} /> : icon}
+        <span className={busy && !icon && !loadingLabel ? styles.actionLabelPending : undefined}>{busy && loadingLabel ? loadingLabel : children}</span>
+      </button>
+      {busy ? <span className={styles.actionAnnouncement} role="status">正在处理，请稍候</span> : null}
+      {failed ? <span className={styles.actionError} role="alert">操作未完成，请重试。</span> : null}
+    </>
   )
 }
 
@@ -172,7 +215,7 @@ export function VNextConfirmDialog({
           <ActionButton disabled={confirming} onClick={onClose} type="button">
             取消
           </ActionButton>
-          <ActionButton disabled={!accepted || confirming} onClick={() => void confirm()} tone={tone} type="button">
+          <ActionButton disabled={!accepted} loading={confirming} onClick={confirm} tone={tone} type="button">
             {confirming ? '正在处理' : confirmLabel}
           </ActionButton>
         </>
@@ -182,6 +225,7 @@ export function VNextConfirmDialog({
       }}
       open={open}
       title={title}
+      closeDisabled={confirming}
     >
       <div className={styles.confirmContent}>
         <p>{message}</p>
