@@ -295,13 +295,17 @@ function selectionSignature(nodeKeys: readonly string[], connectionKeys: readonl
 function flowEdges(document: TopologyDocument): TeamLabFlowEdge[] {
   const edges: TeamLabFlowEdge[] = []
   const obstacles = Object.values(document.nodes)
-  for (const connection of Object.values(document.connections)) {
+  for (const connection of Object.values(document.connections).toSorted((a, b) => a.key.localeCompare(b.key))) {
     if (connection.type === 'membership') {
       edges.push({
         id: connection.key,
         source: connection.nodeKey,
         target: connection.switchKey,
-        ...connectionHandles(document.nodes[connection.nodeKey], document.nodes[connection.switchKey], obstacles),
+        ...connectionHandles(document.nodes[connection.nodeKey], document.nodes[connection.switchKey], obstacles,
+          edges.filter(edge => edge.source === connection.nodeKey).map(edge => ({
+            sourceHandle: edge.sourceHandle ?? 'source', targetHandle: edge.targetHandle ?? 'target',
+            target: document.nodes[edge.target],
+          }))),
         type: 'network',
         selected: false,
         zIndex: edgeLayer(false),
