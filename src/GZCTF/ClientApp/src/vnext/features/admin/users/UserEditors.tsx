@@ -122,7 +122,7 @@ export function UserCreateDialog({
       footer={
         <>
           <ActionButton disabled={saving} onClick={onClose} type="button">取消</ActionButton>
-          <ActionButton disabled={!valid || saving} icon={<UserPlus size={16} />} onClick={() => void submit()} tone="primary" type="button">
+          <ActionButton disabled={!valid || saving} icon={<UserPlus size={16} />} onClick={submit} tone="primary" type="button">
             {saving ? '正在创建' : '创建用户'}
           </ActionButton>
         </>
@@ -175,6 +175,7 @@ export function UserDetailDrawer({
   const [failure, setFailure] = useState<string | null>(null)
   const options = useMemo(() => roleOptions(actorRole), [actorRole])
   const isSelf = Boolean(user?.id && user.id === currentUserId)
+  const canDelete = actorRole === Role.Admin || actorRole === Role.SuperAdmin
 
   useEffect(() => {
     if (!user) return
@@ -223,9 +224,9 @@ export function UserDetailDrawer({
           <div className={styles.drawerActions}>
             <div>
               <ActionButton disabled={saving} icon={<KeyRound size={16} />} onClick={() => onRequestReset(user)} type="button">重置密码</ActionButton>
-              <ActionButton disabled={saving || isSelf} icon={<Trash2 size={16} />} onClick={() => onRequestDelete(user)} tone="danger" type="button">删除</ActionButton>
+              {canDelete ? <ActionButton disabled={saving || isSelf} icon={<Trash2 size={16} />} onClick={() => onRequestDelete(user)} tone="danger" type="button">删除</ActionButton> : null}
             </div>
-            <ActionButton disabled={saving} icon={<Save size={16} />} onClick={() => void save()} tone="primary" type="button">{saving ? '保存中' : '保存修改'}</ActionButton>
+            <ActionButton disabled={saving} icon={<Save size={16} />} onClick={save} tone="primary" type="button">{saving ? '保存中' : '保存修改'}</ActionButton>
           </div>
         ) : null
       }

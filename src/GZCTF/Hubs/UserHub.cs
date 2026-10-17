@@ -41,7 +41,7 @@ public class UserHub : Hub<IUserClient>
         var userManager = context.RequestServices.GetRequiredService<UserManager<UserInfo>>();
         var participationRepository = context.RequestServices.GetRequiredService<IParticipationRepository>();
         var user = await userManager.GetUserAsync(Context.User);
-        if (user is null)
+        if (user is null || user.DeletedAtUtc is not null)
             return;
 
         var participation = await participationRepository.GetParticipation(user.Id, gId);

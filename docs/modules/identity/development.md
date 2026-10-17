@@ -13,6 +13,12 @@
 账号数据基于 ASP.NET Identity，身份策略和中间件与业务模块共同决定访问范围。
 比赛参赛归 CTF、课程报名归 Training，Identity 不持有这些业务授权事实。
 
+账号删除由 [UserDeletionService](../../../src/GZCTF/Modules/Identity/Application/UserDeletionService.cs) 在可串行化事务内完成：使用 `UserInfo.DeletedAtUtc` 墓碑，保留所有历史外键，避免物理删除触发战队级联或运行记录外键限制。服务清除 PII、规范化登录键、Identity tokens/claims/roles、外部登录绑定和学员组关系，更新安全戳并撤销 API tokens；安全戳每次请求验证，旧 Cookie 后续请求立即失效。API token 验证每次读取当前角色与撤销状态。不会使用全局 query filter 隐藏计分与业务历史。管理列表、公开资料和按 ID 的管理写入显式排除墓碑；批量建队解析同样拒绝墓碑账号。
+
+删除自动移除 `Team.Members`，交接队长并轮换邀请 token；孤队保留 `CaptainId` 指向墓碑以保留参赛历史，锁定且拒绝邀请/申请，不删除 `UserParticipation`、`Participation` 或提交。数据库迁移 `AddUserDeletionTombstone` 只增加可空字段。上线按生产手册先备份、隔离恢复并前向升级；应用回退保留新字段和墓碑，不执行删除字段的 Down 迁移，不恢复被清除的凭据。
+
+验证见 [UserDeletionTests](../../../src/GZCTF.Integration.Test/Tests/Api/UserDeletionTests.cs)（管理员权限、队长交接、孤队、旧会话、匿名历史与登录键复用）和 [UserDeletionMigrationTests](../../../src/GZCTF.Integration.Test/Tests/Database/UserDeletionMigrationTests.cs)（真实 PostgreSQL 升级与备份恢复）。账号删除不等于销毁其业务运行实例；实例按所属模块的生命周期保留、过期或由管理员单独清理，跨系统门户会话仍须目标环境联调。
+
 ## 战队与学员组
 
 [TeamController](../../../src/GZCTF/Controllers/TeamController.cs) 处理创建、邀请、入队申请、

@@ -37,7 +37,7 @@ public sealed class EfApiTokenStore(AppDbContext context, IMemoryCache cache) : 
                 token.LastUsedAt,
                 token.RevokedAt,
                 CreatorRole = context.Users
-                    .Where(user => user.Id == token.CreatorId)
+                    .Where(user => user.Id == token.CreatorId && user.DeletedAtUtc == null)
                     .Select(user => (Role?)user.Role)
                     .SingleOrDefault()
             })
