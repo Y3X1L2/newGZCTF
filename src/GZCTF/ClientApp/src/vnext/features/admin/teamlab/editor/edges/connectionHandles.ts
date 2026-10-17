@@ -62,6 +62,13 @@ export function connectionHandles(
   if (!source || !target) return { sourceHandle: 'source', targetHandle: 'target' }
   const a = { ...source.position, ...nodeSize(source) }
   const b = { ...target.position, ...nodeSize(target) }
+  const dx = b.x + b.width / 2 - (a.x + a.width / 2)
+  const dy = b.y + b.height / 2 - (a.y + a.height / 2)
+  const horizontalGap = Math.abs(dx) - (a.width + b.width) / 2
+  const verticalGap = Math.abs(dy) - (a.height + b.height) / 2
+  const preferred = horizontalGap > verticalGap
+    ? dx >= 0 ? [Position.Right, Position.Left] : [Position.Left, Position.Right]
+    : dy >= 0 ? [Position.Bottom, Position.Top] : [Position.Top, Position.Bottom]
   const obstacles = nodes.filter(node => node.key !== source.key && node.key !== target.key)
     .map(node => ({ ...node.position, ...nodeSize(node) }))
   let best: { sourceHandle: string; targetHandle: string; score: number[] } | undefined
@@ -83,7 +90,11 @@ export function connectionHandles(
         const after = points[index + 2]
         return (point.x - before.x) * (after.y - point.y) !== (point.y - before.y) * (after.x - point.x)
       }).length
-      const score = [hits, tight, length + bends * 24, bends]
+      // Keep a clean star's facing edges: saving a few pixels by entering the
+      // side of the switch otherwise creates tiny return bends near its ports.
+      // Safety always wins; a blocked facing route still yields to a clear one.
+      const facingPenalty = Number(from !== preferred[0]) + Number(to !== preferred[1])
+      const score = [hits, tight, length + bends * 24 + facingPenalty * 64, bends]
       if (!best || lowerScore(score, best.score))
         best = { sourceHandle: sourceHandles[from], targetHandle: targetHandles[to], score }
     }
