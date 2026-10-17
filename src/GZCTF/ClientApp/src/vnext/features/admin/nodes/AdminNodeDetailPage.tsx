@@ -271,12 +271,6 @@ export function AdminNodeDetailPage() {
           value={status.label}
         />
         <MetricItem
-          detail={`${node.allocatedContainers} 已分配`}
-          label="Docker"
-          value={`${node.currentContainers} / ${node.maxContainers}`}
-        />
-        <MetricItem detail={`${node.allocatedVms} 已分配`} label="VM" value={`${node.currentVms} / ${node.maxVms}`} />
-        <MetricItem
           detail={`${node.portPoolStart}-${node.portPoolEnd}`}
           label="公网端口"
           value={`${node.usedPorts} / ${node.totalPorts}`}
