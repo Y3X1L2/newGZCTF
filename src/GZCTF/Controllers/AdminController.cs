@@ -33,6 +33,7 @@ namespace GZCTF.Controllers;
 public class AdminController(
     AppDbContext context,
     UserManager<UserInfo> userManager,
+    UserDeletionService userDeletion,
     ILogger<AdminController> logger,
     IBlobStorage storage,
     IPlatformCache cacheHelper,
@@ -557,8 +558,7 @@ public class AdminController(
         if (actor is null)
             return Unauthorized();
 
-        var result = await serviceProvider.GetRequiredService<UserDeletionService>()
-            .DeleteAsync(actor.Id, userid, token);
+        var result = await userDeletion.DeleteAsync(actor.Id, userid, token);
         return result switch
         {
             UserDeletionResult.Deleted => Ok(),
@@ -567,6 +567,7 @@ public class AdminController(
             UserDeletionResult.SelfDeletion => BadRequest(new RequestResponse(
                 localizer[nameof(Resources.Program.Admin_SelfDeletionNotAllowed)])),
             UserDeletionResult.LastSuperAdmin => BadRequest(new RequestResponse("不能删除最后一个超级管理员。")),
+            UserDeletionResult.Conflict => Conflict(new RequestResponse("用户或战队状态已变化，请刷新后重试。", StatusCodes.Status409Conflict)),
             _ => Forbid()
         };
     }
