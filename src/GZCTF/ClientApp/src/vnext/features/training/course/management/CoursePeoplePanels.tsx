@@ -298,7 +298,7 @@ export function CourseStudentsPanel({ course }: { course: TrainingCourseModel })
       >
         <form className={styles.searchForm} onSubmit={(event) => void searchCandidates(event)}>
           <TextField label="搜索用户" onValueChange={setKeyword} placeholder="输入姓名、用户名或学号" value={keyword} />
-          <ActionButton disabled={searching} icon={<Search size={16} />} type="submit">
+          <ActionButton loading={searching} disabled={searching} icon={<Search size={16} />} type="submit">
             {searching ? '搜索中' : '搜索'}
           </ActionButton>
         </form>

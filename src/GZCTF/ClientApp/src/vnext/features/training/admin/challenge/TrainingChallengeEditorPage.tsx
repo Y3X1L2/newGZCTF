@@ -406,7 +406,7 @@ export function TrainingChallengeEditorPage() {
         </EditorSection>
 
         <EditorActionBar status={feedback?.message || '保存后返回课程题目管理。'}>
-          <ActionButton disabled={saving} icon={<Save size={17} />} tone="primary" type="submit">
+          <ActionButton loading={saving} disabled={saving} icon={<Save size={17} />} tone="primary" type="submit">
             {saving ? '正在保存' : editing ? '保存题目' : '创建题目'}
           </ActionButton>
         </EditorActionBar>

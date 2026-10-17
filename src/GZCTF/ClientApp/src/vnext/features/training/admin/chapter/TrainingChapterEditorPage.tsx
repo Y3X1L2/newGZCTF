@@ -373,7 +373,7 @@ export function TrainingChapterEditorPage() {
         ) : null}
 
         <EditorActionBar status={feedback?.message || '保存成功后返回课程章节列表。'}>
-          <ActionButton disabled={saving} icon={<Save size={17} />} tone="primary" type="submit">
+          <ActionButton loading={saving} disabled={saving} icon={<Save size={17} />} tone="primary" type="submit">
             {saving ? '正在保存' : editing ? '保存章节' : '创建章节'}
           </ActionButton>
         </EditorActionBar>

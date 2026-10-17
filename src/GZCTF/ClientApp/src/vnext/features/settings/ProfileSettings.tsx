@@ -172,7 +172,7 @@ export function ProfileSettings() {
           <textarea maxLength={128} onChange={updateField('bio')} rows={4} value={model.bio ?? ''} />
         </label>
         <div className={styles.formActions}>
-          <ActionButton disabled={saving} icon={<Save size={16} />} tone="primary" type="submit">
+          <ActionButton loading={saving} disabled={saving} icon={<Save size={16} />} tone="primary" type="submit">
             保存资料
           </ActionButton>
         </div>

@@ -355,7 +355,7 @@ export function GameDetailPage() {
             <ActionButton onClick={() => setJoinOpen(false)} type="button">
               取消
             </ActionButton>
-            <ActionButton
+            <ActionButton loading={submitting}
               disabled={submitting || !teamId || (needsInvite && !inviteCode.trim())}
               form="vnext-game-join-form"
               tone="primary"

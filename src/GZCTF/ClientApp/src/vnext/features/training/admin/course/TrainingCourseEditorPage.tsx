@@ -318,7 +318,7 @@ export function TrainingCourseEditorPage() {
         <EditorActionBar
           status={feedback?.message || (editing ? '保存后保留在当前编辑页面。' : '新课程将以草稿状态创建。')}
         >
-          <ActionButton disabled={saving} icon={<Save size={17} />} tone="primary" type="submit">
+          <ActionButton loading={saving} disabled={saving} icon={<Save size={17} />} tone="primary" type="submit">
             {saving ? '正在保存' : editing ? '保存课程' : '创建课程'}
           </ActionButton>
         </EditorActionBar>

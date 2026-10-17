@@ -77,7 +77,7 @@ export function SecuritySettings() {
           </label>
         </div>
         <div className={styles.formActions}>
-          <ActionButton
+          <ActionButton loading={saving}
             disabled={saving || !oldPassword || !newPassword || !confirmation}
             icon={<ShieldCheck size={16} />}
             tone="primary"

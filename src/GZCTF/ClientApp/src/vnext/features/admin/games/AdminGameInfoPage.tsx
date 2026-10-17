@@ -286,7 +286,7 @@ export function AdminGameInfoPage() {
         </AdminEditorSection>
 
         <AdminEditorActionBar status={dirty ? '有未保存更改。' : feedback?.message || '当前配置已与服务器同步。'}>
-          <ActionButton disabled={saving || !dirty} icon={<Save size={17} />} tone="primary" type="submit">{saving ? '正在保存' : '保存比赛'}</ActionButton>
+          <ActionButton loading={saving} disabled={saving || !dirty} icon={<Save size={17} />} tone="primary" type="submit">{saving ? '正在保存' : '保存比赛'}</ActionButton>
         </AdminEditorActionBar>
       </form>
       <VNextConfirmDialog confirmationText={game.title} description="删除后无法恢复。" message={`将永久删除比赛“${game.title}”及其配置。`} onClose={() => setDeleteOpen(false)} onConfirm={remove} open={deleteOpen} title="确认删除比赛" />
