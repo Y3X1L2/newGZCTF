@@ -67,7 +67,7 @@ export function ParticipationDetailDrawer({
         <div className={styles.drawerStack}>
           {feedback ? <InlineFeedback tone="danger">{feedback}</InlineFeedback> : null}
           <section className={styles.drawerSection}>
-            <h3>报名事实</h3>
+            <h3>报名信息</h3>
             <div className={styles.facts}>
               <div className={styles.fact}><span>报名编号</span><strong>#{participation.id}</strong></div>
               <div className={styles.fact}><span>当前状态</span><StatusBadge tone={participationStatusMeta(participation.status).tone}>{participationStatusMeta(participation.status).label}</StatusBadge></div>
@@ -77,7 +77,7 @@ export function ParticipationDetailDrawer({
           </section>
           <section className={styles.drawerSection}>
             <h3>审核决策</h3>
-            <p>通过报名会锁定战队，并由服务端准备该比赛已配置的实例资源。</p>
+            <p>通过报名后会锁定战队并准备比赛实例。</p>
             {status === ParticipationStatus.Accepted && participation.status !== ParticipationStatus.Accepted ? <InlineFeedback tone="danger">确认通过后，服务端可能立即为该战队创建或准备比赛实例。</InlineFeedback> : null}
             <div className={styles.fieldGrid}>
               <SelectField label="报名状态" onValueChange={(value) => { const next = value as ParticipationStatus; setStatus(next); if (next === ParticipationStatus.Rejected) setDivisionId('') }} value={status}>

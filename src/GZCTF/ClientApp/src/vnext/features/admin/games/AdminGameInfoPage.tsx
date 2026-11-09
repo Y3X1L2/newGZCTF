@@ -278,7 +278,7 @@ export function AdminGameInfoPage() {
           </div>
         </AdminEditorSection>
 
-        <AdminEditorSection description="删除会移除比赛、题目和相关配置；已有业务事实时后端可能拒绝。" title="危险区">
+        <AdminEditorSection description="删除会移除比赛、题目、参赛记录和相关配置。" title="危险区">
           <div className={styles.dangerRow}>
             <div><strong>删除比赛</strong><p>此操作不可撤销，必须输入完整比赛名称确认。</p></div>
             <ActionButton disabled={auxiliaryPending} icon={<Trash2 size={16} />} onClick={() => setDeleteOpen(true)} tone="danger" type="button">删除比赛</ActionButton>
@@ -289,7 +289,7 @@ export function AdminGameInfoPage() {
           <ActionButton loading={saving} disabled={saving || !dirty} icon={<Save size={17} />} tone="primary" type="submit">{saving ? '正在保存' : '保存比赛'}</ActionButton>
         </AdminEditorActionBar>
       </form>
-      <VNextConfirmDialog confirmationText={game.title} description="删除后无法恢复。" message={`将永久删除比赛“${game.title}”及其配置。`} onClose={() => setDeleteOpen(false)} onConfirm={remove} open={deleteOpen} title="确认删除比赛" />
+      <VNextConfirmDialog confirmationText={game.title} description="删除后无法恢复。" message={`将永久删除比赛“${game.title}”及其题目、参赛记录和配置。`} onClose={() => setDeleteOpen(false)} onConfirm={remove} open={deleteOpen} title="确认删除比赛" />
     </div>
   )
 }

@@ -102,7 +102,7 @@ export function CourseEnvironmentPanel({ course }: { course: TrainingCourseModel
             </ActionButton>
           </>
         }
-        description="这里只展示当前课程可用的镜像，比赛模块和其他课程无法直接访问。"
+        description="管理本课程可用的镜像。"
         eyebrow="COURSE ENVIRONMENTS"
         title="环境模板"
       />

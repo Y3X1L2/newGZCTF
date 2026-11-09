@@ -227,7 +227,7 @@ export function AdminTheoryPaperPage() {
       {feedback ? <InlineFeedback tone={feedback.tone === 'neutral' ? undefined : feedback.tone}>{feedback.message}</InlineFeedback> : null}
       <div className={styles.workspace}>
         <main className={styles.paperColumn}>
-          <AdminEditorSection description="保存草稿不会发布；保存并发布会先写入当前配置，再调用发布接口。" title="试卷配置">
+          <AdminEditorSection description="保存为草稿，或保存后发布试卷。" title="试卷配置">
             <div className={styles.formGrid}>
               <TextField label="试卷名称" onValueChange={(value) => setDraft((current) => current ? { ...current, title: value } : current)} required value={draft.title} />
               <TextAreaField label="试卷说明" onValueChange={(value) => setDraft((current) => current ? { ...current, description: value } : current)} rows={5} value={draft.description ?? ''} />

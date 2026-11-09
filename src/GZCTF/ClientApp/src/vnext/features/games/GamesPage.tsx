@@ -155,7 +155,7 @@ export function GamesPage() {
       {catalog.isLoading ? (
         <DataState description="正在读取全部公开赛事并计算时间状态。" loading title="赛事加载中" />
       ) : catalog.error ? (
-        <DataState description="赛事接口暂时不可用，请稍后刷新。" title="赛事加载失败" />
+        <DataState description="请稍后刷新重试。" title="赛事加载失败" />
       ) : visibleGames.length > 0 ? (
         <motion.section className={styles.gameList} layout>
           {visibleGames.map((game, index) => (

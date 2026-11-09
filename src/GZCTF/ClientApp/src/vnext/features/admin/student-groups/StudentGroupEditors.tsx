@@ -221,7 +221,7 @@ export function StudentGroupDetailDrawer({
       {detailRequest.error ? <InlineFeedback tone="danger">{errorMessage(detailRequest.error, '学员组详情加载失败。')}</InlineFeedback> : null}
       {detail ? (
         <div className={styles.drawerContent}>
-          {archived ? <InlineFeedback>该学员组已归档。当前后端没有恢复接口，因此详情仅供查看。</InlineFeedback> : null}
+          {archived ? <InlineFeedback>该学员组已归档，详情只读。</InlineFeedback> : null}
           <section className={styles.detailSection}>
             <header><div><h3>基本信息</h3><p>名称和用途说明用于课程报名与教师管理。</p></div><StatusBadge tone={archived ? 'neutral' : 'success'}>{archived ? '已归档' : '使用中'}</StatusBadge></header>
             <div className={styles.formStack}>

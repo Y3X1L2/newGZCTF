@@ -67,26 +67,11 @@
   color: var(--yn-color-brand);
 }
 
-.eyebrow {
-  margin: var(--yn-space-6) 0 0;
-  color: var(--yn-color-muted);
-  font-family: var(--yn-font-mono);
-  font-size: var(--yn-font-xs);
-}
-
 .state h1 {
   max-width: 520px;
-  margin: var(--yn-space-2) 0 0;
+  margin: var(--yn-space-6) 0 0;
   font-size: clamp(28px, 4vw, 40px);
   line-height: 1.25;
-}
-
-.state > p:last-of-type {
-  max-width: 560px;
-  margin: var(--yn-space-4) 0 0;
-  color: var(--yn-color-text-secondary);
-  font-size: var(--yn-font-md);
-  line-height: 1.8;
 }
 
 .actions {

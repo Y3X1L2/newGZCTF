@@ -146,7 +146,7 @@ export function TrainingPage() {
       {!coursesRequest.data && !coursesRequest.error ? (
         <DataState description="正在读取课程目录与学习状态。" loading title="课程加载中" />
       ) : coursesRequest.error ? (
-        <DataState description="培训接口暂时不可用，请稍后刷新。" title="课程加载失败" />
+        <DataState description="请稍后刷新重试。" title="课程加载失败" />
       ) : (
         <>
           <div className={styles.overviewGrid}>

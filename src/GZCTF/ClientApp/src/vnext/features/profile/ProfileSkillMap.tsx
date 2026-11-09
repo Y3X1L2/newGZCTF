@@ -45,7 +45,7 @@ export function ProfileSkillMap({ dimensions }: { dimensions: UserSkillDimension
             <polygon className={styles.radarValue} points={polygon} />
           </svg>
         </div>
-        <div className={styles.dimensionTable} role="table" aria-label="分类真实统计">
+        <div className={styles.dimensionTable} role="table" aria-label="分类解题统计">
           <div className={styles.dimensionHeader} role="row">
             <span role="columnheader">方向</span>
             <span role="columnheader">解题</span>

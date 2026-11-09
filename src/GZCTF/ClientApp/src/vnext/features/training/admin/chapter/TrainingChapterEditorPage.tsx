@@ -363,7 +363,7 @@ export function TrainingChapterEditorPage() {
             <div className={styles.deleteRow}>
               <div>
                 <strong>删除当前章节</strong>
-                <p>已有学习记录或关联内容时，后端可能拒绝删除。</p>
+                <p>已有学习记录或关联内容时可能无法删除。</p>
               </div>
               <ActionButton icon={<Trash2 size={16} />} onClick={() => setDeleteOpen(true)} tone="danger" type="button">
                 删除章节

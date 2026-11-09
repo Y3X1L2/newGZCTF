@@ -119,7 +119,7 @@ export function PostsPage() {
       {!posts && !error ? (
         <DataState description="正在读取公告归档。" loading title="公告加载中" />
       ) : error ? (
-        <DataState description="公告接口暂时不可用，请稍后刷新。" title="公告加载失败" />
+        <DataState description="请稍后刷新重试。" title="公告加载失败" />
       ) : visible.length ? (
         <section className={styles.postList}>
           {visible.map((post) => (

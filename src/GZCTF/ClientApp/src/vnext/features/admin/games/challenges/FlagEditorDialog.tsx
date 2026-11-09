@@ -183,7 +183,7 @@ export function FlagEditorDialog({
               <div className={styles.immutableAttachment}>
                 <span>{attachmentUrl ? '当前 Flag 已绑定附件' : '当前 Flag 未绑定附件'}</span>
                 {attachmentUrl ? <a href={attachmentUrl} rel="noreferrer" target="_blank">检查附件</a> : null}
-                <small>后端不支持原位替换 Flag 附件；无提交记录时可删除后重新添加。</small>
+                <small>无提交记录时，可删除此 Flag 并添加新附件。</small>
               </div>
             ) : (
               <div className={styles.grid}>

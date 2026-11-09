@@ -73,7 +73,6 @@ export function ProfileHistory({
           <span className={styles.panelEyebrow}>HISTORY</span>
           <h2>{historyTitles[tab]}</h2>
         </div>
-        <span>仅展示可公开事实</span>
       </header>
       {loading ? (
         <div className={styles.panelLoading}>正在读取经历记录...</div>
@@ -94,7 +93,7 @@ export function ProfileHistory({
           )}
         </div>
       ) : (
-        <div className={styles.panelLoading}>当前分类下暂无可公开经历。</div>
+        <div className={styles.panelLoading}>暂无公开记录。</div>
       )}
       {hasMore ? (
         <div className={styles.historyMore}>

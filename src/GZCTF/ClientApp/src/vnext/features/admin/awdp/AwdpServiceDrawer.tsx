@@ -171,7 +171,6 @@ export function AwdpServiceDrawer({
         <section className={styles.drawerSection}>
           <header>
             <h3>计分规则</h3>
-            <p>所有分值均由后端在轮次结算时执行。</p>
           </header>
           <div className={styles.fieldGrid}>
             <NumberField draft={draft} field="attackPoints" label="攻击得分" min={1} update={update} />
@@ -183,7 +182,6 @@ export function AwdpServiceDrawer({
         <section className={styles.drawerSection}>
           <header>
             <h3>轮次与操作限制</h3>
-            <p>服务级轮次参数将用于 AWDP 当前比赛。</p>
           </header>
           <div className={styles.fieldGrid}>
             <NumberField draft={draft} field="maxAttackPerRound" label="每轮最大攻击次数" min={1} update={update} />

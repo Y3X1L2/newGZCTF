@@ -106,7 +106,7 @@ export function AwdpActionPanel({
           </div>
         </form>
       ) : (
-        <p className={styles.readOnlyNotice}>比赛尚未进入可操作阶段，当前页面只展示最近一次服务器快照。</p>
+        <p className={styles.readOnlyNotice}>当前阶段不可操作。</p>
       )}
     </section>
   )

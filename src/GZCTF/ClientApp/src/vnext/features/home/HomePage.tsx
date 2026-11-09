@@ -259,9 +259,9 @@ export function HomePage() {
         <div className={styles.gamesSection}>
           <SectionHeading eyebrow="LIVE FIELDS" route="/games" routeLabel="全部赛事" title="正在进行" />
           {gameCatalog.isLoading ? (
-            <DataState description="正在读取公开赛事与时间状态。" loading title="赛事加载中" />
+            <DataState loading title="赛事加载中" />
           ) : gameCatalog.error ? (
-            <DataState description="赛事接口暂时不可用，其他首页区域仍可继续访问。" title="赛事加载失败" />
+            <DataState description="请稍后刷新重试。" title="赛事加载失败" />
           ) : featuredGames.length > 0 ? (
             <div className={styles.eventList}>
               {featuredGames.map((game) => (
@@ -285,16 +285,16 @@ export function HomePage() {
               ))}
             </div>
           ) : (
-            <DataState description="管理员发布赛事后会在这里按时间状态展示。" title="暂无进行中或即将开始的赛事" />
+            <DataState title="暂无进行中或即将开始的赛事" />
           )}
         </div>
 
         <aside className={styles.noticeSection}>
           <SectionHeading eyebrow="NOTICE" route="/posts" routeLabel="全部通知" title="平台通知" />
           {!posts.data && !posts.error ? (
-            <DataState description="正在读取平台公告。" loading title="通知加载中" />
+            <DataState loading title="通知加载中" />
           ) : posts.error ? (
-            <DataState description="通知接口暂时不可用。" title="通知加载失败" />
+            <DataState title="通知加载失败" />
           ) : posts.data && posts.data.length > 0 ? (
             <div className={styles.noticeList}>
               {posts.data.slice(0, 5).map((post) => (
@@ -311,7 +311,7 @@ export function HomePage() {
               ))}
             </div>
           ) : (
-            <DataState description="平台维护、赛事安排和规则变化会在这里发布。" title="暂无平台通知" />
+            <DataState title="暂无平台通知" />
           )}
         </aside>
       </section>
@@ -340,11 +340,11 @@ export function HomePage() {
       <section className={styles.courseSection}>
         <SectionHeading eyebrow="TRAINING" route="/training" routeLabel="全部课程" title="最近课程" />
         {!account.isAuthenticated ? (
-          <DataState description="课程目录需要登录后查看。" title="登录后查看课程" />
+          <DataState title="登录后查看课程" />
         ) : !courses.data && !courses.error ? (
-          <DataState description="正在读取课程目录。" loading title="课程加载中" />
+          <DataState loading title="课程加载中" />
         ) : courses.error ? (
-          <DataState description="课程接口暂时不可用。" title="课程加载失败" />
+          <DataState title="课程加载失败" />
         ) : recentCourses.length > 0 ? (
           <div className={styles.courseGrid}>
             {recentCourses.map((course) => (
@@ -369,7 +369,7 @@ export function HomePage() {
             ))}
           </div>
         ) : (
-          <DataState description="课程发布后会在这里展示。" title="暂无公开课程" />
+          <DataState title="暂无公开课程" />
         )}
       </section>
     </div>

@@ -53,7 +53,7 @@ export function ChallengeFlagPanel({
     return (
       <div className={styles.noticePanel}>
         <strong>动态容器使用 Flag 模板</strong>
-        <p>平台按队伍生成唯一 Flag，判题值来自运行环境中的动态 Flag 模板；后端不会在详情接口中返回普通 Flag。</p>
+        <p>运行环境按模板为每支队伍生成唯一 Flag。</p>
       </div>
     )
   }

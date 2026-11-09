@@ -62,7 +62,7 @@ export function ProfileFacts({
     <aside className={styles.factsRail}>
       <section>
         <span className={styles.panelEyebrow}>IDENTITY FACTS</span>
-        <h2>身份事实</h2>
+        <h2>身份信息</h2>
         <dl className={styles.factList}>
           <div>
             <dt>平台角色</dt>

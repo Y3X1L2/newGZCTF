@@ -51,7 +51,7 @@ export function TrialRunDialog({
     >
       <div className={styles.content}>
         <p>{release ? `使用不可变发布版本 v${release.version} 启动一套独立环境。` : ''}</p>
-        <p className={styles.note}>平台将预留资源、准备镜像并部署资产。首次启动可能较慢，请在运行详情中查看实际结果。</p>
+        <p className={styles.note}>首次启动可能较慢，可在运行详情查看部署进度。</p>
         {submitting ? <p role="status">正在创建运行环境，请稍候。</p> : null}
         {error ? <InlineFeedback tone="danger">{error}</InlineFeedback> : null}
       </div>

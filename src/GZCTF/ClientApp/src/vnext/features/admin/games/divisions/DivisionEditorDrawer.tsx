@@ -140,7 +140,6 @@ export function DivisionEditorDrawer({
 
         <section className={styles.drawerSection}>
           <h3>报名与排名权限</h3>
-          <p>权限关闭后由后端在报名、排名和比赛访问流程中执行限制。</p>
           <PermissionGrid challengeScoped={false} disabled={saving} mask={draft.defaultPermissions} onChange={(defaultPermissions) => setDraft((current) => ({ ...current, defaultPermissions }))} />
         </section>
 
@@ -179,7 +178,7 @@ export function DivisionEditorDrawer({
           </section>
         ) : null}
 
-        {!ctf ? <InlineFeedback>当前赛制不使用 CTF 题目权限覆盖，只保存报名和总体排名权限。</InlineFeedback> : null}
+        {!ctf ? <InlineFeedback>当前赛制支持设置报名和总体排名权限。</InlineFeedback> : null}
       </div>
     </VNextDrawer>
   )

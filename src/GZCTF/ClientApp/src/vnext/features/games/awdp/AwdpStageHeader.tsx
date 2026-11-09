@@ -35,7 +35,6 @@ export function AwdpStageHeader({
         <div>
           <span>ROUND {String(status.currentRound).padStart(2, '0')}</span>
           <h1>{phase.label}</h1>
-          <p>攻击与修补状态以服务器轮次快照为准，连接恢复后会自动校准。</p>
         </div>
         <div className={styles.stageLive}>
           <span className={styles.connection} data-state={monitorState}>
@@ -70,7 +69,7 @@ export function AwdpStageHeader({
           <strong>
             {defended}/{serviceCount}
           </strong>
-          <small>仅代表漏洞验证</small>
+          <small>通过漏洞检查</small>
         </div>
         <div>
           <TimerReset size={17} />

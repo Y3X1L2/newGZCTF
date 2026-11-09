@@ -20,12 +20,7 @@ export function PendingPage() {
         <span className={styles.icon}>
           <LayoutTemplate size={22} />
         </span>
-        <p className={styles.eyebrow}>VERTICAL SLICE PENDING</p>
-        <h1>{module.label}尚未进入本轮重构</h1>
-        <p>
-          当前路由尚未进入对应业务切片。本模块会在真实 API、交互流程和验收矩阵准备完成后独立实现，
-          已完成模块可通过全局导航访问，不回退到旧页面。
-        </p>
+        <h1>{module.label}暂未开放</h1>
         <div className={styles.actions}>
           <Link className={styles.primaryAction} to="/">
             <ArrowLeft size={17} />

@@ -96,7 +96,7 @@ export function ImageRemoteAccessDialog({
         {request.error ? (
           <InlineFeedback tone="danger">{errorMessage(request.error, '无法读取运维配置。')}</InlineFeedback>
         ) : null}
-        {template?.imageType !== ImageType.Docker ? <InlineFeedback>账号属于镜像模板。修改设置可能影响使用该模板的存量环境后续新连接；不会修改虚拟机内的账号或密码，也不代表来宾服务已通过实测。</InlineFeedback> : null}
+        {template?.imageType !== ImageType.Docker ? <InlineFeedback>设置会用于模板的新连接，已有环境也可能受影响。虚拟机内的账号和密码需单独修改。</InlineFeedback> : null}
         <label>
           <input checked={enabled} onChange={(event) => setEnabled(event.target.checked)} type="checkbox" />{' '}
           启用远程访问

@@ -113,7 +113,7 @@ export function TheoryQuestionImportDialog({
       wide
     >
       <div className={styles.form}>
-        <InlineFeedback tone="danger">当前后端没有批量事务。写入失败时已成功记录不会自动回滚，页面会报告准确进度。</InlineFeedback>
+        <InlineFeedback tone="danger">导入中断时，已成功写入的记录会保留。</InlineFeedback>
         {feedback ? <InlineFeedback tone="danger">{feedback}</InlineFeedback> : null}
         <div className={styles.fieldGrid}>
           <TextField label="默认题库名称" maxLength={128} onValueChange={(value) => { setDefaultBank(value); setParsed(null) }} value={defaultBank} />
@@ -165,7 +165,7 @@ export function TheoryQuestionImportDialog({
                 <em data-action={item.action}>{item.action === 'create' ? '新增' : item.action === 'update' ? '覆盖' : '跳过'}</em>
               </div>
             ))}
-            {(parsed.issues.length > 20 || (plan?.items.length ?? 0) > 20) ? <small>仅展示前 20 条，统计包含全部记录。</small> : null}
+            {(parsed.issues.length > 20 || (plan?.items.length ?? 0) > 20) ? <small>预览前 20 条，统计包含全部记录。</small> : null}
           </section>
         ) : null}
       </div>

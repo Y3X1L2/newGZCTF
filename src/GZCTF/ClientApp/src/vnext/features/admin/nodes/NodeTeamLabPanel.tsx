@@ -42,7 +42,7 @@ export function NodeTeamLabPanel({
       <header>
         <div>
           <h2>TeamLab 组网能力</h2>
-          <p>服务端当前调度判定；运行兼容性检测可更新节点探测结果。</p>
+          <p>运行兼容性检测可更新节点能力。</p>
         </div>
         <StatusBadge tone={tunnel.tone}>{tunnel.label}</StatusBadge>
       </header>
@@ -92,7 +92,6 @@ export function NodeTeamLabPanel({
       </div>
       <details className={styles.technical}>
         <summary>技术详情 · {node.agentFeatures.length} 项原始探测</summary>
-        <p>以下是 Agent 上报的原始能力标识，供排障和协议核对使用，不代表场景已通过实际运行验收。</p>
         <ul>
           {node.agentFeatures.map((feature) => (
             <li key={feature}>

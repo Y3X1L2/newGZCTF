@@ -57,7 +57,7 @@ export function AssetInspector({
           ))}
         </SelectInput>
         {node.devicePackageId ? <p>镜像由设备模板确定；解除模板绑定后可单独更换镜像。</p> : null}
-        <p>镜像与可选 SSH/RDP 运维入口在 <Link to="/admin/images">环境模板</Link> 中配置。运维入口未配置不会阻止场景发布。</p>
+        <p>在 <Link to="/admin/images">环境模板</Link> 中配置镜像和可选的 SSH/RDP 运维入口。</p>
         {node.type !== 'docker' ? (
           <GuestNetworkModeEditor
             mode={node.vmNetworkMode}

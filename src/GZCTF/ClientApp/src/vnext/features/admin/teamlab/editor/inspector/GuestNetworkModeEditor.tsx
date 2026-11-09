@@ -42,11 +42,11 @@ export function GuestNetworkModeEditor({
       <p className={styles.muted}>
         {mode == null ? `镜像默认：${inheritedMode ? networkModeLabels[inheritedMode] : '尚未返回，发布时校验'}。` : ''}
         {effective === 'preconfigured'
-          ? '当前由镜像自行维护网络，平台不自动应用接口要求。可明确改为 DHCP 或平台固定配置；切换不会自动清除已保存的接口要求。'
+          ? '由镜像管理网络。切换模式会保留已保存的网卡设置。'
           : effective === 'managed-static'
             ? windows
               ? '平台按本次网卡配置并验证固定地址。镜像须安装并运行 QEMU Guest Agent（QGA），并具备兼容网卡驱动。'
-              : '平台按本次网卡配置并验证固定地址。镜像须运行 QGA，并支持 cloud-init / Netplan 和 NoCloud 配置盘；生成配置不代表来宾已应用。'
+              : '由平台配置并验证固定地址。镜像须运行 QGA，并支持 cloud-init / Netplan 和 NoCloud 配置盘。'
             : effective === 'dhcp'
               ? '由来宾 DHCP 客户端获取地址；请确保镜像已启用 DHCP 和兼容网卡驱动。'
               : '可明确选择 DHCP 或平台固定配置。镜像默认和所需组件将在发布时校验。'}

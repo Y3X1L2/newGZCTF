@@ -77,14 +77,13 @@ export function AdminGamePhasesPage() {
 
   return (
     <div className={styles.page}>
-      <AdminPageHeader actions={<ActionButton icon={<Plus size={16} />} onClick={() => openEditor(null)} tone="primary" type="button">新建阶段</ActionButton>} description="按时间维护比赛阶段和 CTF 操作开关；其他赛制阶段仍由各自模块管理。" eyebrow="GAME PHASES" title="比赛阶段" />
+      <AdminPageHeader actions={<ActionButton icon={<Plus size={16} />} onClick={() => openEditor(null)} tone="primary" type="button">新建阶段</ActionButton>} description="按时间设置比赛阶段和 CTF 操作权限。" eyebrow="GAME PHASES" title="比赛阶段" />
       <MetricStrip>
         <MetricItem detail="当前比赛" label="阶段总数" value={metrics.total} />
         <MetricItem detail="当前时刻" label="进行中" tone={metrics.active ? 'success' : 'neutral'} value={metrics.active} />
         <MetricItem detail="尚未开始" label="待执行" tone={metrics.scheduled ? 'info' : 'neutral'} value={metrics.scheduled} />
         <MetricItem detail="阶段级限制" label="关闭 CTF" tone={metrics.ctfDisabled ? 'warning' : 'neutral'} value={metrics.ctfDisabled} />
       </MetricStrip>
-      <InlineFeedback>当前后端阶段模型仅保存 CTF 开关；理论考试、AWDP 和渗透模块不会由此页面伪造阶段状态。</InlineFeedback>
       {phases.length ? <ol aria-label="比赛阶段时间轴" className={styles.timeline}>{phases.map((phase) => <li className={styles.timelineItem} data-state={phaseLifecycle(phase)} key={phase.id}><strong>{phase.name}</strong><small>{formatAdminDate(phase.startTime, false)}</small><StatusBadge tone={phaseStatusMeta(phase).tone}>{phaseStatusMeta(phase).label}</StatusBadge></li>)}</ol> : null}
       {feedback ? <InlineFeedback tone={feedback.tone}>{feedback.message}</InlineFeedback> : null}
       {request.error ? <InlineFeedback tone="danger">{errorMessage(request.error, '比赛阶段加载失败。')}</InlineFeedback> : null}
