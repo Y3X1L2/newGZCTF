@@ -1,6 +1,6 @@
 # YINYU 当前开发状态
 
-整理日期：2026-11-09。平台显示、交互、队长账号删除和 TeamLab 布局已于 10-18 部署；[PR #35](https://github.com/Y3X1L2/newGZCTF/pull/35) 经用户确认于 11-09 合入 main（`fcb14137`）。发布证据见[10-18记录](records/2026-10-18-platform-experience.md)。历史负载查询与文案精简正在 [PR #36](https://github.com/Y3X1L2/newGZCTF/pull/36) 验证，尚未合入或部署，见[任务记录](records/2026-11-09-platform-history.md)。
+整理日期：2026-11-09。[PR #36](https://github.com/Y3X1L2/newGZCTF/pull/36) 已合入 main，并于北京时间 22:26 部署到 `.27`。概览和节点详情现在可查看最近 1 小时、24 小时、7 天的历史负载，刷新后记录仍在；多余页面说明已精简。备份、恢复与上线验证见[发布记录](records/2026-11-09-history-rollout.md)。此前 PR #35 的平台体验改进也已合入主线。
 本页只保留当前摘要，更新时替换旧事实；完整测试、部署过程和授权边界放在任务记录中。目标120行以内，超长时提炼摘要。
 
 ## 代码与部署基线
@@ -10,13 +10,13 @@
 | 开发主线 | `main`；新任务从实时 fetch 后的 `origin/main` 创建分支 | SHA 以 Git 为准，本页不追写每次文档提交 |
 | 培训实例修复 | PR #24 合入 `60170a52`，PR #25 为后续部署记录；课程默认每用户 3 实例，公共练习和课程额度隔离 | [主线修复与发布](records/2026-10-11-training-runtime-mainline.md)、[课程生命周期](modules/training/reference/container-lifecycle.md) |
 | 培训动态设置 / 练习分页 | PR #26 已合入 `b1812d15`，PR #27记录已部署；管理员可动态设置培训额度，练习/管理题库使用服务端分页 | Git 合入事实与[新任务记录](records/2026-10-11-training-quota-settings.md)、[分页说明](modules/exercise/reference/catalog-pagination.md)；10-11发布交接已确认API与页面分页验收；本轮未重新实测 |
-| 主站发布 | `.27` 的 `/opt/gzctf/publish` 指向 `/srv/yinyu-data/releases/platform-experience-1c9941ba46be2d3235e8240a86b075cf2572eda8-20261018/publish`；Main 来源 `1c9941ba`、DLL摘要 `fe24f2e2…` | 本轮任务分支制品已推送但未合 main；后续文档提交不改变来源 |
-| 前端 / Agent | 前端同源 `1c9941ba`，226文件校验；本机 Agent摘要仍 `87e011cf…`、PID未变，原5个执行包文件逐字节保留 | 10-18现场；本轮未升级Agent或子节点，无重启现有VM |
-| 数据库 | 152条历史，head `20261017184129_AddUserDeletionTombstone`；新增可空 `AspNetUsers.DeletedAtUtc`，无默认值 | 新备份完整隔离恢复、同字节SQL升级和26表计数一致；生产schema与临时删除账号墓碑断言通过；历史来源漂移仍保留 |
-| 应用回退 | previous为原 `logs-ui-966ca6081000035c6ac46b4289f44d13dfebf75d-main-927ceef8-20261016/publish`；旧release保留 | 10-18真实链接；未执行真实应用回退；回退保留新增可空列，旧版本缺少删除过滤能力，须暂停删除操作 |
-| 备份 | `/srv/yinyu-data/backups/platform-experience-20261018-pre-20261017T184600Z`；双库和附件摘要通过 | 4分钟备份、13分47秒完整隔离恢复；同SQL迁移与计数核验通过，备份/证明保留 |
-| 服务与页面 | Main / 本机 Agent active/running、NRestarts=0；首页、Config200；指标healthz200/Degraded，和切前相同 | 10-18短维护14.041秒；生产新版概览、拓扑已浏览器复验；本地日夜/4宽度/键盘/减少动效通过 |
-| 节点与调度 | 3节点Online、1个Docker/2个Docker+KVM；`.31`原有4VM保持；504模板Ready、分发235 Ready/1 Failed | 10-18基础冒烟与课程Docker完整创建/入口200/Flag Accepted/停止清理通过；未重试既有失败分发，不代表全部网络与镜像已验收 |
+| 主站发布 | Main 和前端来自已合入的 `0fadb6c3`；当前目录为 `history-0fadb6c35411c3d7e647df9d1cfe2ab06fb6f5fe-20261109/publish` | 完整路径、制品摘要和主线 CI 见[发布记录](records/2026-11-09-history-rollout.md) |
+| 前端 / Agent | 前端 227 文件校验通过；原 5 个 Agent / GuestSupervisor 文件逐字节保留，本机 Agent 摘要仍为 `87e011cf…` | 11-09 未升级或重启 Agent，未操作既有 VM |
+| 数据库 | 152 条迁移记录，头为 `20261017184129_AddUserDeletionTombstone`；本次没有新迁移 | 切换前后完整集合相同；新备份已在隔离环境实际恢复 |
+| 应用回退 | previous 指向 10-18 的 `platform-experience-1c9941ba…/publish`；旧版本和回退脚本保留 | 仅回退 Main，数据库沿用；脚本检查通过，未执行真实回退 |
+| 备份 | 11-09 22:17 完成双库、附件和加密配置备份，摘要校验通过 | 双库完整恢复耗时 7 分 19 秒，临时恢复环境已清理；位置见[发布记录](records/2026-11-09-history-rollout.md) |
+| 服务与页面 | Main / 本机 Agent 正常运行，无自动重启；首页、Config、附件正常；healthz 仍为原有 Degraded | 主站切换 13.173 秒；历史曲线、范围切换、刷新保留及精简文案已在生产浏览器验证 |
+| 节点与调度 | 3 节点在线，验收后容器、VM 和已用端口均为 0，活跃队列为 0；530 模板 Ready，分发 240 Ready / 1 既有 Failed | 课程 Docker 创建、入口 HTTP 200 和销毁通过；未重测已解题的 Flag 提交或其他完整业务链路 |
 
 `stable-20260908` 保留用于历史复现，现网身份以最新发布记录和现场回读为准。生产操作前重新核对现场、授权、候选身份、备份和回退；[10-11文档核验记录](records/2026-10-11-docs-collaboration-audit.md)与既有发布证据分别记录。
 
@@ -24,7 +24,8 @@
 
 | 领域 | 当前实现与限定验收 | 接手入口 |
 | --- | --- | --- |
-| CTF / 理论 / 培训 / 练习 | 已有业务入口；10-18课程4题88真实Docker创建、入口HTTP200、重复Accepted、停止与空态通过；共享按钮等待Promise和实例后续操作状态 | [模块索引](modules/README.md)、[课程生命周期](modules/training/reference/container-lifecycle.md)、[本轮记录](records/2026-10-18-platform-experience.md) |
+| 历史负载 | 概览与节点详情读取后台持续保存的负载记录，支持 1 小时 / 24 小时 / 7 天；关闭页面不影响采集 | [Runtime](modules/runtime/development.md)、[生产验证](records/2026-11-09-history-rollout.md) |
+| CTF / 理论 / 培训 / 练习 | 已有业务入口；11-09 课程4题88 Docker 创建、入口 HTTP 200、销毁与空态通过；Flag 提交最近实测仍为 10-18 | [模块索引](modules/README.md)、[课程生命周期](modules/training/reference/container-lifecycle.md)、[最新发布](records/2026-11-09-history-rollout.md) |
 | TeamLab | 场景、发布、runtime、逐资产操作、受管网络、文件/会话、流量/抓包；10-18拓扑正交避障、双网卡分线、卡片类型标签和版本启动层级已发布，原四机场景浏览器复验 | [制作导入](modules/teamlab/guides/authoring.md)、[运行事实契约](modules/teamlab/reference/runtime-capabilities.md)；既有四机生命周期与删除验收仍见各自历史记录 |
 | 镜像与运行底座 | 统一队列、按需节点准备、下载容量守卫、最后消费者缓存释放；历史来源迁移、模板退役和受控 Registry GC 已执行 | [第二批发布](records/2026-10-09-image-lifecycle-second-rollout.md)；自动 GC、冷缓存 TTL 不由该次手工回收证明 |
 | 身份 / AWDP | 管理员删除队长会退队/交接并匿名保留历史，凭据和会话撤销；10-18临时队长真实删除、旧会话401、新登录401及SQL清理断言通过；未删除既有用户 | [Identity](modules/identity/development.md)；Portal SSO和AWDP仍需专门真实验收，见[Open API](operations/open-api-integration.md)、[AWDP手册](modules/awdp/guides/manual-acceptance.md) |
