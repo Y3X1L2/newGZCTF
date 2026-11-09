@@ -13,7 +13,6 @@ import {
   MetricItem,
   MetricStrip,
   PaginationBar,
-  RefreshIndicator,
   StatusBadge,
   ToolbarGroup,
   type AdminDataColumn,
@@ -216,7 +215,6 @@ export function AdminInstancesPage() {
             刷新资源
           </ActionButton>
         }
-        description="跨节点查看 Docker、VM、渗透环境与 TeamLab 运行资源。"
         eyebrow="RUNTIME INVENTORY"
         title="运行实例"
       />
@@ -282,7 +280,6 @@ export function AdminInstancesPage() {
             ))}
           </select>
         </ToolbarGroup>
-        <RefreshIndicator active={instancesRequest.isRefreshing} label={status === 'active' ? '10 秒自动同步' : '按需读取'} />
       </FilterToolbar>
 
       {instancesRequest.inventory?.source === 'legacy-containers' ? (
@@ -296,11 +293,11 @@ export function AdminInstancesPage() {
       {failure ? <InlineFeedback tone="danger">{failure}</InlineFeedback> : null}
 
       {historyNeedsNode ? (
-        <DataState description="全域历史接口尚未提供，请先在节点筛选中选择一个节点。" title="选择节点查看历史" />
+        <DataState description="在节点筛选中选择一个节点。" title="选择节点查看历史" />
       ) : instancesRequest.isLoading || nodesRequest.isLoading ? (
         <DataState description="正在以受控并发汇总各节点运行资源。" loading title="运行实例加载中" />
       ) : instancesRequest.error ? (
-        <DataState description="节点资源与传统容器接口均无法提供当前视图。" title="运行实例加载失败" />
+        <DataState description="请刷新页面后重试。" title="运行实例加载失败" />
       ) : (
         <>
           <DataTable

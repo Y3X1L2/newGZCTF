@@ -7,7 +7,7 @@ import { DataState } from '../../../shared/Primitives'
 import { errorMessage } from '../../../shared/errors'
 import { useVNextPageTitle } from '../../../shared/useVNextPageTitle'
 import { commonAdminApi } from '../api'
-import { AdminEditorSection, AdminPageHeader, RefreshIndicator } from '../shared/AdminWorkbench'
+import { AdminEditorSection, AdminPageHeader } from '../shared/AdminWorkbench'
 import styles from './AdminSystemPage.module.css'
 import { useAdminSystem } from './useAdminSystem'
 import { TrainingContainerQuotaPanel } from './TrainingContainerQuotaPanel'
@@ -87,15 +87,13 @@ export function AdminSystemPage() {
   return (
     <div className={styles.page}>
       <AdminPageHeader
-        actions={<RefreshIndicator active={request.isRefreshing} label="配置按保存操作回读" />}
-        description="分区维护平台身份、账号策略和实例生命周期；每个区段独立写入。"
         eyebrow="PLATFORM SETTINGS"
         title="系统设置"
       />
       {request.error ? <InlineFeedback tone="danger">{errorMessage(request.error, '系统配置加载失败。')}</InlineFeedback> : null}
       {feedback ? <InlineFeedback tone={feedback.tone}>{feedback.message}</InlineFeedback> : null}
       <div className={styles.settingsLayout}>
-        <AdminEditorSection description="面向所有用户展示的平台名称、标语与说明。" title="平台身份">
+        <AdminEditorSection title="平台身份">
           <div className={styles.sectionBody}>
             <div className={styles.twoColumns}>
               <TextField label="平台标题" onValueChange={(title) => setGlobalDraft({ ...globalDraft, title })} value={globalDraft.title ?? ''} />
@@ -108,7 +106,7 @@ export function AdminSystemPage() {
               <ActionButton
                 disabled={!dirty.global || Boolean(saving)}
                 icon={<Save size={16} />}
-                onClick={() => saveSection('global', () => commonAdminApi.updateSystemConfig({ globalConfig: globalDraft }), '平台身份配置已保存并回读。')}
+                onClick={() => saveSection('global', () => commonAdminApi.updateSystemConfig({ globalConfig: globalDraft }), '平台身份配置已保存。')}
                 tone="primary"
                 type="button"
               >{saving === 'global' ? '保存中' : '保存平台身份'}</ActionButton>
@@ -150,7 +148,7 @@ export function AdminSystemPage() {
           </div>
         </AdminEditorSection>
 
-        <AdminEditorSection description="控制账号注册、初始状态和邮件验证要求。" title="账号策略">
+        <AdminEditorSection title="账号策略">
           <div className={styles.sectionBody}>
             <div className={styles.toggleList}>
               <ToggleField checked={accountDraft.allowRegister ?? false} description="关闭后仅管理员可以创建新用户。" label="允许用户自主注册" onChange={(allowRegister) => setAccountDraft({ ...accountDraft, allowRegister })} />
@@ -164,7 +162,7 @@ export function AdminSystemPage() {
               <ActionButton
                 disabled={!dirty.account || Boolean(saving)}
                 icon={<Save size={16} />}
-                onClick={() => saveSection('account', () => commonAdminApi.updateSystemConfig({ accountPolicy: accountDraft }), '账号策略已保存并回读。')}
+                onClick={() => saveSection('account', () => commonAdminApi.updateSystemConfig({ accountPolicy: accountDraft }), '账号策略已保存。')}
                 tone="primary"
                 type="button"
               >{saving === 'account' ? '保存中' : '保存账号策略'}</ActionButton>
@@ -203,7 +201,7 @@ export function AdminSystemPage() {
               <ActionButton
                 disabled={!dirty.container || !containerValid || Boolean(saving)}
                 icon={<Save size={16} />}
-                onClick={() => saveSection('container', () => commonAdminApi.updateSystemConfig({ containerPolicy: containerDraft }), '容器生命周期策略已保存并回读。')}
+                onClick={() => saveSection('container', () => commonAdminApi.updateSystemConfig({ containerPolicy: containerDraft }), '容器生命周期策略已保存。')}
                 tone="primary"
                 type="button"
               >{saving === 'container' ? '保存中' : '保存容器策略'}</ActionButton>

@@ -78,7 +78,7 @@ export function AdminGameDivisionsPage() {
 
   return (
     <div className={styles.page}>
-      <AdminPageHeader actions={<ActionButton icon={<Plus size={16} />} onClick={() => openEditor(null)} tone="primary" type="button">新建赛区</ActionButton>} description="维护报名策略、总榜关系、赛区邀请码和 CTF 题目访问权限。" eyebrow="GAME DIVISIONS" title="赛区管理" />
+      <AdminPageHeader actions={<ActionButton icon={<Plus size={16} />} onClick={() => openEditor(null)} tone="primary" type="button">新建赛区</ActionButton>} eyebrow="GAME DIVISIONS" title="赛区管理" />
       <MetricStrip>
         <MetricItem detail="当前比赛" label="赛区总数" value={metrics.total} />
         <MetricItem detail="管理员处理" label="需要审核" tone={metrics.review ? 'warning' : 'neutral'} value={metrics.review} />

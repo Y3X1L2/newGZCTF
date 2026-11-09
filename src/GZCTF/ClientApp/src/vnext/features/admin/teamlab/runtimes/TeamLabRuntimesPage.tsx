@@ -5,7 +5,7 @@ import useSWR from 'swr'
 import { ActionButton, InlineFeedback, VNextConfirmDialog } from '../../../../shared/Interaction'
 import { DataState } from '../../../../shared/Primitives'
 import { errorMessage } from '../../../../shared/errors'
-import { CursorPaginationBar, DataTable, RefreshIndicator, type AdminDataColumn } from '../../shared/AdminWorkbench'
+import { CursorPaginationBar, DataTable, type AdminDataColumn } from '../../shared/AdminWorkbench'
 import { formatAdminDate } from '../../shared/adminFormat'
 import { useAdminCursorState } from '../../shared/useAdminCursorState'
 import { teamLabAdminApi, teamLabAdminKeys, teamLabRuntimeApi, type TeamLabAdminRuntimeSummary } from '../api'
@@ -86,7 +86,6 @@ export function TeamLabRuntimesPage() {
     <section className={styles.page}>
       <header className={styles.pageHeader}>
         <div><h2>最近运行环境</h2></div>
-        <RefreshIndicator active={request.isValidating && (request.data?.items.some((runtime) => isRuntimeTransitioning(runtime.status)) ?? false)} label={request.isValidating ? '同步中' : '状态已同步'} />
       </header>
       {!request.data && !request.error ? <DataState description="正在读取场景试运行记录。" loading title="试运行加载中" /> : request.error ? (
         <InlineFeedback tone="danger">{errorMessage(request.error, '试运行记录加载失败。')}</InlineFeedback>

@@ -223,7 +223,7 @@ export function StudentGroupDetailDrawer({
         <div className={styles.drawerContent}>
           {archived ? <InlineFeedback>该学员组已归档，详情只读。</InlineFeedback> : null}
           <section className={styles.detailSection}>
-            <header><div><h3>基本信息</h3><p>名称和用途说明用于课程报名与教师管理。</p></div><StatusBadge tone={archived ? 'neutral' : 'success'}>{archived ? '已归档' : '使用中'}</StatusBadge></header>
+            <header><div><h3>基本信息</h3></div><StatusBadge tone={archived ? 'neutral' : 'success'}>{archived ? '已归档' : '使用中'}</StatusBadge></header>
             <div className={styles.formStack}>
               <TextField disabled={archived} label="学员组名称" maxLength={128} onValueChange={setName} required value={name} />
               <TextAreaField disabled={archived} label="用途说明" maxLength={512} onValueChange={setDescription} rows={3} value={description} />

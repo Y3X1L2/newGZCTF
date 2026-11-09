@@ -14,7 +14,6 @@ import {
   MetricItem,
   MetricStrip,
   PaginationBar,
-  RefreshIndicator,
   StatusBadge,
   ToolbarGroup,
 } from '../shared/AdminWorkbench'
@@ -152,12 +151,11 @@ export function AdminGamesPage() {
             <ActionButton icon={<Upload size={16} />} onClick={() => setImportOpen(true)} type="button">导入比赛</ActionButton>
           </>
         }
-        description="创建、配置和检查各赛制比赛；专业赛制配置在比赛上下文中独立维护。"
         eyebrow="GAME OPERATIONS"
         title="赛事管理"
       />
       <MetricStrip>
-        <MetricItem detail="服务器记录" label="比赛总数" value={gamesRequest.page?.total ?? 0} />
+        <MetricItem label="比赛总数" value={gamesRequest.page?.total ?? 0} />
         <MetricItem detail="当前加载页" label="进行中" tone={metrics.running ? 'success' : 'neutral'} value={metrics.running} />
         <MetricItem detail="当前加载页" label="待开始" tone={metrics.scheduled ? 'info' : 'neutral'} value={metrics.scheduled} />
         <MetricItem detail="当前加载页" label="隐藏" value={metrics.hidden} />
@@ -179,7 +177,6 @@ export function AdminGamesPage() {
             <option value="ended">已结束</option>
           </select>
         </ToolbarGroup>
-        <RefreshIndicator active={gamesRequest.isRefreshing} label="列表按需刷新" />
       </FilterToolbar>
       {gamesRequest.error ? <InlineFeedback tone="danger">{errorMessage(gamesRequest.error, '赛事列表加载失败。')}</InlineFeedback> : null}
       {gamesRequest.isLoading ? (

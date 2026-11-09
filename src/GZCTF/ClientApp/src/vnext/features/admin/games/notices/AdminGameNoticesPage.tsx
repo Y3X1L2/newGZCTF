@@ -7,7 +7,7 @@ import { DataState } from '../../../../shared/Primitives'
 import { errorMessage } from '../../../../shared/errors'
 import { useVNextPageTitle } from '../../../../shared/useVNextPageTitle'
 import { gameOperationsAdminApi } from '../../api'
-import { AdminDataColumn, AdminPageHeader, DataTable, FilterToolbar, MetricItem, MetricStrip, RefreshIndicator, ToolbarGroup } from '../../shared/AdminWorkbench'
+import { AdminDataColumn, AdminPageHeader, DataTable, FilterToolbar, MetricItem, MetricStrip, ToolbarGroup } from '../../shared/AdminWorkbench'
 import { formatAdminDate } from '../../shared/adminFormat'
 import type { GameAdminOutletContext } from '../GameAdminShell'
 import styles from '../GameOperations.module.css'
@@ -65,13 +65,13 @@ export function AdminGameNoticesPage() {
 
   return (
     <div className={styles.page}>
-      <AdminPageHeader actions={<ActionButton icon={<Plus size={16} />} onClick={() => openEditor(null)} tone="primary" type="button">发布公告</ActionButton>} description="维护选手可见的比赛公告；保存后由服务器负责实时推送。" eyebrow="GAME NOTICES" title="比赛公告" />
+      <AdminPageHeader actions={<ActionButton icon={<Plus size={16} />} onClick={() => openEditor(null)} tone="primary" type="button">发布公告</ActionButton>} eyebrow="GAME NOTICES" title="比赛公告" />
       <MetricStrip>
         <MetricItem detail="普通比赛公告" label="公告总数" value={metrics.total} />
         <MetricItem detail="最近 24 小时" label="近期发布" tone={metrics.recent ? 'info' : 'neutral'} value={metrics.recent} />
         <MetricItem detail="最近一次" label="最新发布" value={metrics.latest ? formatAdminDate(metrics.latest, false) : '—'} />
       </MetricStrip>
-      <FilterToolbar><ToolbarGroup grow><label className={styles.searchBox}><Search aria-hidden="true" size={16} /><input aria-label="搜索比赛公告" onChange={(event) => setQuery(event.currentTarget.value)} placeholder="公告内容或编号" type="search" value={query} /></label></ToolbarGroup><RefreshIndicator active={request.isRefreshing} label="公告按需刷新" /></FilterToolbar>
+      <FilterToolbar><ToolbarGroup grow><label className={styles.searchBox}><Search aria-hidden="true" size={16} /><input aria-label="搜索比赛公告" onChange={(event) => setQuery(event.currentTarget.value)} placeholder="公告内容或编号" type="search" value={query} /></label></ToolbarGroup></FilterToolbar>
       {feedback ? <InlineFeedback tone={feedback.tone}>{feedback.message}</InlineFeedback> : null}
       {request.error ? <InlineFeedback tone="danger">{errorMessage(request.error, '比赛公告加载失败。')}</InlineFeedback> : null}
       {request.isLoading ? <DataState description="正在读取比赛公告。" loading title="公告加载中" /> : <DataTable caption="比赛公告管理列表" columns={columns} emptyDescription="发布公告后会显示在选手比赛工作区。" emptyTitle="尚未发布比赛公告" onRowClick={openEditor} rowKey={(notice) => notice.id} rows={filtered} />}

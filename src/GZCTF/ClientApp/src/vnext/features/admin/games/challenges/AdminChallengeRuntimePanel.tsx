@@ -59,7 +59,7 @@ export function AdminChallengeRuntimePanel({
 
   return (
     <AdminEditorSection
-      description="管理员测试实例只支持 Docker；创建和销毁都进入部署队列，并每 3 秒回读题目状态。"
+      description="仅 Docker 题目支持创建测试实例。"
       title="测试实例"
     >
       {draftEnvironment === EnvironmentType.Docker && containerChallenge ? (

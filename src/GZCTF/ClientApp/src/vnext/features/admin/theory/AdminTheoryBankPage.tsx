@@ -21,7 +21,6 @@ import {
   MetricItem,
   MetricStrip,
   PaginationBar,
-  RefreshIndicator,
   StatusBadge,
   ToolbarGroup,
 } from '../shared/AdminWorkbench'
@@ -182,7 +181,6 @@ export function AdminTheoryBankPage() {
             <ActionButton icon={<Plus size={16} />} onClick={() => openEditor(null)} tone="primary" type="button">新建题目</ActionButton>
           </>
         }
-        description="维护全平台共享的单选、多选和判断题；比赛试卷从这里引用并保存题目快照。"
         eyebrow="THEORY QUESTION BANK"
         title="理论题库"
       />
@@ -197,7 +195,6 @@ export function AdminTheoryBankPage() {
           <header>
             <span>QUESTION FILTERS</span>
             <h2>筛选范围</h2>
-            <p>先选择题型、题库或标签，再在右侧搜索题干与解析。</p>
           </header>
           <section>
             <strong>题型</strong>
@@ -241,7 +238,6 @@ export function AdminTheoryBankPage() {
                 <input aria-label="搜索理论题目" onChange={(event) => setQuery(event.currentTarget.value)} placeholder="搜索题干、解析、题库、标签或编号" type="search" value={query} />
               </label>
             </ToolbarGroup>
-            <RefreshIndicator active={request.isRefreshing} label="题库按需刷新" />
           </FilterToolbar>
           {feedback ? <InlineFeedback tone={feedback.tone}>{feedback.message}</InlineFeedback> : null}
           {request.error ? <InlineFeedback tone="danger">{errorMessage(request.error, '理论题库加载失败。')}</InlineFeedback> : null}

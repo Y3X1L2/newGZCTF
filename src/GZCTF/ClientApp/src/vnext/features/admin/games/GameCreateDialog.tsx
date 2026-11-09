@@ -127,7 +127,7 @@ export function GameCreateDialog({
         {step === 1 ? (
           <div className={styles.stack}>
             <SelectField
-              hint="赛制决定后续管理入口；已产生业务数据后修改赛制可能被服务端拒绝。"
+              hint="产生比赛数据后，可能无法更改赛制。"
               label="比赛赛制"
               onValueChange={(value) => update('gameType', value as GameType)}
               value={draft.gameType}
@@ -153,7 +153,6 @@ export function GameCreateDialog({
               />
               <ToggleField
                 checked={draft.isTest}
-                description="用于内部测试和演示数据区分。"
                 label="测试比赛"
                 onChange={(checked) => update('isTest', checked)}
               />

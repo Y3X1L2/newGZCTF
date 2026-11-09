@@ -16,7 +16,6 @@ import {
   MetricItem,
   MetricStrip,
   PaginationBar,
-  RefreshIndicator,
   StatusBadge,
   ToolbarGroup,
 } from '../shared/AdminWorkbench'
@@ -154,7 +153,7 @@ export function AdminTeamsPage() {
 
   return (
     <div className={styles.page}>
-      <AdminPageHeader description="维护战队资料、成员上下文和锁定状态。" eyebrow="TEAM GOVERNANCE" title="战队管理" />
+      <AdminPageHeader eyebrow="TEAM GOVERNANCE" title="战队管理" />
       <MetricStrip>
         <MetricItem detail={keyword ? '搜索结果' : '服务器记录'} label="战队总数" value={teamsRequest.page?.total ?? 0} />
         <MetricItem detail="当前加载页" label="开放" tone={metrics.open ? 'success' : 'neutral'} value={metrics.open} />
@@ -168,7 +167,6 @@ export function AdminTeamsPage() {
             <input aria-label="搜索战队" onChange={(event) => setQuery(event.currentTarget.value)} placeholder="输入战队名称" type="search" value={query} />
           </label>
         </ToolbarGroup>
-        <RefreshIndicator active={teamsRequest.isRefreshing} label={keyword ? '搜索结果模式' : '列表按需刷新'} />
       </FilterToolbar>
       {keyword ? <InlineFeedback>搜索由服务器返回最多一组匹配结果，清空关键字后恢复常规分页。</InlineFeedback> : null}
       {feedback ? <InlineFeedback tone={feedback.tone}>{feedback.message}</InlineFeedback> : null}
@@ -187,7 +185,7 @@ export function AdminTeamsPage() {
         onSave={async (teamId, payload) => {
           await commonAdminApi.updateTeam(teamId, payload)
           await teamsRequest.mutate()
-          setFeedback({ tone: 'success', message: '战队信息已保存并从服务器回读。' })
+          setFeedback({ tone: 'success', message: '战队信息已保存。' })
         }}
         team={selected}
       />

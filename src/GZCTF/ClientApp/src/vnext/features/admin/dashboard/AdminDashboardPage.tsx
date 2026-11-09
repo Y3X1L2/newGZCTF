@@ -16,7 +16,6 @@ import {
   MetricStrip,
   ResourceMeter,
   StatusBadge,
-  RefreshIndicator,
 } from '../shared/AdminWorkbench'
 import { formatAdminDate } from '../shared/adminFormat'
 import styles from './AdminDashboardPage.module.css'
@@ -181,12 +180,6 @@ export function AdminDashboardPage() {
         title="运行概览"
       />
 
-      <div className={styles.syncLine}>
-        <RefreshIndicator
-          active={dashboard.nodes.isRefreshing || dashboard.manualRefreshing}
-          label="每 10 秒刷新"
-        />
-      </div>
       {dashboard.nodes.error ||
       dashboard.images.error ||
       dashboard.queue.error ||

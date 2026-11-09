@@ -12,7 +12,6 @@ import {
   DataTable,
   DetailDrawer,
   type AdminDataColumn,
-  RefreshIndicator,
   StatusBadge,
   FilterToolbar,
   ToolbarGroup,
@@ -52,7 +51,6 @@ export function TeamLabResourcesPage() {
         eyebrow="TEAMLAB"
         title="设备与现场资源维护"
       />
-      <p>此入口用于维护已有设备模板与现场连接器。普通虚拟场景直接在设计页选择镜像和网络。</p>
       <p><Link to="/admin/images">环境模板</Link> · <Link to="/admin/nodes/teamlab-cache">节点制品缓存</Link> · <Link to="/admin/teamlab">返回场景</Link></p>
       <nav aria-label="组网资源分区" className={styles.tabs}>
         {(Object.keys(tabLabels) as ResourcesTab[]).map((key) => (
@@ -132,7 +130,6 @@ function DevicePackagesTab() {
         <ActionButton icon={<Plus size={16} />} onClick={() => setRegisterOpen(true)} tone="primary" type="button">
           登记设备模板
         </ActionButton>
-        <RefreshIndicator active={catalog.isRefreshing} label={catalog.isRefreshing ? '正在同步' : '数据已同步'} />
       </FilterToolbar>
 
       {actionError ? <InlineFeedback tone="danger">{errorMessage(actionError, '设备模板操作失败。')}</InlineFeedback> : null}
@@ -317,7 +314,6 @@ function ConnectorsTab() {
         <ActionButton icon={<Plus size={16} />} onClick={() => setRegisterOpen(true)} tone="primary" type="button">
           登记连接器
         </ActionButton>
-        <RefreshIndicator active={registry.isRefreshing} label={registry.isRefreshing ? '正在同步' : '数据已同步'} />
       </FilterToolbar>
 
       {actionError ? <InlineFeedback tone="danger">{errorMessage(actionError, '连接器操作失败。')}</InlineFeedback> : null}
@@ -432,9 +428,6 @@ export function NodeCacheTab() {
 
   return (
     <section aria-label="节点制品缓存">
-      <FilterToolbar>
-        <RefreshIndicator active={cache.isRefreshing} label={cache.isRefreshing ? '正在同步' : '数据已同步'} />
-      </FilterToolbar>
       {cache.isLoading ? (
         <DataState description="正在读取节点制品缓存。" loading title="节点缓存加载中" />
       ) : cache.error ? (

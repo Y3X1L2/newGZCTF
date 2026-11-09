@@ -32,7 +32,7 @@ export function GameObjectiveEditorDrawer({
 
   return (
     <VNextDrawer
-      description={draft?.id ? `目标 #${draft.id}` : '新增目标'}
+      description={draft?.id ? `目标 #${draft.id}` : undefined}
       eyebrow="SCORING OBJECTIVE"
       footer={
         <>

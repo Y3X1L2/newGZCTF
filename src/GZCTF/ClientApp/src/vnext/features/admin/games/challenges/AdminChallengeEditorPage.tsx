@@ -214,7 +214,6 @@ export function AdminChallengeEditorPage() {
             返回题目列表
           </ActionButton>
         }
-        description="题面、计分和环境配置保存为一个事务；附件与 Flag 使用各自的即时操作接口。"
         eyebrow={`CHALLENGE #${challenge.id}`}
         title={challenge.title}
       />
@@ -239,7 +238,7 @@ export function AdminChallengeEditorPage() {
 
       <form className={styles.form} onSubmit={(event) => void save(event)}>
         <AdminEditorSection
-          description="题目类型创建后不可变更；名称、分类和启用状态会直接影响选手端展示。"
+          description="题型创建后不可更改。"
           title="题目身份"
         >
           <div className={styles.stack}>
@@ -284,7 +283,7 @@ export function AdminChallengeEditorPage() {
           </div>
         </AdminEditorSection>
 
-        <AdminEditorSection description="题面与选手端使用同一 Markdown 渲染器；提示每行一条。" title="题面与提示">
+        <AdminEditorSection title="题面与提示">
           <div className={styles.stack}>
             <div className={styles.markdownGrid}>
               <TextAreaField
@@ -299,7 +298,7 @@ export function AdminChallengeEditorPage() {
               </article>
             </div>
             <TextAreaField
-              hint="空行会在保存时移除。"
+              hint="每行一条提示。"
               label="题目提示"
               onValueChange={(value) => update('hintsText', value)}
               rows={6}
@@ -490,7 +489,7 @@ export function AdminChallengeEditorPage() {
         </AdminEditorSection>
 
         <AdminEditorSection
-          description="普通附件绑定在题目上；动态附件按 Flag 独立绑定，避免两种模型混用。"
+          description="附件独立保存。动态附件在 Flag 中配置。"
           title="题目附件"
         >
           <ChallengeAttachmentPanel
@@ -502,7 +501,7 @@ export function AdminChallengeEditorPage() {
         </AdminEditorSection>
 
         <AdminEditorSection
-          description="支持多阶段判题、继承动态分值或固定分值，以及文本、文件和自定义答案。"
+          description="Flag 独立保存。"
           title="Flag 管理"
         >
           <ChallengeFlagPanel

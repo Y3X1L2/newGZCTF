@@ -42,7 +42,6 @@ export function NodeTeamLabPanel({
       <header>
         <div>
           <h2>TeamLab 组网能力</h2>
-          <p>运行兼容性检测可更新节点能力。</p>
         </div>
         <StatusBadge tone={tunnel.tone}>{tunnel.label}</StatusBadge>
       </header>

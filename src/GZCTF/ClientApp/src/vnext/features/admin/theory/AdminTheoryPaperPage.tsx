@@ -166,7 +166,7 @@ export function AdminTheoryPaperPage() {
       const saved = await theoryAdminApi.savePaper(gameId, payload)
       await paperRequest.mutate(saved, { revalidate: false })
       setDraft(theoryPaperDraft(saved))
-      setFeedback({ tone: 'success', message: '理论试卷草稿已保存，并从服务器回读。' })
+      setFeedback({ tone: 'success', message: '理论试卷草稿已保存。' })
       return true
     } catch (requestError) {
       setFeedback({ tone: 'danger', message: errorMessage(requestError, '理论试卷保存失败。') })
@@ -211,7 +211,6 @@ export function AdminTheoryPaperPage() {
   return (
     <div className={styles.page}>
       <AdminPageHeader
-        description="一场比赛只发布一套试卷；从共享题库加入快照、配置分值并完成发布。"
         eyebrow="THEORY PAPER"
         title="理论试卷"
       />
@@ -222,12 +221,12 @@ export function AdminTheoryPaperPage() {
         <MetricItem detail={paperRequest.paper.publishedAt ? formatAdminDate(paperRequest.paper.publishedAt, false) : '尚未发布'} label="发布状态" value={paperRequest.paper.isPublished ? '已发布' : '草稿'} />
       </MetricStrip>
       {paperRequest.paper.isPublished ? (
-        <InlineFeedback>当前试卷已发布。再次保存会先回到草稿状态；已有已提交答卷时，后端会拒绝编辑。</InlineFeedback>
+        <InlineFeedback>保存会将已发布的试卷转为草稿。有选手提交答卷后无法编辑。</InlineFeedback>
       ) : null}
       {feedback ? <InlineFeedback tone={feedback.tone === 'neutral' ? undefined : feedback.tone}>{feedback.message}</InlineFeedback> : null}
       <div className={styles.workspace}>
         <main className={styles.paperColumn}>
-          <AdminEditorSection description="保存为草稿，或保存后发布试卷。" title="试卷配置">
+          <AdminEditorSection title="试卷配置">
             <div className={styles.formGrid}>
               <TextField label="试卷名称" onValueChange={(value) => setDraft((current) => current ? { ...current, title: value } : current)} required value={draft.title} />
               <TextAreaField label="试卷说明" onValueChange={(value) => setDraft((current) => current ? { ...current, description: value } : current)} rows={5} value={draft.description ?? ''} />

@@ -9,7 +9,6 @@ import {
   CursorPaginationBar,
   DataTable,
   FilterToolbar,
-  RefreshIndicator,
   StatusBadge,
   ToolbarGroup,
   type AdminDataColumn,
@@ -246,7 +245,6 @@ export function AdminLogsPage() {
             </ActionButton>
           </>
         }
-        description={text('description')}
         eyebrow={text('eyebrow')}
         title={text('title')}
       />
@@ -305,7 +303,6 @@ export function AdminLogsPage() {
             )}
           </select>
         </ToolbarGroup>
-        <RefreshIndicator active={logsRequest.isRefreshing} label={text('refresh_hint')} />
       </FilterToolbar>
 
       <p className={styles.filterHint}>{text('filter_hint')}</p>

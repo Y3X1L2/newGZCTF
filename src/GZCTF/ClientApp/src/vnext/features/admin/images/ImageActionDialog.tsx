@@ -9,16 +9,15 @@ import styles from './ImageActionDialog.module.css'
 
 export type ImageActionMode = 'docker-register' | 'docker-upload' | 'local-import' | 'vm-upload'
 
-const actionMeta: Record<ImageActionMode, { eyebrow: string; title: string; description: string }> = {
+const actionMeta: Record<ImageActionMode, { eyebrow: string; title: string; description?: string }> = {
   'docker-register': {
     eyebrow: 'DOCKER REFERENCE',
     title: '注册 Docker 镜像',
-    description: '从可访问的 Registry 拉取镜像，并登记为平台环境模板。',
   },
   'docker-upload': {
     eyebrow: 'DOCKER ARCHIVE',
     title: '上传 Docker Archive',
-    description: '上传 docker save 生成的归档包，服务端将推送到内部 Registry。',
+    description: '使用 docker save 生成的归档包。',
   },
   'vm-upload': {
     eyebrow: 'VM ARTIFACT',
@@ -28,7 +27,7 @@ const actionMeta: Record<ImageActionMode, { eyebrow: string; title: string; desc
   'local-import': {
     eyebrow: 'SERVER IMPORT',
     title: '导入服务器文件',
-    description: '登记服务端允许目录中已经存在的 VM 镜像文件。',
+    description: '请选择允许导入目录下的 VM 镜像文件。',
   },
 }
 

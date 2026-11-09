@@ -106,7 +106,7 @@ export function ChallengeCreateDialog({
 
   return (
     <VNextDialog
-      description="先确定题型和运行环境，创建后进入完整题目工作台维护内容、附件和 Flag。"
+      description="题型创建后不可更改。"
       eyebrow="CHALLENGE CREATION"
       footer={
         <>

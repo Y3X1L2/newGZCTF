@@ -11,7 +11,6 @@ import {
   MetricItem,
   MetricStrip,
   PaginationBar,
-  RefreshIndicator,
   StatusBadge,
   ToolbarGroup,
   type AdminDataColumn,
@@ -198,7 +197,6 @@ export function AdminQueuePage() {
             刷新状态
           </ActionButton>
         }
-        description="跟踪容器、虚拟机和场景资源从排队、调度到执行终态的全过程。"
         eyebrow="RUNTIME ORCHESTRATION"
         title="部署队列"
       />
@@ -241,10 +239,6 @@ export function AdminQueuePage() {
             <option value="cancelled">已取消</option>
           </select>
         </ToolbarGroup>
-        <RefreshIndicator
-          active={queueRequest.isRefreshing}
-          label={metrics.active ? '3 秒自动同步' : '15 秒状态校验'}
-        />
       </FilterToolbar>
 
       {failure ? <InlineFeedback tone="danger">{failure}</InlineFeedback> : null}

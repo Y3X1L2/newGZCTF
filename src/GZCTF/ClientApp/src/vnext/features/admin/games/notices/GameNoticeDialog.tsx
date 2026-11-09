@@ -58,7 +58,7 @@ export function GameNoticeDialog({
 
   return (
     <VNextDialog
-      description="公告支持 Markdown；保存成功后由服务器通过现有实时通道通知选手。"
+      description="公告支持 Markdown。保存后会通知选手。"
       eyebrow="GAME NOTICE"
       footer={<><ActionButton disabled={saving} onClick={onClose} type="button">取消</ActionButton><ActionButton disabled={saving} onClick={() => save()} tone="primary" type="button">{saving ? '正在保存' : notice ? '保存公告' : '发布公告'}</ActionButton></>}
       onClose={() => { if (!saving) onClose() }}
