@@ -19,7 +19,8 @@ export function NodeHistoryChart({ history }: { history: NodeMetricHistory }) {
         <LineChart data={points} accessibilityLayer margin={{ top: 12, right: 12, bottom: 12, left: 0 }}>
           <CartesianGrid stroke="var(--yn-color-border)" strokeDasharray="4 5" vertical={false} />
           <XAxis dataKey="time" type="number" domain={[history.fromUtc, history.toUtc]} scale="time"
-            tickFormatter={dateTime} minTickGap={48} stroke="var(--yn-color-muted)" tick={{ fontSize: 11 }} />
+            ticks={[0, 1, 2, 3].map(index => history.fromUtc + (history.toUtc - history.fromUtc) * index / 3)}
+            tickFormatter={dateTime} minTickGap={32} stroke="var(--yn-color-muted)" tick={{ fontSize: 11 }} />
           <YAxis domain={[0, 100]} ticks={[0, 50, 100]} tickFormatter={value => `${value}%`}
             width={45} stroke="var(--yn-color-muted)" tick={{ fontSize: 11 }} />
           <Tooltip content={({ active, payload, label }) => active && payload?.length ?
@@ -29,9 +30,9 @@ export function NodeHistoryChart({ history }: { history: NodeMetricHistory }) {
               <span>{payload[0].payload.nodeCount} 个节点</span>
             </div> : null} />
           <Line dataKey="cpu" name="CPU" stroke="var(--yn-color-brand)" strokeWidth={2}
-            type="linear" dot={false} connectNulls={false} isAnimationActive={false} />
+            type="linear" dot={{ r: 1.5, strokeWidth: 0, fill: 'var(--yn-color-brand)' }} connectNulls={false} isAnimationActive={false} />
           <Line dataKey="memory" name="内存" stroke="var(--yn-color-info)" strokeWidth={2} strokeDasharray="6 3"
-            type="linear" dot={false} connectNulls={false} isAnimationActive={false} />
+            type="linear" dot={{ r: 1.5, strokeWidth: 0, fill: 'var(--yn-color-info)' }} connectNulls={false} isAnimationActive={false} />
         </LineChart>
       </ResponsiveContainer>
     </div>

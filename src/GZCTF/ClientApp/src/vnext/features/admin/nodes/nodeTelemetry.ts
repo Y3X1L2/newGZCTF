@@ -37,4 +37,3 @@ export function telemetrySample(nodes: NodeSummary[], now = Date.now()): NodeTel
       .join(','),
   }
 }
-

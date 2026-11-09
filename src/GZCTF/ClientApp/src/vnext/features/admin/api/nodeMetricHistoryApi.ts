@@ -32,8 +32,11 @@ export function createNodeMetricHistoryApi(client: RuntimeJsonClient) {
         return contractFailure('Node metric history', value)
       }
       const points = value.points
-      if (points.some((point, index) => point.timestamp < (value.fromUtc as number) ||
-          point.timestamp >= (value.toUtc as number) || (index > 0 && point.timestamp <= points[index - 1].timestamp))) {
+      const [interval, expectedPoints] = { '1h': [60, 60], '24h': [300, 288], '7d': [1800, 336] }[range]
+      if (value.intervalSeconds !== interval || points.length !== expectedPoints ||
+          !Number.isFinite(new Date(value.fromUtc).getTime()) || !Number.isFinite(new Date(value.toUtc).getTime()) ||
+          value.toUtc - value.fromUtc !== interval * expectedPoints * 1000 ||
+          points.some((point, index) => point.timestamp !== (value.fromUtc as number) + index * interval * 1000)) {
         return contractFailure('Node metric history', value)
       }
       return { fromUtc: value.fromUtc, toUtc: value.toUtc, intervalSeconds: value.intervalSeconds, points }
