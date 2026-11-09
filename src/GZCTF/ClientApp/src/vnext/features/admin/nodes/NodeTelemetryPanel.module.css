@@ -92,6 +92,10 @@
   height: 190px;
   margin-top: var(--yn-space-4);
 }
+.chart svg:focus-visible {
+  outline: 2px solid var(--yn-color-brand);
+  outline-offset: -2px;
+}
 .rangeControls {
   display: flex;
   align-items: center;
@@ -159,11 +163,6 @@
   font-size: var(--yn-font-xs);
   font-variant-numeric: tabular-nums;
 }
-.historyTable { font-size: var(--yn-font-xs); color: var(--yn-color-muted); }
-.historyTable summary { cursor: pointer; padding-block: var(--yn-space-2); }
-.historyTable > div { max-height: 280px; overflow: auto; }
-.historyTable table { width: 100%; border-collapse: collapse; white-space: nowrap; }
-.historyTable th, .historyTable td { padding: var(--yn-space-2); text-align: left; border-bottom: 1px solid var(--yn-color-border); }
 @media (max-width: 1000px) {
   .cards {
     grid-template-columns: repeat(2, minmax(0, 1fr));

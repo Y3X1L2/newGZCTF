@@ -131,7 +131,7 @@ export function NodeTelemetryPanel({
         {history.error ? <InlineFeedback tone="danger">历史负载读取失败，请重试。</InlineFeedback> :
           history.isLoading ? <p className={styles.emptyHistory} role="status">正在加载历史负载…</p> :
           history.data?.points.some(point => point.cpuLoad !== null || point.memoryLoad !== null) ?
-            <NodeHistoryChart history={history.data} /> :
+            <NodeHistoryChart key={JSON.stringify([nodeId, history.range])} history={history.data} /> :
             <p className={styles.emptyHistory}>该时段暂无记录</p>}
       </article>
     </section>
