@@ -142,13 +142,13 @@ export function ContainerTerminal({ sessionId, closing, closeError, recreating, 
   return <VNextDialog closeDisabled={closing || recreating} eyebrow="容器终端" footer={<>
     <ActionButton disabled={closing || recreating || socket.current?.readyState !== WebSocket.OPEN} type="button"
       onClick={() => { if (socket.current?.readyState === WebSocket.OPEN) socket.current.send(new Uint8Array([3])) }}>中断命令</ActionButton>
-    <ActionButton disabled={closing || recreating} onClick={() => void onClose()} type="button">{closing ? '正在关闭终端' : '关闭终端'}</ActionButton>
+    <ActionButton disabled={closing || recreating} onClick={() => onClose()} type="button">{closing ? '正在关闭终端' : '关闭终端'}</ActionButton>
   </>} onClose={() => void onClose()} open={sessionId !== null} title="容器终端" wide>
     <div className={styles.terminalSurface}>
       <div aria-label="交互终端" className={styles.terminalHost} ref={setHost} />
       <span role="status">{status}</span>
       {closeError ? <InlineFeedback tone="danger">{errorMessage(closeError, '会话清理未完成，请重试。')}</InlineFeedback> : null}
-      {disconnected ? <ActionButton disabled={closing || recreating} icon={<RefreshCw size={14} />} onClick={() => void onRecreate()} type="button">{recreating ? '正在重新创建' : '重新创建终端'}</ActionButton> : null}
+      {disconnected ? <ActionButton disabled={closing || recreating} icon={<RefreshCw size={14} />} onClick={() => onRecreate()} type="button">{recreating ? '正在重新创建' : '重新创建终端'}</ActionButton> : null}
     </div>
   </VNextDialog>
 }

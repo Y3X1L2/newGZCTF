@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { Plus, Search } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Role, type UserInfoModel } from '@Api'
@@ -39,6 +40,7 @@ function userIdentity(user: UserInfoModel) {
 }
 
 export function AdminUsersPage() {
+  const { t } = useTranslation('admin')
   const account = useCurrentAccount()
   const queryState = useAdminQueryState(PAGE_SIZE)
   const [query, setQuery] = useState(queryState.params.get('q') ?? '')
@@ -157,8 +159,8 @@ export function AdminUsersPage() {
       />
       <VNextConfirmDialog
         confirmationText={deleteTarget?.userName || undefined}
-        description="删除后该账号不能恢复；队长、最后一名超级管理员和当前账号会被后端拒绝删除。"
-        message={<>确认永久删除用户 <strong>{deleteTarget?.userName}</strong>？</>}
+        description={t('content.users.delete_effects')}
+        message={<>确认删除用户 <strong>{deleteTarget?.userName}</strong>？</>}
         onClose={() => setDeleteTarget(null)}
         onConfirm={async () => {
           if (!deleteTarget?.id) return false

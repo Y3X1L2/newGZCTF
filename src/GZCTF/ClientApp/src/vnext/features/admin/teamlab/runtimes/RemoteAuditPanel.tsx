@@ -10,14 +10,14 @@ export function RemoteAuditPanel({ sessionId }: { sessionId: string }) {
   const audit = useRemoteAudit(sessionId)
   return <section className={styles.panel} aria-label="操作审计">
     <header className={styles.panelHeader}><h3>审计文件</h3>
-      <ActionButton icon={<RefreshCw size={16} />} onClick={() => void audit.mutate()} type="button">刷新审计</ActionButton>
+      <ActionButton icon={<RefreshCw size={16} />} onClick={() => audit.mutate()} type="button">刷新审计</ActionButton>
     </header>
     {audit.error ? <InlineFeedback tone="danger">{errorMessage(audit.error, '审计文件读取失败。')}</InlineFeedback>
       : !audit.data ? <DataState loading title="正在读取审计文件" /> : <>
         {audit.data.state === 'session-active' ? <DataState title="会话尚未结束" /> : null}
         {audit.data.state === 'expired' ? <DataState title="已超过审计保留期" /> : null}
         {audit.data.state === 'pending' ? <ActionButton icon={<FileCheck size={16} />} disabled={audit.generating}
-          onClick={() => void audit.generate()} type="button">{audit.generating ? '正在归档' : '归档操作证据'}</ActionButton> : null}
+          onClick={() => audit.generate()} type="button">{audit.generating ? '正在归档' : '归档操作证据'}</ActionButton> : null}
         {audit.data.items.map(file => <div key={file.id} className={styles.auditFile}>
           <dl className={styles.diagnosticsFacts}>
             <div><dt>文件大小</dt><dd>{file.size} B</dd></div>
@@ -25,7 +25,7 @@ export function RemoteAuditPanel({ sessionId }: { sessionId: string }) {
             <div><dt>到期时间</dt><dd>{file.expiresAt ? formatAdminDate(file.expiresAt) : '-'}</dd></div>
           </dl>
           <ActionButton icon={<Download size={16} />} disabled={audit.downloading}
-            onClick={() => void audit.download(file.id)} type="button">下载证据 JSON</ActionButton>
+            onClick={() => audit.download(file.id)} type="button">下载证据 JSON</ActionButton>
         </div>)}
       </>}
     {audit.actionError ? <InlineFeedback tone="danger">{errorMessage(audit.actionError, '审计归档失败。')}</InlineFeedback> : null}

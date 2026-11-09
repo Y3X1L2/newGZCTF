@@ -28,7 +28,7 @@ export function RuntimeSearchPanel() {
   useEffect(() => setDraft(result.filters), [result.filters])
   return <section className={styles.panel} aria-label="运行环境检索">
     <header className={styles.panelHeader}><h3>运行环境</h3>
-      <ActionButton aria-label="刷新环境" title="刷新环境" icon={<RefreshCw size={16} />} disabled={result.isValidating} onClick={() => void result.mutate()} type="button" />
+      <ActionButton aria-label="刷新环境" title="刷新环境" icon={<RefreshCw size={16} />} disabled={result.isValidating} onClick={() => result.mutate()} type="button" />
     </header>
     <form className={`${styles.captureForm} ${searchStyles.runtimeSearchForm}`} onSubmit={event => { event.preventDefault(); result.setFilters({ ...draft }) }}>
       <label>名称、引用或资产<input placeholder="搜索运行环境" type="search" maxLength={128} value={draft.search} onChange={event => setDraft({ ...draft, search: event.target.value })} /></label>

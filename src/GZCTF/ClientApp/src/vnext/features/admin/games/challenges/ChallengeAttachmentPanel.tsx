@@ -142,13 +142,13 @@ export function ChallengeAttachmentPanel({
       <div className={styles.attachmentControls}>
         <div className={styles.bindingBlock}>
           <FileField hint={file?.name} label="本地附件" onChange={setFile} />
-          <ActionButton disabled={!file || pending} icon={<Upload size={16} />} onClick={() => void bindLocal()} type="button">
+          <ActionButton disabled={!file || pending} icon={<Upload size={16} />} onClick={() => bindLocal()} type="button">
             上传并绑定
           </ActionButton>
         </div>
         <div className={styles.bindingBlock}>
           <TextField label="外部附件 URL" onValueChange={setRemoteUrl} placeholder="https://..." type="url" value={remoteUrl} />
-          <ActionButton disabled={!remoteUrl.trim() || pending} icon={<Link2 size={16} />} onClick={() => void bindRemote()} type="button">
+          <ActionButton disabled={!remoteUrl.trim() || pending} icon={<Link2 size={16} />} onClick={() => bindRemote()} type="button">
             绑定链接
           </ActionButton>
         </div>

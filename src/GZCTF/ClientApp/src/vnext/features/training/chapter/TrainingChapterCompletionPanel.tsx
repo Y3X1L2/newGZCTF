@@ -75,7 +75,7 @@ export function TrainingChapterCompletionPanel({
         <ActionButton
           disabled={progress.completed || completing || !progress.blockingConditions}
           icon={progress.completed ? <Check size={17} /> : <BookOpen size={17} />}
-          onClick={() => void onComplete()}
+          onClick={() => onComplete()}
           tone="primary"
           type="button"
         >

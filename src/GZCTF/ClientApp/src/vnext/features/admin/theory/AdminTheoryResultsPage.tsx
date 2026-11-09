@@ -172,7 +172,7 @@ export function AdminTheoryResultsPage() {
       <AdminPageHeader
         actions={
           <>
-            <ActionButton disabled={request.isRefreshing || paperRequest.isRefreshing || recalculating} icon={<RefreshCw size={16} />} onClick={() => void refresh()} type="button">刷新</ActionButton>
+            <ActionButton disabled={request.isRefreshing || paperRequest.isRefreshing || recalculating} icon={<RefreshCw size={16} />} onClick={() => refresh()} type="button">刷新</ActionButton>
             <ActionButton disabled={recalculating} icon={<Calculator size={16} />} onClick={() => setRecalculateOpen(true)} tone="primary" type="button">重新判分</ActionButton>
           </>
         }

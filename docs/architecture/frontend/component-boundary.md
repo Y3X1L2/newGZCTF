@@ -30,6 +30,10 @@
 
 ## 拆分与验证
 
+共享 `ActionButton` 接收返回 Promise 的 `onClick`，请求期间显示等待标记、设置 `aria-busy` 并阻止重复点击；回调应返回实际 Promise，不用 `void` 丢弃它。服务器异步任务在请求返回后仍执行时，由所属 controller 按真实任务状态传入 `loading` 和可选 `loadingLabel`。表单提交按钮同样显式传 `loading`。按钮不推断业务成功，业务错误与最终结果仍由 feature 负责；未处理的请求异常显示通用重试提示，不暴露服务端详情。
+
+按钮支持悬停、按压与键盘焦点反馈；减少动效时停止旋转与位移动画，保留等待语义和禁用状态。
+
 同一组件承担多个独立请求、权限、弹窗与大型视觉区域时，按用户操作或业务链路拆 controller/panel；不要按行数机械拆出没有职责的文件。保留完整加载、失败、重试和取消路径。
 
 架构检查由 [check-frontend-architecture.mjs](../../../src/GZCTF/ClientApp/scripts/check-frontend-architecture.mjs) 执行；它检查生成 API 入口、旧依赖、部分跨 feature 引用与样式边界，并不替代代码审查。完整门禁与视口要求见 [开发边界](development.md)。

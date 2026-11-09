@@ -52,7 +52,7 @@ export function RuntimeAccessPanel({ runtimeId, canCreate }: { runtimeId: string
     <section aria-labelledby="runtime-access-title" className={styles.panel}>
       <header className={styles.panelHeader}>
         <h3 id="runtime-access-title">WireGuard 授权</h3>
-        <ActionButton disabled={!canCreate || acting} icon={<KeyRound size={16} />} onClick={() => void create()} type="button">
+        <ActionButton disabled={!canCreate || acting} icon={<KeyRound size={16} />} onClick={() => create()} type="button">
           新增授权
         </ActionButton>
       </header>
@@ -60,7 +60,7 @@ export function RuntimeAccessPanel({ runtimeId, canCreate }: { runtimeId: string
         <DataState description="" loading title="配置加载中" />
       ) : request.error ? (
         <InlineFeedback tone="danger">{errorMessage(request.error, '授权读取失败。')}
-          <ActionButton aria-label="重新读取 VPN 授权" icon={<RefreshCw size={15} />} onClick={() => void request.mutate()} type="button" />
+          <ActionButton aria-label="重新读取 VPN 授权" icon={<RefreshCw size={15} />} onClick={() => request.mutate()} type="button" />
         </InlineFeedback>
       ) : request.data?.length ? (
         <div className={styles.accessList}>

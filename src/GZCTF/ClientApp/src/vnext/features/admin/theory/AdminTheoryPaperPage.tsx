@@ -298,7 +298,7 @@ export function AdminTheoryPaperPage() {
         </aside>
       </div>
       <AdminEditorActionBar status={dirty ? `有未保存更改 · ${questions.length} 题 / ${totalScore} 分` : `已与服务器同步 · ${questions.length} 题 / ${totalScore} 分`}>
-        <ActionButton disabled={saving || !dirty} icon={<Save size={16} />} onClick={() => void save()} type="button">{saving ? '正在保存' : '保存草稿'}</ActionButton>
+        <ActionButton disabled={saving || !dirty} icon={<Save size={16} />} onClick={() => save()} type="button">{saving ? '正在保存' : '保存草稿'}</ActionButton>
         <ActionButton disabled={saving || !questions.length} icon={<Send size={16} />} onClick={() => setPublishOpen(true)} tone="primary" type="button">保存并发布</ActionButton>
       </AdminEditorActionBar>
       <VNextConfirmDialog description="发布后选手可按比赛时间与权限访问；已有答卷后将无法再编辑试卷。" message={`将保存并发布“${draft.title || game.title}”，共 ${questions.length} 题、${totalScore} 分。`} onClose={() => setPublishOpen(false)} onConfirm={publish} open={publishOpen} title="发布理论试卷？" />

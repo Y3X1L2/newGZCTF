@@ -83,7 +83,7 @@ export function AdminChallengeRuntimePanel({
               <ActionButton
                 disabled={Boolean(operation) || Boolean(testContainer) || dirty}
                 icon={<Play size={16} />}
-                onClick={() => void onCreate()}
+                onClick={() => onCreate()}
                 tone="primary"
                 type="button"
               >
@@ -92,7 +92,7 @@ export function AdminChallengeRuntimePanel({
               <ActionButton
                 disabled={Boolean(operation) || !testContainer}
                 icon={<Square size={16} />}
-                onClick={() => void onDestroy()}
+                onClick={() => onDestroy()}
                 tone="danger"
                 type="button"
               >
@@ -101,7 +101,7 @@ export function AdminChallengeRuntimePanel({
               <ActionButton
                 disabled={refreshing}
                 icon={<RefreshCw size={16} />}
-                onClick={() => void onRefresh()}
+                onClick={() => onRefresh()}
                 type="button"
               >
                 刷新状态

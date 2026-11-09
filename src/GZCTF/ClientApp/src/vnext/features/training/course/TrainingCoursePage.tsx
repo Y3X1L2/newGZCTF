@@ -176,7 +176,7 @@ export function TrainingCoursePage() {
     }
     if (course.enrollmentStatus === TrainingCourseEnrollmentStatus.Pending) {
       return (
-        <ActionButton disabled={submitting} onClick={() => void cancelEnrollment()} type="button">
+        <ActionButton disabled={submitting} onClick={() => cancelEnrollment()} type="button">
           {submitting ? '正在撤回' : '撤回申请'}
         </ActionButton>
       )
@@ -465,7 +465,7 @@ export function TrainingCoursePage() {
             <ActionButton
               disabled={submitting}
               icon={<Send size={16} />}
-              onClick={() => void enroll()}
+              onClick={() => enroll()}
               tone="primary"
               type="button"
             >

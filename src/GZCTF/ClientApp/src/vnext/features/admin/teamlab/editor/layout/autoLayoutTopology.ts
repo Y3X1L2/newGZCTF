@@ -25,12 +25,10 @@ import { buildTopologyGraph, computeRoutingDepth, type TopologyGraph } from './t
  *
  * Reading model: routing depth advances **left to right**, so the entry network
  * sits at the left and each further hop is a column to its right. That direction
- * is not arbitrary — device cards expose a target handle on their left edge and a
- * source handle on their right, so a horizontal flow keeps every link travelling
- * the way its handles already point, and it fills a wide (16:9) canvas instead of
+ * fills a wide (16:9) canvas instead of
  * stacking into a narrow strip. Regions sharing one depth stack vertically inside
  * that column, and border routers sit in the band *between* the two columns they
- * bridge, which is exactly where their links want to cross.
+ * bridge. Links choose facing card edges from the resulting geometry.
  *
  * Sizing rule: node boxes come from {@link nodeSize} (intrinsic to the node
  * type) and never from persisted editor metadata. Region boxes are recomputed

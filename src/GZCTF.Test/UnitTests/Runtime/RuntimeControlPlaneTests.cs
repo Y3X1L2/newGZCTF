@@ -673,6 +673,68 @@ public sealed class RuntimeControlPlaneTests
         await provider.DisposeAsync();
     }
 
+    [Theory]
+    [InlineData(DeploymentQueueKind.ExerciseContainer)]
+    [InlineData(DeploymentQueueKind.TrainingContainer)]
+    [InlineData(DeploymentQueueKind.VirtualMachine)]
+    [InlineData(DeploymentQueueKind.ChallengeTestContainer)]
+    public async Task DeletedPersonalOwner_FailsScheduledCreateAndReleasesReservation(DeploymentQueueKind kind)
+    {
+        var databaseName = Guid.NewGuid().ToString();
+        await using var seed = CreateContext(databaseName);
+        var node = SeedNode(seed, maxContainers: 2);
+        var user = new UserInfo { UserName = "queue-owner", Role = Role.Student };
+        seed.Users.Add(user);
+        var request = kind switch
+        {
+            DeploymentQueueKind.TrainingContainer => DeploymentQueueRequest.TrainingContainer(user.Id, 1),
+            DeploymentQueueKind.VirtualMachine => DeploymentQueueRequest.Vm(1, user.Id, 1, Guid.NewGuid()),
+            DeploymentQueueKind.ChallengeTestContainer => DeploymentQueueRequest.ChallengeTestContainer(1, 1, user.Id),
+            _ => DeploymentQueueRequest.ExerciseContainer(user.Id, 1)
+        };
+        var ticket = DeploymentQueueTicket.Create(request);
+        ticket.Status = DeploymentQueueTicketStatus.Scheduled;
+        ticket.TargetNodeId = node.Id;
+        seed.DeploymentQueueTickets.Add(ticket);
+        seed.FleetCapacityReservations.Add(new FleetCapacityReservation
+        {
+            DeploymentQueueTicketId = ticket.Id, WorkerNodeId = node.Id,
+            DockerSlots = request.DockerSlots, VmSlots = request.VmSlots,
+            ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5)
+        });
+        var existing = new GZCTF.Models.Data.Container
+        {
+            Id = Guid.NewGuid(), Image = "test-image", ContainerId = "existing-personal-runtime",
+            Status = ContainerStatus.Running, NodeId = node.Id
+        };
+        seed.Containers.Add(existing);
+        await seed.SaveChangesAsync();
+
+        // The executor may already track this user when deletion commits in another scope.
+        await using var executorContext = CreateContext(databaseName);
+        Assert.Null((await executorContext.Users.SingleAsync()).DeletedAtUtc);
+        user.DeletedAtUtc = DateTimeOffset.UtcNow;
+        user.Role = Role.Banned;
+        await seed.SaveChangesAsync();
+
+        await using var provider = BuildExecutionProvider(databaseName,
+            new DeploymentExecutionService(executorContext, NullLogger<DeploymentExecutionService>.Instance));
+        var execution = provider.GetRequiredService<RuntimeExecutionService>();
+        Assert.True(await execution.ExecuteTicketAsync(ticket.Id, CancellationToken.None));
+
+        await using var verify = CreateContext(databaseName);
+        var failed = await verify.DeploymentQueueTickets.SingleAsync();
+        Assert.Equal(DeploymentQueueTicketStatus.Failed, failed.Status);
+        Assert.Equal(OperationalErrorCategory.Authorization, failed.ErrorCategory);
+        Assert.Equal(OperationalErrorCodes.AuthorizationForbidden, failed.ErrorCode);
+        Assert.False(failed.Retryable);
+        Assert.NotNull(failed.CompletedAt);
+        var reservation = await verify.FleetCapacityReservations.SingleAsync();
+        Assert.Equal(CapacityReservationStatus.Released, reservation.Status);
+        Assert.NotNull(reservation.ReleasedAt);
+        Assert.Equal(existing.Id, (await verify.Containers.SingleAsync(c => c.Status == ContainerStatus.Running)).Id);
+    }
+
     [Fact]
     public async Task QueueSelector_RotatesOwnersAndHonorsCreateQuota()
     {

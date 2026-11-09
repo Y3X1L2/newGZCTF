@@ -231,6 +231,36 @@ describe('TeamLabCanvas', () => {
     expect(nextEdges[0]).toBe(initialEdges[0])
   })
 
+  it('reprojects an existing connection when dragging a different card changes its clear corridor', async () => {
+    const empty = createEmptyTopologyDocument('Lab2')
+    const network = createTopologyNode(empty, 'switch', { x: 626, y: -203.8 })
+    const member = createTopologyNode(empty, 'docker', { x: 504, y: 85.8 })
+    const blocker = { ...createTopologyNode(empty, 'docker', { x: 504, y: -42.2 }), key: 'dc01' }
+    const connection = { key: 'member-network', type: 'membership' as const, nodeKey: member.key,
+      switchKey: network.key, primary: true, orderIndex: 0, hostOffset: 10 }
+    const document = { ...empty, nodes: { [network.key]: network, [member.key]: member, [blocker.key]: blocker },
+      connections: { [connection.key]: connection } }
+    const callbacks = { onAddNode: vi.fn(), onAutoLayout: vi.fn(), onConnectNodes: vi.fn(), onFitRegion: vi.fn(),
+      onMoveNodes: vi.fn(), onMoveRegion: vi.fn(), onNetworkRegionSelect: vi.fn(), onRedo: vi.fn(),
+      onResizeRegion: vi.fn(), onSelectionChange: vi.fn(), onToggleFocus: vi.fn(), onToggleLeftPanel: vi.fn(),
+      onToggleRegion: vi.fn(), onToggleRightPanel: vi.fn(), onUndo: vi.fn() }
+    const props = { ...callbacks, canRedo: false, canUndo: false, focusMode: false, layoutRequest: 0,
+      leftPanelOpen: true, readOnly: false, rightPanelOpen: true, selectedNetworkKey: null,
+      selection: { nodeKeys: new Set<string>(), connectionKeys: new Set<string>() } }
+    const view = render(<TeamLabCanvas {...props} document={document} />)
+    const initial = (capturedFlowProps.current!.edges as Array<{ sourceHandle: string }>)[0]
+    expect(initial.sourceHandle).toBe('source')
+
+    const moved = { ...document, nodes: { ...document.nodes,
+      [blocker.key]: { ...blocker, position: { ...blocker.position, x: 730, y: 85.8 } } } }
+    view.rerender(<TeamLabCanvas {...props} document={moved} />)
+    await waitFor(() => {
+      const next = (capturedFlowProps.current!.edges as Array<{ sourceHandle: string; data: { connection: unknown } }>)[0]
+      expect(next.sourceHandle).toBe('source-top')
+      expect(next.data.connection).toBe(connection)
+    })
+  })
+
   it('keeps region containers out of marquee selection and moves their members during the drag', async () => {
     const empty = createEmptyTopologyDocument('Canvas')
     const switchNode = createTopologyNode(empty, 'switch', { x: 40, y: 40 })

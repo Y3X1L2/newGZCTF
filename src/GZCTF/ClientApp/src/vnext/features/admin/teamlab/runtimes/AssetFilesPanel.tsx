@@ -59,13 +59,13 @@ function AssetFileWorkspace({ runtime, assetId }: { runtime: TeamLabRuntime; ass
     <div className={styles.filePane}>
       <form className={styles.addressBar} onSubmit={event => { event.preventDefault(); navigate(files.draftPath) }}>
         <Folder size={17} /><input aria-label="目录路径" value={files.draftPath} disabled={files.busy} onChange={event => files.setDraftPath(event.currentTarget.value)} />
-        <ActionButton aria-label="刷新目录" title="刷新目录" icon={<RefreshCw size={16} />} disabled={unavailable} type="submit" />
+        <ActionButton aria-label="刷新目录" title="刷新目录" icon={<RefreshCw size={16} />} disabled={unavailable} loading={files.busy} type="submit" />
       </form>
       <div className={styles.toolbar}>
         <ActionButton icon={<Upload size={16} />} disabled={unavailable || files.entries === null} onClick={() => upload.current?.click()} type="button">上传</ActionButton>
         <ActionButton aria-label="新建目录" title="新建目录" icon={<FolderPlus size={17} />} disabled={unavailable || files.entries === null} onClick={() => { setValue(''); setDialog('mkdir') }} type="button" />
         {selected ? <div className={styles.selectionActions}>
-          {selected.kind === 'file' ? <ActionButton aria-label="下载选中文件" title="下载" icon={<Download size={16} />} disabled={unavailable} onClick={() => void files.download(selected.name)} type="button" /> : null}
+          {selected.kind === 'file' ? <ActionButton aria-label="下载选中文件" title="下载" icon={<Download size={16} />} disabled={unavailable} onClick={() => files.download(selected.name)} type="button" /> : null}
           <ActionButton aria-label="重命名选中项" title="重命名" icon={<Pencil size={16} />} disabled={unavailable || selected.kind === 'restricted'} onClick={() => edit('rename', selected)} type="button" />
           <ActionButton aria-label="移动选中项" title="移动" icon={<Move size={16} />} disabled={unavailable || selected.kind === 'restricted'} onClick={() => edit('move', selected)} type="button" />
           <ActionButton aria-label="删除选中项" title="删除" icon={<Trash2 size={16} />} disabled={unavailable || selected.kind === 'restricted'} onClick={() => setPendingDelete(selected)} type="button" />
@@ -102,7 +102,7 @@ function AssetFileWorkspace({ runtime, assetId }: { runtime: TeamLabRuntime; ass
       onConfirm={async () => pendingUpload !== null && await files.upload(pendingUpload, true)} />
     <VNextConfirmDialog open={resetIdentity} onClose={() => setResetIdentity(false)} title="重新登记 SSH 身份" message="确认当前虚拟机的 SSH 密钥已更新。" confirmLabel="重新登记" onConfirm={files.resetIdentity} />
     <VNextDialog eyebrow="" open={dialog !== null} onClose={() => setDialog(null)} title={dialog === 'mkdir' ? '新建目录' : dialog === 'rename' ? '重命名' : '移动'}
-      footer={<><ActionButton onClick={() => setDialog(null)} type="button">取消</ActionButton><ActionButton disabled={files.busy || !value.trim()} onClick={() => void submit()} tone="primary" type="button">确认</ActionButton></>}>
+      footer={<><ActionButton onClick={() => setDialog(null)} type="button">取消</ActionButton><ActionButton disabled={files.busy || !value.trim()} onClick={() => submit()} tone="primary" type="button">确认</ActionButton></>}>
       <label className={styles.dialogField}>{dialog === 'move' ? '目标路径' : '名称'}<input autoFocus value={value} onChange={event => setValue(event.currentTarget.value)} onKeyDown={event => { if (event.key === 'Enter' && value.trim() && !files.busy) void submit() }} /></label>
       {dialog && files.error ? <InlineFeedback tone="danger">{errorMessage(files.error, '文件操作失败。')}</InlineFeedback> : null}
     </VNextDialog>

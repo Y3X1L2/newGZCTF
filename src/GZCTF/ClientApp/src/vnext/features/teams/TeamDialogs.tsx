@@ -102,7 +102,7 @@ export function TeamDialogs({
             <ActionButton onClick={onCreateClose} type="button">
               取消
             </ActionButton>
-            <ActionButton
+            <ActionButton loading={submitting}
               disabled={submitting || !createName.trim()}
               form="vnext-create-team-form"
               tone="primary"
@@ -145,7 +145,7 @@ export function TeamDialogs({
             <ActionButton onClick={onJoinClose} type="button">
               取消
             </ActionButton>
-            <ActionButton
+            <ActionButton loading={submitting}
               disabled={submitting || !inviteToken.trim()}
               form="vnext-join-team-form"
               tone="primary"

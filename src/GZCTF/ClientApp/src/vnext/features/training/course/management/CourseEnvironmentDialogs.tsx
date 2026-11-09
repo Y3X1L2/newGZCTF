@@ -131,7 +131,7 @@ export function CourseEnvironmentDialogs({
             </ActionButton>
             <ActionButton
               disabled={saving || !registerName.trim() || !registryUrl.trim()}
-              onClick={() => void registerDocker()}
+              onClick={() => registerDocker()}
               tone="primary"
               type="button"
             >
@@ -172,7 +172,7 @@ export function CourseEnvironmentDialogs({
             </ActionButton>
             <ActionButton
               disabled={saving || !dockerFile || !dockerName.trim()}
-              onClick={() => void uploadDocker()}
+              onClick={() => uploadDocker()}
               tone="primary"
               type="button"
             >
@@ -211,7 +211,7 @@ export function CourseEnvironmentDialogs({
             <ActionButton onClick={close} type="button">
               取消
             </ActionButton>
-            <ActionButton disabled={saving || !vmFile} onClick={() => void uploadVm()} tone="primary" type="button">
+            <ActionButton disabled={saving || !vmFile} onClick={() => uploadVm()} tone="primary" type="button">
               {saving ? '正在上传' : '上传并导入'}
             </ActionButton>
           </>
@@ -240,7 +240,7 @@ export function CourseEnvironmentDialogs({
             </ActionButton>
             <ActionButton
               disabled={saving || !localPath.trim()}
-              onClick={() => void importLocal()}
+              onClick={() => importLocal()}
               tone="primary"
               type="button"
             >

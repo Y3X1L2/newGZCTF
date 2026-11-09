@@ -23,7 +23,8 @@ export function TeamLabReleasesPage() {
   const [trialOpen, setTrialOpen] = useState(false)
   const [creatingTrial, setCreatingTrial] = useState(false)
   const [preparingImages, setPreparingImages] = useState(false)
-  const [operationError, setOperationError] = useState<unknown>(null)
+  const [operationError, setOperationError] = useState<string | null>(null)
+  const [preparedReleaseId, setPreparedReleaseId] = useState<string | null>(null)
   const releasesRequest = useSWR(
     teamLabAdminKeys.releases(scene.id),
     () => teamLabAdminApi.listReleases(scene.id),
@@ -37,7 +38,11 @@ export function TeamLabReleasesPage() {
   const readinessRequest = useSWR(
     selectedRelease ? [...teamLabAdminKeys.plan(scene.id, selectedRelease.id), 'readiness'] : null,
     () => teamLabAdminApi.releaseReadiness(scene.id, selectedRelease!.id),
-    { keepPreviousData: false, revalidateOnFocus: true }
+    {
+      keepPreviousData: false,
+      revalidateOnFocus: true,
+      refreshInterval: (data) => data?.images.some(image => image.pendingNodeCount > 0) ? 5000 : 0,
+    }
   )
   const imagesRequest = useSWR(['vnext:admin:teamlab:image-options'], listTeamLabImageOptions)
   const readinessMatchesSelection = readinessRequest.data?.releaseId === selectedRelease?.id
@@ -63,7 +68,7 @@ export function TeamLabReleasesPage() {
       navigate(`/admin/teamlab/runtimes/${runtime.id}`)
       return true
     } catch (error) {
-      setOperationError(error)
+      setOperationError(errorMessage(error, '启动环境失败，请重试。'))
       return false
     } finally {
       setCreatingTrial(false)
@@ -74,11 +79,13 @@ export function TeamLabReleasesPage() {
     if (!selectedRelease || preparingImages) return
     setPreparingImages(true)
     setOperationError(null)
+    setPreparedReleaseId(null)
     try {
-      await teamLabAdminApi.prepareReleaseImages(scene.id, selectedRelease.id)
-      await readinessRequest.mutate()
+      const readiness = await teamLabAdminApi.prepareReleaseImages(scene.id, selectedRelease.id)
+      await readinessRequest.mutate(readiness, { revalidate: true })
+      setPreparedReleaseId(selectedRelease.id)
     } catch (error) {
-      setOperationError(error)
+      setOperationError(errorMessage(error, '镜像预热失败，请重试。'))
     } finally {
       setPreparingImages(false)
     }
@@ -99,27 +106,27 @@ export function TeamLabReleasesPage() {
             active={releasesRequest.isValidating || readinessRequest.isValidating}
             label={releasesRequest.isValidating || readinessRequest.isValidating ? '同步中' : '状态已同步'}
           />
-          <ActionButton icon={<RefreshCw size={16} />} onClick={() => void Promise.all([releasesRequest.mutate(), readinessRequest.mutate()])} type="button">
+          <ActionButton loading={releasesRequest.isValidating || readinessRequest.isValidating} loadingLabel="正在刷新" icon={<RefreshCw size={16} />} onClick={() => Promise.all([releasesRequest.mutate(), readinessRequest.mutate()])} type="button">
             刷新
           </ActionButton>
         </div>
       </header>
 
-      {operationError ? <InlineFeedback tone="danger">{errorMessage(operationError, '试运行创建失败。')}</InlineFeedback> : null}
+      {operationError && !trialOpen ? <InlineFeedback tone="danger">{operationError}</InlineFeedback> : null}
       {releases[0] && releases[0].sourceRevision !== scene.revision ? <p className={styles.draftNotice}>设计草稿有未发布修改。启动只使用所选不可变版本；新设计须先<Link to={`/admin/teamlab/${scene.id}/design`}>检查并发布</Link>。</p> : null}
 
       {!releases.length ? <DataState description="请先在设计页保存、校验并发布当前修订。" title="尚无发布版本" /> : <>
       <div className={styles.workspace}>
         <div className={styles.releaseDetail}>
           <header className={styles.releaseIdentity}>
-            <div><h3>启动版本 v{selectedRelease!.version}</h3></div>
+            <div><span className={styles.sectionLabel}>发布版本</span><h3>v{selectedRelease!.version}</h3></div>
             <StatusBadge tone={selectedRelease!.sourceRevision === scene.revision ? 'success' : 'neutral'}>
               {selectedRelease!.sourceRevision === scene.revision ? '与当前设计一致' : '与当前设计不同'}
             </StatusBadge>
           </header>
           <div className={styles.releaseFacts}>
-            <span>{formatAdminDate(selectedRelease!.publishedAt)}</span>
-            {selectedRelease!.publisherName ? <span>{selectedRelease!.publisherName}</span> : null}
+            <span>发布于 {formatAdminDate(selectedRelease!.publishedAt)}</span>
+            {selectedRelease!.publisherName ? <span>发布人 {selectedRelease!.publisherName}</span> : null}
           </div>
 
           {!readinessRequest.data && !readinessRequest.error ? (
@@ -131,9 +138,13 @@ export function TeamLabReleasesPage() {
               creatingTrial={creatingTrial}
               preparingImages={preparingImages}
               onCreateTrial={() => {
-                if (readinessMatchesSelection) setTrialOpen(true)
+                if (readinessMatchesSelection) {
+                  setOperationError(null)
+                  setTrialOpen(true)
+                }
               }}
-              onPrepareImages={() => void prepareImages()}
+              onPrepareImages={prepareImages}
+              preparationSubmitted={preparedReleaseId === selectedRelease?.id}
               imageOptions={imagesRequest.data}
               readiness={readinessRequest.data}
             />
@@ -147,6 +158,7 @@ export function TeamLabReleasesPage() {
       </>}
       <div id="runtimes" className={styles.runtimeHistory}><TeamLabRuntimesPage /></div>
       <TrialRunDialog
+        error={operationError}
         onClose={() => setTrialOpen(false)}
         onConfirm={createTrial}
         open={trialOpen}

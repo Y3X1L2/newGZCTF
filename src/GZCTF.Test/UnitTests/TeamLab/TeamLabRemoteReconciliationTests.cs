@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using GZCTF.Models;
 using GZCTF.Models.Data;
+using GZCTF.Utils;
 using GZCTF.Infrastructure.Telemetry;
 using GZCTF.Modules.Audit.Application;
 using GZCTF.Modules.Audit.Contracts;
@@ -11,6 +12,7 @@ using GZCTF.Modules.Audit.Domain;
 using GZCTF.Modules.Audit.Infrastructure;
 using GZCTF.Modules.TeamLab.Application;
 using GZCTF.Modules.TeamLab.Domain.Runtime;
+using GZCTF.Modules.Identity.Contracts;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -175,6 +177,92 @@ public sealed class TeamLabRemoteReconciliationTests
             item.EventCode == OperationalEventCodes.TeamLab.RemoteSessionEnded && item.Outcome == OperationalEventOutcome.Succeeded);
     }
 
+    [Fact]
+    public async Task AccountRevocation_DeniesAllActiveSessionsBeforeExternalCleanup_AndKeepsOtherUsers()
+    {
+        await using var context = CreateContext();
+        var sessions = await SeedAsync(context, 4, expired: false);
+        sessions[0].Status = TeamLabRemoteSessionStatus.Creating;
+        sessions[1].Status = TeamLabRemoteSessionStatus.Ready;
+        var other = new UserInfo();
+        context.Users.Add(other);
+        sessions[3].RequestedByUserId = other.Id;
+        await context.SaveChangesAsync();
+        var relay = new Mock<ITeamLabRemoteRelayGateway>();
+        using var cache = new MemoryCache(new MemoryCacheOptions());
+        var participant = (IUserAccountRevocationParticipant)Service(context, relay.Object, cache);
+
+        await participant.PrepareAsync(sessions[0].RequestedByUserId, default);
+
+        Assert.All(sessions.Take(3), session =>
+        {
+            Assert.Equal(TeamLabRemoteSessionStatus.Ending, session.Status);
+            Assert.True(session.ExpiresAt <= DateTimeOffset.UtcNow);
+            Assert.Equal("account_revoked", session.EndReason);
+        });
+        Assert.Equal(TeamLabRemoteSessionStatus.Connected, sessions[3].Status);
+        relay.VerifyNoOtherCalls();
+
+        await participant.CompleteAsync(sessions[0].RequestedByUserId, default);
+
+        Assert.All(sessions.Take(3), session => Assert.Equal(TeamLabRemoteSessionStatus.Ended, session.Status));
+        relay.Verify(item => item.CancelTerminalAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Exactly(3));
+        await participant.CompleteAsync(sessions[0].RequestedByUserId, default);
+        relay.Verify(item => item.CancelTerminalAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Exactly(3));
+    }
+
+    [Fact]
+    public async Task AccountRevocation_PreservesFailedCleanupForTheExistingWorkerToRetry()
+    {
+        await using var context = CreateContext();
+        var session = (await SeedAsync(context, 1, expired: false))[0];
+        var relay = new Mock<ITeamLabRemoteRelayGateway>();
+        relay.SetupSequence(item => item.CancelTerminalAsync(session.WorkerNodeId, session.PublicId, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("node offline"))
+            .Returns(Task.CompletedTask);
+        using var cache = new MemoryCache(new MemoryCacheOptions());
+        var service = Service(context, relay.Object, cache);
+        var participant = (IUserAccountRevocationParticipant)service;
+        await participant.PrepareAsync(session.RequestedByUserId, default);
+        await participant.CompleteAsync(session.RequestedByUserId, default);
+        Assert.Equal(TeamLabRemoteSessionStatus.Ending, session.Status);
+        Assert.Equal("cleanup_pending", session.EndReason);
+        await service.ExpireAsync(default);
+        Assert.Equal(TeamLabRemoteSessionStatus.Ended, session.Status);
+    }
+
+    [Fact]
+    public async Task AccountRevocation_WorkerRecoversACommittedDeletionWithoutThePostCommitCallback()
+    {
+        await using var context = CreateContext();
+        var session = (await SeedAsync(context, 1, expired: false))[0];
+        (await context.Users.SingleAsync(item => item.Id == session.RequestedByUserId)).Role = Role.Banned;
+        await context.SaveChangesAsync();
+        var relay = new Mock<ITeamLabRemoteRelayGateway>();
+        using var cache = new MemoryCache(new MemoryCacheOptions());
+        await Service(context, relay.Object, cache).ExpireAsync(default);
+        Assert.Equal(TeamLabRemoteSessionStatus.Ended, session.Status);
+        Assert.Equal("account_revoked", session.EndReason);
+        relay.Verify(item => item.CancelTerminalAsync(session.WorkerNodeId, session.PublicId, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task CreateOperation_DoesNotReplayAReadySessionForADeletedOrBannedAccount()
+    {
+        await using var context = CreateContext();
+        var session = (await SeedAsync(context, 1, expired: false))[0];
+        session.Status = TeamLabRemoteSessionStatus.Ready;
+        (await context.Users.SingleAsync(item => item.Id == session.RequestedByUserId)).Role = Role.Banned;
+        await context.SaveChangesAsync();
+        var relay = new Mock<ITeamLabRemoteRelayGateway>(MockBehavior.Strict);
+        using var cache = new MemoryCache(new MemoryCacheOptions());
+        var error = await Assert.ThrowsAsync<TeamLabApiContractException>(() =>
+            Service(context, relay.Object, cache).CreateForOperationAsync(session.Runtime.PublicId,
+                session.RuntimeAssetId, session.RequestedByUserId, session.Reason, session.PublicId, default));
+        Assert.Equal("remote_access_account_unavailable", error.Code);
+        relay.VerifyNoOtherCalls();
+    }
+
     private static TeamLabRemoteAccessService Service(AppDbContext context, ITeamLabRemoteRelayGateway relay, IMemoryCache cache,
         IOperationalEventWriter? writer = null) =>
         new(context, new TeamLabAuthorizationService(context),
@@ -189,10 +277,12 @@ public sealed class TeamLabRemoteReconciliationTests
     {
         var runtime = new TeamLabRuntime();
         var asset = new TeamLabRuntimeAsset { Runtime = runtime, Name = "terminal" };
+        var actor = new UserInfo();
+        context.Users.Add(actor);
         var node = Guid.NewGuid();
         var sessions = Enumerable.Range(1, count).Select(id => new TeamLabRemoteSession
         {
-            Id = id, Runtime = runtime, RuntimeAsset = asset, WorkerNodeId = node,
+            Id = id, Runtime = runtime, RuntimeAsset = asset, WorkerNodeId = node, RequestedByUserId = actor.Id,
             Protocol = TeamLabRemoteProtocol.ContainerTerminal,
             Status = TeamLabRemoteSessionStatus.Connected,
             ConnectedAt = DateTimeOffset.UtcNow.AddMinutes(-5),

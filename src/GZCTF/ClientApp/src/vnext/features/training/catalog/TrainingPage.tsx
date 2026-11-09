@@ -125,7 +125,7 @@ export function TrainingPage() {
               <ActionButton
                 disabled={checkingIn || overviewRequest.data.checkedInToday}
                 icon={<CalendarCheck size={17} />}
-                onClick={() => void checkIn()}
+                onClick={() => checkIn()}
                 tone={overviewRequest.data.checkedInToday ? 'secondary' : 'primary'}
                 type="button"
               >

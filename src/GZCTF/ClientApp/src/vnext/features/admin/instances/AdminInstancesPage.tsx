@@ -212,7 +212,7 @@ export function AdminInstancesPage() {
     <div className={styles.page}>
       <AdminPageHeader
         actions={
-          <ActionButton icon={<RefreshCw size={16} />} onClick={() => void refresh()} type="button">
+          <ActionButton icon={<RefreshCw size={16} />} onClick={() => refresh()} type="button">
             刷新资源
           </ActionButton>
         }

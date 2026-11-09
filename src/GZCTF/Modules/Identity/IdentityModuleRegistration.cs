@@ -17,6 +17,7 @@ public static class IdentityModuleRegistration
         services.AddSingleton<IApiTokenSecretHasher>(provider =>
             provider.GetRequiredService<ApiTokenSecretHasher>());
         services.AddScoped<ApiTokenIssuer>();
+        services.AddScoped<UserDeletionService>();
         services.AddScoped<ApiTokenValidator>();
         services.AddSingleton<ApiTokenRateLimitStore>();
         services.AddSingleton<IApiTokenRateLimitStore>(provider =>

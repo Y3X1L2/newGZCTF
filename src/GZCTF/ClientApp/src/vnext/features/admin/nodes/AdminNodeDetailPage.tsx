@@ -1,4 +1,4 @@
-import { ArrowLeft, Network, RefreshCw, Trash2 } from 'lucide-react'
+import { ArrowLeft, RefreshCw, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
 import { useSWRConfig } from 'swr'
@@ -16,8 +16,10 @@ import {
   StatusBadge,
 } from '../shared/AdminWorkbench'
 import styles from './AdminNodeDetailPage.module.css'
-import { NodeResourceTab } from './NodeResourceTab'
 import { NodeCapacitySettings, type NodeCapacitySettingsValue } from './NodeCapacitySettings'
+import { NodeResourceTab } from './NodeResourceTab'
+import { NodeTeamLabPanel } from './NodeTeamLabPanel'
+import { NodeTelemetryPanel } from './NodeTelemetryPanel'
 import {
   formatCpuUnits,
   formatHeartbeat,
@@ -203,7 +205,7 @@ export function AdminNodeDetailPage() {
 
   if (!nodeId) return <DataState description="节点标识缺失。" title="无法打开节点" />
   if (isLoading) return <DataState description="正在读取节点状态、容量和 Agent 心跳。" loading title="节点详情加载中" />
-  if (error || !node) return <DataState description="节点不存在或当前账户没有管理权限。" title="节点详情加载失败" />
+  if (!node) return <DataState description="节点不存在或当前账户没有管理权限。" title="节点详情加载失败" />
 
   const status = nodeStatusMeta(node.status)
   const tunnel = tunnelStatusMeta(node.teamLabTunnelStatus)
@@ -217,13 +219,28 @@ export function AdminNodeDetailPage() {
       <AdminPageHeader
         actions={
           <>
-            <ActionButton disabled={Boolean(working)} onClick={() => void toggleScheduling()} type="button">
+            <ActionButton
+              loading={isRefreshing}
+              disabled={isRefreshing}
+              icon={<RefreshCw size={16} />}
+              onClick={refresh}
+              type="button"
+            >
+              {isRefreshing ? '正在刷新…' : '刷新节点'}
+            </ActionButton>
+            <ActionButton
+              loading={working === 'schedule'}
+              disabled={Boolean(working)}
+              onClick={toggleScheduling}
+              type="button"
+            >
               {working === 'schedule' ? '正在更新' : node.isSchedulable ? '暂停调度' : '恢复调度'}
             </ActionButton>
             <ActionButton
+              loading={working === 'agent'}
               disabled={Boolean(working) || node.isLocal}
               icon={<RefreshCw size={16} />}
-              onClick={() => void syncAgent()}
+              onClick={syncAgent}
               type="button"
             >
               {working === 'agent' ? '正在同步' : '同步 Agent'}
@@ -244,6 +261,8 @@ export function AdminNodeDetailPage() {
         title={node.name}
       />
 
+      <NodeTelemetryPanel nodes={[node]} failed={Boolean(error)} />
+
       <MetricStrip>
         <MetricItem
           detail={node.isSchedulable ? '参与新任务调度' : '不接收新任务'}
@@ -251,12 +270,6 @@ export function AdminNodeDetailPage() {
           tone={status.tone}
           value={status.label}
         />
-        <MetricItem
-          detail={`${node.allocatedContainers} 已分配`}
-          label="Docker"
-          value={`${node.currentContainers} / ${node.maxContainers}`}
-        />
-        <MetricItem detail={`${node.allocatedVms} 已分配`} label="VM" value={`${node.currentVms} / ${node.maxVms}`} />
         <MetricItem
           detail={`${node.portPoolStart}-${node.portPoolEnd}`}
           label="公网端口"
@@ -276,6 +289,9 @@ export function AdminNodeDetailPage() {
         <RefreshIndicator active={isRefreshing} label="节点状态自动同步" />
       </div>
 
+      {error ? (
+        <InlineFeedback tone="danger">节点刷新失败，当前显示上次成功读取的数据。请重试刷新。</InlineFeedback>
+      ) : null}
       {feedback ? <InlineFeedback tone={feedback.tone}>{feedback.message}</InlineFeedback> : null}
       {node.unschedulableReasons.length ? (
         <InlineFeedback tone="danger">{node.unschedulableReasons.join('；')}</InlineFeedback>
@@ -339,9 +355,10 @@ export function AdminNodeDetailPage() {
             </Facts>
             <div className={styles.panelActions}>
               <ActionButton
+                loading={working === 'agent'}
                 disabled={Boolean(working) || node.isLocal}
                 icon={<RefreshCw size={16} />}
-                onClick={() => void syncAgent()}
+                onClick={syncAgent}
                 type="button"
               >
                 同步 Agent
@@ -350,40 +367,12 @@ export function AdminNodeDetailPage() {
           </section>
         ) : null}
         {activeTab === 'teamlab' ? (
-          <section className={styles.panel}>
-            <header>
-              <span>TEAMLAB FABRIC</span>
-              <h2>组网能力</h2>
-            </header>
-            <Facts>
-              <Fact label="网络状态" value={tunnel.label} />
-              <Fact label="隧道地址" value={node.teamLabTunnelIp || '—'} />
-              <Fact label="Fabric 地址" value={node.teamLabFabricIp || '—'} />
-              <Fact label="Docker 场景" value={node.canHostTeamLabDocker ? '可调度' : '不可调度'} />
-              <Fact label="VM 场景" value={node.canHostTeamLabVm ? '可调度' : '不可调度'} />
-              <Fact label="最近握手" value={formatHeartbeat(node.teamLabTunnelLastHandshake)} />
-              <Fact
-                label="能力探测"
-                value={
-                  node.agentFeatures.length ? node.agentFeatures.join(' · ') : '未上报'
-                }
-                wide
-              />
-            </Facts>
-            {node.teamLabTunnelLastError ? (
-              <InlineFeedback tone="danger">{node.teamLabTunnelLastError}</InlineFeedback>
-            ) : null}
-            <div className={styles.panelActions}>
-              <ActionButton
-                disabled={Boolean(working)}
-                icon={<Network size={16} />}
-                onClick={() => void probeTeamLab()}
-                type="button"
-              >
-                运行兼容性检测
-              </ActionButton>
-            </div>
-          </section>
+          <NodeTeamLabPanel
+            node={node}
+            working={working === 'teamlab'}
+            disabled={Boolean(working)}
+            onProbe={probeTeamLab}
+          />
         ) : null}
         {activeTab === 'events' ? (
           <DataState description="当前稳定服务端尚未提供节点级运行事件查询接口。" title="暂无节点事件数据" />

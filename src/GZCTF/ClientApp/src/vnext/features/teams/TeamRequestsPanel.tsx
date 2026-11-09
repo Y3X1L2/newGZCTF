@@ -33,7 +33,7 @@ export function TeamRequestsPanel({ requests, submitting, onReview }: TeamReques
                 <ActionButton
                   disabled={submitting}
                   icon={<X size={15} />}
-                  onClick={() => void onReview(request.id, false)}
+                  onClick={() => onReview(request.id, false)}
                   tone="danger"
                   type="button"
                 >
@@ -42,7 +42,7 @@ export function TeamRequestsPanel({ requests, submitting, onReview }: TeamReques
                 <ActionButton
                   disabled={submitting}
                   icon={<Check size={15} />}
-                  onClick={() => void onReview(request.id, true)}
+                  onClick={() => onReview(request.id, true)}
                   tone="primary"
                   type="button"
                 >

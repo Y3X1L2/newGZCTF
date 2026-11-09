@@ -177,6 +177,6 @@ export function AssetCompositionPanel({ runtime, onSubmitted, initialAction = 'a
       <div className={styles.formAction}><ActionButton disabled={action === 'replace' && !definition} icon={<PackagePlus size={16} />} onClick={stage} type="button">加入本轮变更</ActionButton></div>
     </div>
     {failure ? <InlineFeedback tone="danger">{errorMessage(failure, '资产变更失败。')}</InlineFeedback> : null}
-    {changes.length ? <div className={styles.changeList}>{changes.map((item) => <div key={item.key}><span data-action={item.action}>{item.action === 'add' ? '新增' : item.action === 'replace' ? '替换' : '移除'}</span><strong>{item.name}</strong><button aria-label={`移除 ${item.name}`} onClick={() => setChanges((rows) => rows.filter((row) => row.key !== item.key))} type="button"><Trash2 size={15} /></button></div>)}<ActionButton disabled={busy} icon={<Send size={16} />} onClick={() => void submit()} tone="primary" type="button">提交 {changes.length} 项变更</ActionButton></div> : null}
+    {changes.length ? <div className={styles.changeList}>{changes.map((item) => <div key={item.key}><span data-action={item.action}>{item.action === 'add' ? '新增' : item.action === 'replace' ? '替换' : '移除'}</span><strong>{item.name}</strong><button aria-label={`移除 ${item.name}`} onClick={() => setChanges((rows) => rows.filter((row) => row.key !== item.key))} type="button"><Trash2 size={15} /></button></div>)}<ActionButton disabled={busy} icon={<Send size={16} />} onClick={() => submit()} tone="primary" type="button">提交 {changes.length} 项变更</ActionButton></div> : null}
   </section>
 }

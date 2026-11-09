@@ -13,7 +13,7 @@ export function TeamLabDeleteDialog({ deletion }: { deletion: ReturnType<typeof 
     onClose={deletion.close}
     footer={<>
       <ActionButton disabled={deletion.isDeleting} onClick={deletion.close} type="button">取消</ActionButton>
-      <ActionButton disabled={deletion.isDeleting} onClick={() => void deletion.confirm()} tone="danger" type="button">
+      <ActionButton disabled={deletion.isDeleting} onClick={() => deletion.confirm()} tone="danger" type="button">
         {deletion.isDeleting ? '正在删除' : runtime ? '删除运行记录' : '删除场景'}
       </ActionButton>
     </>}

@@ -53,6 +53,7 @@ public sealed class DynamicInstanceFlagMigrationTests : IAsyncLifetime
                 Email = "dynamic-flag-migration@example.test",
                 NormalizedEmail = "DYNAMIC-FLAG-MIGRATION@EXAMPLE.TEST"
             };
+            await HistoricalUserFixture.InsertAsync(context, user);
             var team = new Team { Name = "flag-migrate", Captain = user, CaptainId = user.Id };
             var game = new Game
             {

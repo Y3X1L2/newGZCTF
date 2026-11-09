@@ -51,7 +51,7 @@ export function TeamLabCreateDialog({
       footer={
         <>
           <ActionButton disabled={submitting} onClick={onClose} type="button">取消</ActionButton>
-          <ActionButton disabled={!name.trim() || submitting} onClick={() => void create()} tone="primary" type="button">
+          <ActionButton disabled={!name.trim() || submitting} onClick={() => create()} tone="primary" type="button">
             {submitting ? '正在创建' : '创建场景'}
           </ActionButton>
         </>

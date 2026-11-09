@@ -79,7 +79,7 @@ export function TeamLabRuntimeDetailPage() {
 
   if (state.isLoading) return <section className={styles.page}><DataState loading title="正在读取运行环境" /></section>
   if (!runtime || state.error) return <section className={styles.page}><DataState description={errorMessage(state.error, '运行环境加载失败。')} title="无法打开运行环境" />
-    <ActionButton icon={<RefreshCw size={16} />} onClick={() => void state.mutate()} type="button">重新读取</ActionButton></section>
+    <ActionButton icon={<RefreshCw size={16} />} onClick={() => state.mutate()} type="button">重新读取</ActionButton></section>
   const queueActive = !!runtime.queueStatus && ['pending', 'scheduling', 'scheduled', 'running'].includes(runtime.queueStatus)
   const canCancel = runtime.queueStatus === 'pending' || runtime.queueStatus === 'scheduling'
   const canReset = !runtime.managedRolloutId && !queueActive && ['running', 'failed', 'paused'].includes(runtime.status)
@@ -101,9 +101,9 @@ export function TeamLabRuntimeDetailPage() {
         {sceneId ? <Link to={`/admin/teamlab/${sceneId}/releases`}>查看场景版本</Link> : <span>无场景来源</span>}</div>
         {runtime.managedRolloutId ? <p className={styles.ownership}>此环境由所属课程或赛事管理，生命周期操作须返回来源业务处理。</p> : null}</div>
       <div className={styles.actions}>
-        <ActionButton aria-label="刷新运行状态" title="刷新运行状态" disabled={state.isRefreshing} icon={<RefreshCw size={17} />} onClick={() => void state.mutate()} type="button" />
+        <ActionButton aria-label="刷新运行状态" title="刷新运行状态" disabled={state.isRefreshing} icon={<RefreshCw size={17} />} onClick={() => state.mutate()} type="button" />
         {['running', 'paused'].includes(runtime.status) ? <ActionButton disabled={acting || queueActive || !!runtime.managedRolloutId}
-          icon={runtime.status === 'paused' ? <Play size={16} /> : <Pause size={16} />} onClick={() => void act('pause')} type="button">{runtime.status === 'paused' ? '恢复' : '暂停'}</ActionButton> : null}
+          icon={runtime.status === 'paused' ? <Play size={16} /> : <Pause size={16} />} onClick={() => act('pause')} type="button">{runtime.status === 'paused' ? '恢复' : '暂停'}</ActionButton> : null}
         {(runtime.status === 'failed' && canReset) || cleanup ? <ActionButton disabled={acting} icon={<RotateCcw size={16} />}
           onClick={() => setConfirmation(cleanup ? 'destroy' : 'reset')} tone="primary" type="button">{cleanup ? '继续清理' : '重新部署'}</ActionButton> : null}
         <ActionMenu label="更多环境操作" items={[

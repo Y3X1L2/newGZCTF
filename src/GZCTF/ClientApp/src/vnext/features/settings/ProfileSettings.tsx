@@ -127,7 +127,7 @@ export function ProfileSettings() {
             </label>
             <ActionButton
               disabled={!avatarFile || saving}
-              onClick={() => void uploadAvatar()}
+              onClick={() => uploadAvatar()}
               tone="secondary"
               type="button"
             >
@@ -172,7 +172,7 @@ export function ProfileSettings() {
           <textarea maxLength={128} onChange={updateField('bio')} rows={4} value={model.bio ?? ''} />
         </label>
         <div className={styles.formActions}>
-          <ActionButton disabled={saving} icon={<Save size={16} />} tone="primary" type="submit">
+          <ActionButton loading={saving} disabled={saving} icon={<Save size={16} />} tone="primary" type="submit">
             保存资料
           </ActionButton>
         </div>
@@ -186,7 +186,7 @@ export function ProfileSettings() {
           <input onChange={(event) => setEmail(event.currentTarget.value)} type="email" value={email} />
           <ActionButton
             disabled={saving || !email.trim() || email === account.user.email}
-            onClick={() => void changeEmail()}
+            onClick={() => changeEmail()}
             type="button"
           >
             申请变更

@@ -105,11 +105,11 @@ export function RuntimeRemoteAccessPanel({ runtime, assetId }: { runtime: TeamLa
     <div className={styles.connectionActions}>
       {configured && protocolMatches ? <ActionButton disabled={!usable || acting || !!terminalId || availability.isLoading || !availability.data?.available}
         icon={asset.kind === 'vm' ? <Monitor size={17} /> : <Terminal size={17} />} tone="primary"
-        onClick={event => void open(false, event.currentTarget)} type="button">
+        onClick={event => open(false, event.currentTarget)} type="button">
         {accessKind === 'rdp' ? '远程桌面' : accessKind === 'ssh' ? 'SSH' : '打开终端'}
       </ActionButton> : null}
       {asset.kind === 'vm' && consoleCapability?.status === 'configured-unverified' ? <ActionButton disabled={!usable || acting} icon={<Monitor size={17} />}
-        onClick={event => void open(true, event.currentTarget)} type="button">控制台</ActionButton> : null}
+        onClick={event => open(true, event.currentTarget)} type="button">控制台</ActionButton> : null}
     </div>
     {capability?.status === 'unconfigured' ? <p className={styles.muted}>{capability.reason}{settingsId && accessKind !== 'terminal' ? <>。<Link to={`/admin/images?template=${settingsId}&remoteAccess=1&returnTo=${returnTo}`}><Settings2 size={15} />配置{accessKind === 'rdp' ? '远程桌面' : 'SSH'}入口</Link></> : null}</p> : null}
     {capability?.status === 'configured-unverified' ? <p className={styles.muted}>{asset.kind === 'docker'
@@ -120,14 +120,14 @@ export function RuntimeRemoteAccessPanel({ runtime, assetId }: { runtime: TeamLa
     {consoleCapability?.status === 'currently-unavailable' ? <p className={styles.muted}>控制台当前不可用：{consoleCapability.reason}</p> : null}
     {!accessKind ? <p className={styles.muted}>系统类型尚未确认，无法判断可用的远程协议。可使用虚拟机控制台。</p> : null}
     {availability.error ? <InlineFeedback tone="danger">{errorMessage(availability.error, '连接信息读取失败。')}
-      <ActionButton aria-label="重新读取连接信息" icon={<RefreshCw size={15} />} onClick={() => void availability.mutate()} type="button" />
+      <ActionButton aria-label="重新读取连接信息" icon={<RefreshCw size={15} />} onClick={() => availability.mutate()} type="button" />
     </InlineFeedback> : configured && availability.data?.unavailableReason ? <p className={styles.muted}>{availability.data.unavailableReason}</p> : null}
     {error ? <InlineFeedback tone="danger">{errorMessage(error, '远程连接失败。')}</InlineFeedback> : null}
     {sessions.error ? <InlineFeedback tone="danger">{errorMessage(sessions.error, '会话读取失败。')}</InlineFeedback> : null}
     {active.length ? <ul className={styles.assetSessions}>{active.map(({ session, requestedByName }) => <li key={session.id}>
       <span><strong>{requestedByName}</strong> · {session.protocol === 'containerTerminal' ? '终端' : session.protocol.toUpperCase()}</span>
       <ActionButton aria-label={`结束 ${requestedByName} 的连接`} disabled={acting} icon={<Unplug size={15} />}
-        onClick={() => void end(session.id)} type="button" />
+        onClick={() => end(session.id)} type="button" />
     </li>)}</ul> : null}
     <ContainerTerminal sessionId={terminalId} closing={acting} closeError={error} returnFocus={() => trigger.current?.focus()}
       onClose={async () => { if (ownedTerminal.current) await end(ownedTerminal.current) }}

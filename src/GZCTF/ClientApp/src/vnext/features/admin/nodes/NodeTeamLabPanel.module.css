@@ -1,0 +1,98 @@
+.panel {
+  display: grid;
+  gap: var(--yn-space-5);
+}
+.panel > header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: start;
+  justify-content: space-between;
+  gap: var(--yn-space-3);
+}
+.panel h2,
+.panel h3 {
+  margin: 0;
+  font-size: var(--yn-font-lg);
+}
+.panel p,
+.panel small {
+  color: var(--yn-color-muted);
+  font-size: var(--yn-font-sm);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.capabilities {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--yn-space-4);
+}
+.capabilities article {
+  display: grid;
+  align-content: start;
+  justify-items: start;
+  gap: var(--yn-space-3);
+  padding: var(--yn-space-5);
+  background: var(--yn-color-surface);
+  border: 1px solid var(--yn-color-border);
+  border-radius: var(--yn-radius-lg);
+}
+.capabilities p {
+  margin: 0;
+}
+.facts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--yn-space-4);
+  margin: 0;
+  padding-block: var(--yn-space-4);
+  border-block: 1px solid var(--yn-color-border);
+}
+.facts dt {
+  font-size: var(--yn-font-xs);
+  color: var(--yn-color-muted);
+}
+.facts dd {
+  margin: var(--yn-space-2) 0 0;
+  font-family: var(--yn-font-mono);
+  font-size: var(--yn-font-sm);
+  overflow-wrap: anywhere;
+}
+.technical {
+  padding: var(--yn-space-4);
+  border: 1px solid var(--yn-color-border);
+  border-radius: var(--yn-radius-md);
+  background: var(--yn-color-surface-muted);
+}
+.technical summary {
+  cursor: pointer;
+  min-height: 24px;
+  font-size: var(--yn-font-sm);
+}
+.technical summary:focus-visible {
+  outline: 2px solid var(--yn-color-brand);
+  outline-offset: 4px;
+}
+.technical ul {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--yn-space-2);
+  padding: var(--yn-space-4);
+  max-height: 320px;
+  overflow: auto;
+}
+.technical code {
+  font-family: var(--yn-font-mono);
+  font-size: var(--yn-font-xs);
+  overflow-wrap: anywhere;
+}
+@media (max-width: 760px) {
+  .capabilities {
+    grid-template-columns: 1fr;
+  }
+  .facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .technical ul {
+    grid-template-columns: 1fr;
+  }
+}

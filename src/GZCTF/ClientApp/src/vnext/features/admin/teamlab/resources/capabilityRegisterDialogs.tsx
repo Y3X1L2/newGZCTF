@@ -97,7 +97,7 @@ export function DevicePackageRegisterDialog({
           <ActionButton disabled={submitting} onClick={onClose} type="button">取消</ActionButton>
           <ActionButton
             disabled={submitting || !form.name.trim() || !form.displayName.trim() || !form.version.trim() || !image}
-            onClick={() => void register()}
+            onClick={() => register()}
             tone="primary"
             type="button"
           >
@@ -217,7 +217,7 @@ export function ConnectorRegisterDialog({
           <ActionButton disabled={submitting} onClick={onClose} type="button">取消</ActionButton>
           <ActionButton
             disabled={submitting || !form.name.trim() || !form.displayName.trim() || !form.nodeId || !form.interfaceName.trim() || !form.macAddress.trim()}
-            onClick={() => void register()}
+            onClick={() => register()}
             tone="primary"
             type="button"
           >

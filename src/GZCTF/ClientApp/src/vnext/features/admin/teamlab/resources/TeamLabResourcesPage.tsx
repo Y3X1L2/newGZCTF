@@ -182,7 +182,7 @@ function DevicePackagesTab() {
             <>
               <ActionButton
                 disabled={busy}
-                onClick={() => void run(async () => {
+                onClick={() => run(async () => {
                   const updated = await teamLabResourcesApi.setDevicePackageEnabled(selected.id, !selected.enabled)
                   setSelected(current => current?.id === updated.id ? updated : current)
                 })}

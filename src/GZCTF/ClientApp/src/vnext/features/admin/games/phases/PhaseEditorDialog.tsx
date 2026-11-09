@@ -66,7 +66,7 @@ export function PhaseEditorDialog({
       footer={
         <>
           <ActionButton disabled={saving} onClick={onClose} type="button">取消</ActionButton>
-          <ActionButton disabled={saving} onClick={() => void save()} tone="primary" type="button">{saving ? '正在保存' : phase ? '保存阶段' : '创建阶段'}</ActionButton>
+          <ActionButton disabled={saving} onClick={() => save()} tone="primary" type="button">{saving ? '正在保存' : phase ? '保存阶段' : '创建阶段'}</ActionButton>
         </>
       }
       onClose={() => { if (!saving) onClose() }}

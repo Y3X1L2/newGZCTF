@@ -89,7 +89,7 @@ src/GZCTF/
 | Theory | Identity、Content、Audit |
 | Runtime | Identity、Content query contracts、Audit |
 | VM | Runtime contracts、Content image catalog、Audit |
-| TeamLab | Runtime contracts、VM contracts、Content image catalog、Audit |
+| TeamLab | Runtime contracts、VM contracts、Content image catalog、Identity 账号撤销 contract、Audit |
 | Penetration | Ctf contracts、TeamLab contracts、Identity、Audit |
 | AWDP | Ctf contracts、Runtime contracts、Identity、Audit |
 

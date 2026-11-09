@@ -111,7 +111,7 @@ export function GameObjectiveBindingEditor({
             onClick={() => setSelected(createObjectiveDraft(assets, objectives))}
             type="button"
           >添加目标</ActionButton>
-          <ActionButton disabled={locked || loading || saving || !dirty} icon={<Save size={16} />} onClick={() => void save()} tone="primary" type="button">
+          <ActionButton disabled={locked || loading || saving || !dirty} icon={<Save size={16} />} onClick={() => save()} tone="primary" type="button">
             {saving ? '保存中' : '保存配置'}
           </ActionButton>
         </div>

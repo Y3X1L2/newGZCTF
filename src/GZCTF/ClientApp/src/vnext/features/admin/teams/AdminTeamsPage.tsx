@@ -81,7 +81,7 @@ function TeamDetailDrawer({
       footer={team ? (
         <div className={styles.drawerActions}>
           <ActionButton disabled={saving} icon={<Trash2 size={16} />} onClick={() => onRequestDelete(team)} tone="danger" type="button">删除战队</ActionButton>
-          <ActionButton disabled={saving || !draft.name?.trim()} icon={<Save size={16} />} onClick={() => void save()} tone="primary" type="button">{saving ? '保存中' : '保存修改'}</ActionButton>
+          <ActionButton disabled={saving || !draft.name?.trim()} icon={<Save size={16} />} onClick={() => save()} tone="primary" type="button">{saving ? '保存中' : '保存修改'}</ActionButton>
         </div>
       ) : null}
       onClose={onClose}

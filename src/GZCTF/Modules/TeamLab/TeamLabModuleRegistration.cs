@@ -4,6 +4,7 @@ using GZCTF.Modules.TeamLab.Application.Validation;
 using GZCTF.Modules.TeamLab.Infrastructure;
 using GZCTF.Modules.Audit.Application;
 using GZCTF.Modules.Identity.Application;
+using GZCTF.Modules.Identity.Contracts;
 using GZCTF.Modules.TeamLab.Application.Rollouts;
 using Microsoft.Extensions.Options;
 
@@ -52,7 +53,9 @@ public static class TeamLabModuleRegistration
         services.AddScoped<TeamLabAssetDiagnosticsService>();
         services.AddScoped<ITeamLabAssetDiagnosticsGateway, AgentTeamLabAssetDiagnosticsGateway>();
         services.AddScoped<ITeamLabRemoteRelayGateway, AgentTeamLabRemoteRelayGateway>();
-        services.AddScoped<ITeamLabRemoteAccessService, TeamLabRemoteAccessService>();
+        services.AddScoped<TeamLabRemoteAccessService>();
+        services.AddScoped<ITeamLabRemoteAccessService>(provider => provider.GetRequiredService<TeamLabRemoteAccessService>());
+        services.AddScoped<IUserAccountRevocationParticipant>(provider => provider.GetRequiredService<TeamLabRemoteAccessService>());
         services.AddOptions<GZCTF.Modules.TeamLab.Contracts.TeamLabRemoteAuditOptions>()
             .BindConfiguration("TeamLab:RemoteAudit")
             .Validate(value => value.RetentionDays is >= 1 and <= 3650 && value.MaxStorageBytes >= 16384 &&

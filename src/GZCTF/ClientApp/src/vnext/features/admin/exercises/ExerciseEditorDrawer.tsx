@@ -156,7 +156,7 @@ export function ExerciseEditorDrawer({
       footer={
         <>
           <ActionButton disabled={saving} onClick={onClose} type="button">取消</ActionButton>
-          <ActionButton disabled={saving || loading} icon={<Save size={16} />} onClick={() => void save()} tone="primary" type="button">
+          <ActionButton disabled={saving || loading} icon={<Save size={16} />} onClick={() => save()} tone="primary" type="button">
             {saving ? '正在保存' : '保存题目'}
           </ActionButton>
         </>

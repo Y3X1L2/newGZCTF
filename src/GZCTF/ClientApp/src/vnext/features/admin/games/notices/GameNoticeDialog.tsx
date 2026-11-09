@@ -60,7 +60,7 @@ export function GameNoticeDialog({
     <VNextDialog
       description="公告支持 Markdown；保存成功后由服务器通过现有实时通道通知选手。"
       eyebrow="GAME NOTICE"
-      footer={<><ActionButton disabled={saving} onClick={onClose} type="button">取消</ActionButton><ActionButton disabled={saving} onClick={() => void save()} tone="primary" type="button">{saving ? '正在保存' : notice ? '保存公告' : '发布公告'}</ActionButton></>}
+      footer={<><ActionButton disabled={saving} onClick={onClose} type="button">取消</ActionButton><ActionButton disabled={saving} onClick={() => save()} tone="primary" type="button">{saving ? '正在保存' : notice ? '保存公告' : '发布公告'}</ActionButton></>}
       onClose={() => { if (!saving) onClose() }}
       open={open}
       title={notice ? '编辑比赛公告' : '发布比赛公告'}

@@ -174,7 +174,7 @@ export function NodeCapacitySettings({
       </div>
 
       <div className={styles.actions}>
-        <ActionButton
+        <ActionButton loading={saving}
           disabled={disabled || saving || unchanged}
           icon={<Save aria-hidden="true" size={16} />}
           tone="primary"

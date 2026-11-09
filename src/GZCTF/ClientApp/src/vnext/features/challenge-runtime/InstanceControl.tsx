@@ -81,6 +81,7 @@ export function InstanceControl({ controller }: { controller: RuntimeInstanceCon
       </header>
 
       {controller.error ? <InlineFeedback tone="danger">{controller.error}</InlineFeedback> : null}
+      {controller.phase === 'stopping' ? <InlineFeedback>正在销毁实例，完成后访问入口会关闭。页面会自动更新。</InlineFeedback> : null}
 
       {controller.phase === 'idle' || controller.phase === 'failed' ? (
         <div className={styles.idlePanel}>
@@ -97,12 +98,12 @@ export function InstanceControl({ controller }: { controller: RuntimeInstanceCon
           </div>
           {entryPublicationFailed ? (
             <div className={styles.runtimeActions}>
-              <ActionButton icon={<RefreshCw size={16} />} onClick={() => void controller.refresh()} type="button">
+              <ActionButton icon={<RefreshCw size={16} />} onClick={() => controller.refresh()} type="button">
                 刷新状态
               </ActionButton>
               <ActionButton
                 icon={<Trash2 size={16} />}
-                onClick={() => void controller.destroy()}
+                onClick={() => controller.destroy()}
                 tone="danger"
                 type="button"
               >
@@ -112,7 +113,7 @@ export function InstanceControl({ controller }: { controller: RuntimeInstanceCon
           ) : (
             <ActionButton
               icon={<RefreshCw size={16} />}
-              onClick={() => void controller.create()}
+              onClick={() => controller.create()}
               tone="primary"
               type="button"
             >
@@ -134,7 +135,7 @@ export function InstanceControl({ controller }: { controller: RuntimeInstanceCon
               {queue?.targetNodeName ? ` · 目标节点 ${queue.targetNodeName}` : ''}
             </p>
           </div>
-          <ActionButton icon={<RefreshCw size={16} />} onClick={() => void controller.refresh()} type="button">
+          <ActionButton icon={<RefreshCw size={16} />} onClick={() => controller.refresh()} type="button">
             刷新状态
           </ActionButton>
         </div>
@@ -225,17 +226,21 @@ export function InstanceControl({ controller }: { controller: RuntimeInstanceCon
             {controller.kind === 'docker' ? (
               <ActionButton
                 disabled={controller.phase !== 'running'}
+                loading={controller.phase === 'extending'}
+                loadingLabel="正在延期"
                 icon={<Clock3 size={16} />}
-                onClick={() => void controller.extend()}
+                onClick={() => controller.extend()}
                 type="button"
               >
                 延长时间
               </ActionButton>
             ) : null}
             <ActionButton
-              disabled={controller.phase === 'stopping'}
+              disabled={controller.busy}
+              loading={controller.phase === 'stopping'}
+              loadingLabel="正在销毁"
               icon={<Trash2 size={16} />}
-              onClick={() => void controller.destroy()}
+              onClick={() => controller.destroy()}
               tone="danger"
               type="button"
             >

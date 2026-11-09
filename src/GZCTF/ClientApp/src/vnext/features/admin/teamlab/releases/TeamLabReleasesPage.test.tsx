@@ -1,8 +1,8 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { SWRConfig } from 'swr'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { teamLabAdminApi, teamLabRuntimeApi, type TeamLabRelease } from '../api'
+import { teamLabAdminApi, teamLabRuntimeApi, type TeamLabAdminReleaseReadiness, type TeamLabRelease } from '../api'
 import { TeamLabReleasesPage } from './TeamLabReleasesPage'
 import { ReleaseReadinessPanel } from './ReleaseReadinessPanel'
 
@@ -69,6 +69,38 @@ describe('TeamLabReleasesPage', () => {
     </MemoryRouter>)
     await waitFor(() => expect(scroll).toHaveBeenCalled())
     delete (Element.prototype as { scrollIntoView?: () => void }).scrollIntoView
+  })
+
+  it('keeps startup errors in the confirmation dialog where the action can be retried', async () => {
+    vi.spyOn(teamLabRuntimeApi, 'createTrial').mockRejectedValue(new Error('节点资源不足'))
+    render(<MemoryRouter><SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}><TeamLabReleasesPage /></SWRConfig></MemoryRouter>)
+    fireEvent.click(await screen.findByRole('button', { name: '启动环境' }))
+    const dialog = await screen.findByRole('dialog', { name: '启动运行环境？' })
+    fireEvent.click(within(dialog).getByRole('button', { name: '启动环境' }))
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('节点资源不足')
+    expect(within(dialog).getByRole('button', { name: '启动环境' })).toBeEnabled()
+    expect(navigate).not.toHaveBeenCalled()
+  })
+
+  it('shows preheat as pending until the server accepts it and then reports submission, not deployment success', async () => {
+    const readiness: TeamLabAdminReleaseReadiness = {
+      ...await teamLabAdminApi.releaseReadiness(release.topologyId, release.id),
+      images: [{ imageTemplateId: 1, name: 'Windows 模板', imageType: 'qcow2', eligibleNodeCount: 2, readyNodeCount: 0, pendingNodeCount: 0, failedNodeCount: 0 }],
+    }
+    vi.mocked(teamLabAdminApi.releaseReadiness).mockResolvedValue(readiness)
+    let accept!: (value: typeof readiness) => void
+    const prepare = vi.spyOn(teamLabAdminApi, 'prepareReleaseImages').mockImplementation(() => new Promise(resolve => { accept = resolve }))
+    render(<MemoryRouter><SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}><TeamLabReleasesPage /></SWRConfig></MemoryRouter>)
+    fireEvent.click(await screen.findByRole('button', { name: '预热合格节点' }))
+    const pending = await screen.findByRole('button', { name: '正在提交预热' })
+    expect(pending).toBeDisabled()
+    expect(pending).toHaveAttribute('aria-busy', 'true')
+    expect(screen.queryByText(/镜像预热请求已提交/)).not.toBeInTheDocument()
+    fireEvent.click(pending)
+    expect(prepare).toHaveBeenCalledTimes(1)
+    await act(async () => { accept(readiness) })
+    expect(await screen.findByText(/镜像预热请求已提交/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '启动环境' })).toBeEnabled()
   })
 
   it('shows cached nodes separately from placement blockers', () => {

@@ -1,15 +1,24 @@
 import { AlertTriangle, ArrowRight, RefreshCw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
-import { ActionButton } from '../../../shared/Interaction'
+import { ActionButton, InlineFeedback } from '../../../shared/Interaction'
 import { DataState } from '../../../shared/Primitives'
 import type { AdminLogEntry, DeploymentTask, GlobalInstanceItem, NodeSummary } from '../api'
 import { instanceContextLabel, instanceKindLabel, instanceStatusMeta } from '../instances/instancePresentation'
 import { adminLogActor, adminLogTitle } from '../logs/adminLogPresentation'
-import { nodeStatusMeta } from '../nodes/useAdminNodes'
+import { NodeTelemetryPanel } from '../nodes/NodeTelemetryPanel'
+import { liveTelemetryNodes } from '../nodes/nodeTelemetry'
+import { nodeStatusMeta, formatHeartbeat } from '../nodes/useAdminNodes'
 import { deploymentStageLabel, deploymentStatusMeta } from '../queue/deploymentQueuePresentation'
+import {
+  AdminPageHeader,
+  MetricItem,
+  MetricStrip,
+  ResourceMeter,
+  StatusBadge,
+  RefreshIndicator,
+} from '../shared/AdminWorkbench'
 import { formatAdminDate } from '../shared/adminFormat'
-import { AdminPageHeader, MetricItem, MetricStrip, ResourceMeter, StatusBadge } from '../shared/AdminWorkbench'
 import styles from './AdminDashboardPage.module.css'
 import { DashboardSectionBoundary } from './DashboardSectionBoundary'
 import { useAdminDashboard } from './useAdminDashboard'
@@ -39,6 +48,15 @@ function NodeRows({ nodes }: { nodes: NodeSummary[] }) {
               <small>{node.hostAddress}</small>
             </div>
             <StatusBadge tone={status.tone}>{status.label}</StatusBadge>
+            <div className={styles.nodeTelemetry}>
+              <span>
+                CPU <b>{liveTelemetryNodes([node]).length ? `${(node.cpuLoad * 100).toFixed(1)}%` : '—'}</b>
+              </span>
+              <span>
+                内存 <b>{liveTelemetryNodes([node]).length ? `${(node.memoryLoad * 100).toFixed(1)}%` : '—'}</b>
+              </span>
+              <small>心跳 {formatHeartbeat(node.lastHeartbeat)}</small>
+            </div>
             <ResourceMeter
               detail={`${node.allocatedContainers} 已分配 · ${node.reservedContainers} 已预留`}
               label="Docker"
@@ -71,7 +89,9 @@ function QueueRows({ tasks }: { tasks: DeploymentTask[] }) {
               <small>{task.targetNodeLabel}</small>
             </div>
             <span>{deploymentStageLabel(task.stage, task.stageMessage)}</span>
-            <StatusBadge pulse={status.active} tone={status.tone}>{status.label}</StatusBadge>
+            <StatusBadge pulse={status.active} tone={status.tone}>
+              {status.label}
+            </StatusBadge>
           </Link>
         )
       })}
@@ -81,20 +101,35 @@ function QueueRows({ tasks }: { tasks: DeploymentTask[] }) {
 
 function InstanceRows({ instances }: { instances: GlobalInstanceItem[] }) {
   const risks = instances
-    .filter((instance) => instanceStatusMeta(instance).tone === 'danger' || (instance.expectedStopAt ?? Infinity) < Date.now() + 15 * 60_000)
+    .filter(
+      (instance) =>
+        instanceStatusMeta(instance).tone === 'danger' ||
+        (instance.expectedStopAt ?? Infinity) < Date.now() + 15 * 60_000
+    )
     .slice(0, 6)
-  if (!risks.length) return <DataState description="当前加载范围内没有异常或 15 分钟内到期的实例。" title="运行资源稳定" />
+  if (!risks.length)
+    return (
+      <p className={styles.stableNote}>
+        当前加载范围内无异常或 15 分钟内到期实例。<Link to="/admin/instances">查看实例 →</Link>
+      </p>
+    )
   return (
-    <div className={styles.compactRows}>
+    <div className={styles.riskRows}>
       {risks.map((instance) => {
         const status = instanceStatusMeta(instance)
         return (
-          <Link className={styles.compactRow} key={`${instance.nodeId}:${instance.kind}:${instance.id}`} to={`/admin/instances?node=${instance.nodeId}`}>
+          <Link
+            className={styles.compactRow}
+            key={`${instance.nodeId}:${instance.kind}:${instance.id}`}
+            to={`/admin/instances?node=${instance.nodeId}`}
+          >
             <div className={styles.rowIdentity}>
               <strong>{instance.name}</strong>
               <small>{instanceContextLabel(instance)}</small>
             </div>
-            <span>{instanceKindLabel(instance.kind)} · {instance.nodeName}</span>
+            <span>
+              {instanceKindLabel(instance.kind)} · {instance.nodeName}
+            </span>
             <StatusBadge tone={status.tone}>{status.label}</StatusBadge>
           </Link>
         )
@@ -114,7 +149,9 @@ function ErrorRows({ logs }: { logs: AdminLogEntry[] }) {
           <AlertTriangle size={16} />
           <div className={styles.rowIdentity}>
             <strong>{adminLogTitle(log, text)}</strong>
-            <small>{adminLogActor(log, text)} · {formatAdminDate(log.time)}</small>
+            <small>
+              {adminLogActor(log, text)} · {formatAdminDate(log.time)}
+            </small>
           </div>
         </Link>
       ))}
@@ -130,8 +167,14 @@ export function AdminDashboardPage() {
     <div className={styles.page}>
       <AdminPageHeader
         actions={
-          <ActionButton icon={<RefreshCw size={16} />} onClick={() => void dashboard.refresh()} type="button">
-            刷新概览
+          <ActionButton
+            loading={dashboard.manualRefreshing}
+            disabled={dashboard.manualRefreshing}
+            icon={<RefreshCw size={16} />}
+            onClick={dashboard.refresh}
+            type="button"
+          >
+            {dashboard.manualRefreshing ? '正在刷新概览…' : '刷新概览'}
           </ActionButton>
         }
         description="汇总节点、容量、部署、实例和错误日志的当前事实状态。"
@@ -139,33 +182,73 @@ export function AdminDashboardPage() {
         title="运行概览"
       />
 
+      <div className={styles.syncLine}>
+        <RefreshIndicator
+          active={dashboard.nodes.isRefreshing || dashboard.manualRefreshing}
+          label="10 秒自动同步 · 以服务端心跳为准"
+        />
+        <span>CPU / 内存仅统计 60 秒内有心跳的在线节点</span>
+      </div>
+      {dashboard.nodes.error ||
+      dashboard.images.error ||
+      dashboard.queue.error ||
+      dashboard.instances.error ||
+      dashboard.logs.error ? (
+        <InlineFeedback tone="danger">
+          部分监控数据读取失败，请点击刷新概览重试。已保留的数值可能来自上次成功同步。
+        </InlineFeedback>
+      ) : null}
+      <NodeTelemetryPanel
+        nodes={dashboard.nodes.nodes ?? []}
+        loading={dashboard.nodes.isLoading}
+        failed={Boolean(dashboard.nodes.error)}
+      />
+
       <MetricStrip>
         <MetricItem
           detail="在线或繁忙节点"
           label="节点在线"
           tone={metrics.onlineNodes === metrics.totalNodes && metrics.totalNodes > 0 ? 'success' : 'warning'}
-          value={<Link className={styles.metricLink} to="/admin/nodes">{metrics.onlineNodes} / {metrics.totalNodes}</Link>}
+          value={
+            <Link className={styles.metricLink} to="/admin/nodes">
+              {dashboard.nodes.nodes ? `${metrics.onlineNodes} / ${metrics.totalNodes}` : '—'}
+            </Link>
+          }
         />
-        <MetricItem detail="允许接收新任务" label="可调度节点" value={<Link className={styles.metricLink} to="/admin/nodes">{metrics.schedulableNodes}</Link>} />
-        <MetricItem detail="最大值减已分配与预留" label="Docker 可用槽位" value={metrics.dockerAvailable} />
-        <MetricItem detail="最大值减已分配与预留" label="VM 可用槽位" value={metrics.vmAvailable} />
+        <MetricItem
+          detail="允许接收新任务"
+          label="可调度节点"
+          value={
+            <Link className={styles.metricLink} to="/admin/nodes">
+              {dashboard.nodes.nodes ? metrics.schedulableNodes : '—'}
+            </Link>
+          }
+        />
         <MetricItem
           detail={`节点覆盖 ${metrics.instanceCoverage}`}
           label="活跃实例"
-          value={<Link className={styles.metricLink} to="/admin/instances">{metrics.activeInstances}</Link>}
+          value={
+            <Link className={styles.metricLink} to="/admin/instances">
+              {dashboard.instances.inventory ? metrics.activeInstances : '—'}
+            </Link>
+          }
         />
         <MetricItem
           detail="全部环境模板"
           label="异常镜像"
           tone={metrics.imageErrors ? 'danger' : 'neutral'}
-          value={<Link className={styles.metricLink} to="/admin/images?status=2">{metrics.imageErrors}</Link>}
+          value={
+            <Link className={styles.metricLink} to="/admin/images?status=2">
+              {dashboard.images.images ? metrics.imageErrors : '—'}
+            </Link>
+          }
         />
       </MetricStrip>
 
-      <div className={styles.primaryGrid}>
+      <div className={styles.nodeSection}>
         <DashboardSectionBoundary name="节点容量">
           <section className={styles.section}>
-            <SectionHeader label="管理节点" title="节点容量" to="/admin/nodes" />
+            <SectionHeader label="管理节点" title="节点负载与容量" to="/admin/nodes" />
             {dashboard.nodes.isLoading ? (
               <DataState description="正在读取节点容量。" loading title="节点加载中" />
             ) : dashboard.nodes.error ? (
@@ -175,7 +258,20 @@ export function AdminDashboardPage() {
             )}
           </section>
         </DashboardSectionBoundary>
+      </div>
+      <DashboardSectionBoundary name="异常实例">
+        <section aria-label="实例关注事项" className={styles.riskSection}>
+          {dashboard.instances.isLoading ? (
+            <DataState description="正在汇总活跃实例。" loading title="实例加载中" />
+          ) : dashboard.instances.error ? (
+            <DataState description="实例聚合暂时不可用。" title="实例加载失败" />
+          ) : (
+            <InstanceRows instances={dashboard.instances.inventory?.items ?? []} />
+          )}
+        </section>
+      </DashboardSectionBoundary>
 
+      <div className={styles.secondaryGrid}>
         <DashboardSectionBoundary name="部署队列">
           <section className={styles.section}>
             <SectionHeader label="查看全部" title="最近部署任务" to="/admin/queue" />
@@ -185,21 +281,6 @@ export function AdminDashboardPage() {
               <DataState description="部署队列接口暂时不可用。" title="队列加载失败" />
             ) : (
               <QueueRows tasks={dashboard.queue.queue?.items ?? []} />
-            )}
-          </section>
-        </DashboardSectionBoundary>
-      </div>
-
-      <div className={styles.secondaryGrid}>
-        <DashboardSectionBoundary name="异常实例">
-          <section className={styles.section}>
-            <SectionHeader label="查看实例" title="异常与即将到期" to="/admin/instances" />
-            {dashboard.instances.isLoading ? (
-              <DataState description="正在汇总活跃实例。" loading title="实例加载中" />
-            ) : dashboard.instances.error ? (
-              <DataState description="实例聚合暂时不可用。" title="实例加载失败" />
-            ) : (
-              <InstanceRows instances={dashboard.instances.inventory?.items ?? []} />
             )}
           </section>
         </DashboardSectionBoundary>

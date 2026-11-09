@@ -84,7 +84,7 @@ export function GameCreateDialog({
               下一步
             </ActionButton>
           ) : (
-            <ActionButton disabled={saving} icon={<Plus size={16} />} onClick={() => void create()} tone="primary" type="button">
+            <ActionButton disabled={saving} icon={<Plus size={16} />} onClick={() => create()} tone="primary" type="button">
               {saving ? '正在创建' : '创建比赛'}
             </ActionButton>
           )}

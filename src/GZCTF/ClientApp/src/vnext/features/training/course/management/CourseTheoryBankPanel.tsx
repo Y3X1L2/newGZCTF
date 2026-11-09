@@ -130,7 +130,7 @@ export function CourseTheoryBankPanel({ course }: { course: TrainingCourseModel 
       <CourseManagementPanelHeader
         actions={
           <>
-            <ActionButton icon={<RefreshCw size={16} />} onClick={() => void questionsRequest.mutate()} type="button">
+            <ActionButton icon={<RefreshCw size={16} />} onClick={() => questionsRequest.mutate()} type="button">
               刷新
             </ActionButton>
             <ActionButton icon={<FileUp size={16} />} onClick={() => setImportOpen(true)} type="button">
@@ -244,7 +244,7 @@ export function CourseTheoryBankPanel({ course }: { course: TrainingCourseModel 
               取消
             </ActionButton>
             {previewQuestions.length ? (
-              <ActionButton disabled={saving} onClick={() => void importQuestions()} tone="primary" type="button">
+              <ActionButton disabled={saving} onClick={() => importQuestions()} tone="primary" type="button">
                 {saving ? '正在导入' : `确认导入 ${previewQuestions.length} 题`}
               </ActionButton>
             ) : (
@@ -306,7 +306,7 @@ export function CourseTheoryBankPanel({ course }: { course: TrainingCourseModel 
             <ActionButton
               disabled={saving}
               icon={<Trash2 size={16} />}
-              onClick={() => void removeQuestion()}
+              onClick={() => removeQuestion()}
               tone="danger"
               type="button"
             >

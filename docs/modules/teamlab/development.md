@@ -39,7 +39,7 @@
 | schema、编译与发布 | `src/GZCTF.Test/UnitTests/TeamLab/TeamLabTopologyV2Tests.cs`、`TeamLabExecutionPlanV2Tests.cs`、`TeamLabFoundationBoundaryTests.cs` |
 | 调度、清理、代次 | `TeamLabDeploymentOrchestrationTests.cs`、`TeamLabCleanupOwnershipTests.cs`、`TeamLabRuntimeUpdateDispatchTests.cs` |
 | 来宾网络与路由 | `TeamLabManagedGuestNetworkTests.cs`、`TeamLabManagedVmNetworkTests.cs`、`TeamLabRouteIsolationTests.cs`、`TeamLabGuestNetworkDeadlineAndFailureTests.cs` |
-| 权限、单资产、文件/会话 | `TeamLabScopeAuthorizationTests.cs`、`TeamLabAssetControlTests.cs`、`TeamLabAssetFileTests.cs`、`TeamLabRemoteAuditTests.cs`、`TeamLabVncConsoleTests.cs` |
+| 权限、单资产、文件/会话 | `TeamLabScopeAuthorizationTests.cs`、`TeamLabAssetControlTests.cs`、`TeamLabAssetFileTests.cs`、`TeamLabRemoteAuditTests.cs`、`TeamLabRemoteReconciliationTests.cs`（账号撤销及清理重试）、`TeamLabVncConsoleTests.cs` |
 | 数据与 HTTP | `src/GZCTF.Integration.Test/Tests/Database/TeamLab*Tests.cs`；`Tests/Api/OpenTeamLabOperationsApiTests.cs` 与 `OpenTeamLabRetirementApiTests.cs` |
 
 自动化测试验证契约和执行规则；真实 OVN/WireGuard、来宾网络、桌面登录、物理设备与跨节点故障另做实机验收。按 [基础验收](guides/foundation-acceptance.md) 和 [执行手册](guides/execution-operations.md) 留独立证据；发布流程用 [维护窗口](../../operations/vnext-maintenance-window-rollout.md)。本次文档整理保留既有验收范围，新增实机结果由对应任务记录更新。

@@ -119,7 +119,7 @@ export function TokenCreateDialog({ canGrantScopes, onClose, onIssued, open }: T
           </ActionButton>
           <ActionButton
             disabled={submitting || !name.trim() || !scopes.length}
-            onClick={() => void submit()}
+            onClick={() => submit()}
             tone="primary"
             type="button"
           >

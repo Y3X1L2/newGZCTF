@@ -22,18 +22,18 @@ export function AssetControlPanel({ runtime }: { runtime: TeamLabRuntime }) {
     ['restart', 'pause'].includes(action) && asset.status === 'running'
   const primary: AssetControlAction = asset.status === 'stopped' ? 'start' : asset.status === 'paused' ? 'resume' : 'restart'
   const choose = (action: AssetControlAction) => {
-    if (action === 'start' || action === 'resume') void controls.submit(action)
+    if (action === 'start' || action === 'resume') return controls.submit(action)
     else controls.setPending(action)
   }
 
   return <div className={styles.controls}>
-    <ActionButton disabled={disabled || !available(primary)} icon={primary === 'restart' ? <RotateCcw size={16} /> : <Play size={16} />}
+    <ActionButton disabled={disabled || !available(primary)} loading={controls.active} icon={primary === 'restart' ? <RotateCcw size={16} /> : <Play size={16} />}
       onClick={() => choose(primary)} type="button">{labels[primary]}</ActionButton>
     <ActionMenu label="更多资产操作" items={[
       ...(Object.keys(labels) as AssetControlAction[]).filter(action => action !== primary && available(action)).map(action => ({ label: labels[action], disabled, onSelect: () => choose(action) })),
     ]} />
     {controls.task ? <span className={styles.task} role="status">{controls.task.status === 'failed' ? controls.task.errorCode ?? '操作失败' : controls.task.status === 'succeeded' ? '已完成' : '执行中'}</span> : null}
-    {controls.task?.canRetry ? <ActionButton disabled={disabled} onClick={() => void controls.retry()} type="button">继续执行</ActionButton> : null}
+    {controls.task?.canRetry ? <ActionButton disabled={disabled} onClick={() => controls.retry()} type="button">继续执行</ActionButton> : null}
     {controls.error ? <InlineFeedback tone="danger">{errorMessage(controls.error, '资产操作失败。')}</InlineFeedback> : null}
     <VNextConfirmDialog open={controls.pending !== null} onClose={() => controls.setPending(null)} onConfirm={controls.submit}
       title={`${controls.pending ? labels[controls.pending] : ''} ${asset.name}`} confirmLabel="确认执行"

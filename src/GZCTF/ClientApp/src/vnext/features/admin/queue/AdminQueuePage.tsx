@@ -194,7 +194,7 @@ export function AdminQueuePage() {
     <div className={styles.page}>
       <AdminPageHeader
         actions={
-          <ActionButton icon={<RefreshCw size={16} />} onClick={() => void queueRequest.mutate()} type="button">
+          <ActionButton icon={<RefreshCw size={16} />} onClick={() => queueRequest.mutate()} type="button">
             刷新状态
           </ActionButton>
         }

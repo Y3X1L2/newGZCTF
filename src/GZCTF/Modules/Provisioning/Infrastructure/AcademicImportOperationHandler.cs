@@ -376,8 +376,8 @@ public sealed class AcademicImportOperationHandler(
         var userIds = references.Where(item => item.UserId.HasValue).Select(item => item.UserId!.Value).Distinct().ToArray();
         var normalizedNames = references.Where(item => !string.IsNullOrWhiteSpace(item.UserName))
             .Select(item => item.UserName!.ToUpperInvariant()).Distinct(StringComparer.Ordinal).ToArray();
-        var users = await context.Users.Where(user =>
-                userIds.Contains(user.Id) || normalizedNames.Contains(user.NormalizedUserName!))
+        var users = await context.Users.Where(user => user.DeletedAtUtc == null &&
+                (userIds.Contains(user.Id) || normalizedNames.Contains(user.NormalizedUserName!)))
             .ToArrayAsync(cancellationToken);
         var usersById = users.ToDictionary(user => user.Id);
         var usersByName = users.Where(user => user.NormalizedUserName is not null)

@@ -1,4 +1,4 @@
-import { Check, Flag, LoaderCircle, Send } from 'lucide-react'
+import { Check, Flag, Send } from 'lucide-react'
 import { FormEvent, useId } from 'react'
 import { AnswerResult } from '@Api'
 import { ActionButton, InlineFeedback } from '../../shared/Interaction'
@@ -95,7 +95,8 @@ export function FlagSubmission({
         </label>
         <ActionButton
           disabled={!value.trim() || solved || Boolean(disabledReason) || pending}
-          icon={pending ? <LoaderCircle className={styles.spin} size={16} /> : <Send size={16} />}
+          icon={<Send size={16} />}
+          loading={pending}
           tone="primary"
           type="submit"
         >

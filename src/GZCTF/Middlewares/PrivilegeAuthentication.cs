@@ -32,7 +32,7 @@ public class RequirePrivilegeAttribute(Role privilege) : Attribute, IAsyncAuthor
             Guid.TryParse(id, out var guid))
             user = await dbContext.Users.SingleOrDefaultAsync(u => u.Id == guid);
 
-        if (user is null)
+        if (user is null || user.DeletedAtUtc is not null)
         {
             context.Result = RequestResponse.Result(localizer[nameof(Resources.Program.Auth_LoginRequired)],
                 StatusCodes.Status401Unauthorized);

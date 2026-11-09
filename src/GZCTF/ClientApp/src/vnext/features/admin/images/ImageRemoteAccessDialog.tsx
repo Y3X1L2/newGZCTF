@@ -80,7 +80,7 @@ export function ImageRemoteAccessDialog({
           </ActionButton>
           <ActionButton
             disabled={!canSave}
-            onClick={() => void save()}
+            onClick={() => save()}
             tone="primary"
             type="button"
           >

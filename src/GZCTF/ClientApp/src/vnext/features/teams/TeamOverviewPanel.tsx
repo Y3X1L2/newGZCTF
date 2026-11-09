@@ -62,7 +62,7 @@ export function TeamOverviewPanel({ team, isCaptain, inviteCode, onRefreshInvite
             >
               复制
             </ActionButton>
-            <ActionButton icon={<RefreshCw size={15} />} onClick={() => void onRefreshInviteCode()} type="button">
+            <ActionButton icon={<RefreshCw size={15} />} onClick={() => onRefreshInviteCode()} type="button">
               刷新
             </ActionButton>
           </div>

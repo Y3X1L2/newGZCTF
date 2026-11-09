@@ -237,11 +237,11 @@ export function AdminLogsPage() {
         actions={
           <>
             {stream.connectionState === 'disconnected' ? (
-              <ActionButton icon={<RotateCw size={16} />} onClick={() => void stream.retry()} type="button">
+              <ActionButton icon={<RotateCw size={16} />} onClick={() => stream.retry()} type="button">
                 {text('reconnect')}
               </ActionButton>
             ) : null}
-            <ActionButton icon={<RefreshCw size={16} />} onClick={() => void logsRequest.mutate()} type="button">
+            <ActionButton icon={<RefreshCw size={16} />} onClick={() => logsRequest.mutate()} type="button">
               {text('refresh')}
             </ActionButton>
           </>
