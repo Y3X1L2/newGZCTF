@@ -2,7 +2,7 @@
 
 ## 改了什么
 
-历史负载图的按钮和文字更紧凑，选手、课程和后台页面删减了重复标题、说明和提示，保留操作条件、必要状态与错误信息。[PR #38](https://github.com/Y3X1L2/newGZCTF/pull/38) · [PR #39](https://github.com/Y3X1L2/newGZCTF/pull/39)
+历史负载图的按钮和文字更紧凑，选手、课程和后台页面去掉了标题下重复的说明和多余小字，保留操作条件、必要状态与错误信息。[PR #38](https://github.com/Y3X1L2/newGZCTF/pull/38) · [PR #39](https://github.com/Y3X1L2/newGZCTF/pull/39)
 
 图表移除了底部的「查看数据」入口。指针停在图内时可用滚轮缩放时间轴，也可用加减键缩放、按 0 复位。切换节点或时间范围时复位，后台刷新时保留当前视图。[PR #40](https://github.com/Y3X1L2/newGZCTF/pull/40)
 
