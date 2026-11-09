@@ -71,7 +71,7 @@ export function TrainingTheoryPage() {
 
   if (!validIds) return <DataState description="课程或章节编号不是有效数字。" title="课后练习参数错误" />
   if ((!course || !chapter || !paper) && !courseRequest.error && !chapterRequest.error && !paperRequest.error) {
-    return <DataState description="正在读取课程、章节、试卷和服务端草稿。" loading title="课后练习加载中" />
+    return <DataState loading title="课后练习加载中" />
   }
   if (!course || !chapter || !paper) {
     return <DataState description="课后练习尚未发布，或当前账户没有课程学习权限。" title="课后练习暂不可用" />

@@ -138,7 +138,6 @@ export function PracticeBrowsePage() {
       <PageHeading
         eyebrow="EXERCISE CATALOG"
         title={isBrowseRoute ? '题库浏览' : '自主练习'}
-        description="筛选、搜索与查看所有练习题"
       />
 
       <div className={styles.searchBar}>
@@ -268,7 +267,7 @@ export function PracticeBrowsePage() {
       )}
 
       {!exercises && !error ? (
-        <DataState description="正在读取题目和筛选条件。" loading title="题库加载中" />
+        <DataState loading title="题库加载中" />
       ) : error ? (
         <DataState description="练习题库暂时不可用，请稍后刷新。" title="题库加载失败" />
       ) : exercises?.length ? (

@@ -10,7 +10,7 @@ export function CourseManagementPanelHeader({
 }: {
   eyebrow: string
   title: string
-  description: ReactNode
+  description?: ReactNode
   actions?: ReactNode
 }) {
   return (
@@ -18,7 +18,7 @@ export function CourseManagementPanelHeader({
       <div>
         <span>{eyebrow}</span>
         <h2>{title}</h2>
-        <p>{description}</p>
+        {description ? <p>{description}</p> : null}
       </div>
       {actions ? <div className={styles.actions}>{actions}</div> : null}
     </header>

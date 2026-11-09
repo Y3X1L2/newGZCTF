@@ -46,7 +46,6 @@ export function CourseChallengesPanel({
             创建题目
           </CourseManagementActionLink>
         }
-        description="课程题目与比赛题目相互隔离，可绑定当前课程的环境模板和一个静态附件。"
         eyebrow="COURSE CHALLENGES"
         title="课程题目"
       />
@@ -95,7 +94,7 @@ export function CourseChallengesPanel({
       )}
 
       <VNextDialog
-        description="删除后章节将不再显示此题，已有提交记录可能使后端拒绝删除。"
+        description="删除后章节将不再显示此题。已有提交记录时可能无法删除。"
         eyebrow="DELETE CHALLENGE"
         footer={
           <>

@@ -69,7 +69,6 @@ export function LoginPage() {
 
   return (
     <AuthPanel
-      description="使用平台账户登录，或从统一身份认证门户进入。"
       eyebrow="ACCOUNT ACCESS"
       footer={
         capabilities.allowRegister ? (
@@ -82,7 +81,6 @@ export function LoginPage() {
     >
       {searchParams.get('reset') === 'success' ? <AuthMessage tone="success">密码已更新，请使用新密码登录。</AuthMessage> : null}
       {action.error ? <AuthMessage>{action.error}</AuthMessage> : null}
-      {capabilityQuery.error ? <AuthMessage tone="info">账户能力接口尚未同步，当前使用兼容登录模式。</AuthMessage> : null}
 
       {capabilities.allowPasswordLogin ? (
         <AuthForm onSubmit={submit}>

@@ -61,7 +61,6 @@ export function AwdpStageHeader({
           <strong>
             {running}/{total}
           </strong>
-          <small>所有可攻击服务</small>
         </div>
         <div>
           <ShieldCheck size={17} />

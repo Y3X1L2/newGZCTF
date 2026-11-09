@@ -152,7 +152,7 @@ export function TrainingChapterEditorPage() {
   if (!validCourse) return <DataState description="课程编号不是有效数字。" title="课程参数错误" />
   if (!course || (editing && !chapter)) {
     if (!courseRequest.error && (!editing || !chapterRequest.error)) {
-      return <DataState description="正在读取课程、章节正文和编辑权限。" loading title="编辑器加载中" />
+      return <DataState loading title="编辑器加载中" />
     }
     return <DataState description="课程或章节不存在，或当前账户没有访问权限。" title="无法打开章节编辑器" />
   }
@@ -166,7 +166,6 @@ export function TrainingChapterEditorPage() {
     <TrainingEditorShell
       backLabel="返回课程章节"
       backTo={`/training/courses/${courseNumber}?tab=chapters`}
-      description="正文编辑与预览保持同屏；实验和理论练习在课程详情的独立管理页面配置。"
       eyebrow="CHAPTER WORKSPACE"
       meta={
         <StatusPill tone={draft.isPublished ? 'success' : 'warning'}>
@@ -179,7 +178,7 @@ export function TrainingChapterEditorPage() {
       <form className={styles.form} onSubmit={(event) => void save(event)}>
         <div className={styles.editorGrid}>
           <div className={styles.editorColumn}>
-            <EditorSection description="章节名称、层级和排序决定左侧课程目录结构。" title="章节信息">
+            <EditorSection title="章节信息">
               <div className={styles.stack}>
                 <TextField
                   error={titleError}
@@ -234,7 +233,7 @@ export function TrainingChapterEditorPage() {
               </div>
             </EditorSection>
 
-            <EditorSection description="章节正文以 Markdown 为主，保存后学生页面使用相同渲染器。" title="知识正文">
+            <EditorSection description="支持 Markdown。" title="知识正文">
               <div className={styles.stack}>
                 <SelectField
                   label="正文格式"
@@ -254,7 +253,7 @@ export function TrainingChapterEditorPage() {
               </div>
             </EditorSection>
 
-            <EditorSection description="视频与正文处于同一章节，学生无需跳转到外部页面。" title="教学视频">
+            <EditorSection title="教学视频">
               <div className={styles.stack}>
                 <SelectField
                   label="视频来源"
@@ -285,7 +284,7 @@ export function TrainingChapterEditorPage() {
               </div>
             </EditorSection>
 
-            <EditorSection description="章节完成按钮会实时说明尚未满足的条件。" title="完成条件">
+            <EditorSection title="完成条件">
               <div className={styles.stack}>
                 <ToggleField
                   checked={policy.requireContentRead ?? true}

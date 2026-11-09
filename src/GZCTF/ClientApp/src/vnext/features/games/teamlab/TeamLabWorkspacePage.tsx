@@ -20,7 +20,7 @@ export function TeamLabWorkspacePage() {
   if (request.isLoading)
     return (
       <div className={styles.state}>
-        <DataState description="正在读取队伍环境和任务目标。" loading title="渗透工作区加载中" />
+        <DataState loading title="渗透工作区加载中" />
       </div>
     )
   if (request.error || !request.workspace)

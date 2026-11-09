@@ -463,9 +463,7 @@ export function TheoryExamWorkbench({
       ) : null}
       {session.submitError ? <InlineFeedback tone="danger">{session.submitError}</InlineFeedback> : null}
       {reviewDataMissing ? (
-        <InlineFeedback>
-          这份历史答卷只保留了总成绩，没有保存逐题选择，系统无法可靠还原错题。成绩记录仍然保留；可使用“重新作答”生成完整复盘数据。
-        </InlineFeedback>
+        <InlineFeedback>这份答卷只保留了总成绩。</InlineFeedback>
       ) : session.submitted ? (
         <InlineFeedback tone="success">
           答卷已于 {formatTimestamp(session.paper.submittedAt)} 提交，当前页面为只读状态。

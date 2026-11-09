@@ -81,7 +81,7 @@ export function InstanceControl({ controller }: { controller: RuntimeInstanceCon
       </header>
 
       {controller.error ? <InlineFeedback tone="danger">{controller.error}</InlineFeedback> : null}
-      {controller.phase === 'stopping' ? <InlineFeedback>正在销毁实例，完成后访问入口会关闭。页面会自动更新。</InlineFeedback> : null}
+      {controller.phase === 'stopping' ? <InlineFeedback>正在销毁实例，完成后访问入口会关闭。</InlineFeedback> : null}
 
       {controller.phase === 'idle' || controller.phase === 'failed' ? (
         <div className={styles.idlePanel}>
@@ -90,11 +90,6 @@ export function InstanceControl({ controller }: { controller: RuntimeInstanceCon
           </span>
           <div>
             <strong>{controller.phase === 'failed' ? '实例未能就绪' : '当前没有运行实例'}</strong>
-            <p>
-              {controller.kind === 'windows'
-                ? '创建后将经历镜像准备、虚拟机创建、启动和网络就绪阶段。'
-                : '创建后将显示由服务端返回的访问入口和剩余时间。'}
-            </p>
           </div>
           {entryPublicationFailed ? (
             <div className={styles.runtimeActions}>
@@ -130,10 +125,7 @@ export function InstanceControl({ controller }: { controller: RuntimeInstanceCon
           </span>
           <div>
             <strong>{stageMessage || (controller.phase === 'queued' ? '等待调度资源' : '正在准备运行环境')}</strong>
-            <p>
-              {queue?.queuePosition ? `队列位置 ${queue.queuePosition}` : '页面会自动读取最新状态，无需重复点击创建。'}
-              {queue?.targetNodeName ? ` · 目标节点 ${queue.targetNodeName}` : ''}
-            </p>
+            {queue?.queuePosition ? <p>队列位置 {queue.queuePosition}</p> : null}
           </div>
           <ActionButton icon={<RefreshCw size={16} />} onClick={() => controller.refresh()} type="button">
             刷新状态
@@ -219,7 +211,7 @@ export function InstanceControl({ controller }: { controller: RuntimeInstanceCon
               ) : null}
             </div>
           ) : (
-            <InlineFeedback>实例已运行，正在等待服务端确认访问入口。</InlineFeedback>
+            <InlineFeedback>实例已运行，访问入口正在准备。</InlineFeedback>
           )}
 
           <div className={styles.runtimeActions}>

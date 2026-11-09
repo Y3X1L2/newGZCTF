@@ -187,7 +187,7 @@ export function HomePage() {
             YINYU <span>安全综合演练平台</span>
           </h1>
           <p>{getPrimarySlogan(config.slogan)}</p>
-          {displayName ? <small>欢迎回来，{displayName}</small> : <small>赛事、课程与演练环境统一编排</small>}
+          {displayName ? <small>欢迎回来，{displayName}</small> : null}
           <div className={styles.brandActions}>
             <Link className={styles.primaryAction} to={primaryRoute}>
               <Play size={17} />
@@ -250,7 +250,6 @@ export function HomePage() {
             </span>
             <small>个人进度</small>
             <strong>登录</strong>
-            <p>查看学习和参赛状态</p>
           </div>
         )}
       </section>

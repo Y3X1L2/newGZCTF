@@ -96,7 +96,7 @@ export function TrainingLabCard({ courseId, chapterId, challenge, refreshProgres
       </header>
 
       {!detail && !challengeRequest.error ? (
-        <DataState description="正在读取实验配置、附件和运行状态。" loading title="实验加载中" />
+        <DataState loading title="实验加载中" />
       ) : challengeRequest.error || !detail ? (
         <DataState description="实验配置暂时无法读取，请刷新页面后重试。" title="实验加载失败" />
       ) : (

@@ -59,7 +59,7 @@ export function AuthPanel({
 }: {
   eyebrow: string
   title: string
-  description: string
+  description?: string
   children: ReactNode
   footer?: ReactNode
 }) {
@@ -68,7 +68,7 @@ export function AuthPanel({
       <header>
         <span>{eyebrow}</span>
         <h1>{title}</h1>
-        <p>{description}</p>
+        {description ? <p>{description}</p> : null}
       </header>
       {children}
       {footer ? <footer>{footer}</footer> : null}

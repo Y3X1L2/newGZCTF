@@ -49,7 +49,6 @@ export function RecoveryPage() {
 
   return (
     <AuthPanel
-      description="提交邮箱后，系统会在账户可用时发送密码重置邮件。"
       eyebrow="PASSWORD RECOVERY"
       footer={<AuthTextLink to="/account/login">返回登录</AuthTextLink>}
       title="找回密码"

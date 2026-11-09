@@ -114,7 +114,7 @@ export function TheoryScoreboardPage() {
       </section>
 
       {!items && !error ? (
-        <DataState description="正在读取理论考试排名和提交时间。" loading title="理论榜单加载中" />
+        <DataState loading title="理论榜单加载中" />
       ) : error ? (
         <DataState description="比赛尚未发布理论试卷，或当前账户无权查看理论榜单。" title="理论榜单暂不可用" />
       ) : visibleItems.length ? (

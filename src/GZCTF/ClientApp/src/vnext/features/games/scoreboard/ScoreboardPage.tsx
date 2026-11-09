@@ -93,7 +93,6 @@ export function ScoreboardPage() {
             <span className={styles.updatedAt}>更新于 {formatTime(scoreboard.updateTimeUtc)}</span>
           ) : undefined
         }
-        description="按比赛总分排序，实时状态变化会在连接恢复后自动校准。"
         eyebrow="LIVE SCOREBOARD"
         title="积分榜"
       />
@@ -154,7 +153,7 @@ export function ScoreboardPage() {
       </section>
 
       {!scoreboard && !error ? (
-        <DataState description="正在读取战队排名和解题状态。" loading title="积分榜加载中" />
+        <DataState loading title="积分榜加载中" />
       ) : error ? (
         <DataState description="积分榜尚未生成或当前账户无权查看。" title="积分榜加载失败" />
       ) : visibleItems.length ? (

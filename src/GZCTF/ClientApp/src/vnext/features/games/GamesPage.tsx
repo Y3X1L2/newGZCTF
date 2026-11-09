@@ -103,7 +103,6 @@ export function GamesPage() {
   return (
     <div className={styles.page}>
       <PageHeading
-        description="按时间状态浏览公开赛事，进入详情后完成报名并访问对应赛制工作区。"
         eyebrow="EXERCISE INDEX"
         title="赛事中心"
         actions={<span className={styles.resultCount}>{filteredGames.length} 场赛事</span>}
@@ -153,7 +152,7 @@ export function GamesPage() {
       </section>
 
       {catalog.isLoading ? (
-        <DataState description="正在读取全部公开赛事并计算时间状态。" loading title="赛事加载中" />
+        <DataState loading title="赛事加载中" />
       ) : catalog.error ? (
         <DataState description="请稍后刷新重试。" title="赛事加载失败" />
       ) : visibleGames.length > 0 ? (

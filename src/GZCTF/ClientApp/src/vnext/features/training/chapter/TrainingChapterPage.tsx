@@ -23,7 +23,7 @@ export function TrainingChapterPage() {
     return <DataState description="课程或章节编号不是有效数字。" title="章节参数错误" />
   }
   if (controller.loading) {
-    return <DataState description="正在读取课程目录、章节正文和学习状态。" loading title="章节加载中" />
+    return <DataState loading title="章节加载中" />
   }
   if (!controller.course || !controller.chapter || !controller.progress) {
     return <DataState description="章节不存在，或当前账户尚未获得课程学习权限。" title="无法打开章节" />
@@ -75,7 +75,6 @@ export function TrainingChapterPage() {
                 <div>
                   <span>HANDS-ON LABS</span>
                   <h2>章节实验</h2>
-                  <p>完成实验并提交正确 Flag 后，学习状态会自动刷新。</p>
                 </div>
                 <StatusPill tone={progress.challengesSatisfied ? 'success' : 'info'}>
                   {progress.solvedChallengeCount} / {progress.requiredChallengeCount || chapter.challenges?.length || 0}

@@ -31,7 +31,7 @@ export function AwdpServiceTable({
         <div>
           <span>SERVICE MAP</span>
           <h2>可攻击服务</h2>
-          <p>展示所有队伍服务入口；只有标记为本队的实例可以管理。</p>
+          <p>仅可管理本队实例。</p>
         </div>
         <label className={styles.searchBox}>
           <Search size={16} />

@@ -20,7 +20,7 @@ export function TeamRequestsPanel({ requests, submitting, onReview }: TeamReques
         <h3>待审核申请</h3>
       </header>
       {!requests ? (
-        <DataState description="正在读取加入申请。" loading title="申请加载中" />
+        <DataState loading title="申请加载中" />
       ) : pendingRequests?.length ? (
         <div className={styles.requestList}>
           {pendingRequests.map((request) => (

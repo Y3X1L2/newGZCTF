@@ -122,7 +122,6 @@ export function CourseEnvironmentDialogs({
   return (
     <>
       <VNextDialog
-        description="平台会拉取镜像并同步至配置的课程 Registry。"
         eyebrow="REGISTER DOCKER"
         footer={
           <>

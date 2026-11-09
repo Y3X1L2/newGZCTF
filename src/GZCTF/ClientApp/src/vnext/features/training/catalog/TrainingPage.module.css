@@ -299,12 +299,6 @@
   }
 }
 
-.sectionNote {
-  margin: calc(var(--yn-space-4) * -1) 0 var(--yn-space-4);
-  color: var(--yn-color-muted);
-  font-size: var(--yn-font-xs);
-}
-
 .courseGrid {
   display: grid;
   min-width: 0;

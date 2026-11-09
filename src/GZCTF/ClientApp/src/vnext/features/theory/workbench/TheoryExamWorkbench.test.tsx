@@ -93,7 +93,7 @@ describe('TheoryExamWorkbench review mode', () => {
       />
     )
 
-    expect(screen.getByText(/这份历史答卷只保留了总成绩/)).toBeInTheDocument()
+    expect(screen.getByText(/这份答卷只保留了总成绩/)).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: '答卷复盘' })).not.toBeInTheDocument()
   })
 })

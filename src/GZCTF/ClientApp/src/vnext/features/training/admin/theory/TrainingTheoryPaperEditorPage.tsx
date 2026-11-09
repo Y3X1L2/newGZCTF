@@ -179,7 +179,7 @@ export function TrainingTheoryPaperEditorPage() {
     return failed ? (
       <DataState description="课程、章节、试卷或题库数据读取失败。" title="无法打开课后练习配置" />
     ) : (
-      <DataState description="正在读取课程题库和章节试卷。" loading title="试卷编辑器加载中" />
+      <DataState loading title="试卷编辑器加载中" />
     )
   }
   if (!course.canEdit)
@@ -189,7 +189,6 @@ export function TrainingTheoryPaperEditorPage() {
     <TrainingEditorShell
       backLabel="返回课后练习"
       backTo={`/training/courses/${courseNumber}?tab=homework`}
-      description="从当前课程题库选择题目、统一设置分值，并将一套试卷发放到当前章节。"
       eyebrow="CHAPTER ASSESSMENT"
       meta={
         <>
