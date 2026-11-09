@@ -75,7 +75,6 @@ export function RegisterPage() {
 
   return (
     <AuthPanel
-      description="注册后将按照平台策略直接登录、等待审核或验证邮箱。"
       eyebrow="CREATE ACCOUNT"
       footer={
         <span>

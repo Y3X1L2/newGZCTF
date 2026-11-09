@@ -125,7 +125,6 @@
 .nodeSection {
   margin-top: var(--yn-space-6);
 }
-.syncLine,
 .stableNote {
   display: flex;
   flex-wrap: wrap;
@@ -133,9 +132,6 @@
   gap: var(--yn-space-3);
   font-size: var(--yn-font-xs);
   color: var(--yn-color-muted);
-}
-.syncLine {
-  margin-top: var(--yn-space-4);
 }
 .stableNote {
   margin: 0;

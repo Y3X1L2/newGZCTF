@@ -39,7 +39,7 @@ export function ProfileSettings() {
     return () => URL.revokeObjectURL(url)
   }, [avatarFile])
 
-  if (!account.user && !account.error) return <DataState description="正在读取本人资料。" loading title="资料加载中" />
+  if (!account.user && !account.error) return <DataState loading title="资料加载中" />
   if (!account.user) return <DataState description="请先登录后再修改账户资料。" title="需要登录" />
 
   const updateField =
@@ -55,7 +55,7 @@ export function ProfileSettings() {
     try {
       await settingsApi.updateProfile(model)
       await account.mutate()
-      setFeedback({ tone: 'success', message: '个人资料已保存，并同步更新全局账户信息。' })
+      setFeedback({ tone: 'success', message: '个人资料已保存。' })
     } catch (error) {
       setFeedback({ tone: 'danger', message: errorMessage(error, '个人资料保存失败。') })
     } finally {

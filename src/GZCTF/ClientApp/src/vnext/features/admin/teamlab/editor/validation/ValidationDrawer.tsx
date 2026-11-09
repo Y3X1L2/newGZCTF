@@ -15,7 +15,7 @@ export function ValidationDrawer({
 }) {
   return (
     <VNextDrawer
-      description={result?.valid ? '当前服务端修订已通过发布门禁。' : '修正问题后重新运行服务端校验。'}
+      description={result?.valid ? '当前修订可以发布。' : '修正问题后重新校验。'}
       eyebrow="服务端校验"
       onClose={onClose}
       open={open}

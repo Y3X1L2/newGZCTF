@@ -64,7 +64,6 @@ export function TeamSettingsPanel({
         <div>
           <span>TEAM AVATAR</span>
           <h3>战队头像</h3>
-          <p>选择图片后单独上传，不会覆盖未保存的文字资料。</p>
         </div>
         <label className={styles.fileButton}>
           选择图片

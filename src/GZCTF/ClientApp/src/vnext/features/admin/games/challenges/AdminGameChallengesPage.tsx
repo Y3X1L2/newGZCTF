@@ -16,7 +16,6 @@ import {
   MetricItem,
   MetricStrip,
   PaginationBar,
-  RefreshIndicator,
   StatusBadge,
   ToolbarGroup,
 } from '../../shared/AdminWorkbench'
@@ -167,7 +166,6 @@ export function AdminGameChallengesPage() {
             <ActionButton icon={<RefreshCw size={16} />} onClick={() => setFlushOpen(true)} type="button">刷新积分榜</ActionButton>
           </>
         }
-        description="维护 CTF 题目身份、环境和启用状态；附件、Flag 与测试实例在题目工作台中配置。"
         eyebrow="CTF CHALLENGES"
         title="题目管理"
       />
@@ -184,7 +182,6 @@ export function AdminGameChallengesPage() {
           <select aria-label="筛选题目类型" onChange={(event) => queryState.update({ type: event.currentTarget.value || null })} value={type ?? ''}><option value="">全部类型</option>{Object.values(ChallengeType).map((value) => <option key={value} value={value}>{challengeTypeLabel(value)}</option>)}</select>
           <select aria-label="筛选启用状态" onChange={(event) => queryState.update({ enabled: event.currentTarget.value || null })} value={enabled ?? ''}><option value="">全部状态</option><option value="true">已启用</option><option value="false">未启用</option></select>
         </ToolbarGroup>
-        <RefreshIndicator active={challengesRequest.isRefreshing} label="题目按需刷新" />
       </FilterToolbar>
       {feedback ? <InlineFeedback tone={feedback.tone}>{feedback.message}</InlineFeedback> : null}
       {challengesRequest.error ? <InlineFeedback tone="danger">{errorMessage(challengesRequest.error, '题目列表加载失败。')}</InlineFeedback> : null}

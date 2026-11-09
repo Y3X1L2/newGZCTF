@@ -19,7 +19,7 @@ export function TeamsPage() {
   if (!controller.account.isAuthenticated && !controller.account.error) {
     return (
       <div className={styles.statePage}>
-        <DataState description="正在确认账户状态。" loading title="账户检查中" />
+        <DataState loading title="账户检查中" />
       </div>
     )
   }
@@ -52,7 +52,6 @@ export function TeamsPage() {
             </ActionButton>
           </div>
         }
-        description="管理队伍成员、加入申请和比赛协作关系。"
         eyebrow="TEAM OPERATIONS"
         title="战队协作"
       />

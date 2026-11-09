@@ -17,8 +17,7 @@
 .readinessStatus svg { flex-shrink: 0; }
 .readinessStatus[data-ready='true'] { color: var(--yn-color-success); }
 .startAction { display: grid; flex: 0 0 auto; gap: var(--yn-space-2); text-align: center; }
-.startAction > span { color: var(--yn-color-muted); font-size: var(--yn-font-xs); }
-.readinessNote, .preparationCard > p, .imageDetails p { margin: 0; color: var(--yn-color-muted); font-size: var(--yn-font-sm); line-height: 1.6; overflow-wrap: anywhere; }
+.preparationCard > p { margin: 0; color: var(--yn-color-muted); font-size: var(--yn-font-sm); line-height: 1.6; overflow-wrap: anywhere; }
 .blockers { display: grid; min-width: 0; gap: var(--yn-space-2); margin: 0; padding-left: var(--yn-space-5); color: var(--yn-color-text); overflow-wrap: anywhere; }
 .latestTrial { width: fit-content; max-width: 100%; flex-wrap: wrap; gap: var(--yn-space-2); color: var(--yn-color-text-secondary); font-size: var(--yn-font-sm); text-decoration: none; }
 .latestTrial:hover { color: var(--yn-color-brand); }

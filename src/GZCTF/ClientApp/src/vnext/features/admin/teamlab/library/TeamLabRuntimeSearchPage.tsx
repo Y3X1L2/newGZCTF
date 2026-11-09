@@ -15,7 +15,6 @@ export function TeamLabRuntimeSearchPage() {
     <AdminPageHeader eyebrow="TEAMLAB" title={sessions ? '远程会话管理' : '运行环境'} />
     <TeamLabWorkspaceNav active="runtimes" />
     {sessions ? <>
-      <p className={styles.maintenanceNote}>远程会话属于环境运维记录。返回环境列表可进入具体环境。</p>
       <Link to="/admin/teamlab/runtimes">返回运行环境</Link>
       <RemoteSessionsPanel />
     </> : <RuntimeSearchPanel />}

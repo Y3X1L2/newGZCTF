@@ -33,7 +33,7 @@ export function RuntimeDifferencesPanel({ runtime }: { runtime: TeamLabRuntime }
     {controller.preview?.items.length === 0 && !controller.preview.operationInProgress ? <p>当前没有可检查的运行资产。</p> : null}
     <VNextConfirmDialog open={controller.pending !== null} onClose={() => controller.setPending(null)} onConfirm={controller.repair}
       title={`${actions[controller.pending?.suggestedAction ?? ''] ?? '修复'} ${controller.pending?.name ?? ''}`} confirmLabel="提交修复"
-      description="提交前会重新检查现场状态。只处理选定资产，任务复用原运行队列。"
+      description="只处理选定资产。"
       message={controller.pending?.suggestedAction === 'rebuild' ? '将从原始发布配置重建此资产，可写层数据无法保留。' : controller.pending?.resourceKind === 'vm' && controller.pending.suggestedAction === 'stop'
         ? '虚拟机将强制断电，未保存的数据会丢失，当前远程连接会关闭。' : '处理期间该资产的当前远程连接会关闭。'}
       tone={controller.pending?.suggestedAction === 'rebuild' ? 'danger' : 'primary'} />

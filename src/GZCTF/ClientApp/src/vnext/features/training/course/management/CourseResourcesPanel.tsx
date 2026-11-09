@@ -142,7 +142,7 @@ export function CourseResourcesPanel({
             </ActionButton>
           ) : null
         }
-        description={canOpenLearning ? '资源可直接打开或下载。' : '报名通过后开放资源下载。'}
+        description={canOpenLearning ? undefined : '报名通过后开放资源下载。'}
         eyebrow="COURSE MATERIALS"
         title="课程资源"
       />
@@ -203,7 +203,6 @@ export function CourseResourcesPanel({
       )}
 
       <VNextDialog
-        description="本地文件会先上传到平台资源存储，再与当前课程绑定。"
         eyebrow="COURSE MATERIAL"
         footer={
           <>

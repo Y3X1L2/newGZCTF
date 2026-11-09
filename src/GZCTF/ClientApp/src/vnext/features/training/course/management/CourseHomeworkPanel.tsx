@@ -13,7 +13,6 @@ export function CourseHomeworkPanel({ course }: { course: TrainingCourseModel })
       <header>
         <span>CHAPTER ASSESSMENTS</span>
         <h2>课后练习</h2>
-        <p>每个章节最多配置一套理论试卷，课程题库可被不同章节重复引用。</p>
       </header>
       {chapters.length ? (
         <div className={styles.homeworkList}>

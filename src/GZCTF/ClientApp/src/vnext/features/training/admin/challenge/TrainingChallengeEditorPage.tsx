@@ -154,7 +154,7 @@ export function TrainingChallengeEditorPage() {
   if (!validCourse) return <DataState description="课程编号不是有效数字。" title="课程参数错误" />
   if (!course || (editing && !detail)) {
     if (!courseRequest.error && (!editing || !detailRequest.error)) {
-      return <DataState description="正在读取课程题目和环境模板。" loading title="题目编辑器加载中" />
+      return <DataState loading title="题目编辑器加载中" />
     }
     return <DataState description="课程或题目不存在，或当前账户没有访问权限。" title="无法打开题目编辑器" />
   }
@@ -165,14 +165,13 @@ export function TrainingChallengeEditorPage() {
     <TrainingEditorShell
       backLabel="返回题目管理"
       backTo={`/training/courses/${courseNumber}?tab=challenges`}
-      description="题目属于当前课程，可绑定课程镜像、一个静态附件和一个 Flag 判定规则。"
       eyebrow="COURSE CHALLENGE"
       meta={detail?.hasSubmittedAnswers ? <StatusPill tone="warning">已有学员提交记录</StatusPill> : null}
       title={editing ? '编辑课程题目' : '创建课程题目'}
     >
       {feedback ? <InlineFeedback tone={feedback.tone}>{feedback.message}</InlineFeedback> : null}
       <form className={styles.form} onSubmit={(event) => void save(event)}>
-        <EditorSection description="题目名称、分类和章节关系决定学生端的展示位置。" title="题目身份">
+        <EditorSection title="题目身份">
           <div className={styles.fieldGrid}>
             <TextField
               error={titleError}
@@ -233,7 +232,7 @@ export function TrainingChallengeEditorPage() {
           </div>
         </EditorSection>
 
-        <EditorSection description="题目说明使用与学生端一致的 Markdown 渲染器。" title="题目内容">
+        <EditorSection description="支持 Markdown。" title="题目内容">
           <div className={styles.markdownGrid}>
             <TextAreaField
               label="题目说明 Markdown"
@@ -248,7 +247,7 @@ export function TrainingChallengeEditorPage() {
           </div>
         </EditorSection>
 
-        <EditorSection description="首阶段每道课程题目只绑定一个本地附件或一个外部链接。" title="题目附件">
+        <EditorSection description="选择一个本地附件或外部链接。" title="题目附件">
           <div className={styles.fieldGrid}>
             <SelectField
               label="附件类型"

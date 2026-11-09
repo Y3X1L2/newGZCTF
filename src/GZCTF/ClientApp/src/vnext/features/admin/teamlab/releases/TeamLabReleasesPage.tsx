@@ -5,7 +5,7 @@ import useSWR from 'swr'
 import { ActionButton, InlineFeedback } from '../../../../shared/Interaction'
 import { DataState } from '../../../../shared/Primitives'
 import { errorMessage } from '../../../../shared/errors'
-import { RefreshIndicator, StatusBadge } from '../../shared/AdminWorkbench'
+import { StatusBadge } from '../../shared/AdminWorkbench'
 import { formatAdminDate } from '../../shared/adminFormat'
 import { listTeamLabImageOptions, teamLabAdminApi, teamLabAdminKeys, teamLabRuntimeApi, type TeamLabRuntimeOverlay } from '../api'
 import { useTeamLabScene } from '../shared/TeamLabSceneShell'
@@ -102,10 +102,6 @@ export function TeamLabReleasesPage() {
           <h2>版本与启动</h2>
         </div>
         <div className={styles.headerActions}>
-          <RefreshIndicator
-            active={releasesRequest.isValidating || readinessRequest.isValidating}
-            label={releasesRequest.isValidating || readinessRequest.isValidating ? '同步中' : '状态已同步'}
-          />
           <ActionButton loading={releasesRequest.isValidating || readinessRequest.isValidating} loadingLabel="正在刷新" icon={<RefreshCw size={16} />} onClick={() => Promise.all([releasesRequest.mutate(), readinessRequest.mutate()])} type="button">
             刷新
           </ActionButton>
@@ -113,7 +109,7 @@ export function TeamLabReleasesPage() {
       </header>
 
       {operationError && !trialOpen ? <InlineFeedback tone="danger">{operationError}</InlineFeedback> : null}
-      {releases[0] && releases[0].sourceRevision !== scene.revision ? <p className={styles.draftNotice}>设计草稿有未发布修改。启动只使用所选不可变版本；新设计须先<Link to={`/admin/teamlab/${scene.id}/design`}>检查并发布</Link>。</p> : null}
+      {releases[0] && releases[0].sourceRevision !== scene.revision ? <p className={styles.draftNotice}>当前草稿有未发布的修改。要使用新设计，请先<Link to={`/admin/teamlab/${scene.id}/design`}>检查并发布</Link>。</p> : null}
 
       {!releases.length ? <DataState description="请先在设计页保存、校验并发布当前修订。" title="尚无发布版本" /> : <>
       <div className={styles.workspace}>

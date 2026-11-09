@@ -4,7 +4,7 @@ import { useOutletContext } from 'react-router'
 import { ActionButton, InlineFeedback } from '../../../../shared/Interaction'
 import { DataState } from '../../../../shared/Primitives'
 import { errorMessage } from '../../../../shared/errors'
-import { AdminPageHeader, RefreshIndicator } from '../../shared/AdminWorkbench'
+import { AdminPageHeader } from '../../shared/AdminWorkbench'
 import { teamLabGameAdminApi, type TeamLabGameReleaseOption, type TeamLabGameRollout, type TeamLabGameTarget } from '../../api/teamlabGameAdminApi'
 import { supportsTeamLabGame, type GameAdminOutletContext } from '../GameAdminShell'
 import { GameObjectiveBindingEditor } from './GameObjectiveBindingEditor'
@@ -71,8 +71,7 @@ export function AdminGameTeamLabPage() {
   return (
     <main className={styles.page}>
       <AdminPageHeader
-        actions={<div className={styles.headerActions}><RefreshIndicator active={data.isRefreshing} label={data.isRefreshing ? '同步中' : '状态已同步'} /><ActionButton icon={<RefreshCw size={15} />} onClick={() => refreshTargets()} type="button">刷新</ActionButton></div>}
-        description="选择不可变场景版本，提前准备各队环境，并控制比赛入口与结束清理。"
+        actions={<div className={styles.headerActions}><ActionButton icon={<RefreshCw size={15} />} onClick={() => refreshTargets()} type="button">刷新</ActionButton></div>}
         eyebrow="TEAMLAB ORCHESTRATION"
         title="TeamLab 编排"
       />

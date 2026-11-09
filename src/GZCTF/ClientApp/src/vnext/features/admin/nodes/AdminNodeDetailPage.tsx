@@ -11,7 +11,6 @@ import {
   AdminPageHeader,
   MetricItem,
   MetricStrip,
-  RefreshIndicator,
   ResourceMeter,
   StatusBadge,
 } from '../shared/AdminWorkbench'
@@ -286,7 +285,6 @@ export function AdminNodeDetailPage() {
       <div className={styles.statusLine}>
         <StatusBadge tone={status.tone}>{status.label}</StatusBadge>
         <span>{formatHeartbeat(node.lastHeartbeat)}</span>
-        <RefreshIndicator active={isRefreshing} label="节点状态自动同步" />
       </div>
 
       {error ? (
@@ -375,7 +373,7 @@ export function AdminNodeDetailPage() {
           />
         ) : null}
         {activeTab === 'events' ? (
-          <DataState description="当前稳定服务端尚未提供节点级运行事件查询接口。" title="暂无节点事件数据" />
+          <DataState title="节点事件暂不可查看" />
         ) : null}
       </div>
 

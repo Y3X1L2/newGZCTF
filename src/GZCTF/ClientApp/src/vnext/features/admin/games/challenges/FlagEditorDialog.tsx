@@ -79,7 +79,6 @@ export function FlagEditorDialog({
 
   return (
     <VNextDialog
-      description="判定方式、分值和尝试次数均作用于当前 Flag；0 次表示不限制。"
       eyebrow="FLAG RULE"
       footer={
         <>
@@ -177,7 +176,7 @@ export function FlagEditorDialog({
           <section className={styles.attachmentSection}>
             <header>
               <strong>队伍附件</strong>
-              <p>动态附件按 Flag 分发；这里的附件与“文件答案 SHA256”是两个独立概念。</p>
+              <p>附件供选手下载，文件答案按 SHA256 判分。</p>
             </header>
             {editing ? (
               <div className={styles.immutableAttachment}>

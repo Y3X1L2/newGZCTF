@@ -27,7 +27,7 @@ export function PostDetailPage() {
   if (!post && !error)
     return (
       <div className={styles.statePage}>
-        <DataState description="正在读取公告正文。" loading title="公告加载中" />
+        <DataState loading title="公告加载中" />
       </div>
     )
   if (error || !post)

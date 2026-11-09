@@ -104,12 +104,6 @@
   color: var(--yn-color-muted);
 }
 
-.submitNote {
-  margin: -4px 0 0;
-  color: var(--yn-color-muted);
-  font-size: var(--yn-font-xs);
-}
-
 .spin {
   animation: flag-spin 800ms linear infinite;
 }

@@ -66,9 +66,9 @@ export function TrainingPage() {
 
   const roleCourses = useMemo(() => {
     const editable = courses.filter((course) => course.canEdit).sort(newestFirst)
-    if (editable.length) return { title: '授课与管理', description: '按最近更新排序', courses: editable.slice(0, 3) }
+    if (editable.length) return { title: '授课与管理', courses: editable.slice(0, 3) }
     const recent = courses.filter((course) => course.canLearn || course.lastStudiedAt).sort(newestFirst)
-    return { title: '最近学习', description: '按最近访问排序', courses: recent.slice(0, 3) }
+    return { title: '最近学习', courses: recent.slice(0, 3) }
   }, [courses])
 
   const visibleCourses = useMemo(
@@ -134,7 +134,6 @@ export function TrainingPage() {
             ) : null}
           </>
         }
-        description="围绕课程持续学习，在章节中完成知识、实验和课后测试。"
         eyebrow="LEARNING CENTER"
         title="培训"
       />
@@ -144,7 +143,7 @@ export function TrainingPage() {
       ) : null}
 
       {!coursesRequest.data && !coursesRequest.error ? (
-        <DataState description="正在读取课程目录与学习状态。" loading title="课程加载中" />
+        <DataState loading title="课程加载中" />
       ) : coursesRequest.error ? (
         <DataState description="请稍后刷新重试。" title="课程加载失败" />
       ) : (
@@ -246,7 +245,6 @@ export function TrainingPage() {
           {roleCourses.courses.length ? (
             <section>
               <SectionHeading eyebrow="RECENT" title={roleCourses.title} />
-              <div className={styles.sectionNote}>{roleCourses.description}</div>
               <div className={styles.courseGrid}>
                 {roleCourses.courses.map((course) => (
                   <TrainingCourseCard compact course={course} key={course.id} />

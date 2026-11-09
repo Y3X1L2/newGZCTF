@@ -117,7 +117,6 @@ export function UserCreateDialog({
 
   return (
     <VNextDialog
-      description="创建单个账号并设置初始身份；批量导入能力留在 API 层。"
       eyebrow="USER CREATE"
       footer={
         <>

@@ -16,7 +16,6 @@ import {
   MetricItem,
   MetricStrip,
   PaginationBar,
-  RefreshIndicator,
   StatusBadge,
   ToolbarGroup,
   type AdminDataColumn,
@@ -51,7 +50,7 @@ export function AdminImagesPage() {
   const [deleteTarget, setDeleteTarget] = useState<ImageTemplateSummary | null>(null)
   const [remoteAccessTarget, setRemoteAccessTarget] = useState<ImageTemplateSummary | null>(null)
   const [actionFailure, setActionFailure] = useState<string | null>(null)
-  const { images, error, isLoading, isRefreshing, mutate } = useAdminImages({})
+  const { images, error, isLoading, mutate } = useAdminImages({})
   const { registry } = useDockerRegistry()
   const detail = useSWR(
     selectedId === null ? null : ['vnext:admin:image-detail', selectedId],
@@ -253,7 +252,6 @@ export function AdminImagesPage() {
             </ActionButton>
           </>
         }
-        description="管理 Docker、虚拟机镜像与内部 Registry 中的平台运行资源。"
         eyebrow="RESOURCE CATALOG"
         title="环境模板"
       />
@@ -328,9 +326,6 @@ export function AdminImagesPage() {
             <option value={ImageStatus.Error}>异常</option>
             <option value={ImageStatus.Deleting}>删除中</option>
           </select>
-        </ToolbarGroup>
-        <ToolbarGroup>
-          <RefreshIndicator active={isRefreshing} label={metrics.importing ? '自动刷新中' : '状态已同步'} />
         </ToolbarGroup>
       </FilterToolbar>
 

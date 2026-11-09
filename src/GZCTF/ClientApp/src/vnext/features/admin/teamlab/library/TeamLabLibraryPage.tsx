@@ -10,7 +10,6 @@ import {
   AdminPageHeader,
   CursorPaginationBar,
   FilterToolbar,
-  RefreshIndicator,
   ToolbarGroup,
 } from '../../shared/AdminWorkbench'
 import { TeamLabCreateDialog } from './TeamLabCreateDialog'
@@ -83,7 +82,6 @@ function TeamLabSceneLibrary() {
             <option value="failed">运行失败</option>
           </select>
         </ToolbarGroup>
-        <RefreshIndicator active={catalog.isRefreshing} label={catalog.isRefreshing ? '正在同步' : '数据已同步'} />
       </FilterToolbar>
 
       {catalog.isLoading ? (

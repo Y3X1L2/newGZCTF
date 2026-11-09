@@ -93,7 +93,6 @@ export function TheoryQuestionImportDialog({
 
   return (
     <VNextDialog
-      description="先在浏览器中完整校验，再按所选重复策略逐题写入服务器。"
       eyebrow="IMPORT THEORY JSON"
       footer={
         <>

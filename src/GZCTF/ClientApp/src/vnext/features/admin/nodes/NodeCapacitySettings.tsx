@@ -120,7 +120,6 @@ export function NodeCapacitySettings({
           <span>SCHEDULING POLICY</span>
           <h3>调度容量配置</h3>
         </div>
-        <p>自动模式按节点上报的 CPU、内存和当前占用安排任务；需要限制节点时再切换到人工上限。</p>
       </header>
 
       <div className={styles.capabilityFacts}>
@@ -138,7 +137,7 @@ export function NodeCapacitySettings({
 
       <ToggleField
         checked={automaticCapacity}
-        description="开启后不使用人工数量上限，调度仍沿用当前资源预留和部署队列。"
+        description="开启后按节点可用资源调度，无需填写实例数量上限。"
         disabled={disabled || saving}
         label="自动规划容量"
         onChange={setAutomaticCapacity}

@@ -3,7 +3,7 @@ import { memo, useMemo } from 'react'
 import { InlineFeedback } from '../../../../shared/Interaction'
 import { DataState } from '../../../../shared/Primitives'
 import { errorMessage } from '../../../../shared/errors'
-import { CursorPaginationBar, DataTable, RefreshIndicator, StatusBadge, type AdminDataColumn } from '../../shared/AdminWorkbench'
+import { CursorPaginationBar, DataTable, StatusBadge, type AdminDataColumn } from '../../shared/AdminWorkbench'
 import { formatAdminDate } from '../../shared/adminFormat'
 import type { TeamLabGameTarget } from '../../api/teamlabGameAdminApi'
 import { targetStatusMeta } from './teamLabGamePresentation'
@@ -48,7 +48,6 @@ export const TeamLabTargetTable = memo(function TeamLabTargetTable({
     <section className={styles.targetsSection} aria-labelledby="teamlab-targets-title">
       <header className={styles.sectionHeader}>
         <div><span>TEAM TARGETS</span><h2 id="teamlab-targets-title">队伍环境</h2></div>
-        <RefreshIndicator active={targets.isRefreshing} label={targets.isRefreshing ? '同步中' : '状态已同步'} />
       </header>
       {targets.isLoading ? <DataState description="正在读取服务端队伍目标分页。" loading title="队伍环境加载中" /> : targets.error ? (
         <InlineFeedback tone="danger">{errorMessage(targets.error, '队伍环境加载失败。')}</InlineFeedback>

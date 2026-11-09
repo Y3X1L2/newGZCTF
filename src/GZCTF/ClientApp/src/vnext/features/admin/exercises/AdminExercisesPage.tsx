@@ -94,7 +94,6 @@ export function AdminExercisesPage() {
     <div className={styles.page}>
       <AdminPageHeader
         actions={<ActionButton icon={<Plus size={16} />} onClick={() => { setEditingId(null); setEditorOpen(true) }} tone="primary" type="button">创建练习题</ActionButton>}
-        description="维护公共自主练习题库、Flags、附件和容器配置；培训课程题目不在此处显示。"
         eyebrow="EXERCISE OPERATIONS"
         title="练习题库"
       />

@@ -204,13 +204,12 @@ export function AdminGameInfoPage() {
             <ActionButton disabled={auxiliaryPending} icon={<Download size={16} />} onClick={() => exportGame()} type="button">导出比赛</ActionButton>
           </>
         }
-        description="维护比赛身份、时间、报名规则、运行限制、Writeup 和选手可见内容。"
         eyebrow="GAME CONFIGURATION"
         title="比赛信息"
       />
       {feedback ? <InlineFeedback tone={feedback.tone === 'neutral' ? undefined : feedback.tone}>{feedback.message}</InlineFeedback> : null}
       <form className={styles.form} onSubmit={(event) => void save(event)}>
-        <AdminEditorSection description="名称、赛制和可见性决定比赛在选手端的入口与后续管理模块。" title="比赛身份">
+        <AdminEditorSection title="比赛身份">
           <div className={styles.stack}>
             <div className={styles.fieldGrid}>
               <TextField label="比赛名称" maxLength={128} onValueChange={(value) => update('title', value)} required value={draft.title} />
@@ -222,12 +221,12 @@ export function AdminGameInfoPage() {
             <div className={styles.toggleGrid}>
               <ToggleField checked={draft.hidden ?? false} description="隐藏后不会出现在选手赛事目录。" label="隐藏比赛" onChange={(checked) => update('hidden', checked)} />
               <ToggleField checked={draft.practiceMode ?? false} description="结束后仍允许已报名选手访问。" label="练习模式" onChange={(checked) => update('practiceMode', checked)} />
-              <ToggleField checked={draft.isTest ?? false} description="标记内部测试或演示赛事。" label="测试比赛" onChange={(checked) => update('isTest', checked)} />
+              <ToggleField checked={draft.isTest ?? false} label="测试比赛" onChange={(checked) => update('isTest', checked)} />
             </div>
           </div>
         </AdminEditorSection>
 
-        <AdminEditorSection description="时间使用浏览器本地时区输入，提交时转换为绝对时间戳。" title="比赛时间">
+        <AdminEditorSection description="时间按浏览器本地时区填写。" title="比赛时间">
           <div className={styles.fieldGrid}>
             <TextField label="开始时间" onValueChange={(value) => setTimeInputs((current) => ({ ...current, start: value }))} required type="datetime-local" value={timeInputs.start} />
             <TextField label="结束时间" min={timeInputs.start} onValueChange={(value) => setTimeInputs((current) => ({ ...current, end: value }))} required type="datetime-local" value={timeInputs.end} />
@@ -246,7 +245,7 @@ export function AdminGameInfoPage() {
           </div>
         </AdminEditorSection>
 
-        <AdminEditorSection description="摘要用于赛事卡片；完整说明与选手端使用同一 Markdown 渲染器。" title="选手可见内容">
+        <AdminEditorSection description="摘要显示在赛事卡片上。" title="选手可见内容">
           <div className={styles.stack}>
             <TextAreaField label="比赛摘要" maxLength={512} onValueChange={(value) => update('summary', value)} rows={4} value={draft.summary ?? ''} />
             <div className={styles.markdownGrid}>
@@ -266,7 +265,7 @@ export function AdminGameInfoPage() {
           </div>
         </AdminEditorSection>
 
-        <AdminEditorSection description="要求提交时，截止时间和说明会显示在选手 Writeup 工作流中。" title="Writeup">
+        <AdminEditorSection title="Writeup">
           <div className={styles.stack}>
             <ToggleField checked={draft.writeupRequired ?? false} label="要求提交 Writeup" onChange={(checked) => update('writeupRequired', checked)} />
             {draft.writeupRequired ? (

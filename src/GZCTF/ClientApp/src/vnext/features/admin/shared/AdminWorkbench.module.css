@@ -390,18 +390,6 @@
   text-align: right;
 }
 
-.refreshIndicator {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  color: var(--yn-color-muted);
-  font-size: var(--yn-font-xs);
-}
-
-.refreshIndicator[data-active] svg {
-  animation: refresh-spin 1.3s linear infinite;
-}
-
 .mobileMenuButton {
   display: none;
   min-height: 40px;
@@ -472,12 +460,6 @@
   50% {
     opacity: 0.35;
     transform: scale(0.78);
-  }
-}
-
-@keyframes refresh-spin {
-  to {
-    transform: rotate(360deg);
   }
 }
 
@@ -559,8 +541,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .statusBadge[data-pulse] i,
-  .refreshIndicator[data-active] svg {
+  .statusBadge[data-pulse] i {
     animation: none;
   }
 }

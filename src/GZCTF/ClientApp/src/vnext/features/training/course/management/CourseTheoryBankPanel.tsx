@@ -148,7 +148,6 @@ export function CourseTheoryBankPanel({ course }: { course: TrainingCourseModel 
             </ActionButton>
           </>
         }
-        description="题库在当前课程内共享，可被多个章节课后练习引用。"
         eyebrow="COURSE THEORY BANK"
         title="课程理论题库"
       />
@@ -180,9 +179,9 @@ export function CourseTheoryBankPanel({ course }: { course: TrainingCourseModel 
         </SelectField>
       </div>
       {!questionsRequest.data && !questionsRequest.error ? (
-        <DataState description="正在读取课程理论题库。" loading title="题库加载中" />
+        <DataState loading title="题库加载中" />
       ) : questionsRequest.error ? (
-        <DataState description="课程题库接口暂时不可用。" title="题库加载失败" />
+        <DataState description="请稍后刷新重试。" title="题库加载失败" />
       ) : visibleQuestions.length ? (
         <div className={styles.questionList}>
           {visibleQuestions.map((question) => (
@@ -236,7 +235,6 @@ export function CourseTheoryBankPanel({ course }: { course: TrainingCourseModel 
       />
 
       <VNextDialog
-        description="先解析并预览，确认题目数量和题型后再写入课程题库。"
         eyebrow="IMPORT THEORY JSON"
         footer={
           <>

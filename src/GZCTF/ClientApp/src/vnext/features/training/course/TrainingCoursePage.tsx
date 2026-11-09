@@ -161,7 +161,7 @@ export function TrainingCoursePage() {
 
   if (!validId) return <DataState description="课程编号不是有效数字。" title="课程参数错误" />
   if (!course && !courseRequest.error)
-    return <DataState description="正在读取课程、章节和学习状态。" loading title="课程加载中" />
+    return <DataState loading title="课程加载中" />
   if (!course) return <DataState description="课程不存在，或当前账户没有查看权限。" title="无法打开课程" />
 
   const enrollmentAction = (() => {

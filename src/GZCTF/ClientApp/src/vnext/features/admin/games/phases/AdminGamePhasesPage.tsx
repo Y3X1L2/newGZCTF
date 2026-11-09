@@ -77,7 +77,7 @@ export function AdminGamePhasesPage() {
 
   return (
     <div className={styles.page}>
-      <AdminPageHeader actions={<ActionButton icon={<Plus size={16} />} onClick={() => openEditor(null)} tone="primary" type="button">新建阶段</ActionButton>} description="按时间设置比赛阶段和 CTF 操作权限。" eyebrow="GAME PHASES" title="比赛阶段" />
+      <AdminPageHeader actions={<ActionButton icon={<Plus size={16} />} onClick={() => openEditor(null)} tone="primary" type="button">新建阶段</ActionButton>} eyebrow="GAME PHASES" title="比赛阶段" />
       <MetricStrip>
         <MetricItem detail="当前比赛" label="阶段总数" value={metrics.total} />
         <MetricItem detail="当前时刻" label="进行中" tone={metrics.active ? 'success' : 'neutral'} value={metrics.active} />

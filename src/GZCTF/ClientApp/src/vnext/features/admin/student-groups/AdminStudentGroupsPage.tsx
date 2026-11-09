@@ -13,7 +13,6 @@ import {
   FilterToolbar,
   MetricItem,
   MetricStrip,
-  RefreshIndicator,
   StatusBadge,
   ToolbarGroup,
 } from '../shared/AdminWorkbench'
@@ -63,7 +62,6 @@ export function AdminStudentGroupsPage() {
     <div className={styles.page}>
       <AdminPageHeader
         actions={<ActionButton icon={<Plus size={16} />} onClick={() => setCreateOpen(true)} tone="primary" type="button">新建学员组</ActionButton>}
-        description="组织培训学员并分配负责教师；归档记录保留历史关系。"
         eyebrow="TRAINING GOVERNANCE"
         title="学员组管理"
       />
@@ -84,7 +82,6 @@ export function AdminStudentGroupsPage() {
             <span>包含归档记录</span>
           </label>
         </ToolbarGroup>
-        <RefreshIndicator active={groupsRequest.isRefreshing} label="列表按需刷新" />
       </FilterToolbar>
       {feedback ? <InlineFeedback tone={feedback.tone}>{feedback.message}</InlineFeedback> : null}
       {groupsRequest.error ? <InlineFeedback tone="danger">{errorMessage(groupsRequest.error, '学员组列表加载失败。')}</InlineFeedback> : null}
@@ -109,7 +106,7 @@ export function AdminStudentGroupsPage() {
       />
       <VNextConfirmDialog
         confirmLabel="归档学员组"
-        description="归档会隐藏该组的常规使用入口，但保留历史成员与课程关系。当前版本没有取消归档接口。"
+        description="归档后，该组将从常规入口隐藏，历史成员与课程关系仍会保留。归档无法撤销。"
         message={<>确认归档学员组 <strong>{archiveTarget?.name}</strong>？</>}
         onClose={() => setArchiveTarget(null)}
         onConfirm={async () => {

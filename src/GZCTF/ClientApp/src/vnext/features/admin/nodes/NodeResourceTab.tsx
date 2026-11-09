@@ -11,7 +11,6 @@ import {
   MetricItem,
   MetricStrip,
   PaginationBar,
-  RefreshIndicator,
   StatusBadge,
   ToolbarGroup,
   type AdminDataColumn,
@@ -46,7 +45,7 @@ export function NodeResourceTab({ nodeId, onMutated }: { nodeId: string; onMutat
   const [failure, setFailure] = useState<string | null>(null)
   const type = queryState.params.get('type') ?? 'all'
   const status = queryState.params.get('status') ?? 'all'
-  const { resources, error, isLoading, isRefreshing, mutate } = useNodeResources(nodeId, {
+  const { resources, error, isLoading, mutate } = useNodeResources(nodeId, {
     type,
     status,
     page: queryState.page,
@@ -181,7 +180,6 @@ export function NodeResourceTab({ nodeId, onMutated }: { nodeId: string; onMutat
             <option value="history">历史记录</option>
           </select>
         </ToolbarGroup>
-        <RefreshIndicator active={isRefreshing} label="10 秒自动同步" />
       </FilterToolbar>
 
       {failure ? <InlineFeedback tone="danger">{failure}</InlineFeedback> : null}

@@ -85,7 +85,6 @@ export function PlayerAccessPanel({ gameId, runtimeId, ready }: { gameId: number
       {error ? <InlineFeedback tone="danger">{errorMessage(error, 'VPN 配置签发失败。')}</InlineFeedback> : null}
       <VNextConfirmDialog
         confirmLabel={grant ? '确认替换' : '确认签发'}
-        description="每个队伍环境同时只保留一份有效的 WireGuard 配置。"
         message={
           <>
             签发新配置会立即使队伍此前下载的 VPN 配置失效，请先确认没有队友仍在使用。

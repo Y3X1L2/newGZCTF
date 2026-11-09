@@ -25,7 +25,7 @@ export function UserProfilePage() {
   if (!controller.resolvedUserId || controller.profileLoading || controller.overviewLoading) {
     return (
       <div className={styles.statePage}>
-        <DataState description="正在读取公开身份与个人统计。" loading title="个人主页加载中" />
+        <DataState loading title="个人主页加载中" />
       </div>
     )
   }

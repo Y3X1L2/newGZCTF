@@ -46,7 +46,7 @@ export function PracticeStatsPage() {
 
   return (
     <div className={styles.page}>
-      <PageHeading eyebrow="EXERCISE PROGRESS" title="练习统计" description="个人解题进度与能力分析" />
+      <PageHeading eyebrow="EXERCISE PROGRESS" title="练习统计" />
 
       <DataState data={stats} error={error} loading={!exercises && !error}>
         {stats && (

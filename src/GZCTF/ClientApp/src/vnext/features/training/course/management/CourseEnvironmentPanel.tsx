@@ -102,17 +102,15 @@ export function CourseEnvironmentPanel({ course }: { course: TrainingCourseModel
             </ActionButton>
           </>
         }
-        description="管理本课程可用的镜像。"
         eyebrow="COURSE ENVIRONMENTS"
         title="环境模板"
       />
       <div className={styles.registryBar}>
-        <Server size={18} />
-        <span>
-          {registry?.enabled
-            ? `课程镜像将同步至 ${registry.address ?? '内网 Registry'}${registry.namespace ? `/${registry.namespace}` : ''}`
-            : '当前未检测到可用的内网 Docker Registry，注册和上传 Docker 镜像可能失败。'}
-        </span>
+        {registry?.enabled ? (
+          <span>{registry.address ?? '镜像仓库'}{registry.namespace ? `/${registry.namespace}` : ''}</span>
+        ) : (
+          <span>未检测到可用的镜像仓库，注册和上传 Docker 镜像可能失败。</span>
+        )}
         <ActionButton icon={<RefreshCw size={15} />} onClick={() => templatesRequest.mutate()} type="button">
           刷新
         </ActionButton>
@@ -125,9 +123,9 @@ export function CourseEnvironmentPanel({ course }: { course: TrainingCourseModel
         value={query}
       />
       {!templatesRequest.data && !templatesRequest.error ? (
-        <DataState description="正在读取当前课程的镜像模板。" loading title="环境模板加载中" />
+        <DataState loading title="环境模板加载中" />
       ) : templatesRequest.error ? (
-        <DataState description="环境模板接口暂时不可用。" title="环境模板加载失败" />
+        <DataState description="请稍后刷新重试。" title="环境模板加载失败" />
       ) : templates.length ? (
         <div className={styles.templateGrid}>
           {templates.map((template) => {
@@ -168,7 +166,7 @@ export function CourseEnvironmentPanel({ course }: { course: TrainingCourseModel
           })}
         </div>
       ) : (
-        <DataState description="注册或上传镜像后，模板会只绑定到当前课程。" title="暂无课程环境模板" />
+        <DataState description="请注册或上传镜像。" title="暂无课程环境模板" />
       )}
 
       <CourseEnvironmentDialogs

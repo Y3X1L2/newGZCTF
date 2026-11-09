@@ -177,7 +177,7 @@ export function GameDetailPage() {
   if (!game && !error)
     return (
       <div className={styles.statePage}>
-        <DataState description="正在读取比赛规则、时间和报名状态。" loading title="赛事加载中" />
+        <DataState loading title="赛事加载中" />
       </div>
     )
   if (!game)
@@ -250,7 +250,6 @@ export function GameDetailPage() {
                       </span>
                       <span>
                         <strong>{module.label}</strong>
-                        <small>{module.description}</small>
                       </span>
                       <ArrowRight size={17} />
                     </Link>
@@ -370,7 +369,7 @@ export function GameDetailPage() {
         title="报名参赛"
       >
         {!checkInfo ? (
-          <DataState description="正在检查可用战队和赛区。" loading title="报名检查中" />
+          <DataState loading title="报名检查中" />
         ) : (
           <form className={styles.joinForm} id="vnext-game-join-form" onSubmit={joinGame}>
             {!selectableTeams.length ? (

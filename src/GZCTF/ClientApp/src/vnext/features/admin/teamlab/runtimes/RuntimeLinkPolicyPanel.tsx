@@ -224,7 +224,7 @@ function ApplyLinkPolicyDialog({
 
   return (
     <VNextDialog
-      description="声明式应用：同参数重复应用幂等，不同参数需先恢复原策略。"
+      description="修改参数前，请先恢复已有策略。"
       eyebrow="LINK POLICY"
       footer={
         <>

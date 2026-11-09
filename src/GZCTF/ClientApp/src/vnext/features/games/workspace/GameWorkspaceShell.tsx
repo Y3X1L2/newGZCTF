@@ -164,7 +164,7 @@ export function GameWorkspaceShell() {
   if (!game && !error) {
     return (
       <div className={styles.statePage}>
-        <DataState description="正在建立比赛工作区。" loading title="工作区加载中" />
+        <DataState loading title="工作区加载中" />
       </div>
     )
   }

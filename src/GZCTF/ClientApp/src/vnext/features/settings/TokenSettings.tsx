@@ -138,7 +138,7 @@ export function TokenSettings() {
         <div>
           <span>API ACCESS</span>
           <h2>API Token</h2>
-          <p>用于镜像、题目、TeamLab 控制面和异步操作接口。Token 明文仅在创建成功后显示一次。</p>
+          <p>Token 明文仅在创建时显示一次。</p>
         </div>
         <ActionButton icon={<KeyRound size={16} />} onClick={() => setCreateOpen(true)} tone="primary" type="button">
           创建 Token
@@ -146,7 +146,7 @@ export function TokenSettings() {
       </section>
       {feedback || error ? <InlineFeedback tone="danger">{feedback || 'Token 列表加载失败。'}</InlineFeedback> : null}
       {!tokens && !error ? (
-        <DataState description="正在读取 Token 列表。" loading title="Token 加载中" />
+        <DataState loading title="Token 加载中" />
       ) : (
         <div className={styles.tableWrap}>
           <table className={styles.table}>

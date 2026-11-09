@@ -7,7 +7,7 @@ import { errorMessage } from '../../../shared/errors'
 import { useVNextPageTitle } from '../../../shared/useVNextPageTitle'
 import { awdpPhase, patchMeta, phaseMeta } from '../../awdp/awdpDomain'
 import type { GameAdminOutletContext } from '../games/GameAdminShell'
-import { AdminPageHeader, MetricItem, MetricStrip, RefreshIndicator, StatusBadge } from '../shared/AdminWorkbench'
+import { AdminPageHeader, MetricItem, MetricStrip, StatusBadge } from '../shared/AdminWorkbench'
 import styles from './AdminAwdp.module.css'
 import { AwdpAttackLogPanel, AwdpPatchLogPanel, AwdpScoreboardPanel } from './AwdpAuditPanels'
 import { AwdpRuntimePanel } from './AwdpRuntimePanel'
@@ -103,7 +103,6 @@ export function AdminAwdpPage() {
             </ActionButton>
           </>
         }
-        description="配置服务、控制轮次并检查每支队伍的实例、攻击和修补结果。"
         eyebrow="AWDP CONTROL"
         title="AWDP 管理"
       />
@@ -151,7 +150,6 @@ export function AdminAwdpPage() {
               ? 'Monitor Hub 已断开'
               : 'Monitor Hub 连接中'}
         </StatusBadge>
-        <RefreshIndicator active={controller.refreshing} label="30 秒快照校准" />
       </div>
       {controller.feedback ? (
         <InlineFeedback tone={controller.feedback.tone}>{controller.feedback.message}</InlineFeedback>

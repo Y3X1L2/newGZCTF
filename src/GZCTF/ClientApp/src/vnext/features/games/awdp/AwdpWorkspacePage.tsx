@@ -44,7 +44,7 @@ export function AwdpWorkspacePage() {
   if (controller.loading && !controller.snapshot)
     return (
       <div className={styles.statePage}>
-        <DataState description="正在读取轮次、服务和计分状态。" loading title="AWDP 工作区加载中" />
+        <DataState loading title="AWDP 工作区加载中" />
       </div>
     )
   if (!controller.snapshot)

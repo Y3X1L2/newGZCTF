@@ -22,7 +22,6 @@ import {
   MetricItem,
   MetricStrip,
   PaginationBar,
-  RefreshIndicator,
   StatusBadge,
   ToolbarGroup,
 } from '../shared/AdminWorkbench'
@@ -111,7 +110,7 @@ export function AdminTheoryResultsPage() {
     try {
       await theoryAdminApi.recalculateResults(gameId)
       await request.mutate()
-      setFeedback({ tone: 'success', message: '已重新判定所有已提交答卷，并从服务器回读最新成绩。' })
+      setFeedback({ tone: 'success', message: '已重新判定所有已提交答卷。' })
       return true
     } catch (requestError) {
       setFeedback({ tone: 'danger', message: errorMessage(requestError, '理论成绩重新判定失败。') })
@@ -176,7 +175,6 @@ export function AdminTheoryResultsPage() {
             <ActionButton disabled={recalculating} icon={<Calculator size={16} />} onClick={() => setRecalculateOpen(true)} tone="primary" type="button">重新判分</ActionButton>
           </>
         }
-        description="查看队伍最高分排名与个人答卷摘要；理论成绩与实战积分保持独立。"
         eyebrow="THEORY RESULTS"
         title="理论成绩"
       />
@@ -224,7 +222,6 @@ export function AdminTheoryResultsPage() {
                   <option value={TheoryAnswerSheetStatus.Submitted}>已提交</option>
                 </select>
               </ToolbarGroup>
-              <RefreshIndicator active={request.isRefreshing || paperRequest.isRefreshing || recalculating} label="成绩按需刷新" />
             </FilterToolbar>
             <DataTable
               caption="理论考试个人答卷摘要"

@@ -116,7 +116,6 @@ export function DivisionEditorDrawer({
 
   return (
     <VNextDrawer
-      description="配置报名策略、总榜权限和 CTF 题目级权限覆盖。"
       eyebrow="GAME DIVISION"
       footer={(requestClose) => <><ActionButton disabled={saving} onClick={() => requestClose()} type="button">取消</ActionButton><ActionButton disabled={saving} onClick={() => save(requestClose)} tone="primary" type="button">{saving ? '正在保存' : division ? '保存赛区' : '创建赛区'}</ActionButton></>}
       onClose={onClose}
@@ -154,7 +153,6 @@ export function DivisionEditorDrawer({
         {ctf ? (
           <section className={styles.drawerSection}>
             <h3>题目权限覆盖</h3>
-            <p>只添加与默认策略不同的题目，避免产生难以维护的大量重复配置。</p>
             <div className={styles.overrideToolbar}>
               <SelectField label="选择题目" onValueChange={setSelectedChallengeId} value={selectedChallengeId}>
                 <option value="">请选择题目</option>

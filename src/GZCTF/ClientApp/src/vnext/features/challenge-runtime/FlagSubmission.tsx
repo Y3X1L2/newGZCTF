@@ -1,6 +1,5 @@
 import { Check, Flag, Send } from 'lucide-react'
 import { FormEvent, useId } from 'react'
-import { AnswerResult } from '@Api'
 import { ActionButton, InlineFeedback } from '../../shared/Interaction'
 import styles from './FlagSubmission.module.css'
 import { ChallengeFeedback, FlagChallengeState, FlagStep } from './types'
@@ -103,10 +102,6 @@ export function FlagSubmission({
           {pending ? '判题中' : '提交'}
         </ActionButton>
       </form>
-
-      {feedback?.result === AnswerResult.WrongAnswer ? (
-        <p className={styles.submitNote}>错误结果不会清空输入，可直接检查并修改。</p>
-      ) : null}
     </section>
   )
 }

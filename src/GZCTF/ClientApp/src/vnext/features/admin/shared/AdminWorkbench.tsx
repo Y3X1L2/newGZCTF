@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Menu, RefreshCw } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Menu } from 'lucide-react'
 import { KeyboardEvent, MouseEvent, ReactNode } from 'react'
 import { VNextDrawer } from '../../../shared/Interaction'
 import { DataState } from '../../../shared/Primitives'
@@ -284,15 +284,6 @@ export function DetailDrawer({
     >
       {children}
     </VNextDrawer>
-  )
-}
-
-export function RefreshIndicator({ active, label }: { active: boolean; label: string }) {
-  return (
-    <span className={styles.refreshIndicator} data-active={active || undefined}>
-      <RefreshCw aria-hidden="true" size={14} />
-      {label}
-    </span>
   )
 }
 

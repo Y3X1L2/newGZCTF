@@ -13,7 +13,6 @@ import {
   MetricItem,
   MetricStrip,
   PaginationBar,
-  RefreshIndicator,
   ResourceMeter,
   StatusBadge,
   ToolbarGroup,
@@ -48,7 +47,7 @@ export function AdminNodesPage() {
   const queryState = useAdminQueryState(PAGE_SIZE)
   const [query, setQuery] = useState(queryState.params.get('q') ?? '')
   const [registerOpen, setRegisterOpen] = useState(false)
-  const { nodes, error, isLoading, isRefreshing, mutate } = useAdminNodes()
+  const { nodes, error, isLoading, mutate } = useAdminNodes()
 
   useVNextPageTitle('节点管理')
 
@@ -208,7 +207,6 @@ export function AdminNodesPage() {
             添加节点
           </ActionButton>
         </>}
-        description="查看节点运行能力、容量、端口池、Agent 心跳与多节点调度状态。"
         eyebrow="RUNTIME FLEET"
         title="节点管理"
       />
@@ -274,7 +272,6 @@ export function AdminNodesPage() {
             <option value="unschedulable">不可调度</option>
           </select>
         </ToolbarGroup>
-        <RefreshIndicator active={isRefreshing} label="10 秒自动同步" />
       </FilterToolbar>
 
       {isLoading ? (

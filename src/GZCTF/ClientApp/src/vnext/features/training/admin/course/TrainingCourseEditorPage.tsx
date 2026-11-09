@@ -149,7 +149,7 @@ export function TrainingCourseEditorPage() {
     return <DataState description="只有教师、管理员和超级管理员可以创建课程。" title="没有课程创建权限" />
   }
   if (editing && !course && !courseRequest.error) {
-    return <DataState description="正在读取课程配置与权限。" loading title="课程加载中" />
+    return <DataState loading title="课程加载中" />
   }
   if (editing && (!course || !course.canEdit)) {
     return <DataState description="课程不存在，或当前账户没有编辑该课程的权限。" title="无法编辑课程" />
@@ -188,14 +188,14 @@ export function TrainingCourseEditorPage() {
       }
       backLabel={editing ? '返回课程详情' : '返回培训'}
       backTo={backTo}
-      description="课程是章节、资源、实验和理论作业的权限边界。先保存基本信息，再进入课程详情维护教学内容。"
+      description="保存课程后，可在课程详情中添加教学内容。"
       eyebrow="COURSE WORKSPACE"
       meta={course ? <StatusPill tone={courseStatusTone(course)}>{courseStatusLabel(course)}</StatusPill> : null}
       title={editing ? '编辑课程' : '创建课程'}
     >
       {feedback ? <InlineFeedback tone={feedback.tone}>{feedback.message}</InlineFeedback> : null}
       <form className={styles.form} onSubmit={(event) => void save(event)}>
-        <EditorSection description="用于课程目录、搜索结果和课程详情头部。" title="课程身份">
+        <EditorSection title="课程身份">
           <div className={styles.fieldGrid}>
             <TextField
               error={validationError}
@@ -207,7 +207,7 @@ export function TrainingCourseEditorPage() {
               value={draft.title}
             />
             <TextField
-              hint="用于可读 URL 或外部系统识别，可留空。"
+              hint="可留空。"
               label="课程标识"
               maxLength={128}
               onValueChange={(value) => updateDraftField('slug', value)}
@@ -215,7 +215,7 @@ export function TrainingCourseEditorPage() {
               value={draft.slug}
             />
             <TextField
-              hint="使用逗号或顿号分隔，重复标签会自动去除。"
+              hint="使用逗号或顿号分隔。"
               label="课程标签"
               onValueChange={setTagsText}
               placeholder="CTF、Web、入门"
@@ -325,7 +325,7 @@ export function TrainingCourseEditorPage() {
       </form>
 
       <VNextDialog
-        description="课程及其章节、资源、题目和学习配置将被删除。已有学习记录时后端可能拒绝本操作。"
+        description="课程及其章节、资源、题目和学习配置将被删除。已有学习记录时可能无法删除。"
         eyebrow="DANGER ZONE"
         footer={
           <>

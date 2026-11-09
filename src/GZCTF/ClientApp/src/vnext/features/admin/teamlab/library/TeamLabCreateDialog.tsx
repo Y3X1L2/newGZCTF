@@ -46,7 +46,6 @@ export function TeamLabCreateDialog({
 
   return (
     <VNextDialog
-      description="建立独立场景草稿，网络和资产在设计区维护。"
       eyebrow="NEW TEAMLAB SCENE"
       footer={
         <>

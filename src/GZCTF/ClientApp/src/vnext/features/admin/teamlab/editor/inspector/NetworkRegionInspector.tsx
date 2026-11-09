@@ -64,14 +64,12 @@ export function NetworkRegionInspector({
       <InspectorSection icon={<Network aria-hidden="true" size={16} />} title="网段区域">
         <TextInput
           disabled={readOnly}
-          hint="用于画布区域标题和发布前检查结果。"
           label="网段名称"
           onChange={(networkName) => updateSwitch({ networkName })}
           value={switchNode.networkName}
         />
         <TextInput
           disabled={readOnly}
-          hint="网段内的交换机名称，不会改变网络地址。"
           label="交换机名称"
           onChange={(name) => updateSwitch({ name })}
           value={switchNode.name}

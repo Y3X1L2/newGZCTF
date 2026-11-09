@@ -68,7 +68,6 @@ export function NodeRegistrationDialog({
 
   return (
     <VNextDialog
-      description="通过 SSH 完成依赖检测、Agent 安装和节点注册。"
       eyebrow="NODE BOOTSTRAP"
       footer={
         <>

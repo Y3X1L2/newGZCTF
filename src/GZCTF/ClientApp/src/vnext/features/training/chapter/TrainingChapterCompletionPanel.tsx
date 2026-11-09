@@ -23,7 +23,6 @@ export function TrainingChapterCompletionPanel({
         <div>
           <span>CHAPTER COMPLETION</span>
           <h2>章节完成</h2>
-          <p>平台会按教师配置的阅读、实验和理论练习条件确认章节状态。</p>
         </div>
         <StatusPill tone={progress.completed ? 'success' : progress.blockingConditions ? 'info' : 'warning'}>
           {progress.completed ? '已完成' : progress.blockingConditions ? '可以确认' : '条件未满足'}

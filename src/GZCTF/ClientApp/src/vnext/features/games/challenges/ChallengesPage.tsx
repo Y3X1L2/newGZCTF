@@ -107,7 +107,6 @@ function ChallengeContextRail({
           </span>
           <div>
             <strong>{teamName || '当前队伍'}</strong>
-            <small>本队实时竞赛数据</small>
           </div>
         </div>
         <div className={styles.teamMetrics}>
@@ -322,7 +321,7 @@ export function ChallengesPage() {
   if (!teamInfo && !teamError) {
     return (
       <div className={styles.statePage}>
-        <DataState description="正在同步题目、队伍与解题状态。" loading title="题目工作区加载中" />
+        <DataState loading title="题目工作区加载中" />
       </div>
     )
   }
@@ -380,7 +379,7 @@ export function ChallengesPage() {
 
         <main className={styles.challengeMain}>
           {!displayedChallenge && !challengeError ? (
-            <DataState description="正在读取题面、附件和实例状态。" loading title="题目加载中" />
+            <DataState loading title="题目加载中" />
           ) : challengeError || !displayedChallenge ? (
             <DataState description="题目不存在、尚未开放或当前队伍没有访问权限。" title="题目加载失败" />
           ) : (

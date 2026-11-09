@@ -37,7 +37,6 @@ export function TrialRunDialog({
   return (
     <VNextDialog
       closeDisabled={submitting}
-      description="确认后将进入运行详情，查看镜像准备、部署进度和访问入口。"
       eyebrow="RUNTIME"
       footer={
         <>
@@ -50,7 +49,7 @@ export function TrialRunDialog({
       title="启动运行环境？"
     >
       <div className={styles.content}>
-        <p>{release ? `使用不可变发布版本 v${release.version} 启动一套独立环境。` : ''}</p>
+        <p>{release ? `使用发布版本 v${release.version} 创建独立环境。` : ''}</p>
         <p className={styles.note}>首次启动可能较慢，可在运行详情查看部署进度。</p>
         {submitting ? <p role="status">正在创建运行环境，请稍候。</p> : null}
         {error ? <InlineFeedback tone="danger">{error}</InlineFeedback> : null}

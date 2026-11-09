@@ -7,7 +7,7 @@ import { DataState } from '../../../../shared/Primitives'
 import { errorMessage } from '../../../../shared/errors'
 import { useVNextPageTitle } from '../../../../shared/useVNextPageTitle'
 import { gameOperationsAdminApi } from '../../api'
-import { AdminDataColumn, AdminPageHeader, DataTable, FilterToolbar, MetricItem, MetricStrip, PaginationBar, RefreshIndicator, StatusBadge, ToolbarGroup } from '../../shared/AdminWorkbench'
+import { AdminDataColumn, AdminPageHeader, DataTable, FilterToolbar, MetricItem, MetricStrip, PaginationBar, StatusBadge, ToolbarGroup } from '../../shared/AdminWorkbench'
 import { useAdminQueryState } from '../../shared/useAdminQueryState'
 import type { GameAdminOutletContext } from '../GameAdminShell'
 import styles from '../GameOperations.module.css'
@@ -93,7 +93,7 @@ export function AdminGameReviewPage() {
 
   return (
     <div className={styles.page}>
-      <AdminPageHeader description="查看报名成员、分配赛区并处理待审核、暂停或拒绝状态。" eyebrow="PARTICIPATION REVIEW" title="报名审核" />
+      <AdminPageHeader eyebrow="PARTICIPATION REVIEW" title="报名审核" />
       <MetricStrip>
         <MetricItem detail="当前比赛" label="报名总数" value={metrics.total} />
         <MetricItem detail="需要处理" label="待审核" tone={metrics.pending ? 'warning' : 'neutral'} value={metrics.pending} />
@@ -106,7 +106,6 @@ export function AdminGameReviewPage() {
           <select aria-label="筛选报名状态" onChange={(event) => queryState.update({ status: event.currentTarget.value || null })} value={status ?? ''}><option value="">全部状态</option>{Object.values(ParticipationStatus).map((value) => <option key={value} value={value}>{participationStatusMeta(value).label}</option>)}</select>
           <select aria-label="筛选报名赛区" onChange={(event) => queryState.update({ division: event.currentTarget.value || null })} value={divisionId ?? ''}><option value="">全部赛区</option>{(divisionsRequest.divisions ?? []).map((division) => <option key={division.id} value={division.id}>{division.name}</option>)}</select>
         </ToolbarGroup>
-        <RefreshIndicator active={participationsRequest.isRefreshing || divisionsRequest.isRefreshing} label="审核数据按需刷新" />
       </FilterToolbar>
       {feedback ? <InlineFeedback tone={feedback.tone}>{feedback.message}</InlineFeedback> : null}
       {loadError ? <InlineFeedback tone="danger">{errorMessage(loadError, '报名审核数据加载失败。')}</InlineFeedback> : null}

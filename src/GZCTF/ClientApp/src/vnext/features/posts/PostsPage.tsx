@@ -94,7 +94,6 @@ export function PostsPage() {
     <div className={styles.page}>
       <PageHeading
         actions={<span className={styles.resultCount}>{filtered.length} 条公告</span>}
-        description="平台规则、维护信息和赛事通知统一归档，可通过链接直接分享。"
         eyebrow="NOTICE ARCHIVE"
         title="平台公告"
       />
@@ -117,7 +116,7 @@ export function PostsPage() {
       </section>
 
       {!posts && !error ? (
-        <DataState description="正在读取公告归档。" loading title="公告加载中" />
+        <DataState loading title="公告加载中" />
       ) : error ? (
         <DataState description="请稍后刷新重试。" title="公告加载失败" />
       ) : visible.length ? (

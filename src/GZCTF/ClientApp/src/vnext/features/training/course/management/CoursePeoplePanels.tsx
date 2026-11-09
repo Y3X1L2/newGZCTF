@@ -158,15 +158,14 @@ export function CourseStudentsPanel({ course }: { course: TrainingCourseModel })
             添加学员
           </ActionButton>
         }
-        description="审核报名并查看每名学员的章节、实验和理论作业完成情况。"
         eyebrow="LEARNER MANAGEMENT"
         title="学员与学习状态"
       />
       {feedback ? <InlineFeedback tone={feedback.tone}>{feedback.message}</InlineFeedback> : null}
       {!enrollmentsRequest.data && !enrollmentsRequest.error ? (
-        <DataState description="正在读取报名和学习记录。" loading title="学员数据加载中" />
+        <DataState loading title="学员数据加载中" />
       ) : enrollmentsRequest.error ? (
-        <DataState description="学员接口暂时不可用。" title="学员数据加载失败" />
+        <DataState description="请稍后刷新重试。" title="学员数据加载失败" />
       ) : rows.length ? (
         <>
           <div className={styles.tableWrap}>
@@ -324,7 +323,7 @@ export function CourseStudentsPanel({ course }: { course: TrainingCourseModel })
         title={detail?.realName || detail?.userName || '学员学习详情'}
       >
         {detailLoading ? (
-          <DataState description="正在汇总章节、实验和理论记录。" loading title="详情加载中" />
+          <DataState loading title="详情加载中" />
         ) : detail ? (
           <StudentLearningDetail detail={detail} />
         ) : null}

@@ -24,7 +24,7 @@ export function SettingsPage() {
 
   return (
     <div className={styles.page}>
-      <PageHeading description="管理个人资料、账户安全和程序化访问凭据。" eyebrow="ACCOUNT CONTROL" title="账户设置" />
+      <PageHeading eyebrow="ACCOUNT CONTROL" title="账户设置" />
       <div className={styles.layout}>
         <nav aria-label="设置分类" className={styles.sideNav}>
           {sections.map((item) => {

@@ -55,7 +55,6 @@ export function ParticipationDetailDrawer({
 
   return (
     <VNextDrawer
-      description="核对战队成员、报名赛区和审核状态。"
       eyebrow="PARTICIPATION DETAIL"
       footer={(requestClose) => <><ActionButton disabled={saving} onClick={() => requestClose()} type="button">关闭</ActionButton><ActionButton disabled={saving || !dirty} onClick={() => save(requestClose)} tone="primary" type="button">{saving ? '正在保存' : '保存审核结果'}</ActionButton></>}
       onClose={onClose}

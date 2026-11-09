@@ -16,7 +16,6 @@ import {
   MetricItem,
   MetricStrip,
   PaginationBar,
-  RefreshIndicator,
   StatusBadge,
   ToolbarGroup,
 } from '../shared/AdminWorkbench'
@@ -94,12 +93,11 @@ export function AdminUsersPage() {
     <div className={styles.page}>
       <AdminPageHeader
         actions={<ActionButton icon={<Plus size={16} />} onClick={() => setCreateOpen(true)} tone="primary" type="button">新建用户</ActionButton>}
-        description="维护平台身份、账号状态、权限角色和培训分组。"
         eyebrow="IDENTITY GOVERNANCE"
         title="用户管理"
       />
       <MetricStrip>
-        <MetricItem detail="服务器记录" label="用户总数" value={usersRequest.page?.total ?? 0} />
+        <MetricItem label="用户总数" value={usersRequest.page?.total ?? 0} />
         <MetricItem detail="当前加载页" label="可登录" tone={metrics.active ? 'success' : 'neutral'} value={metrics.active} />
         <MetricItem detail="当前加载页" label="停用" tone={metrics.disabled ? 'danger' : 'neutral'} value={metrics.disabled} />
         <MetricItem detail="管理员与超级管理员" label="高权限" tone={metrics.privileged ? 'warning' : 'neutral'} value={metrics.privileged} />
@@ -119,7 +117,6 @@ export function AdminUsersPage() {
             {groupRequest.groups.map((group) => group.id ? <option key={group.id} value={group.id}>{group.name}</option> : null)}
           </select>
         </ToolbarGroup>
-        <RefreshIndicator active={usersRequest.isRefreshing} label="列表按需刷新" />
       </FilterToolbar>
       {feedback ? <InlineFeedback tone={feedback.tone}>{feedback.message}</InlineFeedback> : null}
       {usersRequest.error ? <InlineFeedback tone="danger">{errorMessage(usersRequest.error, '用户列表加载失败。')}</InlineFeedback> : null}
@@ -153,7 +150,7 @@ export function AdminUsersPage() {
         onSave={async (userId, payload) => {
           await commonAdminApi.updateUser(userId, payload)
           await usersRequest.mutate()
-          setFeedback({ tone: 'success', message: '用户信息已保存并从服务器回读。' })
+          setFeedback({ tone: 'success', message: '用户信息已保存。' })
         }}
         user={selected}
       />
