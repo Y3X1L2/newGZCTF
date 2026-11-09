@@ -106,9 +106,11 @@ export function CourseEnvironmentPanel({ course }: { course: TrainingCourseModel
         title="环境模板"
       />
       <div className={styles.registryBar}>
-        {!registry?.enabled ? (
+        {registry?.enabled ? (
+          <span>{registry.address ?? '镜像仓库'}{registry.namespace ? `/${registry.namespace}` : ''}</span>
+        ) : (
           <span>未检测到可用的镜像仓库，注册和上传 Docker 镜像可能失败。</span>
-        ) : null}
+        )}
         <ActionButton icon={<RefreshCw size={15} />} onClick={() => templatesRequest.mutate()} type="button">
           刷新
         </ActionButton>

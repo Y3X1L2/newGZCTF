@@ -81,6 +81,7 @@ export function LoginPage() {
     >
       {searchParams.get('reset') === 'success' ? <AuthMessage tone="success">密码已更新，请使用新密码登录。</AuthMessage> : null}
       {action.error ? <AuthMessage>{action.error}</AuthMessage> : null}
+      {capabilityQuery.error ? <AuthMessage tone="info">登录选项加载失败，请刷新重试。</AuthMessage> : null}
 
       {capabilities.allowPasswordLogin ? (
         <AuthForm onSubmit={submit}>

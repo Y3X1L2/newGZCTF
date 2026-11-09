@@ -125,7 +125,10 @@ export function InstanceControl({ controller }: { controller: RuntimeInstanceCon
           </span>
           <div>
             <strong>{stageMessage || (controller.phase === 'queued' ? '等待调度资源' : '正在准备运行环境')}</strong>
-            {queue?.queuePosition ? <p>队列位置 {queue.queuePosition}</p> : null}
+            {queue?.queuePosition || queue?.targetNodeName ? <p>
+              {queue.queuePosition ? `队列位置 ${queue.queuePosition}` : ''}
+              {queue.targetNodeName ? `${queue.queuePosition ? ' · ' : ''}目标节点 ${queue.targetNodeName}` : ''}
+            </p> : null}
           </div>
           <ActionButton icon={<RefreshCw size={16} />} onClick={() => controller.refresh()} type="button">
             刷新状态
