@@ -373,7 +373,7 @@ export function AdminNodeDetailPage() {
           />
         ) : null}
         {activeTab === 'events' ? (
-          <DataState title="暂无节点事件数据" />
+          <DataState title="节点事件暂不可查看" />
         ) : null}
       </div>
 
