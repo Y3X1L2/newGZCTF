@@ -39,7 +39,7 @@ public sealed class NodeMetricHistoryTests(GZCTFApplicationFactory factory)
             var history = Assert.IsType<NodeMetricHistory>(await query.ReadAsync("24h", null, default));
             Assert.Equal(288, history.Points.Length);
             Assert.Equal(300, history.IntervalSeconds);
-            var point = Assert.Single(history.Points.Where(point => point.SampleCount > 0));
+            var point = Assert.Single(history.Points, point => point.SampleCount > 0);
             Assert.Equal(time, point.Timestamp);
             Assert.Equal((.2 + .4 + .8) / 3, point.CpuLoad!.Value, 5);
             Assert.Equal(.5, point.MemoryLoad!.Value, 5);
@@ -76,7 +76,7 @@ public sealed class NodeMetricHistoryTests(GZCTFApplicationFactory factory)
         {
             var query = new NodeMetricHistoryQuery(db, new FixedClock());
             var history = await query.ReadAsync("24h", first.Id, default);
-            var point = Assert.Single(history!.Points.Where(point => point.SampleCount > 0));
+            var point = Assert.Single(history!.Points, point => point.SampleCount > 0);
             Assert.Null(point.CpuLoad);
             Assert.Equal(.2, point.MemoryLoad!.Value, 5);
             Assert.Equal(1, point.NodeCount);
