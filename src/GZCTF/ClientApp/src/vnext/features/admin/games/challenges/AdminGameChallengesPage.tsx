@@ -116,7 +116,7 @@ export function AdminGameChallengesPage() {
     setFeedback(null)
     try {
       await gameAdminApi.flushScoreboard(gameId)
-      setFeedback({ tone: 'success', message: '积分榜缓存已刷新，提交事实没有被修改。' })
+      setFeedback({ tone: 'success', message: '积分榜缓存已刷新。' })
       return true
     } catch (requestError) {
       setFeedback({ tone: 'danger', message: errorMessage(requestError, '积分榜缓存刷新失败。') })
@@ -190,7 +190,7 @@ export function AdminGameChallengesPage() {
       {challengesRequest.error ? <InlineFeedback tone="danger">{errorMessage(challengesRequest.error, '题目列表加载失败。')}</InlineFeedback> : null}
       {challengesRequest.isLoading ? <DataState description="正在读取比赛题目。" loading title="题目列表加载中" /> : <><DataTable caption="CTF 题目管理列表" columns={columns} emptyDescription="当前条件下没有可展示的题目。" emptyTitle="没有匹配题目" onRowClick={(challenge) => navigate(`/admin/games/${gameId}/challenges/${challenge.id}`)} rowKey={(challenge) => challenge.id ?? challenge.title} rows={rows} /><PaginationBar onPageChange={queryState.setPage} page={page} pageCount={pageCount} total={filtered.length} /></>}
       <ChallengeCreateDialog gameId={gameId} onClose={() => setCreateOpen(false)} onCreated={(challengeId) => { setCreateOpen(false); navigate(`/admin/games/${gameId}/challenges/${challengeId}`) }} open={createOpen} templates={imagesRequest.images ?? []} />
-      <VNextConfirmDialog description="只清除积分榜缓存，不删除提交或分数事实。" message="刷新后积分榜会根据当前题目和提交重新读取数据。" onClose={() => setFlushOpen(false)} onConfirm={flush} open={flushOpen} title="刷新积分榜缓存？" />
+      <VNextConfirmDialog message="下次打开积分榜时将重新计算排名。" onClose={() => setFlushOpen(false)} onConfirm={flush} open={flushOpen} title="刷新积分榜缓存？" />
     </div>
   )
 }

@@ -151,7 +151,6 @@ export function ExerciseEditorDrawer({
 
   return (
     <VNextDrawer
-      description="只维护公共练习题库，不会读取或修改培训课程题目。"
       eyebrow="EXERCISE MANAGEMENT"
       footer={
         <>

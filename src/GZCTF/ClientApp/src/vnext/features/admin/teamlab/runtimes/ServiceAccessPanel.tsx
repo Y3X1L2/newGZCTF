@@ -68,7 +68,7 @@ export function ServiceAccessPanel({ runtime, assetId }: { runtime: TeamLabRunti
     <header className={styles.panelHeader}><h3 id="service-access-title">业务访问入口</h3>
       <ActionButton icon={<Plus size={16} />} disabled={!assets.some(item => item.interfaces?.some(nic => nic.assigned)) || runtime.status !== 'running' || !!runtime.managedRolloutId} onClick={() => setFormOpen(value => !value)} type="button">添加访问入口</ActionButton>
     </header>
-    <p className={styles.muted}>端口映射建立后仍需由使用者验证目标服务，映射状态不代表业务可用。</p>
+    <p className={styles.muted}>建立映射后，请测试目标服务能否访问。</p>
     {!asset ? <p className={styles.muted}>当前环境没有机器。</p> : <>
       {formOpen ? <div className={styles.serviceAccessForm}>
         <label>目标机器<select value={selectedId} onChange={event => setSelectedId(Number(event.target.value))}>

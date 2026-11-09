@@ -31,7 +31,9 @@ Redis 观测缓存与 PostgreSQL 回退实现管理观测读路径，数据库�
 
 运行概览与节点详情通过现有节点 API 展示 CPU / 内存心跳实测值和 Docker / VM 分配、预留槽位。CPU / 内存均值只纳入最近 60 秒有有效心跳的在线或繁忙节点，未上报、离线和读取失败显示无可用读数，不能记作零负载。槽位统计是全部节点的配置容量，不能当作实时物理资源使用率。
 
-`nodes/NodeTelemetryPanel.tsx` 只消费 feature adapter 返回的节点事实，在本次页面打开期间积累最多 60 个、10 分钟内的实际心跳样本；没有历史读取接口，页面不会补造打开前的历史。首个样本只显示读数点，节点覆盖变化时重新采样，避免节点上下线形成误导性趋势。`nodes/nodeTelemetry.test.ts` 覆盖失效读数、重复心跳、样本保留和时间坐标。
+负载趋势读取 `GET /api/v1/nodes/metrics/history?range=24h`，可用 `nodeId` 限定节点，权限为管理员。`range` 支持 `1h`、`24h`、`7d`，分别返回 1、5、30 分钟间隔的 60、288、336 个桶。响应为 `fromUtc`、`toUtc`、`intervalSeconds`、`points`；时间沿现有 API 约定使用 Unix 毫秒，最后一个桶可以尚未结束。每点包含 `timestamp`、可空 `cpuLoad` / `memoryLoad`、`nodeCount`、`sampleCount`。
+
+[NodeMetricHistoryQuery](../../../src/GZCTF/Modules/Runtime/Application/NodeMetricHistoryQuery.cs) 复用后台 `NodeMetricPersistenceWorker` 持续写入的 `WorkerNodeMetricSamples`，不依赖页面是否打开，也不按节点当前在线状态删除旧读数。PostgreSQL 按所选范围聚合，最多返回 336 行；每个有效节点分钟均值等权，心跳次数不增加其权重。CPU 和内存分别排除无效值，缺测桶返回 null，图表保留断点。历史保留由 `DataRetention.WorkerNodeMetricDays` 控制，默认 180 天；没有新增采集循环、数据库表或迁移。验证见 `NodeMetricHistoryTests`，覆盖 PostgreSQL 聚合、空桶、异常读数、节点过滤、重开读取、权限和时间范围。
 
 节点 TeamLab 页优先显示网络、Docker 场景和 VM 场景的独立可调度判定、地址及握手。原始 Agent feature 标识默认折叠到技术详情；检测按钮以异步请求期间的忙碌状态防止重复操作。兼容性判定不能代替真实场景运行验收。
 

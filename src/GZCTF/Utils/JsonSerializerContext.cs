@@ -14,6 +14,7 @@ using GZCTF.Modules.Ctf.Contracts;
 using GZCTF.Modules.Exercise.Application;
 using GZCTF.Modules.Penetration.Contracts;
 using GZCTF.Modules.Provisioning.Contracts;
+using GZCTF.Modules.Runtime.Contracts;
 using GZCTF.Repositories.Interface;
 using GZCTF.Services.Container.Provider;
 using GZCTF.Services.TeamLab;
@@ -25,6 +26,7 @@ using NJsonSchema.Generation.TypeMappers;
 namespace GZCTF.Utils;
 
 [JsonSerializable(typeof(int))]
+[JsonSerializable(typeof(NodeMetricHistory))]
 [JsonSerializable(typeof(string))]
 [JsonSerializable(typeof(DateOnly))]
 [JsonSerializable(typeof(TaskStatus))]

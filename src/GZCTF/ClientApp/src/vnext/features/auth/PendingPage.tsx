@@ -1,9 +1,9 @@
-import { Clock3, LogOut } from 'lucide-react'
+import { LogOut } from 'lucide-react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router'
 import { useVNextPageTitle } from '../../shared/useVNextPageTitle'
 import { useAccountLogout, useCurrentAccount } from '../account/useCurrentAccount'
 import { AuthSecondaryButton, AuthTextLink } from './AuthForm'
-import { AuthMessage, AuthPanel } from './AuthShell'
+import { AuthPanel } from './AuthShell'
 import { pendingReason, safeReturnUrl } from './authDomain'
 
 const pendingCopy = {
@@ -46,9 +46,6 @@ export function PendingPage() {
       footer={<AuthTextLink to="/">返回平台首页</AuthTextLink>}
       title={copy.title}
     >
-      <AuthMessage tone="info">
-        <Clock3 aria-hidden="true" size={16} /> 当前页面不会持续轮询账户或保存注册密码。
-      </AuthMessage>
       <AuthSecondaryButton onClick={() => navigate(loginUrl, { replace: true })}>重新登录检查</AuthSecondaryButton>
       {account.isAuthenticated ? (
         <AuthSecondaryButton onClick={() => void logout({ redirectTo: '/account/login' })}>

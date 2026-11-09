@@ -4,7 +4,6 @@
 .advanced { margin-top: var(--yn-space-6); border-top: 1px solid var(--yn-color-border); padding-top: var(--yn-space-4); }
 .advanced summary { cursor: pointer; padding: var(--yn-space-2) 0; color: var(--yn-color-muted); }
 .advanced .viewTabs { flex-wrap: wrap; padding-top: var(--yn-space-3); }
-.recordScope { margin: var(--yn-space-3) 0 var(--yn-space-4); color: var(--yn-color-muted); font-size: var(--yn-font-sm); }
 .timeline { padding: 0; margin: 0; border-top: 1px solid var(--yn-color-border); list-style: none; }
 .timeline li { border-bottom: 1px solid var(--yn-color-border); }
 .timeline button { display: grid; min-height: 88px; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: var(--yn-space-4); width: 100%; padding: var(--yn-space-4); border: 0; border-left: 3px solid transparent; background: transparent; color: var(--yn-color-text); cursor: pointer; font: inherit; text-align: left; }

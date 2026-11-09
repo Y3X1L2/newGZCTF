@@ -8,6 +8,7 @@ using System.ComponentModel.DataAnnotations;
 namespace GZCTF.Integration.Test.Tests.Api.Fixtures;
 
 [ApiController]
+[ApiExplorerSettings(IgnoreApi = true)]
 [Route("test/scopes")]
 public sealed class ScopedApiProbeController : ControllerBase
 {

@@ -210,8 +210,7 @@ export function AdminTheoryResultsPage() {
           </section>
           <section className={styles.section}>
             <header className={styles.sectionHeader}>
-              <div><span>ANSWER SHEETS</span><h2>个人答卷</h2></div>
-              <p>当前接口仅提供答卷摘要；逐题作答详情与导出能力暂缓，页面不提供无效入口。</p>
+              <div><span>ANSWER SHEETS</span><h2>个人答卷摘要</h2></div>
             </header>
             <FilterToolbar>
               <ToolbarGroup grow>
@@ -242,8 +241,7 @@ export function AdminTheoryResultsPage() {
       )}
       <VNextConfirmDialog
         confirmLabel="确认重新判分"
-        description="该操作会按当前试卷快照重新判定所有已提交答卷。"
-        message="草稿不会被判分；完成后页面会再次从服务器读取榜单和答卷摘要。"
+        message="将按当前试卷版本重新判分，更新已提交答卷和队伍排名。"
         onClose={() => setRecalculateOpen(false)}
         onConfirm={recalculate}
         open={recalculateOpen}

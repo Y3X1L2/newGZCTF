@@ -110,7 +110,7 @@ function InstanceRows({ instances }: { instances: GlobalInstanceItem[] }) {
   if (!risks.length)
     return (
       <p className={styles.stableNote}>
-        当前加载范围内无异常或 15 分钟内到期实例。<Link to="/admin/instances">查看实例 →</Link>
+        暂无需要关注的实例。<Link to="/admin/instances">查看实例 →</Link>
       </p>
     )
   return (
@@ -141,7 +141,7 @@ function InstanceRows({ instances }: { instances: GlobalInstanceItem[] }) {
 function ErrorRows({ logs }: { logs: AdminLogEntry[] }) {
   const { t } = useTranslation('admin')
   const text = (key: string) => t(`logs.${key}`)
-  if (!logs.length) return <DataState description="最近查询范围内没有 Error 日志。" title="没有最近错误" />
+  if (!logs.length) return <DataState title="没有最近错误" />
   return (
     <div className={styles.errorRows}>
       {logs.slice(0, 6).map((log, index) => (
@@ -177,7 +177,6 @@ export function AdminDashboardPage() {
             {dashboard.manualRefreshing ? '正在刷新概览…' : '刷新概览'}
           </ActionButton>
         }
-        description="汇总节点、容量、部署、实例和错误日志的当前事实状态。"
         eyebrow="OPERATIONS OVERVIEW"
         title="运行概览"
       />
@@ -185,9 +184,8 @@ export function AdminDashboardPage() {
       <div className={styles.syncLine}>
         <RefreshIndicator
           active={dashboard.nodes.isRefreshing || dashboard.manualRefreshing}
-          label="10 秒自动同步 · 以服务端心跳为准"
+          label="每 10 秒刷新"
         />
-        <span>CPU / 内存仅统计 60 秒内有心跳的在线节点</span>
       </div>
       {dashboard.nodes.error ||
       dashboard.images.error ||
@@ -195,7 +193,7 @@ export function AdminDashboardPage() {
       dashboard.instances.error ||
       dashboard.logs.error ? (
         <InlineFeedback tone="danger">
-          部分监控数据读取失败，请点击刷新概览重试。已保留的数值可能来自上次成功同步。
+          部分数据更新失败，请刷新重试。
         </InlineFeedback>
       ) : null}
       <NodeTelemetryPanel
@@ -287,7 +285,7 @@ export function AdminDashboardPage() {
 
         <DashboardSectionBoundary name="错误日志">
           <section className={styles.section}>
-            <SectionHeader label="查看日志" title="最近 Error 日志" to="/admin/logs?level=Error" />
+            <SectionHeader label="查看日志" title="最近错误日志" to="/admin/logs?level=Error" />
             {dashboard.logs.isLoading ? (
               <DataState description="正在读取最近错误日志。" loading title="日志加载中" />
             ) : dashboard.logs.error ? (

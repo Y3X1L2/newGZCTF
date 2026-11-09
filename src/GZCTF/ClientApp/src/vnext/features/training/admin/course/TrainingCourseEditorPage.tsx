@@ -283,7 +283,7 @@ export function TrainingCourseEditorPage() {
         </EditorSection>
 
         {editing && course ? (
-          <EditorSection description="归档会停止新报名；删除操作仅在后端允许时开放。" title="生命周期">
+          <EditorSection description="归档后将停止接受新报名。" title="生命周期">
             <div className={styles.dangerRow}>
               <div>
                 <strong>归档或删除课程</strong>

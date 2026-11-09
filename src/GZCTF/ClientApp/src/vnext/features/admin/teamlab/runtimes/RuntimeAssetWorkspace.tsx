@@ -75,7 +75,7 @@ export function RuntimeAssetWorkspace({ runtime }: { runtime: TeamLabRuntime }) 
                 <div><dt>回读网关</dt><dd>{nic.observed.gatewayIp || '未设置'}</dd></div>
                 <div><dt>回读路由</dt><dd>{nic.observed.staticRoutes.map(route => `${route.destinationCidr} → ${route.nextHop}`).join('；') || '无'}</dd></div></> : null}</dl>
           </details>
-        </div>) : <p>当前代次没有可确认的逐网卡分配记录，地址尚未核对。</p>}
+        </div>) : <p>暂无已核对的网卡地址。</p>}
       </section>
       <RuntimeRemoteAccessPanel runtime={runtime} assetId={asset.id} />
       {asset.kind === 'vm' ? <VmDiagnosticsPanel runtime={runtime} assetId={asset.id} /> : null}

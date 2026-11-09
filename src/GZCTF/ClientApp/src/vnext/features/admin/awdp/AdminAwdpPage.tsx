@@ -200,15 +200,11 @@ export function AdminAwdpPage() {
       <VNextConfirmDialog
         confirmLabel={lifecycleAction === 'start' ? '确认开始' : '确认停止'}
         confirmationText={lifecycleAction === 'start' ? game.title : undefined}
-        description={
-          lifecycleAction === 'start'
-            ? '后端会为已通过报名的队伍创建所有服务实例并开始新轮次。'
-            : '停止会结束当前 AWDP 状态；保留或清理实例以服务器实际语义为准。'
-        }
+        description={lifecycleAction === 'start' ? '已通过报名的队伍将获得服务实例。' : undefined}
         message={
           lifecycleAction === 'start'
             ? `${snapshot.services.length} 个服务将进入部署。请确认 Checker、Exp、镜像和节点容量均已验证。`
-            : '停止后当前轮次不会因为容器仍存在而自动恢复。'
+            : '将结束当前轮次并清理比赛实例。'
         }
         onClose={() => setLifecycleAction(null)}
         onConfirm={executeLifecycle}

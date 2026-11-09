@@ -1,6 +1,6 @@
 # YINYU 当前开发状态
 
-整理日期：2026-10-18。平台显示与交互候选已按用户授权部署到 `.27`，包括仪表盘、按钮反馈、队长账号删除和 TeamLab 布局；[PR #35](https://github.com/Y3X1L2/newGZCTF/pull/35) 仍为 Draft，明确不合入 main，等待人工验收。完整证据见[本轮记录](records/2026-10-18-platform-experience.md)。
+整理日期：2026-11-09。平台显示、交互、队长账号删除和 TeamLab 布局已于 10-18 部署；[PR #35](https://github.com/Y3X1L2/newGZCTF/pull/35) 经用户确认于 11-09 合入 main（`fcb14137`）。发布证据见[10-18记录](records/2026-10-18-platform-experience.md)。历史负载查询与文案精简正在 [PR #36](https://github.com/Y3X1L2/newGZCTF/pull/36) 验证，尚未合入或部署，见[任务记录](records/2026-11-09-platform-history.md)。
 本页只保留当前摘要，更新时替换旧事实；完整测试、部署过程和授权边界放在任务记录中。目标120行以内，超长时提炼摘要。
 
 ## 代码与部署基线

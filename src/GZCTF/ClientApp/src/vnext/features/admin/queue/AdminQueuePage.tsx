@@ -252,7 +252,7 @@ export function AdminQueuePage() {
       {queueRequest.isLoading ? (
         <DataState description="正在读取部署请求和节点调度状态。" loading title="部署队列加载中" />
       ) : queueRequest.error ? (
-        <DataState description="部署队列接口暂时不可用，请检查服务端契约或连接。" title="部署队列加载失败" />
+        <DataState description="请检查平台服务连接后重试。" title="部署队列加载失败" />
       ) : (
         <>
           <DataTable

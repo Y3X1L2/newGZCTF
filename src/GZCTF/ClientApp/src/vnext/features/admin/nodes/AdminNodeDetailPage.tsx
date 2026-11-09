@@ -261,7 +261,7 @@ export function AdminNodeDetailPage() {
         title={node.name}
       />
 
-      <NodeTelemetryPanel nodes={[node]} failed={Boolean(error)} />
+      <NodeTelemetryPanel nodeId={node.id} nodes={[node]} failed={Boolean(error)} />
 
       <MetricStrip>
         <MetricItem

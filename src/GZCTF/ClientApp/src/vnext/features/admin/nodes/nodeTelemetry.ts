@@ -37,20 +37,3 @@ export function telemetrySample(nodes: NodeSummary[], now = Date.now()): NodeTel
       .join(','),
   }
 }
-
-export function appendTelemetrySample(samples: NodeTelemetrySample[], next: NodeTelemetrySample | null) {
-  if (!next) return []
-  const last = samples.at(-1)
-  if (last?.coverage !== next.coverage) return [next]
-  if (next.time - last.time > 60_000) return [next]
-  if (next.time <= last.time) return samples
-  return [...samples, next].filter((sample) => next.time - sample.time <= 10 * 60_000).slice(-60)
-}
-
-export function telemetryPoints(samples: NodeTelemetrySample[], key: 'cpu' | 'memory') {
-  const start = samples[0]?.time ?? 0
-  const duration = Math.max(10_000, (samples.at(-1)?.time ?? start) - start)
-  return samples
-    .map((sample) => `${20 + ((sample.time - start) / duration) * 680},${160 - sample[key] * 1.4}`)
-    .join(' ')
-}

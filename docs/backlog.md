@@ -1,6 +1,6 @@
 # 后续事项
 
-维护日期：2026-10-18。这里保存尚未闭环或需要重核的事项，不把历史计划中的所有条目自动继承为待办。接手时核对最新主线与现场，并在任务记录中声明负责人、范围和验收方法；关闭后保留证据链接，删除旧的待办描述。
+维护日期：2026-11-09。这里保存尚未闭环或需要重核的事项，不把历史计划中的所有条目自动继承为待办。接手时核对最新主线与现场，并在任务记录中声明负责人、范围和验收方法；关闭后保留证据链接，删除旧的待办描述。
 
 | 编号 | 事项与当前边界 | 接手时的验收 / 证据 |
 | --- | --- | --- |
@@ -10,6 +10,8 @@
 | DATA-01 | 两条 Theory migration 来源尚未恢复；RemoveDestroyedTeamLabUdpMappings 缺元数据。源码仍存在该缺口，旧 134/132 计数已过时 | [迁移交接](records/2026-09-02-migration-drift-reconciliation.md)；新鲜备份上核 discoverable migrations / 历史差异，验证前向升级和恢复，禁止伪造历史 |
 | DATA-02 | 9 月曾有指标 DbUpdateConcurrencyException；没有找到根因已闭环证据。当前指标端口仍 Degraded，但本轮未读取健康详情，不能断言同一根因 | [历史审计](records/2026-09-07-pr9-review-merge.md)；定位最新健康项、失败批次重试与并发回归 |
 | OPS-01 | 发布脚本已支持只上传校验、SSH key 与免密 sudo；完整更新/回退入口、实际 release 路径和 main-only 激活、CI 完整制品及变更分类仍待收口，无停机更新尚未验证 | [发布流程方案](operations/release-workflow-improvement.md)；沿现有脚本完成单入口，验迁移失败、旧应用兼容回退、后台任务与旧前端资源，按阶段记录耗时 |
+| OPS-02 | 开源运维监控试点尚未部署；本轮历史查询复用既有分钟指标，独立 Prometheus/Grafana、主机探针和告警方案已完成审计 | [复用审计](records/2026-11-09-open-source-reuse-audit.md)；先在测试环境验证采集、保留、缺样、告警触发恢复及权限，不替换业务队列 |
+| SEC-02 | 11-09 NuGet restore 对现有 ImageSharp、MessagePack、System.Security.Cryptography.Pkcs / Xml 等报告漏洞告警，尚未完成传递依赖可达性与升级验证 | [本轮审计](records/2026-11-09-open-source-reuse-audit.md)；锁定公告、调用路径和修复版本，独立升级并回归，不能仅消除告警就关闭 |
 | IMG-01 | 管理员/课程 VM 导入仍有写 LocalFilePath 的入口；既往来源迁移不能证明未来不生成本地主副本 | [第二批发布](records/2026-10-09-image-lifecycle-second-rollout.md)；统一持久来源、摘要固定、导入与重建回归 |
 | IMG-02 | 受控 Registry GC 已执行，自动 Blob GC、upload 遗留治理、冷缓存 TTL 与下载/运行增长预算未完整闭环 | [镜像发布](records/2026-10-09-image-lifecycle-rollout.md)、[第二批发布](records/2026-10-09-image-lifecycle-second-rollout.md)；活动/业务引用和 backing 保护、实际释放字节、失败重试 |
 | SEC-01 | 旧交接的 SSH.NET 风险需要重核；当前 src/Directory.Packages.props 已为 2026.0.0，不能继续认定旧版本风险未处理 | 对当前锁定版本重新检查公告与调用路径；本轮未运行依赖漏洞扫描 |

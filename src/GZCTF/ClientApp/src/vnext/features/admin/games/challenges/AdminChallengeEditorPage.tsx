@@ -370,7 +370,7 @@ export function AdminChallengeEditorPage() {
         </AdminEditorSection>
 
         <AdminEditorSection
-          description="容器题必须选择运行环境。模板列表只展示已就绪且类型匹配的全局环境模板。"
+          description="请为容器题选择已就绪的同类型环境模板。"
           title="运行环境"
         >
           {containerChallenge ? (
@@ -526,7 +526,7 @@ export function AdminChallengeEditorPage() {
         />
 
         <AdminEditorSection
-          description="删除会移除题目、附件和 Flag；已有实例或业务事实时服务端可能拒绝。"
+          description="删除会移除题目、附件和 Flag。"
           title="危险区"
         >
           <div className={styles.dangerRow}>

@@ -4,10 +4,11 @@
 
 | 用途 | 记录 |
 | --- | --- |
-| 验收候选：平台显示、交互与管理员删除账号 | [2026-10-18 平台体验](2026-10-18-platform-experience.md)，独立分支，等待用户验收后合入 |
+| 开发验证：历史负载、文案与开源复用 | [任务记录](2026-11-09-platform-history.md)、[开源复用审计](2026-11-09-open-source-reuse-audit.md) |
+| 已合入并部署：平台显示、交互与管理员删除账号 | [2026-10-18 平台体验](2026-10-18-platform-experience.md)，PR #35 于 11-09 合入 |
 | 已部署：管理日志可读性与诊断 | [日志改造](2026-10-14-logs-readability.md)、[10-16 浏览器验收与业务边界](2026-10-16-logs-browser-acceptance.md) |
 | 已完成：模块文档与自动维护及合并核验 | [2026-10-14 实施记录](2026-10-14-documentation-implementation.md) |
-| 最新主站/前端发布、备份与回退 | [日志发布执行记录](2026-10-14-logs-rollout-execution.md) |
+| 最新主站/前端发布、备份与回退 | [平台体验发布](2026-10-18-platform-experience.md) |
 | 前次培训设置与分页发布 | [2026-10-11 培训动态设置与分页](2026-10-11-training-quota-settings.md) |
 | 培训独立额度与实例隔离修复 | [2026-10-11 主线修复](2026-10-11-training-runtime-mainline.md) |
 | TeamLab删除边界与Agent身份 | [2026-10-10 删除发布](2026-10-10-teamlab-delete-rollout.md) |

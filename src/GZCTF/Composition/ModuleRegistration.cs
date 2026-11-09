@@ -64,6 +64,7 @@ public static class ModuleRegistration
         services.AddSingleton<IRuntimeSignalWakeup>(serviceProvider =>
             serviceProvider.GetRequiredService<RedisRuntimeSignalWakeup>());
         services.AddScoped<RuntimeSignalService>();
+        services.AddScoped<NodeMetricHistoryQuery>();
         services.AddSingleton<PostgresNodeLiveStateFallback>();
         services.AddSingleton<RedisNodeLiveStateStore>();
         services.AddSingleton<INodeLiveStateStore>(serviceProvider =>
