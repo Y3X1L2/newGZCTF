@@ -1,4 +1,4 @@
-import { Activity, Boxes, Cpu, MemoryStick, Monitor } from 'lucide-react'
+import { Activity, Boxes, Cpu, MemoryStick, Monitor, RefreshCw } from 'lucide-react'
 import { ActionButton, InlineFeedback } from '../../../shared/Interaction'
 import { NodeHistoryChart } from './NodeHistoryChart'
 import { useNodeMetricHistory } from './useNodeMetricHistory'
@@ -11,6 +11,12 @@ import {
 } from './nodeTelemetry'
 
 const percent = (value: number | undefined) => (value === undefined ? '—' : `${value.toFixed(1)}%`)
+const historyRanges = [
+  ['1h', '1 小时'],
+  ['24h', '24 小时'],
+  ['7d', '7 天'],
+] as const
+
 export function NodeTelemetryPanel({
   nodes,
   loading = false,
@@ -85,11 +91,9 @@ export function NodeTelemetryPanel({
       </div>
       <article className={styles.trend}>
         <header>
-          <div>
-            <h2>
-              <Activity size={17} /> 负载趋势
-            </h2>
-          </div>
+          <h2>
+            <Activity size={17} /> 负载趋势
+          </h2>
           <div className={styles.legend}>
             <span>
               CPU <b>{percent(current?.cpu)}</b>
@@ -98,17 +102,32 @@ export function NodeTelemetryPanel({
               内存 <b>{percent(current?.memory)}</b>
             </span>
           </div>
+          <div className={styles.rangeControls}>
+            <div className={styles.rangeSegments} role="group" aria-label="历史时间范围">
+              {historyRanges.map(([range, label]) => (
+                <button
+                  key={range}
+                  aria-label={`近 ${label}`}
+                  aria-pressed={history.range === range}
+                  onClick={() => history.setRange(range)}
+                  type="button"
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <ActionButton
+              aria-label="刷新趋势"
+              className={styles.refreshHistory}
+              icon={<RefreshCw aria-hidden="true" size={14} />}
+              loading={history.isValidating}
+              onClick={() => history.mutate()}
+              title="刷新趋势"
+              tone="ghost"
+              type="button"
+            />
+          </div>
         </header>
-        <div className={styles.rangeControls} role="group" aria-label="历史时间范围">
-          {(['1h', '24h', '7d'] as const).map((range, index) => (
-            <ActionButton key={range} aria-pressed={history.range === range}
-              tone={history.range === range ? 'primary' : undefined}
-              onClick={() => history.setRange(range)} type="button">
-              {['近 1 小时', '近 24 小时', '近 7 天'][index]}
-            </ActionButton>
-          ))}
-          <ActionButton onClick={() => history.mutate()} loading={history.isValidating} type="button">刷新趋势</ActionButton>
-        </div>
         {history.error ? <InlineFeedback tone="danger">历史负载读取失败，请重试。</InlineFeedback> :
           history.isLoading ? <p className={styles.emptyHistory} role="status">正在加载历史负载…</p> :
           history.data?.points.some(point => point.cpuLoad !== null || point.memoryLoad !== null) ?

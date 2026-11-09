@@ -1,10 +1,23 @@
-import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { CartesianGrid, Dot, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import type { NodeMetricHistory } from '../api/nodeMetricHistoryApi'
 import styles from './NodeTelemetryPanel.module.css'
 
 const dateTime = (value: number) => new Intl.DateTimeFormat('zh-CN', {
   month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false,
 }).format(value)
+
+function IsolatedSampleDot({ cx, cy, stroke, index = 0, points = [] }: {
+  cx?: number
+  cy?: number
+  stroke?: string
+  index?: number
+  points?: { value: number | null }[]
+}) {
+  if (points[index]?.value == null || points[index - 1]?.value != null || points[index + 1]?.value != null) {
+    return null
+  }
+  return <Dot cx={cx} cy={cy} r={2.5} fill={stroke} />
+}
 
 export function NodeHistoryChart({ history }: { history: NodeMetricHistory }) {
   const points = history.points.map(point => ({
@@ -20,19 +33,20 @@ export function NodeHistoryChart({ history }: { history: NodeMetricHistory }) {
           <CartesianGrid stroke="var(--yn-color-border)" strokeDasharray="4 5" vertical={false} />
           <XAxis dataKey="time" type="number" domain={[history.fromUtc, history.toUtc]} scale="time"
             ticks={[0, 1, 2, 3].map(index => history.fromUtc + (history.toUtc - history.fromUtc) * index / 3)}
-            tickFormatter={dateTime} minTickGap={32} stroke="var(--yn-color-muted)" tick={{ fontSize: 11 }} />
+            className={styles.chartAxis} tickFormatter={dateTime} minTickGap={20} tickLine={false}
+            axisLine={{ stroke: 'var(--yn-color-border)' }} stroke="var(--yn-color-muted)" />
           <YAxis domain={[0, 100]} ticks={[0, 50, 100]} tickFormatter={value => `${value}%`}
-            width={45} stroke="var(--yn-color-muted)" tick={{ fontSize: 11 }} />
-          <Tooltip content={({ active, payload, label }) => active && payload?.length ?
+            className={styles.chartAxis} width={40} axisLine={false} tickLine={false} stroke="var(--yn-color-muted)" />
+          <Tooltip isAnimationActive={false} content={({ active, payload, label }) => active && payload?.length ?
             <div className={styles.tooltip}>
-              <strong>{dateTime(Number(label))}</strong>
+              <span className={styles.tooltipMeta}>{dateTime(Number(label))}</span>
               {payload.map(item => <span key={item.dataKey}>{item.name} {Number(item.value).toFixed(1)}%</span>)}
-              <span>{payload[0].payload.nodeCount} 个节点</span>
+              <span className={styles.tooltipMeta}>{payload[0].payload.nodeCount} 个节点</span>
             </div> : null} />
           <Line dataKey="cpu" name="CPU" stroke="var(--yn-color-brand)" strokeWidth={2}
-            type="linear" dot={{ r: 1.5, strokeWidth: 0, fill: 'var(--yn-color-brand)' }} connectNulls={false} isAnimationActive={false} />
+            type="linear" dot={<IsolatedSampleDot />} activeDot={{ r: 3 }} connectNulls={false} isAnimationActive={false} />
           <Line dataKey="memory" name="内存" stroke="var(--yn-color-info)" strokeWidth={2} strokeDasharray="6 3"
-            type="linear" dot={{ r: 1.5, strokeWidth: 0, fill: 'var(--yn-color-info)' }} connectNulls={false} isAnimationActive={false} />
+            type="linear" dot={<IsolatedSampleDot />} activeDot={{ r: 3 }} connectNulls={false} isAnimationActive={false} />
         </LineChart>
       </ResponsiveContainer>
     </div>
