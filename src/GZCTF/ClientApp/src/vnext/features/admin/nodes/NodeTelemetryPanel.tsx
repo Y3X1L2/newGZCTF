@@ -1,52 +1,35 @@
 import { Activity, Boxes, Cpu, MemoryStick, Monitor } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { ActionButton, InlineFeedback } from '../../../shared/Interaction'
+import { NodeHistoryChart } from './NodeHistoryChart'
+import { useNodeMetricHistory } from './useNodeMetricHistory'
 import type { NodeSummary } from '../api'
 import { ResourceMeter } from '../shared/AdminWorkbench'
 import styles from './NodeTelemetryPanel.module.css'
 import {
-  appendTelemetrySample,
   liveTelemetryNodes,
-  telemetryPoints,
   telemetrySample,
-  type NodeTelemetrySample,
 } from './nodeTelemetry'
 
 const percent = (value: number | undefined) => (value === undefined ? '—' : `${value.toFixed(1)}%`)
-const time = (value: number) =>
-  new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(
-    value
-  )
-
 export function NodeTelemetryPanel({
   nodes,
   loading = false,
   failed = false,
+  nodeId,
 }: {
   nodes: NodeSummary[]
   loading?: boolean
   failed?: boolean
+  nodeId?: string
 }) {
   const current = failed ? null : telemetrySample(nodes)
   const live = failed ? [] : liveTelemetryNodes(nodes)
-  const [samples, setSamples] = useState<NodeTelemetrySample[]>([])
-  const sampleTime = current?.time
-  const coverage = current?.coverage
-  const cpu = current?.cpu
-  const memory = current?.memory
-  useEffect(() => {
-    const next =
-      sampleTime === undefined || cpu === undefined || memory === undefined || coverage === undefined
-        ? null
-        : { time: sampleTime, cpu, memory, coverage }
-    setSamples((previous) => appendTelemetrySample(previous, next))
-  }, [sampleTime, coverage, cpu, memory])
-
+  const history = useNodeMetricHistory(nodeId)
   const dockerUsed = nodes.reduce((sum, node) => sum + node.allocatedContainers + node.reservedContainers, 0)
   const dockerMax = nodes.reduce((sum, node) => sum + node.maxContainers, 0)
   const vmUsed = nodes.reduce((sum, node) => sum + node.allocatedVms + node.reservedVms, 0)
   const vmMax = nodes.reduce((sum, node) => sum + node.maxVms, 0)
-  const history = current && samples.at(-1)?.coverage === current.coverage ? samples : []
-  const missing = loading ? '读取中' : failed ? '读取失败' : '暂无新鲜心跳'
+  const missing = loading ? '读取中' : failed ? '读取失败' : '暂无读数'
 
   return (
     <section aria-label="节点实时监控" aria-busy={loading} className={styles.telemetry}>
@@ -56,7 +39,7 @@ export function NodeTelemetryPanel({
             <Cpu size={16} /> CPU 使用率
           </span>
           <strong>{current ? percent(current.cpu) : '—'}</strong>
-          <small>{current ? `${live.length} 个节点平均 · 心跳实测` : missing}</small>
+          <small>{current ? `${live.length} 个节点平均` : missing}</small>
           <ResourceMeter
             label="CPU 使用率"
             max={100}
@@ -69,7 +52,7 @@ export function NodeTelemetryPanel({
             <MemoryStick size={16} /> 内存使用率
           </span>
           <strong>{current ? percent(current.memory) : '—'}</strong>
-          <small>{current ? `${live.length} / ${nodes.length} 节点提供有效读数` : missing}</small>
+          <small>{current ? `${live.length} / ${nodes.length} 节点` : missing}</small>
           <ResourceMeter
             label="内存使用率"
             max={100}
@@ -85,7 +68,7 @@ export function NodeTelemetryPanel({
             {failed || loading ? '—' : dockerUsed}
             <em> / {failed || loading ? '—' : dockerMax}</em>
           </strong>
-          <small>已分配 + 已预留 · 全部节点配置</small>
+          <small>已分配 + 已预留</small>
           <ResourceMeter label="Docker 槽位" max={dockerMax} value={dockerUsed} />
         </article>
         <article className={styles.card}>
@@ -96,7 +79,7 @@ export function NodeTelemetryPanel({
             {failed || loading ? '—' : vmUsed}
             <em> / {failed || loading ? '—' : vmMax}</em>
           </strong>
-          <small>已分配 + 已预留 · 全部节点配置</small>
+          <small>已分配 + 已预留</small>
           <ResourceMeter label="VM 槽位" max={vmMax} value={vmUsed} />
         </article>
       </div>
@@ -106,7 +89,6 @@ export function NodeTelemetryPanel({
             <h2>
               <Activity size={17} /> 负载趋势
             </h2>
-            <p>本次打开后收到的心跳 · 最多保留 10 分钟 · 节点覆盖变化后重新采样</p>
           </div>
           <div className={styles.legend}>
             <span>
@@ -117,43 +99,21 @@ export function NodeTelemetryPanel({
             </span>
           </div>
         </header>
-        <div className={styles.chart}>
-          <div className={styles.axis}>
-            <span>100%</span>
-            <span>50%</span>
-            <span>0%</span>
-          </div>
-          <svg
-            aria-label={`CPU 与内存使用率，${history.length} 个实际心跳样本`}
-            role="img"
-            viewBox="0 0 720 180"
-            preserveAspectRatio="none"
-          >
-            {[20, 90, 160].map((y) => (
-              <line className={styles.gridLine} key={y} x1="20" x2="700" y1={y} y2={y} />
-            ))}
-            {history.length > 1 ? (
-              <>
-                <polyline className={styles.cpuLine} points={telemetryPoints(history, 'cpu')} />
-                <polyline className={styles.memoryLine} points={telemetryPoints(history, 'memory')} />
-              </>
-            ) : null}
-            {history.length === 1 ? (
-              <>
-                <circle className={styles.cpuDot} cx="20" cy={160 - history[0].cpu * 1.4} r="3" />
-                <circle className={styles.memoryDot} cx="20" cy={160 - history[0].memory * 1.4} r="3" />
-              </>
-            ) : null}
-          </svg>
-          {history.length < 2 ? (
-            <p className={styles.waiting}>{current ? '已收到首个读数，等待下一次心跳形成趋势' : missing}</p>
-          ) : null}
+        <div className={styles.rangeControls} role="group" aria-label="历史时间范围">
+          {(['1h', '24h', '7d'] as const).map((range, index) => (
+            <ActionButton key={range} aria-pressed={history.range === range}
+              tone={history.range === range ? 'primary' : undefined}
+              onClick={() => history.setRange(range)} type="button">
+              {['近 1 小时', '近 24 小时', '近 7 天'][index]}
+            </ActionButton>
+          ))}
+          <ActionButton onClick={() => history.mutate()} loading={history.isValidating} type="button">刷新趋势</ActionButton>
         </div>
-        <footer>
-          <span>{history.length ? time(history[0].time) : '—'}</span>
-          <span>{history.length} 个样本</span>
-          <span>{history.length ? time(history[history.length - 1].time) : '—'}</span>
-        </footer>
+        {history.error ? <InlineFeedback tone="danger">历史负载读取失败，请重试。</InlineFeedback> :
+          history.isLoading ? <p className={styles.emptyHistory} role="status">正在加载历史负载…</p> :
+          history.data?.points.some(point => point.cpuLoad !== null || point.memoryLoad !== null) ?
+            <NodeHistoryChart history={history.data} /> :
+            <p className={styles.emptyHistory}>该时段暂无记录</p>}
       </article>
     </section>
   )

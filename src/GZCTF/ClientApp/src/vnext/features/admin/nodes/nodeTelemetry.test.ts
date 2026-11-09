@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { NodeStatus } from '@Api'
 import type { NodeSummary } from '../api'
-import { appendTelemetrySample, liveTelemetryNodes, telemetryPoints, telemetrySample } from './nodeTelemetry'
+import { liveTelemetryNodes, telemetrySample } from './nodeTelemetry'
 
 const now = 1_000_000
 const node = (changes: Partial<NodeSummary> = {}) =>
@@ -28,22 +28,4 @@ describe('node telemetry facts', () => {
     expect(telemetrySample(nodes.slice(1), now)).toBeNull()
   })
 
-  it('does not fabricate samples on duplicate heartbeats and resets when coverage changes', () => {
-    const first = telemetrySample([node()], now)!
-    const samples = appendTelemetrySample([], first)
-    expect(appendTelemetrySample(samples, { ...first })).toBe(samples)
-    expect(appendTelemetrySample(samples, { ...first, coverage: 'node-2', time: now + 10_000 })).toHaveLength(1)
-    expect(appendTelemetrySample(samples, null)).toEqual([])
-  })
-
-  it('uses elapsed timestamps for chart positions and bounds session retention', () => {
-    const samples = [0, 10_000, 40_000].map((offset) => ({
-      time: now + offset,
-      cpu: 50,
-      memory: 25,
-      coverage: 'node-1',
-    }))
-    expect(telemetryPoints(samples, 'cpu')).toBe('20,90 190,90 700,90')
-    expect(appendTelemetrySample(samples, { ...samples[0], time: now + 700_000 })).toHaveLength(1)
-  })
 })
