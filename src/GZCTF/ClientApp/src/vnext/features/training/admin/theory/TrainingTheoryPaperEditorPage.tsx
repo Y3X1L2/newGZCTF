@@ -230,7 +230,6 @@ export function TrainingTheoryPaperEditorPage() {
               <div className={styles.toggles}>
                 <ToggleField
                   checked={paper.allowRetake ?? false}
-                  description="提交后允许生成新的答卷再次作答。"
                   label="允许重做"
                   onChange={(checked) =>
                     setPaper((current) => (current ? { ...current, allowRetake: checked } : current))
@@ -238,7 +237,6 @@ export function TrainingTheoryPaperEditorPage() {
                 />
                 <ToggleField
                   checked={paper.showCorrectAnswerAfterSubmit ?? true}
-                  description="最终提交后向学生展示正确答案。"
                   label="提交后显示答案"
                   onChange={(checked) =>
                     setPaper((current) => (current ? { ...current, showCorrectAnswerAfterSubmit: checked } : current))

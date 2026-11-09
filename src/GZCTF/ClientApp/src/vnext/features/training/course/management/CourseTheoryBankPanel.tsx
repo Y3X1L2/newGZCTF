@@ -235,7 +235,6 @@ export function CourseTheoryBankPanel({ course }: { course: TrainingCourseModel 
       />
 
       <VNextDialog
-        description="先解析并预览，确认题目数量和题型后再写入课程题库。"
         eyebrow="IMPORT THEORY JSON"
         footer={
           <>

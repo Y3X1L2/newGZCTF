@@ -232,7 +232,7 @@ export function HomePage() {
           </span>
           <small>可见课程</small>
           <strong>{overview.data?.visibleCourseCount ?? courses.data?.length ?? '--'}</strong>
-          <p>{overview.data ? `${overview.data.joinedCourseCount ?? 0} 门已加入` : '公开课程目录'}</p>
+          {overview.data ? <p>{overview.data.joinedCourseCount ?? 0} 门已加入</p> : null}
         </div>
         {account.isAuthenticated ? (
           <div>

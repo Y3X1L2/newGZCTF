@@ -53,7 +53,7 @@ export function TeamRequestsPanel({ requests, submitting, onReview }: TeamReques
           ))}
         </div>
       ) : (
-        <DataState description="当前没有等待处理的加入申请。" title="申请已处理完毕" />
+        <DataState title="暂无待处理申请" />
       )}
     </section>
   )
