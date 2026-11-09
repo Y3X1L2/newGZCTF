@@ -2090,6 +2090,39 @@ export interface CreateTeamLabServiceAccessModel {
   networkKey?: string | null;
 }
 
+export interface NodeMetricHistory {
+  /** @format uint64 */
+  fromUtc?: number;
+  /** @format uint64 */
+  toUtc?: number;
+  /** @format int32 */
+  intervalSeconds?: number;
+  points?: NodeMetricHistoryPoint[];
+}
+
+export interface NodeMetricHistoryPoint {
+  /** @format uint64 */
+  timestamp?: number;
+  /** @format double */
+  cpuLoad?: number | null;
+  /** @format double */
+  memoryLoad?: number | null;
+  /** @format int32 */
+  nodeCount?: number;
+  /** @format int64 */
+  sampleCount?: number;
+}
+
+export interface ProblemDetails {
+  type?: string | null;
+  title?: string | null;
+  /** @format int32 */
+  status?: number | null;
+  detail?: string | null;
+  instance?: string | null;
+  [key: string]: any;
+}
+
 export interface ApiTokenResponse {
   plainTextToken?: string;
   info?: ApiTokenModel;
@@ -2139,16 +2172,6 @@ export interface ApiTokenCreateModel {
   requestsPerMinute?: number;
   /** @format uint64 */
   expiresAt?: number | null;
-}
-
-export interface ProblemDetails {
-  type?: string | null;
-  title?: string | null;
-  /** @format int32 */
-  status?: number | null;
-  detail?: string | null;
-  instance?: string | null;
-  [key: string]: any;
 }
 
 export interface ApiOperationModel {
@@ -4654,6 +4677,11 @@ export type UserInfo = IdentityUserOfGuid & {
   id?: string;
   /** User role */
   role?: Role;
+  /**
+   * Account tombstone; historical business references remain intact.
+   * @format uint64
+   */
+  deletedAtUtc?: number | null;
   /** User's recent IP address */
   ip?: string;
   /**
@@ -13261,6 +13289,87 @@ export class Api<
         ...params,
       }),
   };
+  nodeMetricHistory = {
+    /**
+     * No description
+     *
+     * @tags NodeMetricHistory
+     * @name NodeMetricHistoryGetHistory
+     * @summary Get persisted platform or single-node load history.
+     * @request GET:/api/v1/nodes/metrics/history
+     */
+    nodeMetricHistoryGetHistory: (
+      query?: {
+        /**
+         * @default "24h"
+         * @pattern ^(1h|24h|7d)$
+         */
+        range?: string;
+        /** @format guid */
+        nodeId?: string | null;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<NodeMetricHistory, ProblemDetails>({
+        path: `/api/v1/nodes/metrics/history`,
+        method: "GET",
+        query: query,
+        format: "json",
+        ...params,
+      }),
+    /**
+     * No description
+     *
+     * @tags NodeMetricHistory
+     * @name NodeMetricHistoryGetHistory
+     * @summary Get persisted platform or single-node load history.
+     * @request GET:/api/v1/nodes/metrics/history
+     */
+    useNodeMetricHistoryGetHistory: (
+      query?: {
+        /**
+         * @default "24h"
+         * @pattern ^(1h|24h|7d)$
+         */
+        range?: string;
+        /** @format guid */
+        nodeId?: string | null;
+      },
+      options?: SWRConfiguration,
+      doFetch: boolean = true,
+    ) =>
+      useSWR<NodeMetricHistory, ProblemDetails>(
+        doFetch ? [`/api/v1/nodes/metrics/history`, query] : null,
+        options,
+      ),
+
+    /**
+     * No description
+     *
+     * @tags NodeMetricHistory
+     * @name NodeMetricHistoryGetHistory
+     * @summary Get persisted platform or single-node load history.
+     * @request GET:/api/v1/nodes/metrics/history
+     */
+    mutateNodeMetricHistoryGetHistory: (
+      query?: {
+        /**
+         * @default "24h"
+         * @pattern ^(1h|24h|7d)$
+         */
+        range?: string;
+        /** @format guid */
+        nodeId?: string | null;
+      },
+      data?: NodeMetricHistory | Promise<NodeMetricHistory>,
+      options?: MutatorOptions,
+    ) =>
+      mutate<NodeMetricHistory>(
+        [`/api/v1/nodes/metrics/history`, query],
+        data,
+        options,
+      ),
+  };
   apiTokens = {
     /**
      * No description
@@ -13412,7 +13521,7 @@ export class Api<
      * @tags Account
      * @name AccountAvatar
      * @summary Update user avatar
-     * @request PUT:/api/Account/Avatar
+     * @request PUT:/api/account/avatar
      */
     accountAvatar: (
       data: {
@@ -13422,7 +13531,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<string, RequestResponse>({
-        path: `/api/Account/Avatar`,
+        path: `/api/account/avatar`,
         method: "PUT",
         body: data,
         type: ContentType.FormData,
@@ -13436,11 +13545,11 @@ export class Api<
      * @tags Account
      * @name AccountCapabilities
      * @summary Get public account capabilities used by authentication pages.
-     * @request GET:/api/Account/Capabilities
+     * @request GET:/api/account/capabilities
      */
     accountCapabilities: (params: RequestParams = {}) =>
       this.request<AccountCapabilitiesModel, any>({
-        path: `/api/Account/Capabilities`,
+        path: `/api/account/capabilities`,
         method: "GET",
         format: "json",
         ...params,
@@ -13451,14 +13560,14 @@ export class Api<
      * @tags Account
      * @name AccountCapabilities
      * @summary Get public account capabilities used by authentication pages.
-     * @request GET:/api/Account/Capabilities
+     * @request GET:/api/account/capabilities
      */
     useAccountCapabilities: (
       options?: SWRConfiguration,
       doFetch: boolean = true,
     ) =>
       useSWR<AccountCapabilitiesModel, any>(
-        doFetch ? `/api/Account/Capabilities` : null,
+        doFetch ? `/api/account/capabilities` : null,
         options,
       ),
 
@@ -13468,14 +13577,14 @@ export class Api<
      * @tags Account
      * @name AccountCapabilities
      * @summary Get public account capabilities used by authentication pages.
-     * @request GET:/api/Account/Capabilities
+     * @request GET:/api/account/capabilities
      */
     mutateAccountCapabilities: (
       data?: AccountCapabilitiesModel | Promise<AccountCapabilitiesModel>,
       options?: MutatorOptions,
     ) =>
       mutate<AccountCapabilitiesModel>(
-        `/api/Account/Capabilities`,
+        `/api/account/capabilities`,
         data,
         options,
       ),
@@ -13486,11 +13595,11 @@ export class Api<
      * @tags Account
      * @name AccountChangeEmail
      * @summary User email change
-     * @request PUT:/api/Account/ChangeEmail
+     * @request PUT:/api/account/changeemail
      */
     accountChangeEmail: (data: MailChangeModel, params: RequestParams = {}) =>
       this.request<RequestResponseOfBoolean, RequestResponse>({
-        path: `/api/Account/ChangeEmail`,
+        path: `/api/account/changeemail`,
         method: "PUT",
         body: data,
         type: ContentType.Json,
@@ -13504,14 +13613,14 @@ export class Api<
      * @tags Account
      * @name AccountChangePassword
      * @summary User password change
-     * @request PUT:/api/Account/ChangePassword
+     * @request PUT:/api/account/changepassword
      */
     accountChangePassword: (
       data: PasswordChangeModel,
       params: RequestParams = {},
     ) =>
       this.request<void, RequestResponse>({
-        path: `/api/Account/ChangePassword`,
+        path: `/api/account/changepassword`,
         method: "PUT",
         body: data,
         type: ContentType.Json,
@@ -13524,11 +13633,11 @@ export class Api<
      * @tags Account
      * @name AccountLogIn
      * @summary User login
-     * @request POST:/api/Account/LogIn
+     * @request POST:/api/account/login
      */
     accountLogIn: (data: LoginModel, params: RequestParams = {}) =>
       this.request<void, RequestResponse>({
-        path: `/api/Account/LogIn`,
+        path: `/api/account/login`,
         method: "POST",
         body: data,
         type: ContentType.Json,
@@ -13541,11 +13650,11 @@ export class Api<
      * @tags Account
      * @name AccountLogOut
      * @summary User logout
-     * @request POST:/api/Account/LogOut
+     * @request POST:/api/account/logout
      */
     accountLogOut: (params: RequestParams = {}) =>
       this.request<void, any>({
-        path: `/api/Account/LogOut`,
+        path: `/api/account/logout`,
         method: "POST",
         ...params,
       }),
@@ -13556,14 +13665,14 @@ export class Api<
      * @tags Account
      * @name AccountMailChangeConfirm
      * @summary User email change confirmation
-     * @request POST:/api/Account/MailChangeConfirm
+     * @request POST:/api/account/mailchangeconfirm
      */
     accountMailChangeConfirm: (
       data: AccountVerifyModel,
       params: RequestParams = {},
     ) =>
       this.request<void, RequestResponse>({
-        path: `/api/Account/MailChangeConfirm`,
+        path: `/api/account/mailchangeconfirm`,
         method: "POST",
         body: data,
         type: ContentType.Json,
@@ -13576,14 +13685,14 @@ export class Api<
      * @tags Account
      * @name AccountPasswordReset
      * @summary User password reset
-     * @request POST:/api/Account/PasswordReset
+     * @request POST:/api/account/passwordreset
      */
     accountPasswordReset: (
       data: PasswordResetModel,
       params: RequestParams = {},
     ) =>
       this.request<void, RequestResponse>({
-        path: `/api/Account/PasswordReset`,
+        path: `/api/account/passwordreset`,
         method: "POST",
         body: data,
         type: ContentType.Json,
@@ -13670,11 +13779,11 @@ export class Api<
      * @tags Account
      * @name AccountProfile
      * @summary Get user information
-     * @request GET:/api/Account/Profile
+     * @request GET:/api/account/profile
      */
     accountProfile: (params: RequestParams = {}) =>
       this.request<ProfileUserInfoModel, RequestResponse>({
-        path: `/api/Account/Profile`,
+        path: `/api/account/profile`,
         method: "GET",
         format: "json",
         ...params,
@@ -13685,11 +13794,11 @@ export class Api<
      * @tags Account
      * @name AccountProfile
      * @summary Get user information
-     * @request GET:/api/Account/Profile
+     * @request GET:/api/account/profile
      */
     useAccountProfile: (options?: SWRConfiguration, doFetch: boolean = true) =>
       useSWR<ProfileUserInfoModel, RequestResponse>(
-        doFetch ? `/api/Account/Profile` : null,
+        doFetch ? `/api/account/profile` : null,
         options,
       ),
 
@@ -13699,12 +13808,12 @@ export class Api<
      * @tags Account
      * @name AccountProfile
      * @summary Get user information
-     * @request GET:/api/Account/Profile
+     * @request GET:/api/account/profile
      */
     mutateAccountProfile: (
       data?: ProfileUserInfoModel | Promise<ProfileUserInfoModel>,
       options?: MutatorOptions,
-    ) => mutate<ProfileUserInfoModel>(`/api/Account/Profile`, data, options),
+    ) => mutate<ProfileUserInfoModel>(`/api/account/profile`, data, options),
 
     /**
      * @description Use this API to request password recovery. Sends an email to the user. Email URL: /reset
@@ -13712,11 +13821,11 @@ export class Api<
      * @tags Account
      * @name AccountRecovery
      * @summary User password recovery request
-     * @request POST:/api/Account/Recovery
+     * @request POST:/api/account/recovery
      */
     accountRecovery: (data: RecoveryModel, params: RequestParams = {}) =>
       this.request<RequestResponse, RequestResponse>({
-        path: `/api/Account/Recovery`,
+        path: `/api/account/recovery`,
         method: "POST",
         body: data,
         type: ContentType.Json,
@@ -13730,11 +13839,11 @@ export class Api<
      * @tags Account
      * @name AccountRegister
      * @summary User registration
-     * @request POST:/api/Account/Register
+     * @request POST:/api/account/register
      */
     accountRegister: (data: RegisterModel, params: RequestParams = {}) =>
       this.request<RequestResponseOfRegisterStatus, RequestResponse>({
-        path: `/api/Account/Register`,
+        path: `/api/account/register`,
         method: "POST",
         body: data,
         type: ContentType.Json,
@@ -13748,11 +13857,11 @@ export class Api<
      * @tags Account
      * @name AccountSummary
      * @summary Get the lightweight identity and activity summary used by the account drawer.
-     * @request GET:/api/Account/Summary
+     * @request GET:/api/account/summary
      */
     accountSummary: (params: RequestParams = {}) =>
       this.request<AccountSummaryModel, RequestResponse>({
-        path: `/api/Account/Summary`,
+        path: `/api/account/summary`,
         method: "GET",
         format: "json",
         ...params,
@@ -13763,11 +13872,11 @@ export class Api<
      * @tags Account
      * @name AccountSummary
      * @summary Get the lightweight identity and activity summary used by the account drawer.
-     * @request GET:/api/Account/Summary
+     * @request GET:/api/account/summary
      */
     useAccountSummary: (options?: SWRConfiguration, doFetch: boolean = true) =>
       useSWR<AccountSummaryModel, RequestResponse>(
-        doFetch ? `/api/Account/Summary` : null,
+        doFetch ? `/api/account/summary` : null,
         options,
       ),
 
@@ -13777,12 +13886,12 @@ export class Api<
      * @tags Account
      * @name AccountSummary
      * @summary Get the lightweight identity and activity summary used by the account drawer.
-     * @request GET:/api/Account/Summary
+     * @request GET:/api/account/summary
      */
     mutateAccountSummary: (
       data?: AccountSummaryModel | Promise<AccountSummaryModel>,
       options?: MutatorOptions,
-    ) => mutate<AccountSummaryModel>(`/api/Account/Summary`, data, options),
+    ) => mutate<AccountSummaryModel>(`/api/account/summary`, data, options),
 
     /**
      * @description Use this API to update username and description. User permissions required.
@@ -13790,11 +13899,11 @@ export class Api<
      * @tags Account
      * @name AccountUpdate
      * @summary User data update
-     * @request PUT:/api/Account/Update
+     * @request PUT:/api/account/update
      */
     accountUpdate: (data: ProfileUpdateModel, params: RequestParams = {}) =>
       this.request<void, RequestResponse>({
-        path: `/api/Account/Update`,
+        path: `/api/account/update`,
         method: "PUT",
         body: data,
         type: ContentType.Json,
@@ -13807,11 +13916,11 @@ export class Api<
      * @tags Account
      * @name AccountVerify
      * @summary User email confirmation
-     * @request POST:/api/Account/Verify
+     * @request POST:/api/account/verify
      */
     accountVerify: (data: AccountVerifyModel, params: RequestParams = {}) =>
       this.request<void, RequestResponse>({
-        path: `/api/Account/Verify`,
+        path: `/api/account/verify`,
         method: "POST",
         body: data,
         type: ContentType.Json,
@@ -13825,11 +13934,11 @@ export class Api<
      * @tags Admin
      * @name AdminAddUsers
      * @summary Add users in batch
-     * @request POST:/api/Admin/Users
+     * @request POST:/api/admin/users
      */
     adminAddUsers: (data: UserCreateModel[], params: RequestParams = {}) =>
       this.request<void, RequestResponse>({
-        path: `/api/Admin/Users`,
+        path: `/api/admin/users`,
         method: "POST",
         body: data,
         type: ContentType.Json,
@@ -13842,11 +13951,11 @@ export class Api<
      * @tags Admin
      * @name AdminDeleteTeam
      * @summary Delete team
-     * @request DELETE:/api/Admin/Teams/{id}
+     * @request DELETE:/api/admin/teams/{id}
      */
     adminDeleteTeam: (id: number, params: RequestParams = {}) =>
       this.request<string, RequestResponse>({
-        path: `/api/Admin/Teams/${id}`,
+        path: `/api/admin/teams/${id}`,
         method: "DELETE",
         format: "json",
         ...params,
@@ -13858,11 +13967,11 @@ export class Api<
      * @tags Admin
      * @name AdminDeleteUser
      * @summary Delete user
-     * @request DELETE:/api/Admin/Users/{userid}
+     * @request DELETE:/api/admin/users/{userid}
      */
     adminDeleteUser: (userid: string, params: RequestParams = {}) =>
       this.request<string, RequestResponse>({
-        path: `/api/Admin/Users/${userid}`,
+        path: `/api/admin/users/${userid}`,
         method: "DELETE",
         format: "json",
         ...params,
@@ -13874,11 +13983,11 @@ export class Api<
      * @tags Admin
      * @name AdminDestroyInstance
      * @summary Delete container instance
-     * @request DELETE:/api/Admin/Instances/{id}
+     * @request DELETE:/api/admin/instances/{id}
      */
     adminDestroyInstance: (id: string, params: RequestParams = {}) =>
       this.request<void, RequestResponse>({
-        path: `/api/Admin/Instances/${id}`,
+        path: `/api/admin/instances/${id}`,
         method: "DELETE",
         ...params,
       }),
@@ -13889,11 +13998,11 @@ export class Api<
      * @tags Admin
      * @name AdminDownloadAllWriteups
      * @summary Download all Writeups
-     * @request GET:/api/Admin/Writeups/{id}/All
+     * @request GET:/api/admin/writeups/{id}/all
      */
     adminDownloadAllWriteups: (id: number, params: RequestParams = {}) =>
       this.request<void, RequestResponse>({
-        path: `/api/Admin/Writeups/${id}/All`,
+        path: `/api/admin/writeups/${id}/all`,
         method: "GET",
         ...params,
       }),
@@ -13904,7 +14013,7 @@ export class Api<
      * @tags Admin
      * @name AdminFiles
      * @summary Get all files
-     * @request GET:/api/Admin/Files
+     * @request GET:/api/admin/files
      */
     adminFiles: (
       query?: {
@@ -13924,7 +14033,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<ArrayResponseOfLocalFile, RequestResponse>({
-        path: `/api/Admin/Files`,
+        path: `/api/admin/files`,
         method: "GET",
         query: query,
         format: "json",
@@ -13936,7 +14045,7 @@ export class Api<
      * @tags Admin
      * @name AdminFiles
      * @summary Get all files
-     * @request GET:/api/Admin/Files
+     * @request GET:/api/admin/files
      */
     useAdminFiles: (
       query?: {
@@ -13957,7 +14066,7 @@ export class Api<
       doFetch: boolean = true,
     ) =>
       useSWR<ArrayResponseOfLocalFile, RequestResponse>(
-        doFetch ? [`/api/Admin/Files`, query] : null,
+        doFetch ? [`/api/admin/files`, query] : null,
         options,
       ),
 
@@ -13967,7 +14076,7 @@ export class Api<
      * @tags Admin
      * @name AdminFiles
      * @summary Get all files
-     * @request GET:/api/Admin/Files
+     * @request GET:/api/admin/files
      */
     mutateAdminFiles: (
       query?: {
@@ -13988,7 +14097,7 @@ export class Api<
       options?: MutatorOptions,
     ) =>
       mutate<ArrayResponseOfLocalFile>(
-        [`/api/Admin/Files`, query],
+        [`/api/admin/files`, query],
         data,
         options,
       ),
@@ -13999,11 +14108,11 @@ export class Api<
      * @tags Admin
      * @name AdminGetConfigs
      * @summary Get configuration
-     * @request GET:/api/Admin/Config
+     * @request GET:/api/admin/config
      */
     adminGetConfigs: (params: RequestParams = {}) =>
       this.request<ConfigEditModel, RequestResponse>({
-        path: `/api/Admin/Config`,
+        path: `/api/admin/config`,
         method: "GET",
         format: "json",
         ...params,
@@ -14014,11 +14123,11 @@ export class Api<
      * @tags Admin
      * @name AdminGetConfigs
      * @summary Get configuration
-     * @request GET:/api/Admin/Config
+     * @request GET:/api/admin/config
      */
     useAdminGetConfigs: (options?: SWRConfiguration, doFetch: boolean = true) =>
       useSWR<ConfigEditModel, RequestResponse>(
-        doFetch ? `/api/Admin/Config` : null,
+        doFetch ? `/api/admin/config` : null,
         options,
       ),
 
@@ -14028,12 +14137,12 @@ export class Api<
      * @tags Admin
      * @name AdminGetConfigs
      * @summary Get configuration
-     * @request GET:/api/Admin/Config
+     * @request GET:/api/admin/config
      */
     mutateAdminGetConfigs: (
       data?: ConfigEditModel | Promise<ConfigEditModel>,
       options?: MutatorOptions,
-    ) => mutate<ConfigEditModel>(`/api/Admin/Config`, data, options),
+    ) => mutate<ConfigEditModel>(`/api/admin/config`, data, options),
 
     /**
      * @description Use this API to get all container instances, requires Admin permission
@@ -14041,11 +14150,11 @@ export class Api<
      * @tags Admin
      * @name AdminInstances
      * @summary Get all container instances
-     * @request GET:/api/Admin/Instances
+     * @request GET:/api/admin/instances
      */
     adminInstances: (params: RequestParams = {}) =>
       this.request<ArrayResponseOfContainerInstanceModel, RequestResponse>({
-        path: `/api/Admin/Instances`,
+        path: `/api/admin/instances`,
         method: "GET",
         format: "json",
         ...params,
@@ -14056,11 +14165,11 @@ export class Api<
      * @tags Admin
      * @name AdminInstances
      * @summary Get all container instances
-     * @request GET:/api/Admin/Instances
+     * @request GET:/api/admin/instances
      */
     useAdminInstances: (options?: SWRConfiguration, doFetch: boolean = true) =>
       useSWR<ArrayResponseOfContainerInstanceModel, RequestResponse>(
-        doFetch ? `/api/Admin/Instances` : null,
+        doFetch ? `/api/admin/instances` : null,
         options,
       ),
 
@@ -14070,7 +14179,7 @@ export class Api<
      * @tags Admin
      * @name AdminInstances
      * @summary Get all container instances
-     * @request GET:/api/Admin/Instances
+     * @request GET:/api/admin/instances
      */
     mutateAdminInstances: (
       data?:
@@ -14079,7 +14188,7 @@ export class Api<
       options?: MutatorOptions,
     ) =>
       mutate<ArrayResponseOfContainerInstanceModel>(
-        `/api/Admin/Instances`,
+        `/api/admin/instances`,
         data,
         options,
       ),
@@ -14090,7 +14199,7 @@ export class Api<
      * @tags Admin
      * @name AdminLogs
      * @summary Get all logs
-     * @request GET:/api/Admin/Logs
+     * @request GET:/api/admin/logs
      */
     adminLogs: (
       query?: {
@@ -14117,7 +14226,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<LogMessagePageModel, RequestResponse>({
-        path: `/api/Admin/Logs`,
+        path: `/api/admin/logs`,
         method: "GET",
         query: query,
         format: "json",
@@ -14129,7 +14238,7 @@ export class Api<
      * @tags Admin
      * @name AdminLogs
      * @summary Get all logs
-     * @request GET:/api/Admin/Logs
+     * @request GET:/api/admin/logs
      */
     useAdminLogs: (
       query?: {
@@ -14157,7 +14266,7 @@ export class Api<
       doFetch: boolean = true,
     ) =>
       useSWR<LogMessagePageModel, RequestResponse>(
-        doFetch ? [`/api/Admin/Logs`, query] : null,
+        doFetch ? [`/api/admin/logs`, query] : null,
         options,
       ),
 
@@ -14167,7 +14276,7 @@ export class Api<
      * @tags Admin
      * @name AdminLogs
      * @summary Get all logs
-     * @request GET:/api/Admin/Logs
+     * @request GET:/api/admin/logs
      */
     mutateAdminLogs: (
       query?: {
@@ -14193,7 +14302,7 @@ export class Api<
       },
       data?: LogMessagePageModel | Promise<LogMessagePageModel>,
       options?: MutatorOptions,
-    ) => mutate<LogMessagePageModel>([`/api/Admin/Logs`, query], data, options),
+    ) => mutate<LogMessagePageModel>([`/api/admin/logs`, query], data, options),
 
     /**
      * @description Use this API to update team participation status, review application, requires Admin permission
@@ -14201,7 +14310,7 @@ export class Api<
      * @tags Admin
      * @name AdminParticipation
      * @summary Update participation status
-     * @request PUT:/api/Admin/Participation/{id}
+     * @request PUT:/api/admin/participation/{id}
      */
     adminParticipation: (
       id: number,
@@ -14209,7 +14318,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<void, RequestResponse>({
-        path: `/api/Admin/Participation/${id}`,
+        path: `/api/admin/participation/${id}`,
         method: "PUT",
         body: data,
         type: ContentType.Json,
@@ -14222,11 +14331,11 @@ export class Api<
      * @tags Admin
      * @name AdminResetLogo
      * @summary Reset platform Logo
-     * @request DELETE:/api/Admin/Config/Logo
+     * @request DELETE:/api/admin/config/logo
      */
     adminResetLogo: (params: RequestParams = {}) =>
       this.request<void, RequestResponse>({
-        path: `/api/Admin/Config/Logo`,
+        path: `/api/admin/config/logo`,
         method: "DELETE",
         ...params,
       }),
@@ -14237,11 +14346,11 @@ export class Api<
      * @tags Admin
      * @name AdminResetPassword
      * @summary Reset user password
-     * @request DELETE:/api/Admin/Users/{userid}/Password
+     * @request DELETE:/api/admin/users/{userid}/password
      */
     adminResetPassword: (userid: string, params: RequestParams = {}) =>
       this.request<string, RequestResponse>({
-        path: `/api/Admin/Users/${userid}/Password`,
+        path: `/api/admin/users/${userid}/password`,
         method: "DELETE",
         format: "json",
         ...params,
@@ -14253,7 +14362,7 @@ export class Api<
      * @tags Admin
      * @name AdminSearchTeams
      * @summary Search teams
-     * @request POST:/api/Admin/Teams/Search
+     * @request POST:/api/admin/teams/search
      */
     adminSearchTeams: (
       query?: {
@@ -14262,7 +14371,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<ArrayResponseOfTeamInfoModel, RequestResponse>({
-        path: `/api/Admin/Teams/Search`,
+        path: `/api/admin/teams/search`,
         method: "POST",
         query: query,
         format: "json",
@@ -14275,7 +14384,7 @@ export class Api<
      * @tags Admin
      * @name AdminSearchUsers
      * @summary Search users
-     * @request POST:/api/Admin/Users/Search
+     * @request POST:/api/admin/users/search
      */
     adminSearchUsers: (
       query?: {
@@ -14284,7 +14393,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<ArrayResponseOfUserInfoModel, RequestResponse>({
-        path: `/api/Admin/Users/Search`,
+        path: `/api/admin/users/search`,
         method: "POST",
         query: query,
         format: "json",
@@ -14297,7 +14406,7 @@ export class Api<
      * @tags Admin
      * @name AdminTeams
      * @summary Get all team information
-     * @request GET:/api/Admin/Teams
+     * @request GET:/api/admin/teams
      */
     adminTeams: (
       query?: {
@@ -14317,7 +14426,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<ArrayResponseOfTeamInfoModel, RequestResponse>({
-        path: `/api/Admin/Teams`,
+        path: `/api/admin/teams`,
         method: "GET",
         query: query,
         format: "json",
@@ -14329,7 +14438,7 @@ export class Api<
      * @tags Admin
      * @name AdminTeams
      * @summary Get all team information
-     * @request GET:/api/Admin/Teams
+     * @request GET:/api/admin/teams
      */
     useAdminTeams: (
       query?: {
@@ -14350,7 +14459,7 @@ export class Api<
       doFetch: boolean = true,
     ) =>
       useSWR<ArrayResponseOfTeamInfoModel, RequestResponse>(
-        doFetch ? [`/api/Admin/Teams`, query] : null,
+        doFetch ? [`/api/admin/teams`, query] : null,
         options,
       ),
 
@@ -14360,7 +14469,7 @@ export class Api<
      * @tags Admin
      * @name AdminTeams
      * @summary Get all team information
-     * @request GET:/api/Admin/Teams
+     * @request GET:/api/admin/teams
      */
     mutateAdminTeams: (
       query?: {
@@ -14383,7 +14492,7 @@ export class Api<
       options?: MutatorOptions,
     ) =>
       mutate<ArrayResponseOfTeamInfoModel>(
-        [`/api/Admin/Teams`, query],
+        [`/api/admin/teams`, query],
         data,
         options,
       ),
@@ -14394,11 +14503,11 @@ export class Api<
      * @tags Admin
      * @name AdminUpdateConfigs
      * @summary Change configuration
-     * @request PUT:/api/Admin/Config
+     * @request PUT:/api/admin/config
      */
     adminUpdateConfigs: (data: ConfigEditModel, params: RequestParams = {}) =>
       this.request<void, RequestResponse>({
-        path: `/api/Admin/Config`,
+        path: `/api/admin/config`,
         method: "PUT",
         body: data,
         type: ContentType.Json,
@@ -14411,7 +14520,7 @@ export class Api<
      * @tags Admin
      * @name AdminUpdateLogo
      * @summary Change platform Logo
-     * @request POST:/api/Admin/Config/Logo
+     * @request POST:/api/admin/config/logo
      */
     adminUpdateLogo: (
       data: {
@@ -14421,7 +14530,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<void, RequestResponse>({
-        path: `/api/Admin/Config/Logo`,
+        path: `/api/admin/config/logo`,
         method: "POST",
         body: data,
         type: ContentType.FormData,
@@ -14434,7 +14543,7 @@ export class Api<
      * @tags Admin
      * @name AdminUpdateTeam
      * @summary Modify team information
-     * @request PUT:/api/Admin/Teams/{id}
+     * @request PUT:/api/admin/teams/{id}
      */
     adminUpdateTeam: (
       id: number,
@@ -14442,7 +14551,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<void, RequestResponse>({
-        path: `/api/Admin/Teams/${id}`,
+        path: `/api/admin/teams/${id}`,
         method: "PUT",
         body: data,
         type: ContentType.Json,
@@ -14455,7 +14564,7 @@ export class Api<
      * @tags Admin
      * @name AdminUpdateUserInfo
      * @summary Modify user information
-     * @request PUT:/api/Admin/Users/{userid}
+     * @request PUT:/api/admin/users/{userid}
      */
     adminUpdateUserInfo: (
       userid: string,
@@ -14463,7 +14572,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<void, RequestResponse>({
-        path: `/api/Admin/Users/${userid}`,
+        path: `/api/admin/users/${userid}`,
         method: "PUT",
         body: data,
         type: ContentType.Json,
@@ -14476,11 +14585,11 @@ export class Api<
      * @tags Admin
      * @name AdminUserInfo
      * @summary Get user information
-     * @request GET:/api/Admin/Users/{userid}
+     * @request GET:/api/admin/users/{userid}
      */
     adminUserInfo: (userid: string, params: RequestParams = {}) =>
       this.request<ProfileUserInfoModel, RequestResponse>({
-        path: `/api/Admin/Users/${userid}`,
+        path: `/api/admin/users/${userid}`,
         method: "GET",
         format: "json",
         ...params,
@@ -14491,7 +14600,7 @@ export class Api<
      * @tags Admin
      * @name AdminUserInfo
      * @summary Get user information
-     * @request GET:/api/Admin/Users/{userid}
+     * @request GET:/api/admin/users/{userid}
      */
     useAdminUserInfo: (
       userid: string,
@@ -14499,7 +14608,7 @@ export class Api<
       doFetch: boolean = true,
     ) =>
       useSWR<ProfileUserInfoModel, RequestResponse>(
-        doFetch ? `/api/Admin/Users/${userid}` : null,
+        doFetch ? `/api/admin/users/${userid}` : null,
         options,
       ),
 
@@ -14509,14 +14618,14 @@ export class Api<
      * @tags Admin
      * @name AdminUserInfo
      * @summary Get user information
-     * @request GET:/api/Admin/Users/{userid}
+     * @request GET:/api/admin/users/{userid}
      */
     mutateAdminUserInfo: (
       userid: string,
       data?: ProfileUserInfoModel | Promise<ProfileUserInfoModel>,
       options?: MutatorOptions,
     ) =>
-      mutate<ProfileUserInfoModel>(`/api/Admin/Users/${userid}`, data, options),
+      mutate<ProfileUserInfoModel>(`/api/admin/users/${userid}`, data, options),
 
     /**
      * @description Use this API to get all users, requires Admin permission
@@ -14524,7 +14633,7 @@ export class Api<
      * @tags Admin
      * @name AdminUsers
      * @summary Get all users
-     * @request GET:/api/Admin/Users
+     * @request GET:/api/admin/users
      */
     adminUsers: (
       query?: {
@@ -14548,7 +14657,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<ArrayResponseOfUserInfoModel, RequestResponse>({
-        path: `/api/Admin/Users`,
+        path: `/api/admin/users`,
         method: "GET",
         query: query,
         format: "json",
@@ -14560,7 +14669,7 @@ export class Api<
      * @tags Admin
      * @name AdminUsers
      * @summary Get all users
-     * @request GET:/api/Admin/Users
+     * @request GET:/api/admin/users
      */
     useAdminUsers: (
       query?: {
@@ -14585,7 +14694,7 @@ export class Api<
       doFetch: boolean = true,
     ) =>
       useSWR<ArrayResponseOfUserInfoModel, RequestResponse>(
-        doFetch ? [`/api/Admin/Users`, query] : null,
+        doFetch ? [`/api/admin/users`, query] : null,
         options,
       ),
 
@@ -14595,7 +14704,7 @@ export class Api<
      * @tags Admin
      * @name AdminUsers
      * @summary Get all users
-     * @request GET:/api/Admin/Users
+     * @request GET:/api/admin/users
      */
     mutateAdminUsers: (
       query?: {
@@ -14622,7 +14731,7 @@ export class Api<
       options?: MutatorOptions,
     ) =>
       mutate<ArrayResponseOfUserInfoModel>(
-        [`/api/Admin/Users`, query],
+        [`/api/admin/users`, query],
         data,
         options,
       ),
@@ -14633,11 +14742,11 @@ export class Api<
      * @tags Admin
      * @name AdminWriteups
      * @summary Get all Writeup basic information
-     * @request GET:/api/Admin/Writeups/{id}
+     * @request GET:/api/admin/writeups/{id}
      */
     adminWriteups: (id: number, params: RequestParams = {}) =>
       this.request<WriteupInfoModel, RequestResponse>({
-        path: `/api/Admin/Writeups/${id}`,
+        path: `/api/admin/writeups/${id}`,
         method: "GET",
         format: "json",
         ...params,
@@ -14648,7 +14757,7 @@ export class Api<
      * @tags Admin
      * @name AdminWriteups
      * @summary Get all Writeup basic information
-     * @request GET:/api/Admin/Writeups/{id}
+     * @request GET:/api/admin/writeups/{id}
      */
     useAdminWriteups: (
       id: number,
@@ -14656,7 +14765,7 @@ export class Api<
       doFetch: boolean = true,
     ) =>
       useSWR<WriteupInfoModel, RequestResponse>(
-        doFetch ? `/api/Admin/Writeups/${id}` : null,
+        doFetch ? `/api/admin/writeups/${id}` : null,
         options,
       ),
 
@@ -14666,13 +14775,13 @@ export class Api<
      * @tags Admin
      * @name AdminWriteups
      * @summary Get all Writeup basic information
-     * @request GET:/api/Admin/Writeups/{id}
+     * @request GET:/api/admin/writeups/{id}
      */
     mutateAdminWriteups: (
       id: number,
       data?: WriteupInfoModel | Promise<WriteupInfoModel>,
       options?: MutatorOptions,
-    ) => mutate<WriteupInfoModel>(`/api/Admin/Writeups/${id}`, data, options),
+    ) => mutate<WriteupInfoModel>(`/api/admin/writeups/${id}`, data, options),
   };
   assets = {
     /**
@@ -14681,11 +14790,11 @@ export class Api<
      * @tags Assets
      * @name AssetsDelete
      * @summary File deletion interface
-     * @request DELETE:/api/Assets/{hash}
+     * @request DELETE:/api/assets/{hash}
      */
     assetsDelete: (hash: string, params: RequestParams = {}) =>
       this.request<void, RequestResponse | ProblemDetails>({
-        path: `/api/Assets/${hash}`,
+        path: `/api/assets/${hash}`,
         method: "DELETE",
         ...params,
       }),
@@ -14696,7 +14805,7 @@ export class Api<
      * @tags Assets
      * @name AssetsGetFile
      * @summary File retrieval interface
-     * @request GET:/Assets/{hash}/{filename}
+     * @request GET:/assets/{hash}/{filename}
      */
     assetsGetFile: (
       hash: string,
@@ -14704,7 +14813,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<void, RequestResponse>({
-        path: `/Assets/${hash}/${filename}`,
+        path: `/assets/${hash}/${filename}`,
         method: "GET",
         ...params,
       }),
@@ -14715,7 +14824,7 @@ export class Api<
      * @tags Assets
      * @name AssetsUpload
      * @summary File upload interface
-     * @request POST:/api/Assets
+     * @request POST:/api/assets
      */
     assetsUpload: (
       data: {
@@ -14728,7 +14837,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<LocalFile[], RequestResponse>({
-        path: `/api/Assets`,
+        path: `/api/assets`,
         method: "POST",
         query: query,
         body: data,
@@ -14743,7 +14852,7 @@ export class Api<
      *
      * @tags AwdpAdmin
      * @name AwdpAdminCreateService
-     * @request POST:/api/admin/awdp/Games/{gameId}/Services
+     * @request POST:/api/admin/awdp/games/{gameId}/services
      */
     awdpAdminCreateService: (
       gameId: number,
@@ -14751,7 +14860,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<AwdpServiceViewModel, RequestResponse>({
-        path: `/api/admin/awdp/Games/${gameId}/Services`,
+        path: `/api/admin/awdp/games/${gameId}/services`,
         method: "POST",
         body: data,
         type: ContentType.Json,
@@ -14764,11 +14873,11 @@ export class Api<
      *
      * @tags AwdpAdmin
      * @name AwdpAdminDeleteService
-     * @request DELETE:/api/admin/awdp/Services/{serviceId}
+     * @request DELETE:/api/admin/awdp/services/{serviceId}
      */
     awdpAdminDeleteService: (serviceId: number, params: RequestParams = {}) =>
       this.request<void, RequestResponse>({
-        path: `/api/admin/awdp/Services/${serviceId}`,
+        path: `/api/admin/awdp/services/${serviceId}`,
         method: "DELETE",
         ...params,
       }),
@@ -14778,7 +14887,7 @@ export class Api<
      *
      * @tags AwdpAdmin
      * @name AwdpAdminGetAttackLogs
-     * @request GET:/api/admin/awdp/Games/{gameId}/AttackLogs
+     * @request GET:/api/admin/awdp/games/{gameId}/attacklogs
      */
     awdpAdminGetAttackLogs: (
       gameId: number,
@@ -14799,7 +14908,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<ArrayResponseOfAwdpAttackLogItem, RequestResponse>({
-        path: `/api/admin/awdp/Games/${gameId}/AttackLogs`,
+        path: `/api/admin/awdp/games/${gameId}/attacklogs`,
         method: "GET",
         query: query,
         format: "json",
@@ -14810,7 +14919,7 @@ export class Api<
      *
      * @tags AwdpAdmin
      * @name AwdpAdminGetAttackLogs
-     * @request GET:/api/admin/awdp/Games/{gameId}/AttackLogs
+     * @request GET:/api/admin/awdp/games/{gameId}/attacklogs
      */
     useAwdpAdminGetAttackLogs: (
       gameId: number,
@@ -14832,7 +14941,7 @@ export class Api<
       doFetch: boolean = true,
     ) =>
       useSWR<ArrayResponseOfAwdpAttackLogItem, RequestResponse>(
-        doFetch ? [`/api/admin/awdp/Games/${gameId}/AttackLogs`, query] : null,
+        doFetch ? [`/api/admin/awdp/games/${gameId}/attacklogs`, query] : null,
         options,
       ),
 
@@ -14841,7 +14950,7 @@ export class Api<
      *
      * @tags AwdpAdmin
      * @name AwdpAdminGetAttackLogs
-     * @request GET:/api/admin/awdp/Games/{gameId}/AttackLogs
+     * @request GET:/api/admin/awdp/games/{gameId}/attacklogs
      */
     mutateAwdpAdminGetAttackLogs: (
       gameId: number,
@@ -14865,7 +14974,7 @@ export class Api<
       options?: MutatorOptions,
     ) =>
       mutate<ArrayResponseOfAwdpAttackLogItem>(
-        [`/api/admin/awdp/Games/${gameId}/AttackLogs`, query],
+        [`/api/admin/awdp/games/${gameId}/attacklogs`, query],
         data,
         options,
       ),
@@ -14875,11 +14984,11 @@ export class Api<
      *
      * @tags AwdpAdmin
      * @name AwdpAdminGetInstances
-     * @request GET:/api/admin/awdp/Games/{gameId}/Instances
+     * @request GET:/api/admin/awdp/games/{gameId}/instances
      */
     awdpAdminGetInstances: (gameId: number, params: RequestParams = {}) =>
       this.request<AwdpServiceStatusModel[], RequestResponse>({
-        path: `/api/admin/awdp/Games/${gameId}/Instances`,
+        path: `/api/admin/awdp/games/${gameId}/instances`,
         method: "GET",
         format: "json",
         ...params,
@@ -14889,7 +14998,7 @@ export class Api<
      *
      * @tags AwdpAdmin
      * @name AwdpAdminGetInstances
-     * @request GET:/api/admin/awdp/Games/{gameId}/Instances
+     * @request GET:/api/admin/awdp/games/{gameId}/instances
      */
     useAwdpAdminGetInstances: (
       gameId: number,
@@ -14897,7 +15006,7 @@ export class Api<
       doFetch: boolean = true,
     ) =>
       useSWR<AwdpServiceStatusModel[], RequestResponse>(
-        doFetch ? `/api/admin/awdp/Games/${gameId}/Instances` : null,
+        doFetch ? `/api/admin/awdp/games/${gameId}/instances` : null,
         options,
       ),
 
@@ -14906,7 +15015,7 @@ export class Api<
      *
      * @tags AwdpAdmin
      * @name AwdpAdminGetInstances
-     * @request GET:/api/admin/awdp/Games/{gameId}/Instances
+     * @request GET:/api/admin/awdp/games/{gameId}/instances
      */
     mutateAwdpAdminGetInstances: (
       gameId: number,
@@ -14914,7 +15023,7 @@ export class Api<
       options?: MutatorOptions,
     ) =>
       mutate<AwdpServiceStatusModel[]>(
-        `/api/admin/awdp/Games/${gameId}/Instances`,
+        `/api/admin/awdp/games/${gameId}/instances`,
         data,
         options,
       ),
@@ -14924,7 +15033,7 @@ export class Api<
      *
      * @tags AwdpAdmin
      * @name AwdpAdminGetPatches
-     * @request GET:/api/admin/awdp/Games/{gameId}/Patches
+     * @request GET:/api/admin/awdp/games/{gameId}/patches
      */
     awdpAdminGetPatches: (
       gameId: number,
@@ -14948,7 +15057,7 @@ export class Api<
         ArrayResponseOfAwdpPatchSubmissionViewModel,
         RequestResponse
       >({
-        path: `/api/admin/awdp/Games/${gameId}/Patches`,
+        path: `/api/admin/awdp/games/${gameId}/patches`,
         method: "GET",
         query: query,
         format: "json",
@@ -14959,7 +15068,7 @@ export class Api<
      *
      * @tags AwdpAdmin
      * @name AwdpAdminGetPatches
-     * @request GET:/api/admin/awdp/Games/{gameId}/Patches
+     * @request GET:/api/admin/awdp/games/{gameId}/patches
      */
     useAwdpAdminGetPatches: (
       gameId: number,
@@ -14981,7 +15090,7 @@ export class Api<
       doFetch: boolean = true,
     ) =>
       useSWR<ArrayResponseOfAwdpPatchSubmissionViewModel, RequestResponse>(
-        doFetch ? [`/api/admin/awdp/Games/${gameId}/Patches`, query] : null,
+        doFetch ? [`/api/admin/awdp/games/${gameId}/patches`, query] : null,
         options,
       ),
 
@@ -14990,7 +15099,7 @@ export class Api<
      *
      * @tags AwdpAdmin
      * @name AwdpAdminGetPatches
-     * @request GET:/api/admin/awdp/Games/{gameId}/Patches
+     * @request GET:/api/admin/awdp/games/{gameId}/patches
      */
     mutateAwdpAdminGetPatches: (
       gameId: number,
@@ -15014,7 +15123,7 @@ export class Api<
       options?: MutatorOptions,
     ) =>
       mutate<ArrayResponseOfAwdpPatchSubmissionViewModel>(
-        [`/api/admin/awdp/Games/${gameId}/Patches`, query],
+        [`/api/admin/awdp/games/${gameId}/patches`, query],
         data,
         options,
       ),
@@ -15024,11 +15133,11 @@ export class Api<
      *
      * @tags AwdpAdmin
      * @name AwdpAdminGetScoreboard
-     * @request GET:/api/admin/awdp/Games/{gameId}/Scoreboard
+     * @request GET:/api/admin/awdp/games/{gameId}/scoreboard
      */
     awdpAdminGetScoreboard: (gameId: number, params: RequestParams = {}) =>
       this.request<AwdpScoreboardItem[], RequestResponse>({
-        path: `/api/admin/awdp/Games/${gameId}/Scoreboard`,
+        path: `/api/admin/awdp/games/${gameId}/scoreboard`,
         method: "GET",
         format: "json",
         ...params,
@@ -15038,7 +15147,7 @@ export class Api<
      *
      * @tags AwdpAdmin
      * @name AwdpAdminGetScoreboard
-     * @request GET:/api/admin/awdp/Games/{gameId}/Scoreboard
+     * @request GET:/api/admin/awdp/games/{gameId}/scoreboard
      */
     useAwdpAdminGetScoreboard: (
       gameId: number,
@@ -15046,7 +15155,7 @@ export class Api<
       doFetch: boolean = true,
     ) =>
       useSWR<AwdpScoreboardItem[], RequestResponse>(
-        doFetch ? `/api/admin/awdp/Games/${gameId}/Scoreboard` : null,
+        doFetch ? `/api/admin/awdp/games/${gameId}/scoreboard` : null,
         options,
       ),
 
@@ -15055,7 +15164,7 @@ export class Api<
      *
      * @tags AwdpAdmin
      * @name AwdpAdminGetScoreboard
-     * @request GET:/api/admin/awdp/Games/{gameId}/Scoreboard
+     * @request GET:/api/admin/awdp/games/{gameId}/scoreboard
      */
     mutateAwdpAdminGetScoreboard: (
       gameId: number,
@@ -15063,7 +15172,7 @@ export class Api<
       options?: MutatorOptions,
     ) =>
       mutate<AwdpScoreboardItem[]>(
-        `/api/admin/awdp/Games/${gameId}/Scoreboard`,
+        `/api/admin/awdp/games/${gameId}/scoreboard`,
         data,
         options,
       ),
@@ -15073,11 +15182,11 @@ export class Api<
      *
      * @tags AwdpAdmin
      * @name AwdpAdminGetServices
-     * @request GET:/api/admin/awdp/Games/{gameId}/Services
+     * @request GET:/api/admin/awdp/games/{gameId}/services
      */
     awdpAdminGetServices: (gameId: number, params: RequestParams = {}) =>
       this.request<AwdpServiceViewModel[], RequestResponse>({
-        path: `/api/admin/awdp/Games/${gameId}/Services`,
+        path: `/api/admin/awdp/games/${gameId}/services`,
         method: "GET",
         format: "json",
         ...params,
@@ -15087,7 +15196,7 @@ export class Api<
      *
      * @tags AwdpAdmin
      * @name AwdpAdminGetServices
-     * @request GET:/api/admin/awdp/Games/{gameId}/Services
+     * @request GET:/api/admin/awdp/games/{gameId}/services
      */
     useAwdpAdminGetServices: (
       gameId: number,
@@ -15095,7 +15204,7 @@ export class Api<
       doFetch: boolean = true,
     ) =>
       useSWR<AwdpServiceViewModel[], RequestResponse>(
-        doFetch ? `/api/admin/awdp/Games/${gameId}/Services` : null,
+        doFetch ? `/api/admin/awdp/games/${gameId}/services` : null,
         options,
       ),
 
@@ -15104,7 +15213,7 @@ export class Api<
      *
      * @tags AwdpAdmin
      * @name AwdpAdminGetServices
-     * @request GET:/api/admin/awdp/Games/{gameId}/Services
+     * @request GET:/api/admin/awdp/games/{gameId}/services
      */
     mutateAwdpAdminGetServices: (
       gameId: number,
@@ -15112,7 +15221,7 @@ export class Api<
       options?: MutatorOptions,
     ) =>
       mutate<AwdpServiceViewModel[]>(
-        `/api/admin/awdp/Games/${gameId}/Services`,
+        `/api/admin/awdp/games/${gameId}/services`,
         data,
         options,
       ),
@@ -15122,11 +15231,11 @@ export class Api<
      *
      * @tags AwdpAdmin
      * @name AwdpAdminGetStatus
-     * @request GET:/api/admin/awdp/Games/{gameId}/Status
+     * @request GET:/api/admin/awdp/games/{gameId}/status
      */
     awdpAdminGetStatus: (gameId: number, params: RequestParams = {}) =>
       this.request<AwdpGameStatusModel, RequestResponse>({
-        path: `/api/admin/awdp/Games/${gameId}/Status`,
+        path: `/api/admin/awdp/games/${gameId}/status`,
         method: "GET",
         format: "json",
         ...params,
@@ -15136,7 +15245,7 @@ export class Api<
      *
      * @tags AwdpAdmin
      * @name AwdpAdminGetStatus
-     * @request GET:/api/admin/awdp/Games/{gameId}/Status
+     * @request GET:/api/admin/awdp/games/{gameId}/status
      */
     useAwdpAdminGetStatus: (
       gameId: number,
@@ -15144,7 +15253,7 @@ export class Api<
       doFetch: boolean = true,
     ) =>
       useSWR<AwdpGameStatusModel, RequestResponse>(
-        doFetch ? `/api/admin/awdp/Games/${gameId}/Status` : null,
+        doFetch ? `/api/admin/awdp/games/${gameId}/status` : null,
         options,
       ),
 
@@ -15153,7 +15262,7 @@ export class Api<
      *
      * @tags AwdpAdmin
      * @name AwdpAdminGetStatus
-     * @request GET:/api/admin/awdp/Games/{gameId}/Status
+     * @request GET:/api/admin/awdp/games/{gameId}/status
      */
     mutateAwdpAdminGetStatus: (
       gameId: number,
@@ -15161,7 +15270,7 @@ export class Api<
       options?: MutatorOptions,
     ) =>
       mutate<AwdpGameStatusModel>(
-        `/api/admin/awdp/Games/${gameId}/Status`,
+        `/api/admin/awdp/games/${gameId}/status`,
         data,
         options,
       ),
@@ -15171,14 +15280,14 @@ export class Api<
      *
      * @tags AwdpAdmin
      * @name AwdpAdminRecoverInstance
-     * @request POST:/api/admin/awdp/Instances/{instanceId}/Recover
+     * @request POST:/api/admin/awdp/instances/{instanceId}/recover
      */
     awdpAdminRecoverInstance: (
       instanceId: number,
       params: RequestParams = {},
     ) =>
       this.request<AwdpInstanceActionModel, RequestResponse>({
-        path: `/api/admin/awdp/Instances/${instanceId}/Recover`,
+        path: `/api/admin/awdp/instances/${instanceId}/recover`,
         method: "POST",
         format: "json",
         ...params,
@@ -15189,11 +15298,11 @@ export class Api<
      *
      * @tags AwdpAdmin
      * @name AwdpAdminResetInstance
-     * @request POST:/api/admin/awdp/Instances/{instanceId}/Reset
+     * @request POST:/api/admin/awdp/instances/{instanceId}/reset
      */
     awdpAdminResetInstance: (instanceId: number, params: RequestParams = {}) =>
       this.request<AwdpInstanceActionModel, RequestResponse>({
-        path: `/api/admin/awdp/Instances/${instanceId}/Reset`,
+        path: `/api/admin/awdp/instances/${instanceId}/reset`,
         method: "POST",
         format: "json",
         ...params,
@@ -15204,11 +15313,11 @@ export class Api<
      *
      * @tags AwdpAdmin
      * @name AwdpAdminStartGame
-     * @request POST:/api/admin/awdp/Games/{gameId}/Start
+     * @request POST:/api/admin/awdp/games/{gameId}/start
      */
     awdpAdminStartGame: (gameId: number, params: RequestParams = {}) =>
       this.request<RequestResponse, RequestResponse>({
-        path: `/api/admin/awdp/Games/${gameId}/Start`,
+        path: `/api/admin/awdp/games/${gameId}/start`,
         method: "POST",
         format: "json",
         ...params,
@@ -15219,11 +15328,11 @@ export class Api<
      *
      * @tags AwdpAdmin
      * @name AwdpAdminStopGame
-     * @request POST:/api/admin/awdp/Games/{gameId}/Stop
+     * @request POST:/api/admin/awdp/games/{gameId}/stop
      */
     awdpAdminStopGame: (gameId: number, params: RequestParams = {}) =>
       this.request<RequestResponse, RequestResponse>({
-        path: `/api/admin/awdp/Games/${gameId}/Stop`,
+        path: `/api/admin/awdp/games/${gameId}/stop`,
         method: "POST",
         format: "json",
         ...params,
@@ -15234,7 +15343,7 @@ export class Api<
      *
      * @tags AwdpAdmin
      * @name AwdpAdminUpdateService
-     * @request PUT:/api/admin/awdp/Services/{serviceId}
+     * @request PUT:/api/admin/awdp/services/{serviceId}
      */
     awdpAdminUpdateService: (
       serviceId: number,
@@ -15242,7 +15351,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<AwdpServiceViewModel, RequestResponse>({
-        path: `/api/admin/awdp/Services/${serviceId}`,
+        path: `/api/admin/awdp/services/${serviceId}`,
         method: "PUT",
         body: data,
         type: ContentType.Json,
@@ -15256,7 +15365,7 @@ export class Api<
      *
      * @tags AwdpPlayer
      * @name AwdpPlayerGetAttackLogs
-     * @request GET:/api/awdp/Games/{gameId}/AttackLogs
+     * @request GET:/api/awdp/games/{gameId}/attacklogs
      */
     awdpPlayerGetAttackLogs: (
       gameId: number,
@@ -15277,7 +15386,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<ArrayResponseOfAwdpAttackLogItem, RequestResponse>({
-        path: `/api/awdp/Games/${gameId}/AttackLogs`,
+        path: `/api/awdp/games/${gameId}/attacklogs`,
         method: "GET",
         query: query,
         format: "json",
@@ -15288,7 +15397,7 @@ export class Api<
      *
      * @tags AwdpPlayer
      * @name AwdpPlayerGetAttackLogs
-     * @request GET:/api/awdp/Games/{gameId}/AttackLogs
+     * @request GET:/api/awdp/games/{gameId}/attacklogs
      */
     useAwdpPlayerGetAttackLogs: (
       gameId: number,
@@ -15310,7 +15419,7 @@ export class Api<
       doFetch: boolean = true,
     ) =>
       useSWR<ArrayResponseOfAwdpAttackLogItem, RequestResponse>(
-        doFetch ? [`/api/awdp/Games/${gameId}/AttackLogs`, query] : null,
+        doFetch ? [`/api/awdp/games/${gameId}/attacklogs`, query] : null,
         options,
       ),
 
@@ -15319,7 +15428,7 @@ export class Api<
      *
      * @tags AwdpPlayer
      * @name AwdpPlayerGetAttackLogs
-     * @request GET:/api/awdp/Games/{gameId}/AttackLogs
+     * @request GET:/api/awdp/games/{gameId}/attacklogs
      */
     mutateAwdpPlayerGetAttackLogs: (
       gameId: number,
@@ -15343,7 +15452,7 @@ export class Api<
       options?: MutatorOptions,
     ) =>
       mutate<ArrayResponseOfAwdpAttackLogItem>(
-        [`/api/awdp/Games/${gameId}/AttackLogs`, query],
+        [`/api/awdp/games/${gameId}/attacklogs`, query],
         data,
         options,
       ),
@@ -15353,11 +15462,11 @@ export class Api<
      *
      * @tags AwdpPlayer
      * @name AwdpPlayerGetInstances
-     * @request GET:/api/awdp/Games/{gameId}/Instances
+     * @request GET:/api/awdp/games/{gameId}/instances
      */
     awdpPlayerGetInstances: (gameId: number, params: RequestParams = {}) =>
       this.request<AwdpTeamServiceStatus[], RequestResponse>({
-        path: `/api/awdp/Games/${gameId}/Instances`,
+        path: `/api/awdp/games/${gameId}/instances`,
         method: "GET",
         format: "json",
         ...params,
@@ -15367,7 +15476,7 @@ export class Api<
      *
      * @tags AwdpPlayer
      * @name AwdpPlayerGetInstances
-     * @request GET:/api/awdp/Games/{gameId}/Instances
+     * @request GET:/api/awdp/games/{gameId}/instances
      */
     useAwdpPlayerGetInstances: (
       gameId: number,
@@ -15375,7 +15484,7 @@ export class Api<
       doFetch: boolean = true,
     ) =>
       useSWR<AwdpTeamServiceStatus[], RequestResponse>(
-        doFetch ? `/api/awdp/Games/${gameId}/Instances` : null,
+        doFetch ? `/api/awdp/games/${gameId}/instances` : null,
         options,
       ),
 
@@ -15384,7 +15493,7 @@ export class Api<
      *
      * @tags AwdpPlayer
      * @name AwdpPlayerGetInstances
-     * @request GET:/api/awdp/Games/{gameId}/Instances
+     * @request GET:/api/awdp/games/{gameId}/instances
      */
     mutateAwdpPlayerGetInstances: (
       gameId: number,
@@ -15392,7 +15501,7 @@ export class Api<
       options?: MutatorOptions,
     ) =>
       mutate<AwdpTeamServiceStatus[]>(
-        `/api/awdp/Games/${gameId}/Instances`,
+        `/api/awdp/games/${gameId}/instances`,
         data,
         options,
       ),
@@ -15402,11 +15511,11 @@ export class Api<
      *
      * @tags AwdpPlayer
      * @name AwdpPlayerGetPatchStatus
-     * @request GET:/api/awdp/Games/{gameId}/PatchStatus
+     * @request GET:/api/awdp/games/{gameId}/patchstatus
      */
     awdpPlayerGetPatchStatus: (gameId: number, params: RequestParams = {}) =>
       this.request<AwdpPatchStatusItem[], RequestResponse>({
-        path: `/api/awdp/Games/${gameId}/PatchStatus`,
+        path: `/api/awdp/games/${gameId}/patchstatus`,
         method: "GET",
         format: "json",
         ...params,
@@ -15416,7 +15525,7 @@ export class Api<
      *
      * @tags AwdpPlayer
      * @name AwdpPlayerGetPatchStatus
-     * @request GET:/api/awdp/Games/{gameId}/PatchStatus
+     * @request GET:/api/awdp/games/{gameId}/patchstatus
      */
     useAwdpPlayerGetPatchStatus: (
       gameId: number,
@@ -15424,7 +15533,7 @@ export class Api<
       doFetch: boolean = true,
     ) =>
       useSWR<AwdpPatchStatusItem[], RequestResponse>(
-        doFetch ? `/api/awdp/Games/${gameId}/PatchStatus` : null,
+        doFetch ? `/api/awdp/games/${gameId}/patchstatus` : null,
         options,
       ),
 
@@ -15433,7 +15542,7 @@ export class Api<
      *
      * @tags AwdpPlayer
      * @name AwdpPlayerGetPatchStatus
-     * @request GET:/api/awdp/Games/{gameId}/PatchStatus
+     * @request GET:/api/awdp/games/{gameId}/patchstatus
      */
     mutateAwdpPlayerGetPatchStatus: (
       gameId: number,
@@ -15441,7 +15550,7 @@ export class Api<
       options?: MutatorOptions,
     ) =>
       mutate<AwdpPatchStatusItem[]>(
-        `/api/awdp/Games/${gameId}/PatchStatus`,
+        `/api/awdp/games/${gameId}/patchstatus`,
         data,
         options,
       ),
@@ -15451,11 +15560,11 @@ export class Api<
      *
      * @tags AwdpPlayer
      * @name AwdpPlayerGetScoreboard
-     * @request GET:/api/awdp/Games/{gameId}/Scoreboard
+     * @request GET:/api/awdp/games/{gameId}/scoreboard
      */
     awdpPlayerGetScoreboard: (gameId: number, params: RequestParams = {}) =>
       this.request<AwdpScoreboardItem[], RequestResponse>({
-        path: `/api/awdp/Games/${gameId}/Scoreboard`,
+        path: `/api/awdp/games/${gameId}/scoreboard`,
         method: "GET",
         format: "json",
         ...params,
@@ -15465,7 +15574,7 @@ export class Api<
      *
      * @tags AwdpPlayer
      * @name AwdpPlayerGetScoreboard
-     * @request GET:/api/awdp/Games/{gameId}/Scoreboard
+     * @request GET:/api/awdp/games/{gameId}/scoreboard
      */
     useAwdpPlayerGetScoreboard: (
       gameId: number,
@@ -15473,7 +15582,7 @@ export class Api<
       doFetch: boolean = true,
     ) =>
       useSWR<AwdpScoreboardItem[], RequestResponse>(
-        doFetch ? `/api/awdp/Games/${gameId}/Scoreboard` : null,
+        doFetch ? `/api/awdp/games/${gameId}/scoreboard` : null,
         options,
       ),
 
@@ -15482,7 +15591,7 @@ export class Api<
      *
      * @tags AwdpPlayer
      * @name AwdpPlayerGetScoreboard
-     * @request GET:/api/awdp/Games/{gameId}/Scoreboard
+     * @request GET:/api/awdp/games/{gameId}/scoreboard
      */
     mutateAwdpPlayerGetScoreboard: (
       gameId: number,
@@ -15490,7 +15599,7 @@ export class Api<
       options?: MutatorOptions,
     ) =>
       mutate<AwdpScoreboardItem[]>(
-        `/api/awdp/Games/${gameId}/Scoreboard`,
+        `/api/awdp/games/${gameId}/scoreboard`,
         data,
         options,
       ),
@@ -15500,11 +15609,11 @@ export class Api<
      *
      * @tags AwdpPlayer
      * @name AwdpPlayerGetStatus
-     * @request GET:/api/awdp/Games/{gameId}/Status
+     * @request GET:/api/awdp/games/{gameId}/status
      */
     awdpPlayerGetStatus: (gameId: number, params: RequestParams = {}) =>
       this.request<AwdpGameStatusModel, RequestResponse>({
-        path: `/api/awdp/Games/${gameId}/Status`,
+        path: `/api/awdp/games/${gameId}/status`,
         method: "GET",
         format: "json",
         ...params,
@@ -15514,7 +15623,7 @@ export class Api<
      *
      * @tags AwdpPlayer
      * @name AwdpPlayerGetStatus
-     * @request GET:/api/awdp/Games/{gameId}/Status
+     * @request GET:/api/awdp/games/{gameId}/status
      */
     useAwdpPlayerGetStatus: (
       gameId: number,
@@ -15522,7 +15631,7 @@ export class Api<
       doFetch: boolean = true,
     ) =>
       useSWR<AwdpGameStatusModel, RequestResponse>(
-        doFetch ? `/api/awdp/Games/${gameId}/Status` : null,
+        doFetch ? `/api/awdp/games/${gameId}/status` : null,
         options,
       ),
 
@@ -15531,7 +15640,7 @@ export class Api<
      *
      * @tags AwdpPlayer
      * @name AwdpPlayerGetStatus
-     * @request GET:/api/awdp/Games/{gameId}/Status
+     * @request GET:/api/awdp/games/{gameId}/status
      */
     mutateAwdpPlayerGetStatus: (
       gameId: number,
@@ -15539,7 +15648,7 @@ export class Api<
       options?: MutatorOptions,
     ) =>
       mutate<AwdpGameStatusModel>(
-        `/api/awdp/Games/${gameId}/Status`,
+        `/api/awdp/games/${gameId}/status`,
         data,
         options,
       ),
@@ -15549,14 +15658,14 @@ export class Api<
      *
      * @tags AwdpPlayer
      * @name AwdpPlayerRecoverInstance
-     * @request POST:/api/awdp/Instances/{instanceId}/Recover
+     * @request POST:/api/awdp/instances/{instanceId}/recover
      */
     awdpPlayerRecoverInstance: (
       instanceId: number,
       params: RequestParams = {},
     ) =>
       this.request<AwdpInstanceActionModel, RequestResponse>({
-        path: `/api/awdp/Instances/${instanceId}/Recover`,
+        path: `/api/awdp/instances/${instanceId}/recover`,
         method: "POST",
         format: "json",
         ...params,
@@ -15567,11 +15676,11 @@ export class Api<
      *
      * @tags AwdpPlayer
      * @name AwdpPlayerResetInstance
-     * @request POST:/api/awdp/Instances/{instanceId}/Reset
+     * @request POST:/api/awdp/instances/{instanceId}/reset
      */
     awdpPlayerResetInstance: (instanceId: number, params: RequestParams = {}) =>
       this.request<AwdpInstanceActionModel, RequestResponse>({
-        path: `/api/awdp/Instances/${instanceId}/Reset`,
+        path: `/api/awdp/instances/${instanceId}/reset`,
         method: "POST",
         format: "json",
         ...params,
@@ -15582,7 +15691,7 @@ export class Api<
      *
      * @tags AwdpPlayer
      * @name AwdpPlayerSubmitFlag
-     * @request POST:/api/awdp/Games/{gameId}/Flags
+     * @request POST:/api/awdp/games/{gameId}/flags
      */
     awdpPlayerSubmitFlag: (
       gameId: number,
@@ -15590,7 +15699,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<AwdpSubmitResultModel, RequestResponse>({
-        path: `/api/awdp/Games/${gameId}/Flags`,
+        path: `/api/awdp/games/${gameId}/flags`,
         method: "POST",
         body: data,
         type: ContentType.Json,
@@ -15603,7 +15712,7 @@ export class Api<
      *
      * @tags AwdpPlayer
      * @name AwdpPlayerSubmitPatch
-     * @request POST:/api/awdp/Games/{gameId}/Patches
+     * @request POST:/api/awdp/games/{gameId}/patches
      */
     awdpPlayerSubmitPatch: (
       gameId: number,
@@ -15616,7 +15725,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<AwdpPatchSubmissionViewModel, RequestResponse>({
-        path: `/api/awdp/Games/${gameId}/Patches`,
+        path: `/api/awdp/games/${gameId}/patches`,
         method: "POST",
         body: data,
         type: ContentType.FormData,
@@ -15760,7 +15869,7 @@ export class Api<
      * @tags Edit
      * @name EditAddFlags
      * @summary Add Game Challenge Flag
-     * @request POST:/api/Edit/Games/{id}/Challenges/{cId}/Flags
+     * @request POST:/api/edit/games/{id}/challenges/{cId}/flags
      */
     editAddFlags: (
       id: number,
@@ -15769,7 +15878,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<void, RequestResponse>({
-        path: `/api/Edit/Games/${id}/Challenges/${cId}/Flags`,
+        path: `/api/edit/games/${id}/challenges/${cId}/flags`,
         method: "POST",
         body: data,
         type: ContentType.Json,
@@ -15782,11 +15891,11 @@ export class Api<
      * @tags Edit
      * @name EditAddGame
      * @summary Add Game
-     * @request POST:/api/Edit/Games
+     * @request POST:/api/edit/games
      */
     editAddGame: (data: GameInfoModel, params: RequestParams = {}) =>
       this.request<GameInfoModel, RequestResponse>({
-        path: `/api/Edit/Games`,
+        path: `/api/edit/games`,
         method: "POST",
         body: data,
         type: ContentType.Json,
@@ -15800,7 +15909,7 @@ export class Api<
      * @tags Edit
      * @name EditAddGameChallenge
      * @summary Add Game Challenge
-     * @request POST:/api/Edit/Games/{id}/Challenges
+     * @request POST:/api/edit/games/{id}/challenges
      */
     editAddGameChallenge: (
       id: number,
@@ -15808,7 +15917,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<ChallengeEditDetailModel, RequestResponse>({
-        path: `/api/Edit/Games/${id}/Challenges`,
+        path: `/api/edit/games/${id}/challenges`,
         method: "POST",
         body: data,
         type: ContentType.Json,
@@ -15822,7 +15931,7 @@ export class Api<
      * @tags Edit
      * @name EditAddGameNotice
      * @summary Add Game Notice
-     * @request POST:/api/Edit/Games/{id}/Notices
+     * @request POST:/api/edit/games/{id}/notices
      */
     editAddGameNotice: (
       id: number,
@@ -15830,7 +15939,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<GameNotice, RequestResponse>({
-        path: `/api/Edit/Games/${id}/Notices`,
+        path: `/api/edit/games/${id}/notices`,
         method: "POST",
         body: data,
         type: ContentType.Json,
@@ -15844,11 +15953,11 @@ export class Api<
      * @tags Edit
      * @name EditAddPost
      * @summary Add Post
-     * @request POST:/api/Edit/Posts
+     * @request POST:/api/edit/posts
      */
     editAddPost: (data: PostEditModel, params: RequestParams = {}) =>
       this.request<string, RequestResponse>({
-        path: `/api/Edit/Posts`,
+        path: `/api/edit/posts`,
         method: "POST",
         body: data,
         type: ContentType.Json,
@@ -15862,7 +15971,7 @@ export class Api<
      * @tags Edit
      * @name EditCreateDivision
      * @summary Create Division
-     * @request POST:/api/Edit/Games/{id}/Divisions
+     * @request POST:/api/edit/games/{id}/divisions
      */
     editCreateDivision: (
       id: number,
@@ -15870,7 +15979,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<Division, RequestResponse>({
-        path: `/api/Edit/Games/${id}/Divisions`,
+        path: `/api/edit/games/${id}/divisions`,
         method: "POST",
         body: data,
         type: ContentType.Json,
@@ -15884,7 +15993,7 @@ export class Api<
      * @tags Edit
      * @name EditCreateTestContainer
      * @summary Test Game Challenge Container
-     * @request POST:/api/Edit/Games/{id}/Challenges/{cId}/Container
+     * @request POST:/api/edit/games/{id}/challenges/{cId}/container
      */
     editCreateTestContainer: (
       id: number,
@@ -15892,7 +16001,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<DeploymentQueueStatusModel, RequestResponse>({
-        path: `/api/Edit/Games/${id}/Challenges/${cId}/Container`,
+        path: `/api/edit/games/${id}/challenges/${cId}/container`,
         method: "POST",
         format: "json",
         ...params,
@@ -15904,7 +16013,7 @@ export class Api<
      * @tags Edit
      * @name EditDeleteDivision
      * @summary Delete Division
-     * @request DELETE:/api/Edit/Games/{id}/Divisions/{divisionId}
+     * @request DELETE:/api/edit/games/{id}/divisions/{divisionId}
      */
     editDeleteDivision: (
       id: number,
@@ -15912,7 +16021,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<void, RequestResponse>({
-        path: `/api/Edit/Games/${id}/Divisions/${divisionId}`,
+        path: `/api/edit/games/${id}/divisions/${divisionId}`,
         method: "DELETE",
         ...params,
       }),
@@ -15923,11 +16032,11 @@ export class Api<
      * @tags Edit
      * @name EditDeleteGame
      * @summary Delete Game
-     * @request DELETE:/api/Edit/Games/{id}
+     * @request DELETE:/api/edit/games/{id}
      */
     editDeleteGame: (id: number, params: RequestParams = {}) =>
       this.request<GameInfoModel, RequestResponse>({
-        path: `/api/Edit/Games/${id}`,
+        path: `/api/edit/games/${id}`,
         method: "DELETE",
         format: "json",
         ...params,
@@ -15939,7 +16048,7 @@ export class Api<
      * @tags Edit
      * @name EditDeleteGameNotice
      * @summary Delete Game Notice
-     * @request DELETE:/api/Edit/Games/{id}/Notices/{noticeId}
+     * @request DELETE:/api/edit/games/{id}/notices/{noticeId}
      */
     editDeleteGameNotice: (
       id: number,
@@ -15947,7 +16056,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<void, RequestResponse>({
-        path: `/api/Edit/Games/${id}/Notices/${noticeId}`,
+        path: `/api/edit/games/${id}/notices/${noticeId}`,
         method: "DELETE",
         ...params,
       }),
@@ -15958,11 +16067,11 @@ export class Api<
      * @tags Edit
      * @name EditDeleteGameWriteUps
      * @summary Delete All WriteUps
-     * @request DELETE:/api/Edit/Games/{id}/WriteUps
+     * @request DELETE:/api/edit/games/{id}/writeups
      */
     editDeleteGameWriteUps: (id: number, params: RequestParams = {}) =>
       this.request<GameInfoModel, RequestResponse>({
-        path: `/api/Edit/Games/${id}/WriteUps`,
+        path: `/api/edit/games/${id}/writeups`,
         method: "DELETE",
         format: "json",
         ...params,
@@ -15974,11 +16083,11 @@ export class Api<
      * @tags Edit
      * @name EditDeletePost
      * @summary Delete Post
-     * @request DELETE:/api/Edit/Posts/{id}
+     * @request DELETE:/api/edit/posts/{id}
      */
     editDeletePost: (id: string, params: RequestParams = {}) =>
       this.request<void, RequestResponse>({
-        path: `/api/Edit/Posts/${id}`,
+        path: `/api/edit/posts/${id}`,
         method: "DELETE",
         ...params,
       }),
@@ -15989,7 +16098,7 @@ export class Api<
      * @tags Edit
      * @name EditDestroyTestContainer
      * @summary Destroy Test Game Challenge Container
-     * @request DELETE:/api/Edit/Games/{id}/Challenges/{cId}/Container
+     * @request DELETE:/api/edit/games/{id}/challenges/{cId}/container
      */
     editDestroyTestContainer: (
       id: number,
@@ -15997,7 +16106,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<void, RequestResponse>({
-        path: `/api/Edit/Games/${id}/Challenges/${cId}/Container`,
+        path: `/api/edit/games/${id}/challenges/${cId}/container`,
         method: "DELETE",
         ...params,
       }),
@@ -16008,11 +16117,11 @@ export class Api<
      * @tags Edit
      * @name EditExportGame
      * @summary Export game package
-     * @request POST:/api/Edit/Games/{id}/Export
+     * @request POST:/api/edit/games/{id}/export
      */
     editExportGame: (id: number, params: RequestParams = {}) =>
       this.request<void, RequestResponse>({
-        path: `/api/Edit/Games/${id}/Export`,
+        path: `/api/edit/games/${id}/export`,
         method: "POST",
         ...params,
       }),
@@ -16023,11 +16132,11 @@ export class Api<
      * @tags Edit
      * @name EditFlushScoreboardCache
      * @summary Flush Scoreboard Cache
-     * @request POST:/api/Edit/Games/{id}/Scoreboard/Flush
+     * @request POST:/api/edit/games/{id}/scoreboard/flush
      */
     editFlushScoreboardCache: (id: number, params: RequestParams = {}) =>
       this.request<void, RequestResponse>({
-        path: `/api/Edit/Games/${id}/Scoreboard/Flush`,
+        path: `/api/edit/games/${id}/scoreboard/flush`,
         method: "POST",
         ...params,
       }),
@@ -16038,11 +16147,11 @@ export class Api<
      * @tags Edit
      * @name EditGetDivisions
      * @summary Get Divisions
-     * @request GET:/api/Edit/Games/{id}/Divisions
+     * @request GET:/api/edit/games/{id}/divisions
      */
     editGetDivisions: (id: number, params: RequestParams = {}) =>
       this.request<Division[], RequestResponse>({
-        path: `/api/Edit/Games/${id}/Divisions`,
+        path: `/api/edit/games/${id}/divisions`,
         method: "GET",
         format: "json",
         ...params,
@@ -16053,7 +16162,7 @@ export class Api<
      * @tags Edit
      * @name EditGetDivisions
      * @summary Get Divisions
-     * @request GET:/api/Edit/Games/{id}/Divisions
+     * @request GET:/api/edit/games/{id}/divisions
      */
     useEditGetDivisions: (
       id: number,
@@ -16061,7 +16170,7 @@ export class Api<
       doFetch: boolean = true,
     ) =>
       useSWR<Division[], RequestResponse>(
-        doFetch ? `/api/Edit/Games/${id}/Divisions` : null,
+        doFetch ? `/api/edit/games/${id}/divisions` : null,
         options,
       ),
 
@@ -16071,13 +16180,13 @@ export class Api<
      * @tags Edit
      * @name EditGetDivisions
      * @summary Get Divisions
-     * @request GET:/api/Edit/Games/{id}/Divisions
+     * @request GET:/api/edit/games/{id}/divisions
      */
     mutateEditGetDivisions: (
       id: number,
       data?: Division[] | Promise<Division[]>,
       options?: MutatorOptions,
-    ) => mutate<Division[]>(`/api/Edit/Games/${id}/Divisions`, data, options),
+    ) => mutate<Division[]>(`/api/edit/games/${id}/divisions`, data, options),
 
     /**
      * @description Retrieving a game requires administrator privileges
@@ -16085,11 +16194,11 @@ export class Api<
      * @tags Edit
      * @name EditGetGame
      * @summary Get Game
-     * @request GET:/api/Edit/Games/{id}
+     * @request GET:/api/edit/games/{id}
      */
     editGetGame: (id: number, params: RequestParams = {}) =>
       this.request<GameInfoModel, RequestResponse>({
-        path: `/api/Edit/Games/${id}`,
+        path: `/api/edit/games/${id}`,
         method: "GET",
         format: "json",
         ...params,
@@ -16100,7 +16209,7 @@ export class Api<
      * @tags Edit
      * @name EditGetGame
      * @summary Get Game
-     * @request GET:/api/Edit/Games/{id}
+     * @request GET:/api/edit/games/{id}
      */
     useEditGetGame: (
       id: number,
@@ -16108,7 +16217,7 @@ export class Api<
       doFetch: boolean = true,
     ) =>
       useSWR<GameInfoModel, RequestResponse>(
-        doFetch ? `/api/Edit/Games/${id}` : null,
+        doFetch ? `/api/edit/games/${id}` : null,
         options,
       ),
 
@@ -16118,13 +16227,13 @@ export class Api<
      * @tags Edit
      * @name EditGetGame
      * @summary Get Game
-     * @request GET:/api/Edit/Games/{id}
+     * @request GET:/api/edit/games/{id}
      */
     mutateEditGetGame: (
       id: number,
       data?: GameInfoModel | Promise<GameInfoModel>,
       options?: MutatorOptions,
-    ) => mutate<GameInfoModel>(`/api/Edit/Games/${id}`, data, options),
+    ) => mutate<GameInfoModel>(`/api/edit/games/${id}`, data, options),
 
     /**
      * @description Retrieving a game challenge requires administrator privileges
@@ -16132,7 +16241,7 @@ export class Api<
      * @tags Edit
      * @name EditGetGameChallenge
      * @summary Get Game Challenge
-     * @request GET:/api/Edit/Games/{id}/Challenges/{cId}
+     * @request GET:/api/edit/games/{id}/challenges/{cId}
      */
     editGetGameChallenge: (
       id: number,
@@ -16140,7 +16249,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<ChallengeEditDetailModel, RequestResponse>({
-        path: `/api/Edit/Games/${id}/Challenges/${cId}`,
+        path: `/api/edit/games/${id}/challenges/${cId}`,
         method: "GET",
         format: "json",
         ...params,
@@ -16151,7 +16260,7 @@ export class Api<
      * @tags Edit
      * @name EditGetGameChallenge
      * @summary Get Game Challenge
-     * @request GET:/api/Edit/Games/{id}/Challenges/{cId}
+     * @request GET:/api/edit/games/{id}/challenges/{cId}
      */
     useEditGetGameChallenge: (
       id: number,
@@ -16160,7 +16269,7 @@ export class Api<
       doFetch: boolean = true,
     ) =>
       useSWR<ChallengeEditDetailModel, RequestResponse>(
-        doFetch ? `/api/Edit/Games/${id}/Challenges/${cId}` : null,
+        doFetch ? `/api/edit/games/${id}/challenges/${cId}` : null,
         options,
       ),
 
@@ -16170,7 +16279,7 @@ export class Api<
      * @tags Edit
      * @name EditGetGameChallenge
      * @summary Get Game Challenge
-     * @request GET:/api/Edit/Games/{id}/Challenges/{cId}
+     * @request GET:/api/edit/games/{id}/challenges/{cId}
      */
     mutateEditGetGameChallenge: (
       id: number,
@@ -16179,7 +16288,7 @@ export class Api<
       options?: MutatorOptions,
     ) =>
       mutate<ChallengeEditDetailModel>(
-        `/api/Edit/Games/${id}/Challenges/${cId}`,
+        `/api/edit/games/${id}/challenges/${cId}`,
         data,
         options,
       ),
@@ -16190,11 +16299,11 @@ export class Api<
      * @tags Edit
      * @name EditGetGameChallenges
      * @summary Get All Game Challenges
-     * @request GET:/api/Edit/Games/{id}/Challenges
+     * @request GET:/api/edit/games/{id}/challenges
      */
     editGetGameChallenges: (id: number, params: RequestParams = {}) =>
       this.request<ChallengeInfoModel[], RequestResponse>({
-        path: `/api/Edit/Games/${id}/Challenges`,
+        path: `/api/edit/games/${id}/challenges`,
         method: "GET",
         format: "json",
         ...params,
@@ -16205,7 +16314,7 @@ export class Api<
      * @tags Edit
      * @name EditGetGameChallenges
      * @summary Get All Game Challenges
-     * @request GET:/api/Edit/Games/{id}/Challenges
+     * @request GET:/api/edit/games/{id}/challenges
      */
     useEditGetGameChallenges: (
       id: number,
@@ -16213,7 +16322,7 @@ export class Api<
       doFetch: boolean = true,
     ) =>
       useSWR<ChallengeInfoModel[], RequestResponse>(
-        doFetch ? `/api/Edit/Games/${id}/Challenges` : null,
+        doFetch ? `/api/edit/games/${id}/challenges` : null,
         options,
       ),
 
@@ -16223,7 +16332,7 @@ export class Api<
      * @tags Edit
      * @name EditGetGameChallenges
      * @summary Get All Game Challenges
-     * @request GET:/api/Edit/Games/{id}/Challenges
+     * @request GET:/api/edit/games/{id}/challenges
      */
     mutateEditGetGameChallenges: (
       id: number,
@@ -16231,7 +16340,7 @@ export class Api<
       options?: MutatorOptions,
     ) =>
       mutate<ChallengeInfoModel[]>(
-        `/api/Edit/Games/${id}/Challenges`,
+        `/api/edit/games/${id}/challenges`,
         data,
         options,
       ),
@@ -16242,11 +16351,11 @@ export class Api<
      * @tags Edit
      * @name EditGetGameNotices
      * @summary Get Game Notices
-     * @request GET:/api/Edit/Games/{id}/Notices
+     * @request GET:/api/edit/games/{id}/notices
      */
     editGetGameNotices: (id: number, params: RequestParams = {}) =>
       this.request<GameNotice[], RequestResponse>({
-        path: `/api/Edit/Games/${id}/Notices`,
+        path: `/api/edit/games/${id}/notices`,
         method: "GET",
         format: "json",
         ...params,
@@ -16257,7 +16366,7 @@ export class Api<
      * @tags Edit
      * @name EditGetGameNotices
      * @summary Get Game Notices
-     * @request GET:/api/Edit/Games/{id}/Notices
+     * @request GET:/api/edit/games/{id}/notices
      */
     useEditGetGameNotices: (
       id: number,
@@ -16265,7 +16374,7 @@ export class Api<
       doFetch: boolean = true,
     ) =>
       useSWR<GameNotice[], RequestResponse>(
-        doFetch ? `/api/Edit/Games/${id}/Notices` : null,
+        doFetch ? `/api/edit/games/${id}/notices` : null,
         options,
       ),
 
@@ -16275,13 +16384,13 @@ export class Api<
      * @tags Edit
      * @name EditGetGameNotices
      * @summary Get Game Notices
-     * @request GET:/api/Edit/Games/{id}/Notices
+     * @request GET:/api/edit/games/{id}/notices
      */
     mutateEditGetGameNotices: (
       id: number,
       data?: GameNotice[] | Promise<GameNotice[]>,
       options?: MutatorOptions,
-    ) => mutate<GameNotice[]>(`/api/Edit/Games/${id}/Notices`, data, options),
+    ) => mutate<GameNotice[]>(`/api/edit/games/${id}/notices`, data, options),
 
     /**
      * @description Retrieving the game list requires administrator privileges
@@ -16289,7 +16398,7 @@ export class Api<
      * @tags Edit
      * @name EditGetGames
      * @summary Get Game List
-     * @request GET:/api/Edit/Games
+     * @request GET:/api/edit/games
      */
     editGetGames: (
       query?: {
@@ -16305,7 +16414,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<ArrayResponseOfGameInfoModel, RequestResponse>({
-        path: `/api/Edit/Games`,
+        path: `/api/edit/games`,
         method: "GET",
         query: query,
         format: "json",
@@ -16317,7 +16426,7 @@ export class Api<
      * @tags Edit
      * @name EditGetGames
      * @summary Get Game List
-     * @request GET:/api/Edit/Games
+     * @request GET:/api/edit/games
      */
     useEditGetGames: (
       query?: {
@@ -16334,7 +16443,7 @@ export class Api<
       doFetch: boolean = true,
     ) =>
       useSWR<ArrayResponseOfGameInfoModel, RequestResponse>(
-        doFetch ? [`/api/Edit/Games`, query] : null,
+        doFetch ? [`/api/edit/games`, query] : null,
         options,
       ),
 
@@ -16344,7 +16453,7 @@ export class Api<
      * @tags Edit
      * @name EditGetGames
      * @summary Get Game List
-     * @request GET:/api/Edit/Games
+     * @request GET:/api/edit/games
      */
     mutateEditGetGames: (
       query?: {
@@ -16363,7 +16472,7 @@ export class Api<
       options?: MutatorOptions,
     ) =>
       mutate<ArrayResponseOfGameInfoModel>(
-        [`/api/Edit/Games`, query],
+        [`/api/edit/games`, query],
         data,
         options,
       ),
@@ -16374,7 +16483,7 @@ export class Api<
      * @tags Edit
      * @name EditImportGame
      * @summary Import game package
-     * @request POST:/api/Edit/Games/Import
+     * @request POST:/api/edit/games/import
      */
     editImportGame: (
       data: {
@@ -16384,7 +16493,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<number, RequestResponse>({
-        path: `/api/Edit/Games/Import`,
+        path: `/api/edit/games/import`,
         method: "POST",
         body: data,
         type: ContentType.FormData,
@@ -16398,7 +16507,7 @@ export class Api<
      * @tags Edit
      * @name EditRemoveFlag
      * @summary Delete Game Challenge Flag
-     * @request DELETE:/api/Edit/Games/{id}/Challenges/{cId}/Flags/{fId}
+     * @request DELETE:/api/edit/games/{id}/challenges/{cId}/flags/{fId}
      */
     editRemoveFlag: (
       id: number,
@@ -16407,7 +16516,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<TaskStatus, RequestResponse>({
-        path: `/api/Edit/Games/${id}/Challenges/${cId}/Flags/${fId}`,
+        path: `/api/edit/games/${id}/challenges/${cId}/flags/${fId}`,
         method: "DELETE",
         format: "json",
         ...params,
@@ -16419,7 +16528,7 @@ export class Api<
      * @tags Edit
      * @name EditRemoveGameChallenge
      * @summary Delete Game Challenge
-     * @request DELETE:/api/Edit/Games/{id}/Challenges/{cId}
+     * @request DELETE:/api/edit/games/{id}/challenges/{cId}
      */
     editRemoveGameChallenge: (
       id: number,
@@ -16427,7 +16536,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<void, RequestResponse>({
-        path: `/api/Edit/Games/${id}/Challenges/${cId}`,
+        path: `/api/edit/games/${id}/challenges/${cId}`,
         method: "DELETE",
         ...params,
       }),
@@ -16438,7 +16547,7 @@ export class Api<
      * @tags Edit
      * @name EditUpdateAttachment
      * @summary Update Game Challenge Attachment
-     * @request POST:/api/Edit/Games/{id}/Challenges/{cId}/Attachment
+     * @request POST:/api/edit/games/{id}/challenges/{cId}/attachment
      */
     editUpdateAttachment: (
       id: number,
@@ -16447,7 +16556,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<number, RequestResponse>({
-        path: `/api/Edit/Games/${id}/Challenges/${cId}/Attachment`,
+        path: `/api/edit/games/${id}/challenges/${cId}/attachment`,
         method: "POST",
         body: data,
         type: ContentType.Json,
@@ -16461,7 +16570,7 @@ export class Api<
      * @tags Edit
      * @name EditUpdateDivision
      * @summary Update Division
-     * @request PUT:/api/Edit/Games/{id}/Divisions/{divisionId}
+     * @request PUT:/api/edit/games/{id}/divisions/{divisionId}
      */
     editUpdateDivision: (
       id: number,
@@ -16470,7 +16579,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<Division, RequestResponse>({
-        path: `/api/Edit/Games/${id}/Divisions/${divisionId}`,
+        path: `/api/edit/games/${id}/divisions/${divisionId}`,
         method: "PUT",
         body: data,
         type: ContentType.Json,
@@ -16484,7 +16593,7 @@ export class Api<
      * @tags Edit
      * @name EditUpdateFlag
      * @summary Update Game Challenge Flag
-     * @request PUT:/api/Edit/Games/{id}/Challenges/{cId}/Flags/{fId}
+     * @request PUT:/api/edit/games/{id}/challenges/{cId}/flags/{fId}
      */
     editUpdateFlag: (
       id: number,
@@ -16494,7 +16603,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<void, RequestResponse>({
-        path: `/api/Edit/Games/${id}/Challenges/${cId}/Flags/${fId}`,
+        path: `/api/edit/games/${id}/challenges/${cId}/flags/${fId}`,
         method: "PUT",
         body: data,
         type: ContentType.Json,
@@ -16507,7 +16616,7 @@ export class Api<
      * @tags Edit
      * @name EditUpdateGame
      * @summary Update Game
-     * @request PUT:/api/Edit/Games/{id}
+     * @request PUT:/api/edit/games/{id}
      */
     editUpdateGame: (
       id: number,
@@ -16515,7 +16624,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<GameInfoModel, RequestResponse>({
-        path: `/api/Edit/Games/${id}`,
+        path: `/api/edit/games/${id}`,
         method: "PUT",
         body: data,
         type: ContentType.Json,
@@ -16529,7 +16638,7 @@ export class Api<
      * @tags Edit
      * @name EditUpdateGameChallenge
      * @summary Update Game Challenge Information
-     * @request PUT:/api/Edit/Games/{id}/Challenges/{cId}
+     * @request PUT:/api/edit/games/{id}/challenges/{cId}
      */
     editUpdateGameChallenge: (
       id: number,
@@ -16538,7 +16647,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<ChallengeEditDetailModel, RequestResponse>({
-        path: `/api/Edit/Games/${id}/Challenges/${cId}`,
+        path: `/api/edit/games/${id}/challenges/${cId}`,
         method: "PUT",
         body: data,
         type: ContentType.Json,
@@ -16552,7 +16661,7 @@ export class Api<
      * @tags Edit
      * @name EditUpdateGameNotice
      * @summary Update Game Notice
-     * @request PUT:/api/Edit/Games/{id}/Notices/{noticeId}
+     * @request PUT:/api/edit/games/{id}/notices/{noticeId}
      */
     editUpdateGameNotice: (
       id: number,
@@ -16561,7 +16670,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<GameNotice, RequestResponse>({
-        path: `/api/Edit/Games/${id}/Notices/${noticeId}`,
+        path: `/api/edit/games/${id}/notices/${noticeId}`,
         method: "PUT",
         body: data,
         type: ContentType.Json,
@@ -16575,7 +16684,7 @@ export class Api<
      * @tags Edit
      * @name EditUpdateGamePoster
      * @summary Update Game Poster
-     * @request PUT:/api/Edit/Games/{id}/Poster
+     * @request PUT:/api/edit/games/{id}/poster
      */
     editUpdateGamePoster: (
       id: number,
@@ -16586,7 +16695,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<string, RequestResponse>({
-        path: `/api/Edit/Games/${id}/Poster`,
+        path: `/api/edit/games/${id}/poster`,
         method: "PUT",
         body: data,
         type: ContentType.FormData,
@@ -16600,7 +16709,7 @@ export class Api<
      * @tags Edit
      * @name EditUpdatePost
      * @summary Update Post
-     * @request PUT:/api/Edit/Posts/{id}
+     * @request PUT:/api/edit/posts/{id}
      */
     editUpdatePost: (
       id: string,
@@ -16608,7 +16717,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<PostDetailModel, RequestResponse>({
-        path: `/api/Edit/Posts/${id}`,
+        path: `/api/edit/posts/${id}`,
         method: "PUT",
         body: data,
         type: ContentType.Json,
@@ -16622,11 +16731,11 @@ export class Api<
      *
      * @tags Exercise
      * @name ExerciseBackfillPool
-     * @request POST:/api/Exercise/pool/backfill
+     * @request POST:/api/exercise/pool/backfill
      */
     exerciseBackfillPool: (params: RequestParams = {}) =>
       this.request<any, RequestResponse>({
-        path: `/api/Exercise/pool/backfill`,
+        path: `/api/exercise/pool/backfill`,
         method: "POST",
         ...params,
       }),
@@ -16636,11 +16745,11 @@ export class Api<
      *
      * @tags Exercise
      * @name ExerciseCreateContainer
-     * @request POST:/api/Exercise/{id}/container
+     * @request POST:/api/exercise/{id}/container
      */
     exerciseCreateContainer: (id: number, params: RequestParams = {}) =>
       this.request<any, RequestResponse>({
-        path: `/api/Exercise/${id}/container`,
+        path: `/api/exercise/${id}/container`,
         method: "POST",
         ...params,
       }),
@@ -16650,14 +16759,14 @@ export class Api<
      *
      * @tags Exercise
      * @name ExerciseCreateExercise
-     * @request POST:/api/Exercise
+     * @request POST:/api/exercise
      */
     exerciseCreateExercise: (
       data: ExerciseCreateModel,
       params: RequestParams = {},
     ) =>
       this.request<any, RequestResponse>({
-        path: `/api/Exercise`,
+        path: `/api/exercise`,
         method: "POST",
         body: data,
         type: ContentType.Json,
@@ -16669,11 +16778,11 @@ export class Api<
      *
      * @tags Exercise
      * @name ExerciseDeleteExercise
-     * @request DELETE:/api/Exercise/{id}
+     * @request DELETE:/api/exercise/{id}
      */
     exerciseDeleteExercise: (id: number, params: RequestParams = {}) =>
       this.request<any, RequestResponse>({
-        path: `/api/Exercise/${id}`,
+        path: `/api/exercise/${id}`,
         method: "DELETE",
         ...params,
       }),
@@ -16683,11 +16792,11 @@ export class Api<
      *
      * @tags Exercise
      * @name ExerciseDestroyContainer
-     * @request DELETE:/api/Exercise/{id}/container
+     * @request DELETE:/api/exercise/{id}/container
      */
     exerciseDestroyContainer: (id: number, params: RequestParams = {}) =>
       this.request<any, RequestResponse>({
-        path: `/api/Exercise/${id}/container`,
+        path: `/api/exercise/${id}/container`,
         method: "DELETE",
         ...params,
       }),
@@ -16697,11 +16806,11 @@ export class Api<
      *
      * @tags Exercise
      * @name ExerciseExtendContainer
-     * @request POST:/api/Exercise/{id}/container/extend
+     * @request POST:/api/exercise/{id}/container/extend
      */
     exerciseExtendContainer: (id: number, params: RequestParams = {}) =>
       this.request<any, RequestResponse>({
-        path: `/api/Exercise/${id}/container/extend`,
+        path: `/api/exercise/${id}/container/extend`,
         method: "POST",
         ...params,
       }),
@@ -16711,11 +16820,11 @@ export class Api<
      *
      * @tags Exercise
      * @name ExerciseGetExercise
-     * @request GET:/api/Exercise/{id}
+     * @request GET:/api/exercise/{id}
      */
     exerciseGetExercise: (id: number, params: RequestParams = {}) =>
       this.request<any, RequestResponse>({
-        path: `/api/Exercise/${id}`,
+        path: `/api/exercise/${id}`,
         method: "GET",
         ...params,
       }),
@@ -16724,7 +16833,7 @@ export class Api<
      *
      * @tags Exercise
      * @name ExerciseGetExercise
-     * @request GET:/api/Exercise/{id}
+     * @request GET:/api/exercise/{id}
      */
     useExerciseGetExercise: (
       id: number,
@@ -16732,7 +16841,7 @@ export class Api<
       doFetch: boolean = true,
     ) =>
       useSWR<any, RequestResponse>(
-        doFetch ? `/api/Exercise/${id}` : null,
+        doFetch ? `/api/exercise/${id}` : null,
         options,
       ),
 
@@ -16741,27 +16850,27 @@ export class Api<
      *
      * @tags Exercise
      * @name ExerciseGetExercise
-     * @request GET:/api/Exercise/{id}
+     * @request GET:/api/exercise/{id}
      */
     mutateExerciseGetExercise: (
       id: number,
       data?: any | Promise<any>,
       options?: MutatorOptions,
-    ) => mutate<any>(`/api/Exercise/${id}`, data, options),
+    ) => mutate<any>(`/api/exercise/${id}`, data, options),
 
     /**
      * No description
      *
      * @tags Exercise
      * @name ExerciseGetExerciseForManagement
-     * @request GET:/api/Exercise/{id}/manage
+     * @request GET:/api/exercise/{id}/manage
      */
     exerciseGetExerciseForManagement: (
       id: number,
       params: RequestParams = {},
     ) =>
       this.request<any, RequestResponse>({
-        path: `/api/Exercise/${id}/manage`,
+        path: `/api/exercise/${id}/manage`,
         method: "GET",
         ...params,
       }),
@@ -16770,7 +16879,7 @@ export class Api<
      *
      * @tags Exercise
      * @name ExerciseGetExerciseForManagement
-     * @request GET:/api/Exercise/{id}/manage
+     * @request GET:/api/exercise/{id}/manage
      */
     useExerciseGetExerciseForManagement: (
       id: number,
@@ -16778,7 +16887,7 @@ export class Api<
       doFetch: boolean = true,
     ) =>
       useSWR<any, RequestResponse>(
-        doFetch ? `/api/Exercise/${id}/manage` : null,
+        doFetch ? `/api/exercise/${id}/manage` : null,
         options,
       ),
 
@@ -16787,13 +16896,13 @@ export class Api<
      *
      * @tags Exercise
      * @name ExerciseGetExerciseForManagement
-     * @request GET:/api/Exercise/{id}/manage
+     * @request GET:/api/exercise/{id}/manage
      */
     mutateExerciseGetExerciseForManagement: (
       id: number,
       data?: any | Promise<any>,
       options?: MutatorOptions,
-    ) => mutate<any>(`/api/Exercise/${id}/manage`, data, options),
+    ) => mutate<any>(`/api/exercise/${id}/manage`, data, options),
 
     /**
      * No description
@@ -16801,7 +16910,7 @@ export class Api<
      * @tags Exercise
      * @name ExerciseGetExercisePage
      * @summary Get a bounded page of visible public exercises
-     * @request GET:/api/Exercise/page
+     * @request GET:/api/exercise/page
      */
     exerciseGetExercisePage: (
       query?: {
@@ -16828,7 +16937,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<ExerciseCatalogPageModel, RequestResponse>({
-        path: `/api/Exercise/page`,
+        path: `/api/exercise/page`,
         method: "GET",
         query: query,
         format: "json",
@@ -16840,7 +16949,7 @@ export class Api<
      * @tags Exercise
      * @name ExerciseGetExercisePage
      * @summary Get a bounded page of visible public exercises
-     * @request GET:/api/Exercise/page
+     * @request GET:/api/exercise/page
      */
     useExerciseGetExercisePage: (
       query?: {
@@ -16868,7 +16977,7 @@ export class Api<
       doFetch: boolean = true,
     ) =>
       useSWR<ExerciseCatalogPageModel, RequestResponse>(
-        doFetch ? [`/api/Exercise/page`, query] : null,
+        doFetch ? [`/api/exercise/page`, query] : null,
         options,
       ),
 
@@ -16878,7 +16987,7 @@ export class Api<
      * @tags Exercise
      * @name ExerciseGetExercisePage
      * @summary Get a bounded page of visible public exercises
-     * @request GET:/api/Exercise/page
+     * @request GET:/api/exercise/page
      */
     mutateExerciseGetExercisePage: (
       query?: {
@@ -16906,7 +17015,7 @@ export class Api<
       options?: MutatorOptions,
     ) =>
       mutate<ExerciseCatalogPageModel>(
-        [`/api/Exercise/page`, query],
+        [`/api/exercise/page`, query],
         data,
         options,
       ),
@@ -16916,7 +17025,7 @@ export class Api<
      *
      * @tags Exercise
      * @name ExerciseGetExercises
-     * @request GET:/api/Exercise
+     * @request GET:/api/exercise
      */
     exerciseGetExercises: (
       query?: {
@@ -16931,7 +17040,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<any, RequestResponse>({
-        path: `/api/Exercise`,
+        path: `/api/exercise`,
         method: "GET",
         query: query,
         ...params,
@@ -16941,7 +17050,7 @@ export class Api<
      *
      * @tags Exercise
      * @name ExerciseGetExercises
-     * @request GET:/api/Exercise
+     * @request GET:/api/exercise
      */
     useExerciseGetExercises: (
       query?: {
@@ -16957,7 +17066,7 @@ export class Api<
       doFetch: boolean = true,
     ) =>
       useSWR<any, RequestResponse>(
-        doFetch ? [`/api/Exercise`, query] : null,
+        doFetch ? [`/api/exercise`, query] : null,
         options,
       ),
 
@@ -16966,7 +17075,7 @@ export class Api<
      *
      * @tags Exercise
      * @name ExerciseGetExercises
-     * @request GET:/api/Exercise
+     * @request GET:/api/exercise
      */
     mutateExerciseGetExercises: (
       query?: {
@@ -16980,18 +17089,18 @@ export class Api<
       },
       data?: any | Promise<any>,
       options?: MutatorOptions,
-    ) => mutate<any>([`/api/Exercise`, query], data, options),
+    ) => mutate<any>([`/api/exercise`, query], data, options),
 
     /**
      * No description
      *
      * @tags Exercise
      * @name ExerciseGetExercisesForManagement
-     * @request GET:/api/Exercise/manage
+     * @request GET:/api/exercise/manage
      */
     exerciseGetExercisesForManagement: (params: RequestParams = {}) =>
       this.request<ExerciseInfoModel[], RequestResponse>({
-        path: `/api/Exercise/manage`,
+        path: `/api/exercise/manage`,
         method: "GET",
         format: "json",
         ...params,
@@ -17001,14 +17110,14 @@ export class Api<
      *
      * @tags Exercise
      * @name ExerciseGetExercisesForManagement
-     * @request GET:/api/Exercise/manage
+     * @request GET:/api/exercise/manage
      */
     useExerciseGetExercisesForManagement: (
       options?: SWRConfiguration,
       doFetch: boolean = true,
     ) =>
       useSWR<ExerciseInfoModel[], RequestResponse>(
-        doFetch ? `/api/Exercise/manage` : null,
+        doFetch ? `/api/exercise/manage` : null,
         options,
       ),
 
@@ -17017,12 +17126,12 @@ export class Api<
      *
      * @tags Exercise
      * @name ExerciseGetExercisesForManagement
-     * @request GET:/api/Exercise/manage
+     * @request GET:/api/exercise/manage
      */
     mutateExerciseGetExercisesForManagement: (
       data?: ExerciseInfoModel[] | Promise<ExerciseInfoModel[]>,
       options?: MutatorOptions,
-    ) => mutate<ExerciseInfoModel[]>(`/api/Exercise/manage`, data, options),
+    ) => mutate<ExerciseInfoModel[]>(`/api/exercise/manage`, data, options),
 
     /**
      * No description
@@ -17030,7 +17139,7 @@ export class Api<
      * @tags Exercise
      * @name ExerciseGetManagementExercisePage
      * @summary Get a bounded management page including disabled public exercises
-     * @request GET:/api/Exercise/manage/page
+     * @request GET:/api/exercise/manage/page
      */
     exerciseGetManagementExercisePage: (
       query?: {
@@ -17057,7 +17166,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<ExerciseCatalogPageModel, RequestResponse>({
-        path: `/api/Exercise/manage/page`,
+        path: `/api/exercise/manage/page`,
         method: "GET",
         query: query,
         format: "json",
@@ -17069,7 +17178,7 @@ export class Api<
      * @tags Exercise
      * @name ExerciseGetManagementExercisePage
      * @summary Get a bounded management page including disabled public exercises
-     * @request GET:/api/Exercise/manage/page
+     * @request GET:/api/exercise/manage/page
      */
     useExerciseGetManagementExercisePage: (
       query?: {
@@ -17097,7 +17206,7 @@ export class Api<
       doFetch: boolean = true,
     ) =>
       useSWR<ExerciseCatalogPageModel, RequestResponse>(
-        doFetch ? [`/api/Exercise/manage/page`, query] : null,
+        doFetch ? [`/api/exercise/manage/page`, query] : null,
         options,
       ),
 
@@ -17107,7 +17216,7 @@ export class Api<
      * @tags Exercise
      * @name ExerciseGetManagementExercisePage
      * @summary Get a bounded management page including disabled public exercises
-     * @request GET:/api/Exercise/manage/page
+     * @request GET:/api/exercise/manage/page
      */
     mutateExerciseGetManagementExercisePage: (
       query?: {
@@ -17135,7 +17244,7 @@ export class Api<
       options?: MutatorOptions,
     ) =>
       mutate<ExerciseCatalogPageModel>(
-        [`/api/Exercise/manage/page`, query],
+        [`/api/exercise/manage/page`, query],
         data,
         options,
       ),
@@ -17145,14 +17254,14 @@ export class Api<
      *
      * @tags Exercise
      * @name ExerciseImportFromGame
-     * @request POST:/api/Exercise/import
+     * @request POST:/api/exercise/import
      */
     exerciseImportFromGame: (
       data: ExerciseImportFromGameModel,
       params: RequestParams = {},
     ) =>
       this.request<any, RequestResponse>({
-        path: `/api/Exercise/import`,
+        path: `/api/exercise/import`,
         method: "POST",
         body: data,
         type: ContentType.Json,
@@ -17164,14 +17273,14 @@ export class Api<
      *
      * @tags Exercise
      * @name ExerciseImportFromTraining
-     * @request POST:/api/Exercise/import/training
+     * @request POST:/api/exercise/import/training
      */
     exerciseImportFromTraining: (
       data: ExerciseImportFromTrainingModel,
       params: RequestParams = {},
     ) =>
       this.request<any, RequestResponse>({
-        path: `/api/Exercise/import/training`,
+        path: `/api/exercise/import/training`,
         method: "POST",
         body: data,
         type: ContentType.Json,
@@ -17183,7 +17292,7 @@ export class Api<
      *
      * @tags Exercise
      * @name ExerciseSubmitFlag
-     * @request POST:/api/Exercise/{id}/flag
+     * @request POST:/api/exercise/{id}/flag
      */
     exerciseSubmitFlag: (
       id: number,
@@ -17191,7 +17300,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<any, RequestResponse>({
-        path: `/api/Exercise/${id}/flag`,
+        path: `/api/exercise/${id}/flag`,
         method: "POST",
         body: data,
         type: ContentType.Json,
@@ -17203,7 +17312,7 @@ export class Api<
      *
      * @tags Exercise
      * @name ExerciseUpdateExercise
-     * @request PUT:/api/Exercise/{id}
+     * @request PUT:/api/exercise/{id}
      */
     exerciseUpdateExercise: (
       id: number,
@@ -17211,7 +17320,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<any, RequestResponse>({
-        path: `/api/Exercise/${id}`,
+        path: `/api/exercise/${id}`,
         method: "PUT",
         body: data,
         type: ContentType.Json,
@@ -17225,11 +17334,11 @@ export class Api<
      * @tags Game
      * @name GameChallengesWithTeamInfo
      * @summary Get team details in a game
-     * @request GET:/api/Game/{id}/Details
+     * @request GET:/api/game/{id}/details
      */
     gameChallengesWithTeamInfo: (id: number, params: RequestParams = {}) =>
       this.request<GameDetailModel, RequestResponse>({
-        path: `/api/Game/${id}/Details`,
+        path: `/api/game/${id}/details`,
         method: "GET",
         format: "json",
         ...params,
@@ -17240,7 +17349,7 @@ export class Api<
      * @tags Game
      * @name GameChallengesWithTeamInfo
      * @summary Get team details in a game
-     * @request GET:/api/Game/{id}/Details
+     * @request GET:/api/game/{id}/details
      */
     useGameChallengesWithTeamInfo: (
       id: number,
@@ -17248,7 +17357,7 @@ export class Api<
       doFetch: boolean = true,
     ) =>
       useSWR<GameDetailModel, RequestResponse>(
-        doFetch ? `/api/Game/${id}/Details` : null,
+        doFetch ? `/api/game/${id}/details` : null,
         options,
       ),
 
@@ -17258,13 +17367,13 @@ export class Api<
      * @tags Game
      * @name GameChallengesWithTeamInfo
      * @summary Get team details in a game
-     * @request GET:/api/Game/{id}/Details
+     * @request GET:/api/game/{id}/details
      */
     mutateGameChallengesWithTeamInfo: (
       id: number,
       data?: GameDetailModel | Promise<GameDetailModel>,
       options?: MutatorOptions,
-    ) => mutate<GameDetailModel>(`/api/Game/${id}/Details`, data, options),
+    ) => mutate<GameDetailModel>(`/api/game/${id}/details`, data, options),
 
     /**
      * @description Retrieves game cheat data; requires Monitor permission
@@ -17272,11 +17381,11 @@ export class Api<
      * @tags Game
      * @name GameCheatInfo
      * @summary Get game cheat information
-     * @request GET:/api/Game/{id}/CheatInfo
+     * @request GET:/api/game/{id}/cheatinfo
      */
     gameCheatInfo: (id: number, params: RequestParams = {}) =>
       this.request<CheatInfoModel[], RequestResponse>({
-        path: `/api/Game/${id}/CheatInfo`,
+        path: `/api/game/${id}/cheatinfo`,
         method: "GET",
         format: "json",
         ...params,
@@ -17287,7 +17396,7 @@ export class Api<
      * @tags Game
      * @name GameCheatInfo
      * @summary Get game cheat information
-     * @request GET:/api/Game/{id}/CheatInfo
+     * @request GET:/api/game/{id}/cheatinfo
      */
     useGameCheatInfo: (
       id: number,
@@ -17295,7 +17404,7 @@ export class Api<
       doFetch: boolean = true,
     ) =>
       useSWR<CheatInfoModel[], RequestResponse>(
-        doFetch ? `/api/Game/${id}/CheatInfo` : null,
+        doFetch ? `/api/game/${id}/cheatinfo` : null,
         options,
       ),
 
@@ -17305,13 +17414,13 @@ export class Api<
      * @tags Game
      * @name GameCheatInfo
      * @summary Get game cheat information
-     * @request GET:/api/Game/{id}/CheatInfo
+     * @request GET:/api/game/{id}/cheatinfo
      */
     mutateGameCheatInfo: (
       id: number,
       data?: CheatInfoModel[] | Promise<CheatInfoModel[]>,
       options?: MutatorOptions,
-    ) => mutate<CheatInfoModel[]>(`/api/Game/${id}/CheatInfo`, data, options),
+    ) => mutate<CheatInfoModel[]>(`/api/game/${id}/cheatinfo`, data, options),
 
     /**
      * @description Creates a container; requires User permission
@@ -17319,7 +17428,7 @@ export class Api<
      * @tags Game
      * @name GameCreateContainer
      * @summary Creates a container
-     * @request POST:/api/Game/{id}/Container/{challengeId}
+     * @request POST:/api/game/{id}/container/{challengeId}
      */
     gameCreateContainer: (
       id: number,
@@ -17327,7 +17436,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<ContainerInfoModel, RequestResponse>({
-        path: `/api/Game/${id}/Container/${challengeId}`,
+        path: `/api/game/${id}/container/${challengeId}`,
         method: "POST",
         format: "json",
         ...params,
@@ -17339,7 +17448,7 @@ export class Api<
      * @tags Game
      * @name GameDeleteAllTeamTraffic
      * @summary Deletes all traffic files
-     * @request DELETE:/api/Game/Captures/{challengeId}/{partId}/All
+     * @request DELETE:/api/game/captures/{challengeId}/{partId}/all
      */
     gameDeleteAllTeamTraffic: (
       challengeId: number,
@@ -17347,7 +17456,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<void, RequestResponse>({
-        path: `/api/Game/Captures/${challengeId}/${partId}/All`,
+        path: `/api/game/captures/${challengeId}/${partId}/all`,
         method: "DELETE",
         ...params,
       }),
@@ -17358,7 +17467,7 @@ export class Api<
      * @tags Game
      * @name GameDeleteContainer
      * @summary Deletes a container
-     * @request DELETE:/api/Game/{id}/Container/{challengeId}
+     * @request DELETE:/api/game/{id}/container/{challengeId}
      */
     gameDeleteContainer: (
       id: number,
@@ -17366,7 +17475,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<void, RequestResponse>({
-        path: `/api/Game/${id}/Container/${challengeId}`,
+        path: `/api/game/${id}/container/${challengeId}`,
         method: "DELETE",
         ...params,
       }),
@@ -17377,7 +17486,7 @@ export class Api<
      * @tags Game
      * @name GameDeleteTeamTraffic
      * @summary Deletes a traffic file
-     * @request DELETE:/api/Game/Captures/{challengeId}/{partId}/{filename}
+     * @request DELETE:/api/game/captures/{challengeId}/{partId}/{filename}
      */
     gameDeleteTeamTraffic: (
       challengeId: number,
@@ -17386,7 +17495,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<void, RequestResponse>({
-        path: `/api/Game/Captures/${challengeId}/${partId}/${filename}`,
+        path: `/api/game/captures/${challengeId}/${partId}/${filename}`,
         method: "DELETE",
         ...params,
       }),
@@ -17397,7 +17506,7 @@ export class Api<
      * @tags Game
      * @name GameDestroyVm
      * @summary Destroy a VM instance
-     * @request DELETE:/api/Game/{id}/Vm/{challengeId}
+     * @request DELETE:/api/game/{id}/vm/{challengeId}
      */
     gameDestroyVm: (
       id: number,
@@ -17405,7 +17514,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<void, RequestResponse>({
-        path: `/api/Game/${id}/Vm/${challengeId}`,
+        path: `/api/game/${id}/vm/${challengeId}`,
         method: "DELETE",
         ...params,
       }),
@@ -17416,7 +17525,7 @@ export class Api<
      * @tags Game
      * @name GameEvents
      * @summary Get game events
-     * @request GET:/api/Game/{id}/Events
+     * @request GET:/api/game/{id}/events
      */
     gameEvents: (
       id: number,
@@ -17442,7 +17551,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<GameEvent[], RequestResponse>({
-        path: `/api/Game/${id}/Events`,
+        path: `/api/game/${id}/events`,
         method: "GET",
         query: query,
         format: "json",
@@ -17454,7 +17563,7 @@ export class Api<
      * @tags Game
      * @name GameEvents
      * @summary Get game events
-     * @request GET:/api/Game/{id}/Events
+     * @request GET:/api/game/{id}/events
      */
     useGameEvents: (
       id: number,
@@ -17481,7 +17590,7 @@ export class Api<
       doFetch: boolean = true,
     ) =>
       useSWR<GameEvent[], RequestResponse>(
-        doFetch ? [`/api/Game/${id}/Events`, query] : null,
+        doFetch ? [`/api/game/${id}/events`, query] : null,
         options,
       ),
 
@@ -17491,7 +17600,7 @@ export class Api<
      * @tags Game
      * @name GameEvents
      * @summary Get game events
-     * @request GET:/api/Game/{id}/Events
+     * @request GET:/api/game/{id}/events
      */
     mutateGameEvents: (
       id: number,
@@ -17516,7 +17625,7 @@ export class Api<
       },
       data?: GameEvent[] | Promise<GameEvent[]>,
       options?: MutatorOptions,
-    ) => mutate<GameEvent[]>([`/api/Game/${id}/Events`, query], data, options),
+    ) => mutate<GameEvent[]>([`/api/game/${id}/events`, query], data, options),
 
     /**
      * @description Extends container lifetime; requires User permission and can only be extended two hours within ten minutes before expiration
@@ -17524,7 +17633,7 @@ export class Api<
      * @tags Game
      * @name GameExtendContainerLifetime
      * @summary Extends container lifetime
-     * @request POST:/api/Game/{id}/Container/{challengeId}/Extend
+     * @request POST:/api/game/{id}/container/{challengeId}/extend
      */
     gameExtendContainerLifetime: (
       id: number,
@@ -17532,7 +17641,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<ContainerInfoModel, RequestResponse>({
-        path: `/api/Game/${id}/Container/${challengeId}/Extend`,
+        path: `/api/game/${id}/container/${challengeId}/extend`,
         method: "POST",
         format: "json",
         ...params,
@@ -17544,11 +17653,11 @@ export class Api<
      * @tags Game
      * @name GameGame
      * @summary Get detailed game information
-     * @request GET:/api/Game/{id}
+     * @request GET:/api/game/{id}
      */
     gameGame: (id: number, params: RequestParams = {}) =>
       this.request<DetailedGameInfoModel, RequestResponse>({
-        path: `/api/Game/${id}`,
+        path: `/api/game/${id}`,
         method: "GET",
         format: "json",
         ...params,
@@ -17559,7 +17668,7 @@ export class Api<
      * @tags Game
      * @name GameGame
      * @summary Get detailed game information
-     * @request GET:/api/Game/{id}
+     * @request GET:/api/game/{id}
      */
     useGameGame: (
       id: number,
@@ -17567,7 +17676,7 @@ export class Api<
       doFetch: boolean = true,
     ) =>
       useSWR<DetailedGameInfoModel, RequestResponse>(
-        doFetch ? `/api/Game/${id}` : null,
+        doFetch ? `/api/game/${id}` : null,
         options,
       ),
 
@@ -17577,13 +17686,13 @@ export class Api<
      * @tags Game
      * @name GameGame
      * @summary Get detailed game information
-     * @request GET:/api/Game/{id}
+     * @request GET:/api/game/{id}
      */
     mutateGameGame: (
       id: number,
       data?: DetailedGameInfoModel | Promise<DetailedGameInfoModel>,
       options?: MutatorOptions,
-    ) => mutate<DetailedGameInfoModel>(`/api/Game/${id}`, data, options),
+    ) => mutate<DetailedGameInfoModel>(`/api/game/${id}`, data, options),
 
     /**
      * @description Retrieves game information in specified range
@@ -17591,7 +17700,7 @@ export class Api<
      * @tags Game
      * @name GameGames
      * @summary Get games
-     * @request GET:/api/Game
+     * @request GET:/api/game
      */
     gameGames: (
       query?: {
@@ -17611,7 +17720,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<ArrayResponseOfBasicGameInfoModel, RequestResponse>({
-        path: `/api/Game`,
+        path: `/api/game`,
         method: "GET",
         query: query,
         format: "json",
@@ -17623,7 +17732,7 @@ export class Api<
      * @tags Game
      * @name GameGames
      * @summary Get games
-     * @request GET:/api/Game
+     * @request GET:/api/game
      */
     useGameGames: (
       query?: {
@@ -17644,7 +17753,7 @@ export class Api<
       doFetch: boolean = true,
     ) =>
       useSWR<ArrayResponseOfBasicGameInfoModel, RequestResponse>(
-        doFetch ? [`/api/Game`, query] : null,
+        doFetch ? [`/api/game`, query] : null,
         options,
       ),
 
@@ -17654,7 +17763,7 @@ export class Api<
      * @tags Game
      * @name GameGames
      * @summary Get games
-     * @request GET:/api/Game
+     * @request GET:/api/game
      */
     mutateGameGames: (
       query?: {
@@ -17677,7 +17786,7 @@ export class Api<
       options?: MutatorOptions,
     ) =>
       mutate<ArrayResponseOfBasicGameInfoModel>(
-        [`/api/Game`, query],
+        [`/api/game`, query],
         data,
         options,
       ),
@@ -17688,7 +17797,7 @@ export class Api<
      * @tags Game
      * @name GameGetAllTeamTraffic
      * @summary Download all traffic files
-     * @request GET:/api/Game/Captures/{challengeId}/{partId}/All
+     * @request GET:/api/game/captures/{challengeId}/{partId}/all
      */
     gameGetAllTeamTraffic: (
       challengeId: number,
@@ -17696,7 +17805,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<void, RequestResponse>({
-        path: `/api/Game/Captures/${challengeId}/${partId}/All`,
+        path: `/api/game/captures/${challengeId}/${partId}/all`,
         method: "GET",
         ...params,
       }),
@@ -17707,7 +17816,7 @@ export class Api<
      * @tags Game
      * @name GameGetChallenge
      * @summary Get challenge information
-     * @request GET:/api/Game/{id}/Challenges/{challengeId}
+     * @request GET:/api/game/{id}/challenges/{challengeId}
      */
     gameGetChallenge: (
       id: number,
@@ -17715,7 +17824,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<ChallengeDetailModel, RequestResponse>({
-        path: `/api/Game/${id}/Challenges/${challengeId}`,
+        path: `/api/game/${id}/challenges/${challengeId}`,
         method: "GET",
         format: "json",
         ...params,
@@ -17726,7 +17835,7 @@ export class Api<
      * @tags Game
      * @name GameGetChallenge
      * @summary Get challenge information
-     * @request GET:/api/Game/{id}/Challenges/{challengeId}
+     * @request GET:/api/game/{id}/challenges/{challengeId}
      */
     useGameGetChallenge: (
       id: number,
@@ -17735,7 +17844,7 @@ export class Api<
       doFetch: boolean = true,
     ) =>
       useSWR<ChallengeDetailModel, RequestResponse>(
-        doFetch ? `/api/Game/${id}/Challenges/${challengeId}` : null,
+        doFetch ? `/api/game/${id}/challenges/${challengeId}` : null,
         options,
       ),
 
@@ -17745,7 +17854,7 @@ export class Api<
      * @tags Game
      * @name GameGetChallenge
      * @summary Get challenge information
-     * @request GET:/api/Game/{id}/Challenges/{challengeId}
+     * @request GET:/api/game/{id}/challenges/{challengeId}
      */
     mutateGameGetChallenge: (
       id: number,
@@ -17754,7 +17863,7 @@ export class Api<
       options?: MutatorOptions,
     ) =>
       mutate<ChallengeDetailModel>(
-        `/api/Game/${id}/Challenges/${challengeId}`,
+        `/api/game/${id}/challenges/${challengeId}`,
         data,
         options,
       ),
@@ -17765,14 +17874,14 @@ export class Api<
      * @tags Game
      * @name GameGetChallengesWithTrafficCapturing
      * @summary Get challenges with traffic capturing enabled
-     * @request GET:/api/Game/Games/{id}/Captures
+     * @request GET:/api/game/games/{id}/captures
      */
     gameGetChallengesWithTrafficCapturing: (
       id: number,
       params: RequestParams = {},
     ) =>
       this.request<ChallengeTrafficModel[], RequestResponse>({
-        path: `/api/Game/Games/${id}/Captures`,
+        path: `/api/game/games/${id}/captures`,
         method: "GET",
         format: "json",
         ...params,
@@ -17783,7 +17892,7 @@ export class Api<
      * @tags Game
      * @name GameGetChallengesWithTrafficCapturing
      * @summary Get challenges with traffic capturing enabled
-     * @request GET:/api/Game/Games/{id}/Captures
+     * @request GET:/api/game/games/{id}/captures
      */
     useGameGetChallengesWithTrafficCapturing: (
       id: number,
@@ -17791,7 +17900,7 @@ export class Api<
       doFetch: boolean = true,
     ) =>
       useSWR<ChallengeTrafficModel[], RequestResponse>(
-        doFetch ? `/api/Game/Games/${id}/Captures` : null,
+        doFetch ? `/api/game/games/${id}/captures` : null,
         options,
       ),
 
@@ -17801,7 +17910,7 @@ export class Api<
      * @tags Game
      * @name GameGetChallengesWithTrafficCapturing
      * @summary Get challenges with traffic capturing enabled
-     * @request GET:/api/Game/Games/{id}/Captures
+     * @request GET:/api/game/games/{id}/captures
      */
     mutateGameGetChallengesWithTrafficCapturing: (
       id: number,
@@ -17809,7 +17918,7 @@ export class Api<
       options?: MutatorOptions,
     ) =>
       mutate<ChallengeTrafficModel[]>(
-        `/api/Game/Games/${id}/Captures`,
+        `/api/game/games/${id}/captures`,
         data,
         options,
       ),
@@ -17820,14 +17929,14 @@ export class Api<
      * @tags Game
      * @name GameGetChallengeTraffic
      * @summary Get team captures in a challenge
-     * @request GET:/api/Game/Captures/{challengeId}
+     * @request GET:/api/game/captures/{challengeId}
      */
     gameGetChallengeTraffic: (
       challengeId: number,
       params: RequestParams = {},
     ) =>
       this.request<TeamTrafficModel[], RequestResponse>({
-        path: `/api/Game/Captures/${challengeId}`,
+        path: `/api/game/captures/${challengeId}`,
         method: "GET",
         format: "json",
         ...params,
@@ -17838,7 +17947,7 @@ export class Api<
      * @tags Game
      * @name GameGetChallengeTraffic
      * @summary Get team captures in a challenge
-     * @request GET:/api/Game/Captures/{challengeId}
+     * @request GET:/api/game/captures/{challengeId}
      */
     useGameGetChallengeTraffic: (
       challengeId: number,
@@ -17846,7 +17955,7 @@ export class Api<
       doFetch: boolean = true,
     ) =>
       useSWR<TeamTrafficModel[], RequestResponse>(
-        doFetch ? `/api/Game/Captures/${challengeId}` : null,
+        doFetch ? `/api/game/captures/${challengeId}` : null,
         options,
       ),
 
@@ -17856,7 +17965,7 @@ export class Api<
      * @tags Game
      * @name GameGetChallengeTraffic
      * @summary Get team captures in a challenge
-     * @request GET:/api/Game/Captures/{challengeId}
+     * @request GET:/api/game/captures/{challengeId}
      */
     mutateGameGetChallengeTraffic: (
       challengeId: number,
@@ -17864,7 +17973,7 @@ export class Api<
       options?: MutatorOptions,
     ) =>
       mutate<TeamTrafficModel[]>(
-        `/api/Game/Captures/${challengeId}`,
+        `/api/game/captures/${challengeId}`,
         data,
         options,
       ),
@@ -17875,11 +17984,11 @@ export class Api<
      * @tags Game
      * @name GameGetGameJoinCheckInfo
      * @summary Get check info for joining a game
-     * @request GET:/api/Game/{id}/Check
+     * @request GET:/api/game/{id}/check
      */
     gameGetGameJoinCheckInfo: (id: number, params: RequestParams = {}) =>
       this.request<GameJoinCheckInfoModel, RequestResponse>({
-        path: `/api/Game/${id}/Check`,
+        path: `/api/game/${id}/check`,
         method: "GET",
         format: "json",
         ...params,
@@ -17890,7 +17999,7 @@ export class Api<
      * @tags Game
      * @name GameGetGameJoinCheckInfo
      * @summary Get check info for joining a game
-     * @request GET:/api/Game/{id}/Check
+     * @request GET:/api/game/{id}/check
      */
     useGameGetGameJoinCheckInfo: (
       id: number,
@@ -17898,7 +18007,7 @@ export class Api<
       doFetch: boolean = true,
     ) =>
       useSWR<GameJoinCheckInfoModel, RequestResponse>(
-        doFetch ? `/api/Game/${id}/Check` : null,
+        doFetch ? `/api/game/${id}/check` : null,
         options,
       ),
 
@@ -17908,13 +18017,13 @@ export class Api<
      * @tags Game
      * @name GameGetGameJoinCheckInfo
      * @summary Get check info for joining a game
-     * @request GET:/api/Game/{id}/Check
+     * @request GET:/api/game/{id}/check
      */
     mutateGameGetGameJoinCheckInfo: (
       id: number,
       data?: GameJoinCheckInfoModel | Promise<GameJoinCheckInfoModel>,
       options?: MutatorOptions,
-    ) => mutate<GameJoinCheckInfoModel>(`/api/Game/${id}/Check`, data, options),
+    ) => mutate<GameJoinCheckInfoModel>(`/api/game/${id}/check`, data, options),
 
     /**
      * @description Retrieves a traffic packet file; requires Monitor permission
@@ -17922,7 +18031,7 @@ export class Api<
      * @tags Game
      * @name GameGetTeamTraffic
      * @summary Get a traffic file
-     * @request GET:/api/Game/Captures/{challengeId}/{partId}/{filename}
+     * @request GET:/api/game/captures/{challengeId}/{partId}/{filename}
      */
     gameGetTeamTraffic: (
       challengeId: number,
@@ -17931,7 +18040,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<void, RequestResponse>({
-        path: `/api/Game/Captures/${challengeId}/${partId}/${filename}`,
+        path: `/api/game/captures/${challengeId}/${partId}/${filename}`,
         method: "GET",
         ...params,
       }),
@@ -17942,7 +18051,7 @@ export class Api<
      * @tags Game
      * @name GameGetTeamTrafficAll
      * @summary Get traffic files
-     * @request GET:/api/Game/Captures/{challengeId}/{partId}
+     * @request GET:/api/game/captures/{challengeId}/{partId}
      */
     gameGetTeamTrafficAll: (
       challengeId: number,
@@ -17950,7 +18059,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<FileRecord[], RequestResponse>({
-        path: `/api/Game/Captures/${challengeId}/${partId}`,
+        path: `/api/game/captures/${challengeId}/${partId}`,
         method: "GET",
         format: "json",
         ...params,
@@ -17961,7 +18070,7 @@ export class Api<
      * @tags Game
      * @name GameGetTeamTrafficAll
      * @summary Get traffic files
-     * @request GET:/api/Game/Captures/{challengeId}/{partId}
+     * @request GET:/api/game/captures/{challengeId}/{partId}
      */
     useGameGetTeamTrafficAll: (
       challengeId: number,
@@ -17970,7 +18079,7 @@ export class Api<
       doFetch: boolean = true,
     ) =>
       useSWR<FileRecord[], RequestResponse>(
-        doFetch ? `/api/Game/Captures/${challengeId}/${partId}` : null,
+        doFetch ? `/api/game/captures/${challengeId}/${partId}` : null,
         options,
       ),
 
@@ -17980,7 +18089,7 @@ export class Api<
      * @tags Game
      * @name GameGetTeamTrafficAll
      * @summary Get traffic files
-     * @request GET:/api/Game/Captures/{challengeId}/{partId}
+     * @request GET:/api/game/captures/{challengeId}/{partId}
      */
     mutateGameGetTeamTrafficAll: (
       challengeId: number,
@@ -17989,7 +18098,7 @@ export class Api<
       options?: MutatorOptions,
     ) =>
       mutate<FileRecord[]>(
-        `/api/Game/Captures/${challengeId}/${partId}`,
+        `/api/game/captures/${challengeId}/${partId}`,
         data,
         options,
       ),
@@ -18000,7 +18109,7 @@ export class Api<
      * @tags Game
      * @name GameGetVmStatus
      * @summary Get VM instance status and RDP access URL
-     * @request GET:/api/Game/{id}/Vm/{challengeId}
+     * @request GET:/api/game/{id}/vm/{challengeId}
      */
     gameGetVmStatus: (
       id: number,
@@ -18008,7 +18117,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<VmStatusResponse, RequestResponse>({
-        path: `/api/Game/${id}/Vm/${challengeId}`,
+        path: `/api/game/${id}/vm/${challengeId}`,
         method: "GET",
         format: "json",
         ...params,
@@ -18019,7 +18128,7 @@ export class Api<
      * @tags Game
      * @name GameGetVmStatus
      * @summary Get VM instance status and RDP access URL
-     * @request GET:/api/Game/{id}/Vm/{challengeId}
+     * @request GET:/api/game/{id}/vm/{challengeId}
      */
     useGameGetVmStatus: (
       id: number,
@@ -18028,7 +18137,7 @@ export class Api<
       doFetch: boolean = true,
     ) =>
       useSWR<VmStatusResponse, RequestResponse>(
-        doFetch ? `/api/Game/${id}/Vm/${challengeId}` : null,
+        doFetch ? `/api/game/${id}/vm/${challengeId}` : null,
         options,
       ),
 
@@ -18038,7 +18147,7 @@ export class Api<
      * @tags Game
      * @name GameGetVmStatus
      * @summary Get VM instance status and RDP access URL
-     * @request GET:/api/Game/{id}/Vm/{challengeId}
+     * @request GET:/api/game/{id}/vm/{challengeId}
      */
     mutateGameGetVmStatus: (
       id: number,
@@ -18047,7 +18156,7 @@ export class Api<
       options?: MutatorOptions,
     ) =>
       mutate<VmStatusResponse>(
-        `/api/Game/${id}/Vm/${challengeId}`,
+        `/api/game/${id}/vm/${challengeId}`,
         data,
         options,
       ),
@@ -18058,11 +18167,11 @@ export class Api<
      * @tags Game
      * @name GameGetWriteup
      * @summary Get writeup information
-     * @request GET:/api/Game/{id}/Writeup
+     * @request GET:/api/game/{id}/writeup
      */
     gameGetWriteup: (id: number, params: RequestParams = {}) =>
       this.request<BasicWriteupInfoModel, RequestResponse>({
-        path: `/api/Game/${id}/Writeup`,
+        path: `/api/game/${id}/writeup`,
         method: "GET",
         format: "json",
         ...params,
@@ -18073,7 +18182,7 @@ export class Api<
      * @tags Game
      * @name GameGetWriteup
      * @summary Get writeup information
-     * @request GET:/api/Game/{id}/Writeup
+     * @request GET:/api/game/{id}/writeup
      */
     useGameGetWriteup: (
       id: number,
@@ -18081,7 +18190,7 @@ export class Api<
       doFetch: boolean = true,
     ) =>
       useSWR<BasicWriteupInfoModel, RequestResponse>(
-        doFetch ? `/api/Game/${id}/Writeup` : null,
+        doFetch ? `/api/game/${id}/writeup` : null,
         options,
       ),
 
@@ -18091,14 +18200,14 @@ export class Api<
      * @tags Game
      * @name GameGetWriteup
      * @summary Get writeup information
-     * @request GET:/api/Game/{id}/Writeup
+     * @request GET:/api/game/{id}/writeup
      */
     mutateGameGetWriteup: (
       id: number,
       data?: BasicWriteupInfoModel | Promise<BasicWriteupInfoModel>,
       options?: MutatorOptions,
     ) =>
-      mutate<BasicWriteupInfoModel>(`/api/Game/${id}/Writeup`, data, options),
+      mutate<BasicWriteupInfoModel>(`/api/game/${id}/writeup`, data, options),
 
     /**
      * @description Join a game; requires User permission
@@ -18106,7 +18215,7 @@ export class Api<
      * @tags Game
      * @name GameJoinGame
      * @summary Join a game
-     * @request POST:/api/Game/{id}
+     * @request POST:/api/game/{id}
      */
     gameJoinGame: (
       id: number,
@@ -18114,7 +18223,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<void, RequestResponse>({
-        path: `/api/Game/${id}`,
+        path: `/api/game/${id}`,
         method: "POST",
         body: data,
         type: ContentType.Json,
@@ -18127,11 +18236,11 @@ export class Api<
      * @tags Game
      * @name GameLeaveGame
      * @summary Leave a game
-     * @request DELETE:/api/Game/{id}
+     * @request DELETE:/api/game/{id}
      */
     gameLeaveGame: (id: number, params: RequestParams = {}) =>
       this.request<void, RequestResponse>({
-        path: `/api/Game/${id}`,
+        path: `/api/game/${id}`,
         method: "DELETE",
         ...params,
       }),
@@ -18142,7 +18251,7 @@ export class Api<
      * @tags Game
      * @name GameNotices
      * @summary Get game notices
-     * @request GET:/api/Game/{id}/Notices
+     * @request GET:/api/game/{id}/notices
      */
     gameNotices: (
       id: number,
@@ -18165,7 +18274,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<GameNotice[], RequestResponse>({
-        path: `/api/Game/${id}/Notices`,
+        path: `/api/game/${id}/notices`,
         method: "GET",
         query: query,
         format: "json",
@@ -18177,7 +18286,7 @@ export class Api<
      * @tags Game
      * @name GameNotices
      * @summary Get game notices
-     * @request GET:/api/Game/{id}/Notices
+     * @request GET:/api/game/{id}/notices
      */
     useGameNotices: (
       id: number,
@@ -18201,7 +18310,7 @@ export class Api<
       doFetch: boolean = true,
     ) =>
       useSWR<GameNotice[], RequestResponse>(
-        doFetch ? [`/api/Game/${id}/Notices`, query] : null,
+        doFetch ? [`/api/game/${id}/notices`, query] : null,
         options,
       ),
 
@@ -18211,7 +18320,7 @@ export class Api<
      * @tags Game
      * @name GameNotices
      * @summary Get game notices
-     * @request GET:/api/Game/{id}/Notices
+     * @request GET:/api/game/{id}/notices
      */
     mutateGameNotices: (
       id: number,
@@ -18234,7 +18343,7 @@ export class Api<
       data?: GameNotice[] | Promise<GameNotice[]>,
       options?: MutatorOptions,
     ) =>
-      mutate<GameNotice[]>([`/api/Game/${id}/Notices`, query], data, options),
+      mutate<GameNotice[]>([`/api/game/${id}/notices`, query], data, options),
 
     /**
      * @description Retrieves all participation information of the game; requires Admin permission
@@ -18242,11 +18351,11 @@ export class Api<
      * @tags Game
      * @name GameParticipations
      * @summary Get all game participations
-     * @request GET:/api/Game/{id}/Participations
+     * @request GET:/api/game/{id}/participations
      */
     gameParticipations: (id: number, params: RequestParams = {}) =>
       this.request<ParticipationInfoModel[], RequestResponse>({
-        path: `/api/Game/${id}/Participations`,
+        path: `/api/game/${id}/participations`,
         method: "GET",
         format: "json",
         ...params,
@@ -18257,7 +18366,7 @@ export class Api<
      * @tags Game
      * @name GameParticipations
      * @summary Get all game participations
-     * @request GET:/api/Game/{id}/Participations
+     * @request GET:/api/game/{id}/participations
      */
     useGameParticipations: (
       id: number,
@@ -18265,7 +18374,7 @@ export class Api<
       doFetch: boolean = true,
     ) =>
       useSWR<ParticipationInfoModel[], RequestResponse>(
-        doFetch ? `/api/Game/${id}/Participations` : null,
+        doFetch ? `/api/game/${id}/participations` : null,
         options,
       ),
 
@@ -18275,7 +18384,7 @@ export class Api<
      * @tags Game
      * @name GameParticipations
      * @summary Get all game participations
-     * @request GET:/api/Game/{id}/Participations
+     * @request GET:/api/game/{id}/participations
      */
     mutateGameParticipations: (
       id: number,
@@ -18283,7 +18392,7 @@ export class Api<
       options?: MutatorOptions,
     ) =>
       mutate<ParticipationInfoModel[]>(
-        `/api/Game/${id}/Participations`,
+        `/api/game/${id}/participations`,
         data,
         options,
       ),
@@ -18294,7 +18403,7 @@ export class Api<
      * @tags Game
      * @name GameRecentGames
      * @summary Get the recent games
-     * @request GET:/api/Game/Recent
+     * @request GET:/api/game/recent
      */
     gameRecentGames: (
       query?: {
@@ -18309,7 +18418,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<BasicGameInfoModel[], RequestResponse>({
-        path: `/api/Game/Recent`,
+        path: `/api/game/recent`,
         method: "GET",
         query: query,
         format: "json",
@@ -18321,7 +18430,7 @@ export class Api<
      * @tags Game
      * @name GameRecentGames
      * @summary Get the recent games
-     * @request GET:/api/Game/Recent
+     * @request GET:/api/game/recent
      */
     useGameRecentGames: (
       query?: {
@@ -18337,7 +18446,7 @@ export class Api<
       doFetch: boolean = true,
     ) =>
       useSWR<BasicGameInfoModel[], RequestResponse>(
-        doFetch ? [`/api/Game/Recent`, query] : null,
+        doFetch ? [`/api/game/recent`, query] : null,
         options,
       ),
 
@@ -18347,7 +18456,7 @@ export class Api<
      * @tags Game
      * @name GameRecentGames
      * @summary Get the recent games
-     * @request GET:/api/Game/Recent
+     * @request GET:/api/game/recent
      */
     mutateGameRecentGames: (
       query?: {
@@ -18362,7 +18471,7 @@ export class Api<
       data?: BasicGameInfoModel[] | Promise<BasicGameInfoModel[]>,
       options?: MutatorOptions,
     ) =>
-      mutate<BasicGameInfoModel[]>([`/api/Game/Recent`, query], data, options),
+      mutate<BasicGameInfoModel[]>([`/api/game/recent`, query], data, options),
 
     /**
      * @description Retrieves the scoreboard data
@@ -18370,11 +18479,11 @@ export class Api<
      * @tags Game
      * @name GameScoreboard
      * @summary Get the scoreboard
-     * @request GET:/api/Game/{id}/Scoreboard
+     * @request GET:/api/game/{id}/scoreboard
      */
     gameScoreboard: (id: number, params: RequestParams = {}) =>
       this.request<ScoreboardModel, RequestResponse>({
-        path: `/api/Game/${id}/Scoreboard`,
+        path: `/api/game/${id}/scoreboard`,
         method: "GET",
         format: "json",
         ...params,
@@ -18385,7 +18494,7 @@ export class Api<
      * @tags Game
      * @name GameScoreboard
      * @summary Get the scoreboard
-     * @request GET:/api/Game/{id}/Scoreboard
+     * @request GET:/api/game/{id}/scoreboard
      */
     useGameScoreboard: (
       id: number,
@@ -18393,7 +18502,7 @@ export class Api<
       doFetch: boolean = true,
     ) =>
       useSWR<ScoreboardModel, RequestResponse>(
-        doFetch ? `/api/Game/${id}/Scoreboard` : null,
+        doFetch ? `/api/game/${id}/scoreboard` : null,
         options,
       ),
 
@@ -18403,13 +18512,13 @@ export class Api<
      * @tags Game
      * @name GameScoreboard
      * @summary Get the scoreboard
-     * @request GET:/api/Game/{id}/Scoreboard
+     * @request GET:/api/game/{id}/scoreboard
      */
     mutateGameScoreboard: (
       id: number,
       data?: ScoreboardModel | Promise<ScoreboardModel>,
       options?: MutatorOptions,
-    ) => mutate<ScoreboardModel>(`/api/Game/${id}/Scoreboard`, data, options),
+    ) => mutate<ScoreboardModel>(`/api/game/${id}/scoreboard`, data, options),
 
     /**
      * @description Downloads the game scoreboard; requires Monitor permission
@@ -18417,11 +18526,11 @@ export class Api<
      * @tags Game
      * @name GameScoreboardSheet
      * @summary Downloads the scoreboard
-     * @request GET:/api/Game/{id}/ScoreboardSheet
+     * @request GET:/api/game/{id}/scoreboardsheet
      */
     gameScoreboardSheet: (id: number, params: RequestParams = {}) =>
       this.request<void, RequestResponse>({
-        path: `/api/Game/${id}/ScoreboardSheet`,
+        path: `/api/game/${id}/scoreboardsheet`,
         method: "GET",
         ...params,
       }),
@@ -18432,7 +18541,7 @@ export class Api<
      * @tags Game
      * @name GameStatus
      * @summary Queries flag status
-     * @request GET:/api/Game/{id}/Challenges/{challengeId}/Status/{submitId}
+     * @request GET:/api/game/{id}/challenges/{challengeId}/status/{submitId}
      */
     gameStatus: (
       id: number,
@@ -18441,7 +18550,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<AnswerResult, RequestResponse>({
-        path: `/api/Game/${id}/Challenges/${challengeId}/Status/${submitId}`,
+        path: `/api/game/${id}/challenges/${challengeId}/status/${submitId}`,
         method: "GET",
         format: "json",
         ...params,
@@ -18452,7 +18561,7 @@ export class Api<
      * @tags Game
      * @name GameStatus
      * @summary Queries flag status
-     * @request GET:/api/Game/{id}/Challenges/{challengeId}/Status/{submitId}
+     * @request GET:/api/game/{id}/challenges/{challengeId}/status/{submitId}
      */
     useGameStatus: (
       id: number,
@@ -18463,7 +18572,7 @@ export class Api<
     ) =>
       useSWR<AnswerResult, RequestResponse>(
         doFetch
-          ? `/api/Game/${id}/Challenges/${challengeId}/Status/${submitId}`
+          ? `/api/game/${id}/challenges/${challengeId}/status/${submitId}`
           : null,
         options,
       ),
@@ -18474,7 +18583,7 @@ export class Api<
      * @tags Game
      * @name GameStatus
      * @summary Queries flag status
-     * @request GET:/api/Game/{id}/Challenges/{challengeId}/Status/{submitId}
+     * @request GET:/api/game/{id}/challenges/{challengeId}/status/{submitId}
      */
     mutateGameStatus: (
       id: number,
@@ -18484,7 +18593,7 @@ export class Api<
       options?: MutatorOptions,
     ) =>
       mutate<AnswerResult>(
-        `/api/Game/${id}/Challenges/${challengeId}/Status/${submitId}`,
+        `/api/game/${id}/challenges/${challengeId}/status/${submitId}`,
         data,
         options,
       ),
@@ -18495,7 +18604,7 @@ export class Api<
      * @tags Game
      * @name GameSubmissions
      * @summary Get game submissions
-     * @request GET:/api/Game/{id}/Submissions
+     * @request GET:/api/game/{id}/submissions
      */
     gameSubmissions: (
       id: number,
@@ -18514,7 +18623,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<SubmissionPageModel, RequestResponse>({
-        path: `/api/Game/${id}/Submissions`,
+        path: `/api/game/${id}/submissions`,
         method: "GET",
         query: query,
         format: "json",
@@ -18526,7 +18635,7 @@ export class Api<
      * @tags Game
      * @name GameSubmissions
      * @summary Get game submissions
-     * @request GET:/api/Game/{id}/Submissions
+     * @request GET:/api/game/{id}/submissions
      */
     useGameSubmissions: (
       id: number,
@@ -18546,7 +18655,7 @@ export class Api<
       doFetch: boolean = true,
     ) =>
       useSWR<SubmissionPageModel, RequestResponse>(
-        doFetch ? [`/api/Game/${id}/Submissions`, query] : null,
+        doFetch ? [`/api/game/${id}/submissions`, query] : null,
         options,
       ),
 
@@ -18556,7 +18665,7 @@ export class Api<
      * @tags Game
      * @name GameSubmissions
      * @summary Get game submissions
-     * @request GET:/api/Game/{id}/Submissions
+     * @request GET:/api/game/{id}/submissions
      */
     mutateGameSubmissions: (
       id: number,
@@ -18576,7 +18685,7 @@ export class Api<
       options?: MutatorOptions,
     ) =>
       mutate<SubmissionPageModel>(
-        [`/api/Game/${id}/Submissions`, query],
+        [`/api/game/${id}/submissions`, query],
         data,
         options,
       ),
@@ -18587,11 +18696,11 @@ export class Api<
      * @tags Game
      * @name GameSubmissionSheet
      * @summary Downloads all submissions
-     * @request GET:/api/Game/{id}/SubmissionSheet
+     * @request GET:/api/game/{id}/submissionsheet
      */
     gameSubmissionSheet: (id: number, params: RequestParams = {}) =>
       this.request<void, RequestResponse>({
-        path: `/api/Game/${id}/SubmissionSheet`,
+        path: `/api/game/${id}/submissionsheet`,
         method: "GET",
         ...params,
       }),
@@ -18602,7 +18711,7 @@ export class Api<
      * @tags Game
      * @name GameSubmit
      * @summary Submits a flag
-     * @request POST:/api/Game/{id}/Challenges/{challengeId}
+     * @request POST:/api/game/{id}/challenges/{challengeId}
      */
     gameSubmit: (
       id: number,
@@ -18611,7 +18720,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<FlagSubmitResultModel, RequestResponse>({
-        path: `/api/Game/${id}/Challenges/${challengeId}`,
+        path: `/api/game/${id}/challenges/${challengeId}`,
         method: "POST",
         body: data,
         type: ContentType.Json,
@@ -18625,7 +18734,7 @@ export class Api<
      * @tags Game
      * @name GameSubmitWriteup
      * @summary Submits a writeup
-     * @request POST:/api/Game/{id}/Writeup
+     * @request POST:/api/game/{id}/writeup
      */
     gameSubmitWriteup: (
       id: number,
@@ -18636,7 +18745,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<void, RequestResponse>({
-        path: `/api/Game/${id}/Writeup`,
+        path: `/api/game/${id}/writeup`,
         method: "POST",
         body: data,
         type: ContentType.FormData,
@@ -19189,11 +19298,11 @@ export class Api<
      * @tags Info
      * @name InfoGetClientCaptchaInfo
      * @summary Get Captcha configuration
-     * @request GET:/api/Captcha
+     * @request GET:/api/captcha
      */
     infoGetClientCaptchaInfo: (params: RequestParams = {}) =>
       this.request<ClientCaptchaInfoModel, any>({
-        path: `/api/Captcha`,
+        path: `/api/captcha`,
         method: "GET",
         format: "json",
         ...params,
@@ -19204,14 +19313,14 @@ export class Api<
      * @tags Info
      * @name InfoGetClientCaptchaInfo
      * @summary Get Captcha configuration
-     * @request GET:/api/Captcha
+     * @request GET:/api/captcha
      */
     useInfoGetClientCaptchaInfo: (
       options?: SWRConfiguration,
       doFetch: boolean = true,
     ) =>
       useSWR<ClientCaptchaInfoModel, any>(
-        doFetch ? `/api/Captcha` : null,
+        doFetch ? `/api/captcha` : null,
         options,
       ),
 
@@ -19221,12 +19330,12 @@ export class Api<
      * @tags Info
      * @name InfoGetClientCaptchaInfo
      * @summary Get Captcha configuration
-     * @request GET:/api/Captcha
+     * @request GET:/api/captcha
      */
     mutateInfoGetClientCaptchaInfo: (
       data?: ClientCaptchaInfoModel | Promise<ClientCaptchaInfoModel>,
       options?: MutatorOptions,
-    ) => mutate<ClientCaptchaInfoModel>(`/api/Captcha`, data, options),
+    ) => mutate<ClientCaptchaInfoModel>(`/api/captcha`, data, options),
 
     /**
      * @description Get client configuration
@@ -19234,11 +19343,11 @@ export class Api<
      * @tags Info
      * @name InfoGetClientConfig
      * @summary Get client configuration
-     * @request GET:/api/Config
+     * @request GET:/api/config
      */
     infoGetClientConfig: (params: RequestParams = {}) =>
       this.request<ClientConfig, any>({
-        path: `/api/Config`,
+        path: `/api/config`,
         method: "GET",
         format: "json",
         ...params,
@@ -19249,12 +19358,12 @@ export class Api<
      * @tags Info
      * @name InfoGetClientConfig
      * @summary Get client configuration
-     * @request GET:/api/Config
+     * @request GET:/api/config
      */
     useInfoGetClientConfig: (
       options?: SWRConfiguration,
       doFetch: boolean = true,
-    ) => useSWR<ClientConfig, any>(doFetch ? `/api/Config` : null, options),
+    ) => useSWR<ClientConfig, any>(doFetch ? `/api/config` : null, options),
 
     /**
      * @description Get client configuration
@@ -19262,12 +19371,12 @@ export class Api<
      * @tags Info
      * @name InfoGetClientConfig
      * @summary Get client configuration
-     * @request GET:/api/Config
+     * @request GET:/api/config
      */
     mutateInfoGetClientConfig: (
       data?: ClientConfig | Promise<ClientConfig>,
       options?: MutatorOptions,
-    ) => mutate<ClientConfig>(`/api/Config`, data, options),
+    ) => mutate<ClientConfig>(`/api/config`, data, options),
 
     /**
      * @description Get the latest posts
@@ -19275,11 +19384,11 @@ export class Api<
      * @tags Info
      * @name InfoGetLatestPosts
      * @summary Get the latest posts
-     * @request GET:/api/Posts/Latest
+     * @request GET:/api/posts/latest
      */
     infoGetLatestPosts: (params: RequestParams = {}) =>
       this.request<PostInfoModel[], any>({
-        path: `/api/Posts/Latest`,
+        path: `/api/posts/latest`,
         method: "GET",
         format: "json",
         ...params,
@@ -19290,14 +19399,14 @@ export class Api<
      * @tags Info
      * @name InfoGetLatestPosts
      * @summary Get the latest posts
-     * @request GET:/api/Posts/Latest
+     * @request GET:/api/posts/latest
      */
     useInfoGetLatestPosts: (
       options?: SWRConfiguration,
       doFetch: boolean = true,
     ) =>
       useSWR<PostInfoModel[], any>(
-        doFetch ? `/api/Posts/Latest` : null,
+        doFetch ? `/api/posts/latest` : null,
         options,
       ),
 
@@ -19307,12 +19416,12 @@ export class Api<
      * @tags Info
      * @name InfoGetLatestPosts
      * @summary Get the latest posts
-     * @request GET:/api/Posts/Latest
+     * @request GET:/api/posts/latest
      */
     mutateInfoGetLatestPosts: (
       data?: PostInfoModel[] | Promise<PostInfoModel[]>,
       options?: MutatorOptions,
-    ) => mutate<PostInfoModel[]>(`/api/Posts/Latest`, data, options),
+    ) => mutate<PostInfoModel[]>(`/api/posts/latest`, data, options),
 
     /**
      * @description Get post details
@@ -19320,11 +19429,11 @@ export class Api<
      * @tags Info
      * @name InfoGetPost
      * @summary Get post details
-     * @request GET:/api/Posts/{id}
+     * @request GET:/api/posts/{id}
      */
     infoGetPost: (id: string, params: RequestParams = {}) =>
       this.request<PostDetailModel, RequestResponse>({
-        path: `/api/Posts/${id}`,
+        path: `/api/posts/${id}`,
         method: "GET",
         format: "json",
         ...params,
@@ -19335,7 +19444,7 @@ export class Api<
      * @tags Info
      * @name InfoGetPost
      * @summary Get post details
-     * @request GET:/api/Posts/{id}
+     * @request GET:/api/posts/{id}
      */
     useInfoGetPost: (
       id: string,
@@ -19343,7 +19452,7 @@ export class Api<
       doFetch: boolean = true,
     ) =>
       useSWR<PostDetailModel, RequestResponse>(
-        doFetch ? `/api/Posts/${id}` : null,
+        doFetch ? `/api/posts/${id}` : null,
         options,
       ),
 
@@ -19353,13 +19462,13 @@ export class Api<
      * @tags Info
      * @name InfoGetPost
      * @summary Get post details
-     * @request GET:/api/Posts/{id}
+     * @request GET:/api/posts/{id}
      */
     mutateInfoGetPost: (
       id: string,
       data?: PostDetailModel | Promise<PostDetailModel>,
       options?: MutatorOptions,
-    ) => mutate<PostDetailModel>(`/api/Posts/${id}`, data, options),
+    ) => mutate<PostDetailModel>(`/api/posts/${id}`, data, options),
 
     /**
      * @description Get all posts
@@ -19367,11 +19476,11 @@ export class Api<
      * @tags Info
      * @name InfoGetPosts
      * @summary Get all posts
-     * @request GET:/api/Posts
+     * @request GET:/api/posts
      */
     infoGetPosts: (params: RequestParams = {}) =>
       this.request<PostInfoModel[], any>({
-        path: `/api/Posts`,
+        path: `/api/posts`,
         method: "GET",
         format: "json",
         ...params,
@@ -19382,10 +19491,10 @@ export class Api<
      * @tags Info
      * @name InfoGetPosts
      * @summary Get all posts
-     * @request GET:/api/Posts
+     * @request GET:/api/posts
      */
     useInfoGetPosts: (options?: SWRConfiguration, doFetch: boolean = true) =>
-      useSWR<PostInfoModel[], any>(doFetch ? `/api/Posts` : null, options),
+      useSWR<PostInfoModel[], any>(doFetch ? `/api/posts` : null, options),
 
     /**
      * @description Get all posts
@@ -19393,12 +19502,12 @@ export class Api<
      * @tags Info
      * @name InfoGetPosts
      * @summary Get all posts
-     * @request GET:/api/Posts
+     * @request GET:/api/posts
      */
     mutateInfoGetPosts: (
       data?: PostInfoModel[] | Promise<PostInfoModel[]>,
       options?: MutatorOptions,
-    ) => mutate<PostInfoModel[]>(`/api/Posts`, data, options),
+    ) => mutate<PostInfoModel[]>(`/api/posts`, data, options),
 
     /**
      * @description Create Pow Captcha, valid for 5 minutes
@@ -19406,11 +19515,11 @@ export class Api<
      * @tags Info
      * @name InfoPowChallenge
      * @summary Create Pow Captcha
-     * @request GET:/api/Captcha/PowChallenge
+     * @request GET:/api/captcha/powchallenge
      */
     infoPowChallenge: (params: RequestParams = {}) =>
       this.request<HashPowChallenge, RequestResponse>({
-        path: `/api/Captcha/PowChallenge`,
+        path: `/api/captcha/powchallenge`,
         method: "GET",
         format: "json",
         ...params,
@@ -19421,14 +19530,14 @@ export class Api<
      * @tags Info
      * @name InfoPowChallenge
      * @summary Create Pow Captcha
-     * @request GET:/api/Captcha/PowChallenge
+     * @request GET:/api/captcha/powchallenge
      */
     useInfoPowChallenge: (
       options?: SWRConfiguration,
       doFetch: boolean = true,
     ) =>
       useSWR<HashPowChallenge, RequestResponse>(
-        doFetch ? `/api/Captcha/PowChallenge` : null,
+        doFetch ? `/api/captcha/powchallenge` : null,
         options,
       ),
 
@@ -19438,12 +19547,12 @@ export class Api<
      * @tags Info
      * @name InfoPowChallenge
      * @summary Create Pow Captcha
-     * @request GET:/api/Captcha/PowChallenge
+     * @request GET:/api/captcha/powchallenge
      */
     mutateInfoPowChallenge: (
       data?: HashPowChallenge | Promise<HashPowChallenge>,
       options?: MutatorOptions,
-    ) => mutate<HashPowChallenge>(`/api/Captcha/PowChallenge`, data, options),
+    ) => mutate<HashPowChallenge>(`/api/captcha/powchallenge`, data, options),
   };
   internal = {
     /**
@@ -21414,11 +21523,11 @@ export class Api<
      * @tags Proxy
      * @name ProxyProxyForInstance
      * @summary Proxy TCP over websocket
-     * @request GET:/api/Proxy/{id}
+     * @request GET:/api/proxy/{id}
      */
     proxyProxyForInstance: (id: string, params: RequestParams = {}) =>
       this.request<void, RequestResponse>({
-        path: `/api/Proxy/${id}`,
+        path: `/api/proxy/${id}`,
         method: "GET",
         ...params,
       }),
@@ -21429,11 +21538,11 @@ export class Api<
      * @tags Proxy
      * @name ProxyProxyForNoInstance
      * @summary Proxy TCP over websocket for admins
-     * @request GET:/api/Proxy/NoInst/{id}
+     * @request GET:/api/proxy/noinst/{id}
      */
     proxyProxyForNoInstance: (id: string, params: RequestParams = {}) =>
       this.request<void, RequestResponse>({
-        path: `/api/Proxy/NoInst/${id}`,
+        path: `/api/proxy/noinst/${id}`,
         method: "GET",
         ...params,
       }),
@@ -21693,11 +21802,11 @@ export class Api<
      * @tags Team
      * @name TeamAccept
      * @summary Accept invitation
-     * @request POST:/api/Team/Accept
+     * @request POST:/api/team/accept
      */
     teamAccept: (data: string, params: RequestParams = {}) =>
       this.request<void, RequestResponse>({
-        path: `/api/Team/Accept`,
+        path: `/api/team/accept`,
         method: "POST",
         body: data,
         type: ContentType.Json,
@@ -21710,7 +21819,7 @@ export class Api<
      * @tags Team
      * @name TeamAvatar
      * @summary Update team avatar
-     * @request PUT:/api/Team/{id}/Avatar
+     * @request PUT:/api/team/{id}/avatar
      */
     teamAvatar: (
       id: number,
@@ -21721,7 +21830,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<string, RequestResponse>({
-        path: `/api/Team/${id}/Avatar`,
+        path: `/api/team/${id}/avatar`,
         method: "PUT",
         body: data,
         type: ContentType.FormData,
@@ -21735,7 +21844,7 @@ export class Api<
      * @tags Team
      * @name TeamCreateJoinRequest
      * @summary Create a team join request
-     * @request POST:/api/Team/{id}/Requests
+     * @request POST:/api/team/{id}/requests
      */
     teamCreateJoinRequest: (
       id: number,
@@ -21743,7 +21852,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<TeamJoinRequestModel, RequestResponse>({
-        path: `/api/Team/${id}/Requests`,
+        path: `/api/team/${id}/requests`,
         method: "POST",
         body: data,
         type: ContentType.Json,
@@ -21757,11 +21866,11 @@ export class Api<
      * @tags Team
      * @name TeamCreateTeam
      * @summary Create team
-     * @request POST:/api/Team
+     * @request POST:/api/team
      */
     teamCreateTeam: (data: TeamUpdateModel, params: RequestParams = {}) =>
       this.request<TeamInfoModel, RequestResponse>({
-        path: `/api/Team`,
+        path: `/api/team`,
         method: "POST",
         body: data,
         type: ContentType.Json,
@@ -21775,11 +21884,11 @@ export class Api<
      * @tags Team
      * @name TeamDeleteTeam
      * @summary Delete team
-     * @request DELETE:/api/Team/{id}
+     * @request DELETE:/api/team/{id}
      */
     teamDeleteTeam: (id: number, params: RequestParams = {}) =>
       this.request<TeamInfoModel, RequestResponse>({
-        path: `/api/Team/${id}`,
+        path: `/api/team/${id}`,
         method: "DELETE",
         format: "json",
         ...params,
@@ -21791,11 +21900,11 @@ export class Api<
      * @tags Team
      * @name TeamGetBasicInfo
      * @summary Get team information
-     * @request GET:/api/Team/{id}
+     * @request GET:/api/team/{id}
      */
     teamGetBasicInfo: (id: number, params: RequestParams = {}) =>
       this.request<TeamInfoModel, RequestResponse>({
-        path: `/api/Team/${id}`,
+        path: `/api/team/${id}`,
         method: "GET",
         format: "json",
         ...params,
@@ -21806,7 +21915,7 @@ export class Api<
      * @tags Team
      * @name TeamGetBasicInfo
      * @summary Get team information
-     * @request GET:/api/Team/{id}
+     * @request GET:/api/team/{id}
      */
     useTeamGetBasicInfo: (
       id: number,
@@ -21814,7 +21923,7 @@ export class Api<
       doFetch: boolean = true,
     ) =>
       useSWR<TeamInfoModel, RequestResponse>(
-        doFetch ? `/api/Team/${id}` : null,
+        doFetch ? `/api/team/${id}` : null,
         options,
       ),
 
@@ -21824,13 +21933,13 @@ export class Api<
      * @tags Team
      * @name TeamGetBasicInfo
      * @summary Get team information
-     * @request GET:/api/Team/{id}
+     * @request GET:/api/team/{id}
      */
     mutateTeamGetBasicInfo: (
       id: number,
       data?: TeamInfoModel | Promise<TeamInfoModel>,
       options?: MutatorOptions,
-    ) => mutate<TeamInfoModel>(`/api/Team/${id}`, data, options),
+    ) => mutate<TeamInfoModel>(`/api/team/${id}`, data, options),
 
     /**
      * @description Team captain can view pending join requests.
@@ -21838,11 +21947,11 @@ export class Api<
      * @tags Team
      * @name TeamGetJoinRequests
      * @summary Get pending join requests
-     * @request GET:/api/Team/{id}/Requests
+     * @request GET:/api/team/{id}/requests
      */
     teamGetJoinRequests: (id: number, params: RequestParams = {}) =>
       this.request<TeamJoinRequestModel[], RequestResponse>({
-        path: `/api/Team/${id}/Requests`,
+        path: `/api/team/${id}/requests`,
         method: "GET",
         format: "json",
         ...params,
@@ -21853,7 +21962,7 @@ export class Api<
      * @tags Team
      * @name TeamGetJoinRequests
      * @summary Get pending join requests
-     * @request GET:/api/Team/{id}/Requests
+     * @request GET:/api/team/{id}/requests
      */
     useTeamGetJoinRequests: (
       id: number,
@@ -21861,7 +21970,7 @@ export class Api<
       doFetch: boolean = true,
     ) =>
       useSWR<TeamJoinRequestModel[], RequestResponse>(
-        doFetch ? `/api/Team/${id}/Requests` : null,
+        doFetch ? `/api/team/${id}/requests` : null,
         options,
       ),
 
@@ -21871,14 +21980,14 @@ export class Api<
      * @tags Team
      * @name TeamGetJoinRequests
      * @summary Get pending join requests
-     * @request GET:/api/Team/{id}/Requests
+     * @request GET:/api/team/{id}/requests
      */
     mutateTeamGetJoinRequests: (
       id: number,
       data?: TeamJoinRequestModel[] | Promise<TeamJoinRequestModel[]>,
       options?: MutatorOptions,
     ) =>
-      mutate<TeamJoinRequestModel[]>(`/api/Team/${id}/Requests`, data, options),
+      mutate<TeamJoinRequestModel[]>(`/api/team/${id}/requests`, data, options),
 
     /**
      * @description Get basic information of a team based on user
@@ -21886,11 +21995,11 @@ export class Api<
      * @tags Team
      * @name TeamGetTeamsInfo
      * @summary Get current team information
-     * @request GET:/api/Team
+     * @request GET:/api/team
      */
     teamGetTeamsInfo: (params: RequestParams = {}) =>
       this.request<TeamInfoModel[], RequestResponse>({
-        path: `/api/Team`,
+        path: `/api/team`,
         method: "GET",
         format: "json",
         ...params,
@@ -21901,14 +22010,14 @@ export class Api<
      * @tags Team
      * @name TeamGetTeamsInfo
      * @summary Get current team information
-     * @request GET:/api/Team
+     * @request GET:/api/team
      */
     useTeamGetTeamsInfo: (
       options?: SWRConfiguration,
       doFetch: boolean = true,
     ) =>
       useSWR<TeamInfoModel[], RequestResponse>(
-        doFetch ? `/api/Team` : null,
+        doFetch ? `/api/team` : null,
         options,
       ),
 
@@ -21918,12 +22027,12 @@ export class Api<
      * @tags Team
      * @name TeamGetTeamsInfo
      * @summary Get current team information
-     * @request GET:/api/Team
+     * @request GET:/api/team
      */
     mutateTeamGetTeamsInfo: (
       data?: TeamInfoModel[] | Promise<TeamInfoModel[]>,
       options?: MutatorOptions,
-    ) => mutate<TeamInfoModel[]>(`/api/Team`, data, options),
+    ) => mutate<TeamInfoModel[]>(`/api/team`, data, options),
 
     /**
      * @description Get team invitation information, must be team creator
@@ -21931,11 +22040,11 @@ export class Api<
      * @tags Team
      * @name TeamInviteCode
      * @summary Get invitation information
-     * @request GET:/api/Team/{id}/Invite
+     * @request GET:/api/team/{id}/invite
      */
     teamInviteCode: (id: number, params: RequestParams = {}) =>
       this.request<string, RequestResponse>({
-        path: `/api/Team/${id}/Invite`,
+        path: `/api/team/${id}/invite`,
         method: "GET",
         format: "json",
         ...params,
@@ -21946,7 +22055,7 @@ export class Api<
      * @tags Team
      * @name TeamInviteCode
      * @summary Get invitation information
-     * @request GET:/api/Team/{id}/Invite
+     * @request GET:/api/team/{id}/invite
      */
     useTeamInviteCode: (
       id: number,
@@ -21954,7 +22063,7 @@ export class Api<
       doFetch: boolean = true,
     ) =>
       useSWR<string, RequestResponse>(
-        doFetch ? `/api/Team/${id}/Invite` : null,
+        doFetch ? `/api/team/${id}/invite` : null,
         options,
       ),
 
@@ -21964,13 +22073,13 @@ export class Api<
      * @tags Team
      * @name TeamInviteCode
      * @summary Get invitation information
-     * @request GET:/api/Team/{id}/Invite
+     * @request GET:/api/team/{id}/invite
      */
     mutateTeamInviteCode: (
       id: number,
       data?: string | Promise<string>,
       options?: MutatorOptions,
-    ) => mutate<string>(`/api/Team/${id}/Invite`, data, options),
+    ) => mutate<string>(`/api/team/${id}/invite`, data, options),
 
     /**
      * @description User kick API, kick user with corresponding ID, requires team creator permission
@@ -21978,11 +22087,11 @@ export class Api<
      * @tags Team
      * @name TeamKickUser
      * @summary Kick user
-     * @request POST:/api/Team/{id}/Kick/{userId}
+     * @request POST:/api/team/{id}/kick/{userId}
      */
     teamKickUser: (id: number, userId: string, params: RequestParams = {}) =>
       this.request<TeamInfoModel, RequestResponse>({
-        path: `/api/Team/${id}/Kick/${userId}`,
+        path: `/api/team/${id}/kick/${userId}`,
         method: "POST",
         format: "json",
         ...params,
@@ -21994,11 +22103,11 @@ export class Api<
      * @tags Team
      * @name TeamLeave
      * @summary Leave team
-     * @request POST:/api/Team/{id}/Leave
+     * @request POST:/api/team/{id}/leave
      */
     teamLeave: (id: number, params: RequestParams = {}) =>
       this.request<void, RequestResponse>({
-        path: `/api/Team/${id}/Leave`,
+        path: `/api/team/${id}/leave`,
         method: "POST",
         ...params,
       }),
@@ -22009,7 +22118,7 @@ export class Api<
      * @tags Team
      * @name TeamReviewJoinRequest
      * @summary Review a join request
-     * @request POST:/api/Team/{id}/Requests/{requestId}
+     * @request POST:/api/team/{id}/requests/{requestId}
      */
     teamReviewJoinRequest: (
       id: number,
@@ -22018,7 +22127,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<TeamInfoModel, RequestResponse>({
-        path: `/api/Team/${id}/Requests/${requestId}`,
+        path: `/api/team/${id}/requests/${requestId}`,
         method: "POST",
         body: data,
         type: ContentType.Json,
@@ -22032,7 +22141,7 @@ export class Api<
      * @tags Team
      * @name TeamSearch
      * @summary Search teams for join request
-     * @request GET:/api/Team/Search
+     * @request GET:/api/team/search
      */
     teamSearch: (
       query?: {
@@ -22042,7 +22151,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<TeamInfoModel[], any>({
-        path: `/api/Team/Search`,
+        path: `/api/team/search`,
         method: "GET",
         query: query,
         format: "json",
@@ -22054,7 +22163,7 @@ export class Api<
      * @tags Team
      * @name TeamSearch
      * @summary Search teams for join request
-     * @request GET:/api/Team/Search
+     * @request GET:/api/team/search
      */
     useTeamSearch: (
       query?: {
@@ -22065,7 +22174,7 @@ export class Api<
       doFetch: boolean = true,
     ) =>
       useSWR<TeamInfoModel[], any>(
-        doFetch ? [`/api/Team/Search`, query] : null,
+        doFetch ? [`/api/team/search`, query] : null,
         options,
       ),
 
@@ -22075,7 +22184,7 @@ export class Api<
      * @tags Team
      * @name TeamSearch
      * @summary Search teams for join request
-     * @request GET:/api/Team/Search
+     * @request GET:/api/team/search
      */
     mutateTeamSearch: (
       query?: {
@@ -22084,7 +22193,7 @@ export class Api<
       },
       data?: TeamInfoModel[] | Promise<TeamInfoModel[]>,
       options?: MutatorOptions,
-    ) => mutate<TeamInfoModel[]>([`/api/Team/Search`, query], data, options),
+    ) => mutate<TeamInfoModel[]>([`/api/team/search`, query], data, options),
 
     /**
      * @description Team ownership transfer API, must be team creator
@@ -22092,7 +22201,7 @@ export class Api<
      * @tags Team
      * @name TeamTransfer
      * @summary Transfer team ownership
-     * @request PUT:/api/Team/{id}/Transfer
+     * @request PUT:/api/team/{id}/transfer
      */
     teamTransfer: (
       id: number,
@@ -22100,7 +22209,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<TeamInfoModel, RequestResponse>({
-        path: `/api/Team/${id}/Transfer`,
+        path: `/api/team/${id}/transfer`,
         method: "PUT",
         body: data,
         type: ContentType.Json,
@@ -22114,11 +22223,11 @@ export class Api<
      * @tags Team
      * @name TeamUpdateInviteToken
      * @summary Update invitation token
-     * @request PUT:/api/Team/{id}/Invite
+     * @request PUT:/api/team/{id}/invite
      */
     teamUpdateInviteToken: (id: number, params: RequestParams = {}) =>
       this.request<string, RequestResponse>({
-        path: `/api/Team/${id}/Invite`,
+        path: `/api/team/${id}/invite`,
         method: "PUT",
         format: "json",
         ...params,
@@ -22130,7 +22239,7 @@ export class Api<
      * @tags Team
      * @name TeamUpdateTeam
      * @summary Update team information
-     * @request PUT:/api/Team/{id}
+     * @request PUT:/api/team/{id}
      */
     teamUpdateTeam: (
       id: number,
@@ -22138,7 +22247,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<TeamInfoModel, RequestResponse>({
-        path: `/api/Team/${id}`,
+        path: `/api/team/${id}`,
         method: "PUT",
         body: data,
         type: ContentType.Json,
@@ -22152,14 +22261,14 @@ export class Api<
      * @tags Team
      * @name TeamVerifySignature
      * @summary Verify signature
-     * @request POST:/api/Team/Verify
+     * @request POST:/api/team/verify
      */
     teamVerifySignature: (
       data: SignatureVerifyModel,
       params: RequestParams = {},
     ) =>
       this.request<void, RequestResponse>({
-        path: `/api/Team/Verify`,
+        path: `/api/team/verify`,
         method: "POST",
         body: data,
         type: ContentType.Json,
@@ -24642,7 +24751,7 @@ export class Api<
      *
      * @tags Users
      * @name UsersActivity
-     * @request GET:/api/Users/{userId}/activity
+     * @request GET:/api/users/{userId}/activity
      */
     usersActivity: (
       userId: string,
@@ -24655,7 +24764,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<UserActivityPointModel[], RequestResponse>({
-        path: `/api/Users/${userId}/activity`,
+        path: `/api/users/${userId}/activity`,
         method: "GET",
         query: query,
         format: "json",
@@ -24666,7 +24775,7 @@ export class Api<
      *
      * @tags Users
      * @name UsersActivity
-     * @request GET:/api/Users/{userId}/activity
+     * @request GET:/api/users/{userId}/activity
      */
     useUsersActivity: (
       userId: string,
@@ -24680,7 +24789,7 @@ export class Api<
       doFetch: boolean = true,
     ) =>
       useSWR<UserActivityPointModel[], RequestResponse>(
-        doFetch ? [`/api/Users/${userId}/activity`, query] : null,
+        doFetch ? [`/api/users/${userId}/activity`, query] : null,
         options,
       ),
 
@@ -24689,7 +24798,7 @@ export class Api<
      *
      * @tags Users
      * @name UsersActivity
-     * @request GET:/api/Users/{userId}/activity
+     * @request GET:/api/users/{userId}/activity
      */
     mutateUsersActivity: (
       userId: string,
@@ -24703,7 +24812,7 @@ export class Api<
       options?: MutatorOptions,
     ) =>
       mutate<UserActivityPointModel[]>(
-        [`/api/Users/${userId}/activity`, query],
+        [`/api/users/${userId}/activity`, query],
         data,
         options,
       ),
@@ -24713,7 +24822,7 @@ export class Api<
      *
      * @tags Users
      * @name UsersHistory
-     * @request GET:/api/Users/{userId}/history
+     * @request GET:/api/users/{userId}/history
      */
     usersHistory: (
       userId: string,
@@ -24730,7 +24839,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<UserProfileHistoryPageModel, RequestResponse>({
-        path: `/api/Users/${userId}/history`,
+        path: `/api/users/${userId}/history`,
         method: "GET",
         query: query,
         format: "json",
@@ -24741,7 +24850,7 @@ export class Api<
      *
      * @tags Users
      * @name UsersHistory
-     * @request GET:/api/Users/{userId}/history
+     * @request GET:/api/users/{userId}/history
      */
     useUsersHistory: (
       userId: string,
@@ -24759,7 +24868,7 @@ export class Api<
       doFetch: boolean = true,
     ) =>
       useSWR<UserProfileHistoryPageModel, RequestResponse>(
-        doFetch ? [`/api/Users/${userId}/history`, query] : null,
+        doFetch ? [`/api/users/${userId}/history`, query] : null,
         options,
       ),
 
@@ -24768,7 +24877,7 @@ export class Api<
      *
      * @tags Users
      * @name UsersHistory
-     * @request GET:/api/Users/{userId}/history
+     * @request GET:/api/users/{userId}/history
      */
     mutateUsersHistory: (
       userId: string,
@@ -24786,7 +24895,7 @@ export class Api<
       options?: MutatorOptions,
     ) =>
       mutate<UserProfileHistoryPageModel>(
-        [`/api/Users/${userId}/history`, query],
+        [`/api/users/${userId}/history`, query],
         data,
         options,
       ),
@@ -24796,7 +24905,7 @@ export class Api<
      *
      * @tags Users
      * @name UsersOverview
-     * @request GET:/api/Users/{userId}/overview
+     * @request GET:/api/users/{userId}/overview
      */
     usersOverview: (
       userId: string,
@@ -24807,7 +24916,7 @@ export class Api<
       params: RequestParams = {},
     ) =>
       this.request<UserProfileOverviewModel, void | RequestResponse>({
-        path: `/api/Users/${userId}/overview`,
+        path: `/api/users/${userId}/overview`,
         method: "GET",
         query: query,
         format: "json",
@@ -24818,7 +24927,7 @@ export class Api<
      *
      * @tags Users
      * @name UsersOverview
-     * @request GET:/api/Users/{userId}/overview
+     * @request GET:/api/users/{userId}/overview
      */
     useUsersOverview: (
       userId: string,
@@ -24830,7 +24939,7 @@ export class Api<
       doFetch: boolean = true,
     ) =>
       useSWR<UserProfileOverviewModel, void | RequestResponse>(
-        doFetch ? [`/api/Users/${userId}/overview`, query] : null,
+        doFetch ? [`/api/users/${userId}/overview`, query] : null,
         options,
       ),
 
@@ -24839,7 +24948,7 @@ export class Api<
      *
      * @tags Users
      * @name UsersOverview
-     * @request GET:/api/Users/{userId}/overview
+     * @request GET:/api/users/{userId}/overview
      */
     mutateUsersOverview: (
       userId: string,
@@ -24851,7 +24960,7 @@ export class Api<
       options?: MutatorOptions,
     ) =>
       mutate<UserProfileOverviewModel>(
-        [`/api/Users/${userId}/overview`, query],
+        [`/api/users/${userId}/overview`, query],
         data,
         options,
       ),
@@ -24861,11 +24970,11 @@ export class Api<
      *
      * @tags Users
      * @name UsersPrivateOverview
-     * @request GET:/api/Users/me/private-overview
+     * @request GET:/api/users/me/private-overview
      */
     usersPrivateOverview: (params: RequestParams = {}) =>
       this.request<UserPrivateOverviewModel, RequestResponse>({
-        path: `/api/Users/me/private-overview`,
+        path: `/api/users/me/private-overview`,
         method: "GET",
         format: "json",
         ...params,
@@ -24875,14 +24984,14 @@ export class Api<
      *
      * @tags Users
      * @name UsersPrivateOverview
-     * @request GET:/api/Users/me/private-overview
+     * @request GET:/api/users/me/private-overview
      */
     useUsersPrivateOverview: (
       options?: SWRConfiguration,
       doFetch: boolean = true,
     ) =>
       useSWR<UserPrivateOverviewModel, RequestResponse>(
-        doFetch ? `/api/Users/me/private-overview` : null,
+        doFetch ? `/api/users/me/private-overview` : null,
         options,
       ),
 
@@ -24891,14 +25000,14 @@ export class Api<
      *
      * @tags Users
      * @name UsersPrivateOverview
-     * @request GET:/api/Users/me/private-overview
+     * @request GET:/api/users/me/private-overview
      */
     mutateUsersPrivateOverview: (
       data?: UserPrivateOverviewModel | Promise<UserPrivateOverviewModel>,
       options?: MutatorOptions,
     ) =>
       mutate<UserPrivateOverviewModel>(
-        `/api/Users/me/private-overview`,
+        `/api/users/me/private-overview`,
         data,
         options,
       ),
@@ -24908,11 +25017,11 @@ export class Api<
      *
      * @tags Users
      * @name UsersProfile
-     * @request GET:/api/Users/{userId}
+     * @request GET:/api/users/{userId}
      */
     usersProfile: (userId: string, params: RequestParams = {}) =>
       this.request<PublicUserProfileModel, void | RequestResponse>({
-        path: `/api/Users/${userId}`,
+        path: `/api/users/${userId}`,
         method: "GET",
         format: "json",
         ...params,
@@ -24922,7 +25031,7 @@ export class Api<
      *
      * @tags Users
      * @name UsersProfile
-     * @request GET:/api/Users/{userId}
+     * @request GET:/api/users/{userId}
      */
     useUsersProfile: (
       userId: string,
@@ -24930,7 +25039,7 @@ export class Api<
       doFetch: boolean = true,
     ) =>
       useSWR<PublicUserProfileModel, void | RequestResponse>(
-        doFetch ? `/api/Users/${userId}` : null,
+        doFetch ? `/api/users/${userId}` : null,
         options,
       ),
 
@@ -24939,13 +25048,13 @@ export class Api<
      *
      * @tags Users
      * @name UsersProfile
-     * @request GET:/api/Users/{userId}
+     * @request GET:/api/users/{userId}
      */
     mutateUsersProfile: (
       userId: string,
       data?: PublicUserProfileModel | Promise<PublicUserProfileModel>,
       options?: MutatorOptions,
-    ) => mutate<PublicUserProfileModel>(`/api/Users/${userId}`, data, options),
+    ) => mutate<PublicUserProfileModel>(`/api/users/${userId}`, data, options),
   };
   teamLabConnectors = {
     /**
