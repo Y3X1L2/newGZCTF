@@ -128,7 +128,7 @@ public sealed class NetlabCompetitionTests
                 else throw new InvalidOperationException("Unexpected lifecycle endpoint");
             }
             else if (http.Request.Path == "/api/v1/environments")
-                response = new[] { new { id = "environment", projectId = "test/games/" + game.Id, name = "组网比赛 · 队伍一",
+                response = state == "destroyed" ? Array.Empty<object>() : new[] { new { id = "environment", projectId = "test/games/" + game.Id, name = "组网比赛 · 队伍一",
                     revision = 7, status = state, assetCount = 2, networkCount = 0, createdAt = now, updatedAt = now } };
             http.Response.ContentType = "application/json";
             await http.Response.WriteAsync(JsonConvert.SerializeObject(response));
@@ -173,6 +173,9 @@ public sealed class NetlabCompetitionTests
         await scenes.EnsureTeamDrainedBeforeDeleteAsync(team.Id, default);
         await scenes.EnsureGameDrainedBeforeDeleteAsync(game.Id, default);
         Assert.Equal(1, await db.PenetrationResetRecords.CountAsync());
+        var completed = await scenes.GetGameTeamLabAsync(game.Id, default);
+        Assert.Equal("completed", completed.Rollout!.Status);
+        Assert.Equal(1, completed.Rollout.Counts.Destroyed);
 
         game.StartTimeUtc = now.AddHours(-1);
         settings.AccessOpen = true;

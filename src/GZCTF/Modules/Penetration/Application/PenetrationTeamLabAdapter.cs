@@ -351,17 +351,20 @@ public sealed class PenetrationTeamLabAdapter(AppDbContext context, NetlabClient
     private async Task<PenetrationSceneSummary> SummaryAsync(int gameId, CancellationToken token)
     {
         var settings = await SettingsAsync(gameId, token);
-        var assigned = await context.PenetrationTeamRuntimeBindings.AsNoTracking().Where(x => x.GameId == gameId)
+        var assigned = await context.PenetrationTeamRuntimeBindings.AsNoTracking().Where(x => x.GameId == gameId &&
+                context.Participations.Any(p => p.GameId == gameId && p.TeamId == x.TeamId && p.Status == ParticipationStatus.Accepted))
             .Select(x => x.EnvironmentId).ToArrayAsync(token);
         var environments = (await EnvironmentsAsync(gameId, token)).Where(x => assigned.Contains(x.Id)).ToArray();
         int Count(params NetlabStatus[] states) => environments.Count(x => states.Contains(x.Status));
         var total = await context.Participations.CountAsync(x => x.GameId == gameId && x.Status == ParticipationStatus.Accepted, token);
-        var counts = new PenetrationSceneCounts(total, Math.Max(0, total - environments.Length),
+        // Netlab lists active records; destroyed environments retain their business binding.
+        var destroyed = assigned.Count(id => id != null) - environments.Length;
+        var counts = new PenetrationSceneCounts(total, Math.Max(0, total - environments.Length - destroyed) + Count(NetlabStatus.Draft, NetlabStatus.Stopped),
             Count(NetlabStatus.Deploying, NetlabStatus.Changing), Count(NetlabStatus.Running),
-            settings.AccessOpen ? Count(NetlabStatus.Running) : 0, Count(NetlabStatus.Failed),
-            Count(NetlabStatus.Destroying), Count(NetlabStatus.Destroyed), Count(NetlabStatus.Suspended));
+            settings.AccessOpen ? Count(NetlabStatus.Running) : 0, Count(NetlabStatus.Failed, NetlabStatus.Unknown),
+            Count(NetlabStatus.Destroying), destroyed, Count(NetlabStatus.Suspended));
         var status = counts.Draining > 0 ? "draining" : counts.Provisioning > 0 ? "preparing" : counts.Failed > 0 ? "failed" :
-            counts.Ready == total && total > 0 ? "ready" : environments.Length > 0 && counts.Destroyed == environments.Length ? "completed" :
+            counts.Ready == total && total > 0 ? "ready" : destroyed > 0 && environments.Length == 0 ? "completed" :
             counts.Paused > 0 ? "paused" : "pending";
         return new(settings.BlueprintVersionId!, settings.BlueprintVersionId!, status, environments.Length > 0,
             settings.AccessOpen, counts.Draining > 0, counts.Paused > 0, counts, settings.CreatedAt, settings.UpdatedAt);
