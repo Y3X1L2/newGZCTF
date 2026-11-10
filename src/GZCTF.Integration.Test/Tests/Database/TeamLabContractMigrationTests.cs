@@ -175,14 +175,10 @@ public sealed class TeamLabContractMigrationTests : IAsyncLifetime
             await HistoricalUserFixture.InsertAsync(context, owner);
             await HistoricalUserFixture.InsertAsync(context, operatorUser);
             context.AddRange(game, team, topology, release, runtime);
-            context.Add(new PenetrationTeamRuntimeBinding
-            {
-                GameId = game.Id,
-                TeamId = team.Id,
-                RuntimeId = runtime.Id
-            });
             await context.SaveChangesAsync();
             await context.Database.ExecuteSqlInterpolatedAsync($$"""
+                INSERT INTO "PenetrationTeamRuntimeBindings" ("GameId", "TeamId", "RuntimeId", "CreatedAt")
+                VALUES ({{game.Id}}, {{team.Id}}, {{runtime.Id}}, now());
                 INSERT INTO "PenetrationTeamLabOperatorGrants"
                     ("GameId", "UserId", "Permissions", "GrantedByUserId", "CreatedAt", "UpdatedAt")
                 VALUES
