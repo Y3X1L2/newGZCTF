@@ -2,7 +2,8 @@ import { MantineProvider } from '@mantine/core'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import flowStyles from '@xyflow/react/dist/style.css?inline'
 import { Boxes, Layers3 } from 'lucide-react'
-import { lazy, Suspense, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useId, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Route, Routes } from 'react-router'
 import '@mantine/core/styles.css'
 import { useVNextTheme } from '../../../app/VNextThemeProvider'
@@ -23,6 +24,7 @@ const TemplatesPage = lazy(() =>
 export function Workspace({ gameId, environmentId }: { gameId?: number; environmentId?: string }) {
   const { theme } = useVNextTheme()
   const root = useRef<HTMLDivElement>(null)
+  const portalId = useId()
   const [client] = useState(
     () =>
       new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: 10000, refetchOnWindowFocus: false } } })
@@ -41,37 +43,44 @@ export function Workspace({ gameId, environmentId }: { gameId?: number; environm
     [gameId, environmentId]
   )
   return (
-    <div ref={root} className={styles.root} data-netlab-workspace data-mantine-color-scheme={theme}>
-      <style>{`@scope ([data-netlab-workspace]) { ${flowStyles} }`}</style>
-      <MantineProvider
-        theme={{
-          ...workspaceTheme,
-          components: { ...workspaceTheme.components, Portal: { defaultProps: { target: '[data-netlab-workspace]' } } },
-        }}
-        forceColorScheme={theme}
-        cssVariablesSelector="[data-netlab-workspace]"
-        cssVariablesResolver={() => ({
-          variables: {
-            '--mantine-primary-color-filled': 'var(--yn-color-control-strong)',
-            '--mantine-primary-color-filled-hover': 'var(--yn-color-control-strong-hover)',
-            '--mantine-color-error': 'var(--yn-color-danger)',
-          },
-          light: {},
-          dark: {},
-        })}
-        getRootElement={() => root.current ?? undefined}
-        deduplicateCssVariables={false}
-        withGlobalClasses={false}
-      >
-        <QueryClientProvider client={client}>
-          <WorkspaceApiContext.Provider value={api}>
-            <WorkspaceRouteContext.Provider value={route}>
-              <WorkspaceContent environmentOnly={Boolean(gameId)} environmentId={environmentId} />
-            </WorkspaceRouteContext.Provider>
-          </WorkspaceApiContext.Provider>
-        </QueryClientProvider>
-      </MantineProvider>
-    </div>
+    <>
+      {/* Keep overlays outside the animated route while retaining workspace-scoped styles. */}
+      {createPortal(
+        <div id={portalId} className={styles.root} data-netlab-workspace data-mantine-color-scheme={theme} />,
+        document.body
+      )}
+      <div ref={root} className={styles.root} data-netlab-workspace data-mantine-color-scheme={theme}>
+        <style>{`@scope ([data-netlab-workspace]) { ${flowStyles} }`}</style>
+        <MantineProvider
+          theme={{
+            ...workspaceTheme,
+            components: { ...workspaceTheme.components, Portal: { defaultProps: { target: `[id="${portalId}"]` } } },
+          }}
+          forceColorScheme={theme}
+          cssVariablesSelector="[data-netlab-workspace]"
+          cssVariablesResolver={() => ({
+            variables: {
+              '--mantine-primary-color-filled': 'var(--yn-color-control-strong)',
+              '--mantine-primary-color-filled-hover': 'var(--yn-color-control-strong-hover)',
+              '--mantine-color-error': 'var(--yn-color-danger)',
+            },
+            light: {},
+            dark: {},
+          })}
+          getRootElement={() => root.current ?? undefined}
+          deduplicateCssVariables={false}
+          withGlobalClasses={false}
+        >
+          <QueryClientProvider client={client}>
+            <WorkspaceApiContext.Provider value={api}>
+              <WorkspaceRouteContext.Provider value={route}>
+                <WorkspaceContent environmentOnly={Boolean(gameId)} environmentId={environmentId} />
+              </WorkspaceRouteContext.Provider>
+            </WorkspaceApiContext.Provider>
+          </QueryClientProvider>
+        </MantineProvider>
+      </div>
+    </>
   )
 }
 

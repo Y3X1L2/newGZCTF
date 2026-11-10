@@ -82,6 +82,7 @@ export const workspaceTheme = createTheme({
       },
     },
     Drawer: {
+      defaultProps: { closeButtonProps: { 'aria-label': '关闭抽屉' } },
       styles: {
         content: { background: 'var(--surface)' },
         header: {
@@ -94,7 +95,7 @@ export const workspaceTheme = createTheme({
       },
     },
     Modal: {
-      defaultProps: { radius: 'md' },
+      defaultProps: { radius: 'md', closeButtonProps: { 'aria-label': '关闭对话框' } },
       styles: {
         content: { background: 'var(--surface)' },
         header: { background: 'var(--surface)' },
