@@ -106,7 +106,7 @@ public sealed class NetlabProxyTests : IAsyncLifetime
     [InlineData("api/v1/service-tokens", 403)]
     [InlineData("api%2Fv1%2Fservice-tokens", 403)]
     [InlineData("api%2Fprivate", 404)]
-    [InlineData("api/v1/%2573ervice-tokens", 400)]
+    [InlineData("api/v1/%2573ervice-tokens", 403)]
     public async Task Proxy_RejectsEscapingOrHostManagedPaths(string path, int status)
     {
         using var response = await _browser.GetAsync(Prefix + "/" + path, _deadline.Token);

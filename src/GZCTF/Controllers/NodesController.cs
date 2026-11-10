@@ -324,7 +324,7 @@ public class NodesController : ControllerBase
                     join team in _context.Teams.AsNoTracking() on binding.TeamId equals team.Id
                     where binding.RuntimeId != null && runtimeIds.Contains(binding.RuntimeId.Value)
                     select new NodeTeamLabBindingView(
-                        binding.RuntimeId.Value, binding.GameId, game.Title, binding.TeamId, team.Name))
+                        binding.RuntimeId!.Value, binding.GameId, game.Title, binding.TeamId, team.Name))
                 .ToDictionaryAsync(item => item.RuntimeId, token);
 
             foreach (var asset in assets)

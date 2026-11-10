@@ -130,6 +130,9 @@ public sealed class PenetrationTeamLabAdapter(AppDbContext context, NetlabClient
         token = lifetime.Token;
         var settings = await SettingsAsync(gameId, token);
         if (settings.BlueprintVersionId is null) throw Conflict("请先选择场景版本。");
+        if (!await context.Participations.AnyAsync(p => p.GameId == gameId && p.TeamId == teamId &&
+            p.Status == ParticipationStatus.Accepted && (p.Game.PracticeMode || p.Game.EndTimeUtc > DateTimeOffset.UtcNow), token))
+            throw Conflict("请为已通过审核且比赛仍开放的队伍部署环境。");
         var binding = await context.PenetrationTeamRuntimeBindings.SingleOrDefaultAsync(x => x.GameId == gameId && x.TeamId == teamId, token);
         if (binding?.EnvironmentId is { } existing)
         {
@@ -147,6 +150,7 @@ public sealed class PenetrationTeamLabAdapter(AppDbContext context, NetlabClient
             binding = new() { GameId = gameId, TeamId = teamId, CreationRequestId = Guid.NewGuid() };
             context.PenetrationTeamRuntimeBindings.Add(binding);
         }
+        if (binding.CreationRequestId == Guid.Empty) binding.CreationRequestId = Guid.NewGuid();
         var version = await netlab.GetAsync<BlueprintVersion>($"blueprint-versions/{Uri.EscapeDataString(settings.BlueprintVersionId)}", token);
         var flags = await objectives.BuildOverlaysAsync(gameId, teamId, version.Version, token);
         var templateIds = string.Join(",", version.Spec.Assets.Select(x => x.TemplateId).Distinct());
@@ -269,6 +273,21 @@ public sealed class PenetrationTeamLabAdapter(AppDbContext context, NetlabClient
         foreach (var environment in remaining.Where(x => x.Status != NetlabStatus.Destroying))
             await ActionAsync(environment.Id, environment.Revision, ActionRequestAction.Destroy, token);
         throw Conflict("比赛环境正在清理，完成后即可删除比赛。");
+    }
+
+    public async Task EnsureTeamDrainedBeforeDeleteAsync(int teamId, CancellationToken token)
+    {
+        var environments = await context.PenetrationTeamRuntimeBindings.AsNoTracking()
+            .Where(x => x.TeamId == teamId && x.EnvironmentId != null).Select(x => x.EnvironmentId!).ToArrayAsync(token);
+        var pending = false;
+        foreach (var id in environments)
+        {
+            var state = await StateAsync(id, token);
+            if (state.Status == "destroyed") continue;
+            pending = true;
+            if (state.Status != "destroying") await ActionAsync(id, state.Revision, ActionRequestAction.Destroy, token);
+        }
+        if (pending) throw Conflict("队伍环境正在清理，完成后即可删除队伍。");
     }
 
     public async Task<IReadOnlyList<PenetrationRuntimeBindingModel>> ListRuntimesAsync(int gameId, CancellationToken token)

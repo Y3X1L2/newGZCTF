@@ -42,6 +42,7 @@ public class ConfigService(
 
         foreach (var conf in configs)
         {
+            var configValue = IsSensitiveConfig(conf.ConfigKey) ? "******" : conf.Value ?? "null";
             if (dbConfigs.TryGetValue(conf.ConfigKey, out var dbConf))
             {
                 if (dbConf.Value == conf.Value)
@@ -54,7 +55,7 @@ public class ConfigService(
 
                 logger.SystemLog(
                     StaticLocalizer[nameof(Resources.Program.Config_GlobalConfigUpdated), conf.ConfigKey,
-                        conf.Value ?? "null"],
+                        configValue],
                     TaskStatus.Success, LogLevel.Debug);
             }
             else
@@ -63,10 +64,6 @@ public class ConfigService(
                     cacheKeys.UnionWith(conf.CacheKeys);
 
                 await context.Configs.AddAsync(conf, token);
-
-                var configValue = IsSensitiveConfig(conf.ConfigKey)
-                    ? MaskSensitiveData(conf.Value)
-                    : conf.Value ?? "Null";
 
                 logger.SystemLog(
                     StaticLocalizer[nameof(Resources.Program.Config_GlobalConfigAdded), conf.ConfigKey,
@@ -84,16 +81,7 @@ public class ConfigService(
     }
 
     private static bool IsSensitiveConfig(string key) =>
-        key.EndsWith("PrivateKey", StringComparison.Ordinal);
-
-    private static string MaskSensitiveData(string? value)
-    {
-        var length = value?.Length ?? 6;
-        if (string.IsNullOrEmpty(value) || length <= 8)
-            return new string('*', length);
-
-        return $"{value[..4]}{new string('*', length - 8)}{value[^4..]}";
-    }
+        key.EndsWith("PrivateKey", StringComparison.Ordinal) || key == "Netlab:Credential";
 
     public async Task UpdateApiEncryptionKey(CancellationToken token = default)
     {

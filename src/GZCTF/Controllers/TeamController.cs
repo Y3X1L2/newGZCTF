@@ -4,6 +4,7 @@ using GZCTF.Middlewares;
 using GZCTF.Models.Request.Info;
 using GZCTF.Repositories.Interface;
 using GZCTF.Infrastructure.Cache;
+using GZCTF.Modules.Penetration.Application;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -26,7 +27,8 @@ public partial class TeamController(
     ITeamRepository teamRepository,
     IParticipationRepository participationRepository,
     IPlatformCache cacheHelper,
-    IStringLocalizer<Program> localizer) : ControllerBase
+    IStringLocalizer<Program> localizer,
+    PenetrationTeamLabAdapter competitionScenes) : ControllerBase
 {
     private const int MaxTeamsAllowed = 3;
 
@@ -732,6 +734,7 @@ public partial class TeamController(
         if (team.Locked && await teamRepository.AnyActiveGame(team, token))
             return BadRequest(new RequestResponse(localizer[nameof(Resources.Program.Team_Locked)]));
 
+        await competitionScenes.EnsureTeamDrainedBeforeDeleteAsync(id, token);
         await teamRepository.DeleteTeam(team, token);
 
         logger.Log(StaticLocalizer[nameof(Resources.Program.Team_Deleted), team.Name], user,
