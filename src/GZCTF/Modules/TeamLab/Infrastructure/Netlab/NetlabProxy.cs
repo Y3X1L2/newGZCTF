@@ -122,12 +122,12 @@ public sealed class NetlabProxy(NetlabConnection connection, IHttpClientFactory 
         }
     }
 
-    private sealed class UploadContent(Stream source, Action sent) : HttpContent
+    private sealed class UploadContent(System.IO.Stream source, Action sent) : HttpContent
     {
-        protected override async Task SerializeToStreamAsync(Stream stream, System.Net.TransportContext? context) =>
+        protected override async Task SerializeToStreamAsync(System.IO.Stream stream, System.Net.TransportContext? context) =>
             await SerializeToStreamAsync(stream, context, CancellationToken.None);
 
-        protected override async Task SerializeToStreamAsync(Stream stream, System.Net.TransportContext? context, CancellationToken token)
+        protected override async Task SerializeToStreamAsync(System.IO.Stream stream, System.Net.TransportContext? context, CancellationToken token)
         {
             await source.CopyToAsync(stream, token);
             sent();
