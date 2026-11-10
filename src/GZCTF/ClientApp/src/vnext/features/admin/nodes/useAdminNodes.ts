@@ -1,5 +1,5 @@
 import useSWR from 'swr'
-import { NodeCapability, NodeStatus, TeamLabTunnelStatus } from '@Api'
+import { NodeCapability, NodeStatus } from '@Api'
 import { nodeAdminApi } from '../api'
 
 export function useAdminNodes() {
@@ -66,14 +66,6 @@ export function nodeStatusMeta(status: NodeStatus) {
   if (status === NodeStatus.Busy) return { label: '繁忙', tone: 'warning' as const }
   if (status === NodeStatus.Error) return { label: '异常', tone: 'danger' as const }
   if (status === NodeStatus.Offline) return { label: '离线', tone: 'neutral' as const }
-  return { label: '未知', tone: 'neutral' as const }
-}
-
-export function tunnelStatusMeta(status: TeamLabTunnelStatus) {
-  if (status === TeamLabTunnelStatus.Healthy) return { label: '隧道正常', tone: 'success' as const }
-  if (status === TeamLabTunnelStatus.Probing) return { label: '检测中', tone: 'info' as const }
-  if (status === TeamLabTunnelStatus.Error) return { label: '隧道异常', tone: 'danger' as const }
-  if (status === TeamLabTunnelStatus.Disabled) return { label: '未启用', tone: 'neutral' as const }
   return { label: '未知', tone: 'neutral' as const }
 }
 

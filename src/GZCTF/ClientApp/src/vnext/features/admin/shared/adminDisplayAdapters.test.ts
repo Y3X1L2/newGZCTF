@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { ImageStatus, NodeCapability, NodeStatus, TeamLabTunnelStatus } from '@Api'
+import { ImageStatus, NodeCapability, NodeStatus } from '@Api'
 import { imageStatusMeta } from '../images/useAdminImages'
-import { hasNodeCapability, nodeStatusMeta, tunnelStatusMeta } from '../nodes/useAdminNodes'
+import { hasNodeCapability, nodeStatusMeta } from '../nodes/useAdminNodes'
 
 describe('admin display adapters', () => {
   it('maps every image lifecycle state to a stable visual tone', () => {
@@ -11,17 +11,13 @@ describe('admin display adapters', () => {
     expect(imageStatusMeta(ImageStatus.Deleting)).toMatchObject({ label: '删除中', tone: 'warning', active: true })
   })
 
-  it('maps node and TeamLab states without treating unknown values as healthy', () => {
+  it('maps node states without treating unknown values as healthy', () => {
     expect(nodeStatusMeta(NodeStatus.Online)).toMatchObject({ label: '在线', tone: 'success' })
     expect(nodeStatusMeta(NodeStatus.Busy)).toMatchObject({ label: '繁忙', tone: 'warning' })
     expect(nodeStatusMeta(NodeStatus.Error)).toMatchObject({ label: '异常', tone: 'danger' })
     expect(nodeStatusMeta(NodeStatus.Offline)).toMatchObject({ label: '离线', tone: 'neutral' })
     expect(nodeStatusMeta(NodeStatus.Unknown)).toMatchObject({ label: '未知', tone: 'neutral' })
 
-    expect(tunnelStatusMeta(TeamLabTunnelStatus.Healthy)).toMatchObject({ label: '隧道正常', tone: 'success' })
-    expect(tunnelStatusMeta(TeamLabTunnelStatus.Probing)).toMatchObject({ label: '检测中', tone: 'info' })
-    expect(tunnelStatusMeta(TeamLabTunnelStatus.Error)).toMatchObject({ label: '隧道异常', tone: 'danger' })
-    expect(tunnelStatusMeta(TeamLabTunnelStatus.Disabled)).toMatchObject({ label: '未启用', tone: 'neutral' })
   })
 
   it('checks bit-mask capabilities independently', () => {

@@ -1,6 +1,6 @@
 import { ArrowRight, Plus, Search, Server } from 'lucide-react'
 import { ChangeEvent, useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router'
+import { useNavigate } from 'react-router'
 import { NodeCapability, NodeStatus } from '@Api'
 import { ActionButton } from '../../../shared/Interaction'
 import { DataState } from '../../../shared/Primitives'
@@ -21,7 +21,7 @@ import {
 import { useAdminQueryState } from '../shared/useAdminQueryState'
 import styles from './AdminNodesPage.module.css'
 import { NodeRegistrationDialog } from './NodeRegistrationDialog'
-import { formatHeartbeat, hasNodeCapability, nodeStatusMeta, tunnelStatusMeta, useAdminNodes } from './useAdminNodes'
+import { formatHeartbeat, hasNodeCapability, nodeStatusMeta, useAdminNodes } from './useAdminNodes'
 
 const PAGE_SIZE = 20
 
@@ -29,7 +29,6 @@ function capabilityText(node: NodeSummary) {
   const labels = []
   if (hasNodeCapability(node.capabilities, NodeCapability.Docker)) labels.push('Docker')
   if (hasNodeCapability(node.capabilities, NodeCapability.Kvm)) labels.push('KVM')
-  if (node.canHostTeamLab) labels.push('TeamLab')
   return labels.length ? labels.join(' · ') : '未检测到运行能力'
 }
 
@@ -37,7 +36,6 @@ function matchesCapability(node: NodeSummary, value: string | null) {
   if (!value) return true
   if (value === 'docker') return hasNodeCapability(node.capabilities, NodeCapability.Docker)
   if (value === 'kvm') return hasNodeCapability(node.capabilities, NodeCapability.Kvm)
-  if (value === 'teamlab') return node.canHostTeamLab
   if (value === 'unschedulable') return !node.isSchedulable || node.unschedulableReasons.length > 0
   return true
 }
@@ -164,16 +162,6 @@ export function AdminNodesPage() {
       ),
     },
     {
-      id: 'teamlab',
-      header: 'TeamLab',
-      width: 'medium',
-      visibility: 'desktop',
-      render: (node) => {
-        const meta = tunnelStatusMeta(node.teamLabTunnelStatus)
-        return <StatusBadge tone={meta.tone}>{node.canHostTeamLab ? meta.label : '能力不足'}</StatusBadge>
-      },
-    },
-    {
       id: 'heartbeat',
       header: '最后心跳',
       width: 'medium',
@@ -202,7 +190,6 @@ export function AdminNodesPage() {
     <div className={styles.page}>
       <AdminPageHeader
         actions={<>
-          <Link to="/admin/nodes/teamlab-cache">节点制品缓存</Link>
           <ActionButton icon={<Plus size={16} />} onClick={() => setRegisterOpen(true)} tone="primary" type="button">
             添加节点
           </ActionButton>
@@ -268,7 +255,6 @@ export function AdminNodesPage() {
             <option value="">全部能力</option>
             <option value="docker">Docker</option>
             <option value="kvm">KVM</option>
-            <option value="teamlab">TeamLab</option>
             <option value="unschedulable">不可调度</option>
           </select>
         </ToolbarGroup>
