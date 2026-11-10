@@ -1,0 +1,82 @@
+.body {
+  padding: 4px 20px 24px;
+}
+.detail {
+  min-width: 0;
+  padding-top: 24px;
+}
+.detailHeading {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 15px;
+}
+.detailHeading strong {
+  margin-right: auto;
+  font-weight: 600;
+}
+.phase {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 18px 0 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.phase > span:last-child {
+  font-variant-numeric: tabular-nums;
+}
+.completion {
+  height: 4px;
+  background: var(--line);
+  overflow: hidden;
+  margin-bottom: 20px;
+  border-radius: 3px;
+}
+.completion span {
+  height: 100%;
+  display: block;
+  background: var(--accent);
+}
+.completion[data-state='failed'] span {
+  background: var(--negative);
+}
+.results > div {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 0;
+  font-size: 13px;
+  border-bottom: 1px solid var(--line);
+}
+.results > div > span:first-child {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.results p,
+.error {
+  width: 100%;
+  color: var(--negative);
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.error {
+  padding: 12px;
+  margin: 16px 0;
+  border: 1px solid var(--negative-line);
+  border-radius: 8px;
+  background: var(--negative-soft);
+}
+.empty {
+  padding: 64px 20px;
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  color: var(--muted);
+  font-size: 13px;
+}

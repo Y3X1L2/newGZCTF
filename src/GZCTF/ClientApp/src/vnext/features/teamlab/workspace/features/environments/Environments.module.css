@@ -1,0 +1,218 @@
+.summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.summary > button {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: var(--shadow-panel);
+  color: var(--text);
+  display: grid;
+  gap: 12px;
+  padding: 18px 20px;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+.summary > button:hover {
+  border-color: var(--strong-line);
+}
+.summary > button[aria-pressed='true'] {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.summary > button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.summary > button > strong {
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+.summary > button > span {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.listSurface {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: var(--shadow-panel);
+  overflow: hidden;
+}
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--line);
+}
+.toolbar > :last-child {
+  width: 280px;
+}
+.tableScroll {
+  overflow-x: auto;
+}
+.table {
+  table-layout: fixed;
+}
+.table th:first-child {
+  width: 35%;
+}
+.table th:nth-child(2) {
+  width: 13%;
+}
+.table th:nth-child(3),
+.table th:nth-child(4) {
+  width: 12%;
+}
+.table th:nth-child(5) {
+  width: 19%;
+}
+.table th:last-child {
+  width: 96px;
+}
+.table td {
+  height: 78px;
+}
+.environment strong {
+  font-size: 14px;
+  font-weight: 600;
+}
+.symbol {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+}
+.assetCount,
+.networkCount {
+  font-variant-numeric: tabular-nums;
+}
+.measure {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.measure svg,
+.measure > span {
+  color: var(--muted);
+}
+.measure > strong {
+  font-weight: 600;
+  font-family: var(--font-mono);
+}
+.measure > span {
+  font-size: 12px;
+}
+.reference {
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+.actions {
+  white-space: nowrap;
+  text-align: right;
+}
+.updated {
+  color: var(--muted);
+  font-size: 13px;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+.creation {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 24px;
+}
+.creation > section {
+  min-width: 0;
+  display: grid;
+  gap: 16px;
+  align-content: start;
+}
+.creation > section + section {
+  border-left: 1px solid var(--line);
+  padding-left: 24px;
+}
+.creationFooter {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+@media (max-width: 850px) {
+  .summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .summary > button {
+    padding: 16px;
+    gap: 10px;
+  }
+  .toolbar {
+    padding: 14px 16px;
+    flex-wrap: wrap;
+  }
+  .toolbar > :last-child {
+    width: 100%;
+  }
+  .table,
+  .table tbody,
+  .table tr {
+    display: block;
+  }
+  .table thead {
+    display: none;
+  }
+  .table tr {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    padding: 16px;
+    gap: 12px;
+    border-bottom: 1px solid var(--line);
+  }
+  .table tr:last-child {
+    border-bottom: 0;
+  }
+  .table td {
+    border: 0;
+    padding: 0;
+    height: auto;
+  }
+  .environment {
+    grid-column: 1 / -1;
+  }
+  .state {
+    grid-column: 1 / -1;
+  }
+  .updated {
+    align-self: center;
+  }
+  .actions {
+    justify-self: end;
+  }
+  .creation {
+    grid-template-columns: 1fr;
+    gap: 22px;
+  }
+  .creation > section + section {
+    border-left: 0;
+    border-top: 1px solid var(--line);
+    padding: 20px 0 0;
+  }
+}

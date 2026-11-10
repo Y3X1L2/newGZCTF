@@ -9,14 +9,21 @@ export interface WorkspaceTarget {
 
 export interface WorkspaceConnection {
   available: boolean
-  frameUrl?: string
+  environmentId?: string
+  permissions?: string[]
   error?: string
 }
 
-export interface NetlabConnection { endpoint: string; projectName: string; configured: boolean }
+export interface NetlabConnection {
+  endpoint: string
+  projectName: string
+  configured: boolean
+}
 
 export const netlabApi = {
-  workspace: (target: WorkspaceTarget) => runtimeJsonClient.get('/api/teamlab/workspace', { ...target }) as Promise<WorkspaceConnection>,
+  workspace: (target: WorkspaceTarget) =>
+    runtimeJsonClient.get('/api/teamlab/workspace', { ...target }) as Promise<WorkspaceConnection>,
   connection: () => runtimeJsonClient.get('/api/teamlab/connection') as Promise<NetlabConnection>,
-  saveConnection: (connection: { endpoint: string; projectName: string; token?: string }) => runtimeJsonClient.putJson('/api/teamlab/connection', connection),
+  saveConnection: (connection: { endpoint: string; projectName: string; token?: string }) =>
+    runtimeJsonClient.putJson('/api/teamlab/connection', connection),
 }

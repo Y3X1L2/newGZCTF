@@ -29,7 +29,7 @@ export function NetlabConnectionDialog({ connection, onClose, onSaved }: { conne
     <div className={styles.connectionForm}>
       <TextField label="底座地址" type="url" value={endpoint} onValueChange={setEndpoint} autoFocus />
       <TextField label="项目名称" value={projectName} onValueChange={setProjectName} />
-      <PasswordField label="平台集成令牌" value={token} onValueChange={setToken} autoComplete="new-password" placeholder={connection?.configured ? '已保存' : ''} />
+      <PasswordField label="底座访问令牌" value={token} onValueChange={setToken} autoComplete="new-password" placeholder={connection?.configured ? '已保存' : ''} />
       {error ? <InlineFeedback tone="danger">{errorMessage(error, '连接失败')}</InlineFeedback> : null}
     </div>
   </VNextDialog>

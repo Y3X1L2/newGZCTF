@@ -1,0 +1,43 @@
+.form {
+  display: grid;
+  gap: 18px;
+}
+.options {
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+.options summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+}
+.options[open] summary {
+  color: var(--text);
+  margin-bottom: 14px;
+}
+.optionFields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.identity {
+  display: flex;
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 12px;
+}
+.identity code {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.dialogActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  border-top: 1px solid var(--line);
+  padding-top: 18px;
+  margin-top: 2px;
+}

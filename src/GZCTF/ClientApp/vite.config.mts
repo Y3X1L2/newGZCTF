@@ -48,7 +48,12 @@ export default defineConfig(({ mode }) => {
       rolldownOptions: {
         output: {
           hashCharacters: 'base36',
-          chunkFileNames: `static/[name].${buildId}.[hash].js`,
+          chunkFileNames: (chunk) => {
+            const netlab = chunk.moduleIds.some((id) =>
+              /features\/teamlab\/workspace\/|node_modules\/.*@mantine\//.test(id.replaceAll('\\', '/'))
+            )
+            return `static/${netlab ? 'netlab-' : ''}[name].${buildId}.[hash].js`
+          },
           assetFileNames: `static/[name].${buildId}.[hash].[ext]`,
           entryFileNames: `static/[name].${buildId}.[hash].js`,
         },
@@ -57,6 +62,14 @@ export default defineConfig(({ mode }) => {
     html: { cspNonce: '%nonce%' },
     plugins: [
       react(),
+      {
+        name: 'scope-netlab-mantine',
+        enforce: 'pre',
+        transform(code, id) {
+          if (id.replaceAll('\\', '/').includes('/@mantine/') && /\.css(?:$|\?)/.test(id))
+            return { code: `@scope ([data-netlab-workspace]) { ${code} }`, map: null }
+        },
+      },
       banner(BANNER),
       webfontDownload(
         [

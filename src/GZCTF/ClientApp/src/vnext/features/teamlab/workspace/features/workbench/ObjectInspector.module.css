@@ -1,0 +1,243 @@
+.inspector {
+  width: 320px;
+  flex: 0 0 320px;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: var(--shadow-panel);
+}
+.header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 20px 16px 14px;
+}
+.symbol {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-radius: 7px;
+  flex-shrink: 0;
+}
+.identity {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+.identity h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 0 16px 16px;
+  border-bottom: 1px solid var(--line);
+}
+.actions > :last-child {
+  margin-left: auto;
+}
+.connect {
+  display: flex;
+  gap: 1px;
+  align-items: center;
+}
+.connect > button:first-child {
+  border-radius: 5px 0 0 5px;
+}
+.connect > button:last-child {
+  border-radius: 0 5px 5px 0;
+  height: 36px;
+  width: 26px;
+}
+.body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 16px 20px;
+}
+.resources {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  padding: 16px 0;
+  margin: 0;
+  gap: 8px;
+  border-bottom: 1px solid var(--line);
+}
+.resources div {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-subtle);
+  padding: 10px 8px;
+}
+.resources dt {
+  color: var(--muted);
+  font-size: 12px;
+}
+.resources dd {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}
+.resources dd span {
+  margin-left: 4px;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--muted);
+  font-family: var(--font-ui);
+}
+.section {
+  padding: 20px 0 0;
+}
+.section h3 {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  margin: 0 0 10px;
+}
+.section h3 span {
+  font-weight: 400;
+}
+.items {
+  display: grid;
+  gap: 6px;
+}
+.item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  padding: 10px;
+  text-align: left;
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+.item:hover {
+  color: var(--accent);
+  background: var(--surface-hover);
+}
+.item > svg:last-child {
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.itemText {
+  min-width: 0;
+  flex: 1;
+  display: grid;
+  gap: 5px;
+}
+.itemText strong {
+  font-size: 14px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.marker {
+  height: 22px;
+  width: 3px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+.meta {
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.address {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.properties {
+  display: grid;
+  gap: 12px;
+  padding: 18px 0 0;
+  margin: 0;
+}
+.properties > div {
+  display: grid;
+  grid-template-columns: 68px minmax(0, 1fr);
+  gap: 8px;
+  font-size: 13px;
+}
+.properties dt {
+  color: var(--muted);
+  font-size: 12px;
+}
+.properties dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-weight: 500;
+}
+.technical {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.details {
+  margin-top: 20px;
+  border-top: 1px solid var(--line);
+  padding-top: 16px;
+}
+.details summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  list-style: none;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--muted);
+}
+.details summary::-webkit-details-marker {
+  display: none;
+}
+.details[open] summary svg {
+  transform: rotate(180deg);
+}
+.error {
+  margin: 12px 16px;
+  padding: 10px;
+  color: var(--negative);
+  background: color-mix(in srgb, var(--negative) 8%, var(--surface));
+  border-left: 2px solid var(--negative);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 1100px) {
+  .inspector {
+    width: 288px;
+    flex-basis: 288px;
+  }
+}
+@media (max-width: 760px) {
+  .inspector {
+    position: absolute;
+    inset: 63px 8px 8px auto;
+    width: min(340px, calc(100% - 16px));
+    z-index: 6;
+    box-shadow: -8px 0 24px #0000000a;
+  }
+}
