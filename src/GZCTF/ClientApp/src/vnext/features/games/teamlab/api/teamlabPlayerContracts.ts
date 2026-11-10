@@ -38,18 +38,6 @@ export interface TeamLabPlayerWorkspace {
   objectives: readonly TeamLabPlayerObjective[]
 }
 
-export interface TeamLabPlayerAccessGrant {
-  id: string
-  type: string
-  clientAddress: string
-  endpoint: string
-  allowedIps: string
-  dns: string
-  createdAt: number
-  expiresAt: number | null
-  configurationDownloadUrl: string | null
-}
-
 export interface TeamLabPlayerResetReceipt {
   runtimeId: string
 }

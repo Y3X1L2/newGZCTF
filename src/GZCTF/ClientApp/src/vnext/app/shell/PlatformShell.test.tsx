@@ -19,7 +19,7 @@ describe('ModuleDrawer', () => {
 
     const currentLinks = screen.getAllByRole('link').filter((link) => link.getAttribute('aria-current') === 'page')
     expect(currentLinks).toHaveLength(1)
-    expect(currentLinks[0]).toHaveTextContent('TeamLab')
+    expect(currentLinks[0]).toHaveTextContent('组网环境')
     expect(screen.getByRole('link', { name: /平台管理/ })).not.toHaveAttribute('aria-current')
   })
 })

@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react'
-import { Navigate, Route, Routes, useLocation, useParams } from 'react-router'
+import { Navigate, Route, Routes } from 'react-router'
 import { VNextRouteLoading } from './VNextRouteLoading'
 import { PlatformShell } from './shell/PlatformShell'
 
@@ -151,37 +151,9 @@ const AdminTheoryBankPage = lazy(() =>
 const TeamLabWorkspacePage = lazy(() =>
   import('../features/games/teamlab/TeamLabWorkspacePage').then((module) => ({ default: module.TeamLabWorkspacePage }))
 )
-const TeamLabLibraryPage = lazy(() =>
-  import('../features/admin/teamlab/library/TeamLabLibraryPage').then((module) => ({ default: module.TeamLabLibraryPage }))
+const TeamLabPage = lazy(() =>
+  import('../features/teamlab/TeamLabPage').then((module) => ({ default: module.TeamLabPage }))
 )
-const TeamLabResourcesPage = lazy(() =>
-  import('../features/admin/teamlab/resources/TeamLabResourcesPage').then((module) => ({ default: module.TeamLabResourcesPage }))
-)
-const TeamLabNodeCachePage = lazy(() =>
-  import('../features/admin/teamlab/resources/TeamLabNodeCachePage').then((module) => ({ default: module.TeamLabNodeCachePage }))
-)
-const TeamLabSceneShell = lazy(() =>
-  import('../features/admin/teamlab/shared/TeamLabSceneShell').then((module) => ({ default: module.TeamLabSceneShell }))
-)
-const TeamLabDesignRoute = lazy(() =>
-  import('../features/admin/teamlab/editor/TeamLabDesignRoute').then((module) => ({ default: module.TeamLabDesignRoute }))
-)
-const TeamLabRuntimeSearchPage = lazy(() =>
-  import('../features/admin/teamlab/library/TeamLabRuntimeSearchPage').then((module) => ({ default: module.TeamLabRuntimeSearchPage }))
-)
-const TeamLabRuntimeDetailPage = lazy(() =>
-  import('../features/admin/teamlab/runtimes/TeamLabRuntimeDetailPage').then((module) => ({ default: module.TeamLabRuntimeDetailPage }))
-)
-const TeamLabReleasesPage = lazy(() =>
-  import('../features/admin/teamlab/releases/TeamLabReleasesPage').then((module) => ({ default: module.TeamLabReleasesPage }))
-)
-
-function LegacyTeamLabRuntimeRoute({ detail = false }: { detail?: boolean }) {
-  const { topologyId, runtimeId } = useParams()
-  const { search, hash } = useLocation()
-  if (detail && runtimeId) return <Navigate replace to={`/admin/teamlab/runtimes/${runtimeId}${search}${hash}`} />
-  return <Navigate replace to={`/admin/teamlab/${topologyId}/releases${search}${hash || '#runtimes'}`} />
-}
 const GameAdminShell = lazy(() =>
   import('../features/admin/games/GameAdminShell').then((module) => ({ default: module.GameAdminShell }))
 )
@@ -296,18 +268,7 @@ export function VNextApp() {
             <Route path="games" element={<AdminGamesPage />} />
             <Route path="exercises" element={<AdminExercisesPage />} />
             <Route path="theory-bank" element={<AdminTheoryBankPage />} />
-            <Route path="teamlab" element={<TeamLabLibraryPage />} />
-            <Route path="teamlab/runtimes" element={<TeamLabRuntimeSearchPage />} />
-            <Route path="teamlab/runtimes/:runtimeId" element={<TeamLabRuntimeDetailPage />} />
-            <Route path="teamlab/resources" element={<TeamLabResourcesPage />} />
-            <Route path="nodes/teamlab-cache" element={<TeamLabNodeCachePage />} />
-            <Route path="teamlab/:topologyId/runtimes/:runtimeId" element={<LegacyTeamLabRuntimeRoute detail />} />
-            <Route path="teamlab/:topologyId/runtimes" element={<LegacyTeamLabRuntimeRoute />} />
-            <Route path="teamlab/:topologyId" element={<TeamLabSceneShell />}>
-              <Route index element={<Navigate replace to="design" />} />
-              <Route path="design" element={<TeamLabDesignRoute />} />
-              <Route path="releases" element={<TeamLabReleasesPage />} />
-            </Route>
+            <Route path="teamlab/*" element={<TeamLabPage />} />
             <Route path="games/:gameId" element={<GameAdminShell />}>
               <Route index element={<Navigate replace to="info" />} />
               <Route path="info" element={<AdminGameInfoPage />} />

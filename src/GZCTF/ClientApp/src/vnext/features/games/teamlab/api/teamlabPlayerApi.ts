@@ -1,6 +1,5 @@
 import { runtimeJsonClient, type RuntimeJsonClient } from '../../../admin/api/runtimeJsonClient'
 import {
-  parseTeamLabPlayerAccessGrant,
   parseTeamLabPlayerResetReceipt,
   parseTeamLabPlayerSubmissionResult,
   parseTeamLabPlayerWorkspace,
@@ -22,11 +21,6 @@ export function createTeamLabPlayerApi(client: RuntimeJsonClient = runtimeJsonCl
       const id = routeId(gameId, 'gameId')
       const response = await client.get(`/api/pentest/games/${id}/workspace`)
       return projectTeamLabPlayerWorkspace(parseTeamLabPlayerWorkspace(response))
-    },
-
-    async createAccessGrant(gameId: number) {
-      const id = routeId(gameId, 'gameId')
-      return parseTeamLabPlayerAccessGrant(await client.postJson(`/api/pentest/games/${id}/access-grants`))
     },
 
     async resetWorkspace(gameId: number) {

@@ -1,5 +1,4 @@
 import type {
-  TeamLabPlayerAccessGrant,
   TeamLabPlayerObjective,
   TeamLabPlayerResetReceipt,
   TeamLabPlayerRuntimeStatus,
@@ -84,15 +83,6 @@ function positiveInteger(value: unknown, field: string): number {
   return parsed
 }
 
-function timestamp(value: unknown, field: string): number {
-  const parsed = nonNegativeInteger(value, field)
-  return parsed
-}
-
-function nullableTimestamp(value: unknown, field: string): number | null {
-  return value === null ? null : timestamp(value, field)
-}
-
 function guid(value: unknown, field: string): string {
   const parsed = string(value, field)
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(parsed)) {
@@ -143,24 +133,6 @@ export function parseTeamLabPlayerWorkspace(value: unknown): TeamLabPlayerWorksp
     resetCount: nonNegativeInteger(item.resetCount, 'workspace.resetCount'),
     maxResetCount: nonNegativeInteger(item.maxResetCount, 'workspace.maxResetCount'),
     objectives: item.objectives.map((entry, index) => objective(entry, `workspace.objectives[${index}]`)),
-  }
-}
-
-export function parseTeamLabPlayerAccessGrant(value: unknown): TeamLabPlayerAccessGrant {
-  const item = record(value, 'accessGrant')
-  return {
-    id: guid(item.id, 'accessGrant.id'),
-    type: string(item.type, 'accessGrant.type'),
-    clientAddress: string(item.clientAddress, 'accessGrant.clientAddress'),
-    endpoint: string(item.endpoint, 'accessGrant.endpoint'),
-    allowedIps: string(item.allowedIps, 'accessGrant.allowedIps'),
-    dns: string(item.dns, 'accessGrant.dns'),
-    createdAt: timestamp(item.createdAt, 'accessGrant.createdAt'),
-    expiresAt: nullableTimestamp(item.expiresAt, 'accessGrant.expiresAt'),
-    configurationDownloadUrl: nullableString(
-      item.configurationDownloadUrl,
-      'accessGrant.configurationDownloadUrl'
-    ),
   }
 }
 

@@ -96,7 +96,7 @@ export const platformModules: PlatformModule[] = [
   },
   {
     id: 'teamlab',
-    label: 'TeamLab',
+    label: '组网环境',
     shortLabel: '组网',
     route: '/admin/teamlab',
     icon: Network,

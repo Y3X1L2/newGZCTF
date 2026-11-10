@@ -2,7 +2,7 @@ import { Save } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { PasswordField, SelectField, TextAreaField, TextField, ToggleField } from '../../../../shared/FormControls'
 import { ActionButton, VNextDrawer } from '../../../../shared/Interaction'
-import type { TeamLabTopologyAsset } from '../../teamlab/api/teamlabContracts'
+import type { TeamLabGameAsset } from '../../api/teamlabGameAdminApi'
 import type { GameObjectiveDraft } from './gameObjectiveModel'
 import styles from './TeamLabGame.module.css'
 
@@ -16,7 +16,7 @@ export function GameObjectiveEditorDrawer({
 }: {
   objective: GameObjectiveDraft | null
   objectives: readonly GameObjectiveDraft[]
-  assets: readonly TeamLabTopologyAsset[]
+  assets: readonly TeamLabGameAsset[]
   open: boolean
   onClose: () => void
   onApply: (objective: GameObjectiveDraft) => void
@@ -32,8 +32,7 @@ export function GameObjectiveEditorDrawer({
 
   return (
     <VNextDrawer
-      description={draft?.id ? `目标 #${draft.id}` : undefined}
-      eyebrow="SCORING OBJECTIVE"
+      eyebrow=""
       footer={
         <>
           <ActionButton onClick={onClose} type="button">取消</ActionButton>
@@ -54,18 +53,9 @@ export function GameObjectiveEditorDrawer({
       {draft ? (
         <div className={styles.objectiveForm}>
           <div className={styles.objectiveFormGrid}>
-            <TextField
-              disabled={draft.id !== undefined}
-              hint={draft.id ? '已创建目标的标识不可修改。' : undefined}
-              label="目标标识"
-              maxLength={63}
-              onValueChange={(key) => update({ key })}
-              required
-              value={draft.key}
-            />
             <SelectField label="绑定资产" onValueChange={(assetKey) => update({ assetKey })} required value={draft.assetKey}>
               <option value="">请选择资产</option>
-              {assets.map((asset) => <option key={asset.key} value={asset.key}>{asset.name} ({asset.key})</option>)}
+              {assets.map((asset) => <option key={asset.id} value={asset.id}>{asset.name}</option>)}
             </SelectField>
           </div>
           <TextField label="标题" maxLength={128} onValueChange={(title) => update({ title })} required value={draft.title} />
@@ -118,7 +108,6 @@ export function GameObjectiveEditorDrawer({
                       type="checkbox"
                     />
                     <span>{item.title}</span>
-                    <code>{item.key}</code>
                   </label>
                 ))}
               </div>
