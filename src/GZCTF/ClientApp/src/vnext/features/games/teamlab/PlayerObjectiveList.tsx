@@ -39,11 +39,11 @@ export function PlayerObjectiveList({
 
   return (
     <section className={styles.objectives}>
-      <header><div><span>OBJECTIVES</span><h2>任务目标</h2></div><strong>{workspace.solvedCount} / {workspace.objectiveCount}</strong></header>
+      <header><div><h2>任务目标</h2></div><strong>{workspace.solvedCount} / {workspace.objectiveCount}</strong></header>
       <div className={styles.targetList}>
         {workspace.targets.map((target) => (
           <section className={styles.target} key={target.assetKey}>
-            <header><div><Flag size={16} /><strong>{target.assetKey}</strong></div><span>{target.solvedCount} / {target.objectiveCount}</span></header>
+
             <ol>
               {target.objectives.map((objective) => (
                 <li data-locked={!objective.available || undefined} data-solved={objective.solved || undefined} key={objective.id}>

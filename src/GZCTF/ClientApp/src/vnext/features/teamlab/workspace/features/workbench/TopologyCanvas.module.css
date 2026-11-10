@@ -1,0 +1,198 @@
+.frame {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  background: var(--page);
+}
+.frame:fullscreen {
+  width: 100vw;
+  height: 100dvh;
+}
+.canvas {
+  --xy-background-color: color-mix(in srgb, var(--page) 72%, var(--surface));
+}
+.asset,
+.network {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--text);
+  box-shadow: var(--shadow-panel);
+}
+.asset {
+  height: 100%;
+  padding: 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-left: 3px solid var(--network-color);
+  position: relative;
+  text-align: left;
+}
+.asset[data-kind='router'] {
+  border-left-color: var(--accent);
+  border-radius: 10px;
+}
+.asset[data-selected='true'],
+.network[data-selected='true'] {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+.asset:hover,
+.network:hover {
+  border-color: var(--network-color);
+}
+.glyph {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border-radius: 6px;
+  color: var(--network-color);
+  background: color-mix(in srgb, var(--network-color) 10%, var(--surface));
+}
+.assetIdentity {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+.light {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--muted);
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--muted) 10%, transparent);
+}
+.light[data-state='running'] {
+  background: var(--positive);
+}
+.light[data-state='failed'] {
+  background: var(--negative);
+}
+.light[data-state='suspended'] {
+  background: var(--warning);
+}
+.asset strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 18px;
+  white-space: nowrap;
+}
+.address,
+.cidr {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 19px;
+}
+.network {
+  height: 100%;
+  padding: 16px 18px;
+  border: 1px solid color-mix(in srgb, var(--network-color) 28%, var(--line));
+  border-top: 3px solid var(--network-color);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--network-color) 5%, var(--surface));
+  box-shadow: none;
+}
+.networkHeading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  text-align: left;
+}
+.networkGlyph {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid color-mix(in srgb, var(--network-color) 18%, transparent);
+  border-radius: 8px;
+  color: var(--network-color);
+  background: color-mix(in srgb, var(--network-color) 8%, var(--surface));
+  flex-shrink: 0;
+}
+.networkHeading > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.networkHeading strong {
+  flex: 1;
+  white-space: nowrap;
+  font-weight: 600;
+}
+.networkCount {
+  margin-left: auto;
+  padding: 2px 7px;
+  background: color-mix(in srgb, var(--network-color) 10%, var(--surface));
+  border-radius: 5px;
+  color: var(--muted);
+  font-size: 11px;
+  font-family: var(--font-mono);
+}
+.asset :global(.react-flow__handle),
+.network :global(.react-flow__handle) {
+  width: 7px;
+  height: 7px;
+  border: 1px solid var(--surface);
+  background: var(--network-color);
+  opacity: 0;
+}
+.canvas :global(.react-flow__handle[data-editable='true']) {
+  opacity: 0.7;
+}
+.tools {
+  display: flex;
+  gap: 2px;
+  padding: 4px;
+  box-shadow: var(--shadow-panel);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 9px;
+  overflow: hidden;
+}
+.tools button {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.tools button:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+.error {
+  max-width: min(500px, 80vw);
+  padding: 10px 14px;
+  border: 1px solid var(--negative-line);
+  border-radius: 7px;
+  color: var(--negative);
+  background: var(--negative-soft);
+  font-size: 13px;
+}
+.canvas :global(.react-flow__minimap) {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: none;
+}
+.canvas :global(.react-flow__edge-text) {
+  font-family: var(--font-mono);
+}
+@media (max-width: 760px) {
+  .canvas :global(.react-flow__minimap) {
+    display: none;
+  }
+}

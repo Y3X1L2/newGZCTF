@@ -6,7 +6,6 @@ using System.Threading.Tasks;
 using GZCTF.Agent.Controllers;
 using GZCTF.Agent.Models;
 using GZCTF.Agent.Services;
-using GZCTF.Modules.TeamLab.Infrastructure;
 using GZCTF.Modules.Runtime.Contracts;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
@@ -16,15 +15,6 @@ namespace GZCTF.Test.UnitTests.TeamLab;
 
 public sealed class RuntimeInventoryAvailabilityTests
 {
-    [Fact]
-    public void MainAdapter_PreservesUnavailableComputeInsteadOfTreatingEmptyAsAbsent()
-    {
-        var inventory = AgentTeamLabNodeExecutor.MapRuntimeInventory(
-            new AgentRuntimeInventoryResponse(true, false, [], [], DateTimeOffset.UtcNow));
-        Assert.True(inventory.DockerAvailable);
-        Assert.False(inventory.KvmAvailable);
-        Assert.Empty(inventory.Vms);
-    }
 
     [Theory]
     [InlineData("list")]

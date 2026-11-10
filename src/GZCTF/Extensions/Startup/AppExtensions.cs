@@ -142,13 +142,12 @@ internal static class AppExtensions
                           <div class="gz-api-guide__content">
                             <div class="gz-api-guide__title">
                               <strong>YINYU 平台开放 API v1</strong>
-                              <span>面向内容流水线、组网自动化和受控系统集成。</span>
+                              <span>面向内容导入、比赛管理和受控系统集成。</span>
                             </div>
                             <div class="gz-api-guide__items">
                               <span><b>认证</b>：点击“Authentication”，填写 Bearer Token。</span>
                               <span><b>写操作</b>：按接口要求提供稳定的 <code>Idempotency-Key</code>。</span>
-                              <span><b>接口分类</b>：题目与镜像、Bootstrap Profile、TeamLab 拓扑、运行环境、流量与抓包。</span>
-                              <span><b>组网导航</b>：<code>TeamLab - Topologies</code>、<code>TeamLab - Runtimes</code>、<code>TeamLab - Traffic and Captures</code>。</span>
+                              <span><b>接口分类</b>：题目、镜像、课程、理论考试与队伍。</span>
                               <span><b>唯一契约</b>：本页面只读取 <code>/openapi/open-v1.json</code>，不维护第二份接口定义。</span>
                             </div>
                           </div>

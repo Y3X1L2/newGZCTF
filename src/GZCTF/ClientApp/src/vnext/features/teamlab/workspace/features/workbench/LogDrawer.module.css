@@ -1,0 +1,42 @@
+.body {
+  height: calc(100dvh - 60px);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.output {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 16px;
+  background: var(--terminal-bg);
+  color: var(--terminal-text);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: 12px/1.7 var(--font-mono);
+  tab-size: 4;
+}
+.stderr {
+  color: var(--negative);
+}
+.status {
+  color: var(--muted);
+  font-size: 12px;
+}
+@media (max-width: 540px) {
+  .toolbar {
+    gap: 8px;
+  }
+  .output {
+    padding: 10px;
+  }
+}

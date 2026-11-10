@@ -332,60 +332,6 @@ public sealed class ApiOperationPersistenceTests(GZCTFApplicationFactory factory
     }
 
     [Fact]
-    public async Task ConcurrentTeamLabSubmission_UsesBrowserActorAsIdempotencyIdentity()
-    {
-        var actorId = Guid.CreateVersion7();
-        var otherActorId = Guid.CreateVersion7();
-        var scopeId = Guid.CreateVersion7();
-        var key = Guid.NewGuid().ToString("N");
-        var route = $"POST:/api/open/v1/teamlab/scopes/{scopeId:D}/archive#scope:{scopeId:D}";
-
-        await using (var seedScope = factory.Services.CreateAsyncScope())
-        {
-            var seedContext = seedScope.ServiceProvider.GetRequiredService<AppDbContext>();
-            await SeedUserAsync(seedContext, actorId);
-            await SeedUserAsync(seedContext, otherActorId);
-        }
-
-        async Task<Guid> SubmitAsync(Guid actor, string hash)
-        {
-            await using var scope = factory.Services.CreateAsyncScope();
-            var store = scope.ServiceProvider.GetRequiredService<ITeamLabRuntimeOperationSubmissionStore>();
-            var result = await store.SubmitAsync(new TeamLabRuntimeOperationSubmission(
-                null,
-                actor,
-                scopeId,
-                route,
-                key,
-                hash,
-                "teamlab-scope",
-                scopeId.ToString("D"),
-                new TeamLabRuntimeOperationJob
-                {
-                    Kind = TeamLabRuntimeOperationKind.RolloutArchive,
-                    PayloadHash = $"sha256:{hash}"
-                }), CancellationToken.None);
-            return result.Operation.Id;
-        }
-
-        var ids = await Task.WhenAll(
-            SubmitAsync(actorId, "same-request-hash"),
-            SubmitAsync(actorId, "same-request-hash"));
-
-        Assert.Equal(ids[0], ids[1]);
-        await Assert.ThrowsAsync<IdempotencyConflictException>(() =>
-            SubmitAsync(actorId, "changed-request-hash"));
-
-        var otherActorOperation = await SubmitAsync(otherActorId, "same-request-hash");
-        Assert.NotEqual(ids[0], otherActorOperation);
-
-        await using var verificationScope = factory.Services.CreateAsyncScope();
-        var context = verificationScope.ServiceProvider.GetRequiredService<AppDbContext>();
-        Assert.Equal(2, await context.ApiOperations.CountAsync(item =>
-            item.ApiTokenId == null && item.RouteKey == route && item.IdempotencyKey == key));
-    }
-
-    [Fact]
     public async Task OperationsApi_OnlyReturnsOperationsOwnedByCurrentToken()
     {
         var issued = await IssueOperationsTokenAsync();

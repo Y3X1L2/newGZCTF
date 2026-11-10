@@ -9,7 +9,7 @@
 | Docker/VM 导入 | [镜像接口](../../../src/GZCTF/Modules/Content/Api/OpenImagesController.cs) 提交导入任务；Application/ 校验，Infrastructure/ 导入 worker 与执行器处理制品 | [镜像生命周期](reference/image-lifecycle.md) |
 | 目录、权限与引用删除 | [镜像目录](../../../src/GZCTF/Modules/Content/Application/IImageTemplateCatalog.cs) 协调删除，[公开引用接口](../../../src/GZCTF/Modules/Content/Contracts/IImageTemplateReferenceProvider.cs) 收集消费者事实；EF 存储在 Infrastructure/ | [引用与删除](reference/image-lifecycle.md) |
 | 来源迁移与认证 | Api/ 中的来源迁移入口提交 operation；Infrastructure/ 中的迁移、认证 handler 与 VM probe 执行验证 | [模板与缓存状态](reference/image-lifecycle.md) |
-| 模板 OS/远程配置投影 | [运行配置 query](../../../src/GZCTF/Modules/Content/Application/IImageRuntimeAccessQuery.cs) 提供批量投影；EF 实现在 Infrastructure/，响应定义在 Contracts/ | [TeamLab 运行事实](../teamlab/reference/runtime-capabilities.md) |
+| 模板 OS/远程配置投影 | [运行配置 query](../../../src/GZCTF/Modules/Content/Application/IImageRuntimeAccessQuery.cs) 提供批量投影；EF 实现在 Infrastructure/，响应定义在 Contracts/ | [TeamLab 运行事实](../../archive/teamlab-internal-20261110/reference/runtime-capabilities.md) |
 | 启动配置与 OCI 制品 | Application/ 管理启动配置，Infrastructure/ 中的 operation handler、分发服务和 OCI Registry 客户端处理制品 | [模块边界](../../architecture/module-boundary-map.md) |
 | 附件上传与复用 | [附件接口](../../../src/GZCTF/Modules/Content/Api/OpenAssetsController.cs) → [上传服务](../../../src/GZCTF/Modules/Content/Application/AssetApplicationService.cs) → Blob 存储 | [附件资产](reference/attachments.md) |
 | 选中节点准备及引用回收 | [Fleet 分发服务](../../../src/GZCTF/Services/Fleet/ImageDistributionService.cs) 管理节点需求与回收；Agent/Services/ 中的下载和容量服务执行本机保护 | [节点缓存生命周期](reference/image-lifecycle.md) |

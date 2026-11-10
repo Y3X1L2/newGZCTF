@@ -81,9 +81,6 @@ public sealed class ImageSelectedNodeDemandTests
         ticket.ErrorCategory = failure.Category;
         ticket.ErrorCode = failure.Code;
         ticket.Retryable = failure.Retryable;
-        var presentation = TeamLabFailurePresentation.ForRuntime(TeamLabRuntimeStatus.Failed, ticket, Guid.NewGuid());
-        Assert.NotNull(presentation);
-        Assert.Equal(code ?? "image.transfer_failed", presentation.Code);
         Assert.Equal(category ?? OperationalErrorCategory.ImageTransfer, failure.Category);
         Assert.Equal(retryable, failure.Retryable);
         Assert.Equal(selected.Id, (await context.ImageDistributionRecords.AsNoTracking().SingleAsync()).WorkerNodeId);

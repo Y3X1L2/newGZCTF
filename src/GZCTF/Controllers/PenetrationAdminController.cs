@@ -39,7 +39,7 @@ public sealed class PenetrationAdminController(
         var (_, actor, error) = await RequireManageableGameAsync(gameId, cancellationToken);
         if (error is not null) return error;
         return await ExecuteTeamLabAsync(() => adapter.BindAsync(
-            gameId, model.TopologyId, actor!.Id, actor.Role >= Role.Admin, cancellationToken));
+            gameId, model.TopologyId, actor!.Id, cancellationToken));
     }
 
     [HttpPut("games/{gameId:int}/objectives")]
@@ -73,13 +73,13 @@ public sealed class PenetrationAdminController(
         }
     }
 
-    [HttpPost("games/{gameId:int}/releases/{releaseId:guid}/activate")]
-    public async Task<IActionResult> ActivateRelease(int gameId, Guid releaseId, CancellationToken cancellationToken)
+    [HttpPost("games/{gameId:int}/releases/{releaseId}/activate")]
+    public async Task<IActionResult> ActivateRelease(int gameId, string releaseId, CancellationToken cancellationToken)
     {
         var (_, actor, error) = await RequireManageableGameAsync(gameId, cancellationToken);
         if (error is not null) return error;
         return await ExecuteTeamLabAsync(() => adapter.ActivateReleaseAsync(
-            gameId, releaseId, actor!.Id, actor.Role >= Role.Admin, cancellationToken));
+            gameId, releaseId, actor!.Id, cancellationToken));
     }
 
     [HttpPost("games/{gameId:int}/deploy")]
@@ -88,7 +88,7 @@ public sealed class PenetrationAdminController(
         var (_, actor, error) = await RequireManageableGameAsync(gameId, cancellationToken);
         if (error is not null) return error;
         return await ExecuteTeamLabAsync(() => adapter.PrepareAsync(
-            gameId, actor!.Id, actor.Role >= Role.Admin, cancellationToken), StatusCodes.Status202Accepted);
+            gameId, cancellationToken), StatusCodes.Status202Accepted);
     }
 
     [HttpPost("games/{gameId:int}/stop")]
@@ -97,7 +97,7 @@ public sealed class PenetrationAdminController(
         var (_, actor, error) = await RequireManageableGameAsync(gameId, cancellationToken);
         if (error is not null) return error;
         return await ExecuteTeamLabAsync(() => adapter.DrainAsync(
-            gameId, actor!.Id, actor.Role >= Role.Admin, cancellationToken), StatusCodes.Status202Accepted);
+            gameId, cancellationToken), StatusCodes.Status202Accepted);
     }
 
     [HttpGet("games/{gameId:int}/teamlab")]
@@ -113,7 +113,14 @@ public sealed class PenetrationAdminController(
         var (_, actor, error) = await RequireManageableGameAsync(gameId, cancellationToken);
         if (error is not null) return error;
         return Ok(await adapter.ListAvailableReleasesAsync(
-            actor!.Id, actor.Role >= Role.Admin, cancellationToken));
+            actor!.Id, cancellationToken));
+    }
+
+    [HttpGet("games/{gameId:int}/teamlab/assets")]
+    public async Task<IActionResult> ListSceneAssets(int gameId, CancellationToken cancellationToken)
+    {
+        var (_, _, error) = await RequireManageableGameAsync(gameId, cancellationToken);
+        return error ?? Ok(await adapter.ListAssetsAsync(gameId, cancellationToken));
     }
 
     [HttpPost("games/{gameId:int}/teamlab/prepare")]
@@ -122,7 +129,7 @@ public sealed class PenetrationAdminController(
         var (_, actor, error) = await RequireManageableGameAsync(gameId, cancellationToken);
         if (error is not null) return error;
         return await ExecuteTeamLabAsync(() => adapter.PrepareAsync(
-            gameId, actor!.Id, actor.Role >= Role.Admin, cancellationToken), StatusCodes.Status202Accepted);
+            gameId, cancellationToken), StatusCodes.Status202Accepted);
     }
 
     [HttpPost("games/{gameId:int}/teamlab/access/open")]
@@ -131,7 +138,7 @@ public sealed class PenetrationAdminController(
         var (_, actor, error) = await RequireManageableGameAsync(gameId, cancellationToken);
         if (error is not null) return error;
         return await ExecuteTeamLabAsync(() => adapter.SetAccessAsync(
-            gameId, actor!.Id, actor.Role >= Role.Admin, true, cancellationToken));
+            gameId, true, cancellationToken));
     }
 
     [HttpPost("games/{gameId:int}/teamlab/access/close")]
@@ -140,7 +147,7 @@ public sealed class PenetrationAdminController(
         var (_, actor, error) = await RequireManageableGameAsync(gameId, cancellationToken);
         if (error is not null) return error;
         return await ExecuteTeamLabAsync(() => adapter.SetAccessAsync(
-            gameId, actor!.Id, actor.Role >= Role.Admin, false, cancellationToken));
+            gameId, false, cancellationToken));
     }
 
     [HttpPost("games/{gameId:int}/teamlab/drain")]
@@ -149,7 +156,7 @@ public sealed class PenetrationAdminController(
         var (_, actor, error) = await RequireManageableGameAsync(gameId, cancellationToken);
         if (error is not null) return error;
         return await ExecuteTeamLabAsync(() => adapter.DrainAsync(
-            gameId, actor!.Id, actor.Role >= Role.Admin, cancellationToken), StatusCodes.Status202Accepted);
+            gameId, cancellationToken), StatusCodes.Status202Accepted);
     }
 
     [HttpPost("games/{gameId:int}/teamlab/pause")]
@@ -158,7 +165,7 @@ public sealed class PenetrationAdminController(
         var (_, actor, error) = await RequireManageableGameAsync(gameId, cancellationToken);
         if (error is not null) return error;
         return await ExecuteTeamLabAsync(() => adapter.PauseAsync(
-            gameId, actor!.Id, actor.Role >= Role.Admin, cancellationToken), StatusCodes.Status202Accepted);
+            gameId, cancellationToken), StatusCodes.Status202Accepted);
     }
 
     [HttpPost("games/{gameId:int}/teamlab/resume")]
@@ -167,7 +174,7 @@ public sealed class PenetrationAdminController(
         var (_, actor, error) = await RequireManageableGameAsync(gameId, cancellationToken);
         if (error is not null) return error;
         return await ExecuteTeamLabAsync(() => adapter.ResumeAsync(
-            gameId, actor!.Id, actor.Role >= Role.Admin, cancellationToken), StatusCodes.Status202Accepted);
+            gameId, cancellationToken), StatusCodes.Status202Accepted);
     }
 
     [HttpGet("games/{gameId:int}/teamlab/targets")]
@@ -196,7 +203,7 @@ public sealed class PenetrationAdminController(
         var (_, _, error) = await RequireManageableGameAsync(gameId, cancellationToken);
         if (error is not null) return error;
         await adapter.DestroyTeamAsync(gameId, teamId, cancellationToken);
-        return Ok(new RequestResponse("The TeamLab runtime was destroyed.", StatusCodes.Status200OK));
+        return Accepted(new RequestResponse("环境正在清理。", StatusCodes.Status202Accepted));
     }
 
     [HttpGet("games/{gameId:int}/scoreboard")]
@@ -260,4 +267,4 @@ public sealed class PenetrationAdminController(
     }
 }
 
-public sealed record BindPenetrationTopologyModel(Guid TopologyId);
+public sealed record BindPenetrationTopologyModel(string TopologyId);

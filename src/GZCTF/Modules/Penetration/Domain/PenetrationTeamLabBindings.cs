@@ -25,8 +25,11 @@ public enum PenetrationRuntimeBindingStatus : byte
 
 public sealed class PenetrationGameLabBinding
 {
+    public string? BlueprintId { get; set; }
+    public string? BlueprintVersionId { get; set; }
+    public bool AccessOpen { get; set; }
     public int GameId { get; set; }
-    public int TopologyId { get; set; }
+    public int? TopologyId { get; set; }
     public Guid? ActiveReleaseId { get; set; }
     public int? ActiveRolloutId { get; set; }
     public int MaxResetCount { get; set; } = 3;
@@ -37,9 +40,13 @@ public sealed class PenetrationGameLabBinding
 
 public sealed class PenetrationTeamRuntimeBinding
 {
+    public string? EnvironmentId { get; set; }
+    public Guid CreationRequestId { get; set; }
+    public string? BlueprintVersionId { get; set; }
+    public int BlueprintVersion { get; set; }
     public int GameId { get; set; }
     public int TeamId { get; set; }
-    public int RuntimeId { get; set; }
+    public int? RuntimeId { get; set; }
     public PenetrationRuntimeBindingStatus Status { get; set; } = PenetrationRuntimeBindingStatus.Active;
     public Guid? DestroyOperationId { get; set; }
     public DateTimeOffset? DestroyedAt { get; set; }

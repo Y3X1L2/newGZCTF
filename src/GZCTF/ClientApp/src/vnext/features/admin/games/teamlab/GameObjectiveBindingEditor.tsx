@@ -8,7 +8,7 @@ import type {
   TeamLabGameBinding,
   TeamLabGameRollout,
 } from '../../api/teamlabGameAdminApi'
-import type { TeamLabTopologyAsset } from '../../teamlab/api/teamlabContracts'
+import type { TeamLabGameAsset } from '../../api/teamlabGameAdminApi'
 import { GameObjectiveEditorDrawer } from './GameObjectiveEditorDrawer'
 import {
   createObjectiveDraft,
@@ -29,7 +29,7 @@ export function GameObjectiveBindingEditor({
 }: {
   binding: TeamLabGameBinding | null
   rollout: TeamLabGameRollout | null
-  assets: readonly TeamLabTopologyAsset[]
+  assets: readonly TeamLabGameAsset[]
   loading: boolean
   onSave: (request: ReplaceTeamLabGameObjectivesRequest) => Promise<TeamLabGameBinding>
   onDirtyChange?: (dirty: boolean) => void
@@ -63,7 +63,7 @@ export function GameObjectiveBindingEditor({
 
   if (!binding) return null
 
-  const locked = Boolean(rollout && rollout.status !== 'completed')
+  const locked = Boolean(rollout?.preparationRequested && rollout.status !== 'completed')
   const interactionLocked = locked || saving
   const changed = (next: GameObjectiveDraft[]) => {
     setObjectives(next)
@@ -102,7 +102,7 @@ export function GameObjectiveBindingEditor({
   return (
     <section className={styles.objectiveSection} aria-labelledby="teamlab-objectives-title">
       <header className={styles.sectionHeader}>
-        <div><span>SCORING CONTRACT</span><h2 id="teamlab-objectives-title">得分目标</h2></div>
+        <div><h2 id="teamlab-objectives-title">得分目标</h2></div>
         <div className={styles.objectiveHeaderActions}>
           {dirty ? <span className={styles.unsavedMark}>有未保存修改</span> : null}
           <ActionButton
@@ -140,7 +140,7 @@ export function GameObjectiveBindingEditor({
               <div className={styles.objectiveOrder}>{index + 1}</div>
               <div className={styles.objectiveIdentity}>
                 <strong>{objective.title}</strong>
-                <span><code>{objective.key}</code><span>{objective.category}</span><span>{objective.assetKey}</span></span>
+                <span><span>{objective.category}</span><span>{assets.find(asset => asset.id === objective.assetKey)?.name ?? "资产不可用"}</span></span>
               </div>
               <div className={styles.objectiveFacts}>
                 <strong>{objective.score}</strong><span>分</span>

@@ -1,0 +1,107 @@
+.form {
+  display: grid;
+  gap: 20px;
+}
+.interfaces {
+  display: grid;
+  padding: 4px 14px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--canvas);
+}
+.interface {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(150px, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding-block: 10px;
+}
+.interface + .interface {
+  border-top: 1px solid var(--line);
+}
+.network,
+.routeHeading,
+.routeHeading > span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.network svg {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+.network strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 13px;
+}
+.address {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.routes {
+  border-top: 1px solid var(--line);
+}
+.routes summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-block: 16px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  list-style: none;
+}
+.routes summary::-webkit-details-marker {
+  display: none;
+}
+.routes summary b {
+  margin-left: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+}
+.routes summary svg {
+  color: var(--muted);
+}
+.routes[open] summary svg {
+  transform: rotate(180deg);
+}
+.routeList,
+.route {
+  display: grid;
+  gap: 14px;
+}
+.route {
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--canvas);
+}
+.routeHeading {
+  justify-content: space-between;
+  font-size: 12px;
+  font-weight: 600;
+}
+.columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.footer {
+  position: sticky;
+  bottom: -16px;
+  padding-block: 16px;
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+}
+@media (max-width: 450px) {
+  .interface {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+  .columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

@@ -5,14 +5,12 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using GZCTF.Agent.Models;
 using GZCTF.Agent.Services.GuestControl;
-using GZCTF.Agent.Services.TeamLab;
 
 namespace GZCTF.Agent.Services;
 
 public class AgentMaintenanceService(
     IHttpClientFactory httpClientFactory,
     GuestManagementNetworkService guestManagementNetwork,
-    TeamLabDataPlanePreparationService dataPlane,
     ILogger<AgentMaintenanceService> logger)
 {
     private const string InstalledAgentPath = "/usr/local/bin/gzctf-agent";
@@ -46,8 +44,6 @@ public class AgentMaintenanceService(
             }
             var configChanged = request.VmControlPlane is not null &&
                                 await SyncVmControlPlaneConfigAsync(request.VmControlPlane, token);
-            configChanged |= request.TeamLabDataPlane is not null &&
-                             await SyncTeamLabDataPlaneConfigAsync(request.TeamLabDataPlane, token);
             if (agentUpToDate && request.Restart && !string.IsNullOrWhiteSpace(expectedSha))
             {
                 var runningSha = await ComputeRunningBinarySha256Async(token);
@@ -61,13 +57,6 @@ public class AgentMaintenanceService(
                         CurrentVersion());
                 }
             }
-            var dataPlaneReadiness = request.TeamLabDataPlane is null
-                ? null
-                : await dataPlane.ApplyAsync(request.TeamLabDataPlane, token);
-            if (request.TeamLabDataPlane is { Enabled: true } && dataPlaneReadiness is { Ready: false })
-                return new AgentSyncResponse(false,
-                    $"OVS/OVN data-plane preparation did not converge ({dataPlaneReadiness.Code}).",
-                    CurrentVersion());
             if (agentUpToDate)
             {
                 if (configChanged && request.Restart)
@@ -76,10 +65,6 @@ public class AgentMaintenanceService(
                     true,
                     configChanged && request.Restart
                         ? "Agent was current; VM control-plane configuration was synchronized and restart scheduled."
-                        : dataPlaneReadiness is { Ready: true }
-                        ? "Agent was current; OVS/OVN data-plane prerequisites were synchronized."
-                        : dataPlaneReadiness is not null
-                        ? $"Agent was current; local OVS/OVN prerequisites were prepared ({dataPlaneReadiness.Code})."
                         : configChanged
                         ? "Agent was current; managed runtime configuration was synchronized."
                         : "Agent and managed runtime configuration are already up to date.",
@@ -194,48 +179,6 @@ public class AgentMaintenanceService(
             TryDelete(temporary);
         }
     }
-
-    private static async Task<bool> SyncTeamLabDataPlaneConfigAsync(
-        TeamLabDataPlaneSyncConfig desired,
-        CancellationToken token)
-    {
-        if (!File.Exists(AgentConfigPath))
-            throw new InvalidOperationException("Agent configuration file is missing.");
-        var root = JsonNode.Parse(await File.ReadAllTextAsync(AgentConfigPath, token)) as JsonObject
-                   ?? throw new InvalidDataException("Agent configuration is invalid.");
-        var teamLab = root["TeamLab"] as JsonObject;
-        if (teamLab is null)
-        {
-            teamLab = new JsonObject();
-            root["TeamLab"] = teamLab;
-        }
-        var changed = ApplyTeamLabDataPlaneConfig(teamLab, desired);
-        if (!changed) return false;
-
-        var temporary = CreateSiblingTemporaryPath(AgentConfigPath);
-        try
-        {
-            await File.WriteAllTextAsync(
-                temporary,
-                root.ToJsonString(new JsonSerializerOptions(JsonSerializerDefaults.Web) { WriteIndented = true }),
-                token);
-            if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-                File.SetUnixFileMode(temporary, File.GetUnixFileMode(AgentConfigPath));
-            File.Move(temporary, AgentConfigPath, true);
-            return true;
-        }
-        finally
-        {
-            TryDelete(temporary);
-        }
-    }
-
-    internal static bool ApplyTeamLabDataPlaneConfig(JsonObject teamLab, TeamLabDataPlaneSyncConfig desired) =>
-        Set(teamLab, "Enable", desired.Enabled) |
-        Set(teamLab, "OvnNorthboundEndpoint", desired.NorthboundEndpoint) |
-        Set(teamLab, "OvnSouthboundEndpoint", desired.SouthboundEndpoint) |
-        Set(teamLab, "OvsIntegrationBridgeName", desired.IntegrationBridgeName) |
-        Set(teamLab, "ManagedDhcpLeaseSeconds", Math.Clamp(desired.ManagedDhcpLeaseSeconds, 60, 86_400));
 
     private static bool Set(JsonObject target, string name, string? value)
     {

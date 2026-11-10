@@ -29,7 +29,7 @@ public sealed class OpenApiDocumentationTests
         response.EnsureSuccessStatusCode();
         var content = await response.Content.ReadAsStringAsync();
         using var document = JsonDocument.Parse(content);
-        Assert.True(document.RootElement.GetProperty("paths").TryGetProperty("/api/admin/teamlab/runtimes/search", out _));
+        Assert.True(document.RootElement.GetProperty("paths").TryGetProperty("/api/teamlab/workspace", out _));
         var dockerStorage = document.RootElement.GetProperty("components").GetProperty("schemas")
             .GetProperty("AgentHostFacts").GetProperty("properties")
             .GetProperty("availableDockerStorageBytes");
@@ -88,9 +88,6 @@ public sealed class OpenApiDocumentationTests
         Assert.Contains("填写 Bearer Token", html, StringComparison.Ordinal);
         Assert.Contains("Idempotency-Key", html, StringComparison.Ordinal);
         Assert.Contains("本页面只读取", html, StringComparison.Ordinal);
-        Assert.Contains("TeamLab - Topologies", html, StringComparison.Ordinal);
-        Assert.Contains("TeamLab - Runtimes", html, StringComparison.Ordinal);
-        Assert.Contains("TeamLab - Traffic and Captures", html, StringComparison.Ordinal);
         Assert.Contains("open-v1", html, StringComparison.Ordinal);
         Assert.Contains("/openapi/open-v1.json", html, StringComparison.Ordinal);
         Assert.DoesNotContain("openapi/v1.json", html, StringComparison.Ordinal);

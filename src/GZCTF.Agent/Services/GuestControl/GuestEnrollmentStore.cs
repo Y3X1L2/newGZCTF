@@ -137,7 +137,6 @@ public sealed class GuestEnrollmentStore
     public async Task<GuestEventDisposition> AcceptEventAsync(
         string certificateThumbprint,
         GuestLifecycleEvent guestEvent,
-        Func<CancellationToken, Task> journalBeforeAcknowledge,
         CancellationToken cancellationToken)
     {
         await using var resourceLock = await _resourceLock.AcquireAsync("guest-control:state", cancellationToken);
@@ -153,8 +152,6 @@ public sealed class GuestEnrollmentStore
             guestEvent);
         if (disposition != GuestEventDisposition.Accepted) return disposition;
         GuestControlContractValidator.ValidateLifecycleTransition(state.LastStage, guestEvent.Stage);
-        if (state.ProjectRuntimeSignals != false)
-            await journalBeforeAcknowledge(cancellationToken);
         await WriteStateAsync(state with
         {
             LastSequence = guestEvent.Sequence,

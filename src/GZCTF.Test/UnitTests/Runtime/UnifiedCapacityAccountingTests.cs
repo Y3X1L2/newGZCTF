@@ -18,16 +18,16 @@ namespace GZCTF.Test.UnitTests.Runtime;
 public sealed class UnifiedCapacityAccountingTests
 {
     [Fact]
-    public async Task Snapshot_SubtractsOrdinaryAndTeamLabReservationsTogether()
+    public async Task Snapshot_SubtractsContainerAndVmReservationsTogether()
     {
         await using var context = CreateContext();
         var node = CreateNode(NodeCapability.Docker | NodeCapability.Kvm);
         var ordinary = DeploymentQueueTicket.Create(DeploymentQueueRequest.GameContainer(1, 2, 3));
-        var teamLab = DeploymentQueueTicket.Create(DeploymentQueueRequest.TeamLab(4, 0, 1));
-        context.AddRange(node, ordinary, teamLab);
+        var vm = DeploymentQueueTicket.Create(DeploymentQueueRequest.Vm(4, Guid.NewGuid(), 5, Guid.NewGuid()));
+        context.AddRange(node, ordinary, vm);
         context.FleetCapacityReservations.AddRange(
             Reservation(ordinary.Id, node.Id, new WorkloadResourceVector(10, 2_048, 4_096, 1, 0)),
-            Reservation(teamLab.Id, node.Id, new WorkloadResourceVector(20, 8_192, 40_000, 0, 1)));
+            Reservation(vm.Id, node.Id, new WorkloadResourceVector(20, 8_192, 40_000, 0, 1)));
         await context.SaveChangesAsync();
 
         var snapshot = Assert.Single(await new NodeCapacitySnapshotService(context)

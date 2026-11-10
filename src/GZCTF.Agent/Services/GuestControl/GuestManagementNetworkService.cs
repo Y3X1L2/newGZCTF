@@ -1,14 +1,12 @@
 using System.Net;
 using GZCTF.Agent.Models;
-using GZCTF.Agent.Services.TeamLab;
 using Microsoft.Extensions.Options;
 
 namespace GZCTF.Agent.Services.GuestControl;
 
 public sealed class GuestManagementNetworkService(
     IOptions<AgentConfig> options,
-    TeamLabCommandExecutor executor,
-    TeamLabCommandRunner runner,
+    HostCommandRunner runner,
     AgentResourceLock resourceLock)
 {
     private readonly GuestManagementConfig _config = options.Value.GuestManagement;
@@ -17,25 +15,23 @@ public sealed class GuestManagementNetworkService(
     {
         Validate();
         await using var networkLock = await resourceLock.AcquireAsync("guest-control:network", cancellationToken);
-        var bridge = TeamLabNetworkPrimitives.ShellQuote(_config.BridgeName);
-        var cidr = TeamLabNetworkPrimitives.ShellQuote($"{_config.HostAddress}/{_config.PrefixLength}");
-        var commands = new[]
+        var commands = BuildPlan();
+        if (dryRun) return new TeamLabDryRunResponse(true, true, "Command plan ready.", commands);
+        foreach (var command in commands)
         {
-            $"ip link show {bridge} >/dev/null 2>&1 || ip link add {bridge} type bridge",
-            $"ip address replace {cidr} dev {bridge}",
-            $"ip link set {bridge} up",
-            BuildNftCommand()
-        };
-        return await executor.ExecuteAsync(commands, dryRun, cancellationToken);
+            var result = await runner.RunAsync(command, cancellationToken);
+            if (!result.Success) return new TeamLabDryRunResponse(false, false, result.Output, commands);
+        }
+        return new TeamLabDryRunResponse(true, false, "Guest management network configured.", commands);
     }
 
     public async Task<bool> IsHealthyAsync(CancellationToken cancellationToken)
     {
         if (!_config.Enabled) return false;
         Validate();
-        var bridge = TeamLabNetworkPrimitives.ShellQuote(_config.BridgeName);
+        var bridge = Vm.VmDomainBuilder.ShellEscape(_config.BridgeName);
         var (bridgeReady, _) = await runner.RunAsync(
-            $"ip -4 address show dev {bridge} | grep -F -- {TeamLabNetworkPrimitives.ShellQuote($"{_config.HostAddress}/{_config.PrefixLength}")}",
+            $"ip -4 address show dev {bridge} | grep -F -- {Vm.VmDomainBuilder.ShellEscape($"{_config.HostAddress}/{_config.PrefixLength}")}",
             cancellationToken);
         var (firewallReady, _) = await runner.RunAsync(
             "nft list table inet gzctf_guest_mgmt >/dev/null 2>&1", cancellationToken);
@@ -45,8 +41,8 @@ public sealed class GuestManagementNetworkService(
     internal string[] BuildPlan()
     {
         Validate();
-        var bridge = TeamLabNetworkPrimitives.ShellQuote(_config.BridgeName);
-        var cidr = TeamLabNetworkPrimitives.ShellQuote($"{_config.HostAddress}/{_config.PrefixLength}");
+        var bridge = Vm.VmDomainBuilder.ShellEscape(_config.BridgeName);
+        var cidr = Vm.VmDomainBuilder.ShellEscape($"{_config.HostAddress}/{_config.PrefixLength}");
         return
         [
             $"ip link show {bridge} >/dev/null 2>&1 || ip link add {bridge} type bridge",
@@ -84,7 +80,7 @@ public sealed class GuestManagementNetworkService(
 
     private void Validate()
     {
-        if (TeamLabNetworkPrimitives.ValidateLinuxName(_config.BridgeName, nameof(_config.BridgeName)) is not null ||
+        if (!System.Text.RegularExpressions.Regex.IsMatch(_config.BridgeName, @"^[a-zA-Z0-9_-]{1,15}$") ||
             !IPAddress.TryParse(_config.HostAddress, out var address) ||
             address.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork ||
             _config.PrefixLength != 16 || _config.ListenPort is < 1 or > 65535)

@@ -30,7 +30,6 @@ public sealed class ImageRetirementPostgresTests : IAsyncLifetime
     private readonly PostgreSqlContainer postgres = new PostgreSqlBuilder("postgres:16-alpine")
         .WithDatabase("image_retirement").WithUsername("postgres").WithPassword("postgres")
         .WithCleanUp(true).Build();
-    private readonly TeamLabRuntimeOperationPayloadProtector protector = new(new EphemeralDataProtectionProvider());
 
     public async Task InitializeAsync()
     {
@@ -64,15 +63,14 @@ public sealed class ImageRetirementPostgresTests : IAsyncLifetime
         await using var context = Context();
         var cleaner = new RecordingCleaner();
         var deletion = Deletion(context, cleaner);
-        await new TeamLabReleaseService(context, new TeamLabTopologyValidator()).ArchiveAsync(fixture.Release.Id, default);
+        (await context.TeamLabTopologyReleases.SingleAsync(item => item.Id == fixture.Release.Id)).IsArchived = true;
+        await context.SaveChangesAsync();
         Assert.Equal(ImageTemplateDeleteStatus.InUse,
             (await deletion.DeleteAsync(fixture.Template.Id, Admin(fixture.Owner), default)).Status);
 
-        var topologies = new TeamLabTopologyApplicationService(context, new TeamLabTopologyValidator(),
-            new TeamLabReleaseService(context, new TeamLabTopologyValidator()), new TeamLabControlScopeService(context),
-            new NodeCapacitySnapshotService(context));
-        await topologies.UpdateDraftAsync(fixture.Topology.PublicId,
-            new(fixture.Topology.Revision, "retired draft", [], [], [], SchemaVersion: 2), fixture.Owner, true, default);
+        var draft = await context.TeamLabTopologies.Include(item => item.Assets).SingleAsync(item => item.Id == fixture.Topology.Id);
+        draft.Assets.Clear();
+        await context.SaveChangesAsync();
         Assert.Equal(ImageTemplateDeleteStatus.Deleted,
             (await deletion.DeleteAsync(fixture.Template.Id, Admin(fixture.Owner), default)).Status);
         Assert.Equal(1, cleaner.Calls);
@@ -87,13 +85,7 @@ public sealed class ImageRetirementPostgresTests : IAsyncLifetime
         Assert.Equal(Digest, asset.ImageDigest);
         Assert.DoesNotContain(context.Model.FindEntityType(typeof(TeamLabRuntimeAsset))!.GetForeignKeys(),
             key => key.Properties.Any(property => property.Name == nameof(TeamLabRuntimeAsset.SourceTemplateId)));
-        var history = await new TeamLabRuntimeProjectionService(context, new EfImageRuntimeAccessQuery(context))
-            .GetAsync(runtime.PublicId, default);
-        Assert.Equal(TeamLabRuntimeStatus.Destroyed, history.Status);
-        Assert.Equal(fixture.Release.Id, history.ReleaseId);
-        Assert.Equal("retirement fixture", history.TopologyName);
-        var audit = await topologies.GetReleaseAsync(fixture.Topology.PublicId, fixture.Release.Id, fixture.Owner, true, default);
-        Assert.True(audit.Archived);
+
     }
 
     [Fact]
@@ -101,7 +93,8 @@ public sealed class ImageRetirementPostgresTests : IAsyncLifetime
     {
         await using var context = Context();
         var fixture = await SeedAsync(context);
-        await new TeamLabReleaseService(context, new TeamLabTopologyValidator()).ArchiveAsync(fixture.Release.Id, default);
+        (await context.TeamLabTopologyReleases.SingleAsync(item => item.Id == fixture.Release.Id)).IsArchived = true;
+        await context.SaveChangesAsync();
         var runtime = new TeamLabRuntime
         {
             TopologyReleaseId = fixture.Release.Id, Status = TeamLabRuntimeStatus.Stopped,
@@ -139,110 +132,6 @@ public sealed class ImageRetirementPostgresTests : IAsyncLifetime
         Assert.Equal(1, cleaner.Calls);
     }
 
-    [Fact]
-    public async Task ArchiveWinsAfterInitialCreateRead_StalePlannerCannotCreateFromRetiredBytes()
-    {
-        await using var seed = Context();
-        var fixture = await SeedAsync(seed);
-        var barrier = new ReleaseReadBarrier();
-        await using var createContext = Context(barrier);
-        var create = Planner(createContext).CreateAsync(new(fixture.Release.Id, null, null, null), fixture.Owner,
-            "fixture-create", null, null, default);
-        await barrier.Reached.Task.WaitAsync(TimeSpan.FromSeconds(10));
-        await using var archiveContext = Context();
-        try
-        {
-            await new TeamLabReleaseService(archiveContext, new TeamLabTopologyValidator()).ArchiveAsync(fixture.Release.Id, default);
-        }
-        finally { barrier.Proceed.TrySetResult(); }
-
-        var exception = await Assert.ThrowsAsync<TeamLabApiContractException>(() => create);
-        Assert.Equal("release_archived", exception.Code);
-        Assert.Empty(await archiveContext.TeamLabRuntimes.Where(item => item.TopologyReleaseId == fixture.Release.Id).ToArrayAsync());
-    }
-
-    [Fact]
-    public async Task ResetPermit_BlocksArchiveAfterReadAcrossReleasesAndNormalReplanSucceeds()
-    {
-        await using var context = Context();
-        var source = await SeedAsync(context);
-        var target = new TeamLabTopologyRelease
-        {
-            TopologyId = source.Topology.Id, Version = 2, SourceRevision = 2, SchemaVersion = 2,
-            CanonicalJson = source.Release.CanonicalJson, ContentHash = source.Release.ContentHash
-        };
-        var runtime = new TeamLabRuntime
-        {
-            TopologyReleaseId = source.Release.Id, CreatedById = source.Owner, Status = TeamLabRuntimeStatus.Running,
-            Assets = [new() { TopologyKey = "vm", SourceTemplateId = source.Template.Id, Status = TeamLabRuntimeStatus.Running }]
-        };
-        context.AddRange(target, runtime);
-        await context.SaveChangesAsync();
-        var queue = new RecordingQueue(context);
-        var orchestrator = new TeamLabRuntimeOrchestrator(context, null!, null!, null!, null!, null!, null!, null!,
-            null!, null!, null!, null!, new TeamLabRuntimeLifecycleGuard(context), protector, queue, null!, Recorder(context),
-            NullLogger<TeamLabRuntimeOrchestrator>.Instance);
-        await orchestrator.ResetAndEnqueueAsync(runtime.PublicId, new(null, target.Id), null, default);
-        Assert.Equal(1, queue.Notifications);
-        var ticket = await context.DeploymentQueueTickets.SingleAsync(item => item.TeamLabRuntimeId == runtime.Id);
-        ticket.Status = DeploymentQueueTicketStatus.Running;
-        await context.SaveChangesAsync();
-
-        var checkedRelease = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var proceed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var originalResourcePresent = true;
-        var reset = Task.Run(async () =>
-        {
-            await using var resetContext = Context();
-            await TeamLabReleaseLifecycle.RequireStartableAsync(resetContext, target.Id, default);
-            checkedRelease.TrySetResult();
-            await proceed.Task;
-            var loaded = await resetContext.TeamLabRuntimes.Include(item => item.Assets)
-                .SingleAsync(item => item.Id == runtime.Id);
-            // Hardware cleanup is an external port; converge its successful database terminal
-            // state with the actual cleanup method, then invoke the actual PostgreSQL planner.
-            await TeamLabRuntimeCleanupService.FinalizeGenerationAsync(resetContext, loaded, loaded.Generation, true, default);
-            originalResourcePresent = false;
-            return await Planner(resetContext).ResetAsync(runtime.PublicId, null, target.Id, null, default);
-        });
-        await checkedRelease.Task.WaitAsync(TimeSpan.FromSeconds(10));
-        await using var archiveContext = Context();
-        var archives = new TeamLabReleaseService(archiveContext, new TeamLabTopologyValidator(), operationPayloads: protector);
-        try
-        {
-            foreach (var releaseId in new[] { source.Release.Id, target.Id })
-            {
-                var busy = await Assert.ThrowsAsync<TeamLabApiContractException>(() => archives.ArchiveAsync(releaseId, default));
-                Assert.Equal("release_reset_in_progress", busy.Code);
-                Assert.True(originalResourcePresent);
-            }
-            // Cancellation does not erase a still-owned execution lease.
-            ticket.Status = DeploymentQueueTicketStatus.Cancelled;
-            ticket.ClaimOwner = "fixture-reset";
-            ticket.ClaimExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5);
-            await context.SaveChangesAsync();
-            Assert.Equal("release_reset_in_progress", (await Assert.ThrowsAsync<TeamLabApiContractException>(
-                () => archives.ArchiveAsync(target.Id, default))).Code);
-            ticket.Status = DeploymentQueueTicketStatus.Running;
-            await context.SaveChangesAsync();
-        }
-        finally { proceed.TrySetResult(); }
-
-        await reset.WaitAsync(TimeSpan.FromSeconds(20));
-        var rebuilt = await archiveContext.TeamLabRuntimes.AsNoTracking().SingleAsync(item => item.Id == runtime.Id);
-        Assert.False(originalResourcePresent);
-        Assert.Equal(2, rebuilt.Generation);
-        Assert.Equal(target.Id, rebuilt.TopologyReleaseId);
-        Assert.False((await archiveContext.TeamLabTopologyReleases.AsNoTracking().SingleAsync(item => item.Id == target.Id)).IsArchived);
-        ticket.Status = DeploymentQueueTicketStatus.Succeeded;
-        ticket.ClaimOwner = null;
-        ticket.ClaimExpiresAt = null;
-        await context.SaveChangesAsync();
-        await archives.ArchiveAsync(target.Id, default);
-        Assert.True((await archiveContext.TeamLabTopologyReleases.AsNoTracking().SingleAsync(item => item.Id == target.Id)).IsArchived);
-        Assert.False((await References(archiveContext).CanDeleteAsync(source.Template.Id, default)).Allowed);
-    }
-
     private AppDbContext Context(DbCommandInterceptor? interceptor = null)
     {
         var options = new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(postgres.GetConnectionString());
@@ -254,13 +143,6 @@ public sealed class ImageRetirementPostgresTests : IAsyncLifetime
     private static ImageTemplateReferenceService References(AppDbContext context) => new([new TeamLabImageTemplateReferenceProvider(context)]);
     private static ImageTemplateDeletionService Deletion(AppDbContext context, RecordingCleaner cleaner) =>
         new(new EfImageTemplateCatalog(context, cleaner), References(context));
-
-    private static TeamLabEventRecorder Recorder(AppDbContext context) => new(context,
-        new EfOperationalEventWriter(context, NullLogger<EfOperationalEventWriter>.Instance), new OperationalCorrelation());
-
-    private static TeamLabRuntimePlanner Planner(AppDbContext context) => new(context,
-        new TeamLabRuntimeOverlayService(new EphemeralDataProtectionProvider()), Recorder(context), null!,
-        Options.Create(new TeamLabNetworkConfig()), new GZCTF.Modules.Runtime.Application.TeamLabRecordReferenceQuery(context));
 
     private static async Task<Fixture> SeedAsync(AppDbContext context, bool draft = false)
     {
@@ -304,45 +186,6 @@ public sealed class ImageRetirementPostgresTests : IAsyncLifetime
             Assert.Equal(ImageStatus.Deleting, template.Status);
             Calls++;
             return Task.CompletedTask;
-        }
-    }
-
-    private sealed class RecordingQueue(AppDbContext context) : ITeamLabRuntimeQueue
-    {
-        public int Notifications { get; private set; }
-        public Task<TeamLabQueueTicketResult> EnqueueAsync(TeamLabQueueRequest request, CancellationToken token) =>
-            throw new InvalidOperationException("PostgreSQL reset must publish its ticket in the current transaction.");
-        public async Task<TeamLabQueueTicketResult> EnqueueInCurrentTransactionAsync(TeamLabQueueRequest request, CancellationToken token)
-        {
-            Assert.NotNull(context.Database.CurrentTransaction);
-            var ticket = new DeploymentQueueTicket
-            {
-                Kind = DeploymentQueueKind.TeamLabRuntime, Operation = request.Operation,
-                TeamLabRuntimeId = request.RuntimeId, Generation = request.Generation, ProtectedPayload = request.ProtectedPayload,
-                Status = DeploymentQueueTicketStatus.Pending
-            };
-            context.Add(ticket);
-            await context.SaveChangesAsync(token);
-            return new(ticket.Id);
-        }
-        public Task NotifyAsync(Guid ticketId, CancellationToken token) { Notifications++; return Task.CompletedTask; }
-    }
-
-    private sealed class ReleaseReadBarrier : DbCommandInterceptor
-    {
-        public TaskCompletionSource Reached { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        public TaskCompletionSource Proceed { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        private bool triggered;
-        public override async ValueTask<DbDataReader> ReaderExecutedAsync(DbCommand command, CommandExecutedEventData data,
-            DbDataReader result, CancellationToken token = default)
-        {
-            if (!triggered && command.CommandText.Contains("FROM \"TeamLabTopologyReleases\"", StringComparison.Ordinal))
-            {
-                triggered = true;
-                Reached.TrySetResult();
-                await Proceed.Task.WaitAsync(TimeSpan.FromSeconds(15), token);
-            }
-            return result;
         }
     }
 }

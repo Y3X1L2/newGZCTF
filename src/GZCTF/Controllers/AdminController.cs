@@ -4,6 +4,7 @@ using System.Net.Mime;
 using GZCTF.Extensions;
 using GZCTF.Middlewares;
 using GZCTF.Modules.Identity.Application;
+using GZCTF.Modules.Penetration.Application;
 using GZCTF.Models.Internal;
 using GZCTF.Models.Request.Account;
 using GZCTF.Models.Request.Admin;
@@ -45,7 +46,8 @@ public class AdminController(
     IContainerRepository containerRepository,
     IServiceProvider serviceProvider,
     IParticipationRepository participationRepository,
-    IStringLocalizer<Program> localizer) : ControllerBase
+    IStringLocalizer<Program> localizer,
+    PenetrationTeamLabAdapter competitionScenes) : ControllerBase
 {
     /// <summary>
     /// Get configuration
@@ -594,6 +596,7 @@ public class AdminController(
             return NotFound(new RequestResponse(localizer[nameof(Resources.Program.Team_NotFound)],
                 StatusCodes.Status404NotFound));
 
+        await competitionScenes.EnsureTeamDrainedBeforeDeleteAsync(id, token);
         await teamRepository.DeleteTeam(team, token);
 
         return Ok();

@@ -8,7 +8,6 @@ using GZCTF.Agent.Middlewares;
 using GZCTF.Agent.Models;
 using GZCTF.Agent.Services;
 using GZCTF.Agent.Services.GuestControl;
-using GZCTF.Agent.Services.RuntimeSignals;
 using GZCTF.GuestControl.Contracts;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -54,8 +53,6 @@ public sealed class GuestGatewayTests
         builder.Services.AddSingleton<AgentResourceLock>();
         builder.Services.AddSingleton(authority);
         builder.Services.AddSingleton<GuestEnrollmentStore>();
-        builder.Services.AddSingleton<AgentRuntimeSignalJournal>();
-        builder.Services.AddSingleton<AgentRuntimeSignalPublisher>();
         builder.Services.AddSingleton<GuestEventIngestor>();
         builder.Services.AddHttpClient();
         builder.Services.AddControllers().AddApplicationPart(typeof(GuestGatewayController).Assembly);
@@ -137,12 +134,9 @@ public sealed class GuestGatewayTests
             eventResponse.EnsureSuccessStatusCode();
             Assert.Equal(GuestEventDisposition.Accepted,
                 await eventResponse.Content.ReadFromJsonAsync<GuestEventDisposition>());
-            var journal = app.Services.GetRequiredService<AgentRuntimeSignalJournal>();
-            var signal = Assert.Single(await journal.ReadAllAsync(identity.OperationId, CancellationToken.None));
-            Assert.Equal(AgentRuntimeSignalStage.ManagementLinkReady, signal.Stage);
-            Assert.Equal(identity.NativeVmId.ToString("D"), signal.Facts!["nativeVmId"]);
-            Assert.Equal("install", signal.Facts["failedStep"]);
-            Assert.Equal("completed", signal.Facts["failureCategory"]);
+            var status = await app.Services.GetRequiredService<GuestEnrollmentStore>()
+                .GetStatusAsync(identity, CancellationToken.None);
+            Assert.Equal(GuestLifecycleStage.ManagementLinkReady, status!.LastStage);
         }
         finally
         {

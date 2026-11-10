@@ -24,7 +24,6 @@ public sealed class ApiOperationHandlerResolutionTests(GZCTFApplicationFactory f
             ImageImportApplicationService.OperationKind,
             BootstrapProfileApplicationService.OperationKind,
             ImageTemplateCertificationService.OperationKind,
-            TeamLabRuntimeOperationApplicationService.OperationKind,
             CompletingApiOperationHandler.OperationKind
         };
         foreach (var kind in kinds)

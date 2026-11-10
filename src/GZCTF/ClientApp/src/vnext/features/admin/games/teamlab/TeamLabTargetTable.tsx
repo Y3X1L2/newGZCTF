@@ -22,9 +22,9 @@ export const TeamLabTargetTable = memo(function TeamLabTargetTable({
   const columns = useMemo<AdminDataColumn<TeamLabGameTarget>[]>(() => [
     {
       id: 'team',
-      header: '请求对象',
+      header: '队伍',
       width: 'wide',
-      render: (target) => <span className={styles.identityCell}><strong>{target.displayName}</strong><small>队伍 #{target.teamId}</small></span>,
+      render: (target) => <span className={styles.identityCell}><strong>{target.displayName}</strong></span>,
     },
     {
       id: 'status',
@@ -34,12 +34,6 @@ export const TeamLabTargetTable = memo(function TeamLabTargetTable({
         return <StatusBadge pulse={meta.active} tone={meta.tone}>{meta.label}</StatusBadge>
       },
     },
-    {
-      id: 'runtime',
-      header: '运行环境',
-      width: 'wide',
-      render: (target) => target.runtimeId ? <span className={styles.identityCell}><code>{target.runtimeId}</code><small>{target.runtimeStage ?? '等待运行状态'}</small></span> : '尚未创建',
-    },
     { id: 'updated', header: '最后更新', visibility: 'desktop', render: (target) => formatAdminDate(target.updatedAt) },
     { id: 'open', header: '', width: 'compact', align: 'right', render: (target) => target.runtimeId ? <ExternalLink aria-hidden="true" size={15} /> : <ArrowRight aria-hidden="true" size={15} /> },
   ], [])
@@ -47,9 +41,9 @@ export const TeamLabTargetTable = memo(function TeamLabTargetTable({
   return (
     <section className={styles.targetsSection} aria-labelledby="teamlab-targets-title">
       <header className={styles.sectionHeader}>
-        <div><span>TEAM TARGETS</span><h2 id="teamlab-targets-title">队伍环境</h2></div>
+        <div><h2 id="teamlab-targets-title">队伍环境</h2></div>
       </header>
-      {targets.isLoading ? <DataState description="正在读取服务端队伍目标分页。" loading title="队伍环境加载中" /> : targets.error ? (
+      {targets.isLoading ? <DataState loading title="队伍环境加载中" /> : targets.error ? (
         <InlineFeedback tone="danger">{errorMessage(targets.error, '队伍环境加载失败。')}</InlineFeedback>
       ) : targets.page?.items.length ? (
         <>

@@ -23,6 +23,20 @@ public sealed class ExternalApiExceptionHandler(
         {
             await next(context);
         }
+        catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
+        {
+            context.Abort();
+        }
+        catch (Exception exception) when (context.Response.HasStarted)
+        {
+            logger.LogWarning(exception, "API stream closed after response started");
+            context.Abort();
+        }
+        catch (BadHttpRequestException exception)
+        {
+            await ExternalApiProblemDetails.WriteAsync(context, exception.StatusCode,
+                "invalid_request", "The request could not be processed.", exception.Message);
+        }
         catch (ApiContractException exception)
         {
             await ExternalApiProblemDetails.WriteAsync(

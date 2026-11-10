@@ -1,11 +1,17 @@
 using GZCTF.Repositories.Interface;
 using GZCTF.Infrastructure.Cache;
 using GZCTF.Services.Fleet;
+using GZCTF.Modules.Penetration.Application;
 
 namespace GZCTF.Services.CronJob;
 
 public static class RuntimeCronJobs
 {
+    [CronJob("* * * * *")]
+    public static Task RetireCompetitionEnvironments(AsyncServiceScope scope,
+        ILogger<CronJobService> logger, CancellationToken cancellationToken) =>
+        scope.ServiceProvider.GetRequiredService<PenetrationTeamLabAdapter>().RetireExpiredAsync(cancellationToken);
+
     [CronJob("*/3 * * * *")]
     public static async Task ContainerChecker(
         AsyncServiceScope scope,

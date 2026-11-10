@@ -141,6 +141,7 @@ jobs:
           ./scripts/verify-openapi-contract.ps1
           -BaselinePath "$env:OPENAPI_BASELINE_PATH"
           -CurrentPath "$env:OPENAPI_CURRENT_PATH"
+          -RetiredPathPrefixes '/api/open/v1/teamlab/'
 
   frontend:
     name: Frontend quality and artifact

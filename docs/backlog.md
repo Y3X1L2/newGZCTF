@@ -4,6 +4,7 @@
 
 | 编号 | 事项与当前边界 | 接手时的验收 / 证据 |
 | --- | --- | --- |
+| NETLAB-01 | Netlab 接入候选已建立；现有场景、镜像、实例与旧活动任务在上线窗口迁移，历史实体和镜像引用继续保留 | [接入顺序](modules/teamlab/netlab-integration.md#更新与上线)、[候选记录](records/2026-11-10-netlab-integration.md)；上线前核对物理资源、绑定、旧任务与容量释放，切换后完成真实业务冒烟 |
 | RUN-01 | `.27` 来宾网络回读曾失败；改在 `.31` 通过不代表根因解决。10-10 记录已恢复三节点调度旗标，不能继续沿用 10-09 的停止调度结论 | [第二批发布](records/2026-10-09-image-lifecycle-second-rollout.md)、[后续发布](records/2026-10-10-teamlab-delete-rollout.md)；独立复现、修补和网络回读 |
 | RUN-02 | VM 执行 vCPU 与节点 cpuUnits 报告语义不一致；自动模式下 maxVms 不能当硬限；Docker 展开预算、运行增长和磁盘硬配额仍有边界 | [第二批发布](records/2026-10-09-image-lifecycle-second-rollout.md)、[分盘修复](records/2026-10-07-teamlab-workload-storage-rollout.md)；真实 CPU/内存/文件系统准入与拒绝测试 |
 | RUN-03 | `guest_network_control_failed` 等诊断缺少精确资产 / 异常分类；10-16镜像未就绪仍归为 `operation.unclassified_failure`；Main 重启后调度旗标恢复原因未独立核实 | [第二批发布](records/2026-10-09-image-lifecycle-second-rollout.md)、[删除发布](records/2026-10-10-teamlab-delete-rollout.md)、[日志现场](records/2026-10-16-logs-browser-acceptance.md)；结构化诊断与维护围栏回归 |
@@ -16,7 +17,7 @@
 | IMG-02 | 受控 Registry GC 已执行，自动 Blob GC、upload 遗留治理、冷缓存 TTL 与下载/运行增长预算未完整闭环 | [镜像发布](records/2026-10-09-image-lifecycle-rollout.md)、[第二批发布](records/2026-10-09-image-lifecycle-second-rollout.md)；活动/业务引用和 backing 保护、实际释放字节、失败重试 |
 | SEC-01 | 旧交接的 SSH.NET 风险需要重核；当前 src/Directory.Packages.props 已为 2026.0.0，不能继续认定旧版本风险未处理 | 对当前锁定版本重新检查公告与调用路径；本轮未运行依赖漏洞扫描 |
 | ACC-01 | 多 Worker 故障接管、完整跨节点/现场物理设备、长期监督、复杂注入和生产规模签收不足；已有限定双 Worker / 模拟端点证据 | [9 月容量汇总](records/test-reports/2026-09-18-teamlab-production-and-capacity-summary.md)、[H03](records/2026-09-08-h03-hybrid-datapath.md)；区分模拟、控制面与实机范围 |
-| ACC-02 | 普通 Windows 冷缓存、完整 RDP/Guacamole 桌面、剪贴板及隔离销毁的最新版本附加验收为 NOT_RUN；旧 2008 R2 许可导致自行关机；当前 runtime 契约不支持 Windows SFTP/files | [第二批发布](records/2026-10-09-image-lifecycle-second-rollout.md)、[运行事实契约](modules/teamlab/reference/runtime-capabilities.md)；合格镜像、双实例与桌面实测 |
+| ACC-02 | 普通 Windows 冷缓存、完整 RDP/Guacamole 桌面、剪贴板及隔离销毁的最新版本附加验收为 NOT_RUN；旧 2008 R2 许可导致自行关机；当前 runtime 契约不支持 Windows SFTP/files | [第二批发布](records/2026-10-09-image-lifecycle-second-rollout.md)、[运行事实契约](archive/teamlab-internal-20261110/reference/runtime-capabilities.md)；合格镜像、双实例与桌面实测 |
 | ACC-03 | AWDP 真实攻击/修补/异常恢复与 Portal SSO 跨网联调仍需专门验收；外部门户不在本仓库 | [AWDP 手册](modules/awdp/guides/manual-acceptance.md)、Identity 模块与目标门户契约 |
 | ACC-04 | 自主练习内容运营、真实应用回退及节点整机重启持久性仍缺最新完整签收；10-18课程4题88已完成Docker创建/入口200/Flag Accepted/停止清理；不代表10-16题92缺Ready模板的问题已修复 | [本轮限定验收](records/2026-10-18-platform-experience.md)、[日志现场](records/2026-10-16-logs-browser-acceptance.md)；独立修复题目镜像前置条件，并安排回退/整机重启验收，保留现有用户实例 |
 | DOC-02 | 旧商业能力地图的会话重启清理/退避/URL恢复、批量UI、H02持续监督及协议事件仍需逐项重核，不能因旧计划归档就当已闭环 | 原审计材料保留到历史目录；按当前 application、Agent 持久化与故障恢复实测核对，明确已替代/仍缺/已验收，禁止直接恢复旧实现 |

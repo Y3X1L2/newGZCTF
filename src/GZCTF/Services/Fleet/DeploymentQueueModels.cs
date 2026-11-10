@@ -93,21 +93,6 @@ public sealed record DeploymentQueueRequest(
             vmInstanceId, null, 0, 1,
             WorkloadSchedulingIdentity.ForUser(userId,
                 $"vm:{gameId}:{userId:D}:{challengeId}:{vmInstanceId:D}", gameId));
-
-    public static DeploymentQueueRequest TeamLab(
-        int runtimeId,
-        int dockerSlots,
-        int vmSlots,
-        Guid? ownerUserId = null,
-        Guid? apiOperationId = null,
-        Guid? runtimePublicId = null,
-        string? subjectDisplayName = null,
-        string? resourceDisplayName = null) =>
-        new(DeploymentQueueKind.TeamLabRuntime, null, ownerUserId, null, null,
-            null, runtimeId, dockerSlots, vmSlots,
-            WorkloadSchedulingIdentity.ForRuntime(runtimeId, $"teamlab-runtime:{runtimeId}", ownerUserId),
-            apiOperationId,
-            "teamlab-runtime", runtimePublicId?.ToString("D"), subjectDisplayName, resourceDisplayName);
 }
 
 public sealed record DeploymentQueueStatusModel(

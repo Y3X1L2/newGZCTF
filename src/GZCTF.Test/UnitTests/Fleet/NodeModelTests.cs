@@ -10,7 +10,6 @@ using GZCTF.Infrastructure.Concurrency;
 using GZCTF.Modules.Runtime.Application;
 using GZCTF.Modules.Runtime.Contracts;
 using GZCTF.Services.Fleet;
-using GZCTF.Services.TeamLab;
 using GZCTF.Utils;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -131,27 +130,6 @@ public class WorkerNodeTests
         Assert.Null(node.TeamLabTunnelLastError);
         Assert.Equal(3, node.TeamLabTunnelConfigVersion);
         Assert.False(node.IsSchedulable);
-    }
-
-    [Fact]
-    public void ApplyTeamLabDryRunProbe_PreservesAlreadyEnabledHealthyNode()
-    {
-        var node = new WorkerNode
-        {
-            TeamLabNetworkEnabled = true,
-            TeamLabTunnelStatus = TeamLabTunnelStatus.Probing,
-            TeamLabTunnelIp = "10.24.0.27",
-            TeamLabTunnelLastError = null,
-            TeamLabTunnelConfigVersion = 7
-        };
-
-        NodeTunnelService.ApplyDryRunProbeResult(node, fabricReady: true, fabricIp: "10.24.0.27");
-
-        Assert.True(node.TeamLabNetworkEnabled);
-        Assert.Equal(TeamLabTunnelStatus.Healthy, node.TeamLabTunnelStatus);
-        Assert.Equal("10.24.0.27", node.TeamLabTunnelIp);
-        Assert.Null(node.TeamLabTunnelLastError);
-        Assert.Equal(7, node.TeamLabTunnelConfigVersion);
     }
 
     [Fact]

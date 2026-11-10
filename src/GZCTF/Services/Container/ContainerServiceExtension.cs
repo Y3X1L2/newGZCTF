@@ -55,15 +55,13 @@ public static class ContainerServiceExtension
                     .AddSingleton<KubernetesManager>()
                     .AddSingleton<IContainerManager>(sp => sp.GetRequiredService<KubernetesManager>())
                     .AddSingleton<IContainerPatchApplicator>(sp => sp.GetRequiredService<KubernetesManager>())
-                    .AddSingleton<IContainerCommandExecutor>(sp => sp.GetRequiredService<KubernetesManager>())
-                    .AddSingleton<IPenetrationFabricManager>(sp => sp.GetRequiredService<KubernetesManager>()),
+                    .AddSingleton<IContainerCommandExecutor>(sp => sp.GetRequiredService<KubernetesManager>()),
                 _ => services
                     .AddSingleton<DockerManager>()
                     .AddSingleton<FleetContainerManager>()
                     .AddSingleton<IContainerManager>(sp => sp.GetRequiredService<FleetContainerManager>())
                     .AddSingleton<IContainerPatchApplicator>(sp => sp.GetRequiredService<FleetContainerManager>())
                     .AddSingleton<IContainerCommandExecutor>(sp => sp.GetRequiredService<FleetContainerManager>())
-                    .AddSingleton<IPenetrationFabricManager>(sp => sp.GetRequiredService<FleetContainerManager>())
             };
     }
 }

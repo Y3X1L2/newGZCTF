@@ -207,9 +207,7 @@ public class OpenApiTests(GZCTFApplicationFactory factory, ITestOutputHelper out
                 item.Route is "/api/open/v1/images/docker-references" or "/api/open/v1/images/docker-archives" ||
                 item.Route.StartsWith("/api/open/v1/training", StringComparison.Ordinal) ||
                 item.Route.StartsWith("/api/open/v1/theory", StringComparison.Ordinal) ||
-                item.Route.StartsWith("/api/open/v1/teams", StringComparison.Ordinal) ||
-                item.Route.StartsWith("/api/open/v1/teamlab", StringComparison.Ordinal) &&
-                item.Operation.GetProperty("responses").TryGetProperty("202", out _))
+                item.Route.StartsWith("/api/open/v1/teams", StringComparison.Ordinal))
             .ToArray();
 
         Assert.NotEmpty(writes);
@@ -221,126 +219,11 @@ public class OpenApiTests(GZCTFApplicationFactory factory, ITestOutputHelper out
                 parameter.GetProperty("in").GetString() == "header" &&
                 parameter.GetProperty("required").GetBoolean()),
                 $"{write.Method.ToUpperInvariant()} {write.Route} must require Idempotency-Key.");
-            if (write.Route.StartsWith("/api/open/v1/teamlab", StringComparison.Ordinal) ||
-                write.Route.StartsWith("/api/open/v1/training", StringComparison.Ordinal) ||
+            if (write.Route.StartsWith("/api/open/v1/training", StringComparison.Ordinal) ||
                 write.Route.StartsWith("/api/open/v1/theory", StringComparison.Ordinal) ||
                 write.Route.StartsWith("/api/open/v1/teams", StringComparison.Ordinal))
                 Assert.True(write.Operation.GetProperty("responses").TryGetProperty("202", out _),
                     $"{write.Method.ToUpperInvariant()} {write.Route} must return 202 Accepted.");
-        }
-    }
-
-    [Fact]
-    public async Task OpenV1_RemoteSessionWritesUseOperationsAndDedicatedContracts()
-    {
-        using var document = JsonDocument.Parse(await _client.GetStringAsync(OpenV1DocumentPath));
-        var paths = document.RootElement.GetProperty("paths");
-        var create = paths.GetProperty("/api/open/v1/teamlab/runtimes/{runtimeId}/assets/{assetId}/remote-sessions").GetProperty("post");
-        var close = paths.GetProperty("/api/open/v1/teamlab/remote-sessions/{sessionId}").GetProperty("delete");
-        Assert.True(paths.GetProperty("/api/open/v1/teamlab/remote-sessions").TryGetProperty("get", out _));
-        foreach (var operation in new[] { create, close })
-        {
-            Assert.True(operation.GetProperty("responses").TryGetProperty("202", out _));
-            Assert.Contains(operation.GetProperty("parameters").EnumerateArray(), item =>
-                item.GetProperty("name").GetString() == "Idempotency-Key" && item.GetProperty("required").GetBoolean());
-        }
-        var schemas = document.RootElement.GetProperty("components").GetProperty("schemas");
-        Assert.True(schemas.TryGetProperty("OpenTeamLabRemoteSessionModel", out _));
-        Assert.True(schemas.TryGetProperty("OpenTeamLabRemoteSessionPageModel", out _));
-        Assert.False(schemas.TryGetProperty("TeamLabRemoteSessionModel", out _));
-        Assert.True(schemas.TryGetProperty("OpenCreateTeamLabRemoteSessionModel", out _));
-    }
-
-    [Fact]
-    public async Task OpenV1_RuntimeOperationsUseDedicatedContractsAndExistingQueueTickets()
-    {
-        using var document = JsonDocument.Parse(await _client.GetStringAsync(OpenV1DocumentPath));
-        var paths = document.RootElement.GetProperty("paths");
-
-        Assert.True(paths.GetProperty("/api/open/v1/teamlab/runtimes/{runtimeId}/service-access")
-            .TryGetProperty("get", out _));
-        Assert.True(paths.GetProperty("/api/open/v1/teamlab/runtimes/{runtimeId}/assets/{assetId}/service-access")
-            .TryGetProperty("post", out _));
-        Assert.True(paths.GetProperty("/api/open/v1/teamlab/runtimes/{runtimeId}/service-access/{accessId}")
-            .TryGetProperty("delete", out _));
-
-        var controlPath = "/api/open/v1/teamlab/runtimes/{runtimeId}/assets/{assetId}/control";
-        Assert.True(paths.GetProperty(controlPath).TryGetProperty("get", out _));
-        var control = paths.GetProperty(controlPath).GetProperty("post");
-        Assert.True(control.GetProperty("responses").TryGetProperty("202", out _));
-        Assert.Contains(control.GetProperty("parameters").EnumerateArray(), parameter =>
-            parameter.GetProperty("name").GetString() == "Idempotency-Key" &&
-            parameter.GetProperty("in").GetString() == "header" &&
-            parameter.GetProperty("required").GetBoolean());
-
-        var taskPath = "/api/open/v1/teamlab/runtimes/{runtimeId}/assets/{assetId}/control/{ticketId}";
-        Assert.True(paths.GetProperty(taskPath).TryGetProperty("get", out _));
-        Assert.False(paths.TryGetProperty(taskPath + "/retry", out _));
-        Assert.True(paths.GetProperty("/api/open/v1/teamlab/runtimes/{runtimeId}/device-health")
-            .TryGetProperty("get", out _));
-        Assert.True(paths.GetProperty("/api/open/v1/teamlab/runtimes/{runtimeId}/status-check")
-            .TryGetProperty("get", out _));
-
-        var schemas = document.RootElement.GetProperty("components").GetProperty("schemas");
-        string[] publicSchemas =
-        [
-            "OpenCreateTeamLabServiceAccessModel",
-            "OpenTeamLabServiceAccessModel",
-            "OpenTeamLabAssetControlCommand",
-            "OpenTeamLabAssetControlCapabilityModel",
-            "OpenTeamLabAssetControlTicketModel",
-            "OpenTeamLabAssetControlTaskModel"
-        ];
-        Assert.All(publicSchemas, schema => Assert.True(schemas.TryGetProperty(schema, out _),
-            $"OpenAPI must publish the dedicated {schema} contract."));
-
-        var serialized = string.Join('\n', publicSchemas.Select(schema => schemas.GetProperty(schema).GetRawText()));
-        Assert.DoesNotContain("lastError", serialized, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("workerNodeId", serialized, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("resourceId", serialized, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("nativeIdentity", serialized, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("apiTokenId", serialized, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("protectedPayload", serialized, StringComparison.OrdinalIgnoreCase);
-    }
-
-    [Fact]
-    public async Task OpenV1_TeamLabSchemasPreserveEditorAndHideSensitiveRuntimeState()
-    {
-        var content = await _client.GetStringAsync(OpenV1DocumentPath);
-        using var document = JsonDocument.Parse(content);
-        var schemas = document.RootElement.GetProperty("components").GetProperty("schemas");
-        var teamLabSchemas = schemas.EnumerateObject()
-            .Where(schema => schema.Name.Contains("TeamLab", StringComparison.Ordinal))
-            .ToArray();
-
-        Assert.NotEmpty(teamLabSchemas);
-        var serialized = string.Join('\n', teamLabSchemas.Select(schema => schema.Value.GetRawText()));
-        Assert.DoesNotContain("runtimeResourceId", serialized, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("protectedDownloadToken", serialized, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("protectedSecret", serialized, StringComparison.OrdinalIgnoreCase);
-
-        var openRequestSchemas = schemas.EnumerateObject()
-            .Where(schema => schema.Name.StartsWith("Open", StringComparison.Ordinal) &&
-                              schema.Name.Contains("TeamLabTopologyModel", StringComparison.Ordinal))
-            .ToArray();
-        Assert.NotEmpty(openRequestSchemas);
-        Assert.All(openRequestSchemas, schema =>
-            Assert.True(schema.Value.GetProperty("properties").TryGetProperty("editor", out _),
-                $"{schema.Name} must preserve the published editor layout contract."));
-
-        var problemSchema = schemas.GetProperty("ExternalApiProblemDetailsModel");
-        Assert.Contains("\"code\"", problemSchema.GetRawText(), StringComparison.Ordinal);
-        Assert.Contains("\"traceId\"", problemSchema.GetRawText(), StringComparison.Ordinal);
-
-        foreach (var path in document.RootElement.GetProperty("paths").EnumerateObject()
-                     .Where(path => path.Name.StartsWith("/api/open/v1/teamlab", StringComparison.Ordinal)))
-        foreach (var operation in path.Value.EnumerateObject().Where(item => IsHttpMethod(item.Name)))
-        foreach (var response in operation.Value.GetProperty("responses").EnumerateObject()
-                     .Where(item => int.TryParse(item.Name, out var status) && status >= 400))
-        {
-            var contentTypes = response.Value.GetProperty("content");
-            Assert.True(contentTypes.TryGetProperty("application/problem+json", out _),
-                $"{operation.Name.ToUpperInvariant()} {path.Name} response {response.Name} must use application/problem+json.");
         }
     }
 

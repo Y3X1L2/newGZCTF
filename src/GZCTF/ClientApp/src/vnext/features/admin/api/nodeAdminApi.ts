@@ -1,4 +1,4 @@
-import type { EnableTeamLabNetworkRequest, NodeDeployRequest } from '@Api'
+import type { NodeDeployRequest } from '@Api'
 import {
   contractFailure,
   isBoolean,
@@ -224,12 +224,6 @@ export function createNodeAdminApi(client: RuntimeJsonClient = runtimeJsonClient
 
     async update(id: string, data: UpdateNodeRequest) {
       return parseUpdateResult(await client.patchJson(`/api/v1/nodes/${id}`, data))
-    },
-
-    async enableTeamLab(id: string, data: EnableTeamLabNetworkRequest) {
-      const value = await client.postJson(`/api/v1/nodes/${id}/teamlab/enable`, data)
-      if (!isRecord(value)) return contractFailure('TeamLab network action', value)
-      return value
     },
 
     async syncAgent(id: string) {

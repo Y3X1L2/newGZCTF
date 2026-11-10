@@ -2,7 +2,6 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using GZCTF.Agent.Models;
-using GZCTF.Agent.Services.Observation;
 
 namespace GZCTF.Agent.Services.Vm;
 

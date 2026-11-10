@@ -17,7 +17,6 @@ using GZCTF.Repositories.Interface;
 using GZCTF.Services;
 using GZCTF.Services.Container.Manager;
 using GZCTF.Services.Fleet;
-using GZCTF.Services.TeamLab;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -323,9 +322,9 @@ public class NodesController : ControllerBase
                     from binding in _context.PenetrationTeamRuntimeBindings.AsNoTracking()
                     join game in _context.Games.AsNoTracking() on binding.GameId equals game.Id
                     join team in _context.Teams.AsNoTracking() on binding.TeamId equals team.Id
-                    where runtimeIds.Contains(binding.RuntimeId)
+                    where binding.RuntimeId != null && runtimeIds.Contains(binding.RuntimeId.Value)
                     select new NodeTeamLabBindingView(
-                        binding.RuntimeId, binding.GameId, game.Title, binding.TeamId, team.Name))
+                        binding.RuntimeId!.Value, binding.GameId, game.Title, binding.TeamId, team.Name))
                 .ToDictionaryAsync(item => item.RuntimeId, token);
 
             foreach (var asset in assets)
@@ -459,34 +458,8 @@ public class NodesController : ControllerBase
     async Task<NodeForceCleanupResult> ForceCleanupNodeResources(Guid nodeId, CancellationToken token)
     {
         var errors = new List<string>();
-        var runtimes = HttpContext.RequestServices.GetRequiredService<GZCTF.Modules.TeamLab.Application.ITeamLabRuntimeApplicationService>();
         var deploymentQueue = HttpContext.RequestServices.GetRequiredService<DeploymentQueueService>();
         var nginxProxySync = HttpContext.RequestServices.GetRequiredService<INginxProxySyncService>();
-
-        var runtimeIds = await _context.TeamLabRuntimeShards
-            .AsNoTracking()
-            .Where(shard => shard.WorkerNodeId == nodeId && shard.Status != TeamLabRuntimeStatus.Destroyed)
-            .Select(shard => shard.Runtime.PublicId)
-            .Distinct()
-            .ToArrayAsync(token);
-
-        foreach (var runtimeId in runtimeIds)
-        {
-            try
-            {
-                var queued = await runtimes.DestroyAndEnqueueAsync(runtimeId, null, null, token);
-                var result = await WaitForControlTicketAsync(deploymentQueue, queued.TicketId, token);
-                if (result?.Status != DeploymentQueueTicketStatus.Succeeded)
-                    errors.Add($"TeamLab runtime {runtimeId:D} 清理失败：{result?.ErrorMessage}");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex,
-                    "Force deregister failed to cleanup TeamLab runtime {RuntimeId} on node {NodeId}.",
-                    runtimeId, nodeId);
-                errors.Add($"TeamLab runtime {runtimeId:D} 清理异常：{ex.Message}");
-            }
-        }
 
         var containers = await _context.Containers
             .Where(c => c.NodeId == nodeId && c.Status != ContainerStatus.Destroyed)
@@ -684,27 +657,6 @@ public class NodesController : ControllerBase
             node.MaxContainers,
             node.MaxVms
         });
-    }
-
-    [HttpPost("{id:guid}/teamlab/enable")]
-    [RequireAdmin]
-    public async Task<IActionResult> EnableTeamLabNetwork(Guid id, [FromBody] EnableTeamLabNetworkRequest request)
-    {
-        var token = HttpContext.RequestAborted;
-        var node = await _context.WorkerNodes.FirstOrDefaultAsync(n => n.Id == id, token);
-        if (node is null) return NotFound();
-
-        var service = HttpContext.RequestServices.GetRequiredService<NodeTunnelService>();
-        var result = request.DryRun
-            ? await service.EnableDryRunAsync(node, token)
-            : await service.MarkHealthyAsync(node, request.TunnelIp ?? string.Empty, token);
-
-        _logger.SystemLog(
-            $"Worker node TeamLab network {(request.DryRun ? "checked" : "enabled")}: node={node.Name}, id={node.Id}, success={result.Success}, message={result.Message}.",
-            result.Success ? TaskStatus.Success : TaskStatus.Failed,
-            result.Success ? LogLevel.Information : LogLevel.Warning);
-
-        return result.Success ? Ok(result) : BadRequest(result);
     }
 
     [HttpPost("{id:guid}/sync-agent")]
@@ -1203,12 +1155,6 @@ public class UpdateNodeRequest
     public int? MaxVms { get; set; }
     public bool? IsStorageNode { get; set; }
     public int? RegistryPort { get; set; }
-}
-
-public class EnableTeamLabNetworkRequest
-{
-    public bool DryRun { get; set; } = true;
-    public string? TunnelIp { get; set; }
 }
 
 public class HeartbeatRequest

@@ -38,7 +38,7 @@
 
 50 份中有 8 份至少 400 行、3 份至少 800 行。TeamLab 操作/API 手册 2673 行、对接指南 866 行；modules/ 实际只有索引、培训容器生命周期、TeamLab 运行事实契约。源码有 12 个 Modules 目录，Agent 另在独立项目。以上是文件/行数盘点，不能据此断言长文全部冗余或内容全部过期。提交前同步 PR #26 后新增一个任务记录和练习分页说明，当前分支非归档为122份（51份说明/入口、65份handoff、6份测试资料），modules为4份；新增内容有明确价值，但统一短入口仍未补齐。
 
-还发现了一个语义冲突：[TeamLab 手册](../modules/teamlab/reference/README.md)原先将 ApiOperation 状态写作 queued/running/completed/failed/cancelled；当前 [枚举](../../src/GZCTF/Modules/Audit/Domain/ApiOperation.cs)与 [OpenAPI](../commercialization/openapi/open-v1.json)实际只有 Pending/Running/Succeeded/Failed，对应 0–3。本轮已修正该段。这种错误能通过文件链接检查，说明检查“文件存在”和“描述符合代码”是两件事。
+还发现了一个语义冲突：[TeamLab 手册](../archive/teamlab-internal-20261110/reference/README.md)原先将 ApiOperation 状态写作 queued/running/completed/failed/cancelled；当前 [枚举](../../src/GZCTF/Modules/Audit/Domain/ApiOperation.cs)与 [OpenAPI](../commercialization/openapi/open-v1.json)实际只有 Pending/Running/Succeeded/Failed，对应 0–3。本轮已修正该段。这种错误能通过文件链接检查，说明检查“文件存在”和“描述符合代码”是两件事。
 
 另外，[Provisioning 实现](../../src/GZCTF/Modules/Provisioning/Application/AcademicImportApplicationService.cs)实际处理课程、理论题/试卷、战队的批量导入，不能因模块名称就称它为 VM/容器部署编排。培训关键入口还位于 Controllers/Repositories/Services，自动把 `Modules/Training` 全部内容当作完整培训实现会漏掉主链路。
 

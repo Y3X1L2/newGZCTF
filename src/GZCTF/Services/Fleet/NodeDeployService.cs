@@ -102,9 +102,7 @@ public class NodeDeployService
                 _config["ContainerProvider:PublicEntry"],
                 _config.GetValue<int?>("ContainerProvider:DockerConfig:PublicPortStart"),
                 _config.GetValue<int?>("ContainerProvider:DockerConfig:PublicPortEnd"),
-                _config["ContainerProvider:DockerConfig:ChallengeNetwork"],
-                teamLabEnable: true,
-                teamLabDryRun: false);
+                _config["ContainerProvider:DockerConfig:ChallengeNetwork"]);
             WriteRemoteFileIfChanged(ssh, sudo, "/etc/gzctf-agent/appsettings.json", configJson,
                 "Write agent configuration");
             remoteInstallStarted = true;
@@ -530,23 +528,23 @@ install_kvm() {
   run_sudo chmod 755 /var/lib/gzctf /var/lib/gzctf/images 2>/dev/null || true
 }
 
-install_teamlab_network_tools() {
-  if teamlab_tools_ready; then
+install_guest_management_tools() {
+  if guest_management_tools_ready; then
     return
   fi
 
   case "$pm" in
     apt)
-      install_pkgs wireguard-tools nftables iptables tcpdump tshark genisoimage xorriso cloud-image-utils dnsmasq-base openvswitch-switch ovn-host
+      install_pkgs nftables genisoimage xorriso cloud-image-utils
       ;;
     dnf|yum)
-      install_pkgs wireguard-tools nftables iptables tcpdump wireshark-cli xorriso cloud-utils-growpart dnsmasq openvswitch ovn-host || true
+      install_pkgs nftables xorriso cloud-utils-growpart || true
       ;;
     zypper)
-      install_pkgs wireguard-tools nftables iptables tcpdump wireshark xorriso dnsmasq openvswitch ovn || true
+      install_pkgs nftables xorriso || true
       ;;
     pacman)
-      install_pkgs wireguard-tools nftables iptables-nft tcpdump wireshark-cli xorriso cloud-image-utils dnsmasq openvswitch ovn || true
+      install_pkgs nftables xorriso cloud-image-utils || true
       ;;
   esac
 }
@@ -587,16 +585,8 @@ kvm_ready() {
   run_sudo virsh -c qemu:///system list >/dev/null 2>&1 || return 1
 }
 
-teamlab_tools_ready() {
-  need_cmd wg || return 1
-  { need_cmd iptables || need_cmd nft; } || return 1
-  need_cmd tcpdump || return 1
-      need_cmd dumpcap || return 1
-      need_cmd ovs-vsctl || return 1
-      need_cmd ovsdb-client || return 1
-      need_cmd ovn-controller || return 1
-      need_cmd ovn-nbctl || return 1
-      need_cmd ovn-sbctl || return 1
+guest_management_tools_ready() {
+  need_cmd nft || return 1
   { need_cmd genisoimage || need_cmd mkisofs || need_cmd xorriso || need_cmd cloud-localds; } || return 1
 }
 
@@ -606,9 +596,6 @@ print_capability_summary() {
   echo "Virsh: $(virsh --version 2>/dev/null || echo unavailable)"
   echo "Virt-install: $(virt-install --version 2>/dev/null || echo unavailable)"
   echo "Qemu-img: $(qemu-img --version 2>/dev/null | head -n 1 || echo unavailable)"
-  echo "WireGuard: $(wg --version 2>/dev/null || echo unavailable)"
-  echo "Tcpdump: $(tcpdump --version 2>/dev/null | head -n 1 || echo unavailable)"
-  echo "Dumpcap: $(dumpcap --version 2>/dev/null | head -n 1 || echo unavailable)"
   echo "Cloud-init ISO: $(command -v genisoimage || command -v mkisofs || command -v xorriso || echo unavailable)"
   if [ -e /dev/kvm ] && grep -Eq '(^flags|^Features).* (vmx|svm)( |$)' /proc/cpuinfo 2>/dev/null; then
     echo "KVM hardware: available"
@@ -657,7 +644,7 @@ install_base
 install_docker
 configure_docker_registry
 install_kvm
-install_teamlab_network_tools
+install_guest_management_tools
 configure_guest_management_network
 install_dotnet_runtime
 
@@ -696,8 +683,7 @@ fi
 """;
 
     internal static string BuildAgentConfigJson(string serverUrl, WorkerNode node, string? publicEntry = null,
-        int? publicPortStart = null, int? publicPortEnd = null, string? challengeNetwork = null,
-        bool teamLabEnable = true, bool teamLabDryRun = false) =>
+        int? publicPortStart = null, int? publicPortEnd = null, string? challengeNetwork = null) =>
         JsonSerializer.Serialize(new
         {
             Agent = new
@@ -710,7 +696,7 @@ fi
                 OperationStateRoot = "/var/lib/gzctf/agent",
                 GuestManagement = new
                 {
-                    Enabled = teamLabEnable && node.Capabilities.HasFlag(NodeCapability.Kvm),
+                    Enabled = node.Capabilities.HasFlag(NodeCapability.Kvm),
                     BridgeName = "gzmgt0",
                     HostAddress = "100.127.0.1",
                     PrefixLength = 16,
@@ -726,11 +712,6 @@ fi
                 PublicPortStart = publicPortStart,
                 PublicPortEnd = publicPortEnd,
                 ChallengeNetwork = string.IsNullOrWhiteSpace(challengeNetwork) ? "gzctf" : challengeNetwork
-            },
-            TeamLab = new
-            {
-                Enable = teamLabEnable,
-                DryRun = teamLabDryRun
             }
         }, new JsonSerializerOptions { WriteIndented = true });
 

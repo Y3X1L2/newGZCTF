@@ -20,7 +20,6 @@ using GZCTF.Services.CronJob;
 
 using GZCTF.Services.Fleet;
 using GZCTF.Services.Mail;
-using GZCTF.Services.TeamLab;
 using GZCTF.Services.Transfer;
 using GZCTF.Services.Vm;
 using GZCTF.Storage;
@@ -153,7 +152,6 @@ internal static class ServicesExtension
             builder.Services.AddScoped<NodeEligibilityEvaluator>();
             builder.Services.AddScoped<RuntimeQueueSelector>();
             builder.Services.AddScoped<RuntimeAdmissionPolicy>();
-            builder.Services.AddScoped<TeamLabPhysicalPlacementService>();
             builder.Services.AddScoped<FleetCapacityReservationService>();
             builder.Services.AddScoped<DeploymentQueueService>();
             builder.Services.AddScoped<DeploymentQueueViewService>();
@@ -190,8 +188,6 @@ internal static class ServicesExtension
             builder.Services.AddSingleton<GuacamoleService>();
             builder.Services.AddSingleton<GuacamoleRemoteSessionService>();
             builder.Services.AddHostedService<VmReadyService>();
-            builder.Services.AddScoped<NodeTunnelService>();
-            builder.Services.AddScoped<IPublicUdpGatewayProvider, PublicUdpGatewayProvider>();
 
             builder.Services.AddSingleton<RedisDistributedLeaseProvider>();
             builder.Services.AddSingleton<LocalDevelopmentLeaseProvider>();

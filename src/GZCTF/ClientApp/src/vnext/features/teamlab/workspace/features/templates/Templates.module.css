@@ -1,0 +1,319 @@
+.catalog {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: var(--shadow-panel);
+  overflow: hidden;
+}
+.catalogTools {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--line);
+}
+.catalogTools > :first-child {
+  width: 260px;
+}
+.catalogTools > button {
+  margin-left: auto;
+}
+.item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.library {
+  display: grid;
+  grid-template-columns: minmax(300px, 31%) minmax(0, 1fr);
+  min-height: 530px;
+}
+.directory {
+  min-width: 0;
+  border-right: 1px solid var(--line);
+  background: var(--surface-subtle);
+  padding: 12px;
+}
+.items {
+  max-height: calc(100dvh - 270px);
+  min-height: 300px;
+  overflow-y: auto;
+  display: grid;
+  align-content: start;
+  gap: 6px;
+}
+.item {
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: none;
+  color: var(--text);
+  padding: 14px 12px;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+.item:hover {
+  background: var(--surface-hover);
+}
+.item[aria-pressed='true'] {
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 25%, var(--line));
+}
+.item > :last-child {
+  grid-column: 2;
+  justify-self: start;
+}
+.itemText {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+.itemText strong {
+  font-size: 14px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.itemText > span {
+  color: var(--muted);
+  font-size: 13px;
+}
+.symbol {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-radius: 7px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+}
+.detail {
+  min-width: 0;
+  padding: 24px 28px;
+}
+.detailHeading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.detailHeading h2 {
+  font-size: 21px;
+  line-height: 1.35;
+  margin: 0 0 8px;
+  overflow-wrap: anywhere;
+}
+.detailHeading > div:first-child > span {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  color: var(--muted);
+  font-size: 13px;
+}
+.specs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  padding: 0;
+  margin-bottom: 22px;
+}
+.specs div {
+  display: grid;
+  gap: 6px;
+  background: var(--surface-subtle);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 14px 16px;
+}
+.specs strong {
+  font-size: 18px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+}
+.specs span {
+  color: var(--muted);
+  font-size: 13px;
+}
+.detailColumns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 28px;
+}
+.section {
+  padding: 20px 0 0;
+  min-width: 0;
+}
+.section h3 {
+  margin: 0 0 16px;
+  font-size: 14px;
+  font-weight: 500;
+}
+.meta {
+  display: grid;
+  grid-template-columns: 78px minmax(0, 1fr);
+  gap: 13px 16px;
+  margin: 0;
+  font-size: 14px;
+}
+.meta dt {
+  color: var(--muted);
+  font-size: 12px;
+  align-self: center;
+}
+.meta dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  font-weight: 500;
+}
+.technical {
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+.disks {
+  display: grid;
+  gap: 12px;
+}
+.references {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 12px;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.emptyStorage {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+.disks > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+}
+.importForm {
+  display: grid;
+  gap: 22px;
+}
+.importSection {
+  display: grid;
+  gap: 16px;
+  padding-bottom: 22px;
+  border-bottom: 1px solid var(--line);
+}
+.importSection h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+}
+.importFooter {
+  display: flex;
+  justify-content: flex-end;
+  background: var(--surface);
+  padding: 16px 0 0;
+}
+.hardware {
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 20px;
+}
+.hardware summary {
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 0 0 16px;
+}
+.hardware summary span {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--muted);
+  margin-left: 16px;
+}
+.blueprintGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+.blueprintGrid section {
+  min-width: 0;
+}
+.blueprintGrid h3 {
+  font-size: 14px;
+  margin: 0 0 12px;
+}
+.blueprintRow {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+.blueprintRow span {
+  color: var(--muted);
+  font-size: 13px;
+}
+@media (max-width: 1000px) {
+  .library {
+    grid-template-columns: 280px minmax(0, 1fr);
+  }
+  .detail {
+    padding: 20px;
+  }
+  .detailColumns {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+}
+@media (max-width: 650px) {
+  .catalogTools {
+    flex-wrap: wrap;
+    padding: 14px;
+    gap: 12px;
+  }
+  .catalogTools > :first-child {
+    width: 100%;
+  }
+  .library {
+    grid-template-columns: 1fr;
+  }
+  .directory {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .items {
+    max-height: 250px;
+    min-height: 0;
+  }
+  .detail {
+    padding: 20px 16px;
+  }
+  .detailHeading {
+    flex-wrap: wrap;
+  }
+  .detailHeading h2 {
+    font-size: 19px;
+  }
+  .specs {
+    gap: 8px;
+  }
+  .specs div {
+    padding: 12px 8px;
+  }
+  .specs strong {
+    font-size: 16px;
+  }
+  .blueprintGrid {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+}

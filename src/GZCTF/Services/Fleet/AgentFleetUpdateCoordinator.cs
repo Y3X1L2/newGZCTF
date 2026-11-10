@@ -21,8 +21,7 @@ public sealed class AgentFleetUpdateCoordinator(
     AppDbContext context,
     AgentClient agent,
     IOperationalEventWriter events,
-    ILogger<AgentFleetUpdateCoordinator> logger,
-    IOptions<TeamLabNetworkConfig> teamLabNetwork)
+    ILogger<AgentFleetUpdateCoordinator> logger)
 {
     private static readonly TimeSpan HeartbeatDeadline = TimeSpan.FromSeconds(90);
 
@@ -44,10 +43,6 @@ public sealed class AgentFleetUpdateCoordinator(
         if (string.IsNullOrWhiteSpace(expectedSha))
             throw new InvalidOperationException("The bundled Agent binary is unavailable.");
         var priorCapabilities = node.Capabilities;
-        var controlPlaneNode = await context.WorkerNodes.AsNoTracking()
-            .SingleOrDefaultAsync(item => item.IsLocal && item.TeamLabNetworkEnabled, cancellationToken);
-        var targetDataPlane = TeamLabDataPlaneSyncConfiguration.Create(
-            node, controlPlaneNode, teamLabNetwork.Value.ManagedDhcpLeaseSeconds);
         var priorSchedulable = node.AgentUpdateState == AgentUpdateState.Failed
             ? node.AgentUpdateWasSchedulable
             : node.IsSchedulable;
@@ -62,7 +57,7 @@ public sealed class AgentFleetUpdateCoordinator(
                 "Agent binary is synchronizing from the main server.",
                 cancellationToken);
             var result = await agent.SyncAgentAsync(node.Id,
-            CreateSyncRequest(serverUrl, expectedSha, node, targetDataPlane,
+            CreateSyncRequest(serverUrl, expectedSha, node,
                     includeNodeConfiguration: false), cancellationToken);
             if (!result.Success)
                 return await FailAsync(node, correlationId, result.Message, cancellationToken,
@@ -91,10 +86,10 @@ public sealed class AgentFleetUpdateCoordinator(
 
             await TransitionAsync(node, AgentUpdateState.Syncing, cancellationToken);
             await RecordStageAsync(node, correlationId, "node-configuration",
-                "The updated Agent is applying VM control-plane and TeamLab data-plane configuration.",
+                "The updated Agent is applying VM control-plane configuration.",
                 cancellationToken);
             result = await agent.SyncAgentAsync(node.Id,
-            CreateSyncRequest(serverUrl, expectedSha, node, targetDataPlane,
+            CreateSyncRequest(serverUrl, expectedSha, node,
                     includeNodeConfiguration: true), cancellationToken);
             if (!result.Success)
                 return await FailAsync(node, correlationId, result.Message, cancellationToken,
@@ -107,7 +102,7 @@ public sealed class AgentFleetUpdateCoordinator(
             {
                 await context.Entry(node).ReloadAsync(cancellationToken);
                 if (HasExpectedManifest(node, expectedSha, priorCapabilities,
-                        requireManagedConfiguration: true) && FabricReady(node, targetDataPlane.Enabled))
+                        requireManagedConfiguration: true))
                     break;
                 await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
             }
@@ -117,15 +112,9 @@ public sealed class AgentFleetUpdateCoordinator(
                     "The configured Agent manifest was not observed before the update deadline.", cancellationToken,
                     CreateSyncFailure(
                         "The configured Agent manifest was not observed before the update deadline.", node));
-            if (!FabricReady(node, targetDataPlane.Enabled))
-                return await FailAsync(node, correlationId,
-                    "TeamLab Fabric health was not confirmed after Agent synchronization.", cancellationToken,
-                    CreateSyncFailure(
-                        "TeamLab Fabric health was not confirmed after Agent synchronization.", node));
-
             await CompleteAsync(node, priorSchedulable, cancellationToken);
             await RecordStageAsync(node, correlationId, "completed",
-                "Agent binary, configuration and TeamLab Fabric health were confirmed.", cancellationToken,
+                "Agent binary and configuration were confirmed.", cancellationToken,
                 OperationalEventCodes.Agent.SyncSucceeded,
                 OperationalEventOutcome.Succeeded);
             return new AgentFleetUpdateResult(
@@ -182,41 +171,20 @@ public sealed class AgentFleetUpdateCoordinator(
         var required = new List<string>
         {
             AgentFeatureIds.SelfUpdate,
-            AgentFeatureIds.RuntimeInventory,
-            AgentFeatureIds.RuntimeSignals
+            AgentFeatureIds.RuntimeInventory
         };
         if ((requiredCapabilities & NodeCapability.Docker) != 0)
             required.Add(AgentFeatureIds.Docker);
         if ((requiredCapabilities & NodeCapability.Kvm) != 0)
             required.AddRange([
                 AgentFeatureIds.Kvm,
-                AgentFeatureIds.VmDownload,
-                AgentFeatureIds.VmReadinessSignals
+                AgentFeatureIds.VmDownload
             ]);
-        if (node.TeamLabNetworkEnabled)
-        {
-            required.AddRange([
-                AgentFeatureIds.TeamLabInfrastructure,
-                AgentFeatureIds.TeamLabFabricLeasedLinks,
-                AgentFeatureIds.TeamLabObservation
-            ]);
-            if (requireManagedConfiguration && (requiredCapabilities & NodeCapability.Kvm) != 0)
-                required.AddRange([
-                    AgentFeatureIds.VmGuestManagement,
-                    AgentFeatureIds.VmConfigDriveV2,
-                    AgentFeatureIds.VmPreparedImage
-                ]);
-            if ((requiredCapabilities & NodeCapability.Docker) != 0)
-                required.Add(AgentFeatureIds.TeamLabContainerNetworkFinalize);
-        }
+        if (requireManagedConfiguration && (requiredCapabilities & NodeCapability.Kvm) != 0)
+            required.AddRange([AgentFeatureIds.VmGuestManagement,
+                AgentFeatureIds.VmConfigDriveV2, AgentFeatureIds.VmPreparedImage]);
         return AgentCapabilityEvaluator.Supports(node, required.Distinct(StringComparer.Ordinal).ToArray());
     }
-
-    internal static bool FabricReady(WorkerNode node, bool required = true) =>
-        !required ||
-        string.IsNullOrWhiteSpace(node.TeamLabTunnelIp) ||
-        node.TeamLabTunnelStatus == TeamLabTunnelStatus.Healthy &&
-        node.TeamLabFabricStatus == TeamLabFabricStatus.Healthy;
 
     private async Task BeginUpdateAsync(WorkerNode node, bool priorSchedulable, string expectedSha,
         CancellationToken cancellationToken)
@@ -288,15 +256,14 @@ public sealed class AgentFleetUpdateCoordinator(
     }
 
     private AgentSyncRequest CreateSyncRequest(string serverUrl, string expectedSha, WorkerNode node,
-        TeamLabDataPlaneSyncConfig targetDataPlane, bool includeNodeConfiguration) =>
+        bool includeNodeConfiguration) =>
         new(
             DownloadUrl: $"{serverUrl.TrimEnd('/')}/api/agent/download",
             ExpectedSha256: expectedSha,
             VmControlPlane: includeNodeConfiguration
                 ? new AgentVmControlPlaneSyncConfig(
-                    node.TeamLabNetworkEnabled && node.Capabilities.HasFlag(NodeCapability.Kvm))
-                : null,
-            TeamLabDataPlane: includeNodeConfiguration ? targetDataPlane : null);
+                    node.Capabilities.HasFlag(NodeCapability.Kvm))
+                : null);
 
     private async Task<AgentFleetUpdateResult> FailAsync(
         WorkerNode node,

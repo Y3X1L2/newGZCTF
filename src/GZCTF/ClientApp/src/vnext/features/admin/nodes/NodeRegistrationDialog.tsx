@@ -149,7 +149,7 @@ export function NodeRegistrationDialog({
               </li>
               <li>
                 <ShieldCheck size={17} />
-                <span>公网端口池与 TeamLab 网络依赖</span>
+                <span>公网端口池</span>
               </li>
             </ul>
           </section>

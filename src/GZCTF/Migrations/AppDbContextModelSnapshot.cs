@@ -2082,16 +2082,22 @@ namespace GZCTF.Migrations
                     b.Property<DateTimeOffset?>("CompletedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("EnvironmentId")
+                        .HasColumnType("text");
+
                     b.Property<byte>("FailureClass")
                         .HasColumnType("smallint");
 
                     b.Property<Guid>("OperationId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("RemoteOperationId")
+                        .HasColumnType("text");
+
                     b.Property<DateTimeOffset>("ResetAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<int>("RuntimeId")
+                    b.Property<int?>("RuntimeId")
                         .HasColumnType("integer");
 
                     b.Property<byte>("Status")
@@ -2111,6 +2117,10 @@ namespace GZCTF.Migrations
                     b.HasIndex("RuntimeId");
 
                     b.HasIndex("UserId");
+
+                    b.HasIndex("EnvironmentId", "TargetGeneration")
+                        .IsUnique()
+                        .HasFilter("\"EnvironmentId\" IS NOT NULL AND \"Status\" IN (0, 1)");
 
                     b.HasIndex("RuntimeId", "TargetGeneration")
                         .IsUnique()
@@ -5031,11 +5041,20 @@ namespace GZCTF.Migrations
                     b.Property<int>("GameId")
                         .HasColumnType("integer");
 
+                    b.Property<bool>("AccessOpen")
+                        .HasColumnType("boolean");
+
                     b.Property<Guid?>("ActiveReleaseId")
                         .HasColumnType("uuid");
 
                     b.Property<int?>("ActiveRolloutId")
                         .HasColumnType("integer");
+
+                    b.Property<string>("BlueprintId")
+                        .HasColumnType("text");
+
+                    b.Property<string>("BlueprintVersionId")
+                        .HasColumnType("text");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -5047,7 +5066,7 @@ namespace GZCTF.Migrations
                         .IsConcurrencyToken()
                         .HasColumnType("bigint");
 
-                    b.Property<int>("TopologyId")
+                    b.Property<int?>("TopologyId")
                         .HasColumnType("integer");
 
                     b.Property<DateTimeOffset>("UpdatedAt")
@@ -5147,8 +5166,17 @@ namespace GZCTF.Migrations
                     b.Property<int>("TeamId")
                         .HasColumnType("integer");
 
+                    b.Property<int>("BlueprintVersion")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("BlueprintVersionId")
+                        .HasColumnType("text");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CreationRequestId")
+                        .HasColumnType("uuid");
 
                     b.Property<Guid?>("DestroyOperationId")
                         .HasColumnType("uuid");
@@ -5156,7 +5184,10 @@ namespace GZCTF.Migrations
                     b.Property<DateTimeOffset?>("DestroyedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<int>("RuntimeId")
+                    b.Property<string>("EnvironmentId")
+                        .HasColumnType("text");
+
+                    b.Property<int?>("RuntimeId")
                         .HasColumnType("integer");
 
                     b.Property<byte>("Status")
@@ -5167,6 +5198,9 @@ namespace GZCTF.Migrations
                     b.HasIndex("DestroyOperationId")
                         .IsUnique()
                         .HasFilter("\"DestroyOperationId\" IS NOT NULL");
+
+                    b.HasIndex("EnvironmentId")
+                        .IsUnique();
 
                     b.HasIndex("RuntimeId")
                         .IsUnique();
@@ -9220,8 +9254,7 @@ namespace GZCTF.Migrations
                     b.HasOne("GZCTF.Modules.TeamLab.Domain.Runtime.TeamLabRuntime", "Runtime")
                         .WithMany()
                         .HasForeignKey("RuntimeId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Cascade);
 
                     b.HasOne("GZCTF.Models.Data.UserInfo", "User")
                         .WithMany()
@@ -10208,8 +10241,7 @@ namespace GZCTF.Migrations
                     b.HasOne("GZCTF.Modules.TeamLab.Domain.TeamLabTopology", null)
                         .WithMany()
                         .HasForeignKey("TopologyId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("GZCTF.Modules.Penetration.Domain.PenetrationObjective", b =>
@@ -10232,8 +10264,7 @@ namespace GZCTF.Migrations
                     b.HasOne("GZCTF.Modules.TeamLab.Domain.Runtime.TeamLabRuntime", null)
                         .WithMany()
                         .HasForeignKey("RuntimeId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Cascade);
 
                     b.HasOne("GZCTF.Models.Data.Team", null)
                         .WithMany()

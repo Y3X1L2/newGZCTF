@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
-import { gzipSync } from 'node:zlib'
 import process from 'node:process'
+import { gzipSync } from 'node:zlib'
 
 const buildDir = join(process.cwd(), 'build')
 const hardJsGzipBudget = 900 * 1024
@@ -28,8 +28,12 @@ const assets = walk(buildDir)
 const failures = []
 for (const asset of assets) {
   if (asset.name.endsWith('.js') && asset.gzip > hardJsGzipBudget) failures.push(`${asset.name}: JS gzip ${asset.gzip}`)
-  if (asset.name.endsWith('.css') && asset.gzip > hardCssGzipBudget) failures.push(`${asset.name}: CSS gzip ${asset.gzip}`)
-  if (/@mantine\/|MantineProvider|--mantine-scale/.test(asset.content)) {
+  if (asset.name.endsWith('.css') && asset.gzip > hardCssGzipBudget)
+    failures.push(`${asset.name}: CSS gzip ${asset.gzip}`)
+  const scopedNetlab =
+    asset.name.startsWith('static/netlab-') ||
+    (asset.name.endsWith('.css') && /@scope\s*\(\[data-netlab-workspace\]/.test(asset.content))
+  if (!scopedNetlab && /@mantine\/|MantineProvider|--mantine-scale/.test(asset.content)) {
     failures.push(`${asset.name}: vNext production artifact contains Mantine runtime or transformed units`)
   }
 }

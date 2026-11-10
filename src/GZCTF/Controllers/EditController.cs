@@ -49,7 +49,8 @@ public class EditController(
     IStringLocalizer<Program> localizer,
     DeploymentQueueService deploymentQueue,
     ImageRemoteAccessService imageRemoteAccess,
-    IExerciseManagementService exerciseManagement) : Controller
+    IExerciseManagementService exerciseManagement,
+    PenetrationTeamLabAdapter competitionScenes) : Controller
 {
     bool HasContainerRuntimeConfig(GameChallenge challenge) =>
         challenge.Environment != EnvironmentType.Docker ||
@@ -300,6 +301,8 @@ public class EditController(
     {
         var (game, error) = await RequireManageableGameAsync(id, token);
         if (error is not null) return error;
+
+        await competitionScenes.EnsureGameDrainedBeforeDeleteAsync(id, token);
 
         return await gameRepository.DeleteGame(game!, token) switch
         {

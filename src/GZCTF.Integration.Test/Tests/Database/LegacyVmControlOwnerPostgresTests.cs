@@ -66,8 +66,6 @@ public sealed class LegacyVmControlOwnerPostgresTests : IAsyncLifetime
         var scheduler = new RuntimeSchedulingService(context,
             new FleetCapacityReservationService(context, lease, snapshots, eligibility, events, NullLogger<FleetCapacityReservationService>.Instance),
             new RuntimeQueueSelector(context, options),
-            new TeamLabPhysicalPlacementService(context, lease, snapshots, eligibility, events, new TeamLabEventRecorder(context, events, correlation),
-                new TeamLabFabricLinkAllocator(context, Options.Create(new TeamLabNetworkConfig())), Options.Create(new TeamLabNetworkConfig()), options),
             new PollingDeploymentQueueWakeup(), events, correlation, Options.Create(new KvmSettings()), NullLogger<RuntimeSchedulingService>.Instance);
         Assert.Equal(blocked ? 0 : 1, await scheduler.SchedulePendingAsync(default));
         var stored = await context.DeploymentQueueTickets.AsNoTracking().SingleAsync(item => item.Id == ticket.Id);

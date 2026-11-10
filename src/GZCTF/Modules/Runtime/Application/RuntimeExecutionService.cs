@@ -172,8 +172,7 @@ public sealed class RuntimeExecutionService(
         using var activity = RuntimeOperationalEvents.StartActivity(ticket, "runtime.execute");
         var executionStartedAt = Stopwatch.GetTimestamp();
 
-        var teamLabCoordinator = ticket.Kind == DeploymentQueueKind.TeamLabRuntime;
-        if (ticket.TargetNodeId is null && !teamLabCoordinator)
+        if (ticket.TargetNodeId is null)
         {
             var error = new OperationalError(
                 OperationalErrorCategory.NodeUnavailable,
@@ -187,18 +186,16 @@ public sealed class RuntimeExecutionService(
             return;
         }
 
-        var nodeId = ticket.TargetNodeId ?? Guid.Empty;
+        var nodeId = ticket.TargetNodeId.Value;
 
         logger.SystemLog(
-            $"Deployment execution started: ticket={ticket.Id}, kind={ticket.Kind}, operation={ticket.Operation}, node={(teamLabCoordinator ? "control-plane" : nodeId)}.",
+            $"Deployment execution started: ticket={ticket.Id}, kind={ticket.Kind}, operation={ticket.Operation}, node={nodeId}.",
             TaskStatus.Pending, LogLevel.Information);
 
-        var manifest = teamLabCoordinator
-            ? null
-            : await context.WorkerNodes.AsNoTracking()
-                .Where(item => item.Id == nodeId)
-                .Select(item => item.CapabilityManifestJson)
-                .SingleOrDefaultAsync(token);
+        var manifest = await context.WorkerNodes.AsNoTracking()
+            .Where(item => item.Id == nodeId)
+            .Select(item => item.CapabilityManifestJson)
+            .SingleOrDefaultAsync(token);
         var category = ResolveCategory(ticket);
         var limit = NodeDispatchLimitPolicy.Resolve(
             AgentCapabilityEvaluator.Parse(manifest)?.ExecutionLimits, category);
@@ -225,15 +222,12 @@ public sealed class RuntimeExecutionService(
         var renewalTask = RenewClaimLoopAsync(ticketId, claimOwner, executionCancellation, token);
         try
         {
-            if (teamLabCoordinator)
-                result = await executor.ExecuteAsync(ticket, executionCancellation.Token);
-            else
-                result = await dispatchLimiter.RunAsync(
-                    nodeId,
-                    category,
-                    limit,
-                    operationToken => executor.ExecuteAsync(ticket, operationToken),
-                    executionCancellation.Token);
+            result = await dispatchLimiter.RunAsync(
+                nodeId,
+                category,
+                limit,
+                operationToken => executor.ExecuteAsync(ticket, operationToken),
+                executionCancellation.Token);
         }
         finally
         {
@@ -430,13 +424,6 @@ public sealed class RuntimeExecutionService(
     static async Task ConfirmCapacityAsync(AppDbContext context, FleetCapacityReservationService capacity,
         DeploymentQueueTicket ticket, CancellationToken token)
     {
-        if (ticket.Kind == DeploymentQueueKind.TeamLabRuntime && ticket.TeamLabRuntimeId is { } runtimeId)
-        {
-            foreach (var slot in await TeamLabCapacityFacts.LoadAsync(context, runtimeId, token))
-                await capacity.ConfirmAsync(ticket.Id, slot.WorkerNodeId, token);
-            return;
-        }
-
         if (ticket.TargetNodeId is { } nodeId)
             await capacity.ConfirmAsync(ticket.Id, nodeId, token);
     }
@@ -444,26 +431,12 @@ public sealed class RuntimeExecutionService(
     static async Task ReleaseCapacityAsync(AppDbContext context, FleetCapacityReservationService capacity,
         DeploymentQueueTicket ticket, CancellationToken token)
     {
-        if (ticket.Kind == DeploymentQueueKind.TeamLabRuntime && ticket.TeamLabRuntimeId is not null)
-        {
-            var nodeIds = await context.FleetCapacityReservations.AsNoTracking()
-                .Where(item => item.DeploymentQueueTicketId == ticket.Id &&
-                               item.Status == CapacityReservationStatus.Active)
-                .Select(item => item.WorkerNodeId)
-                .ToArrayAsync(token);
-            foreach (var reservedNodeId in nodeIds)
-                await capacity.ReleaseAsync(ticket.Id, reservedNodeId, token);
-            return;
-        }
-
         if (ticket.TargetNodeId is { } nodeId)
             await capacity.ReleaseAsync(ticket.Id, nodeId, token);
     }
 
     static bool RequiresCapacityReservation(DeploymentQueueTicket ticket) =>
-        ticket.Operation == RuntimeOperationKind.Create ||
-        ticket.Kind == DeploymentQueueKind.TeamLabRuntime &&
-        ticket.Operation is RuntimeOperationKind.Reset or RuntimeOperationKind.Update;
+        ticket.Operation == RuntimeOperationKind.Create;
 
     static string TrimError(string? message)
     {
@@ -485,9 +458,7 @@ public sealed class RuntimeExecutionService(
             return NodeDispatchCategory.Control;
         return ticket.Kind == DeploymentQueueKind.VirtualMachine
             ? NodeDispatchCategory.VmCreate
-            : ticket.Kind == DeploymentQueueKind.TeamLabRuntime
-                ? NodeDispatchCategory.TeamLabNetwork
-                : NodeDispatchCategory.DockerCreate;
+            : NodeDispatchCategory.DockerCreate;
     }
 
 }

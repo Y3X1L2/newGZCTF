@@ -18,7 +18,7 @@
 - 前端边界：`docs/architecture/frontend/component-boundary.md`
 - 前端视觉契约：`docs/architecture/frontend/style-tokens.md`
 - vNext 设计与开发边界：`docs/architecture/frontend/development.md`
-- 组网/TeamLab 执行面：`docs/modules/teamlab/reference/networking-practices.md`
+- 组网/TeamLab 执行面：`docs/modules/teamlab/netlab-integration.md`
 - 生产发布：`docs/operations/vnext-maintenance-window-rollout.md`
 
 `docs/archive/` 只保存历史材料，不是当前设计或实现依据。历史计划中的路径、分支、测试数量和部署状态不得直接当作当前事实。
@@ -41,7 +41,7 @@
 - 主仓库：`https://github.com/Y3X1L2/newGZCTF.git`
 - 稳定分支：`main`
 - 后端：`.NET 10 / ASP.NET Core / EF Core / PostgreSQL / Redis`
-- 前端：`React 19 / TypeScript / Vite / pnpm；正式 vNext 使用本仓库 shared/design，不新增 Mantine 依赖`
+- 前端：`React 19 / TypeScript / Vite / pnpm；正式 vNext 使用本仓库 shared/design；迁入的 TeamLab 组件保留原有 Mantine 依赖`
 - 执行面：`GZCTF.Agent / Docker / KVM / libvirt / Guacamole`
 - 架构形态：模块化单体主站加独立 Agent 执行面
 
@@ -49,7 +49,8 @@
 
 ```text
 HTTP/Frontend -> Contracts -> Application -> Domain -> Infrastructure ports
-Business Application -> Runtime Application -> Fleet/VM/TeamLab ports -> AgentClient -> Agent
+CTF/Training/AWDP -> Runtime Application -> Fleet/VM ports -> AgentClient -> Agent
+TeamLab/Penetration -> Netlab public API -> Netlab execution nodes
 ```
 
 约束：
@@ -57,7 +58,7 @@ Business Application -> Runtime Application -> Fleet/VM/TeamLab ports -> AgentCl
 - Controller 只处理协议、授权、用例调用和 HTTP 映射，不直接编排 Agent 命令。
 - 跨模块读取使用公开 query contract，跨模块写入使用 application command。
 - PostgreSQL 是业务和运行状态事实源；Redis 只承载缓存、协调和高频缓冲。
-- `DeploymentQueueTicket` 是 Docker、VM、培训、AWDP 和 TeamLab 运行任务的统一事实，不建立第二套队列。
+- `DeploymentQueueTicket` 是普通 Docker、VM、培训和 AWDP 运行任务的统一事实。组网任务由 Netlab 执行，上层保存业务绑定并读取底座状态。
 - Agent 只执行已经校验的本机操作，不读取比赛、课程、计分或权限实体。
 - 运行恢复读取数据库当前事实和 Agent inventory，不从日志文本反推业务状态。
 - 具体允许依赖以 `module-boundary-map.md` 为准。
@@ -67,6 +68,7 @@ Business Application -> Runtime Application -> Fleet/VM/TeamLab ports -> AgentCl
 当前正式前端位于 `src/GZCTF/ClientApp/src/vnext`。新增或重构页面必须：
 
 - 使用 vNext 壳层、语义 Token、CSS Module 和 feature API adapter。
+- `features/teamlab/workspace` 为直接迁入的底座组件，保留现有组件依赖和局部样式；主题由上层传入，样式限定在场景区域。其余 vNext 页面继续使用 shared/design。
 - 遵循 `Route -> feature controller/hook -> feature panel -> foundation component` 依赖方向。
 - 页面不直接访问生成 API 文件，不把请求、DTO 转换和视觉状态堆在一个大组件中。
 - 通用展示组件不得包含业务请求、路由 ID 或权限逻辑。

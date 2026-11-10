@@ -1,0 +1,87 @@
+.body {
+  display: grid;
+  gap: 16px;
+}
+.connection {
+  display: grid;
+  justify-items: start;
+  gap: 12px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--line);
+  min-width: 0;
+}
+.heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+.heading strong {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.routes {
+  width: 100%;
+  min-width: 0;
+}
+.routes summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+  list-style: none;
+}
+.routes summary span {
+  overflow-wrap: anywhere;
+}
+.routes summary svg {
+  flex: none;
+  transition: transform 150ms;
+}
+.routes[open] summary svg {
+  transform: rotate(180deg);
+}
+.routeList {
+  display: grid;
+  gap: 12px;
+  padding-top: 16px;
+}
+.route {
+  display: grid;
+  gap: 4px;
+  font-size: 13px;
+}
+.route code {
+  overflow-wrap: anywhere;
+  color: var(--muted);
+}
+.error {
+  color: var(--negative);
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+.form {
+  display: grid;
+  gap: 18px;
+  padding-top: 8px;
+}
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.empty {
+  padding: 32px 0;
+  text-align: center;
+  color: var(--muted);
+}
+@media (prefers-reduced-motion: reduce) {
+  .routes summary svg {
+    transition: none;
+  }
+}

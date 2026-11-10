@@ -17,14 +17,12 @@ import {
 import styles from './AdminNodeDetailPage.module.css'
 import { NodeCapacitySettings, type NodeCapacitySettingsValue } from './NodeCapacitySettings'
 import { NodeResourceTab } from './NodeResourceTab'
-import { NodeTeamLabPanel } from './NodeTeamLabPanel'
 import { NodeTelemetryPanel } from './NodeTelemetryPanel'
 import {
   formatCpuUnits,
   formatHeartbeat,
   formatMemoryMiB,
   nodeStatusMeta,
-  tunnelStatusMeta,
   useAdminNode,
 } from './useAdminNodes'
 
@@ -33,7 +31,6 @@ const tabs = [
   { id: 'capacity', label: '容量' },
   { id: 'network', label: '网络' },
   { id: 'agent', label: 'Agent' },
-  { id: 'teamlab', label: 'TeamLab' },
   { id: 'events', label: '事件' },
 ] as const
 
@@ -170,21 +167,6 @@ export function AdminNodeDetailPage() {
     }
   }
 
-  const probeTeamLab = async () => {
-    if (!node || working) return
-    setWorking('teamlab')
-    setFeedback(null)
-    try {
-      const result = await nodeAdminApi.enableTeamLab(node.id, { dryRun: true, tunnelIp: node.teamLabTunnelIp })
-      setFeedback({ tone: 'success', message: actionMessage(result) })
-      await refresh()
-    } catch (probeError) {
-      setFeedback({ tone: 'danger', message: errorMessage(probeError, 'TeamLab 网络检测失败。') })
-    } finally {
-      setWorking(null)
-    }
-  }
-
   const deregister = async () => {
     if (!node) return false
     setWorking('delete')
@@ -207,7 +189,6 @@ export function AdminNodeDetailPage() {
   if (!node) return <DataState description="节点不存在或当前账户没有管理权限。" title="节点详情加载失败" />
 
   const status = nodeStatusMeta(node.status)
-  const tunnel = tunnelStatusMeta(node.teamLabTunnelStatus)
 
   return (
     <div className={styles.page}>
@@ -274,12 +255,6 @@ export function AdminNodeDetailPage() {
           label="公网端口"
           value={`${node.usedPorts} / ${node.totalPorts}`}
         />
-        <MetricItem
-          detail={node.teamLabTunnelIp || '未分配隧道地址'}
-          label="TeamLab"
-          tone={tunnel.tone}
-          value={tunnel.label}
-        />
       </MetricStrip>
 
       <div className={styles.statusLine}>
@@ -334,7 +309,6 @@ export function AdminNodeDetailPage() {
               <Fact label="端口池模式" value={node.portPoolMode} />
               <Fact label="公网端口范围" value={`${node.portPoolStart}-${node.portPoolEnd}`} />
               <Fact label="已占用端口" value={`${node.usedPorts} / ${node.totalPorts}`} />
-              <Fact label="TeamLab 隧道地址" value={node.teamLabTunnelIp || '—'} />
             </Facts>
           </section>
         ) : null}
@@ -349,7 +323,6 @@ export function AdminNodeDetailPage() {
               <Fact label="能力清单版本" value={node.capabilityManifestSchemaVersion || '—'} />
               <Fact label="最后心跳" value={formatHeartbeat(node.lastHeartbeat)} />
               <Fact label="能力上报" value={formatHeartbeat(node.capabilityObservedAt)} />
-              <Fact label="配置版本" value={node.teamLabTunnelConfigVersion || '—'} />
             </Facts>
             <div className={styles.panelActions}>
               <ActionButton
@@ -363,14 +336,6 @@ export function AdminNodeDetailPage() {
               </ActionButton>
             </div>
           </section>
-        ) : null}
-        {activeTab === 'teamlab' ? (
-          <NodeTeamLabPanel
-            node={node}
-            working={working === 'teamlab'}
-            disabled={Boolean(working)}
-            onProbe={probeTeamLab}
-          />
         ) : null}
         {activeTab === 'events' ? (
           <DataState title="节点事件暂不可查看" />

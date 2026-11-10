@@ -53,7 +53,7 @@ AWDP 服务外部入口虽然位于 `Modules/Ctf/Api/OpenAwdpServicesController.
 | 问题 | 实现入口 | 业务边界 |
 | --- | --- | --- |
 | 目标绑定、可见性或前置条件错误 | [PenetrationObjectiveService](../../../src/GZCTF/Modules/Penetration/Application/PenetrationObjectiveService.cs) | `ReplaceAsync`、`SubmitAsync`；目标属于比赛，实例属于 TeamLab |
-| 本队工作区没有环境或次数不对 | [PenetrationWorkspaceService](../../../src/GZCTF/Modules/Penetration/Application/PenetrationWorkspaceService.cs) | `GetAsync` 汇总本队绑定、runtime 和目标提交，不创建拓扑 |
+| 本队工作区没有环境或次数不对 | [PenetrationWorkspaceService](../../../src/GZCTF/Modules/Penetration/Application/PenetrationWorkspaceService.cs) | `GetAsync` 汇总本队 Netlab 环境、目标提交和重建次数 |
 | 管理/选手权限异常 | [PenetrationAdminController](../../../src/GZCTF/Controllers/PenetrationAdminController.cs)、[PenetrationPlayerController](../../../src/GZCTF/Controllers/PenetrationPlayerController.cs) | 先核比赛与参赛队伍，再查服务规则 |
 
 前端管理入口在 `admin/games/teamlab`，运行专题见[TeamLab](../teamlab/README.md)。
@@ -68,8 +68,8 @@ AWDP 服务外部入口虽然位于 `Modules/Ctf/Api/OpenAwdpServicesController.
 | --- | --- |
 | 报名与赛事流程 | [GameJoinTests](../../../src/GZCTF.Integration.Test/Tests/Api/GameJoinTests.cs)、[GameWorkflowTests](../../../src/GZCTF.Integration.Test/Tests/Api/GameWorkflowTests.cs) |
 | 计分与榜单 | [DetailedGameScoringTests](../../../src/GZCTF.Integration.Test/Tests/Api/DetailedGameScoringTests.cs)、[ScoreboardCalculationTests](../../../src/GZCTF.Integration.Test/Tests/Api/ScoreboardCalculationTests.cs) |
-| 渗透目标隔离 | [PenetrationObjectiveSecurityTests](../../../src/GZCTF.Test/UnitTests/TeamLab/PenetrationObjectiveSecurityTests.cs)、[TeamLabCompetitionSubmissionTests](../../../src/GZCTF.Test/UnitTests/TeamLab/TeamLabCompetitionSubmissionTests.cs) |
-| 渗透生命周期 | [PenetrationTeamLabLifecycleTests](../../../src/GZCTF.Test/UnitTests/TeamLab/PenetrationTeamLabLifecycleTests.cs) |
+| 渗透目标与队伍隔离 | [NetlabCompetitionTests](../../../src/GZCTF.Integration.Test/Tests/Runtime/NetlabCompetitionTests.cs) |
+| 渗透生命周期与工作区代理 | [Netlab 调用链与验证](../teamlab/development.md#验证) |
 
 示例：`dotnet test src/GZCTF.Integration.Test/GZCTF.Integration.Test.csproj -c Release --filter FullyQualifiedName~GameJoinTests`。
 数据库与 HTTP 测试不能代替真实镜像启动、入口访问、跨节点和 VM 登录验收。

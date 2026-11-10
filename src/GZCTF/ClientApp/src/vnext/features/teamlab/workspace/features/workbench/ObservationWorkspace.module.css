@@ -1,0 +1,120 @@
+.workspace {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+}
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 46px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+.title,
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.title {
+  min-width: 0;
+}
+.title strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.title span,
+.plot h3 span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+}
+.grid {
+  flex: 1;
+  min-height: 300px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(180px, 1fr));
+  padding: 12px;
+  gap: 12px;
+  background: var(--page);
+}
+.plot {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  padding: 14px 12px 8px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: var(--shadow-panel);
+  background: var(--surface);
+}
+.plot h3 {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0 0 8px 6px;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.interfaceStats {
+  padding: 12px 18px;
+  overflow-x: auto;
+}
+.interfaceStats table {
+  width: 100%;
+  border-collapse: collapse;
+  white-space: nowrap;
+  font-size: 13px;
+}
+.interfaceStats caption {
+  text-align: left;
+  font-weight: 600;
+  padding-bottom: 8px;
+}
+.interfaceStats th {
+  color: var(--muted);
+  font-weight: 400;
+  text-align: right;
+  padding: 5px 10px;
+}
+.interfaceStats td {
+  padding: 6px 10px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.interfaceStats th:first-child,
+.interfaceStats td:first-child {
+  text-align: left;
+  padding-left: 0;
+}
+@media (max-width: 740px) {
+  .workspace {
+    overflow-y: auto;
+  }
+  .toolbar {
+    padding: 10px;
+    gap: 8px;
+  }
+  .controls {
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .grid {
+    flex: none;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: repeat(4, 190px);
+    min-height: 820px;
+  }
+  .interfaceStats {
+    padding: 10px;
+    flex-shrink: 0;
+  }
+}

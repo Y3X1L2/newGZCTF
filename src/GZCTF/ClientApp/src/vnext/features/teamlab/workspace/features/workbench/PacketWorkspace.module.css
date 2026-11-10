@@ -1,0 +1,247 @@
+.list {
+  height: 100%;
+  overflow: auto;
+  min-width: 0;
+  background: var(--surface);
+}
+.list table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font: 12px/1.5 var(--font-mono, monospace);
+  white-space: nowrap;
+}
+.list th {
+  position: sticky;
+  top: 0;
+  background: var(--surface-subtle);
+  border-bottom: 1px solid var(--line);
+  font-family: var(--font-ui);
+  font-weight: 500;
+  color: var(--muted);
+  z-index: 2;
+}
+.list th,
+.list td {
+  padding: 4px 10px;
+  text-align: left;
+}
+.list tr td {
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 45%, transparent);
+}
+.list td:nth-child(3),
+.list td:nth-child(4) {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.list td:nth-child(7) {
+  width: 100%;
+  max-width: 400px;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+.list tr:hover td {
+  background: var(--surface-hover);
+}
+.list tr[data-risk='high'] td {
+  background: color-mix(in srgb, var(--negative) 8%, var(--surface));
+}
+.list tr[data-risk='medium'] td {
+  background: color-mix(in srgb, var(--warning) 8%, var(--surface));
+}
+.list tr[aria-selected='true'] td {
+  background: var(--accent-soft);
+  color: var(--text);
+}
+.list tr:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.list td:first-child {
+  border-left: 3px solid transparent;
+}
+.list tr[data-protocol='tcp'] td:first-child {
+  border-left-color: var(--chart-1);
+}
+.list tr[data-protocol='udp'] td:first-child {
+  border-left-color: var(--chart-3);
+}
+.list tr[data-protocol^='icmp'] td:first-child {
+  border-left-color: var(--chart-2);
+}
+.list button {
+  background: none;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+.protocolTag {
+  display: inline-block;
+  padding: 1px 5px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--muted);
+  background: var(--surface-subtle);
+  font-size: 10px;
+  line-height: 16px;
+  font-weight: 500;
+}
+.list tr[data-protocol='tcp'] .protocolTag {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 20%, var(--line));
+}
+.list tr[data-protocol='udp'] .protocolTag {
+  color: var(--warning);
+  background: var(--warning-soft);
+  border-color: var(--warning-line);
+}
+.list tr[data-protocol^='icmp'] .protocolTag {
+  color: var(--chart-2);
+  background: color-mix(in srgb, var(--chart-2) 10%, var(--surface));
+}
+.risk {
+  display: flex;
+  align-items: center;
+}
+.older {
+  display: block;
+  width: 100%;
+  color: var(--accent) !important;
+  background: var(--canvas) !important;
+  font-family: inherit;
+  font-size: 11px !important;
+  line-height: 28px !important;
+}
+.protocols,
+.hex {
+  height: 100%;
+  min-width: 0;
+  overflow: auto;
+  padding: 9px 10px;
+  background: var(--surface);
+}
+.protocols {
+  font: 12px/1.65 var(--font-mono, monospace);
+}
+.field {
+  display: flex;
+  gap: 5px;
+  align-items: baseline;
+  width: 100%;
+  border: 0;
+  text-align: left;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  padding: 3px 4px;
+  cursor: pointer;
+}
+.field svg {
+  flex-shrink: 0;
+  align-self: center;
+}
+.field span:last-child {
+  overflow-wrap: anywhere;
+}
+.field:hover {
+  background: var(--surface-hover);
+}
+.field[data-selected='true'] {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.children {
+  padding-left: 15px;
+}
+.spacer {
+  width: 12px;
+  flex-shrink: 0;
+}
+.hexRow {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  white-space: pre;
+  font: 12px/25px var(--font-mono, monospace);
+}
+.offset {
+  color: var(--muted);
+}
+.hexRow code {
+  font: inherit;
+  display: flex;
+}
+.hexRow code:first-of-type {
+  width: 392px;
+  flex-shrink: 0;
+}
+.hexRow button {
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  width: 23px;
+  padding: 0;
+  cursor: pointer;
+}
+.hexRow button:nth-child(8) {
+  margin-right: 8px;
+}
+.hexRow .ascii button {
+  width: 8px;
+  color: var(--muted);
+}
+.hexRow .ascii button:nth-child(8) {
+  margin: 0;
+}
+.hexRow button:hover {
+  background: var(--surface-hover);
+}
+.hexRow button[data-selected='true'] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100%;
+  padding: 25px;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.alert {
+  font-family: inherit;
+  margin-bottom: 8px;
+}
+.alert summary {
+  cursor: pointer;
+}
+.alert summary svg {
+  vertical-align: middle;
+}
+.alert div {
+  padding: 5px 16px;
+  color: var(--muted);
+}
+@media (max-width: 1366px) {
+  .hexRow {
+    gap: 9px;
+    font-size: 11px;
+  }
+  .hexRow code:first-of-type {
+    width: 344px;
+  }
+  .hexRow button {
+    width: 21px;
+  }
+  .hexRow .ascii button {
+    width: 7px;
+  }
+}

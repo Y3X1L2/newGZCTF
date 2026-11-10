@@ -281,7 +281,7 @@ public sealed partial class VmGuestAgentService(ILogger<VmGuestAgentService> log
 
     internal static bool IsWindowsCommandPath(string commandPath) =>
         commandPath.StartsWith("C:\\Windows\\", StringComparison.OrdinalIgnoreCase) ||
-        commandPath.Equals(TeamLabVmNetworkService.WindowsLegacyPowerShellHostPath, StringComparison.OrdinalIgnoreCase);
+        commandPath.Equals(@"C:\Program Files\YINYU-GuestTools\LegacyPowerShellHost.exe", StringComparison.OrdinalIgnoreCase);
 
     public async Task RebootAndWaitAsync(
         string vmName,

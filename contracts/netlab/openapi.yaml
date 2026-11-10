@@ -1,0 +1,2530 @@
+openapi: 3.0.3
+info: {title: Netlab API, version: 1.0.0}
+servers: [{url: /api/v1}]
+security: [{bearer: []}]
+paths:
+  /templates/{id}/references:
+    parameters: [{$ref: '#/components/parameters/Id'}]
+    get:
+      operationId: templateReferences
+      responses:
+        '200': {description: Objects using the template, content: {application/json: {schema: {type: array, items: {type: string}}}}}
+  /environments/{id}/storage:
+    parameters: [{$ref: '#/components/parameters/Id'}]
+    get:
+      operationId: environmentStorage
+      responses:
+        '200': {description: Measured environment footprint including shared template bases, content: {application/json: {schema: {$ref: '#/components/schemas/EnvironmentStorage'}}}}
+  /templates/{id}/cache:
+    parameters: [{$ref: '#/components/parameters/Id'}]
+    get:
+      operationId: templateCache
+      responses:
+        '200': {description: Local base disk cache, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/TemplateCache'}}}}}
+    delete:
+      operationId: trimTemplateCache
+      responses: {'202': {$ref: '#/components/responses/Accepted'}}
+  /identity/password:
+    put:
+      operationId: changePassword
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/ChangePassword'}}}}
+      responses: {'204': {description: Password changed; sign in again}}
+  /principals/{id}/grants:
+    parameters: [{$ref: '#/components/parameters/Id'}]
+    get:
+      operationId: principalGrants
+      responses:
+        '200': {description: Account grants, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/ScopeGrant'}}}}}
+  /nodes/{id}/storage-device:
+    parameters: [{$ref: '#/components/parameters/Id'}]
+    get:
+      operationId: nodeStorageDevices
+      responses:
+        '200': {description: Physical disks, selected Ceph disk and preparation task, content: {application/json: {schema: {$ref: '#/components/schemas/NodeStorageDevices'}}}}
+    put:
+      operationId: configureNodeStorage
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/ConfigureNodeStorage'}}}}
+      responses:
+        '202': {$ref: '#/components/responses/Accepted'}
+  /storage-pools/{id}/ceph:
+    parameters: [{$ref: '#/components/parameters/Id'}]
+    get:
+      operationId: cephStatus
+      responses:
+        '200': {description: Live managed Ceph status, content: {application/json: {schema: {$ref: '#/components/schemas/CephStatus'}}}}
+    put:
+      operationId: configureCephPool
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/ConfigureCephPool'}}}}
+      responses:
+        '202': {$ref: '#/components/responses/Accepted'}
+  /storage-pools/{id}/assets:
+    parameters: [{$ref: '#/components/parameters/Id'}]
+    get:
+      operationId: storagePoolAssets
+      responses:
+        '200': {description: Assets using this pool, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/StoragePoolAsset'}}}}}
+  /environments/{id}/assets/{assetId}/migrations:
+    parameters:
+      - {$ref: '#/components/parameters/Id'}
+      - {name: assetId, in: path, required: true, schema: {type: string}}
+    get:
+      operationId: migrationDestinations
+      responses:
+        '200': {description: Compatible migration destinations, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/MigrationDestination'}}}}}
+    post:
+      operationId: migrateAsset
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/MigrationRequest'}}}}
+      responses:
+        '202': {$ref: '#/components/responses/Accepted'}
+        '409': {description: Revision changed or an environment operation is unfinished}
+  /volumes:
+    get:
+      operationId: listVolumes
+      responses:
+        '200': {description: Persistent volumes, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/PersistentVolume'}}}}}
+    post:
+      operationId: createVolume
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/CreateVolume'}}}}
+      responses:
+        '202': {description: Volume creation accepted, content: {application/json: {schema: {$ref: '#/components/schemas/Operation'}}}}
+  /volumes/{id}:
+    parameters: [{$ref: '#/components/parameters/Id'}]
+    get:
+      operationId: getVolume
+      responses:
+        '200': {description: Persistent volume, content: {application/json: {schema: {$ref: '#/components/schemas/PersistentVolume'}}}}
+        '404': {description: Volume not found}
+    put:
+      operationId: resizeVolume
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [sizeGiB], properties: {sizeGiB: {type: integer, format: int64, minimum: 1}}}}}}
+      responses:
+        '202': {description: Detached volume expansion accepted, content: {application/json: {schema: {$ref: '#/components/schemas/Operation'}}}}
+        '409': {description: Volume is attached or an operation is pending}
+    delete:
+      operationId: deleteVolume
+      responses:
+        '202': {description: Unreferenced volume deletion accepted, content: {application/json: {schema: {$ref: '#/components/schemas/Operation'}}}}
+        '409': {description: Volume is referenced}
+  /environments/{id}/traffic:
+    parameters: [{$ref: '#/components/parameters/Id'}]
+    get:
+      operationId: observeTraffic
+      responses:
+        '200': {description: Rolling IPFIX conversations and recent packet retention, content: {application/json: {schema: {$ref: '#/components/schemas/TrafficObservation'}}}}
+  /environments/{id}/packets:
+    parameters: [{$ref: '#/components/parameters/Id'}]
+    get:
+      operationId: environmentPackets
+      parameters:
+        - {name: start, in: query, schema: {type: string, format: date-time}}
+        - {name: end, in: query, schema: {type: string, format: date-time}}
+        - {name: assetId, in: query, schema: {type: string}}
+        - {name: interfaceId, in: query, schema: {type: string}}
+        - {name: networkId, in: query, schema: {type: string}}
+        - {name: source, in: query, schema: {type: string}, description: IP or MAC address; endpoint filters match both directions}
+        - {name: destination, in: query, schema: {type: string}}
+        - {name: sourcePort, in: query, schema: {type: integer, minimum: 0, maximum: 65535}}
+        - {name: destinationPort, in: query, schema: {type: integer, minimum: 0, maximum: 65535}}
+        - {name: protocol, in: query, schema: {type: string}}
+        - {name: filter, in: query, schema: {type: string}, description: Wireshark display filter}
+        - {name: cursor, in: query, schema: {type: string}, description: Opaque cursor toward older packets}
+        - {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 200, default: 100}}
+      responses:
+        '200': {description: Latest matching packets in chronological order; nextCursor requests older packets, content: {application/json: {schema: {$ref: '#/components/schemas/RecentPacketPage'}}}}
+  /environments/{id}/packets/export:
+    parameters: [{$ref: '#/components/parameters/Id'}]
+    get:
+      operationId: exportEnvironmentPackets
+      responses:
+        '200': {description: Retained packets matching the same filters as environmentPackets, content: {application/octet-stream: {schema: {type: string, format: binary}}}}
+  /environments/{id}/packets/{packetId}:
+    parameters:
+      - {$ref: '#/components/parameters/Id'}
+      - {name: packetId, in: path, required: true, schema: {type: string}}
+    get:
+      operationId: environmentPacket
+      responses:
+        '200': {description: Original frame and TShark protocol tree, content: {application/json: {schema: {$ref: '#/components/schemas/CapturePacketDetail'}}}}
+  /environments/{id}/security:
+    parameters: [{$ref: '#/components/parameters/Id'}]
+    get:
+      operationId: environmentSecurity
+      parameters:
+        - {name: range, in: query, schema: {type: integer, minimum: 10, maximum: 2592000, default: 3600}}
+        - {name: level, in: query, schema: {type: string, enum: [high, medium, low]}}
+        - {name: assetId, in: query, schema: {type: string}}
+        - {name: protocol, in: query, schema: {type: string, maxLength: 32}}
+        - {name: search, in: query, schema: {type: string, maxLength: 200}}
+        - {name: before, in: query, schema: {type: integer, format: int64, minimum: 1}}
+      responses:
+        '200': {description: Suricata detections grouped by minute, rule and conversation; no detection does not imply safe traffic, content: {application/json: {schema: {$ref: '#/components/schemas/SecurityOverview'}}}}
+  /environments/{id}/captures:
+    parameters: [{$ref: '#/components/parameters/Id'}]
+    get:
+      operationId: listCaptures
+      responses:
+        '200': {description: Node capture segments and unavailable nodes, content: {application/json: {schema: {$ref: '#/components/schemas/CaptureList'}}}}
+    post:
+      operationId: startCapture
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/CreateCapture'}}}}
+      responses:
+        '201': {description: Actual per-node start results, content: {application/json: {schema: {$ref: '#/components/schemas/CaptureList'}}}}
+  /environments/{id}/captures/{nodeId}/{captureId}:
+    parameters:
+      - {$ref: '#/components/parameters/Id'}
+      - {name: nodeId, in: path, required: true, schema: {type: string}}
+      - {name: captureId, in: path, required: true, schema: {type: string}}
+    get:
+      operationId: captureFlows
+      responses:
+        '200': {description: Observed conversations and counters, content: {application/json: {schema: {$ref: '#/components/schemas/CaptureDetail'}}}}
+    post:
+      operationId: stopCapture
+      responses:
+        '200': {description: Stopped segment, content: {application/json: {schema: {$ref: '#/components/schemas/CaptureSegment'}}}}
+    delete:
+      operationId: deleteCapture
+      responses:
+        '204': {description: Capture and its file removed}
+  /environments/{id}/captures/{nodeId}/{captureId}/file:
+    parameters:
+      - {$ref: '#/components/parameters/Id'}
+      - {name: nodeId, in: path, required: true, schema: {type: string}}
+      - {name: captureId, in: path, required: true, schema: {type: string}}
+    get:
+      operationId: downloadCapture
+      responses:
+        '200': {description: Completed PCAPNG stream, content: {application/octet-stream: {schema: {type: string, format: binary}}}}
+  /environments/{id}/captures/{nodeId}/{captureId}/packets:
+    parameters:
+      - {$ref: '#/components/parameters/Id'}
+      - {name: nodeId, in: path, required: true, schema: {type: string}}
+      - {name: captureId, in: path, required: true, schema: {type: string}}
+    get:
+      operationId: capturePackets
+      parameters:
+        - {name: after, in: query, schema: {type: integer, format: int64, minimum: 0, default: 0}}
+        - {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 200, default: 100}}
+        - {name: source, in: query, schema: {type: string}}
+        - {name: destination, in: query, schema: {type: string}}
+        - {name: sourcePort, in: query, schema: {type: integer, minimum: 0, maximum: 65535}}
+        - {name: destinationPort, in: query, schema: {type: integer, minimum: 0, maximum: 65535}}
+        - {name: interfaceIndex, in: query, schema: {type: integer, minimum: 0}}
+        - {name: protocol, in: query, schema: {type: string}}
+      responses:
+        '200': {description: Original captured packets; connection filter includes both directions. Cursor is the last returned frame number., content: {application/json: {schema: {$ref: '#/components/schemas/CapturePacketPage'}}}}
+  /environments/{id}/captures/{nodeId}/{captureId}/packets/{packetNumber}:
+    parameters:
+      - {$ref: '#/components/parameters/Id'}
+      - {name: nodeId, in: path, required: true, schema: {type: string}}
+      - {name: captureId, in: path, required: true, schema: {type: string}}
+      - {name: packetNumber, in: path, required: true, schema: {type: integer, format: int64, minimum: 1}}
+    get:
+      operationId: capturePacket
+      responses:
+        '200': {description: Original frame bytes and protocol fields decoded by TShark; observe permission required., content: {application/json: {schema: {$ref: '#/components/schemas/CapturePacketDetail'}}}}
+  /system/update:
+    get:
+      operationId: systemUpdate
+      responses:
+        '200': {description: Installed version and update progress; administrator only, content: {application/json: {schema: {$ref: '#/components/schemas/SystemUpdate'}}}}
+    post:
+      operationId: applySystemUpdate
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/ApplySystemUpdate'}}}}
+      responses:
+        '202': {description: Update accepted, content: {application/json: {schema: {$ref: '#/components/schemas/SystemUpdate'}}}}
+        '409': {description: Update already running or version changed}
+  /system/update/check:
+    post:
+      operationId: checkSystemUpdate
+      responses:
+        '200': {description: Latest stable GitHub release, content: {application/json: {schema: {$ref: '#/components/schemas/SystemUpdate'}}}}
+  /backup-repositories:
+    get:
+      operationId: listBackupRepositories
+      responses:
+        '200': {description: Backup repositories, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/BackupRepository'}}}}}
+    post:
+      operationId: createBackupRepository
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/CreateBackupRepository'}}}}
+      responses:
+        '201': {description: Repository connection queued, content: {application/json: {schema: {$ref: '#/components/schemas/BackupRepository'}}}}
+  /backup-repositories/{id}:
+    parameters: [{$ref: '#/components/parameters/Id'}]
+    delete:
+      operationId: deleteBackupRepository
+      responses:
+        '204': {description: Registration removed; repository data retained}
+        '409': {description: Repository contains backups or an active task}
+  /backup-repositories/{id}/credentials:
+    parameters: [{$ref: '#/components/parameters/Id'}]
+    get:
+      operationId: backupRepositoryCredentials
+      responses:
+        '200': {description: Repository credentials; administrator only, content: {application/json: {schema: {$ref: '#/components/schemas/BackupCredentials'}}}}
+  /backup-repositories/{id}/refresh:
+    parameters: [{$ref: '#/components/parameters/Id'}]
+    post:
+      operationId: refreshBackupRepository
+      responses:
+        '202': {$ref: '#/components/responses/Accepted'}
+  /backup-repositories/{repositoryId}/backups:
+    parameters: [{name: repositoryId, in: path, required: true, schema: {type: string}}]
+    get:
+      operationId: listRepositoryBackups
+      parameters: [{$ref: '#/components/parameters/Cursor'}, {$ref: '#/components/parameters/Limit'}]
+      responses:
+        '200': {description: Repository catalog; administrator only, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/BackupSummary'}}}}}
+  /backup-repositories/{repositoryId}/backups/{backupId}:
+    parameters:
+      - {name: repositoryId, in: path, required: true, schema: {type: string}}
+      - {name: backupId, in: path, required: true, schema: {type: string}}
+    delete:
+      operationId: deleteRepositoryBackup
+      responses:
+        '202': {$ref: '#/components/responses/Accepted'}
+  /environments/{id}/backups:
+    parameters: [{$ref: '#/components/parameters/Id'}]
+    get:
+      operationId: listBackups
+      parameters: [{$ref: '#/components/parameters/Cursor'}, {$ref: '#/components/parameters/Limit'}]
+      responses:
+        '200': {description: Environment backups, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/BackupSummary'}}}}}
+    post:
+      operationId: createBackup
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/CreateBackup'}}}}
+      responses:
+        '201': {description: Backup queued, content: {application/json: {schema: {$ref: '#/components/schemas/BackupSummary'}}}}
+  /environments/{id}/backups/{backupId}:
+    parameters:
+      - {$ref: '#/components/parameters/Id'}
+      - {name: backupId, in: path, required: true, schema: {type: string}}
+    delete:
+      operationId: deleteBackup
+      responses:
+        '202': {$ref: '#/components/responses/Accepted'}
+  /environments/{id}/backups/{backupId}/restore:
+    parameters:
+      - {$ref: '#/components/parameters/Id'}
+      - {name: backupId, in: path, required: true, schema: {type: string}}
+    post:
+      operationId: restoreBackup
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/RestoreRecoveryPoint'}}}}
+      responses:
+        '202': {$ref: '#/components/responses/Accepted'}
+  /environments/{id}/recovery-points:
+    parameters: [{$ref: '#/components/parameters/Id'}]
+    get:
+      operationId: listRecoveryPoints
+      parameters: [{$ref: '#/components/parameters/Cursor'}, {$ref: '#/components/parameters/Limit'}]
+      responses:
+        '200': {description: Environment recovery points, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/RecoveryPointSummary'}}}}}
+    post:
+      operationId: captureRecoveryPoint
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/CaptureRecoveryPoint'}}}}
+      responses:
+        '201':
+          description: Capture queued; normal shutdown and original power state restoration are part of the operation
+          headers:
+            Operation-Location: {schema: {type: string}}
+          content: {application/json: {schema: {$ref: '#/components/schemas/RecoveryPointSummary'}}}
+        '409': {description: Revision changed or another environment operation is active}
+  /environments/{id}/recovery-points/{pointId}:
+    parameters:
+      - {$ref: '#/components/parameters/Id'}
+      - {name: pointId, in: path, required: true, schema: {type: string}}
+    delete:
+      operationId: deleteRecoveryPoint
+      responses:
+        '202': {$ref: '#/components/responses/Accepted'}
+  /environments/{id}/recovery-points/{pointId}/restore:
+    parameters:
+      - {$ref: '#/components/parameters/Id'}
+      - {name: pointId, in: path, required: true, schema: {type: string}}
+    post:
+      operationId: restoreRecoveryPoint
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/RestoreRecoveryPoint'}}}}
+      responses:
+        '202': {$ref: '#/components/responses/Accepted'}
+  /storage-pools:
+    get:
+      operationId: listStoragePools
+      responses:
+        '200': {description: Storage pools and current capacity, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/StoragePool'}}}}}
+    post:
+      operationId: createStoragePool
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/CreateStoragePool'}}}}
+      responses:
+        '201': {description: Registered storage, content: {application/json: {schema: {$ref: '#/components/schemas/StoragePool'}}}}
+  /storage-pools/{id}:
+    parameters: [{$ref: '#/components/parameters/Id'}]
+    delete:
+      operationId: deleteStoragePool
+      responses:
+        '202': {$ref: '#/components/responses/Accepted'}
+        '409': {description: Pool is referenced, content: {application/problem+json: {schema: {$ref: '#/components/schemas/Problem'}}}}
+  /environments/{id}/assets/{assetId}/templates:
+    parameters:
+      - {$ref: '#/components/parameters/Id'}
+      - {name: assetId, in: path, required: true, schema: {type: string}}
+    post:
+      operationId: captureAssetTemplate
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/CaptureTemplate'}}}}
+      responses:
+        '201':
+          description: Template capture queued; source VM remains stopped
+          headers:
+            Operation-Location: {schema: {type: string}, description: Operation resource}
+          content: {application/json: {schema: {$ref: '#/components/schemas/Template'}}}
+  /nodes/{id}/retirement:
+    parameters: [{$ref: '#/components/parameters/Id'}]
+    get:
+      operationId: nodeRetirement
+      responses:
+        '200': {description: Node exit plan and progress, content: {application/json: {schema: {$ref: '#/components/schemas/NodeRetirement'}}}}
+    post:
+      operationId: retireNode
+      responses:
+        '202': {$ref: '#/components/responses/Accepted'}
+        '409': {description: Node has dependencies to resolve}
+    delete:
+      operationId: resumeNodeScheduling
+      responses:
+        '204': {description: Scheduling resumed}
+  /nodes/{id}/interfaces:
+    parameters: [{$ref: '#/components/parameters/Id'}]
+    get:
+      operationId: listNodeInterfaces
+      responses:
+        '200': {description: Current host interfaces, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/ExternalInterface'}}}}}
+  /nodes/{id}/external-devices:
+    parameters: [{$ref: '#/components/parameters/Id'}]
+    post:
+      operationId: discoverExternalDevices
+      description: Administrator-only ARP discovery on a selected external interface. Does not change device addresses or scan service ports.
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/ExternalDiscovery'}}}}
+      responses:
+        '200': {description: Devices that answered discovery, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/DiscoveredDevice'}}}}}
+        '403': {description: Administrator access required}
+        '422': {description: Invalid interface or discovery range}
+  /principals:
+    get:
+      operationId: listPrincipals
+      parameters: [{$ref: '#/components/parameters/Cursor'}, {$ref: '#/components/parameters/Limit'}, {$ref: '#/components/parameters/Search'}, {name: kind, in: query, schema: {type: string, enum: [user, token]}}]
+      responses:
+        '200': {description: Accounts, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/Principal'}}}}}
+    post:
+      operationId: createUser
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/CreateUser'}}}}
+      responses:
+        '201': {description: Created, content: {application/json: {schema: {$ref: '#/components/schemas/Principal'}}}}
+  /principals/{id}:
+    parameters: [{$ref: '#/components/parameters/Id'}]
+    put:
+      operationId: updateUser
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/UpdateUser'}}}}
+      responses: {'204': {description: Updated}}
+  /service-tokens:
+    post:
+      operationId: createServiceToken
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/CreateServiceToken'}}}}
+      responses:
+        '201': {description: Token returned once, content: {application/json: {schema: {$ref: '#/components/schemas/IssuedServiceToken'}}}}
+  /service-tokens/{id}:
+    parameters: [{$ref: '#/components/parameters/Id'}]
+    delete:
+      operationId: revokeServiceToken
+      responses: {'204': {description: Revoked}}
+  /environments/{id}/grants:
+    parameters: [{$ref: '#/components/parameters/Id'}]
+    get:
+      operationId: getEnvironmentGrants
+      responses:
+        '200': {description: Environment sharing, content: {application/json: {schema: {$ref: '#/components/schemas/EnvironmentSharing'}}}}
+    put:
+      operationId: replaceEnvironmentGrants
+      requestBody: {required: true, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/EnvironmentGrant'}}}}}
+      responses: {'204': {description: Replaced}}
+  /environments:
+    get:
+      operationId: listEnvironments
+      parameters: [{$ref: '#/components/parameters/Cursor'}, {$ref: '#/components/parameters/Limit'}, {$ref: '#/components/parameters/Search'}, {name: status, in: query, schema: {$ref: '#/components/schemas/EnvironmentStatus'}}]
+      responses:
+        '200': {description: Environment summaries, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/EnvironmentSummary'}}}}}
+    post:
+      operationId: createEnvironment
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/CreateEnvironment'}}}}
+      responses:
+        '201': {description: Created, content: {application/json: {schema: {$ref: '#/components/schemas/Environment'}}}}
+  /environments/summary:
+    get:
+      operationId: environmentCounts
+      parameters: [{$ref: '#/components/parameters/Search'}]
+      responses:
+        '200': {description: Authorized environment counts by status, content: {application/json: {schema: {$ref: '#/components/schemas/EnvironmentCounts'}}}}
+  /environments/{id}:
+    parameters: [{$ref: '#/components/parameters/Id'}]
+    get:
+      operationId: getEnvironment
+      responses:
+        '200': {description: Environment, content: {application/json: {schema: {$ref: '#/components/schemas/Environment'}}}}
+  /environments/{id}/metrics:
+    parameters: [{$ref: '#/components/parameters/Id'}]
+    get:
+      operationId: getEnvironmentMetrics
+      parameters:
+        - {$ref: '#/components/parameters/Metrics'}
+        - {name: assetId, in: query, schema: {type: string}}
+        - {name: aggregate, in: query, schema: {type: boolean, default: false}, description: Sum measured asset resource usage across the environment; network values are asset interface totals}
+        - {name: range, in: query, schema: {type: integer, minimum: 10, maximum: 2592000, default: 900}, description: Relative time window in seconds; start overrides this window}
+        - {name: start, in: query, schema: {type: string, format: date-time}}
+        - {name: end, in: query, schema: {type: string, format: date-time}}
+        - {name: step, in: query, schema: {type: integer, minimum: 10}, description: Seconds between points; defaults to at most 600 points}
+      responses:
+        '200': {description: Measured resource history, content: {application/json: {schema: {$ref: '#/components/schemas/MetricHistory'}}}}
+        '400': {description: Invalid range, step or metric selection}
+        '403': {description: Observe permission required}
+        '502': {description: Metrics service unavailable}
+  /environments/{id}/state:
+    parameters: [{$ref: '#/components/parameters/Id'}]
+    get:
+      operationId: getEnvironmentState
+      responses:
+        '200': {description: State, content: {application/json: {schema: {$ref: '#/components/schemas/EnvironmentState'}}}}
+  /environments/{id}/services:
+    parameters: [{$ref: '#/components/parameters/Id'}]
+    get:
+      operationId: listEnvironmentServices
+      responses:
+        '200': {description: Applied service endpoints, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/ServiceEndpoint'}}}}}
+  /environments/{id}/vpn-access:
+    parameters: [{$ref: '#/components/parameters/Id'}]
+    get:
+      operationId: listVPNAccess
+      responses:
+        '200': {description: VPN access, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/VPNAccess'}}}}}
+    post:
+      operationId: createVPNAccess
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/CreateVPNAccess'}}}}
+      responses: {'202': {$ref: '#/components/responses/Accepted'}}
+  /environments/{id}/vpn-access/{accessId}:
+    parameters:
+      - {$ref: '#/components/parameters/Id'}
+      - {name: accessId, in: path, required: true, schema: {type: string}}
+    delete:
+      operationId: revokeVPNAccess
+      parameters:
+        - {name: expectedRevision, in: query, required: true, schema: {type: integer}}
+        - {name: clientRequestId, in: query, schema: {type: string}}
+      responses: {'202': {$ref: '#/components/responses/Accepted'}}
+  /environments/{id}/vpn-access/{accessId}/connection:
+    parameters:
+      - {$ref: '#/components/parameters/Id'}
+      - {name: accessId, in: path, required: true, schema: {type: string}}
+    get:
+      operationId: getVPNConnection
+      responses:
+        '200': {description: Applied WireGuard connection, content: {application/json: {schema: {$ref: '#/components/schemas/VPNConnection'}}}}
+  /environments/{id}/assets/{assetId}/services:
+    parameters:
+      - {$ref: '#/components/parameters/Id'}
+      - {name: assetId, in: path, required: true, schema: {type: string}}
+    post:
+      operationId: exposeAssetService
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/CreateService'}}}}
+      responses: {'202': {$ref: '#/components/responses/Accepted'}}
+  /environments/{id}/services/{serviceId}:
+    parameters:
+      - {$ref: '#/components/parameters/Id'}
+      - {name: serviceId, in: path, required: true, schema: {type: string}}
+    delete:
+      operationId: revokeService
+      parameters:
+        - {name: expectedRevision, in: query, required: true, schema: {type: integer}}
+        - {name: clientRequestId, in: query, schema: {type: string}}
+      responses: {'202': {$ref: '#/components/responses/Accepted'}}
+  /environments/{id}/events:
+    parameters: [{$ref: '#/components/parameters/Id'}]
+    get:
+      operationId: environmentEvents
+      parameters: [{name: Last-Event-ID, in: header, schema: {type: integer, format: int64}}]
+      responses:
+        '200': {description: Committed environment events, content: {text/event-stream: {schema: {type: string}}}}
+  /environments/{id}/actions:
+    parameters: [{$ref: '#/components/parameters/Id'}]
+    post:
+      operationId: environmentAction
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/ActionRequest'}}}}
+      responses: {'202': {$ref: '#/components/responses/Accepted'}}
+  /environments/{id}/changes:
+    parameters: [{$ref: '#/components/parameters/Id'}]
+    post:
+      operationId: changeEnvironment
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/ChangeRequest'}}}}
+      responses:
+        '200': {description: Preview, content: {application/json: {schema: {$ref: '#/components/schemas/ChangePreview'}}}}
+        '202': {$ref: '#/components/responses/Accepted'}
+  /environments/{id}/view:
+    parameters: [{$ref: '#/components/parameters/Id'}]
+    put:
+      operationId: saveView
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/CanvasView'}}}}
+      responses: {'204': {description: Saved}}
+  /environments/{id}/draft:
+    parameters: [{$ref: '#/components/parameters/Id'}]
+    put:
+      operationId: saveDraft
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/Draft'}}}}
+      responses: {'204': {description: Saved}}
+    delete:
+      operationId: discardDraft
+      responses: {'204': {description: Discarded}}
+  /environments/{id}/blueprints:
+    parameters: [{$ref: '#/components/parameters/Id'}]
+    post:
+      operationId: saveEnvironmentBlueprint
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/SaveBlueprint'}}}}
+      responses:
+        '201': {description: Saved, content: {application/json: {schema: {$ref: '#/components/schemas/Blueprint'}}}}
+  /blueprints:
+    get:
+      operationId: listBlueprints
+      parameters: [{$ref: '#/components/parameters/Cursor'}, {$ref: '#/components/parameters/Limit'}, {$ref: '#/components/parameters/Search'}]
+      responses:
+        '200': {description: Environment blueprints, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/Blueprint'}}}}}
+  /blueprints/{id}:
+    parameters: [{$ref: '#/components/parameters/Id'}]
+    get:
+      operationId: getBlueprint
+      responses:
+        '200': {description: Blueprint, content: {application/json: {schema: {$ref: '#/components/schemas/Blueprint'}}}}
+    delete:
+      operationId: deleteBlueprint
+      responses: {'204': {description: Deleted}, '409': {description: Referenced by an existing environment}}
+  /blueprints/{id}/versions:
+    parameters: [{$ref: '#/components/parameters/Id'}]
+    get:
+      operationId: listBlueprintVersions
+      parameters: [{$ref: '#/components/parameters/Cursor'}, {$ref: '#/components/parameters/Limit'}]
+      responses:
+        '200': {description: Immutable blueprint versions, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/BlueprintVersionSummary'}}}}}
+    post:
+      operationId: saveBlueprintVersion
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/SaveBlueprintVersion'}}}}
+      responses:
+        '201': {description: Saved, content: {application/json: {schema: {$ref: '#/components/schemas/BlueprintVersion'}}}}
+  /blueprint-versions/{id}:
+    parameters: [{$ref: '#/components/parameters/Id'}]
+    get:
+      operationId: getBlueprintVersion
+      responses:
+        '200': {description: Blueprint version, content: {application/json: {schema: {$ref: '#/components/schemas/BlueprintVersion'}}}}
+  /environments/{id}/assets/{assetId}/actions:
+    parameters:
+      - {$ref: '#/components/parameters/Id'}
+      - {name: assetId, in: path, required: true, schema: {type: string}}
+    post:
+      operationId: assetAction
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/ActionRequest'}}}}
+      responses: {'202': {$ref: '#/components/responses/Accepted'}}
+  /environments/{id}/assets/{assetId}/ssh:
+    parameters:
+      - {$ref: '#/components/parameters/Id'}
+      - {name: assetId, in: path, required: true, schema: {type: string}}
+    get:
+      operationId: assetSSHSettings
+      description: Personal connection settings; password, private key and passphrase are omitted.
+      responses: {'200': {description: SSH connection settings, content: {application/json: {schema: {$ref: '#/components/schemas/SSHSettings'}}}}, '404': {description: No saved connection}}
+    put:
+      operationId: saveAssetSSHSettings
+      description: Omitted authentication material retains the saved value for the same authentication method. Host key is explicitly confirmed by the caller.
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/SSHSettings'}}}}
+      responses: {'204': {description: Connection saved}}
+    delete:
+      operationId: deleteAssetSSHSettings
+      responses: {'204': {description: Personal connection removed}}
+  /environments/{id}/assets/{assetId}/ssh/host-key:
+    parameters:
+      - {$ref: '#/components/parameters/Id'}
+      - {name: assetId, in: path, required: true, schema: {type: string}}
+    post:
+      operationId: assetSSHHostKey
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/SSHProbe'}}}}
+      responses: {'200': {description: Presented SSH host key, content: {application/json: {schema: {type: object, required: [fingerprint], properties: {fingerprint: {type: string}}}}}}}
+  /environments/{id}/assets/{assetId}/rdp:
+    parameters:
+      - {$ref: '#/components/parameters/Id'}
+      - {name: assetId, in: path, required: true, schema: {type: string}}
+    get:
+      operationId: assetRDPSettings
+      responses: {'200': {description: Personal RDP settings without password, content: {application/json: {schema: {$ref: '#/components/schemas/RDPSettings'}}}}, '404': {description: No saved connection}}
+    put:
+      operationId: saveAssetRDPSettings
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/RDPSettings'}}}}
+      responses: {'204': {description: Connection saved}}
+    delete:
+      operationId: deleteAssetRDPSettings
+      responses: {'204': {description: Personal connection removed}}
+  /environments/{id}/assets/{assetId}/rdp/certificate:
+    parameters:
+      - {$ref: '#/components/parameters/Id'}
+      - {name: assetId, in: path, required: true, schema: {type: string}}
+    post:
+      operationId: assetRDPCertificate
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/SSHProbe'}}}}
+      responses: {'200': {description: Presented RDP certificate, content: {application/json: {schema: {type: object, required: [fingerprint], properties: {fingerprint: {type: string}}}}}}}
+  /environments/{id}/assets/{assetId}/files:
+    parameters:
+      - {$ref: '#/components/parameters/Id'}
+      - {name: assetId, in: path, required: true, schema: {type: string}}
+      - {name: path, in: query, required: true, schema: {type: string}}
+    get:
+      operationId: assetFiles
+      responses:
+        '200': {description: Directory entries, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/FileEntry'}}}}}
+    post:
+      operationId: changeAssetFiles
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/FileCommand'}}}}
+      responses: {'204': {description: File command completed}}
+  /environments/{id}/assets/{assetId}/files/content:
+    parameters:
+      - {$ref: '#/components/parameters/Id'}
+      - {name: assetId, in: path, required: true, schema: {type: string}}
+      - {name: path, in: query, required: true, schema: {type: string}}
+    get:
+      operationId: downloadAssetFile
+      responses: {'200': {description: File stream, content: {application/octet-stream: {schema: {type: string, format: binary}}}}}
+    put:
+      operationId: uploadAssetFile
+      requestBody: {required: true, content: {application/octet-stream: {schema: {type: string, format: binary}}}}
+      responses: {'204': {description: File uploaded}}
+  /environments/{id}/assets/{assetId}/console:
+    parameters:
+      - {$ref: '#/components/parameters/Id'}
+      - {name: assetId, in: path, required: true, schema: {type: string}}
+    get:
+      operationId: assetConsole
+      description: WebSocket. The binary subprotocol carries terminal or RFB bytes; terminal text messages contain ConsoleResize. RDP uses the guacamole subprotocol and text instructions.
+      parameters: [{name: kind, in: query, required: true, schema: {$ref: '#/components/schemas/ConsoleKind'}}]
+      responses: {'101': {description: Connected}, '409': {description: Asset has no running instance}}
+  /environments/{id}/assets/{assetId}/logs:
+    parameters:
+      - {$ref: '#/components/parameters/Id'}
+      - {name: assetId, in: path, required: true, schema: {type: string}}
+    get:
+      operationId: assetLogs
+      description: Container stdout/stderr as output events. Initial tail is bounded to 1 MiB per stream; follow continues until disconnected or access is revoked.
+      parameters:
+        - {name: tail, in: query, schema: {type: integer, minimum: 0, maximum: 10000, default: 200}}
+        - {name: stream, in: query, schema: {type: string, enum: [all, stdout, stderr], default: all}}
+        - {name: follow, in: query, schema: {type: boolean, default: false}}
+      responses:
+        '200': {description: Log stream, content: {text/event-stream: {schema: {$ref: '#/components/schemas/LogChunk'}}}}
+        '409': {description: Asset is not a container}
+  /operations:
+    get:
+      operationId: listOperations
+      parameters: [{name: environmentId, in: query, schema: {type: string}}, {$ref: '#/components/parameters/Cursor'}, {$ref: '#/components/parameters/Limit'}]
+      responses:
+        '200': {description: Operations, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/Operation'}}}}}
+  /operations/{id}:
+    parameters: [{$ref: '#/components/parameters/Id'}]
+    get:
+      operationId: getOperation
+      responses:
+        '200': {description: Operation, content: {application/json: {schema: {$ref: '#/components/schemas/Operation'}}}}
+  /operations/{id}/retry:
+    parameters: [{$ref: '#/components/parameters/Id'}]
+    post:
+      operationId: retryOperation
+      responses: {'202': {$ref: '#/components/responses/Accepted'}}
+  /templates:
+    get:
+      operationId: listTemplates
+      parameters:
+        - {$ref: '#/components/parameters/Cursor'}
+        - {$ref: '#/components/parameters/Limit'}
+        - {$ref: '#/components/parameters/Search'}
+        - {name: kind, in: query, schema: {$ref: '#/components/schemas/TemplateKind'}}
+        - {name: ids, in: query, style: form, explode: false, schema: {type: array, items: {type: string}}}
+      responses:
+        '200': {description: Templates, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/Template'}}}}}
+    post:
+      operationId: createTemplate
+      requestBody:
+        required: true
+        description: Send the template JSON part first. Source names the main file, relative to the uploaded files; preserve relative filenames for OVF and split VMDK.
+        content:
+          application/json: {schema: {$ref: '#/components/schemas/TemplateImport'}}
+          multipart/form-data:
+            schema:
+              type: object
+              required: [template, files]
+              properties:
+                template: {$ref: '#/components/schemas/TemplateImport'}
+                files: {type: array, items: {type: string, format: binary}}
+            encoding:
+              template: {contentType: application/json}
+      responses:
+        '201':
+          description: Created
+          headers:
+            Operation-Location: {description: Template import operation URL, schema: {type: string}}
+          content: {application/json: {schema: {$ref: '#/components/schemas/Template'}}}
+  /templates/{id}:
+    parameters: [{$ref: '#/components/parameters/Id'}]
+    delete:
+      operationId: deleteTemplate
+      responses:
+        '202': {$ref: '#/components/responses/Accepted'}
+        '409': {description: Template is referenced or has an active operation, content: {application/problem+json: {schema: {$ref: '#/components/schemas/Problem'}}}}
+  /nodes/{id}/scheduling:
+    parameters: [{$ref: '#/components/parameters/Id'}]
+    put:
+      operationId: configureNodeScheduling
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/NodeScheduling'}}}}
+      responses:
+        '204': {description: CPU allocation ratio updated; existing assets keep their configuration.}
+  /nodes/metrics:
+    get:
+      operationId: getNodeMetrics
+      parameters:
+        - {$ref: '#/components/parameters/Metrics'}
+        - {name: nodeId, in: query, schema: {type: string}}
+        - {name: aggregate, in: query, schema: {type: boolean, default: false}}
+        - {name: range, in: query, schema: {type: integer, minimum: 10, maximum: 2592000, default: 900}}
+        - {name: start, in: query, schema: {type: string, format: date-time}}
+        - {name: end, in: query, schema: {type: string, format: date-time}}
+        - {name: step, in: query, schema: {type: integer, minimum: 10}}
+      responses:
+        '200': {description: 'Measured host resource history; no nodeId returns all nodes, aggregate sums the selected nodes', content: {application/json: {schema: {$ref: '#/components/schemas/MetricHistory'}}}}
+        '400': {description: Invalid range, step or metric selection}
+        '403': {description: Administrator permission required}
+        '502': {description: Metrics service unavailable}
+  /nodes:
+    get:
+      operationId: listNodes
+      parameters: [{$ref: '#/components/parameters/Cursor'}, {$ref: '#/components/parameters/Limit'}, {$ref: '#/components/parameters/Search'}]
+      responses:
+        '200': {description: Nodes, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/Node'}}}}}
+    post:
+      operationId: registerNode
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/NodeRegistration'}}}}
+      responses:
+        '201': {description: Registered, content: {application/json: {schema: {$ref: '#/components/schemas/Node'}}}}
+  /identity:
+    get:
+      operationId: getIdentity
+      responses:
+        '200': {description: Identity, content: {application/json: {schema: {$ref: '#/components/schemas/Identity'}}}}
+  /sessions/login:
+    post:
+      operationId: login
+      security: []
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/Login'}}}}
+      responses:
+        '200': {description: Signed in, content: {application/json: {schema: {$ref: '#/components/schemas/Identity'}}}}
+  /sessions/logout:
+    post:
+      operationId: logout
+      responses: {'204': {description: Signed out}}
+components:
+  parameters:
+    Id: {name: id, in: path, required: true, schema: {type: string}}
+    Cursor: {name: cursor, in: query, schema: {type: string}}
+    Limit: {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 500, default: 100}}
+    Search: {name: search, in: query, schema: {type: string}}
+    Metrics:
+      name: metrics
+      in: query
+      style: form
+      explode: false
+      description: Comma-separated metric names from MetricSeries.metric; omitted returns all available metrics.
+      schema: {type: array, minItems: 1, items: {type: string}}
+  responses:
+    Accepted:
+      description: Accepted
+      content: {application/json: {schema: {$ref: '#/components/schemas/Operation'}}}
+  securitySchemes:
+    bearer: {type: http, scheme: bearer}
+  schemas:
+    SystemUpdate:
+      type: object
+      required: [currentVersion, available, canApply]
+      properties:
+        currentVersion: {type: string}
+        available: {type: boolean}
+        canApply: {type: boolean}
+        checkedAt: {type: string, format: date-time}
+        checkError: {type: string}
+        latest: {$ref: '#/components/schemas/UpdateRelease'}
+        activity: {$ref: '#/components/schemas/UpdateActivity'}
+    UpdateRelease:
+      type: object
+      required: [version, name, notes, publishedAt, url]
+      properties:
+        version: {type: string}
+        name: {type: string}
+        notes: {type: string}
+        publishedAt: {type: string, format: date-time}
+        url: {type: string, format: uri}
+    ApplySystemUpdate:
+      type: object
+      required: [version]
+      properties:
+        version: {type: string}
+    UpdateActivity:
+      type: object
+      required: [version, phase, updatedAt]
+      properties:
+        version: {type: string}
+        phase: {type: string, enum: [queued, downloading, installing, waiting_operations, updating_nodes, restarting, succeeded, failed]}
+        updatedAt: {type: string, format: date-time}
+        error: {type: string}
+        nodeName: {type: string}
+        completedNodes: {type: integer, x-go-type-skip-optional-pointer: true}
+        totalNodes: {type: integer, x-go-type-skip-optional-pointer: true}
+    SSHProbe:
+      type: object
+      required: [port]
+      properties:
+        port: {type: integer, minimum: 1, maximum: 65535}
+        interfaceId: {type: string}
+    SSHSettings:
+      type: object
+      required: [username, port, authKind, hostKey]
+      properties:
+        username: {type: string, minLength: 1}
+        port: {type: integer, minimum: 1, maximum: 65535}
+        interfaceId: {type: string}
+        authKind: {type: string, enum: [password, key], x-enum-varnames: [SSHPassword, SSHKey]}
+        hostKey: {type: string, description: Confirmed SHA256 host-key fingerprint}
+        password: {type: string, writeOnly: true}
+        privateKey: {type: string, writeOnly: true}
+        passphrase: {type: string, writeOnly: true}
+    NodeSSH:
+      type: object
+      required: [networkId, address, settings]
+      properties:
+        networkId: {type: string}
+        address: {type: string}
+        settings: {$ref: '#/components/schemas/SSHSettings'}
+    RDPSettings:
+      type: object
+      required: [username, port, certificate]
+      properties:
+        username: {type: string, minLength: 1}
+        domain: {type: string}
+        port: {type: integer, minimum: 1, maximum: 65535}
+        interfaceId: {type: string}
+        certificate: {type: string, description: Confirmed sha256 certificate fingerprint in FreeRDP format}
+        password: {type: string, writeOnly: true}
+    NodeRDP:
+      type: object
+      required: [networkId, address, settings]
+      properties:
+        networkId: {type: string}
+        address: {type: string}
+        settings: {$ref: '#/components/schemas/RDPSettings'}
+    FileEntry:
+      type: object
+      required: [name, kind, size, modifiedAt, mode]
+      properties:
+        name: {type: string}
+        kind: {type: string, enum: [directory, file, link, other], x-enum-varnames: [FileDirectory, FileRegular, FileLink, FileOther]}
+        size: {type: integer, format: int64}
+        modifiedAt: {type: string, format: date-time}
+        mode: {type: string}
+    FileCommand:
+      type: object
+      required: [action]
+      properties:
+        action: {type: string, enum: [mkdir, rename, remove], x-enum-varnames: [FileMkdir, FileRename, FileRemove]}
+        destination: {type: string}
+    ConsoleKind:
+      type: string
+      enum: [terminal, serial, vnc, ssh, rdp]
+    ConsoleResize:
+      type: object
+      required: [cols, rows]
+      properties:
+        cols: {type: integer, minimum: 1, maximum: 1000}
+        rows: {type: integer, minimum: 1, maximum: 1000}
+    Permission:
+      type: string
+      enum: [read, operate, compose, manage, session, file, observe, network, access]
+    ScopeGrant:
+      type: object
+      required: [scopeKind, scopeId, permissions]
+      properties:
+        scopeKind: {type: string, enum: [project, environment, asset]}
+        scopeId: {type: string}
+        permissions: {type: array, items: {$ref: '#/components/schemas/Permission'}}
+    RolePreset:
+      type: object
+      required: [key, name, permissions]
+      properties:
+        key: {type: string, enum: [viewer, operator, manager]}
+        name: {type: string}
+        permissions: {type: array, items: {$ref: '#/components/schemas/Permission'}}
+    Principal:
+      type: object
+      required: [id, name, kind, administrator, disabled, createdAt]
+      properties:
+        id: {type: string}
+        name: {type: string}
+        kind: {type: string, enum: [user, token]}
+        administrator: {type: boolean}
+        disabled: {type: boolean}
+        createdAt: {type: string, format: date-time}
+        expiresAt: {type: string, format: date-time}
+    CreateUser:
+      type: object
+      required: [name, password]
+      properties:
+        name: {type: string, minLength: 1, maxLength: 100}
+        password: {type: string, minLength: 8, maxLength: 72, format: password}
+        administrator: {type: boolean, x-go-type-skip-optional-pointer: true}
+        grants: {type: array, items: {$ref: '#/components/schemas/ScopeGrant'}, x-go-type-skip-optional-pointer: true}
+    UpdateUser:
+      type: object
+      required: [name, disabled]
+      properties:
+        name: {type: string, minLength: 1, maxLength: 100}
+        password: {type: string, minLength: 8, maxLength: 72, format: password}
+        disabled: {type: boolean}
+        administrator: {type: boolean}
+        grants: {type: array, items: {$ref: '#/components/schemas/ScopeGrant'}}
+    ChangePassword:
+      type: object
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword: {type: string, format: password}
+        newPassword: {type: string, minLength: 8, maxLength: 72, format: password}
+    CreateServiceToken:
+      type: object
+      required: [name, grants]
+      properties:
+        name: {type: string, minLength: 1, maxLength: 100}
+        grants: {type: array, minItems: 1, items: {$ref: '#/components/schemas/ScopeGrant'}}
+        expiresAt: {type: string, format: date-time}
+    IssuedServiceToken:
+      type: object
+      required: [principal, token]
+      properties:
+        principal: {$ref: '#/components/schemas/Principal'}
+        token: {type: string}
+    EnvironmentGrant:
+      type: object
+      required: [principalId, permissions]
+      properties:
+        principalId: {type: string}
+        assetIds: {type: array, items: {type: string}}
+        permissions: {type: array, items: {$ref: '#/components/schemas/Permission'}}
+    EnvironmentSharing:
+      type: object
+      required: [grants, inherited, subjects]
+      properties:
+        grants: {type: array, items: {$ref: '#/components/schemas/EnvironmentGrant'}}
+        inherited: {type: array, items: {$ref: '#/components/schemas/EnvironmentGrant'}}
+        subjects: {type: array, items: {$ref: '#/components/schemas/Principal'}}
+        ownerId: {type: string}
+    Identity:
+      type: object
+      required: [id, name, administrator]
+      properties:
+        id: {type: string}
+        name: {type: string}
+        administrator: {type: boolean}
+        roles: {type: array, items: {$ref: '#/components/schemas/RolePreset'}}
+        grants: {type: array, items: {$ref: '#/components/schemas/ScopeGrant'}}
+    Login:
+      type: object
+      required: [name, password]
+      properties:
+        name: {type: string}
+        password: {type: string, format: password}
+    Resources:
+      type: object
+      required: [cpu, memoryMiB, diskGiB]
+      properties:
+        cpu: {type: number, format: double, minimum: 0.01, multipleOf: 0.01, description: Container CPU limit in cores; virtual machines require whole vCPUs.}
+        memoryMiB: {type: integer, format: int64, minimum: 64}
+        diskGiB: {type: integer, format: int64, minimum: 1, description: Node disk capacity, VM system-disk capacity, or OCI writable-layer scheduling budget. OCI writable layers do not have a hard filesystem quota. Asset data volume capacity is specified separately.}
+    Hardware:
+      type: object
+      required: [firmware, machine, diskBus, nicModel]
+      properties:
+        firmware: {type: string, enum: [bios, uefi]}
+        machine: {type: string}
+        diskBus: {type: string, enum: [ide, sata, scsi, virtio]}
+        diskController: {type: string}
+        nicModel: {type: string, enum: [virtio, e1000, e1000e, rtl8139, vmxnet3]}
+        cpuModel: {type: string}
+        cpuTopology: {$ref: '#/components/schemas/CpuTopology'}
+        numaNodes: {type: integer, minimum: 1, description: Guest NUMA nodes; vCPUs and memory are divided evenly. Omitted keeps one NUMA node.}
+        numaPlacement: {type: string, enum: [preferred, strict], description: Native automatic host CPU and memory placement. Omitted lets the host scheduler choose.}
+        secureBoot: {type: boolean}
+        tpm: {type: boolean}
+        guestAgent: {type: boolean}
+        firmwareCode: {type: string}
+        firmwareVars: {type: string}
+    CpuTopology:
+      type: object
+      required: [sockets, threads]
+      properties:
+        sockets: {type: integer, minimum: 1}
+        threads: {type: integer, minimum: 1}
+    Volume:
+      type: object
+      required: [id, mountPath, sizeGiB]
+      properties:
+        id: {type: string}
+        mountPath: {type: string}
+        sizeGiB: {type: integer, format: int64}
+        persistentVolumeId: {type: string, description: Registered persistent volume. Its size comes from the volume catalogue.}
+    CreateVolume:
+      type: object
+      required: [name, storagePoolId, kind, sizeGiB]
+      properties:
+        name: {type: string}
+        storagePoolId: {type: string}
+        kind: {$ref: '#/components/schemas/TemplateKind'}
+        sizeGiB: {type: integer, format: int64, minimum: 1}
+    PersistentVolume:
+      allOf:
+        - {$ref: '#/components/schemas/CreateVolume'}
+        - type: object
+          required: [id, nodeId, state, references]
+          properties:
+            id: {type: string}
+            nodeId: {type: string}
+            state: {type: string, enum: [creating, ready, resizing, deleting, failed]}
+            references: {type: array, items: {type: string}}
+            operationId: {type: string}
+            error: {type: string}
+    NodeVolume:
+      type: object
+      required: [id, kind, sizeGiB, storage]
+      properties:
+        id: {type: string}
+        kind: {$ref: '#/components/schemas/TemplateKind'}
+        sizeGiB: {type: integer, format: int64}
+        storage: {$ref: '#/components/schemas/StorageInfo'}
+        storagePoolId: {type: string, x-go-type-skip-optional-pointer: true, description: Actual storage pool identity, including default:<nodeId> for node-local default storage.}
+    NodeRetirement:
+      type: object
+      required: [assets, blockers, draining]
+      properties:
+        assets: {type: array, items: {$ref: '#/components/schemas/StoragePoolAsset'}}
+        blockers: {type: array, items: {type: string}}
+        draining: {type: boolean}
+        operation: {$ref: '#/components/schemas/Operation'}
+    NodeCephAdmin:
+      type: object
+      required: [config, keyring, publicKey]
+      properties:
+        config: {type: string}
+        keyring: {type: string}
+        publicKey: {type: string}
+    NodeCephDeparture:
+      type: object
+      required: [host, remaining]
+      properties:
+        host: {type: string}
+        remaining: {type: array, minItems: 1, items: {type: string}}
+    NodeCephBootstrap:
+      type: object
+      required: [publicKey]
+      properties:
+        publicKey: {type: string}
+    NodeCephHost:
+      type: object
+      required: [name, address]
+      properties:
+        name: {type: string}
+        address: {type: string}
+        device: {type: string}
+    NodeCephConfiguration:
+      type: object
+      required: [hosts]
+      properties:
+        hosts: {type: array, items: {$ref: '#/components/schemas/NodeCephHost'}}
+        replicas: {type: integer, minimum: 1, maximum: 3, default: 1}
+    TemplateDisk:
+      type: object
+      required: [id, sizeGiB, bus, bootOrder]
+      properties:
+        id: {type: string}
+        sizeGiB: {type: integer, format: int64, minimum: 1}
+        bus: {type: string, enum: [ide, sata, scsi, virtio]}
+        bootOrder: {type: integer, minimum: 1}
+        controllerModel: {type: string}
+        controllerIndex: {type: integer, minimum: 0}
+        controllerUnit: {type: integer, minimum: 0}
+    RegistryCredentials:
+      type: object
+      properties:
+        username: {type: string}
+        password: {type: string, format: password, writeOnly: true}
+        plainHttp: {type: boolean, default: false, description: Explicitly connect to this registry over HTTP}
+    TemplateImport:
+      allOf:
+        - {$ref: '#/components/schemas/Template'}
+        - type: object
+          properties:
+            registry: {$ref: '#/components/schemas/RegistryCredentials'}
+    TemplateFormat:
+      type: string
+      enum: [oci, docker, qcow2, raw, vmdk, ova, ovf, iso]
+    TemplateInitialization:
+      type: string
+      enum: [none, cloud-init, cloudbase-init]
+      default: none
+    TemplateState:
+      type: string
+      enum: [importing, ready, failed, deleting]
+      x-enum-varnames: [TemplateStateImporting, TemplateStateReady, TemplateStateFailed, TemplateStateDeleting]
+    Template:
+      type: object
+      required: [id, name, kind, os, version, source, resources]
+      properties:
+        id: {type: string}
+        name: {type: string}
+        kind: {$ref: '#/components/schemas/TemplateKind'}
+        os: {type: string}
+        version: {type: integer}
+        source: {type: string}
+        format: {$ref: '#/components/schemas/TemplateFormat'}
+        artifactNodeId: {type: string, readOnly: true}
+        operationId: {type: string, readOnly: true}
+        resources: {$ref: '#/components/schemas/Resources'}
+        hardware: {$ref: '#/components/schemas/Hardware'}
+        disks: {type: array, items: {$ref: '#/components/schemas/TemplateDisk'}}
+        media: {type: array, items: {$ref: '#/components/schemas/TemplateMedia'}}
+        stateFiles: {type: array, items: {type: string}, readOnly: true}
+        nicModels: {type: array, items: {type: string}}
+        initialization: {$ref: '#/components/schemas/TemplateInitialization'}
+        volumes: {type: array, items: {$ref: '#/components/schemas/Volume'}}
+        imageVolumes: {type: array, items: {type: string}, readOnly: true, description: Mount paths declared by the prepared OCI image. Asset volume overrides are resolved before scheduling.}
+        state: {$ref: '#/components/schemas/TemplateState'}
+        error: {type: string}
+    TemplateMedia:
+      type: object
+      required: [id, source]
+      properties:
+        id: {type: string}
+        source: {type: string}
+    Network:
+      type: object
+      required: [id, name, cidr]
+      properties:
+        id: {type: string}
+        name: {type: string, description: Display name of the logical switch, independent of its stable ID and network CIDR.}
+        cidr: {type: string}
+        gateway: {type: string}
+        accessAddress: {type: string, readOnly: true, description: Address reserved for platform management on this network; assigned automatically.}
+        allocationPool: {type: string, description: Address prefix reserved for Netlab on an existing LAN}
+        external: {$ref: '#/components/schemas/ExternalAttachment'}
+        devices: {type: array, items: {$ref: '#/components/schemas/ExternalDevice'}, x-go-type-skip-optional-pointer: true, description: Physical devices registered on this external network; never provisioned or reconfigured by Netlab.}
+        dnsAssetId: {type: string}
+        dnsServers: {type: array, items: {type: string}}
+        mtu: {type: integer}
+    Interface:
+      type: object
+      required: [id, networkId, mac, address, primary]
+      properties:
+        id: {type: string}
+        networkId: {type: string}
+        mac: {type: string}
+        address: {type: string}
+        primary: {type: boolean}
+    Asset:
+      type: object
+      required: [id, name, templateId, resources, interfaces]
+      properties:
+        id: {type: string}
+        name: {type: string}
+        templateId: {type: string}
+        storagePoolId: {type: string, description: Omitted selects storage automatically; an existing asset keeps its storage until migrated.}
+        resources: {$ref: '#/components/schemas/Resources'}
+        interfaces: {type: array, items: {$ref: '#/components/schemas/Interface'}}
+        volumes: {type: array, items: {$ref: '#/components/schemas/Volume'}}
+        parameters: {type: object, additionalProperties: {type: string}}
+        restartPolicy: {$ref: '#/components/schemas/RestartPolicy'}
+        guest: {$ref: '#/components/schemas/GuestSettings'}
+        media: {type: array, items: {type: string}, description: Attached template media IDs. Omitted attaches all; an empty array ejects all.}
+        pciBinding: {$ref: '#/components/schemas/PciBinding'}
+    PciBinding:
+      type: object
+      required: [nodeId, groupIds]
+      properties:
+        nodeId: {type: string}
+        groupIds: {type: array, minItems: 1, uniqueItems: true, items: {type: string}}
+    PciGroup:
+      type: object
+      required: [id, name, available, devices]
+      properties:
+        id: {type: string}
+        name: {type: string}
+        available: {type: boolean}
+        devices: {type: array, items: {type: string}}
+    RestartPolicy:
+      type: string
+      enum: [never, on-failure, always]
+      default: never
+      description: Restart unexpected exits only. Explicit stop remains stopped, including across node restarts.
+    LogChunk:
+      type: object
+      required: [stream, data]
+      properties:
+        stream: {type: string, enum: [stdout, stderr]}
+        data: {type: string}
+    GuestSettings:
+      type: object
+      properties:
+        hostname: {type: string}
+        username: {type: string}
+        sshAuthorizedKeys: {type: array, items: {type: string}}
+        files:
+          type: object
+          description: UTF-8 files written once when a new VM starts, through QEMU Guest Agent. Keys are absolute guest paths. Reboot preserves later guest changes.
+          additionalProperties: {type: string}
+    RouterInterface:
+      type: object
+      required: [id, networkId, address]
+      properties:
+        id: {type: string}
+        networkId: {type: string}
+        address: {type: string}
+    LogicalRouter:
+      type: object
+      required: [id, name, interfaces]
+      properties:
+        id: {type: string}
+        name: {type: string}
+        interfaces: {type: array, items: {$ref: '#/components/schemas/RouterInterface'}}
+    Route:
+      type: object
+      required: [networkId, destination, nextHop]
+      properties:
+        routerId: {type: string}
+        networkId: {type: string}
+        destination: {type: string}
+        nextHop: {type: string}
+    Policy:
+      type: object
+      required: [id, networkId, direction, action]
+      properties:
+        id: {type: string}
+        networkId: {type: string}
+        direction: {type: string, enum: [ingress, egress, both]}
+        action: {type: string, enum: [allow, deny, shape]}
+        protocol: {type: string}
+        source: {type: string}
+        destination: {type: string}
+        delayMs: {type: integer}
+        lossPercent: {type: number}
+        bandwidthKbps: {type: integer}
+    EnvironmentSpec:
+      type: object
+      required: [assets, networks]
+      properties:
+        assets: {type: array, items: {$ref: '#/components/schemas/Asset'}}
+        networks: {type: array, items: {$ref: '#/components/schemas/Network'}}
+        routers: {type: array, items: {$ref: '#/components/schemas/LogicalRouter'}, description: Omitted creates the default routed topology; an empty array keeps networks at layer 2. Responses contain the resolved routers.}
+        routes: {type: array, items: {$ref: '#/components/schemas/Route'}}
+        policies: {type: array, items: {$ref: '#/components/schemas/Policy'}}
+        services: {type: array, items: {$ref: '#/components/schemas/ServiceExposure'}}
+    ServiceExposure:
+      type: object
+      required: [id, assetId, interfaceId, protocol, targetPort]
+      properties:
+        id: {type: string}
+        assetId: {type: string}
+        interfaceId: {type: string}
+        protocol: {$ref: '#/components/schemas/ServiceProtocol'}
+        targetPort: {type: integer, minimum: 1, maximum: 65535}
+        listenPort: {type: integer, minimum: 1, maximum: 65535}
+    ServiceEndpoint:
+      allOf:
+        - {$ref: '#/components/schemas/ServiceExposure'}
+        - type: object
+          required: [address, port, updatedAt]
+          properties:
+            address: {type: string}
+            port: {type: integer}
+            updatedAt: {type: string, format: date-time}
+    CreateService:
+      type: object
+      required: [protocol, targetPort, expectedRevision]
+      properties:
+        interfaceId: {type: string}
+        protocol: {$ref: '#/components/schemas/ServiceProtocol'}
+        targetPort: {type: integer, minimum: 1, maximum: 65535}
+        listenPort: {type: integer, minimum: 1, maximum: 65535}
+        expectedRevision: {type: integer}
+        clientRequestId: {type: string}
+    ServiceProtocol:
+      type: string
+      enum: [tcp, udp]
+    VPNMode:
+      type: string
+      enum: [original, translated]
+    VPNRoute:
+      type: object
+      required: [networkId, cidr, accessCidr]
+      properties:
+        networkId: {type: string}
+        cidr: {type: string}
+        accessCidr: {type: string}
+    VPNPeer:
+      type: object
+      required: [id, name, publicKey, mode, routes]
+      properties:
+        id: {type: string}
+        name: {type: string}
+        publicKey: {type: string}
+        mode: {$ref: '#/components/schemas/VPNMode'}
+        routes: {type: array, items: {$ref: '#/components/schemas/VPNRoute'}}
+        addresses: {type: array, items: {type: string}}
+    CreateVPNAccess:
+      type: object
+      required: [name, publicKey, networkIds, expectedRevision]
+      properties:
+        name: {type: string, minLength: 1, maxLength: 100}
+        publicKey: {type: string}
+        networkIds: {type: array, minItems: 1, items: {type: string}}
+        mode: {$ref: '#/components/schemas/VPNMode', default: original}
+        expectedRevision: {type: integer}
+        clientRequestId: {type: string}
+    VPNAccess:
+      allOf:
+        - {$ref: '#/components/schemas/VPNPeer'}
+        - type: object
+          required: [state, createdAt, operationId]
+          properties:
+            state:
+              type: string
+              enum: [pending, active, revoking, failed]
+              x-enum-varnames: [VPNAccessStatePending, VPNAccessStateActive, VPNAccessStateRevoking, VPNAccessStateFailed]
+            operationId: {type: string}
+            error: {type: string}
+            createdAt: {type: string, format: date-time}
+    VPNConnection:
+      type: object
+      required: [endpoint, publicKey, addresses, allowedIPs, mtu]
+      properties:
+        endpoint: {type: string}
+        publicKey: {type: string}
+        addresses: {type: array, items: {type: string}}
+        allowedIPs: {type: array, items: {type: string}}
+        mtu: {type: integer}
+    NodeVPNPlan:
+      type: object
+      required: [listenPort, peers]
+      properties:
+        listenPort: {type: integer}
+        peers: {type: array, items: {$ref: '#/components/schemas/VPNPeer'}}
+    NodeVPNPeer:
+      type: object
+      required: [id, addresses]
+      properties:
+        id: {type: string}
+        addresses: {type: array, items: {type: string}}
+    NodeVPNResult:
+      type: object
+      required: [publicKey, listenPort, peers, mtu]
+      properties:
+        publicKey: {type: string}
+        listenPort: {type: integer}
+        peers: {type: array, items: {$ref: '#/components/schemas/NodeVPNPeer'}}
+        mtu: {type: integer}
+    ServiceNetwork:
+      type: object
+      required: [cidr, address]
+      properties:
+        cidr: {type: string}
+        address: {type: string}
+    ServiceGateway:
+      type: object
+      required: [nodeId, address]
+      properties:
+        nodeId: {type: string}
+        address: {type: string}
+    NodeServiceBinding:
+      type: object
+      required: [id, assetId, interfaceId, networkId, protocol, targetAddress, targetPort, listenPort]
+      properties:
+        id: {type: string}
+        assetId: {type: string}
+        interfaceId: {type: string}
+        networkId: {type: string}
+        protocol: {$ref: '#/components/schemas/ServiceProtocol'}
+        targetAddress: {type: string}
+        targetPort: {type: integer}
+        listenPort: {type: integer}
+    Point:
+      type: object
+      required: [x, y]
+      properties:
+        x: {type: number}
+        y: {type: number}
+    CanvasView:
+      type: object
+      properties:
+        roles: {type: object, additionalProperties: {type: string}, description: Asset presentation groups; do not affect execution or permissions.}
+        positions: {type: object, additionalProperties: {$ref: '#/components/schemas/Point'}}
+        collapsed: {type: array, items: {type: string}}
+    Draft:
+      type: object
+      required: [baseRevision, spec]
+      properties:
+        baseRevision: {type: integer}
+        spec: {$ref: '#/components/schemas/EnvironmentSpec'}
+    Environment:
+      type: object
+      required: [id, projectId, name, revision, status, spec, view, createdAt, updatedAt]
+      properties:
+        permissions: {type: array, items: {$ref: '#/components/schemas/Permission'}}
+        assetPermissions: {type: object, additionalProperties: {type: array, items: {$ref: '#/components/schemas/Permission'}}}
+        id: {type: string}
+        projectId: {type: string}
+        name: {type: string}
+        externalReference: {type: string}
+        blueprintVersionId: {type: string}
+        revision: {type: integer}
+        status: {$ref: '#/components/schemas/EnvironmentStatus'}
+        spec: {$ref: '#/components/schemas/EnvironmentSpec'}
+        appliedSpec: {$ref: '#/components/schemas/EnvironmentSpec'}
+        view: {$ref: '#/components/schemas/CanvasView'}
+        draft: {$ref: '#/components/schemas/Draft'}
+        operationId: {type: string}
+        error: {type: string}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+    TemplateKind:
+      type: string
+      enum: [container, vm]
+    EnvironmentStatus:
+      type: string
+      enum: [draft, deploying, running, stopped, suspended, changing, destroying, destroyed, failed, unknown]
+    EnvironmentCounts:
+      type: object
+      required: [total, statuses]
+      properties:
+        total: {type: integer}
+        statuses: {type: object, additionalProperties: {type: integer}}
+    EnvironmentSummary:
+      type: object
+      required: [id, projectId, name, revision, status, assetCount, networkCount, createdAt, updatedAt]
+      properties:
+        id: {type: string}
+        projectId: {type: string}
+        name: {type: string}
+        externalReference: {type: string}
+        revision: {type: integer}
+        status: {$ref: '#/components/schemas/EnvironmentStatus'}
+        assetCount: {type: integer}
+        networkCount: {type: integer}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+    AssetState:
+      type: object
+      required: [assetId, instanceId, nodeId, state, observedAt]
+      properties:
+        assetId: {type: string}
+        instanceId: {type: string}
+        nodeId: {type: string}
+        storagePoolId: {type: string}
+        state: {type: string}
+        error: {type: string}
+        observedAt: {type: string, format: date-time}
+    MetricPoint:
+      type: object
+      required: [time, value]
+      properties:
+        time: {type: string, format: date-time}
+        value: {type: number, format: double}
+    MetricSeries:
+      type: object
+      required: [metric, assetId, instanceId, nodeId, points]
+      properties:
+        metric: {type: string, enum: [cpu, memory, disk_read, disk_write, receive, transmit, receive_packets, transmit_packets, receive_drops, transmit_drops, cpu_capacity, memory_capacity, memory_available, disk_used, disk_capacity]}
+        assetId: {type: string}
+        instanceId: {type: string}
+        nodeId: {type: string}
+        interfaceId: {type: string}
+        points: {type: array, items: {$ref: '#/components/schemas/MetricPoint'}}
+    MetricHistory:
+      type: object
+      required: [start, end, stepSeconds, series]
+      properties:
+        start: {type: string, format: date-time}
+        end: {type: string, format: date-time}
+        stepSeconds: {type: integer}
+        series: {type: array, items: {$ref: '#/components/schemas/MetricSeries'}}
+    EnvironmentState:
+      type: object
+      required: [id, status, revision, assets, updatedAt]
+      properties:
+        id: {type: string}
+        status: {type: string}
+        revision: {type: integer}
+        assets: {type: array, items: {$ref: '#/components/schemas/AssetState'}}
+        operation: {$ref: '#/components/schemas/Operation'}
+        updatedAt: {type: string, format: date-time}
+    Operation:
+      type: object
+      required: [id, kind, state, phase, completed, total, retryable, createdAt, updatedAt]
+      properties:
+        id: {type: string}
+        environmentId: {type: string}
+        kind: {type: string}
+        state: {type: string, enum: [queued, running, succeeded, failed, partially_applied]}
+        phase: {type: string}
+        completed: {type: integer}
+        total: {type: integer}
+        retryable: {type: boolean}
+        error: {type: string}
+        results: {type: array, items: {$ref: '#/components/schemas/ExecutionResult'}}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+    Node:
+      type: object
+      required: [id, name, endpoint, capacity, reserved, cpuAllocationRatio, memoryReserveMiB, allocatableMemoryMiB, capabilities, slots, observedAt]
+      properties:
+        id: {type: string}
+        name: {type: string}
+        endpoint: {type: string}
+        capacity: {$ref: '#/components/schemas/Resources'}
+        reserved: {$ref: '#/components/schemas/Resources'}
+        cpuAllocationRatio: {type: number, format: double, minimum: 1, default: 4, description: Maximum total assigned vCPUs per physical CPU; does not change physical capacity.}
+        memoryReserveMiB: {type: integer, format: int64, minimum: 0, description: Configured host memory reservation; zero selects automatic reservation. Does not include assigned guest memory.}
+        allocatableMemoryMiB: {type: integer, format: int64, minimum: 0, readOnly: true, x-go-type-skip-optional-pointer: true, description: Physical memory minus the effective host reservation. This stable scheduling capacity is not instantaneous free memory.}
+        capabilities: {type: array, items: {type: string}}
+        vmHardware: {$ref: '#/components/schemas/VmHardware'}
+        storageDevice: {type: string, description: Dedicated Ceph disk selected during node installation}
+        slots: {type: integer}
+        observedAt: {type: string, format: date-time}
+        state: {type: string}
+    NodeScheduling:
+      type: object
+      required: [cpuAllocationRatio]
+      properties:
+        cpuAllocationRatio: {type: number, format: double, minimum: 1}
+        memoryReserveMiB: {type: integer, format: int64, minimum: 0, description: Host memory reservation; zero restores automatic reservation. Omission preserves the current setting.}
+    ResolvedInterface:
+      type: object
+      required: [id, networkId, mac, address, prefix, primary, portName, mtu]
+      properties:
+        id: {type: string}
+        networkId: {type: string}
+        mac: {type: string}
+        address: {type: string}
+        prefix: {type: integer}
+        primary: {type: boolean}
+        portName: {type: string}
+        mtu: {type: integer}
+        gateway: {type: string}
+        dns: {type: array, items: {type: string}}
+    AssetExecution:
+      type: object
+      required: [asset, template, instanceId, interfaces]
+      properties:
+        asset: {$ref: '#/components/schemas/Asset'}
+        template: {$ref: '#/components/schemas/Template'}
+        instanceId: {type: string}
+        previousInstanceId: {type: string}
+        dataSetId: {type: string, x-go-type-skip-optional-pointer: true, description: Actual writable data set; retained across ordinary rebuilds}
+        volumeSources: {type: object, additionalProperties: {$ref: '#/components/schemas/NodeVolume'}, x-go-type-skip-optional-pointer: true}
+        pciDevices: {type: array, items: {type: string}, x-go-type-skip-optional-pointer: true}
+        storagePath: {type: string, description: Selected node-local storage for VM disks or container data volumes and runtime files. OCI writable layers remain in the container runtime storage.}
+        storagePoolId: {type: string, description: Actual selected pool; omitted for node default storage}
+        storageFilesystem: {type: string, description: Physical filesystem reservation identity}
+        rbd: {$ref: '#/components/schemas/RbdStorage'}
+        interfaces: {type: array, items: {$ref: '#/components/schemas/ResolvedInterface'}}
+    NodePlan:
+      type: object
+      required: [operationId, environmentId, phase, assets, spec]
+      properties:
+        operationId: {type: string}
+        environmentId: {type: string}
+        phase: {type: string, enum: [network, external-attachments, services, vpn, policies, prepare, update, start, stop, force-stop, suspend, resume, destroy, cleanup-volumes, remove-network, inspect, capture-recovery, delete-recovery, prepare-recovery, apply-recovery, rollback-recovery, cleanup-recovery, migrate]}
+        migrations: {type: object, additionalProperties: {$ref: '#/components/schemas/NodeVMMigration'}, x-go-type-skip-optional-pointer: true}
+        recoveryPointId: {type: string}
+        includeMemory: {type: boolean, x-go-type-skip-optional-pointer: true}
+        captureStates: {type: object, additionalProperties: {type: string}}
+        recoverySources: {type: object, additionalProperties: {$ref: '#/components/schemas/NodeRecoverySource'}}
+        recoveryTargets: {type: object, additionalProperties: {$ref: '#/components/schemas/AssetExecution'}, x-go-type-skip-optional-pointer: true}
+        assets: {type: array, items: {$ref: '#/components/schemas/AssetExecution'}}
+        spec: {$ref: '#/components/schemas/EnvironmentSpec'}
+        gateway: {$ref: '#/components/schemas/ServiceGateway'}
+        services: {type: array, items: {$ref: '#/components/schemas/NodeServiceBinding'}}
+        vpn: {$ref: '#/components/schemas/NodeVPNPlan'}
+        attachments: {type: array, items: {$ref: '#/components/schemas/ExternalAttachment'}}
+        externalChassis: {type: object, additionalProperties: {type: string}}
+        artifactEndpoints: {type: object, additionalProperties: {type: string}}
+    NodeVMMigration:
+      type: object
+      required: [endpoint, domainXml]
+      properties:
+        endpoint: {type: string, format: uri, description: Destination node mTLS endpoint}
+        domainXml: {type: string, description: Native migratable domain XML with destination host paths and unchanged instance identity}
+    MigrationRequest:
+      type: object
+      required: [expectedRevision]
+      properties:
+        targetStoragePoolId: {type: string}
+        expectedRevision: {type: integer, minimum: 0}
+        targetNodeId: {type: string, description: Omit to select a compatible destination automatically}
+        clientRequestId: {type: string}
+    MigrationDestination:
+      type: object
+      required: [id, name, available, live]
+      properties:
+        id: {type: string}
+        name: {type: string}
+        available: {$ref: '#/components/schemas/Resources'}
+        live: {type: boolean}
+        current: {type: boolean, x-go-type-skip-optional-pointer: true}
+        sourceStoragePoolId: {type: string, x-go-type-skip-optional-pointer: true}
+    TemplateCache:
+      type: object
+      required: [nodeId, nodeName, bytes, reclaimable, reason]
+      properties:
+        nodeId: {type: string}
+        nodeName: {type: string}
+        bytes: {type: integer, format: int64}
+        reclaimable: {type: boolean}
+        reason: {type: string}
+    TemplateCacheRequest:
+      type: object
+      required: [template, poolIds]
+      properties:
+        template: {$ref: '#/components/schemas/Template'}
+        poolIds: {type: array, items: {type: string}}
+    NodeMigrationPreparation:
+      type: object
+      required: [environmentId, execution, domainXml, sourceEndpoint]
+      properties:
+        environmentId: {type: string}
+        execution: {$ref: '#/components/schemas/AssetExecution'}
+        domainXml: {type: string}
+        sourceEndpoint: {type: string, format: uri}
+    NodeMigrationCleanup:
+      type: object
+      required: [source, target, targetNodeId]
+      properties:
+        source: {$ref: '#/components/schemas/AssetExecution'}
+        target: {$ref: '#/components/schemas/AssetExecution'}
+        targetNodeId: {type: string, description: Node that retains the target execution and its volumes after cleanup.}
+    NodeTemplatePreparation:
+      type: object
+      required: [template]
+      properties:
+        template: {$ref: '#/components/schemas/Template'}
+        artifactEndpoint: {type: string}
+        storagePoolId: {type: string}
+        registry: {$ref: '#/components/schemas/RegistryCredentials'}
+        capture: {$ref: '#/components/schemas/TemplateCaptureSource'}
+    TemplateCaptureSource:
+      type: object
+      required: [environmentId, assetId, instanceId]
+      properties:
+        environmentId: {type: string}
+        assetId: {type: string}
+        instanceId: {type: string}
+    CaptureTemplate:
+      type: object
+      required: [name, expectedRevision]
+      properties:
+        name: {type: string, minLength: 1}
+        expectedRevision: {type: integer}
+        initialization: {$ref: '#/components/schemas/TemplateInitialization'}
+    ExecutionResult:
+      type: object
+      required: [assetId, instanceId, state, observedAt]
+      properties:
+        environmentId: {type: string}
+        nodeId: {type: string}
+        assetId: {type: string}
+        instanceId: {type: string}
+        state: {type: string}
+        error: {type: string}
+        execution: {$ref: '#/components/schemas/AssetExecution'}
+        recovery: {$ref: '#/components/schemas/RecoveryCapture'}
+        observedAt: {type: string, format: date-time}
+    RecoveryConsistency:
+      type: string
+      enum: [crash, filesystem, application]
+    RecoveryCapture:
+      type: object
+      required: [sizeBytes, memory, consistency]
+      properties:
+        sizeBytes: {type: integer, format: int64}
+        memory: {type: boolean}
+        consistency: {$ref: '#/components/schemas/RecoveryConsistency'}
+    CaptureRecoveryPoint:
+      type: object
+      required: [name, expectedRevision]
+      properties:
+        name: {type: string}
+        expectedRevision: {type: integer, minimum: 0}
+        includeMemory: {type: boolean, x-go-type-skip-optional-pointer: true}
+    RestoreRecoveryPoint:
+      type: object
+      required: [expectedRevision]
+      properties:
+        expectedRevision: {type: integer, minimum: 0}
+    NodeRecoverySource:
+      type: object
+      required: [environmentId, nodeId, endpoint, execution]
+      properties:
+        environmentId: {type: string}
+        nodeId: {type: string}
+        endpoint: {type: string}
+        execution: {$ref: '#/components/schemas/AssetExecution'}
+        backup: {$ref: '#/components/schemas/NodeBackupSource'}
+    NodeBackupRepository:
+      type: object
+      required: [location, password]
+      properties:
+        location: {type: string}
+        password: {type: string, format: password}
+        accessKey: {type: string}
+        secretKey: {type: string, format: password}
+        region: {type: string}
+    BackupCredentials:
+      type: object
+      required: [password]
+      properties:
+        password: {type: string, format: password}
+        accessKey: {type: string}
+        secretKey: {type: string, format: password}
+        region: {type: string}
+    CreateBackupRepository:
+      type: object
+      required: [name, nodeId, location]
+      properties:
+        name: {type: string}
+        nodeId: {type: string}
+        location: {type: string, description: Absolute directory or s3:https://endpoint/bucket/path}
+        initialize: {type: boolean, default: true}
+        password: {type: string, format: password, writeOnly: true}
+        accessKey: {type: string}
+        secretKey: {type: string, format: password, writeOnly: true}
+        region: {type: string}
+    BackupRepository:
+      type: object
+      required: [id, name, nodeId, state]
+      properties:
+        id: {type: string}
+        name: {type: string}
+        nodeId: {type: string}
+        location: {type: string}
+        state: {type: string, enum: [connecting, ready, failed]}
+        operationId: {type: string}
+        error: {type: string}
+    CreateBackup:
+      type: object
+      required: [name, repositoryId, recoveryPointId]
+      properties:
+        name: {type: string}
+        repositoryId: {type: string}
+        recoveryPointId: {type: string}
+    BackupSummary:
+      type: object
+      required: [id, repositoryId, name, state, sizeBytes, createdAt]
+      properties:
+        id: {type: string}
+        environmentId: {type: string}
+        repositoryId: {type: string}
+        name: {type: string}
+        state: {type: string, enum: [creating, ready, failed, deleting]}
+        sizeBytes: {type: integer, format: int64}
+        operationId: {type: string}
+        error: {type: string}
+        createdAt: {type: string, format: date-time}
+    NodeBackupSource:
+      type: object
+      required: [repository, snapshotId, sizeBytes]
+      properties:
+        repository: {$ref: '#/components/schemas/NodeBackupRepository'}
+        snapshotId: {type: string}
+        sizeBytes: {type: integer, format: int64}
+    NodeBackupPart:
+      type: object
+      required: [snapshotId, sizeBytes]
+      properties:
+        snapshotId: {type: string}
+        sizeBytes: {type: integer, format: int64}
+    NodeBackupPlan:
+      type: object
+      required: [repository, name, createdAt, recoveryPointId, sources, definition]
+      properties:
+        repository: {$ref: '#/components/schemas/NodeBackupRepository'}
+        name: {type: string}
+        createdAt: {type: string, format: date-time}
+        recoveryPointId: {type: string}
+        sources: {type: array, items: {$ref: '#/components/schemas/NodeRecoverySource'}}
+        definition:
+          type: object
+          additionalProperties: true
+          x-go-type: json.RawMessage
+    NodeBackupResult:
+      type: object
+      required: [manifestSnapshotId, parts, templates]
+      properties:
+        manifestSnapshotId: {type: string}
+        parts: {type: object, additionalProperties: {$ref: '#/components/schemas/NodeBackupPart'}}
+        templates: {type: object, additionalProperties: {$ref: '#/components/schemas/NodeBackupPart'}}
+    NodeBackupManifest:
+      type: object
+      required: [id, name, createdAt, definition, parts, templates]
+      properties:
+        id: {type: string}
+        name: {type: string}
+        createdAt: {type: string, format: date-time}
+        snapshotId: {type: string, readOnly: true}
+        definition:
+          type: object
+          additionalProperties: true
+          x-go-type: json.RawMessage
+        parts: {type: object, additionalProperties: {$ref: '#/components/schemas/NodeBackupPart'}}
+        templates: {type: object, additionalProperties: {$ref: '#/components/schemas/NodeBackupPart'}}
+    NodeRestoreBackupTemplate:
+      type: object
+      required: [template, source]
+      properties:
+        template: {$ref: '#/components/schemas/Template'}
+        source: {$ref: '#/components/schemas/NodeBackupSource'}
+    RecoveryPointSummary:
+      type: object
+      required: [id, environmentId, name, revision, state, assetCount, sizeBytes, createdAt]
+      properties:
+        id: {type: string}
+        environmentId: {type: string}
+        name: {type: string}
+        revision: {type: integer}
+        state: {type: string, enum: [capturing, ready, failed, deleting]}
+        assetCount: {type: integer}
+        sizeBytes: {type: integer, format: int64}
+        consistency: {$ref: '#/components/schemas/RecoveryConsistency'}
+        memoryAssetCount: {type: integer, minimum: 0, x-go-type-skip-optional-pointer: true}
+        operationId: {type: string}
+        error: {type: string}
+        createdAt: {type: string, format: date-time}
+    NodeObservation:
+      type: object
+      required: [nodeId, snapshot, results, observedAt]
+      properties:
+        nodeId: {type: string}
+        snapshot: {type: boolean}
+        results: {type: array, items: {$ref: '#/components/schemas/ExecutionResult'}}
+        observedAt: {type: string, format: date-time}
+    NodeResult:
+      type: object
+      required: [results]
+      properties:
+        results: {type: array, items: {$ref: '#/components/schemas/ExecutionResult'}}
+        error: {type: string}
+        services: {type: array, items: {$ref: '#/components/schemas/NodeServiceBinding'}}
+        vpn: {$ref: '#/components/schemas/NodeVPNResult'}
+    NodeInfo:
+      type: object
+      required: [id, name, version, capacity, capabilities, slots]
+      properties:
+        id: {type: string}
+        name: {type: string}
+        version: {type: string}
+        capacity: {$ref: '#/components/schemas/Resources'}
+        capabilities: {type: array, items: {type: string}}
+        slots: {type: integer}
+        vmHardware: {$ref: '#/components/schemas/VmHardware'}
+        serviceNetwork: {$ref: '#/components/schemas/ServiceNetwork'}
+        accessAddress: {type: string}
+        networkChassis: {type: string}
+        externalInterfaces: {type: array, items: {$ref: '#/components/schemas/ExternalInterface'}}
+        storage: {$ref: '#/components/schemas/StorageInfo'}
+        containerStorage: {$ref: '#/components/schemas/StorageInfo'}
+        storageDevice: {type: string, description: Dedicated disk accepted during node installation}
+    StorageDriver:
+      type: string
+      enum: [directory, rbd]
+      x-enum-varnames: [StorageDriverDirectory, StorageDriverRBD]
+    EnvironmentStorage:
+      type: object
+      required: [bytes, baseBytes, measuredAt, locations]
+      properties:
+        bytes: {type: integer, format: int64, description: Deduplicated storage required by the environment including base images, instance data and recovery points.}
+        baseBytes: {type: integer, format: int64, description: Base images counted once per physical copy within this environment.}
+        measuredAt: {type: string, format: date-time}
+        locations: {type: array, items: {$ref: '#/components/schemas/StorageLocation'}}
+    StorageLocation:
+      type: object
+      required: [id, name, bytes, baseBytes, capacityBytes, availableBytes]
+      properties:
+        id: {type: string}
+        name: {type: string}
+        bytes: {type: integer, format: int64}
+        baseBytes: {type: integer, format: int64}
+        capacityBytes: {type: integer, format: int64}
+        availableBytes: {type: integer, format: int64, description: Space currently available to scheduling after the running reserve and pending writes.}
+    StorageUsagePart:
+      type: object
+      required: [key, bytes]
+      properties:
+        key: {type: string}
+        bytes: {type: integer, format: int64}
+        baseBytes: {type: integer, format: int64, x-go-type-skip-optional-pointer: true}
+        filesystem: {type: string, x-go-type-skip-optional-pointer: true}
+        storage: {$ref: '#/components/schemas/StorageInfo'}
+    StorageUsageSource:
+      type: object
+      required: [execution, recoveryId]
+      properties:
+        execution: {$ref: '#/components/schemas/AssetExecution'}
+        recoveryId: {type: string}
+    NodeStorageUsage:
+      type: object
+      required: [environmentId, sources]
+      properties:
+        environmentId: {type: string}
+        sources: {type: array, items: {$ref: '#/components/schemas/StorageUsageSource'}}
+    NodeStorageEstimate:
+      type: object
+      required: [assets]
+      properties:
+        assets: {type: object, additionalProperties: {$ref: '#/components/schemas/AssetExecution'}}
+    StorageInfo:
+      type: object
+      required: [path, filesystem, capacityBytes, availableBytes]
+      properties:
+        path: {type: string}
+        filesystem: {type: string}
+        capacityBytes: {type: integer, format: int64}
+        availableBytes: {type: integer, format: int64}
+        nativeSnapshots: {type: boolean, x-go-type-skip-optional-pointer: true}
+        rbd: {$ref: '#/components/schemas/RbdStorage'}
+    ConfigureNodeStorage:
+      type: object
+      required: [device]
+      properties:
+        device: {type: string, description: Physical empty disk selected for Ceph; empty clears an unused selection}
+    StorageDevice:
+      type: object
+      required: [path, sizeBytes, model, serial, available, reason]
+      properties:
+        path: {type: string}
+        sizeBytes: {type: integer, format: int64}
+        model: {type: string}
+        serial: {type: string}
+        available: {type: boolean}
+        reason: {type: string}
+    NodeStorageDevices:
+      type: object
+      required: [devices, selected]
+      properties:
+        devices: {type: array, items: {$ref: '#/components/schemas/StorageDevice'}}
+        selected: {type: string}
+        operation: {$ref: '#/components/schemas/Operation'}
+    ConfigureCephPool:
+      type: object
+      required: [replicas]
+      properties:
+        replicas: {type: integer, minimum: 1, maximum: 3}
+    CephDaemon:
+      type: object
+      required: [name, host, role, state]
+      properties:
+        name: {type: string}
+        host: {type: string}
+        role: {type: string}
+        state: {type: string}
+    CephDisk:
+      type: object
+      required: [name, host, capacityBytes, usedBytes, state]
+      properties:
+        name: {type: string}
+        host: {type: string}
+        capacityBytes: {type: integer, format: int64}
+        usedBytes: {type: integer, format: int64}
+        state: {type: string}
+    CephStatus:
+      type: object
+      required: [health, messages, replicas, osdsUp, osdsTotal, disks, daemons]
+      properties:
+        health: {type: string}
+        messages: {type: array, items: {type: string}}
+        replicas: {type: integer}
+        osdsUp: {type: integer}
+        osdsTotal: {type: integer}
+        disks: {type: array, items: {$ref: '#/components/schemas/CephDisk'}}
+        daemons: {type: array, items: {$ref: '#/components/schemas/CephDaemon'}}
+    StoragePoolAsset:
+      type: object
+      required: [environmentId, environmentName, revision, assetId, assetName, nodeId, sizeGiB, state]
+      properties:
+        environmentId: {type: string}
+        environmentName: {type: string}
+        revision: {type: integer, format: int64}
+        assetId: {type: string}
+        assetName: {type: string}
+        nodeId: {type: string}
+        sizeGiB: {type: integer, format: int64}
+        state: {type: string}
+    RbdStorage:
+      type: object
+      required: [pool, imagePrefix, monitors, user, fsid, secretId]
+      properties:
+        pool: {type: string}
+        imagePrefix: {type: string}
+        monitors: {type: array, items: {type: string}}
+        user: {type: string}
+        fsid: {type: string}
+        secretId: {type: string}
+    CephConnection:
+      type: object
+      required: [monitors, pool, user, key]
+      properties:
+        monitors: {type: array, minItems: 1, items: {type: string}}
+        pool: {type: string}
+        user: {type: string}
+        key: {type: string, format: password, writeOnly: true}
+    CreateStoragePool:
+      type: object
+      required: [nodeIds, name, driver]
+      properties:
+        nodeIds: {type: array, minItems: 1, uniqueItems: true, items: {type: string}}
+        name: {type: string}
+        driver: {$ref: '#/components/schemas/StorageDriver'}
+        directory: {type: string, description: Existing directory or mounted filesystem on this node}
+        ceph: {$ref: '#/components/schemas/CephConnection'}
+    StoragePool:
+      type: object
+      required: [id, nodeIds, name, default, driver, allocatedGiB, capabilities]
+      properties:
+        id: {type: string}
+        nodeIds: {type: array, items: {type: string}}
+        name: {type: string}
+        directory: {type: string, description: Original node storage location; visible to administrators}
+        default: {type: boolean}
+        driver: {$ref: '#/components/schemas/StorageDriver'}
+        state: {type: string, enum: [ready, preparing, deleting], x-enum-varnames: [StoragePoolStateReady, StoragePoolStatePreparing, StoragePoolStateDeleting]}
+        managed: {type: boolean, default: false}
+        operationState: {type: string}
+        operationId: {type: string}
+        storage: {$ref: '#/components/schemas/StorageInfo'}
+        allocatedGiB: {type: integer, format: int64}
+        containerStorage: {allOf: [{$ref: '#/components/schemas/StorageInfo'}], description: Container writable-layer storage returned live for the node default pool; not a selectable asset storage pool.}
+        containerAllocatedGiB: {type: integer, format: int64, minimum: 0, x-go-type-skip-optional-pointer: true, description: Container writable-layer scheduling budget on this node, present on the node default pool.}
+        capabilities: {type: array, items: {type: string}}
+        error: {type: string}
+    ExternalAttachment:
+      type: object
+      required: [nodeId, interface]
+      properties:
+        nodeId: {type: string}
+        interface: {type: string}
+        vlan: {type: integer, minimum: 1, maximum: 4094}
+    ExternalInterface:
+      type: object
+      required: [name, kind, mac, mtu, addresses, available]
+      properties:
+        name: {type: string}
+        kind: {type: string, enum: [ethernet, linux-bridge, ovs-bridge]}
+        mac: {type: string}
+        mtu: {type: integer}
+        addresses: {type: array, items: {type: string}}
+        available: {type: boolean}
+        linkUp: {type: boolean, x-go-type-skip-optional-pointer: true}
+    ExternalDiscovery:
+      type: object
+      required: [interface, cidr]
+      properties:
+        interface: {type: string}
+        cidr: {type: string, description: IPv4 prefix with at most 1024 addresses.}
+        vlan: {type: integer, minimum: 1, maximum: 4094}
+    DiscoveredDevice:
+      type: object
+      required: [address, mac, observedAt]
+      properties:
+        address: {type: string}
+        mac: {type: string}
+        observedAt: {type: string, format: date-time}
+    ExternalDevice:
+      type: object
+      required: [id, name, address, mac]
+      properties:
+        id: {type: string}
+        name: {type: string}
+        address: {type: string, description: Existing device address; registering it does not configure the physical device.}
+        mac: {type: string}
+        observedAt: {type: string, format: date-time}
+    VmHardware:
+      type: object
+      required: [machines, cpuModes, cpuModels, nicModels, diskControllers]
+      properties:
+        machines: {type: array, items: {$ref: '#/components/schemas/VmMachine'}}
+        cpuModes: {type: array, items: {type: string}}
+        cpuModels: {type: array, items: {type: string}}
+        nicModels: {type: array, items: {type: string}}
+        diskControllers: {type: array, items: {type: string}}
+        numaPlacement: {type: boolean, description: Host supports libvirt automatic placement through numad.}
+        pciGroups: {type: array, items: {$ref: '#/components/schemas/PciGroup'}, x-go-type-skip-optional-pointer: true}
+    VmMachine:
+      type: object
+      required: [name, aliases, maxVcpus, firmware, secureBoot, tpm2, diskBuses, firmwareFiles]
+      properties:
+        name: {type: string}
+        aliases: {type: array, items: {type: string}}
+        maxVcpus: {type: integer}
+        firmware: {type: array, items: {type: string}}
+        secureBoot: {type: boolean}
+        tpm2: {type: boolean}
+        diskBuses: {type: array, items: {type: string}}
+        firmwareFiles: {type: array, items: {type: string}}
+    CreateEnvironment:
+      type: object
+      required: [name]
+      properties:
+        name: {type: string}
+        projectId: {type: string}
+        externalReference: {type: string}
+        blueprintVersionId: {type: string}
+        recoveryPointId: {type: string, description: Create an independent copy of this recovery point; run defaults to false}
+        backupId: {type: string, description: Restore an independent environment from this backup; run defaults to false}
+        clientRequestId: {type: string}
+        run: {type: boolean}
+        spec: {$ref: '#/components/schemas/EnvironmentSpec'}
+    SaveBlueprint:
+      type: object
+      required: [name, expectedRevision, spec]
+      properties:
+        name: {type: string}
+        expectedRevision: {type: integer, minimum: 0}
+        spec: {$ref: '#/components/schemas/EnvironmentSpec'}
+    SaveBlueprintVersion:
+      type: object
+      required: [environmentId, expectedRevision, spec]
+      properties:
+        environmentId: {type: string}
+        expectedRevision: {type: integer, minimum: 0}
+        spec: {$ref: '#/components/schemas/EnvironmentSpec'}
+    Blueprint:
+      type: object
+      required: [id, projectId, name, latestVersionId, latestVersion, assetCount, networkCount, createdAt, updatedAt]
+      properties:
+        id: {type: string}
+        projectId: {type: string}
+        permissions: {type: array, items: {$ref: '#/components/schemas/Permission'}, readOnly: true}
+        name: {type: string}
+        latestVersionId: {type: string}
+        latestVersion: {type: integer}
+        assetCount: {type: integer}
+        networkCount: {type: integer}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+    BlueprintVersionSummary:
+      type: object
+      required: [id, blueprintId, version, assetCount, networkCount, createdAt]
+      properties:
+        id: {type: string}
+        blueprintId: {type: string}
+        version: {type: integer}
+        assetCount: {type: integer}
+        networkCount: {type: integer}
+        createdAt: {type: string, format: date-time}
+    BlueprintVersion:
+      allOf:
+        - {$ref: '#/components/schemas/BlueprintVersionSummary'}
+        - type: object
+          required: [spec, view, sourceEnvironmentId, sourceRevision]
+          properties:
+            spec: {$ref: '#/components/schemas/EnvironmentSpec'}
+            view: {$ref: '#/components/schemas/CanvasView'}
+            sourceEnvironmentId: {type: string}
+            sourceRevision: {type: integer}
+    ActionRequest:
+      type: object
+      required: [action]
+      properties:
+        action: {type: string, enum: [start, stop, force-stop, reboot, suspend, resume, rebuild, destroy]}
+        resetVolumes: {type: boolean, default: false, x-go-type-skip-optional-pointer: true, description: Rebuild with fresh environment data volumes. Independently managed volumes are detached and retained.}
+        expectedRevision: {type: integer}
+        clientRequestId: {type: string}
+    ChangeRequest:
+      type: object
+      required: [expectedRevision, spec, apply]
+      properties:
+        expectedRevision: {type: integer}
+        spec: {$ref: '#/components/schemas/EnvironmentSpec'}
+        apply: {type: boolean}
+        clientRequestId: {type: string}
+    ChangeItem:
+      type: object
+      required: [id, name, kind, effect]
+      properties:
+        id: {type: string}
+        name: {type: string}
+        kind: {type: string, enum: [asset, network, service]}
+        effect: {type: string, enum: [add, update, replace, remove]}
+        requiresStop: {type: boolean}
+        dataEffect: {type: string}
+    ChangePreview:
+      type: object
+      required: [revision, changes]
+      properties:
+        revision: {type: integer}
+        changes: {type: array, items: {$ref: '#/components/schemas/ChangeItem'}}
+    NodeRegistration:
+      type: object
+      required: [name, endpoint]
+      properties:
+        name: {type: string}
+        endpoint: {type: string}
+    Problem:
+      type: object
+      required: [status, title, detail]
+      properties:
+        status: {type: integer}
+        title: {type: string}
+        detail: {type: string}
+    SecurityInterface:
+      type: object
+      required: [environmentId, interface]
+      properties:
+        environmentId: {type: string}
+        interface: {$ref: '#/components/schemas/CaptureInterface'}
+    SecurityAlert:
+      type: object
+      required: [id, environmentId, nodeId, networkId, interfaceId, source, sourcePort, destination, destinationPort, sourceAssetId, sourceAssetName, destinationAssetId, destinationAssetName, protocol, appProtocol, generatorId, signatureId, revision, severity, category, signature, count, firstSeen, lastSeen]
+      properties:
+        id: {type: integer, format: int64}
+        environmentId: {type: string}
+        nodeId: {type: string}
+        networkId: {type: string}
+        interfaceId: {type: string}
+        source: {type: string}
+        sourcePort: {type: integer}
+        destination: {type: string}
+        destinationPort: {type: integer}
+        sourceAssetId: {type: string}
+        sourceAssetName: {type: string}
+        destinationAssetId: {type: string}
+        destinationAssetName: {type: string}
+        protocol: {type: string}
+        appProtocol: {type: string}
+        generatorId: {type: integer, format: int64}
+        signatureId: {type: integer, format: int64}
+        revision: {type: integer}
+        severity: {type: integer, minimum: 1, maximum: 255, description: 'Native Suricata priority; 1 high, 2 medium, 3–255 low.'}
+        category: {type: string}
+        signature: {type: string}
+        count: {type: integer, format: int64}
+        firstSeen: {type: string, format: date-time}
+        lastSeen: {type: string, format: date-time}
+    SecuritySensor:
+      type: object
+      required: [nodeId, status, interfaces, packets, droppedPackets, checkedAt]
+      properties:
+        nodeId: {type: string}
+        nodeName: {type: string}
+        status: {type: string, enum: [idle, loading, ready, unavailable, failed]}
+        interfaces: {type: integer}
+        packets: {type: integer, format: int64}
+        droppedPackets: {type: integer, format: int64}
+        checkedAt: {type: string, format: date-time}
+        startedAt: {type: string, format: date-time}
+        rulesUpdatedAt: {type: string, format: date-time}
+        error: {type: string}
+    NodeSecurityRequest:
+      type: object
+      required: [cursor, interfaces]
+      properties:
+        packetQuotas: {type: object, additionalProperties: {type: integer, format: int64}}
+        cursor: {type: string}
+        interfaces: {type: array, items: {$ref: '#/components/schemas/SecurityInterface'}}
+    NodeSecurityObservation:
+      type: object
+      required: [cursor, alerts, sensor, coverage, historyGap, hasMore]
+      properties:
+        packetRetention: {type: object, additionalProperties: {$ref: '#/components/schemas/PacketRetention'}}
+        cursor: {type: string}
+        alerts: {type: array, items: {$ref: '#/components/schemas/SecurityAlert'}}
+        sensor: {$ref: '#/components/schemas/SecuritySensor'}
+        coverage: {type: object, additionalProperties: {type: integer}}
+        historyGap: {type: boolean}
+        hasMore: {type: boolean}
+    SecurityOverview:
+      type: object
+      required: [alerts, sensors, counts, start, end]
+      properties:
+        alerts: {type: array, items: {$ref: '#/components/schemas/SecurityAlert'}}
+        sensors: {type: array, items: {$ref: '#/components/schemas/SecuritySensor'}}
+        counts:
+          type: object
+          required: [high, medium, low]
+          properties:
+            high: {type: integer, format: int64}
+            medium: {type: integer, format: int64}
+            low: {type: integer, format: int64}
+        nextCursor: {type: integer, format: int64}
+        start: {type: string, format: date-time}
+        end: {type: string, format: date-time}
+    TrafficObservation:
+      type: object
+      required: [flows, errors, observedAt, samplingRate, windowSeconds, omittedSamples]
+      properties:
+        flows: {type: array, items: {$ref: '#/components/schemas/CaptureFlow'}}
+        errors: {type: object, additionalProperties: {type: string}}
+        observedAt: {type: string, format: date-time}
+        samplingRate: {type: integer, description: IPFIX export denominator; 1 means every packet contributes to the flow counters.}
+        windowSeconds: {type: integer, description: Rolling retention window for observed samples.}
+        omittedSamples: {type: integer, format: int64, description: Sample records in the observation window excluded by buffer or conversation budgets; not estimated packets.}
+        retention: {$ref: '#/components/schemas/PacketRetention'}
+    PacketRetention:
+      type: object
+      required: [limitBytes, usedBytes, status]
+      properties:
+        limitBytes: {type: integer, format: int64}
+        usedBytes: {type: integer, format: int64}
+        oldestAt: {type: string, format: date-time}
+        newestAt: {type: string, format: date-time}
+        status: {type: string, enum: [recording, idle, unavailable]}
+        error: {type: string}
+    RecentPacketPage:
+      type: object
+      required: [packets, retention, errors]
+      properties:
+        packets: {type: array, items: {$ref: '#/components/schemas/CapturePacket'}}
+        nextCursor: {type: string}
+        retention: {$ref: '#/components/schemas/PacketRetention'}
+        errors: {type: object, additionalProperties: {type: string}}
+    CreateCapture:
+      type: object
+      required: [assetIds, durationSeconds, fileSizeMiB]
+      properties:
+        assetIds: {type: array, minItems: 1, items: {type: string}}
+        durationSeconds: {type: integer, minimum: 10, maximum: 1800}
+        fileSizeMiB: {type: integer, minimum: 1, maximum: 1024}
+        filter: {type: string, description: BPF capture filter}
+    CaptureInterface:
+      type: object
+      required: [assetId, assetName, interfaceId, networkId, portName, nodeId, mac, address]
+      properties:
+        assetId: {type: string}
+        assetName: {type: string}
+        interfaceId: {type: string}
+        networkId: {type: string}
+        portName: {type: string}
+        nodeId: {type: string}
+        mac: {type: string}
+        address: {type: string}
+    NodeCaptureRequest:
+      type: object
+      required: [id, environmentId, settings, interfaces]
+      properties:
+        id: {type: string}
+        environmentId: {type: string}
+        settings: {$ref: '#/components/schemas/CreateCapture'}
+        interfaces: {type: array, items: {$ref: '#/components/schemas/CaptureInterface'}}
+    CaptureSegment:
+      type: object
+      required: [id, nodeId, environmentId, assetIds, status, startedAt, bytes, packets, omittedFlows]
+      properties:
+        id: {type: string}
+        nodeId: {type: string}
+        nodeName: {type: string}
+        environmentId: {type: string}
+        assetIds: {type: array, items: {type: string}}
+        status: {type: string, enum: [starting, running, stopped, failed]}
+        startedAt: {type: string, format: date-time}
+        finishedAt: {type: string, format: date-time}
+        error: {type: string}
+        bytes: {type: integer, format: int64}
+        packets: {type: integer, format: int64}
+        omittedFlows: {type: integer, format: int64, description: Packets excluded from online aggregation due to distinct conversation limit; raw capture is unaffected.}
+        kernelDroppedPackets: {type: integer, format: int64, description: Cumulative kernel drops reported by the native capture intervals contributing to this file; omitted until source statistics are available.}
+    CaptureList:
+      type: object
+      required: [segments, errors]
+      properties:
+        segments: {type: array, items: {$ref: '#/components/schemas/CaptureSegment'}}
+        errors: {type: object, additionalProperties: {type: string}}
+    CaptureDetail:
+      type: object
+      required: [segment, flows]
+      properties:
+        segment: {$ref: '#/components/schemas/CaptureSegment'}
+        flows: {type: array, items: {$ref: '#/components/schemas/CaptureFlow'}}
+    CaptureFlow:
+      type: object
+      required: [source, destination, protocol, sourcePort, destinationPort, bytes, packets, bytesPerSecond, firstSeen, lastSeen]
+      properties:
+        nodeId: {type: string, description: Node that owns this observation.}
+        interfaceId: {type: string, description: Managed interface that owns this observation.}
+        networkId: {type: string, description: Managed network of the owning interface.}
+        interfaceIndex: {type: integer, minimum: 0, description: Original PCAPNG interface index; present for captured conversations.}
+        source: {type: string}
+        destination: {type: string}
+        sourceAssetId: {type: string}
+        destinationAssetId: {type: string}
+        sourceAssetName: {type: string}
+        destinationAssetName: {type: string}
+        protocol: {type: string}
+        appProtocol: {type: string, description: Application protocol identified by TShark when capture data is available.}
+        sourcePort: {type: integer}
+        destinationPort: {type: integer}
+        bytesPerSecond: {type: number, format: double, description: Mean bytes per second over the most recent up-to-ten seconds of this capture.}
+        bytes: {type: integer, format: int64}
+        packets: {type: integer, format: int64}
+        firstSeen: {type: string, format: date-time}
+        lastSeen: {type: string, format: date-time}
+    CapturePacket:
+      type: object
+      required: [number, time, length, capturedLength, interfaceIndex, source, destination, sourcePort, destinationPort, protocol, summary]
+      properties:
+        id: {type: string, description: Stable opaque node/segment/frame identity for recent packets}
+        nodeId: {type: string}
+        assetId: {type: string}
+        interfaceId: {type: string}
+        networkId: {type: string}
+        sourceMac: {type: string}
+        destinationMac: {type: string}
+        number: {type: integer, format: int64}
+        time: {type: string, format: date-time}
+        length: {type: integer}
+        capturedLength: {type: integer}
+        interfaceIndex: {type: integer}
+        source: {type: string}
+        destination: {type: string}
+        sourcePort: {type: integer}
+        destinationPort: {type: integer}
+        protocol: {type: string}
+        transportProtocol: {type: string, description: "TCP, UDP, ICMP or ICMPv6 from the decoded packet header, independently of the displayed application protocol."}
+        summary: {type: string}
+    CapturePacketPage:
+      type: object
+      required: [packets]
+      properties:
+        packets: {type: array, items: {$ref: '#/components/schemas/CapturePacket'}}
+        nextCursor: {type: integer, format: int64}
+    PacketField:
+      type: object
+      required: [name, label, offset, length, children]
+      properties:
+        name: {type: string}
+        label: {type: string}
+        value: {type: string}
+        offset: {type: integer}
+        length: {type: integer}
+        children: {type: array, items: {$ref: '#/components/schemas/PacketField'}}
+    CapturePacketDetail:
+      type: object
+      required: [packet, hex, layers]
+      properties:
+        packet: {$ref: '#/components/schemas/CapturePacket'}
+        hex: {type: string, description: Complete captured frame bytes as hexadecimal.}
+        layers: {type: array, items: {$ref: '#/components/schemas/PacketField'}}

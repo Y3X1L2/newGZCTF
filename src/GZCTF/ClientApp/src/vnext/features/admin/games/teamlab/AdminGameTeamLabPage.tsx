@@ -25,12 +25,12 @@ export function AdminGameTeamLabPage() {
   const [actionError, setActionError] = useState<unknown>(null)
   const [selectedTarget, setSelectedTarget] = useState<TeamLabGameTarget | null>(null)
 
-  if (gameId <= 0) return <DataState description="比赛编号无效。" title="无法打开 TeamLab 编排" />
+  if (gameId <= 0) return <DataState description="比赛编号无效。" title="无法打开 比赛环境" />
   if (!supportsTeamLabGame(game.gameType)) {
     return <DataState description="仅渗透演练和混合赛制可以绑定 TeamLab 场景。" title="当前赛制不支持 TeamLab" />
   }
-  if (data.isLoading) return <DataState description="正在并行读取比赛绑定、Release 与 rollout 状态。" loading title="TeamLab 编排加载中" />
-  if (data.stateError || !data.state) return <DataState description={errorMessage(data.stateError, 'TeamLab 比赛状态加载失败。')} title="无法打开 TeamLab 编排" />
+  if (data.isLoading) return <DataState loading title="比赛环境加载中" />
+  if (data.stateError || !data.state) return <DataState description={errorMessage(data.stateError, 'TeamLab 比赛状态加载失败。')} title="无法打开 比赛环境" />
 
   const updateRollout = async (action: () => Promise<TeamLabGameRollout>) => {
     if (busy) return
@@ -42,6 +42,7 @@ export function AdminGameTeamLabPage() {
       await data.targets.mutate()
     } catch (error) {
       setActionError(error)
+      await data.mutateState()
     } finally {
       setBusy(false)
     }
@@ -72,21 +73,21 @@ export function AdminGameTeamLabPage() {
     <main className={styles.page}>
       <AdminPageHeader
         actions={<div className={styles.headerActions}><ActionButton icon={<RefreshCw size={15} />} onClick={() => refreshTargets()} type="button">刷新</ActionButton></div>}
-        eyebrow="TEAMLAB ORCHESTRATION"
-        title="TeamLab 编排"
+        eyebrow=""
+        title="比赛环境"
       />
-      {actionError ? <InlineFeedback tone="danger">{errorMessage(actionError, 'TeamLab 编排操作失败。')}</InlineFeedback> : null}
-      {data.releasesError ? <InlineFeedback tone="danger">{errorMessage(data.releasesError, '可用 Release 加载失败。')}</InlineFeedback> : null}
-      {data.topologyError ? <InlineFeedback tone="danger">{errorMessage(data.topologyError, '绑定场景加载失败。')}</InlineFeedback> : null}
+      {actionError ? <InlineFeedback tone="danger">{errorMessage(actionError, '比赛环境操作失败。')}</InlineFeedback> : null}
+      {data.releasesError ? <InlineFeedback tone="danger">{errorMessage(data.releasesError, '场景版本 加载失败。')}</InlineFeedback> : null}
+      {data.assetsError ? <InlineFeedback tone="danger">{errorMessage(data.assetsError, '绑定场景加载失败。')}</InlineFeedback> : null}
 
       {data.releases.length ? (
         <TeamLabReleaseSelector binding={data.state.binding} busy={busy || objectivesDirty} onSelect={selectRelease} releases={data.releases} rollout={data.state.rollout} />
-      ) : <DataState description="请先在 TeamLab 场景库中校验并发布一个不可变版本。" title="暂无可用 Release" />}
+      ) : <DataState description="在组网环境中保存场景模板。" title="暂无场景版本" />}
 
       <GameObjectiveBindingEditor
-        assets={data.topology?.definition.assets ?? []}
+        assets={data.assets}
         binding={data.state.binding}
-        loading={data.topologyLoading}
+        loading={data.assetsLoading}
         onSave={async (request) => {
           const binding = await teamLabGameAdminApi.replaceObjectives(gameId, request)
           await data.mutateState({ binding, rollout: data.state!.rollout }, { revalidate: false })
@@ -111,7 +112,7 @@ export function AdminGameTeamLabPage() {
           <TeamLabTargetTable onSelect={setSelectedTarget} targets={data.targets} />
         </>
       ) : (
-        <section className={styles.notPrepared}><Network size={20} /><DataState description="选择 Release 后点击“提前准备环境”，系统会按已审核队伍建立可观测部署目标。" title="比赛环境尚未准备" /></section>
+        <section className={styles.notPrepared}><Network size={20} /><DataState description="" title="比赛环境尚未准备" /></section>
       )}
 
       <TeamLabTargetDrawer
@@ -120,7 +121,6 @@ export function AdminGameTeamLabPage() {
         onRebuild={async (target) => { await teamLabGameAdminApi.rebuildTeam(gameId, target.teamId); setSelectedTarget(null); await refreshTargets() }}
         rollout={data.state.rollout}
         target={selectedTarget}
-        topologyId={data.state.binding?.topologyId ?? null}
       />
     </main>
   )

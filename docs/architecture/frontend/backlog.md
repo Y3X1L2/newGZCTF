@@ -94,7 +94,7 @@ Docker 和 Windows VM 已有运行链路，Linux VM SSH 尚未形成正式产品
 
 TeamLab 已有拓扑、发布、计划、runtime、远程访问、流量和管理/选手路由。仍需持续验证多节点故障、双 Worker 竞争、长时间流量采集、PCAP、资源残留和容量上限。
 
-退出条件：按 [TeamLab 基础验收手册](../../modules/teamlab/guides/foundation-acceptance.md) 在真实节点完成规模、故障和清理验收，并记录可重复证据。
+退出条件：按 [TeamLab 基础验收手册](../../archive/teamlab-internal-20261110/guides/foundation-acceptance.md) 在真实节点完成规模、故障和清理验收，并记录可重复证据。
 
 ### 5.2 AWDP 手工验收
 

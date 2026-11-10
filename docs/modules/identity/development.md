@@ -28,7 +28,7 @@
 [TeamController](../../../src/GZCTF/Controllers/TeamController.cs) 处理创建、邀请、入队申请、
 审核、转让、移除成员和离队；[TeamRepository](../../../src/GZCTF/Repositories/TeamRepository.cs) 保存关系。
 核对当前用户是否队长/成员、战队是否锁定、申请是否属于该队以及比赛中的使用限制。
-战队删除需保留相关业务清理条件，不能仅删成员关系就宣称参赛事实已清除。
+战队删除先通过 `PenetrationTeamLabAdapter.EnsureTeamDrainedBeforeDeleteAsync` 清理关联 Netlab 环境；底座确认销毁后，再删除队伍业务记录。
 
 [StudentGroupAdminController](../../../src/GZCTF/Controllers/StudentGroupAdminController.cs)
 处理管理端学员组，学员组与战队不是同一个对象。
@@ -48,6 +48,8 @@
 真实验收须检查平台授权、禁用用户、角色变化、本地重定向与后续会话，不能仅测试 JSON 解析。
 
 ## API token 签发、验证与授权
+
+组网接入使用底座已有的普通服务 Token，在场景连接设置中加密保存。上层用户沿用现有账号，入口根据角色、资源归属和比赛关系授权；API token 页面保留普通业务授权。接入机制见 [TeamLab](../teamlab/netlab-integration.md#权限与实时状态)。
 
 [ApiTokensController](../../../src/GZCTF/Modules/Identity/Api/ApiTokensController.cs)
 暴露浏览器管理入口 `/api/tokens`；创建、列表和撤销本身需要教师权限。
