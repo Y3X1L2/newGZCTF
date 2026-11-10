@@ -39,4 +39,4 @@ PR #42 审查修复：
 - SSE 脱敏限定为选手环境变更事件；容器日志保留正文与流式传输。
 - 本轮真实 PostgreSQL 与 HTTP/WebSocket 定向测试 16/16，通过部署期间修改目标、关闭期间创建 VPN、撤销失败后后台重试、角色边界和日志传输验证。前端重试交互 2/2，类型、lint 与架构检查通过，后端构建为零警告、零错误。测试请求流复用与命名冲突已在测试代码修正，前端依赖按锁文件补齐。全量门禁由 PR CI 执行。
 
-上层 [PR #42](https://github.com/Y3X1L2/newGZCTF/pull/42) 和底座 [PR #1](https://github.com/scmypapa/netlab/pull/1) 为待审候选。合并与部署按用户明确指令执行，生产现状见 [当前状态](../current-state.md)。
+上层 [PR #42](https://github.com/Y3X1L2/newGZCTF/pull/42) 已合入并于 11-10 上线，原 release-v2 四机场景迁入独立 YINYU 项目，启停通过；流量解析异常另记待办。底座 [PR #1](https://github.com/scmypapa/netlab/pull/1) 仍未合并或部署。生产证据和验收范围见 [上线记录](2026-11-10-netlab-rollout.md)。

@@ -20,6 +20,6 @@ YINYU 管理用户、参赛关系、开放时间、目标、Flag、计分和重�
 | --- | --- |
 | 连接底座、制作场景与用于比赛 | [接入与使用](netlab-integration.md) |
 | 定位源码、生成契约与验证 | [开发地图](development.md) |
-| 核对候选代码与上线范围 | [任务记录](../../records/2026-11-10-netlab-integration.md)、[当前状态](../../current-state.md) |
+| 核对代码与上线范围 | [任务记录](../../records/2026-11-10-netlab-integration.md)、[当前状态](../../current-state.md) |
 
-现有场景、镜像和运行实例在上线时迁移。旧执行面的文档保存在 [历史参考](../../archive/teamlab-internal-20261110/reference/README.md)，用于核对原数据和现场配置。
+原 release-v2 四机场景和镜像已迁入独立 YINYU 项目，真实启停通过；流量解析及 VM 初始化文件的剩余工作见 [后续事项](../../backlog.md)。旧执行面的文档保存在 [历史参考](../../archive/teamlab-internal-20261110/reference/README.md)，用于核对原数据和现场配置。

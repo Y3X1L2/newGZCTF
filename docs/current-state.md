@@ -1,23 +1,23 @@
 # YINYU 当前开发状态
 
-整理日期为 2026-11-09。北京时间 23:34，主站 `.27` 完成本轮更新。历史负载图的按钮和文字更紧凑，支持滚轮缩放时间轴，多处页面去掉了标题下重复的说明。详见[最新发布](records/2026-11-09-ui-polish-rollout.md)。
+整理日期为 2026-11-10。北京时间 21:34，PR #42 已合入并部署至主站 `.27`，组网接入 `.40` 的独立 YINYU 项目。原 release-v2 四机场景已迁入，真实启停通过；流量解析异常仍待修复。详见[最新发布](records/2026-11-10-netlab-rollout.md)。
 本页只保留当前摘要，更新时替换旧事实；完整测试、部署过程和授权边界放在任务记录中。目标120行以内，超长时提炼摘要。
 
 ## 代码与部署基线
 
 | 项目 | 最新已知事实 | 依据与时效 |
 | --- | --- | --- |
-| 未合并候选：Netlab 接入 | [PR #42](https://github.com/Y3X1L2/newGZCTF/pull/42) 使用原有服务 Token 调用独立底座，场景组件源码迁入上层；底座仅保留 VM 初始化文件扩展。生产保持 11-09 版本，数据在上线时迁移 | [本次调用链与验证](records/2026-11-10-netlab-integration.md) |
+| Netlab 接入 | PR #42 已合入 `8d9efc7c` 并上线；原四机场景进入独立 YINYU 项目，底座仍为 v1.2.2 | [调用链](records/2026-11-10-netlab-integration.md)、[上线证据](records/2026-11-10-netlab-rollout.md) |
 | 开发主线 | `main`；新任务从实时 fetch 后的 `origin/main` 创建分支 | SHA 以 Git 为准，本页不追写每次文档提交 |
 | 培训实例修复 | PR #24 合入 `60170a52`，PR #25 为后续部署记录；课程默认每用户 3 实例，公共练习和课程额度隔离 | [主线修复与发布](records/2026-10-11-training-runtime-mainline.md)、[课程生命周期](modules/training/reference/container-lifecycle.md) |
 | 培训动态设置 / 练习分页 | PR #26 已合入 `b1812d15`，PR #27记录已部署；管理员可动态设置培训额度，练习/管理题库使用服务端分页 | Git 合入事实与[新任务记录](records/2026-10-11-training-quota-settings.md)、[分页说明](modules/exercise/reference/catalog-pagination.md)；10-11发布交接已确认API与页面分页验收；本轮未重新实测 |
-| 主站发布 | 前端来自 `cf473cad`（PR #38 至 #40），主站后端来自 `0fadb6c3` | 发布目录和制品身份见[最新发布](records/2026-11-09-ui-polish-rollout.md) |
-| 前端 / Agent | 前端制品共 227 个文件，Agent 进程持续运行 | [最新发布](records/2026-11-09-ui-polish-rollout.md) |
-| 数据库 | 152 条迁移记录，头为 `20261017184129_AddUserDeletionTombstone` | [最新发布](records/2026-11-09-ui-polish-rollout.md) |
-| 应用回退 | 上一版为 `ui-polish-d0082b51…/publish`，保留旧版和回退脚本 | [最新发布](records/2026-11-09-ui-polish-rollout.md) |
-| 备份 | 11-09 双库、附件和加密配置备份通过校验，双库隔离恢复用时 7 分 34 秒 | 备份位置见[最新发布](records/2026-11-09-ui-polish-rollout.md) |
-| 服务与页面 | 主站约 13 秒恢复服务，首页和配置接口正常，健康检查保持既有降级状态；浏览器确认图表缩放和文案调整 | [最新发布](records/2026-11-09-ui-polish-rollout.md) |
-| 节点与调度 | 最新切换后 3 节点在线，活跃队列为 0；前次验收记录 530 个模板 Ready，分发 240 Ready / 1 既有 Failed | 课程 Docker 创建、入口 HTTP 200 和销毁见[前次验收](records/2026-11-09-history-rollout.md) |
+| 主站发布 | 前后端均来自 `8d9efc7c`（PR #42） | 发布目录和身份见[最新发布](records/2026-11-10-netlab-rollout.md) |
+| 前端 / Agent | 前端制品共 271 个文件，原 Agent 二进制和进程保持不变 | [最新发布](records/2026-11-10-netlab-rollout.md) |
+| 数据库 | 153 条迁移，头为 `20261110070457_IntegrateNetlabSceneBindings` | [最新发布](records/2026-11-10-netlab-rollout.md) |
+| 应用回退 | 上一版为 `ui-polish-cf473cad…/publish`；回退脚本先检查新增比赛绑定，未实际回退 | [回退条件](records/2026-11-10-netlab-rollout.md) |
+| 备份 | 11-10 双库、附件和加密配置通过校验；双库恢复用时 8 分 9 秒，临时恢复环境已清理 | [备份位置](records/2026-11-10-netlab-rollout.md) |
+| 服务与页面 | 主站约 14 秒恢复，首页、配置接口和附件通过；健康检查保持既有降级；组网启停通过，流量页报文解析失败 | [验收边界](records/2026-11-10-netlab-rollout.md) |
+| 节点与调度 | 3 节点在线，活跃队列为 0；530 模板 Ready，分发 240 Ready / 1 既有 Failed | [本轮核验](records/2026-11-10-netlab-rollout.md)；Docker 创建、HTTP 入口和销毁仍见[11-09 验收](records/2026-11-09-history-rollout.md) |
 
 `stable-20260908` 保留用于历史复现，现网身份以最新发布记录和现场回读为准。生产操作前重新核对现场、授权、候选身份、备份和回退；[10-11文档核验记录](records/2026-10-11-docs-collaboration-audit.md)与既有发布证据分别记录。
 
@@ -27,7 +27,7 @@
 | --- | --- | --- |
 | 历史负载 | 概览与节点详情读取后台持续保存的负载记录，支持 1 小时 / 24 小时 / 7 天；关闭页面不影响采集 | [Runtime](modules/runtime/development.md)、[生产验证](records/2026-11-09-history-rollout.md) |
 | CTF / 理论 / 培训 / 练习 | 已有业务入口；11-09 课程4题88 Docker 创建、入口 HTTP 200、销毁与空态通过；Flag 提交最近实测仍为 10-18 | [模块索引](modules/README.md)、[课程生命周期](modules/training/reference/container-lifecycle.md)、[课程业务验收](records/2026-11-09-history-rollout.md) |
-| TeamLab | 场景、发布、runtime、逐资产操作、受管网络、文件/会话、流量/抓包；10-18拓扑正交避障、双网卡分线、卡片类型标签和版本启动层级已发布，原四机场景浏览器复验 | [制作导入](archive/teamlab-internal-20261110/guides/authoring.md)、[运行事实契约](archive/teamlab-internal-20261110/reference/runtime-capabilities.md)；既有四机生命周期与删除验收仍见各自历史记录 |
+| TeamLab | 正式接入独立 Netlab，原 release-v2 四机场景及版本保留；真实启停和来宾代理响应通过；流量解析异常，VM 动态 Flag 文件注入依赖未部署补丁 | [接入说明](modules/teamlab/netlab-integration.md)、[上线记录](records/2026-11-10-netlab-rollout.md) |
 | 镜像与运行底座 | 统一队列、按需节点准备、下载容量守卫、最后消费者缓存释放；历史来源迁移、模板退役和受控 Registry GC 已执行 | [第二批发布](records/2026-10-09-image-lifecycle-second-rollout.md)；自动 GC、冷缓存 TTL 不由该次手工回收证明 |
 | 身份 / AWDP | 管理员删除队长会退队/交接并匿名保留历史，凭据和会话撤销；10-18临时队长真实删除、旧会话401、新登录401及SQL清理断言通过；未删除既有用户 | [Identity](modules/identity/development.md)；Portal SSO和AWDP仍需专门真实验收，见[Open API](operations/open-api-integration.md)、[AWDP手册](modules/awdp/guides/manual-acceptance.md) |
 | 管理日志 | 列表显示操作者、动作、对象与结果；详情无二级折叠，正常事件不展示空错误；例行ACK/HTTP明细降噪，历史缺失身份/结果显示未知；真实请求记录User/admin/IP，后台标System | [日志改造](records/2026-10-14-logs-readability.md)、[现场验收](records/2026-10-16-logs-browser-acceptance.md)、[Audit](modules/audit/README.md)；正常/失败详情通过，Docker完整链路因题目镜像缺Ready模板未通过，无活动容器残留 |
@@ -38,6 +38,7 @@
 
 技术缺口统一记录在 [后续事项](backlog.md)，本页只列重点：
 
+- Netlab 流量报文解析错误、VM 初始化文件补丁及比赛真实业务验收，见 NETLAB-01 / NETLAB-02。
 - `.27` 来宾网络回读根因、运行失败诊断粒度、CPU 单位与执行 vCPU 语义、磁盘硬配额。
 - 迁移来源漂移、指标并发、既有健康降级；历史问题须重新定位，不能套用旧迁移数量或旧依赖版本。
 - 镜像持久导入入口收口、自动 Blob GC、冷缓存策略和运行增长预算。

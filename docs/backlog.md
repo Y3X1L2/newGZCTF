@@ -1,10 +1,11 @@
 # 后续事项
 
-维护日期：2026-11-09。这里保存尚未闭环或需要重核的事项，不把历史计划中的所有条目自动继承为待办。接手时核对最新主线与现场，并在任务记录中声明负责人、范围和验收方法；关闭后保留证据链接，删除旧的待办描述。
+维护日期：2026-11-10。这里保存尚未闭环或需要重核的事项，不把历史计划中的所有条目自动继承为待办。接手时核对最新主线与现场，并在任务记录中声明负责人、范围和验收方法；关闭后保留证据链接，删除旧的待办描述。
 
 | 编号 | 事项与当前边界 | 接手时的验收 / 证据 |
 | --- | --- | --- |
-| NETLAB-01 | Netlab 接入候选已建立；现有场景、镜像、实例与旧活动任务在上线窗口迁移，历史实体和镜像引用继续保留 | [接入顺序](modules/teamlab/netlab-integration.md#更新与上线)、[候选记录](records/2026-11-10-netlab-integration.md)；上线前核对物理资源、绑定、旧任务与容量释放，切换后完成真实业务冒烟 |
+| NETLAB-01 | 原 release-v2 四机场景已迁入，启停及来宾代理响应通过；VM 初始化文件仍需 Netlab PR #1，比赛完整业务链、VPN 和桌面登录未做本轮真实验收 | [上线记录](records/2026-11-10-netlab-rollout.md)；另行授权底座补丁发布后，验证动态 Flag 文件写入、队伍隔离、提交计分、重建和结束清理 |
+| NETLAB-02 | 新场景流量页返回 409：报文解析第 3 行第 155 列引号错误，列表不可用；性能页磁盘 I/O 当时无记录 | [现场证据](records/2026-11-10-netlab-rollout.md)；定位底座报文输出与解析规则，保留触发样本并测试引号和分隔符，再验证真实抓包和磁盘指标 |
 | RUN-01 | `.27` 来宾网络回读曾失败；改在 `.31` 通过不代表根因解决。10-10 记录已恢复三节点调度旗标，不能继续沿用 10-09 的停止调度结论 | [第二批发布](records/2026-10-09-image-lifecycle-second-rollout.md)、[后续发布](records/2026-10-10-teamlab-delete-rollout.md)；独立复现、修补和网络回读 |
 | RUN-02 | VM 执行 vCPU 与节点 cpuUnits 报告语义不一致；自动模式下 maxVms 不能当硬限；Docker 展开预算、运行增长和磁盘硬配额仍有边界 | [第二批发布](records/2026-10-09-image-lifecycle-second-rollout.md)、[分盘修复](records/2026-10-07-teamlab-workload-storage-rollout.md)；真实 CPU/内存/文件系统准入与拒绝测试 |
 | RUN-03 | `guest_network_control_failed` 等诊断缺少精确资产 / 异常分类；10-16镜像未就绪仍归为 `operation.unclassified_failure`；Main 重启后调度旗标恢复原因未独立核实 | [第二批发布](records/2026-10-09-image-lifecycle-second-rollout.md)、[删除发布](records/2026-10-10-teamlab-delete-rollout.md)、[日志现场](records/2026-10-16-logs-browser-acceptance.md)；结构化诊断与维护围栏回归 |
