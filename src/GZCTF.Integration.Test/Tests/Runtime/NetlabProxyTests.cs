@@ -112,21 +112,23 @@ public sealed class NetlabProxyTests : IAsyncLifetime
         Assert.Equal(Prefix + "/api/v1/operations/start", response.Headers.GetValues("Operation-Location").Single());
     }
 
-    [Fact]
-    public async Task Events_ArriveBeforeStreamCompletesAndDisconnectClosesUpstream()
+    [Theory]
+    [InlineData("events", true)]
+    [InlineData("assets/container/logs", false)]
+    public async Task Events_ArriveBeforeStreamCompletesAndDisconnectClosesUpstream(string suffix, bool redact)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Get, Prefix + "/api/v1/events");
+        using var request = new HttpRequestMessage(HttpMethod.Get, Prefix + "/api/v1/environments/environment-8/" + suffix);
         request.Headers.Add("Last-Event-ID", "previous-event");
         using var response = await _browser.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, _deadline.Token);
         response.EnsureSuccessStatusCode();
         using var stream = await response.Content.ReadAsStreamAsync(_deadline.Token);
         using var reader = new StreamReader(stream);
         Assert.Equal("event: runtime.changed", await reader.ReadLineAsync(_deadline.Token));
-        Assert.Equal("data: {}", await reader.ReadLineAsync(_deadline.Token));
+        Assert.Equal(redact ? "data: {}" : "data: first", await reader.ReadLineAsync(_deadline.Token));
         Assert.Equal("", await reader.ReadLineAsync(_deadline.Token));
         _continueEvents.SetResult();
         Assert.Equal("event: runtime.changed", await reader.ReadLineAsync(_deadline.Token));
-        Assert.Equal("data: {}", await reader.ReadLineAsync(_deadline.Token));
+        Assert.Equal(redact ? "data: {}" : "data: second", await reader.ReadLineAsync(_deadline.Token));
         var received = await _requests.Reader.ReadAsync(_deadline.Token);
         Assert.Equal("previous-event", received.LastEventId);
         AssertServerIdentity(received);
@@ -247,7 +249,8 @@ public sealed class NetlabProxyTests : IAsyncLifetime
             }
             return;
         }
-        if (request.Path == "/base/api/v1/events")
+        if (request.Path is { Value: "/base/api/v1/environments/environment-8/events" or
+            "/base/api/v1/environments/environment-8/assets/container/logs" })
         {
             using var disconnected = context.RequestAborted.Register(() => _eventsClosed.TrySetResult());
             context.Response.ContentType = "text/event-stream";

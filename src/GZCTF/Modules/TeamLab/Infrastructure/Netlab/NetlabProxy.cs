@@ -51,7 +51,8 @@ public sealed class NetlabProxy(NetlabConnection connection, IHttpClientFactory 
         }
         context.Response.Headers.CacheControl = "private, no-store";
         context.Features.Get<IHttpResponseBodyFeature>()?.DisableBuffering();
-        if (workspace.EnvironmentId is not null && response.Content.Headers.ContentType?.MediaType == "text/event-stream")
+        if (workspace.EnvironmentId is not null && path == $"api/v1/environments/{workspace.EnvironmentId}/events" &&
+            response.Content.Headers.ContentType?.MediaType == "text/event-stream")
         {
             using var reader = new StreamReader(await response.Content.ReadAsStreamAsync(token));
             while (await reader.ReadLineAsync(token) is { } line)

@@ -19,6 +19,8 @@ public sealed record NetlabWorkspaceContext(string BasePath, string ProjectId, s
 public sealed class NetlabWorkspaceAccess(AppDbContext db, NetlabConnection connection, IParticipationRepository participations,
     IServiceScopeFactory scopes, NetlabClient netlab)
 {
+    public static string GameLeaseKey(int gameId) => $"penetration:configuration:{gameId}";
+
     public async Task<NetlabWorkspaceContext> AuthorizeAsync(UserInfo user, int? gameId, CancellationToken token)
     {
         if (user.DeletedAtUtc is not null || user.LockoutEnd > DateTimeOffset.UtcNow)

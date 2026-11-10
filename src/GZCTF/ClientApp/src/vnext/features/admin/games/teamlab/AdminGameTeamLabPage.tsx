@@ -42,6 +42,7 @@ export function AdminGameTeamLabPage() {
       await data.targets.mutate()
     } catch (error) {
       setActionError(error)
+      await data.mutateState()
     } finally {
       setBusy(false)
     }

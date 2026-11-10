@@ -30,8 +30,8 @@ export function TeamLabRolloutControls({
       <header className={styles.sectionHeader}><div><h2 id="teamlab-controls-title">比赛环境控制</h2></div></header>
       <div className={styles.controlActions}>
         <ActionButton disabled={!binding?.activeReleaseId || busy || configurationDirty || rollout?.status === 'draining' || preparing} icon={<PackageCheck size={16} />} onClick={() => onPrepare()} tone="primary" type="button">提前准备环境</ActionButton>
-        {rollout?.desiredAccessOpen ? (
-          <ActionButton disabled={busy || finished} icon={<DoorClosed size={16} />} onClick={() => onAccess(false)} type="button">关闭选手入口</ActionButton>
+        {rollout && (rollout.desiredAccessOpen || rollout.counts.accessOpen > 0) ? (
+          <ActionButton disabled={busy || finished} icon={<DoorClosed size={16} />} onClick={() => onAccess(false)} type="button">{rollout.desiredAccessOpen ? '关闭选手入口' : '重试关闭入口'}</ActionButton>
         ) : (
           <ActionButton disabled={!prepared || busy || finished} icon={<DoorOpen size={16} />} onClick={() => onAccess(true)} type="button">开放选手入口</ActionButton>
         )}

@@ -10,6 +10,7 @@ using GZCTF.Integration.Test.Base;
 using GZCTF.Models;
 using GZCTF.Models.Data;
 using GZCTF.Modules.Penetration.Application;
+using GZCTF.Modules.Penetration.Contracts;
 using GZCTF.Modules.Penetration.Domain;
 using GZCTF.Modules.TeamLab;
 using GZCTF.Modules.TeamLab.Application;
@@ -87,6 +88,18 @@ public sealed class NetlabCompetitionTests
         var state = "running";
         var operationState = "running";
         var interruptReset = true;
+        var createEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var continueCreate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var revokeEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var continueRevoke = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var created = false;
+        var revision = 7;
+        var vpnOpen = false;
+        var serviceOpen = false;
+        var failRevoke = true;
+        var revokePolls = 0;
+        var revokeKind = "";
+        List<string> requests = [], revokedEndpoints = [];
         var resources = new { cpu = 1, memoryMiB = 512, diskGiB = 8 };
         var assets = new[] {
             new { id = "web", name = "门户", templateId = "container", resources, interfaces = Array.Empty<object>() },
@@ -96,6 +109,7 @@ public sealed class NetlabCompetitionTests
         upstream.Run(async http =>
         {
             Assert.False(http.Request.Headers.ContainsKey("X-Netlab-Context"));
+            requests.Add(http.Request.Method + " " + http.Request.Path);
             object response = http.Request.Path.Value switch
             {
                 "/api/v1/blueprints/scene" => new { id = "scene", name = "场景模板", projectId = "test", latestVersionId = "version",
@@ -107,21 +121,51 @@ public sealed class NetlabCompetitionTests
                     new { id = "vm", name = "Windows", kind = "vm", os = "windows", version = 1, source = "", resources }
                 },
                 "/api/v1/environments/environment" => new { id = "environment", name = "队伍环境", projectId = "test",
-                    externalReference = $"game:{game.Id}/team:{team.Id}", revision = 7, status = "running", view = new { }, createdAt = now, updatedAt = now,
+                    externalReference = $"game:{game.Id}/team:{team.Id}", revision, status = "running", view = new { }, createdAt = now, updatedAt = now,
                     spec = new { networks = Array.Empty<object>(), assets = new[] { new { id = "web", name = "门户", templateId = "container",
                         resources, interfaces = Array.Empty<object>(), parameters = new { GZCTF_FLAG = "private-flag" } } } },
                     permissions = new[] { "read", "compose", "operate", "session", "observe", "access" } },
                 "/api/v1/environments/environment/state" => new { id = "environment", status = state, revision = 7, assets = Array.Empty<object>(), updatedAt = now },
                 "/api/v1/operations/rebuild" => new { id = "rebuild", scopeKind = "environment", scopeId = "environment",
                     kind = "rebuild", state = operationState, phase = "execute", completed = 0, total = 1, retryable = false, createdAt = now, updatedAt = now },
+                "/api/v1/environments/environment/vpn-access" => vpnOpen ? new[] { new VPNAccess {
+                    Id = "peer", Name = "队伍 VPN", PublicKey = "public-key", OperationId = "issued", CreatedAt = now } } : [],
+                "/api/v1/environments/environment/services" => serviceOpen ? new[] { new ServiceEndpoint {
+                    Id = "web", AssetId = "web", InterfaceId = "lan", TargetPort = 80, Address = "192.0.2.1", Port = 8080, UpdatedAt = now } } : [],
                 _ => new object()
             };
+            if (http.Request.Method == "DELETE")
+            {
+                Assert.False(await db.PenetrationGameLabBindings.AsNoTracking().Select(x => x.AccessOpen).SingleAsync());
+                Assert.Equal(revision.ToString(), http.Request.Query["expectedRevision"].ToString());
+                revokedEndpoints.Add(http.Request.Path);
+                revokeKind = http.Request.Path.Value!.Contains("vpn-access") ? "vpn" : "service";
+                revokePolls = 0;
+                revision++;
+                response = new Operation { Id = "revoke", Kind = revokeKind, Phase = "execute", State = OperationState.Queued, CreatedAt = now, UpdatedAt = now };
+            }
+            if (http.Request.Path == "/api/v1/operations/revoke")
+            {
+                revokeEntered.TrySetResult();
+                await continueRevoke.Task.WaitAsync(http.RequestAborted);
+                var status = ++revokePolls == 1 ? OperationState.Running : failRevoke ? OperationState.Failed : OperationState.Succeeded;
+                if (status == OperationState.Succeeded)
+                {
+                    if (revokeKind == "vpn") vpnOpen = false;
+                    else serviceOpen = false;
+                }
+                response = new Operation { Id = "revoke", Kind = revokeKind, Phase = "execute", State = status,
+                    Error = status == OperationState.Failed ? "test revocation failure" : null, CreatedAt = now, UpdatedAt = now };
+            }
             if (http.Request.Method == "POST")
             {
                 var body = (JsonObject)(await JsonNode.ParseAsync(http.Request.Body))!;
                 if (http.Request.Path == "/api/v1/environments")
                 {
                     creates.Add(body);
+                    createEntered.TrySetResult();
+                    await continueCreate.Task.WaitAsync(http.RequestAborted);
+                    created = true;
                     response = new { id = "environment", projectId = body["projectId"]!.GetValue<string>(), name = "组网比赛 · 队伍一",
                         revision = 1, status = "deploying", spec, view = new { }, createdAt = now, updatedAt = now };
                 }
@@ -141,7 +185,7 @@ public sealed class NetlabCompetitionTests
                 else throw new InvalidOperationException("Unexpected lifecycle endpoint");
             }
             else if (http.Request.Path == "/api/v1/environments")
-                response = state == "destroyed" ? Array.Empty<object>() : new[] { new { id = "environment", projectId = "test", externalReference = $"game:{game.Id}/team:{team.Id}", name = "组网比赛 · 队伍一",
+                response = !created || state == "destroyed" ? Array.Empty<object>() : new[] { new { id = "environment", projectId = "test", externalReference = $"game:{game.Id}/team:{team.Id}", name = "组网比赛 · 队伍一",
                     revision = 7, status = state, assetCount = 2, networkCount = 0, createdAt = now, updatedAt = now } };
             http.Response.ContentType = "application/json";
             await http.Response.WriteAsync(JsonConvert.SerializeObject(response));
@@ -160,8 +204,17 @@ public sealed class NetlabCompetitionTests
         var objectives = new PenetrationObjectiveService(db, client, connection, null!, leases, null!, null!,
             NullLogger<PenetrationObjectiveService>.Instance, config);
         var scenes = new PenetrationTeamLabAdapter(db, client, connection, null!, objectives, leases);
-        var deployed = await scenes.DeployTeamAsync(game.Id, team.Id, default);
-        Assert.Equal("environment", deployed.RuntimePublicId);
+        var preparing = scenes.PrepareAsync(game.Id, default);
+        await createEntered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        await using var editDb = database.CreateContext();
+        var editing = new PenetrationObjectiveService(editDb, client, connection, null!, leases, null!, null!,
+            NullLogger<PenetrationObjectiveService>.Instance, config).ReplaceAsync(game.Id, new ReplacePenetrationObjectivesModel(0, 1, []), default);
+        await Task.Delay(100);
+        Assert.False(editing.IsCompleted);
+        continueCreate.SetResult();
+        await preparing;
+        var editError = await Assert.ThrowsAsync<InvalidOperationException>(() => editing);
+        Assert.Contains("请先清理比赛环境", editError.Message);
         Assert.True((await scenes.DeployTeamAsync(game.Id, team.Id, default)).Reused);
         var create = Assert.Single(creates);
         Assert.Equal("test", create["projectId"]!.GetValue<string>());
@@ -221,7 +274,7 @@ public sealed class NetlabCompetitionTests
             User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, owner.Id.ToString())], "test")) };
         http.Response.Body = new MemoryStream();
         var controller = new NetlabWorkspaceController(accessScope.ServiceProvider.GetRequiredService<UserManager<UserInfo>>(),
-            connection, access, new NetlabProxy(connection, clients), client) { ControllerContext = new ControllerContext { HttpContext = http } };
+            connection, access, new NetlabProxy(connection, clients), client, leases) { ControllerContext = new ControllerContext { HttpContext = http } };
         http.Request.Method = "POST";
         await Assert.ThrowsAsync<TeamLabApiContractException>(() => controller.GameProxy(game.Id, "api/v1/environments/other-team/actions", default));
         await Assert.ThrowsAsync<TeamLabApiContractException>(() => controller.GameProxy(game.Id, "api/v1/environments/environment/actions", default));
@@ -243,11 +296,56 @@ public sealed class NetlabCompetitionTests
         Assert.Equal("test", creates[^1]["projectId"]!.GetValue<string>());
         Assert.Equal($"user:{owner.Id:D}", creates[^1]["externalReference"]!.GetValue<string>());
 
+        http.Request.Method = "GET";
+        http.Request.Body = System.IO.Stream.Null;
+        http.Request.ContentLength = null;
+        foreach (var path in new[] { "nodes", "storage-pools", "backup-repositories", "nodes/node/interfaces" })
+            await controller.AdminProxy("api/v1/" + path, default);
+        foreach (var (method, path) in new[] { ("PUT", "storage-pools/pool"), ("DELETE", "nodes/node"),
+            ("GET", "backup-repositories/repository/credentials"), ("GET", "volumes"), ("POST", "nodes") })
+        {
+            http.Request.Method = method;
+            var count = requests.Count;
+            var denied = await Assert.ThrowsAsync<TeamLabApiContractException>(() => controller.AdminProxy("api/v1/" + path, default));
+            Assert.Equal(403, denied.StatusCode);
+            Assert.Equal(count, requests.Count);
+        }
+        owner.Role = Role.Admin;
+        await db.SaveChangesAsync();
+        accessScope.ServiceProvider.GetRequiredService<AppDbContext>().ChangeTracker.Clear();
+        http.Request.Method = "GET";
+        await controller.AdminProxy("api/v1/backup-repositories/repository/credentials", default);
+        Assert.Contains("GET /api/v1/backup-repositories/repository/credentials", requests);
+        owner.Role = Role.Teacher;
+        await db.SaveChangesAsync();
+        accessScope.ServiceProvider.GetRequiredService<AppDbContext>().ChangeTracker.Clear();
+
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(45));
         var session = access.RunSessionAsync(owner, game.Id, player,
             cancellation => Task.Delay(Timeout.Infinite, cancellation), deadline.Token);
-        settings.AccessOpen = false;
-        await db.SaveChangesAsync();
+        state = "running";
+        vpnOpen = serviceOpen = true;
+        var closing = scenes.SetAccessAsync(game.Id, false, default);
+        await revokeEntered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        http.Request.Method = "POST";
+        var reopening = controller.GameProxy(game.Id, "api/v1/environments/environment/vpn-access", default);
+        await Task.Delay(100);
+        Assert.False(reopening.IsCompleted);
+        continueRevoke.SetResult();
+        var closeError = await Assert.ThrowsAsync<TeamLabApiContractException>(() => closing);
+        var deniedEntry = await Assert.ThrowsAsync<TeamLabApiContractException>(() => reopening);
+        Assert.Equal(403, deniedEntry.StatusCode);
+        Assert.Contains("关闭入口失败", closeError.Message);
+        Assert.False(await scenes.IsPlayerAccessOpenAsync(game.Id, default));
+        Assert.Equal(1, (await scenes.GetGameTeamLabAsync(game.Id, default)).Rollout!.Counts.AccessOpen);
+        failRevoke = false;
+        await scenes.RetireExpiredAsync(default);
+        Assert.False(vpnOpen);
+        Assert.False(serviceOpen);
+        Assert.Equal(0, (await scenes.GetGameTeamLabAsync(game.Id, default)).Rollout!.Counts.AccessOpen);
+        var removed = revokedEndpoints.Count;
+        await scenes.SetAccessAsync(game.Id, false, default);
+        Assert.Equal(removed, revokedEndpoints.Count);
         var revoked = await Assert.ThrowsAsync<TeamLabApiContractException>(() => session);
         Assert.Contains("环境尚未开放", revoked.Message);
     }

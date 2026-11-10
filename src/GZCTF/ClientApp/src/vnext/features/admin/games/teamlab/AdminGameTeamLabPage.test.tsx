@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GameAdminOutletContext } from '../GameAdminShell'
 import { AdminGameTeamLabPage } from './AdminGameTeamLabPage'
 import { useGameTeamLab } from './useGameTeamLab'
+import { TeamLabRolloutControls } from './TeamLabRolloutControls'
 
 vi.mock('./useGameTeamLab', () => ({ useGameTeamLab: vi.fn() }))
 
@@ -48,5 +49,15 @@ describe('AdminGameTeamLabPage', () => {
     expect(screen.getByText('Alpha')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('row', { name: /Alpha/ }))
     expect(screen.getByRole('link', { name: '打开环境' })).toHaveAttribute('href', '/admin/teamlab?runtime=runtime-1')
+  })
+
+  it('retries revocation while network entrances remain open', () => {
+    const onAccess = vi.fn().mockResolvedValue(undefined)
+    render(<TeamLabRolloutControls binding={binding} busy={false} configurationDirty={false}
+      onAccess={onAccess} onDrain={vi.fn()} onPrepare={vi.fn()}
+      rollout={{ ...rollout, counts: { ...rollout.counts, accessOpen: 1 } }} />)
+    expect(screen.queryByRole('button', { name: '开放选手入口' })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '重试关闭入口' }))
+    expect(onAccess).toHaveBeenCalledWith(false)
   })
 })

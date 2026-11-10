@@ -1,4 +1,5 @@
 using GZCTF.Middlewares;
+using GZCTF.Infrastructure.Concurrency;
 using GZCTF.Modules.TeamLab.Application;
 using GZCTF.Modules.TeamLab.Infrastructure.Netlab;
 using Microsoft.AspNetCore.Identity;
@@ -14,7 +15,7 @@ namespace GZCTF.Modules.TeamLab.Api;
 [ApiController]
 [Route("api/teamlab")]
 public sealed class NetlabWorkspaceController(UserManager<UserInfo> users, NetlabConnection connection,
-    NetlabWorkspaceAccess access, NetlabProxy proxy, NetlabClient client) : ControllerBase
+    NetlabWorkspaceAccess access, NetlabProxy proxy, NetlabClient client, IDistributedLeaseProvider locks) : ControllerBase
 {
     [HttpGet("workspace")]
     public async Task<IActionResult> Workspace(int? gameId, string? section, string? environmentId, string? runtimeId, CancellationToken token)
@@ -43,11 +44,16 @@ public sealed class NetlabWorkspaceController(UserManager<UserInfo> users, Netla
     private async Task ForwardAsync(int? gameId, string? path, CancellationToken token)
     {
         path = NetlabProxy.ValidateRequest(Request, path ?? "");
+        var parts = path[7..].Split('/');
+        await using var entryLease = gameId is { } game && HttpMethods.IsPost(Request.Method) &&
+            parts is ["environments", _, "vpn-access"] or ["environments", _, "assets", _, "services"]
+            ? await locks.AcquireAsync(NetlabWorkspaceAccess.GameLeaseKey(game), TimeSpan.FromSeconds(10), cancellationToken: token) : null;
+        using var lifetime = entryLease is null ? null : CancellationTokenSource.CreateLinkedTokenSource(token, entryLease.LeaseLost);
+        token = lifetime?.Token ?? token;
         var user = (await users.GetUserAsync(User))!;
         var workspace = await access.AuthorizeAsync(user, gameId, token);
         await access.RunSessionAsync(user, gameId, workspace, async session =>
         {
-            var parts = path[7..].Split('/');
             await AuthorizeResourceAsync(workspace, parts, session);
             var result = await HandleAsync(workspace, parts, session);
             if (result is not null)
@@ -84,6 +90,7 @@ public sealed class NetlabWorkspaceController(UserManager<UserInfo> users, Netla
                     if (workspace.EnvironmentId is { } own && id != own) throw NetlabWorkspaceAccess.Forbidden();
                     if (workspace.EnvironmentId is null) await access.EnvironmentAsync(workspace, id, token);
                 }
+                else if (path.Length > 1 && !workspace.Administrator) throw NetlabWorkspaceAccess.Forbidden();
                 if (workspace.EnvironmentId is not null && (!read || id != workspace.EnvironmentId)) throw NetlabWorkspaceAccess.Forbidden();
                 return;
             case "blueprints" when workspace.EnvironmentId is null:
@@ -93,11 +100,11 @@ public sealed class NetlabWorkspaceController(UserManager<UserInfo> users, Netla
                 var version = await client.GetAsync<BlueprintVersion>($"blueprint-versions/{Uri.EscapeDataString(path[1])}", token);
                 await access.BlueprintAsync(workspace, version.BlueprintId, token);
                 return;
+            case "nodes" or "storage-pools" or "volumes" or "backup-repositories" when workspace.EnvironmentId is null:
+                if (!workspace.Administrator && !(read && path is ["nodes"] or ["storage-pools"] or
+                    ["backup-repositories"] or ["nodes", _, "interfaces"])) throw NetlabWorkspaceAccess.Forbidden();
+                return;
             case "environments" when workspace.EnvironmentId is null:
-            case "nodes" when workspace.EnvironmentId is null:
-            case "storage-pools" when workspace.EnvironmentId is null:
-            case "volumes" when workspace.EnvironmentId is null:
-            case "backup-repositories" when workspace.EnvironmentId is null:
             case "templates" when workspace.EnvironmentId is null && workspace.Administrator:
                 return;
             default:

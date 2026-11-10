@@ -8,6 +8,7 @@ using GZCTF.Models.Data;
 using GZCTF.Modules.Penetration.Contracts;
 using GZCTF.Modules.Penetration.Domain;
 using GZCTF.Modules.TeamLab.Contracts;
+using GZCTF.Modules.TeamLab.Application;
 using GZCTF.Modules.TeamLab.Infrastructure.Netlab;
 using GZCTF.Repositories.Interface;
 using GZCTF.Services.Config;
@@ -50,7 +51,7 @@ public sealed class PenetrationObjectiveService(
         CancellationToken cancellationToken)
     {
         await using var lease = await locks.AcquireAsync(
-            ConfigurationLeaseKey(gameId), TimeSpan.FromSeconds(10), cancellationToken: cancellationToken);
+            NetlabWorkspaceAccess.GameLeaseKey(gameId), TimeSpan.FromSeconds(10), cancellationToken: cancellationToken);
         using var leaseCancellation = CancellationTokenSource.CreateLinkedTokenSource(
             cancellationToken, lease.LeaseLost);
         cancellationToken = leaseCancellation.Token;
@@ -394,8 +395,6 @@ public sealed class PenetrationObjectiveService(
         var previousSecret = next.Dynamic ? previous.FlagTemplate : previous.StaticFlag;
         return suppliedSecret is not null && !string.Equals(suppliedSecret, previousSecret, StringComparison.Ordinal);
     }
-
-    internal static string ConfigurationLeaseKey(int gameId) => $"penetration:configuration:{gameId}";
 
     internal static IReadOnlyList<string> DeserializeKeys(string json)
     {
