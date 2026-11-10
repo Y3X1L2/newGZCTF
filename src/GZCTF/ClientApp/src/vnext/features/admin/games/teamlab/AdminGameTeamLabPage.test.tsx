@@ -10,15 +10,12 @@ vi.mock('./useGameTeamLab', () => ({ useGameTeamLab: vi.fn() }))
 const game = { id: 8, title: '企业攻防赛', gameType: 'Penetration' } as GameAdminOutletContext['game']
 const binding = { gameId: 8, topologyId: 'topology-1', activeReleaseId: 'release-1', maxResetCount: 2, objectiveRevision: 0, objectives: [] }
 const rollout = {
-  id: 'rollout-1', releaseId: 'release-1', status: 'ready' as const,
-  preparationRequested: true, desiredAccessOpen: false, drainRequested: false,
+  id: 'rollout-1', status: 'ready' as const, desiredAccessOpen: false, preparationRequested: true,
   counts: { total: 1, pending: 0, provisioning: 0, ready: 1, accessOpen: 0, failed: 0, draining: 0, destroyed: 0, paused: 0 },
-  preparedAt: 1, accessOpenedAt: null, drainingAt: null, completedAt: null, createdAt: 1, updatedAt: 2, error: null,
 }
 const target = {
-  id: 'target-1', externalSubject: 'team:12', teamId: 12, displayName: 'Alpha', runtimeId: 'runtime-1',
-  status: 'ready' as const, operationId: null, runtimeStatus: 'running' as const, runtimeStage: 'running',
-  createdAt: 1, updatedAt: 2, error: null,
+  id: 'target-1', teamId: 12, displayName: 'Alpha', runtimeId: 'runtime-1',
+  status: 'running' as const, updatedAt: 2, error: null,
 }
 
 describe('AdminGameTeamLabPage', () => {

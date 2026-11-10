@@ -63,7 +63,7 @@ export function GameObjectiveBindingEditor({
 
   if (!binding) return null
 
-  const locked = Boolean(rollout && rollout.status !== 'completed')
+  const locked = Boolean(rollout?.preparationRequested && rollout.status !== 'completed')
   const interactionLocked = locked || saving
   const changed = (next: GameObjectiveDraft[]) => {
     setObjectives(next)

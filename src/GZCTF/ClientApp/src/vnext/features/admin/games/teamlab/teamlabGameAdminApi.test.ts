@@ -30,10 +30,6 @@ const rollout = {
   desiredAccessOpen: false,
   drainRequested: false,
   counts: { total: 1, pending: 0, provisioning: 0, ready: 1, accessOpen: 0, failed: 0, draining: 0, destroyed: 0, paused: 0 },
-  preparedAt: 1_784_918_400_000,
-  accessOpenedAt: null,
-  drainingAt: null,
-  completedAt: null,
   createdAt: 1_784_832_000_000,
   updatedAt: 1_784_918_400_000,
   error: null,
@@ -47,6 +43,8 @@ describe('teamLabGameAdminApi', () => {
 
     await expect(api.state(8)).resolves.toMatchObject({ binding: { gameId: 8 }, rollout: { status: 'ready' } })
     expect(transport.get).toHaveBeenCalledWith('/api/admin/pentest/games/8/teamlab')
+    transport.get.mockResolvedValue({ binding, rollout: { ...rollout, status: 'paused', pauseRequested: true } })
+    await expect(api.state(8)).resolves.toMatchObject({ rollout: { status: 'paused' } })
   })
 
   it('uses the deployed lifecycle endpoints without generated API or direct fetch', async () => {
@@ -81,8 +79,9 @@ describe('teamLabGameAdminApi', () => {
   })
 
   it('derives a numeric team id only from the penetration target subject contract', () => {
-    const page = { items: [{ id: 'target-1', externalSubject: 'team:12', displayName: 'Alpha', runtimeId: null, status: 'pending', operationId: null, runtimeStatus: null, runtimeStage: null, createdAt: 1, updatedAt: 2, error: null }], nextCursor: null }
+    const page = { items: [{ id: 'target-1', externalSubject: 'team:12', displayName: 'Alpha', runtimeId: null, status: 'draft', updatedAt: 2, error: null }], nextCursor: null }
     expect(parseTeamLabGameTargetPage(page).items[0].teamId).toBe(12)
+    expect(parseTeamLabGameTargetPage({ ...page, items: [{ ...page.items[0], status: 'stopped' }] }).items[0].status).toBe('stopped')
     expect(() => parseTeamLabGameTargetPage({ ...page, items: [{ ...page.items[0], externalSubject: 'user:12' }] })).toThrow('TeamLab rollout target page.items[0].externalSubject')
   })
 

@@ -27,7 +27,7 @@ export function TeamLabTargetDrawer({
   const [actionError, setActionError] = useState<unknown>(null)
   const meta = target ? targetStatusMeta[target.status] : null
   const rolloutClosed = rollout?.status === 'draining' || rollout?.status === 'completed'
-  const transition = target?.status === 'provisioning' || target?.status === 'draining' || target?.status === 'cleanuppending'
+  const transition = target ? targetStatusMeta[target.status].active : false
   const canRebuild = Boolean(target && !rolloutClosed && !transition && target.status !== 'destroyed')
   const canCleanup = Boolean(target?.runtimeId && !transition && target?.status !== 'destroyed')
 

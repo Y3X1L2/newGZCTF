@@ -24,12 +24,12 @@ export function TeamLabRolloutControls({
   const [drainOpen, setDrainOpen] = useState(false)
   const prepared = rollout?.status === 'ready'
   const finished = rollout?.status === 'completed' || rollout?.status === 'draining'
-  const preparing = rollout?.status === 'preparing' || rollout?.status === 'rollingout'
+  const preparing = rollout?.status === 'preparing'
   return (
     <section className={styles.controlSection} aria-labelledby="teamlab-controls-title">
       <header className={styles.sectionHeader}><div><h2 id="teamlab-controls-title">比赛环境控制</h2></div></header>
       <div className={styles.controlActions}>
-        <ActionButton disabled={!binding?.activeReleaseId || busy || configurationDirty || finished || preparing} icon={<PackageCheck size={16} />} onClick={() => onPrepare()} tone="primary" type="button">提前准备环境</ActionButton>
+        <ActionButton disabled={!binding?.activeReleaseId || busy || configurationDirty || rollout?.status === 'draining' || preparing} icon={<PackageCheck size={16} />} onClick={() => onPrepare()} tone="primary" type="button">提前准备环境</ActionButton>
         {rollout?.desiredAccessOpen ? (
           <ActionButton disabled={busy || finished} icon={<DoorClosed size={16} />} onClick={() => onAccess(false)} type="button">关闭选手入口</ActionButton>
         ) : (

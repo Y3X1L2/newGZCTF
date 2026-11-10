@@ -3,28 +3,26 @@ import { runtimeJsonClient, type RuntimeJsonClient } from './runtimeJsonClient'
 
 export interface TeamLabGameAsset { id: string; name: string; kind: 'vm' | 'container' | 'router' | 'external' }
 
-type TeamLabRuntimeStatus = typeof runtimeStatuses[keyof typeof runtimeStatuses]
-
 export type TeamLabGameRolloutStatus =
-  | 'draft'
+  | 'pending'
   | 'preparing'
-  | 'rollingout'
   | 'ready'
   | 'draining'
   | 'completed'
-  | 'blocked'
+  | 'paused'
   | 'failed'
 
 export type TeamLabGameTargetStatus =
-  | 'pending'
-  | 'provisioning'
-  | 'ready'
-  | 'accessopen'
-  | 'failed'
-  | 'draining'
-  | 'cleanuppending'
+  | 'draft'
+  | 'deploying'
+  | 'running'
+  | 'stopped'
+  | 'suspended'
+  | 'changing'
+  | 'destroying'
   | 'destroyed'
-  | 'paused'
+  | 'failed'
+  | 'unknown'
 
 export interface TeamLabGameObjective {
   id: number
@@ -99,19 +97,10 @@ export interface TeamLabGameRolloutCounts {
 
 export interface TeamLabGameRollout {
   id: string
-  releaseId: string
   status: TeamLabGameRolloutStatus
   preparationRequested: boolean
   desiredAccessOpen: boolean
-  drainRequested: boolean
   counts: TeamLabGameRolloutCounts
-  preparedAt: number | null
-  accessOpenedAt: number | null
-  drainingAt: number | null
-  completedAt: number | null
-  createdAt: number
-  updatedAt: number
-  error: string | null
 }
 
 export interface TeamLabGameState {
@@ -121,15 +110,10 @@ export interface TeamLabGameState {
 
 export interface TeamLabGameTarget {
   id: string
-  externalSubject: string
   teamId: number
   displayName: string
   runtimeId: string | null
   status: TeamLabGameTargetStatus
-  operationId: string | null
-  runtimeStatus: TeamLabRuntimeStatus | null
-  runtimeStage: string | null
-  createdAt: number
   updatedAt: number
   error: string | null
 }
@@ -145,20 +129,12 @@ export interface TeamLabTeamRebuildResult {
 }
 
 const rolloutStatuses = {
-  draft: 'draft', preparing: 'preparing', rollingout: 'rollingout', ready: 'ready',
-  draining: 'draining', completed: 'completed', blocked: 'blocked', failed: 'failed',
+  pending: 'pending', preparing: 'preparing', ready: 'ready',
+  draining: 'draining', completed: 'completed', paused: 'paused', failed: 'failed',
 } as const
 const targetStatuses = {
-  pending: 'pending', provisioning: 'provisioning', ready: 'ready', accessopen: 'accessopen',
-  failed: 'failed', draining: 'draining', cleanuppending: 'cleanuppending', destroyed: 'destroyed',
-  paused: 'paused',
-} as const
-const runtimeStatuses = {
-  0: 'pending', 1: 'planning', 2: 'scheduled', 3: 'deploying', 4: 'probing', 5: 'running',
-  6: 'failed', 7: 'cleanup-pending', 8: 'paused', 9: 'destroying', 10: 'destroyed',
-  Pending: 'pending', Planning: 'planning', Scheduled: 'scheduled', Deploying: 'deploying',
-  Probing: 'probing', Running: 'running', Failed: 'failed', CleanupPending: 'cleanup-pending',
-  Paused: 'paused', Destroying: 'destroying', Destroyed: 'destroyed',
+  draft: 'draft', deploying: 'deploying', running: 'running', stopped: 'stopped', suspended: 'suspended',
+  changing: 'changing', destroying: 'destroying', destroyed: 'destroyed', failed: 'failed', unknown: 'unknown',
 } as const
 
 function nullable<T>(value: unknown, label: string, parser: (input: unknown, inputLabel: string) => T): T | null {
@@ -215,19 +191,10 @@ export function parseTeamLabGameRollout(value: unknown): TeamLabGameRollout {
   const item = parse.record(value, 'TeamLab game rollout')
   return {
     id: parse.string(item.id, 'TeamLab game rollout.id'),
-    releaseId: parse.string(item.releaseId, 'TeamLab game rollout.releaseId'),
     status: parse.enumValue(item.status, rolloutStatuses, 'TeamLab game rollout.status'),
     preparationRequested: parse.boolean(item.preparationRequested, 'TeamLab game rollout.preparationRequested'),
     desiredAccessOpen: parse.boolean(item.desiredAccessOpen, 'TeamLab game rollout.desiredAccessOpen'),
-    drainRequested: parse.boolean(item.drainRequested, 'TeamLab game rollout.drainRequested'),
     counts: parseCounts(item.counts),
-    preparedAt: parse.nullableNumber(item.preparedAt, 'TeamLab game rollout.preparedAt'),
-    accessOpenedAt: parse.nullableNumber(item.accessOpenedAt, 'TeamLab game rollout.accessOpenedAt'),
-    drainingAt: parse.nullableNumber(item.drainingAt, 'TeamLab game rollout.drainingAt'),
-    completedAt: parse.nullableNumber(item.completedAt, 'TeamLab game rollout.completedAt'),
-    createdAt: parse.number(item.createdAt, 'TeamLab game rollout.createdAt'),
-    updatedAt: parse.number(item.updatedAt, 'TeamLab game rollout.updatedAt'),
-    error: parse.nullableString(item.error, 'TeamLab game rollout.error'),
   }
 }
 
@@ -268,16 +235,10 @@ export function parseTeamLabGameTargetPage(value: unknown): TeamLabGameTargetPag
       const externalSubject = parse.string(item.externalSubject, `${label}.externalSubject`)
       return {
         id: parse.string(item.id, `${label}.id`),
-        externalSubject,
         teamId: teamIdFromSubject(externalSubject, `${label}.externalSubject`),
         displayName: parse.string(item.displayName, `${label}.displayName`),
         runtimeId: parse.nullableString(item.runtimeId, `${label}.runtimeId`),
         status: parse.enumValue(item.status, targetStatuses, `${label}.status`),
-        operationId: parse.nullableString(item.operationId, `${label}.operationId`),
-        runtimeStatus: nullable(item.runtimeStatus, `${label}.runtimeStatus`, (input, inputLabel) =>
-          parse.enumValue<TeamLabRuntimeStatus>(input, runtimeStatuses, inputLabel)),
-        runtimeStage: parse.nullableString(item.runtimeStage, `${label}.runtimeStage`),
-        createdAt: parse.number(item.createdAt, `${label}.createdAt`),
         updatedAt: parse.number(item.updatedAt, `${label}.updatedAt`),
         error: parse.nullableString(item.error, `${label}.error`),
       }

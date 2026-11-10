@@ -29,7 +29,7 @@ export function AdminGameTeamLabPage() {
   if (!supportsTeamLabGame(game.gameType)) {
     return <DataState description="仅渗透演练和混合赛制可以绑定 TeamLab 场景。" title="当前赛制不支持 TeamLab" />
   }
-  if (data.isLoading) return <DataState description="正在并行读取比赛绑定、Release 与 rollout 状态。" loading title="比赛环境加载中" />
+  if (data.isLoading) return <DataState loading title="比赛环境加载中" />
   if (data.stateError || !data.state) return <DataState description={errorMessage(data.stateError, 'TeamLab 比赛状态加载失败。')} title="无法打开 比赛环境" />
 
   const updateRollout = async (action: () => Promise<TeamLabGameRollout>) => {

@@ -40,10 +40,6 @@ function nullableString(value: unknown, label: string): string | null {
   return value === null || value === undefined ? null : string(value, label)
 }
 
-function nullableNumber(value: unknown, label: string): number | null {
-  return value === null || value === undefined ? null : number(value, label)
-}
-
 function array<T>(value: unknown, label: string, parser: (item: unknown, itemLabel: string) => T): T[] {
   if (!Array.isArray(value)) return teamLabContractFailure(label, value)
   return value.map((item, index) => parser(item, `${label}[${index}]`))
@@ -61,7 +57,6 @@ export const teamLabParsing = {
   number,
   boolean,
   nullableString,
-  nullableNumber,
   array,
   enumValue,
 }

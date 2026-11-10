@@ -24,7 +24,7 @@ export function TeamLabReleaseSelector({
     setSelectedId(binding?.activeReleaseId ?? releases[0]?.releaseId ?? '')
   }, [binding?.activeReleaseId, releases])
   const selected = useMemo(() => releases.find((release) => release.releaseId === selectedId) ?? null, [releases, selectedId])
-  const locked = Boolean(rollout && rollout.status !== 'completed' && selectedId !== binding?.activeReleaseId)
+  const locked = Boolean(rollout?.preparationRequested && rollout.status !== 'completed' && selectedId !== binding?.activeReleaseId)
   const unchanged = selectedId === binding?.activeReleaseId
 
   return (
