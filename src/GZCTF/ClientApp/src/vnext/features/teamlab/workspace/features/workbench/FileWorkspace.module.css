@@ -1,5 +1,5 @@
 .workspace {
-  height: 100%;
+  height: max(560px, 65dvh);
   min-height: 0;
   display: flex;
   flex-direction: column;

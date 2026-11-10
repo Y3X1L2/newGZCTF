@@ -12,9 +12,10 @@
   justify-content: space-between;
   gap: 16px;
   min-height: 68px;
-  padding: 12px 22px;
+  padding: var(--yn-space-5) 0;
+  flex-wrap: wrap;
   border-bottom: 1px solid var(--line);
-  background: var(--surface);
+  background: transparent;
 }
 .identity,
 .title,
@@ -26,12 +27,10 @@
 }
 .title h1 {
   margin: 0;
-  font-size: 20px;
+  font-size: var(--yn-font-xl);
   font-weight: 600;
   letter-spacing: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 .actions {
   flex-shrink: 0;
@@ -95,18 +94,20 @@
   min-width: 0;
   display: flex;
   position: relative;
-  gap: 12px;
-  padding: 12px;
+  gap: var(--yn-space-4);
+  padding: var(--yn-space-4) 0;
+  align-items: flex-start;
+  flex-wrap: wrap;
 }
 .tree {
   width: 220px;
   flex-shrink: 0;
   padding: 16px 10px;
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--yn-radius-lg);
   background: var(--surface);
   box-shadow: var(--shadow-panel);
-  overflow-y: auto;
+  align-self: flex-start;
 }
 .treeHeading {
   display: flex;
@@ -162,13 +163,13 @@
 .canvas {
   display: flex;
   flex-direction: column;
-  flex: 1;
+  flex: 1 1 34rem;
   min-height: 0;
   min-width: 0;
   position: relative;
   background: var(--canvas);
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--yn-radius-lg);
   box-shadow: var(--shadow-panel);
   overflow: hidden;
 }
@@ -193,7 +194,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 0 16px;
+  padding: var(--yn-space-2) var(--yn-space-4);
+  flex-wrap: wrap;
   background: var(--surface);
   border-bottom: 1px solid var(--line);
   flex-shrink: 0;
@@ -255,17 +257,17 @@
 .tableScroll {
   flex: 1;
   min-height: 0;
-  overflow: auto;
+  overflow-x: auto;
 }
 .assetTable {
   width: 100%;
+  table-layout: fixed;
   border-collapse: collapse;
   font-size: 13px;
   text-align: left;
 }
 .assetTable th {
-  position: sticky;
-  top: 0;
+  position: static;
   background: var(--canvas);
   color: var(--muted);
   font-size: 12px;
@@ -277,7 +279,17 @@
 .assetTable td {
   padding: 12px 20px;
   border-bottom: 1px solid var(--line);
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.assetTable th:first-child {
+  width: 30%;
+}
+.assetTable th:nth-child(2) {
+  width: 16%;
+}
+.assetTable th:nth-child(3) {
+  width: 24%;
 }
 .assetTable tbody tr {
   cursor: pointer;
@@ -298,8 +310,12 @@
   font: inherit;
   color: var(--text);
   cursor: pointer;
+  text-align: left;
+  overflow-wrap: anywhere;
+  min-width: 0;
 }
 .assetName svg {
+  flex-shrink: 0;
   color: var(--accent);
   background: var(--accent-soft);
   padding: 5px;
@@ -368,14 +384,11 @@
     display: none;
   }
   .tree {
-    position: absolute;
-    inset: 63px auto 8px 8px;
-    width: 220px;
-    z-index: 5;
+    width: 100%;
   }
   .body {
-    padding: 8px;
-    gap: 8px;
+    padding: var(--yn-space-3) 0;
+    gap: var(--yn-space-3);
   }
   .listTools {
     padding: 12px;
@@ -383,7 +396,10 @@
   }
   .assetTable td,
   .assetTable th {
-    padding: 12px;
+    padding: 12px 8px;
+  }
+  .assetTable {
+    min-width: 540px;
   }
 }
 

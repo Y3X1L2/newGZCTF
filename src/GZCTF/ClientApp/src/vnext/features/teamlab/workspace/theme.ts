@@ -1,52 +1,65 @@
-import { createTheme } from '@mantine/core'
+import { createTheme, defaultVariantColorsResolver } from '@mantine/core'
 
 export const workspaceTheme = createTheme({
-  primaryColor: 'blue',
+  primaryColor: 'yinyu',
   colors: {
-    blue: [
-      '#f0f9ff',
-      '#e0f2fe',
-      '#b9e6fe',
-      '#7cd4fd',
-      '#36bffa',
-      '#0ba5ec',
-      '#0086c9',
-      '#026aa2',
-      '#065986',
-      '#0b4a6f',
+    yinyu: [
+      'var(--accent-soft)',
+      'var(--accent-soft)',
+      'var(--accent-soft)',
+      'var(--accent-soft)',
+      'var(--accent)',
+      'var(--accent)',
+      'var(--accent)',
+      'var(--accent)',
+      'var(--accent)',
+      'var(--accent)',
     ],
-    dark: [
-      '#f2f4f7',
-      '#ced0d3',
-      '#abafb5',
-      '#7b8089',
-      '#5c6066',
-      '#484a4e',
-      '#3a3b3f',
-      '#2e2f33',
-      '#222326',
-      '#161719',
-    ],
-    red: ['#fffbfa', '#fef3f2', '#fee4e2', '#fecdca', '#fda29b', '#f97066', '#f04438', '#d92d20', '#b42318', '#912018'],
-    green: [
-      '#f6fef9',
-      '#ecfdf3',
-      '#d1fadf',
-      '#a6f4c5',
-      '#6ce9a6',
-      '#32d583',
-      '#12b76a',
-      '#039855',
-      '#027a48',
-      '#05603a',
-    ],
+  },
+  variantColorResolver: (input) => {
+    const resolved = defaultVariantColorsResolver(input)
+    if (input.color && input.color !== 'yinyu') return resolved
+    if (input.variant === 'filled')
+      return {
+        background: 'var(--yn-color-control-strong)',
+        hover: 'var(--yn-color-control-strong-hover)',
+        color: 'var(--yn-color-control-strong-text)',
+        border: 'transparent',
+      }
+    if (input.variant === 'light')
+      return {
+        background: 'var(--accent-soft)',
+        hover: 'var(--accent-soft)',
+        color: 'var(--accent)',
+        border: 'transparent',
+      }
+    if (input.variant === 'outline' || input.variant === 'subtle')
+      return {
+        background: 'transparent',
+        hover: 'var(--yn-color-surface-muted)',
+        color: 'var(--yn-color-text-secondary)',
+        border: input.variant === 'outline' ? '1px solid var(--yn-color-border)' : 'transparent',
+      }
+    return resolved
   },
   primaryShade: { light: 7, dark: 7 },
   defaultRadius: 'sm',
-  radius: { xs: '4px', sm: '6px', md: '8px', lg: '12px', xl: '16px' },
+  radius: {
+    xs: 'var(--yn-radius-sm)',
+    sm: 'var(--yn-radius-md)',
+    md: 'var(--yn-radius-lg)',
+    lg: 'var(--yn-radius-lg)',
+    xl: 'var(--yn-radius-lg)',
+  },
   fontFamily: 'var(--font-ui)',
   fontFamilyMonospace: 'var(--font-mono)',
-  fontSizes: { xs: '12px', sm: '14px', md: '14px', lg: '16px', xl: '18px' },
+  fontSizes: {
+    xs: 'var(--yn-font-sm)',
+    sm: 'var(--yn-font-md)',
+    md: 'var(--yn-font-md)',
+    lg: 'var(--yn-font-lg)',
+    xl: 'var(--yn-font-xl)',
+  },
   headings: { fontWeight: '600' },
   components: {
     Button: {

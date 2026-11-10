@@ -1,5 +1,6 @@
 .frame {
-  flex: 1;
+  flex: none;
+  height: clamp(440px, 65dvh, 820px);
   min-height: 0;
   position: relative;
   background: var(--page);

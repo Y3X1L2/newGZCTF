@@ -1,6 +1,10 @@
 .workspace {
-  height: min(38dvh, 390px);
-  min-height: 230px;
+  height: clamp(420px, 65dvh, 820px);
+  min-height: 320px;
+  margin-top: var(--yn-space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--yn-radius-lg);
+  overflow: hidden;
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;

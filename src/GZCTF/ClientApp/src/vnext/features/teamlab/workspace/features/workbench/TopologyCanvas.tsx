@@ -159,6 +159,9 @@ function Canvas({
         }}
         nodesConnectable={editing}
         nodesDraggable={false}
+        preventScrolling={false}
+        zoomOnScroll={false}
+        zoomActivationKeyCode="Control"
         edgesReconnectable={false}
         deleteKeyCode={null}
         minZoom={0.05}

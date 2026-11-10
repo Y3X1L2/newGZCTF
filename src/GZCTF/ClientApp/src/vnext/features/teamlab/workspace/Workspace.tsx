@@ -50,6 +50,15 @@ export function Workspace({ gameId, environmentId }: { gameId?: number; environm
         }}
         forceColorScheme={theme}
         cssVariablesSelector="[data-netlab-workspace]"
+        cssVariablesResolver={() => ({
+          variables: {
+            '--mantine-primary-color-filled': 'var(--yn-color-control-strong)',
+            '--mantine-primary-color-filled-hover': 'var(--yn-color-control-strong-hover)',
+            '--mantine-color-error': 'var(--yn-color-danger)',
+          },
+          light: {},
+          dark: {},
+        })}
         getRootElement={() => root.current ?? undefined}
         deduplicateCssVariables={false}
         withGlobalClasses={false}

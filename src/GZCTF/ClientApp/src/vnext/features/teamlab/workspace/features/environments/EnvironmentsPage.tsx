@@ -1,8 +1,9 @@
-import { ActionIcon, Button, TextInput } from '@mantine/core'
+import { ActionIcon, TextInput } from '@mantine/core'
 import { useDebouncedValue } from '@mantine/hooks'
 import { useQuery } from '@tanstack/react-query'
 import { Boxes, GitBranch, Layers3, List, Network, Plus, Search } from 'lucide-react'
 import { useState } from 'react'
+import { ActionButton } from '../../../../../shared/Interaction'
 import { useWorkspaceApi } from '../../api/client'
 import { Empty, ErrorMessage, Loading } from '../../foundation/Feedback'
 import { LoadMore } from '../../foundation/LoadMore'
@@ -43,9 +44,9 @@ export function EnvironmentsPage() {
           <h1>环境</h1>
         </div>
         {canCreate && (
-          <Button leftSection={<Plus size={16} />} onClick={() => setCreating(true)}>
+          <ActionButton tone="primary" icon={<Plus size={16} />} onClick={() => setCreating(true)}>
             新建环境
-          </Button>
+          </ActionButton>
         )}
       </div>
       <div className={styles.summary} role="group" aria-label="环境状态">
