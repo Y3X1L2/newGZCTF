@@ -63,6 +63,7 @@ public sealed class PenetrationTeamRuntimeBindingEntityConfiguration : IEntityTy
         builder.ToTable("PenetrationTeamRuntimeBindings");
         builder.HasKey(item => new { item.GameId, item.TeamId });
         builder.HasIndex(item => item.RuntimeId).IsUnique();
+        builder.HasIndex(item => item.EnvironmentId).IsUnique();
         builder.HasIndex(item => item.DestroyOperationId)
             .IsUnique()
             .HasFilter("\"DestroyOperationId\" IS NOT NULL");
@@ -89,6 +90,8 @@ public sealed class PenetrationResetRecordEntityConfiguration : IEntityTypeConfi
         builder.Property(item => item.Status).HasConversion<byte>();
         builder.Property(item => item.FailureClass).HasConversion<byte>();
         builder.HasIndex(item => item.OperationId).IsUnique();
+        builder.HasIndex(item => new { item.EnvironmentId, item.TargetGeneration }).IsUnique()
+            .HasFilter("\"EnvironmentId\" IS NOT NULL AND \"Status\" IN (0, 1)");
         builder.HasIndex(item => new { item.RuntimeId, item.TargetGeneration })
             .IsUnique()
             .HasFilter("\"Status\" IN (0, 1)");

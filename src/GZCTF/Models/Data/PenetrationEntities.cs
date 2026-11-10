@@ -49,7 +49,7 @@ public class PenetrationResetRecord
     [Key]
     public int Id { get; set; }
 
-    public int RuntimeId { get; set; }
+    public int? RuntimeId { get; set; }
 
     public Guid? UserId { get; set; }
 
@@ -67,7 +67,7 @@ public class PenetrationResetRecord
 
     public DateTimeOffset ResetAt { get; set; } = DateTimeOffset.UtcNow;
 
-    public TeamLabRuntime Runtime { get; set; } = null!;
+    public TeamLabRuntime? Runtime { get; set; }
 
     public UserInfo? User { get; set; }
 }

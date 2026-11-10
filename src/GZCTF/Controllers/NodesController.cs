@@ -323,9 +323,9 @@ public class NodesController : ControllerBase
                     from binding in _context.PenetrationTeamRuntimeBindings.AsNoTracking()
                     join game in _context.Games.AsNoTracking() on binding.GameId equals game.Id
                     join team in _context.Teams.AsNoTracking() on binding.TeamId equals team.Id
-                    where runtimeIds.Contains(binding.RuntimeId)
+                    where binding.RuntimeId != null && runtimeIds.Contains(binding.RuntimeId.Value)
                     select new NodeTeamLabBindingView(
-                        binding.RuntimeId, binding.GameId, game.Title, binding.TeamId, team.Name))
+                        binding.RuntimeId.Value, binding.GameId, game.Title, binding.TeamId, team.Name))
                 .ToDictionaryAsync(item => item.RuntimeId, token);
 
             foreach (var asset in assets)

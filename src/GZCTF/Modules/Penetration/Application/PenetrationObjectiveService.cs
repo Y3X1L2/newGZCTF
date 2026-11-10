@@ -27,11 +27,11 @@ public sealed class PenetrationObjectiveService(
     IGameEventRepository events,
     IHubContext<UserHub, IUserClient> hub,
     ILogger<PenetrationObjectiveService> logger,
-    IConfigService? configService = null)
+    IConfigService configService)
 {
     private static readonly TimeSpan SubmitRateWindow = TimeSpan.FromMinutes(1);
     private const int SubmitRateLimit = 5;
-    private readonly byte[] _flagKey = configService?.GetXorKey() ?? [];
+    private readonly byte[] _flagKey = configService.GetXorKey();
 
     public async Task<IReadOnlyList<PenetrationObjectiveModel>> ListAsync(
         int gameId,

@@ -96,6 +96,9 @@ public sealed class PenetrationPlayerController(
         if (participation?.Status != ParticipationStatus.Accepted)
             return new(user, null, StatusCode(StatusCodes.Status403Forbidden,
                 new RequestResponse("Accepted participation is required.")));
+        if (denyAfterEnded && !await adapter.IsPlayerAccessOpenAsync(gameId, cancellationToken))
+            return new(user, participation, StatusCode(StatusCodes.Status403Forbidden,
+                new RequestResponse("比赛环境尚未开放。")));
         return new(user, participation, null);
     }
 

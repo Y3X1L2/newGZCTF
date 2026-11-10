@@ -23,7 +23,7 @@ public sealed class PenetrationTeamLabAdapter(AppDbContext context, NetlabClient
     }
 
     public async Task<PenetrationGameLabBindingModel> BindAsync(int gameId, string blueprintId,
-        Guid actorUserId, bool administrator, CancellationToken token)
+        Guid actorUserId, CancellationToken token)
     {
         await netlab.GetAsync<Blueprint>($"blueprints/{Uri.EscapeDataString(blueprintId)}", token, await ManagerScopeAsync(actorUserId, token));
         await using var lease = await locks.AcquireAsync(PenetrationObjectiveService.ConfigurationLeaseKey(gameId),
@@ -50,7 +50,7 @@ public sealed class PenetrationTeamLabAdapter(AppDbContext context, NetlabClient
     }
 
     public async Task<PenetrationGameLabBindingModel> ActivateReleaseAsync(int gameId, string versionId,
-        Guid actorUserId, bool administrator, CancellationToken token)
+        Guid actorUserId, CancellationToken token)
     {
         var version = await netlab.GetAsync<BlueprintVersion>($"blueprint-versions/{Uri.EscapeDataString(versionId)}",
             token, await ManagerScopeAsync(actorUserId, token));
@@ -66,7 +66,7 @@ public sealed class PenetrationTeamLabAdapter(AppDbContext context, NetlabClient
     }
 
     public async Task<IReadOnlyList<PenetrationReleaseOptionModel>> ListAvailableReleasesAsync(
-        Guid actorUserId, bool administrator, CancellationToken token)
+        Guid actorUserId, CancellationToken token)
     {
         var scope = await ManagerScopeAsync(actorUserId, token);
         var blueprints = await netlab.ListAsync<Blueprint>("blueprints", x => x.Id, token, scope);
@@ -97,15 +97,15 @@ public sealed class PenetrationTeamLabAdapter(AppDbContext context, NetlabClient
         return new(binding, binding?.ActiveReleaseId is null ? null : await SummaryAsync(gameId, token));
     }
 
-    public async Task<PenetrationSceneSummary> PrepareAsync(int gameId, Guid actorUserId, bool administrator, CancellationToken token)
+    public async Task<PenetrationSceneSummary> PrepareAsync(int gameId, CancellationToken token)
     {
         var teams = await context.Participations.AsNoTracking().Where(x => x.GameId == gameId && x.Status == ParticipationStatus.Accepted)
             .Select(x => x.TeamId).Distinct().Order().ToArrayAsync(token);
-        foreach (var team in teams) await DeployTeamAsync(gameId, team, actorUserId, token);
+        foreach (var team in teams) await DeployTeamAsync(gameId, team, token);
         return await SummaryAsync(gameId, token);
     }
 
-    public async Task<PenetrationSceneSummary> SetAccessAsync(int gameId, Guid actorUserId, bool administrator, bool open, CancellationToken token)
+    public async Task<PenetrationSceneSummary> SetAccessAsync(int gameId, bool open, CancellationToken token)
     {
         var binding = await SettingsAsync(gameId, token);
         binding.AccessOpen = open;
@@ -116,14 +116,14 @@ public sealed class PenetrationTeamLabAdapter(AppDbContext context, NetlabClient
 
     public Task<bool> IsPlayerAccessOpenAsync(int gameId, CancellationToken token) =>
         context.PenetrationGameLabBindings.AnyAsync(x => x.GameId == gameId && x.AccessOpen, token);
-    public Task<PenetrationSceneSummary> DrainAsync(int gameId, Guid actorUserId, bool administrator, CancellationToken token) =>
+    public Task<PenetrationSceneSummary> DrainAsync(int gameId, CancellationToken token) =>
         ActOnGameAsync(gameId, ActionRequestAction.Destroy, token);
-    public Task<PenetrationSceneSummary> PauseAsync(int gameId, Guid actorUserId, bool administrator, CancellationToken token) =>
+    public Task<PenetrationSceneSummary> PauseAsync(int gameId, CancellationToken token) =>
         ActOnGameAsync(gameId, ActionRequestAction.Suspend, token);
-    public Task<PenetrationSceneSummary> ResumeAsync(int gameId, Guid actorUserId, bool administrator, CancellationToken token) =>
+    public Task<PenetrationSceneSummary> ResumeAsync(int gameId, CancellationToken token) =>
         ActOnGameAsync(gameId, ActionRequestAction.Resume, token);
 
-    public async Task<PenetrationDeploymentResult> DeployTeamAsync(int gameId, int teamId, Guid actorUserId, CancellationToken token)
+    public async Task<PenetrationDeploymentResult> DeployTeamAsync(int gameId, int teamId, CancellationToken token)
     {
         await using var lease = await locks.AcquireAsync($"penetration:environment:{gameId}:{teamId}", TimeSpan.FromSeconds(30), cancellationToken: token);
         using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(token, lease.LeaseLost);
@@ -149,14 +149,29 @@ public sealed class PenetrationTeamLabAdapter(AppDbContext context, NetlabClient
         }
         var version = await netlab.GetAsync<BlueprintVersion>($"blueprint-versions/{Uri.EscapeDataString(settings.BlueprintVersionId)}", token);
         var flags = await objectives.BuildOverlaysAsync(gameId, teamId, version.Version, token);
+        var templateIds = string.Join(",", version.Spec.Assets.Select(x => x.TemplateId).Distinct());
+        var templates = (await netlab.ListAsync<Template>($"templates?ids={Uri.EscapeDataString(templateIds)}", x => x.Id, token)).ToDictionary(x => x.Id);
         foreach (var asset in version.Spec.Assets)
             if (flags.TryGetValue(asset.Id, out var values))
             {
-                asset.Parameters ??= [];
-                foreach (var (key, value) in values) asset.Parameters[key] = value;
+                var template = templates[asset.TemplateId];
+                if (template.Kind == TemplateKind.Container)
+                {
+                    asset.Parameters ??= [];
+                    foreach (var (key, value) in values) asset.Parameters[key] = value;
+                }
+                else
+                {
+                    asset.Guest ??= new();
+                    asset.Guest.Files ??= [];
+                    var directory = string.Equals(template.Os, "windows", StringComparison.OrdinalIgnoreCase)
+                        ? @"C:\ProgramData\GZCTF\Runtime\secrets\" : "/opt/gzctf/runtime/secrets/";
+                    foreach (var (key, value) in values) asset.Guest.Files[directory + key] = value;
+                }
             }
         binding.BlueprintVersionId = version.Id;
         binding.BlueprintVersion = version.Version;
+        binding.DestroyedAt = null;
         await context.SaveChangesAsync(token);
         var names = await context.Participations.AsNoTracking().Where(x => x.GameId == gameId && x.TeamId == teamId)
             .Select(x => new { Game = x.Game.Title, Team = x.Team.Name }).FirstAsync(token);
@@ -194,9 +209,20 @@ public sealed class PenetrationTeamLabAdapter(AppDbContext context, NetlabClient
             context.PenetrationResetRecords.Add(pending);
             await context.SaveChangesAsync(token);
         }
-        var operation = await netlab.SendAsync<Operation>(HttpMethod.Post, $"environments/{Uri.EscapeDataString(binding.EnvironmentId!)}/actions",
-            new ActionRequest { Action = ActionRequestAction.Rebuild, ExpectedRevision = pending.TargetGeneration,
-                ResetVolumes = true, ClientRequestId = pending.OperationId.ToString() }, token);
+        Operation operation;
+        try
+        {
+            operation = await netlab.SendAsync<Operation>(HttpMethod.Post, $"environments/{Uri.EscapeDataString(binding.EnvironmentId!)}/actions",
+                new ActionRequest { Action = ActionRequestAction.Rebuild, ExpectedRevision = pending.TargetGeneration,
+                    ResetVolumes = true, ClientRequestId = pending.OperationId.ToString() }, token);
+        }
+        catch (TeamLabApiContractException error) when (error.StatusCode is >= 400 and < 500)
+        {
+            pending.Status = PenetrationResetStatus.Failed;
+            pending.CompletedAt = DateTimeOffset.UtcNow;
+            await context.SaveChangesAsync(token);
+            throw;
+        }
         pending.RemoteOperationId = operation.Id;
         pending.Status = PenetrationResetStatus.Running;
         await context.SaveChangesAsync(token);
@@ -213,8 +239,31 @@ public sealed class PenetrationTeamLabAdapter(AppDbContext context, NetlabClient
     public async Task DestroyGameAsync(int gameId, CancellationToken token) =>
         await ActOnGameAsync(gameId, ActionRequestAction.Destroy, token);
 
-    public async Task EnsureGameDrainedBeforeDeleteAsync(int gameId, Guid actorUserId, CancellationToken token)
+    public async Task RetireExpiredAsync(CancellationToken token)
     {
+        var now = DateTimeOffset.UtcNow;
+        var expired = await context.PenetrationTeamRuntimeBindings
+            .Where(binding => binding.EnvironmentId != null && binding.DestroyedAt == null &&
+                (context.Games.Any(game => game.Id == binding.GameId && !game.PracticeMode && game.EndTimeUtc <= now) ||
+                 !context.Participations.Any(p => p.GameId == binding.GameId && p.TeamId == binding.TeamId && p.Status == ParticipationStatus.Accepted)))
+            .ToArrayAsync(token);
+        foreach (var group in expired.GroupBy(binding => binding.GameId))
+        {
+            var environments = (await EnvironmentsAsync(group.Key, token)).ToDictionary(e => e.Id);
+            foreach (var binding in group)
+            {
+                if (!environments.TryGetValue(binding.EnvironmentId!, out var environment) || environment.Status == NetlabStatus.Destroyed)
+                    binding.DestroyedAt = now;
+                else if (environment.Status != NetlabStatus.Destroying)
+                    await ActionAsync(environment.Id, environment.Revision, ActionRequestAction.Destroy, token);
+            }
+            await context.SaveChangesAsync(token);
+        }
+    }
+
+    public async Task EnsureGameDrainedBeforeDeleteAsync(int gameId, CancellationToken token)
+    {
+        if (!await context.PenetrationGameLabBindings.AnyAsync(x => x.GameId == gameId && x.BlueprintId != null, token)) return;
         var remaining = (await EnvironmentsAsync(gameId, token)).Where(x => x.Status != NetlabStatus.Destroyed).ToArray();
         if (remaining.Length == 0) return;
         foreach (var environment in remaining.Where(x => x.Status != NetlabStatus.Destroying))
@@ -233,7 +282,7 @@ public sealed class PenetrationTeamLabAdapter(AppDbContext context, NetlabClient
             var environment = environments[x.EnvironmentId!];
             return new PenetrationRuntimeBindingModel(x.TeamId, x.Name, environment.Id, x.BlueprintVersion,
                 Status(environment.Status.ToString().ToLowerInvariant()), environment.Status.ToString().ToLowerInvariant(),
-                0, environment.AssetCount, environment.CreatedAt, environment.UpdatedAt, null);
+                environment.AssetCount, environment.CreatedAt, environment.UpdatedAt, null);
         }).ToArray();
     }
 
@@ -283,22 +332,25 @@ public sealed class PenetrationTeamLabAdapter(AppDbContext context, NetlabClient
     private async Task<PenetrationSceneSummary> SummaryAsync(int gameId, CancellationToken token)
     {
         var settings = await SettingsAsync(gameId, token);
-        var environments = await EnvironmentsAsync(gameId, token);
+        var assigned = await context.PenetrationTeamRuntimeBindings.AsNoTracking().Where(x => x.GameId == gameId)
+            .Select(x => x.EnvironmentId).ToArrayAsync(token);
+        var environments = (await EnvironmentsAsync(gameId, token)).Where(x => assigned.Contains(x.Id)).ToArray();
         int Count(params NetlabStatus[] states) => environments.Count(x => states.Contains(x.Status));
         var total = await context.Participations.CountAsync(x => x.GameId == gameId && x.Status == ParticipationStatus.Accepted, token);
-        var counts = new PenetrationSceneCounts(total, Math.Max(0, total - environments.Count),
+        var counts = new PenetrationSceneCounts(total, Math.Max(0, total - environments.Length),
             Count(NetlabStatus.Deploying, NetlabStatus.Changing), Count(NetlabStatus.Running),
             settings.AccessOpen ? Count(NetlabStatus.Running) : 0, Count(NetlabStatus.Failed),
             Count(NetlabStatus.Destroying), Count(NetlabStatus.Destroyed), Count(NetlabStatus.Suspended));
         var status = counts.Draining > 0 ? "draining" : counts.Provisioning > 0 ? "preparing" : counts.Failed > 0 ? "failed" :
-            counts.Ready == total && total > 0 ? "ready" : environments.Count > 0 && counts.Destroyed == environments.Count ? "completed" :
+            counts.Ready == total && total > 0 ? "ready" : environments.Length > 0 && counts.Destroyed == environments.Length ? "completed" :
             counts.Paused > 0 ? "paused" : "pending";
-        return new(settings.BlueprintVersionId!, settings.BlueprintVersionId!, status, environments.Count > 0,
+        return new(settings.BlueprintVersionId!, settings.BlueprintVersionId!, status, environments.Length > 0,
             settings.AccessOpen, counts.Draining > 0, counts.Paused > 0, counts, settings.CreatedAt, settings.UpdatedAt);
     }
 
-    private Task<PenetrationGameLabBinding> SettingsAsync(int gameId, CancellationToken token) =>
-        context.PenetrationGameLabBindings.SingleAsync(x => x.GameId == gameId, token);
+    private async Task<PenetrationGameLabBinding> SettingsAsync(int gameId, CancellationToken token) =>
+        await context.PenetrationGameLabBindings.SingleOrDefaultAsync(x => x.GameId == gameId, token)
+            ?? throw Conflict("请先选择比赛场景。");
     private async Task<PenetrationTeamRuntimeBinding> RuntimeAsync(int gameId, int teamId, CancellationToken token) =>
         await context.PenetrationTeamRuntimeBindings.SingleOrDefaultAsync(x => x.GameId == gameId && x.TeamId == teamId && x.EnvironmentId != null, token)
             ?? throw Conflict("本队环境尚未创建。");
