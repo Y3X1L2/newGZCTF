@@ -6,14 +6,12 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using GZCTF.Agent.Models;
-using GZCTF.Agent.Services.RuntimeSignals;
 
 namespace GZCTF.Agent.Services.Vm;
 
 public sealed partial class VmBootstrapService(
     VmGuestAgentService guest,
-    ILogger<VmBootstrapService> logger,
-    AgentRuntimeSignalPublisher? signals = null)
+    ILogger<VmBootstrapService> logger)
 {
     internal const string WindowsPowerShellPath = @"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe";
     private const string WindowsIcaclsPath = @"C:\Windows\System32\icacls.exe";
@@ -130,13 +128,7 @@ public sealed partial class VmBootstrapService(
                         throw new InvalidOperationException("Bootstrap profile exceeded its declared reboot limit.");
                     if (!checkpoint.RebootCompleted)
                     {
-                        await EmitRebootAsync(
-                            vmName, request, AgentRuntimeSignalStage.Rebooting,
-                            AgentRuntimeSignalOutcome.Started, cancellationToken);
                         await guest.RebootAndWaitAsync(vmName, TimeSpan.FromMinutes(5), cancellationToken);
-                        await EmitRebootAsync(
-                            vmName, request, AgentRuntimeSignalStage.GuestReadyAfterReboot,
-                            AgentRuntimeSignalOutcome.Ready, cancellationToken);
                         await VerifyMarkerAsync(vmName, request, markerPath, cancellationToken);
                         checkpoint = checkpoint with
                         {
@@ -190,13 +182,7 @@ public sealed partial class VmBootstrapService(
                 rebootCount++;
                 if (rebootCount > manifest.MaxReboots)
                     throw new InvalidOperationException("Bootstrap profile exceeded its declared reboot limit.");
-                await EmitRebootAsync(
-                    vmName, request, AgentRuntimeSignalStage.Rebooting,
-                    AgentRuntimeSignalOutcome.Started, cancellationToken);
                 await guest.RebootAndWaitAsync(vmName, TimeSpan.FromMinutes(5), cancellationToken);
-                await EmitRebootAsync(
-                    vmName, request, AgentRuntimeSignalStage.GuestReadyAfterReboot,
-                    AgentRuntimeSignalOutcome.Ready, cancellationToken);
                 await VerifyMarkerAsync(vmName, request, markerPath, cancellationToken);
                 checkpoint = checkpoint with
                 {
@@ -248,25 +234,6 @@ public sealed partial class VmBootstrapService(
         await WriteInventoryStateAsync(
             vmName, request, "healthy", NormalizeDigest(request.ArtifactDigest), cancellationToken);
         return completed;
-    }
-
-    private async Task EmitRebootAsync(
-        string vmName,
-        VmBootstrapApplyRequest request,
-        AgentRuntimeSignalStage stage,
-        AgentRuntimeSignalOutcome outcome,
-        CancellationToken cancellationToken)
-    {
-        if (signals is null || request.OperationId is not { } operationId || operationId == Guid.Empty)
-            return;
-        await signals.AppendAsync(new AgentRuntimeSignalDraft(
-            operationId,
-            request.RuntimeId,
-            request.Generation,
-            "vm",
-            vmName,
-            stage,
-            outcome), cancellationToken);
     }
 
     public async Task<IReadOnlyList<RuntimeInventoryResource>> SnapshotInventoryAsync(

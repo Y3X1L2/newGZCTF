@@ -1,6 +1,5 @@
 using GZCTF.Agent.Models;
 using GZCTF.Agent.Services;
-using GZCTF.Agent.Services.RuntimeSignals;
 using GZCTF.Agent.Services.Vm;
 using Microsoft.AspNetCore.Mvc;
 
@@ -12,9 +11,6 @@ public class VmController(
     KvmService kvm,
     VmGuestAgentService guest,
     VmBootstrapService bootstrap,
-    VmRuntimeReadinessCoordinator readiness,
-    AgentRuntimeSignalPublisher signals,
-    ILogger<VmController> logger,
     AgentOperationGate gate) : ControllerBase
 {
     private readonly KvmService _kvm = kvm;
@@ -31,8 +27,6 @@ public class VmController(
     {
         await using var permit = await gate.EnterAsync(AgentOperationCategory.VmCreate, token);
         var result = await _kvm.CreateVmAsync(request, token);
-        if (result is not null && request.GuestSupervisor is null)
-            await readiness.TrackAsync(request, result, token);
         return result is null
             ? throw new AgentOperationException("Kvm", "kvm.operation_failed", "VM creation failed.", true)
             : Ok(result);
@@ -154,28 +148,9 @@ public class VmController(
         CancellationToken token)
     {
         await using var permit = await gate.EnterAsync(AgentOperationCategory.Control, token);
-        await EmitAsync(vmName, request, AgentRuntimeSignalStage.BootstrapRunning,
-            AgentRuntimeSignalOutcome.Started, null, null, token);
-        try
-        {
-            var result = await _kvm.ExecuteWithIdentityAsync(
-                vmName, request.Generation, nativeId,
-                identityToken => bootstrap.ApplyAsync(vmName, request, identityToken), token);
-            await EmitAsync(
-                vmName,
-                request,
-                result.Success ? AgentRuntimeSignalStage.BootstrapCompleted : AgentRuntimeSignalStage.Failed,
-                result.Success ? AgentRuntimeSignalOutcome.Ready : AgentRuntimeSignalOutcome.Failed,
-                result.Success ? null : "runtime.bootstrap_failed",
-                result.Success ? null : BootstrapFailureFacts(result),
-                token);
-            return Ok(result);
-        }
-        catch (Exception exception)
-        {
-            await TryEmitFailureAsync(vmName, request, "runtime.bootstrap_failed", exception);
-            throw;
-        }
+        return Ok(await _kvm.ExecuteWithIdentityAsync(
+            vmName, request.Generation, nativeId,
+            identityToken => bootstrap.ApplyAsync(vmName, request, identityToken), token));
     }
 
     [HttpPost("{vmName}/bootstrap/health")]
@@ -186,26 +161,9 @@ public class VmController(
         CancellationToken token)
     {
         await using var permit = await gate.EnterAsync(AgentOperationCategory.Control, token);
-        try
-        {
-            var result = await _kvm.ExecuteWithIdentityAsync(
-                vmName, request.Generation, nativeId,
-                identityToken => bootstrap.CheckHealthAsync(vmName, request, identityToken), token);
-            await EmitAsync(
-                vmName,
-                request,
-                result.Success ? AgentRuntimeSignalStage.HealthReady : AgentRuntimeSignalStage.Failed,
-                result.Success ? AgentRuntimeSignalOutcome.Ready : AgentRuntimeSignalOutcome.Failed,
-                result.Success ? null : "runtime.health_failed",
-                result.Success ? null : BootstrapFailureFacts(result),
-                token);
-            return Ok(result);
-        }
-        catch (Exception exception)
-        {
-            await TryEmitFailureAsync(vmName, request, "runtime.health_failed", exception);
-            throw;
-        }
+        return Ok(await _kvm.ExecuteWithIdentityAsync(
+            vmName, request.Generation, nativeId,
+            identityToken => bootstrap.CheckHealthAsync(vmName, request, identityToken), token));
     }
 
     [HttpPost("{vmName}/capabilities/probe")]
@@ -220,66 +178,5 @@ public class VmController(
         return Ok(await _kvm.ExecuteWithIdentityAsync(
             vmName, generation, nativeId,
             identityToken => bootstrap.ProbeAsync(vmName, request, identityToken), token));
-    }
-
-    private async Task EmitAsync(
-        string vmName,
-        VmBootstrapApplyRequest request,
-        AgentRuntimeSignalStage stage,
-        AgentRuntimeSignalOutcome outcome,
-        string? errorCode,
-        IReadOnlyDictionary<string, string>? facts,
-        CancellationToken cancellationToken)
-    {
-        if (request.OperationId is not { } operationId || operationId == Guid.Empty)
-            return;
-        await signals.AppendAsync(new AgentRuntimeSignalDraft(
-            operationId,
-            request.RuntimeId,
-            request.Generation,
-            "vm",
-            vmName,
-            stage,
-            outcome,
-            errorCode,
-            Retryable: false,
-            Facts: facts), cancellationToken);
-    }
-
-    private static IReadOnlyDictionary<string, string>? BootstrapFailureFacts(
-        VmBootstrapApplyResponse result)
-    {
-        var facts = new Dictionary<string, string>(StringComparer.Ordinal);
-        Add("stage", result.Stage);
-        Add("errorCode", result.ErrorCode);
-        Add("stepId", result.FailedStep);
-        Add("category", result.FailureCategory);
-        if (result.ExitCode is { } exitCode)
-            facts["exitCode"] = exitCode.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        return facts.Count == 0 ? null : facts;
-
-        void Add(string key, string? value)
-        {
-            if (!string.IsNullOrWhiteSpace(value))
-                facts[key] = value.Length <= 256 ? value : value[..256];
-        }
-    }
-
-    private async Task TryEmitFailureAsync(
-        string vmName,
-        VmBootstrapApplyRequest request,
-        string errorCode,
-        Exception exception)
-    {
-        try
-        {
-            await EmitAsync(vmName, request, AgentRuntimeSignalStage.Failed,
-                AgentRuntimeSignalOutcome.Failed, errorCode, null, CancellationToken.None);
-        }
-        catch (Exception signalException)
-        {
-            logger.LogError(signalException,
-                "Failed to persist VM operation failure signal after {ErrorType}", exception.GetType().Name);
-        }
     }
 }

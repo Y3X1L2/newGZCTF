@@ -13,6 +13,9 @@ public sealed record VmImageBackingReference(string OverlayPath, string BackingP
 /// </summary>
 public sealed class VmImageBackingChainInspector(ILogger<VmImageBackingChainInspector> logger)
 {
+    internal static string BaseImageLockKey(string path) =>
+        "vm-image-path:" + Path.GetFullPath(path).Replace('\\', '/').ToUpperInvariant();
+
     static readonly TimeSpan InspectTimeout = TimeSpan.FromSeconds(20);
 
     /// <summary>

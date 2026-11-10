@@ -34,28 +34,6 @@ public interface IContainerCommandExecutor
         TimeSpan timeout, CancellationToken token = default);
 }
 
-public interface IPenetrationFabricManager
-{
-    public bool IsSupported { get; }
-
-    public Task<PenetrationFabricResult> CreateNetworkAsync(string networkName, string cidr,
-        CancellationToken token = default);
-
-    public Task<PenetrationFabricResult> AttachInterfaceAsync(Models.Data.Container container,
-        PenetrationFabricInterfaceSpec spec, CancellationToken token = default);
-
-    public Task<PenetrationFabricResult> EnableForwardingAsync(Models.Data.Container container,
-        CancellationToken token = default);
-
-    public Task<PenetrationFabricResult> ApplyRouteAsync(Models.Data.Container container, string targetCidr,
-        string gatewayIp, CancellationToken token = default);
-
-    public Task<PenetrationFabricResult> ProbeAsync(Models.Data.Container container, string targetIp,
-        CancellationToken token = default);
-
-    public Task<PenetrationFabricResult> RemoveNetworkAsync(string networkName, CancellationToken token = default);
-}
-
 public sealed record PenetrationFabricInterfaceSpec(
     string NetworkName,
     string NetworkCidr,

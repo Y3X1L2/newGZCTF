@@ -106,7 +106,7 @@ public class ImageController : ControllerBase
         var result = await _singleFlight.RunAsync(key, async sharedToken =>
         {
             await using var cacheLock = await _resourceLock.AcquireAsync(
-                LibvirtTeamLabProvider.BaseImageLockKey(destination), sharedToken);
+                VmImageBackingChainInspector.BaseImageLockKey(destination), sharedToken);
             await using var permit = await _gate.EnterAsync(AgentOperationCategory.VmImageTransfer, sharedToken);
             return await DownloadVmImageCoreAsync(request, sharedToken);
         }, token);
@@ -198,7 +198,7 @@ public class ImageController : ControllerBase
         {
             var path = Path.Combine(_kvm.ImageStoragePath, $"{request.TemplateId}.qcow2");
             await using var cacheLock = await _resourceLock.AcquireAsync(
-                LibvirtTeamLabProvider.BaseImageLockKey(path), sharedToken);
+                VmImageBackingChainInspector.BaseImageLockKey(path), sharedToken);
             await using var permit = await _gate.EnterAsync(
                 AgentOperationCategory.VmImageTransfer, sharedToken);
             if (!System.IO.File.Exists(path))
@@ -242,7 +242,7 @@ public class ImageController : ControllerBase
         var cacheIdentity = NormalizeSha256(hash) ?? templateId.ToString();
         var templatePath = Path.Combine(storagePath, $"{templateId}.qcow2");
         await using var cacheLock = await _resourceLock.AcquireAsync(
-            LibvirtTeamLabProvider.BaseImageLockKey(templatePath), token);
+            VmImageBackingChainInspector.BaseImageLockKey(templatePath), token);
         await using var permit = await _gate.EnterAsync(AgentOperationCategory.Control, token);
         var targets = ResolveVmImageCachePaths(storagePath, templateId, hash)
             .Where(System.IO.File.Exists)

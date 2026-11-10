@@ -1,12 +1,4 @@
-using GZCTF.Models.Internal;
 using GZCTF.Modules.TeamLab.Application;
-using GZCTF.Modules.TeamLab.Application.Validation;
-using GZCTF.Modules.TeamLab.Infrastructure;
-using GZCTF.Modules.Audit.Application;
-using GZCTF.Modules.Identity.Application;
-using GZCTF.Modules.Identity.Contracts;
-using GZCTF.Modules.TeamLab.Application.Rollouts;
-using Microsoft.Extensions.Options;
 
 namespace GZCTF.Modules.TeamLab;
 
@@ -22,114 +14,8 @@ public static class TeamLabModuleRegistration
             .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false, UseCookies = false });
         services.AddHttpClient("NetlabStream", client => client.Timeout = Timeout.InfiniteTimeSpan)
             .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false, UseCookies = false, ConnectTimeout = TimeSpan.FromSeconds(15) });
-        // Built from configuration so tenant addressing stays inside the range the platform owns and
-        // clear of the networks its nodes already route; either overlap would replace host routes on
-        // the WorkerNode and break unrelated games running there.
-        services.AddScoped<TeamLabTopologyValidator>(provider =>
-        {
-            var network = provider.GetRequiredService<IOptions<TeamLabNetworkConfig>>().Value;
-            return new TeamLabTopologyValidator(TeamLabAddressPolicy.ForPlatform(
-                network.ReservedCidrs, network.FabricLinkPool, network.RuntimeNetworkBaseCidr));
-        });
-        services.AddScoped<TeamLabReleaseService>();
-        services.AddScoped<TeamLabAssetFileService>();
-        services.AddScoped<TeamLabAssetControlService>();
-        services.AddScoped<TeamLabRuntimeDifferenceService>();
-        services.AddScoped<ITeamLabAssetControlGateway, AgentTeamLabAssetControlGateway>();
-        services.AddScoped<ITeamLabAssetFileGateway, AgentTeamLabAssetFileGateway>();
-        services.AddScoped<ITeamLabConnectorNodeGateway, AgentTeamLabConnectorNodeGateway>();
-        services.AddScoped<ITeamLabServiceAccessGateway, AgentTeamLabServiceAccessGateway>();
-        services.AddScoped<TeamLabServiceAccessService>();
-        services.AddScoped<ITeamLabServiceAccessCleanup>(provider =>
-            provider.GetRequiredService<TeamLabServiceAccessService>());
-        services.AddScoped<TeamLabReleaseImagePreparationService>();
-        services.AddScoped<TeamLabControlScopeService>();
-        services.AddScoped<TeamLabScopeAuthorizationService>();
-        services.AddScoped<IApiTokenResourceGrantPolicy, TeamLabScopeApiTokenResourceGrantPolicy>();
-        services.AddScoped<ITeamLabTopologyApplicationService, TeamLabTopologyApplicationService>();
-        services.AddScoped<TeamLabRuntimeOverlayService>();
-        services.AddScoped<TeamLabRuntimePlanner>();
-        services.AddScoped<TeamLabRuntimeUpdateService>();
-        services.AddScoped<TeamLabFabricLinkAllocator>();
-        services.AddScoped<TeamLabEventRecorder>();
-        services.AddScoped<TeamLabRuntimeProjectionService>();
-        services.AddScoped<TeamLabOpenDiscoveryService>();
-        services.AddScoped<TeamLabAdminQueryService>();
-        services.AddScoped<ITeamLabUsageProjectionProvider, TeamLabEmptyUsageProjectionProvider>();
-        services.AddScoped<TeamLabAuthorizationService>();
-        services.AddScoped<TeamLabRuntimeGrantService>();
-        services.AddScoped<TeamLabAssetDiagnosticsService>();
-        services.AddScoped<ITeamLabAssetDiagnosticsGateway, AgentTeamLabAssetDiagnosticsGateway>();
-        services.AddScoped<ITeamLabRemoteRelayGateway, AgentTeamLabRemoteRelayGateway>();
-        services.AddScoped<TeamLabRemoteAccessService>();
-        services.AddScoped<ITeamLabRemoteAccessService>(provider => provider.GetRequiredService<TeamLabRemoteAccessService>());
-        services.AddScoped<IUserAccountRevocationParticipant>(provider => provider.GetRequiredService<TeamLabRemoteAccessService>());
-        services.AddOptions<GZCTF.Modules.TeamLab.Contracts.TeamLabRemoteAuditOptions>()
-            .BindConfiguration("TeamLab:RemoteAudit")
-            .Validate(value => value.RetentionDays is >= 1 and <= 3650 && value.MaxStorageBytes >= 16384 &&
-                value.MaxStorageBytes <= 10L * 1024 * 1024 * 1024, "Remote audit retention or quota is invalid.")
-            .ValidateOnStart();
-        services.AddScoped<TeamLabRemoteAuditService>();
-        services.AddHostedService<TeamLabRemoteSessionWorker>();
-        services.AddScoped<TeamLabRuntimeLifecycleGuard>();
-        services.AddScoped<TeamLabTrafficApplicationService>();
-        services.AddSingleton<TeamLabTrafficLocalBuffer>();
-        services.AddSingleton<RedisTeamLabTrafficIngestor>();
-        services.AddSingleton<ITeamLabTrafficIngestor>(serviceProvider =>
-            serviceProvider.GetRequiredService<RedisTeamLabTrafficIngestor>());
-        services.AddScoped<PostgresTeamLabTrafficBatchWriter>();
-        services.AddHostedService<TeamLabTrafficPersistenceWorker>();
-        services.AddScoped<TeamLabTrafficPathCorrelator>();
-        services.AddHostedService<TeamLabTrafficPathWorker>();
-        services.AddSingleton<TeamLabCaptureUploadTokenService>();
-        services.AddSingleton<TeamLabCaptureArtifactStore>();
-        services.AddScoped<TeamLabCaptureUploadService>();
-        services.AddScoped<TeamLabCaptureCoordinator>();
-        services.AddScoped<ITeamLabCaptureCleanup>(provider =>
-            provider.GetRequiredService<TeamLabCaptureCoordinator>());
-        services.AddHostedService<TeamLabCaptureCoordinatorWorker>();
-        services.AddScoped<ITeamLabNodeExecutor, AgentTeamLabNodeExecutor>();
-        services.AddScoped<TeamLabRouteApplicationService>();
-        services.AddScoped<TeamLabDeploymentStageMachine>();
-        services.AddScoped<ITeamLabDeploymentProgress>(serviceProvider =>
-            serviceProvider.GetRequiredService<TeamLabDeploymentStageMachine>());
-        services.AddScoped<ITeamLabArtifactDistribution, TeamLabArtifactDistribution>();
-        services.AddScoped<ITeamLabRuntimeQueue, TeamLabRuntimeQueue>();
-        services.AddScoped<TeamLabRuntimeRecoveryPolicy>();
-        services.AddScoped<TeamLabShardDeploymentService>();
-        services.AddScoped<TeamLabRuntimeCleanupService>();
-        services.AddScoped<TeamLabRecordDeletionService>();
-        services.AddScoped<GZCTF.Modules.Runtime.Contracts.ITeamLabRecordReferenceQuery,
-            GZCTF.Modules.Runtime.Application.TeamLabRecordReferenceQuery>();
-        services.AddScoped<GZCTF.Modules.Runtime.Contracts.ITeamLabCreationHistory,
-            GZCTF.Modules.Runtime.Application.TeamLabRecordReferenceQuery>();
-        services.AddScoped<ITeamLabRuntimeApplicationService, TeamLabRuntimeOrchestrator>();
-        services.AddScoped<TeamLabAccessGrantService>();
-        services.AddScoped<ITeamLabRolloutApplicationService, TeamLabRolloutApplicationService>();
-        services.AddScoped<ITeamLabRolloutTargetProvider, TeamLabExternalRolloutProvider>();
-        services.AddScoped<TeamLabRolloutCoordinator>();
-        services.AddHostedService<TeamLabRolloutCoordinatorWorker>();
-        services.AddScoped<TeamLabRuntimeOperationPayloadProtector>();
-        services.AddScoped<ITeamLabRuntimeOperationSubmissionStore, EfTeamLabRuntimeOperationSubmissionStore>();
-        services.AddScoped<TeamLabRuntimeOperationApplicationService>();
-        services.AddScoped<ITeamLabControlPlaneOperationService>(provider =>
-            provider.GetRequiredService<TeamLabRuntimeOperationApplicationService>());
-        services.AddKeyedScoped<IApiOperationHandler, TeamLabRuntimeOperationHandler>(
-            TeamLabRuntimeOperationApplicationService.OperationKind);
-        services.AddScoped<IApiOperationResultProvider, TeamLabRuntimeOperationResultProvider>();
-        services.AddScoped<TeamLabWebhookService>();
-        services.AddScoped<ITeamLabWebhookDeliverer, HttpTeamLabWebhookDeliverer>();
-        services.AddHostedService<TeamLabWebhookDeliveryWorker>();
-        services.AddScoped<TeamLabDevicePackageService>();
-        services.AddScoped<ITeamLabDeviceObserver, AgentTeamLabDeviceObserver>();
-        services.AddScoped<TeamLabDeviceObservationService>();
-        services.AddHostedService<TeamLabDeviceObservationWorker>();
-        services.AddScoped<TeamLabConnectorService>();
-        services.AddScoped<TeamLabLinkPolicyService>();
-        services.AddScoped<TeamLabProtocolEventService>();
-        services.AddScoped<ITeamLabLinkPolicyDispatcher, TeamLabLinkPolicyDispatcher>();
-        services.AddScoped<TeamLabResourcePoolService>();
-        services.AddHostedService<TeamLabCapabilityResourceWorker>();
+        services.AddScoped<Modules.Runtime.Contracts.ITeamLabRecordReferenceQuery, Modules.Runtime.Application.TeamLabRecordReferenceQuery>();
+        services.AddScoped<Modules.Runtime.Contracts.ITeamLabCreationHistory, Modules.Runtime.Application.TeamLabRecordReferenceQuery>();
         return services;
     }
 }

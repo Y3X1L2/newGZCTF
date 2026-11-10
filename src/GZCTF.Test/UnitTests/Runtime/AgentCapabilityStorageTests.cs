@@ -8,55 +8,6 @@ namespace GZCTF.Test.UnitTests.Runtime;
 
 public sealed class AgentCapabilityStorageTests
 {
-    [Fact]
-    public void VmStorage_UsesBothConfiguredDirectoriesAndSmallerFreeSpace()
-    {
-        var root = Path.Combine(Path.GetTempPath(), $"gzctf-capacity-{Guid.NewGuid():N}");
-        var images = Path.Combine(root, "images");
-        var runtime = Path.Combine(root, "teamlab");
-        Directory.CreateDirectory(images);
-        Directory.CreateDirectory(runtime);
-        try
-        {
-            var queried = new List<string>();
-            var available = AgentCapabilityService.ReadAvailableVmImageStorage(images, runtime, true, path =>
-            {
-                queried.Add(path);
-                return path == images ? 180 : 90;
-            });
-
-            Assert.Equal(90, available);
-            Assert.Equal(new[] { images, runtime }, queried);
-        }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
-    }
-
-    [Fact]
-    public void VmStorage_RuntimeDirectoryIsRequiredOnlyForTeamLabExecution()
-    {
-        var root = Path.Combine(Path.GetTempPath(), $"gzctf-capacity-{Guid.NewGuid():N}");
-        var images = Path.Combine(root, "images");
-        var runtime = Path.Combine(root, "teamlab");
-        Directory.CreateDirectory(images);
-        try
-        {
-            var queried = new List<string>();
-            Assert.Equal(180, AgentCapabilityService.ReadAvailableVmImageStorage(images, runtime, false, path =>
-            {
-                queried.Add(path);
-                return 180;
-            }));
-            Assert.Equal(new[] { images }, queried);
-            Assert.Equal(0, AgentCapabilityService.ReadAvailableVmImageStorage(images, runtime, true, _ => 180));
-        }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
-    }
 
     [Fact]
     public void DockerStorage_UsesDaemonDirectoryAndFailsClosed()

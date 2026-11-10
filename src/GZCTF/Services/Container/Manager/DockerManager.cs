@@ -11,7 +11,7 @@ using ContainerStatus = GZCTF.Utils.ContainerStatus;
 
 namespace GZCTF.Services.Container.Manager;
 
-public class DockerManager : IContainerManager, IContainerPatchApplicator, IContainerCommandExecutor, IPenetrationFabricManager
+public class DockerManager : IContainerManager, IContainerPatchApplicator, IContainerCommandExecutor
 {
     private readonly DockerClient _client;
     private readonly ILogger<DockerManager> _logger;
@@ -19,7 +19,6 @@ public class DockerManager : IContainerManager, IContainerPatchApplicator, ICont
     private readonly bool _isWindowsDaemon;
     private static readonly TimeSpan PatchApplyTimeout = TimeSpan.FromSeconds(60);
     private const int MaxExtractedPatchArchiveSize = 64 * 1024 * 1024;
-    private static readonly TimeSpan FabricCommandTimeout = TimeSpan.FromSeconds(15);
 
     public DockerManager(IContainerProvider<DockerClient, DockerMetadata> provider, ILogger<DockerManager> logger)
     {
@@ -415,137 +414,6 @@ public class DockerManager : IContainerManager, IContainerPatchApplicator, ICont
         }
     }
 
-    public async Task<PenetrationFabricResult> CreateNetworkAsync(string networkName, string cidr,
-        CancellationToken token = default)
-    {
-        if (!IsSupported)
-            return PenetrationFabricResult.Unsupported("当前 Docker 后端未运行在 Linux 宿主进程中，不能直接配置渗透 fabric 网络；请使用 Linux Fleet Agent。");
-
-        var bridgeName = BuildStableFabricName("yyb", networkName);
-        return await RunHostFabricCommand(
-            [
-                "sh",
-                "-c",
-                $"command -v ip >/dev/null 2>&1 || {{ echo 'missing host ip command'; exit 127; }}; ip link show {ShellQuote(bridgeName)} >/dev/null 2>&1 || ip link add name {ShellQuote(bridgeName)} type bridge; ip link set {ShellQuote(bridgeName)} up"
-            ],
-            FabricCommandTimeout, token);
-    }
-
-    public async Task<PenetrationFabricResult> AttachInterfaceAsync(Models.Data.Container container,
-        PenetrationFabricInterfaceSpec spec, CancellationToken token = default)
-    {
-        if (!IsSupported)
-            return PenetrationFabricResult.Unsupported("当前 Docker 后端未运行在 Linux 宿主进程中，不能直接配置渗透 fabric 网络；请使用 Linux Fleet Agent。");
-
-        var pid = await GetContainerPid(container.ContainerId, token);
-        if (pid <= 0)
-            return PenetrationFabricResult.Failed(null, "无法获取容器 PID，不能配置渗透 fabric 网卡。");
-
-        var bridgeName = BuildStableFabricName("yyb", spec.NetworkName);
-        var hostIf = SanitizeFabricName(spec.HostInterfaceName, 15);
-        var peerIf = BuildPeerInterfaceName(hostIf);
-        var containerIf = SanitizeFabricName(spec.ContainerInterfaceName, 15);
-        var ipCidr = $"{spec.IpAddress}/{spec.PrefixLength}";
-        var cleanupCommand =
-            $"ip link del {ShellQuote(hostIf)} 2>/dev/null || true; nsenter -t {pid} -n ip link del {ShellQuote(containerIf)} 2>/dev/null || true";
-        var command = string.Join(' ',
-        [
-            "set -e;",
-            "yy_fabric_ok=0;",
-            $"yy_fabric_cleanup() {{ if [ \"$yy_fabric_ok\" != \"1\" ]; then {cleanupCommand}; fi; }};",
-            "trap yy_fabric_cleanup 0;",
-            "command -v ip >/dev/null 2>&1 || { echo 'missing host ip command'; exit 127; };",
-            "command -v nsenter >/dev/null 2>&1 || { echo 'missing nsenter command'; exit 127; };",
-            $"ip link show {ShellQuote(bridgeName)} >/dev/null 2>&1 || ip link add name {ShellQuote(bridgeName)} type bridge;",
-            $"ip link set {ShellQuote(bridgeName)} up;",
-            $"ip link del {ShellQuote(hostIf)} 2>/dev/null || true;",
-            $"nsenter -t {pid} -n ip link del {ShellQuote(containerIf)} 2>/dev/null || true;",
-            $"ip link add {ShellQuote(hostIf)} type veth peer name {ShellQuote(peerIf)};",
-            $"ip link set {ShellQuote(hostIf)} master {ShellQuote(bridgeName)};",
-            $"ip link set {ShellQuote(hostIf)} up;",
-            $"ip link set {ShellQuote(peerIf)} netns {pid};",
-            $"nsenter -t {pid} -n ip link set {ShellQuote(peerIf)} name {ShellQuote(containerIf)};",
-            $"nsenter -t {pid} -n ip addr flush dev {ShellQuote(containerIf)};",
-            $"nsenter -t {pid} -n ip addr add {ShellQuote(ipCidr)} dev {ShellQuote(containerIf)};",
-            $"nsenter -t {pid} -n ip link set {ShellQuote(containerIf)} up;",
-            spec.RemoveDefaultRoute
-                ? $"nsenter -t {pid} -n ip route del default 2>/dev/null || true;"
-                : string.Empty,
-            $"nsenter -t {pid} -n ip route show;",
-            "yy_fabric_ok=1"
-        ]);
-
-        return await RunHostFabricCommand(["sh", "-c", command], FabricCommandTimeout, token);
-    }
-
-    public async Task<PenetrationFabricResult> EnableForwardingAsync(Models.Data.Container container,
-        CancellationToken token = default)
-    {
-        if (!IsSupported)
-            return PenetrationFabricResult.Unsupported("当前 Docker 后端未运行在 Linux 宿主进程中，不能直接配置渗透 fabric 网络；请使用 Linux Fleet Agent。");
-
-        var pid = await GetContainerPid(container.ContainerId, token);
-        if (pid <= 0)
-            return PenetrationFabricResult.Failed(null, "无法获取容器 PID，不能开启转发。");
-
-        return await RunHostFabricCommand(
-            [
-                "sh",
-                "-c",
-                $"command -v nsenter >/dev/null 2>&1 || {{ echo 'missing nsenter command'; exit 127; }}; nsenter -t {pid} -n sh -c 'echo 1 > /proc/sys/net/ipv4/ip_forward && cat /proc/sys/net/ipv4/ip_forward'"
-            ],
-            FabricCommandTimeout, token);
-    }
-
-    public async Task<PenetrationFabricResult> ApplyRouteAsync(Models.Data.Container container, string targetCidr,
-        string gatewayIp, CancellationToken token = default)
-    {
-        if (!IsSupported)
-            return PenetrationFabricResult.Unsupported("当前 Docker 后端未运行在 Linux 宿主进程中，不能直接配置渗透 fabric 网络；请使用 Linux Fleet Agent。");
-
-        var pid = await GetContainerPid(container.ContainerId, token);
-        if (pid <= 0)
-            return PenetrationFabricResult.Failed(null, "无法获取容器 PID，不能写入路由。");
-
-        return await RunHostFabricCommand(
-            [
-                "sh",
-                "-c",
-                $"command -v ip >/dev/null 2>&1 || {{ echo 'missing host ip command'; exit 127; }}; command -v nsenter >/dev/null 2>&1 || {{ echo 'missing nsenter command'; exit 127; }}; nsenter -t {pid} -n ip route replace {ShellQuote(targetCidr)} via {ShellQuote(gatewayIp)} && nsenter -t {pid} -n ip route show {ShellQuote(targetCidr)} | grep -q {ShellQuote(gatewayIp)}"
-            ],
-            FabricCommandTimeout, token);
-    }
-
-    public async Task<PenetrationFabricResult> ProbeAsync(Models.Data.Container container, string targetIp,
-        CancellationToken token = default)
-    {
-        if (!IsSupported)
-            return PenetrationFabricResult.Unsupported("当前 Docker 后端未运行在 Linux 宿主进程中，不能直接配置渗透 fabric 网络；请使用 Linux Fleet Agent。");
-
-        var pid = await GetContainerPid(container.ContainerId, token);
-        if (pid <= 0)
-            return PenetrationFabricResult.Failed(null, "无法获取容器 PID，不能执行连通探测。");
-
-        return await RunHostFabricCommand(
-            [
-                "sh",
-                "-c",
-                $"command -v nsenter >/dev/null 2>&1 || {{ echo 'missing nsenter command'; exit 127; }}; command -v ping >/dev/null 2>&1 || {{ echo 'missing host ping command'; exit 127; }}; nsenter -t {pid} -n ping -c 1 -W 2 {ShellQuote(targetIp)}"
-            ],
-            TimeSpan.FromSeconds(8), token);
-    }
-
-    public async Task<PenetrationFabricResult> RemoveNetworkAsync(string networkName, CancellationToken token = default)
-    {
-        if (!IsSupported)
-            return PenetrationFabricResult.Unsupported("当前 Docker 后端未运行在 Linux 宿主进程中，不能直接配置渗透 fabric 网络；请使用 Linux Fleet Agent。");
-
-        var bridgeName = BuildStableFabricName("yyb", networkName);
-        return await RunHostFabricCommand(
-            ["sh", "-c", $"command -v ip >/dev/null 2>&1 || {{ echo 'missing host ip command'; exit 127; }}; ip link del {ShellQuote(bridgeName)} 2>/dev/null || true"],
-            FabricCommandTimeout, token);
-    }
-
     static async Task<MemoryStream> DecompressGzipArchive(Stream archive, CancellationToken token)
     {
         archive.Position = 0;
@@ -617,102 +485,6 @@ public class DockerManager : IContainerManager, IContainerPatchApplicator, ICont
             : ContainerPatchApplyResult.Failed(inspect.ExitCode,
                 string.IsNullOrWhiteSpace(message) ? "Patch command failed" : message);
     }
-
-    async Task<PenetrationFabricResult> RunHostFabricCommand(IReadOnlyList<string> command, TimeSpan timeout,
-        CancellationToken token)
-    {
-        System.Diagnostics.Process? process = null;
-        try
-        {
-            process = new System.Diagnostics.Process();
-            process.StartInfo.FileName = command[0];
-            foreach (var arg in command.Skip(1))
-                process.StartInfo.ArgumentList.Add(arg);
-            process.StartInfo.RedirectStandardOutput = true;
-            process.StartInfo.RedirectStandardError = true;
-            process.StartInfo.UseShellExecute = false;
-            process.StartInfo.CreateNoWindow = true;
-            process.Start();
-
-            using var cts = CancellationTokenSource.CreateLinkedTokenSource(token);
-            cts.CancelAfter(timeout);
-            var stdout = process.StandardOutput.ReadToEndAsync(cts.Token);
-            var stderr = process.StandardError.ReadToEndAsync(cts.Token);
-            await process.WaitForExitAsync(cts.Token);
-            var output = string.Join('\n', new[] { await stdout, await stderr }
-                .Where(s => !string.IsNullOrWhiteSpace(s))).Trim();
-
-            return process.ExitCode == 0
-                ? PenetrationFabricResult.Success(string.IsNullOrWhiteSpace(output) ? "fabric command executed" : output)
-                : PenetrationFabricResult.Failed(process.ExitCode,
-                    string.IsNullOrWhiteSpace(output) ? "fabric command failed" : output);
-        }
-        catch (OperationCanceledException) when (!token.IsCancellationRequested)
-        {
-            try
-            {
-                if (process is not null && !process.HasExited)
-                    process.Kill(entireProcessTree: true);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogDebug(ex, "Failed to kill timed out penetration fabric command");
-            }
-
-            return PenetrationFabricResult.Timeout("fabric command timed out");
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            _logger.LogWarning(ex, "Penetration fabric host command failed");
-            return PenetrationFabricResult.Failed(null, ex.Message);
-        }
-        finally
-        {
-            process?.Dispose();
-        }
-    }
-
-    async Task<long> GetContainerPid(string containerId, CancellationToken token)
-    {
-        try
-        {
-            var inspect = await _client.Containers.InspectContainerAsync(containerId, token);
-            return inspect.State.Pid;
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            _logger.LogWarning(ex, "Failed to inspect PID for container {ContainerId}", containerId);
-            return 0;
-        }
-    }
-
-    static string BuildStableFabricName(string prefix, string value, int maxLength = 15)
-    {
-        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant();
-        var name = $"{prefix}{hash}";
-        return name[..Math.Min(name.Length, maxLength)];
-    }
-
-    static string BuildPeerInterfaceName(string hostInterfaceName)
-    {
-        var peerName = SanitizeFabricName($"p{hostInterfaceName}", 15);
-        return peerName.Equals(hostInterfaceName, StringComparison.Ordinal)
-            ? BuildStableFabricName("yyr", hostInterfaceName)
-            : peerName;
-    }
-
-    static string SanitizeFabricName(string value, int maxLength)
-    {
-        var chars = value.Trim().ToLowerInvariant()
-            .Select(ch => char.IsLetterOrDigit(ch) ? ch : '-')
-            .ToArray();
-        var normalized = new string(chars).Trim('-');
-        if (string.IsNullOrWhiteSpace(normalized))
-            normalized = $"yy{Guid.NewGuid():N}";
-        return normalized[..Math.Min(normalized.Length, maxLength)];
-    }
-
-    static string ShellQuote(string value) => $"'{value.Replace("'", "'\"'\"'")}'";
 
     private CreateContainerParameters GetCreateContainerParameters(GZCTF.Models.Internal.ContainerConfig config,
         IReadOnlyList<ContainerNetworkAttachment> attachments)

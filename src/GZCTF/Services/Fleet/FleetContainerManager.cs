@@ -11,7 +11,7 @@ using DataContainer = GZCTF.Models.Data.Container;
 
 namespace GZCTF.Services.Fleet;
 
-public class FleetContainerManager : IContainerManager, IContainerPatchApplicator, IContainerCommandExecutor, IPenetrationFabricManager
+public class FleetContainerManager : IContainerManager, IContainerPatchApplicator, IContainerCommandExecutor
 {
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly AgentClient _agentClient;
@@ -214,92 +214,6 @@ public class FleetContainerManager : IContainerManager, IContainerPatchApplicato
             command, (int)Math.Ceiling(timeout.TotalSeconds), token);
         return new ContainerCommandResult(result.IsSupported, result.Succeeded, result.TimedOut,
             result.ExitCode, result.Message);
-    }
-
-    public async Task<PenetrationFabricResult> CreateNetworkAsync(string networkName, string cidr,
-        CancellationToken token = default)
-    {
-        return PenetrationFabricResult.Unsupported(
-            "Fleet fabric network creation requires a runtime container context; call AttachInterfaceAsync after containers are scheduled.");
-    }
-
-    public async Task<PenetrationFabricResult> AttachInterfaceAsync(DataContainer container,
-        PenetrationFabricInterfaceSpec spec, CancellationToken token = default)
-    {
-        var node = await ResolveContainerNode(container, token);
-        if (node is null)
-            return PenetrationFabricResult.Unsupported("容器没有可解析的 Fleet 节点，不能配置 fabric 网卡。");
-
-        if (node.IsLocal)
-        {
-            var create = await _localManager.CreateNetworkAsync(spec.NetworkName, spec.NetworkCidr, token);
-            return create.Succeeded
-                ? await _localManager.AttachInterfaceAsync(container, spec, token)
-                : create;
-        }
-
-        var network = await _agentClient.CreateFabricNetworkAsync(node.Id, spec.NetworkName, spec.NetworkCidr, token);
-        return network.Succeeded
-            ? await _agentClient.AttachFabricInterfaceAsync(node.Id, container.ContainerId, spec, token)
-            : network;
-    }
-
-    public async Task<PenetrationFabricResult> EnableForwardingAsync(DataContainer container,
-        CancellationToken token = default)
-    {
-        var node = await ResolveContainerNode(container, token);
-        if (node is null)
-            return PenetrationFabricResult.Unsupported("容器没有可解析的 Fleet 节点，不能开启 fabric 转发。");
-
-        return node.IsLocal
-            ? await _localManager.EnableForwardingAsync(container, token)
-            : await _agentClient.EnableFabricForwardingAsync(node.Id, container.ContainerId, token);
-    }
-
-    public async Task<PenetrationFabricResult> ApplyRouteAsync(DataContainer container, string targetCidr,
-        string gatewayIp, CancellationToken token = default)
-    {
-        var node = await ResolveContainerNode(container, token);
-        if (node is null)
-            return PenetrationFabricResult.Unsupported("容器没有可解析的 Fleet 节点，不能写入 fabric 路由。");
-
-        return node.IsLocal
-            ? await _localManager.ApplyRouteAsync(container, targetCidr, gatewayIp, token)
-            : await _agentClient.ApplyFabricRouteAsync(node.Id, container.ContainerId, targetCidr, gatewayIp, token);
-    }
-
-    public async Task<PenetrationFabricResult> ProbeAsync(DataContainer container, string targetIp,
-        CancellationToken token = default)
-    {
-        var node = await ResolveContainerNode(container, token);
-        if (node is null)
-            return PenetrationFabricResult.Unsupported("容器没有可解析的 Fleet 节点，不能执行 fabric 探测。");
-
-        return node.IsLocal
-            ? await _localManager.ProbeAsync(container, targetIp, token)
-            : await _agentClient.ProbeFabricAsync(node.Id, container.ContainerId, targetIp, token);
-    }
-
-    public async Task<PenetrationFabricResult> RemoveNetworkAsync(string networkName, CancellationToken token = default)
-    {
-        var removed = false;
-        using var scope = _scopeFactory.CreateScope();
-        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var nodes = await context.WorkerNodes.AsNoTracking()
-            .Where(n => n.Status == NodeStatus.Online)
-            .ToListAsync(token);
-
-        foreach (var node in nodes)
-        {
-            var result = node.IsLocal
-                ? await _localManager.RemoveNetworkAsync(networkName, token)
-                : await _agentClient.RemoveFabricNetworkAsync(node.Id, networkName, token);
-            removed |= result.Succeeded || !result.IsSupported;
-        }
-
-        return removed
-            ? PenetrationFabricResult.Success("fabric network cleanup attempted")
-            : PenetrationFabricResult.Unsupported("没有可用节点执行 fabric 网络清理。");
     }
 
     async Task<WorkerNode?> ResolveContainerNode(DataContainer container, CancellationToken token)

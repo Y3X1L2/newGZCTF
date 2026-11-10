@@ -5,9 +5,6 @@ using GZCTF.Modules.Audit.Application;
 using GZCTF.Modules.Audit.Contracts;
 using GZCTF.Modules.Audit.Domain;
 using GZCTF.Modules.Runtime.Contracts;
-using GZCTF.Modules.TeamLab.Application;
-using GZCTF.Modules.TeamLab.Domain;
-using GZCTF.Modules.TeamLab.Domain.Runtime;
 using GZCTF.Services.Fleet;
 using Microsoft.EntityFrameworkCore;
 
@@ -23,29 +20,14 @@ public sealed record RuntimeReconciliationSummary(
     int ReplayedCount,
     int RecoveredTicketCount);
 
-public sealed partial class RuntimeFactReconciliationService(
+public sealed class RuntimeFactReconciliationService(
     AppDbContext context,
     AgentClient agentClient,
     FleetCapacityReservationService capacity,
-    TeamLabRuntimeRecoveryPolicy teamLabRecovery,
     IDeploymentQueueWakeup wakeup,
     IOperationalEventWriter events,
     ILogger<RuntimeFactReconciliationService> logger)
 {
-    private static readonly TeamLabRuntimeStatus[] ActiveTeamLabRuntimeStatuses =
-    [
-        TeamLabRuntimeStatus.Probing,
-        TeamLabRuntimeStatus.Running
-    ];
-
-    private static readonly TeamLabRuntimeStatus[] ExpectedTeamLabWorkloadStatuses =
-    [
-        TeamLabRuntimeStatus.Deploying,
-        TeamLabRuntimeStatus.Probing,
-        TeamLabRuntimeStatus.Running,
-        TeamLabRuntimeStatus.Stopped,
-        TeamLabRuntimeStatus.Paused
-    ];
 
     public async Task<RuntimeReconciliationSummary> ReconcileAsync(
         Guid runId,
@@ -59,9 +41,7 @@ public sealed partial class RuntimeFactReconciliationService(
         foreach (var nodeId in nodes.Select(node => node.Id))
             await capacity.ReconcileReservedAsync(nodeId, token);
 
-        var activeTeamLabOwners = await LoadActiveTeamLabLifecycleOwnersAsync(token);
-        var expected = await LoadExpectedFactsAsync(activeTeamLabOwners, token);
-        var expectedTeamLabControl = await LoadExpectedTeamLabControlFactsAsync(activeTeamLabOwners, token);
+        var expected = await LoadExpectedFactsAsync(token);
         // Staleness means "nobody is executing this any more", not "this is taking a while".
         // The executor renews its claim while it works, and legitimate deployments routinely run
         // longer than the elapsed-time threshold — a Windows guest with a reboot-bearing bootstrap
@@ -79,7 +59,6 @@ public sealed partial class RuntimeFactReconciliationService(
         await RecordInventoryAvailabilityAsync(
             runId,
             expected.Select(item => item.WorkerNodeId)
-                .Concat(expectedTeamLabControl.Select(item => item.WorkerNodeId))
                 .Concat(staleTickets.Where(item => item.TargetNodeId != null)
                     .Select(item => item.TargetNodeId!.Value))
                 .Distinct()
@@ -145,7 +124,7 @@ public sealed partial class RuntimeFactReconciliationService(
 
             fact.BackfillNativeIdentity(actual);
 
-            var powerMatches = PowerMatches(fact, actual.State);
+            var powerMatches = IsActive(fact.Kind, actual.State);
             if (!powerMatches)
             {
                 missing++;
@@ -161,15 +140,7 @@ public sealed partial class RuntimeFactReconciliationService(
             matched++;
         }
 
-        var control = await ReconcileTeamLabControlFactsAsync(
-            runId, expectedTeamLabControl, activeTeamLabOwners, inventories, now, token);
-        matched += control.Matched;
-        missing += control.Missing;
-        conflicts += control.Conflicts;
-        deferred += control.Deferred;
-
-        var orphanCount = await ObserveOrphansAsync(
-            runId, expected, activeTeamLabOwners, inventories, token) + control.Orphans;
+        var orphanCount = await ObserveOrphansAsync(runId, expected, inventories, token);
         var replayIds = new List<Guid>();
         var recoveredTickets = 0;
         var replayedTickets = 0;
@@ -218,25 +189,7 @@ public sealed partial class RuntimeFactReconciliationService(
             recoveredTickets);
     }
 
-    private async Task<int[]> LoadActiveTeamLabLifecycleOwnersAsync(CancellationToken token) =>
-        await context.DeploymentQueueTickets.AsNoTracking()
-            .Where(item => item.Kind == DeploymentQueueKind.TeamLabRuntime &&
-                           item.TeamLabRuntimeId != null &&
-                           (item.Operation == RuntimeOperationKind.Create ||
-                            item.Operation == RuntimeOperationKind.Reset ||
-                             item.Operation == RuntimeOperationKind.Destroy ||
-                             item.Operation == RuntimeOperationKind.Update ||
-                             item.Operation == RuntimeOperationKind.AssetControl) &&
-                           (item.Status == DeploymentQueueTicketStatus.Pending ||
-                            item.Status == DeploymentQueueTicketStatus.Scheduling ||
-                            item.Status == DeploymentQueueTicketStatus.Scheduled ||
-                            item.Status == DeploymentQueueTicketStatus.Running))
-            .Select(item => item.TeamLabRuntimeId!.Value)
-            .Distinct()
-            .ToArrayAsync(token);
-
     private async Task<ExpectedRuntimeFact[]> LoadExpectedFactsAsync(
-        IReadOnlyCollection<int> activeTeamLabOwners,
         CancellationToken token)
     {
         var containers = await context.Containers
@@ -248,197 +201,9 @@ public sealed partial class RuntimeFactReconciliationService(
                            (item.Status == VmInstanceStatus.Creating || item.Status == VmInstanceStatus.Running) &&
                            item.VmName != string.Empty)
             .ToArrayAsync(token);
-        var teamLabAssets = await context.TeamLabRuntimeAssets
-            .Include(item => item.Runtime)
-            .Include(item => item.Shard)
-            .Where(item => item.WorkerNodeId != null && item.RuntimeResourceId != null &&
-                           item.Generation == item.Runtime.Generation &&
-                           !activeTeamLabOwners.Contains(item.RuntimeId) &&
-                           (item.Kind == TeamLabResourceKind.Docker || item.Kind == TeamLabResourceKind.Vm) &&
-                           ExpectedTeamLabWorkloadStatuses.Contains(item.Status) &&
-                           ActiveTeamLabRuntimeStatuses.Contains(item.Runtime.Status))
-            .ToArrayAsync(token);
-
         return containers.Select(ExpectedRuntimeFact.FromContainer)
             .Concat(vms.Select(ExpectedRuntimeFact.FromVm))
-            .Concat(teamLabAssets.Select(ExpectedRuntimeFact.FromTeamLabAsset))
             .ToArray();
-    }
-
-    private async Task<ExpectedTeamLabControlFact[]> LoadExpectedTeamLabControlFactsAsync(
-        IReadOnlyCollection<int> activeTeamLabOwners,
-        CancellationToken token)
-    {
-        var observations = await context.TeamLabObservationPoints.AsNoTracking()
-            .Include(item => item.Runtime)
-            .Where(item => item.Enabled && item.Generation == item.Runtime.Generation &&
-                           !activeTeamLabOwners.Contains(item.RuntimeId) &&
-                           ActiveTeamLabRuntimeStatuses.Contains(item.Runtime.Status))
-            .ToArrayAsync(token);
-        var captures = await context.TeamLabTrafficCaptureSegments.AsNoTracking()
-            .Include(item => item.CaptureJob)
-            .ThenInclude(item => item.Runtime)
-            .Where(item => item.CaptureJob.Generation == item.CaptureJob.Runtime.Generation &&
-                           !activeTeamLabOwners.Contains(item.CaptureJob.RuntimeId) &&
-                           ActiveTeamLabRuntimeStatuses.Contains(item.CaptureJob.Runtime.Status) &&
-                           item.Status != TeamLabTrafficCaptureSegmentStatus.Pending &&
-                           item.Status != TeamLabTrafficCaptureSegmentStatus.Failed &&
-                           item.Status != TeamLabTrafficCaptureSegmentStatus.Expired)
-            .ToArrayAsync(token);
-
-        return observations.Select(item => new ExpectedTeamLabControlFact(
-                item.WorkerNodeId,
-                item.RuntimeId,
-                item.Generation,
-                "observation-point",
-                item.PublicId.ToString("D"),
-                item.InterfaceToken,
-                item.DesiredStateDigest))
-            .Concat(captures.Select(item => new ExpectedTeamLabControlFact(
-                item.WorkerNodeId,
-                item.CaptureJob.RuntimeId,
-                item.CaptureJob.Generation,
-                "pcap-segment",
-                item.PublicId.ToString("D"),
-                null,
-                item.Sha256)))
-            .OrderBy(item => item.WorkerNodeId)
-            .ThenBy(item => item.RuntimeId)
-            .ThenBy(item => item.ResourceKind, StringComparer.Ordinal)
-            .ThenBy(item => item.StableName, StringComparer.Ordinal)
-            .ToArray();
-    }
-
-    private async Task<TeamLabControlReconciliation> ReconcileTeamLabControlFactsAsync(
-        Guid runId,
-        IReadOnlyCollection<ExpectedTeamLabControlFact> expected,
-        IReadOnlyCollection<int> activeTeamLabOwners,
-        IReadOnlyDictionary<Guid, NodeInventory> inventories,
-        DateTimeOffset now,
-        CancellationToken token)
-    {
-        var matched = 0;
-        var missing = 0;
-        var conflicts = 0;
-        var deferred = 0;
-        var recentCutoff = now.AddMinutes(-15);
-        var recent = (await context.OperationalEvents.AsNoTracking()
-                .Where(item => item.OccurredAt >= recentCutoff && item.WorkerNodeId != null &&
-                               (item.EventCode == OperationalEventCodes.Recovery.ResourceMissing ||
-                                item.EventCode == OperationalEventCodes.Recovery.IdentityConflict ||
-                                item.EventCode == OperationalEventCodes.Recovery.OrphanObserved))
-                .Select(item => new { item.EventCode, item.WorkerNodeId, item.ResourceType, item.ResourceId })
-                .ToArrayAsync(token))
-            .Select(item => $"{item.EventCode}|{item.WorkerNodeId:D}|{item.ResourceType}|{item.ResourceId}")
-            .ToHashSet(StringComparer.Ordinal);
-        var expectedKeys = expected.Select(item => item.IdentityKey).ToHashSet(StringComparer.Ordinal);
-
-        foreach (var fact in expected)
-        {
-            if (!inventories.TryGetValue(fact.WorkerNodeId, out var inventory) ||
-                inventory.Availability != InventoryAvailability.Available)
-            {
-                deferred++;
-                continue;
-            }
-            var actual = inventory.TeamLabResources.FirstOrDefault(item =>
-                item.RuntimeId == fact.RuntimeId && item.Generation == fact.Generation &&
-                item.ResourceKind.Equals(fact.ResourceKind, StringComparison.Ordinal) &&
-                item.StableName.Equals(fact.StableName, StringComparison.Ordinal));
-            if (actual is null)
-            {
-                missing++;
-                AppendControlFactEvent(
-                    recent, runId, fact, OperationalEventCodes.Recovery.ResourceMissing,
-                    OperationalEventOutcome.Blocked, "Managed TeamLab control resource is missing.");
-                continue;
-            }
-            var identityConflict = !string.IsNullOrWhiteSpace(fact.NativeId) &&
-                                   !actual.NativeId.Equals(fact.NativeId, StringComparison.Ordinal);
-            var digestConflict = !string.IsNullOrWhiteSpace(fact.DesiredStateDigest) &&
-                                 !string.IsNullOrWhiteSpace(actual.DesiredStateDigest) &&
-                                 !NormalizeDigest(actual.DesiredStateDigest)
-                                     .Equals(NormalizeDigest(fact.DesiredStateDigest), StringComparison.Ordinal);
-            if (identityConflict || digestConflict || actual.State.Equals("failed", StringComparison.OrdinalIgnoreCase))
-            {
-                conflicts++;
-                AppendControlFactEvent(
-                    recent, runId, fact, OperationalEventCodes.Recovery.IdentityConflict,
-                    OperationalEventOutcome.Blocked,
-                    "Managed TeamLab control resource conflicts with the desired runtime fact.");
-                continue;
-            }
-            matched++;
-        }
-
-        var orphanCandidates = inventories.Values
-            .Where(item => item.Availability == InventoryAvailability.Available)
-            .SelectMany(item => item.TeamLabResources.Select(resource => (item.WorkerNodeId, Resource: resource)))
-            .Where(item => item.Resource.RuntimeId.HasValue &&
-                           !activeTeamLabOwners.Contains(item.Resource.RuntimeId.Value) &&
-                           !expectedKeys.Contains(ExpectedTeamLabControlFact.IdentityKeyFor(
-                               item.WorkerNodeId, item.Resource)))
-            .ToArray();
-        var orphans = 0;
-        foreach (var candidate in orphanCandidates)
-        {
-            var resourceType = $"teamlab-{candidate.Resource.ResourceKind}";
-            var eventKey = $"{OperationalEventCodes.Recovery.OrphanObserved}|{candidate.WorkerNodeId:D}|" +
-                           $"{resourceType}|{candidate.Resource.StableName}";
-            if (!recent.Add(eventKey)) continue;
-            events.Append(new OperationalEventDraft(
-                OperationalEventCodes.Recovery.OrphanObserved,
-                OperationalEventOutcome.Observed,
-                "Agent reported a TeamLab control resource with no current desired-state owner.",
-                OperationalEventSeverity.Warning,
-                runId,
-                Detail: new Dictionary<string, object?>
-                {
-                    ["generation"] = candidate.Resource.Generation,
-                    ["currentStatus"] = candidate.Resource.State,
-                    ["reasonCode"] = "teamlab_control_orphan"
-                },
-                WorkerNodeId: candidate.WorkerNodeId,
-                TeamLabRuntimeId: candidate.Resource.RuntimeId,
-                SubjectType: "teamlab-runtime",
-                SubjectId: candidate.Resource.RuntimeId?.ToString(),
-                ResourceType: resourceType,
-                ResourceId: candidate.Resource.StableName));
-            orphans++;
-        }
-        return new TeamLabControlReconciliation(matched, missing, conflicts, orphans, deferred);
-    }
-
-    private void AppendControlFactEvent(
-        ISet<string> recent,
-        Guid runId,
-        ExpectedTeamLabControlFact fact,
-        string eventCode,
-        OperationalEventOutcome outcome,
-        string message)
-    {
-        var resourceType = $"teamlab-{fact.ResourceKind}";
-        var eventKey = $"{eventCode}|{fact.WorkerNodeId:D}|{resourceType}|{fact.StableName}";
-        if (!recent.Add(eventKey)) return;
-        events.Append(new OperationalEventDraft(
-            eventCode,
-            outcome,
-            message,
-            OperationalEventSeverity.Warning,
-            runId,
-            Detail: new Dictionary<string, object?>
-            {
-                ["generation"] = fact.Generation,
-                ["reasonCode"] = eventCode == OperationalEventCodes.Recovery.ResourceMissing
-                    ? "teamlab_control_missing"
-                    : "teamlab_control_conflict"
-            },
-            WorkerNodeId: fact.WorkerNodeId,
-            TeamLabRuntimeId: fact.RuntimeId,
-            SubjectType: "teamlab-runtime",
-            SubjectId: fact.RuntimeId.ToString(),
-            ResourceType: resourceType,
-            ResourceId: fact.StableName));
     }
 
     private async Task<Dictionary<Guid, NodeInventory>> LoadInventoriesAsync(
@@ -458,13 +223,12 @@ public sealed partial class RuntimeFactReconciliationService(
                     node.Capabilities.HasFlag(NodeCapability.Kvm),
                     [],
                     [],
-                    [],
                     null);
             if (node.GetEffectiveStatus(now) != NodeStatus.Online)
-                return new NodeInventory(node.Id, InventoryAvailability.Offline, false, false, [], [], [],
+                return new NodeInventory(node.Id, InventoryAvailability.Offline, false, false, [], [],
                     "Node is offline.");
             if (!AgentCapabilityEvaluator.Supports(node, AgentFeatureIds.RuntimeInventory))
-                return new NodeInventory(node.Id, InventoryAvailability.Unsupported, false, false, [], [], [],
+                return new NodeInventory(node.Id, InventoryAvailability.Unsupported, false, false, [], [],
                     "Agent does not advertise runtime inventory support.");
 
             await limiter.WaitAsync(token);
@@ -478,19 +242,18 @@ public sealed partial class RuntimeFactReconciliationService(
                     response.KvmSupported,
                     response.Containers,
                     response.Vms,
-                    response.TeamLabResources ?? [],
                     null);
             }
             catch (AgentClientException exception) when (
                 exception.Error.Code == OperationalErrorCodes.AgentFeatureMissing)
             {
-                return new NodeInventory(node.Id, InventoryAvailability.Unsupported, false, false, [], [], [],
+                return new NodeInventory(node.Id, InventoryAvailability.Unsupported, false, false, [], [],
                     exception.Error.Message);
             }
             catch (Exception exception) when (exception is AgentClientException or HttpRequestException or TaskCanceledException)
             {
                 logger.LogWarning(exception, "Runtime inventory is unavailable on node {NodeId}.", node.Id);
-                return new NodeInventory(node.Id, InventoryAvailability.Unavailable, false, false, [], [], [],
+                return new NodeInventory(node.Id, InventoryAvailability.Unavailable, false, false, [], [],
                     exception.Message);
             }
             finally
@@ -563,7 +326,6 @@ public sealed partial class RuntimeFactReconciliationService(
     private async Task<int> ObserveOrphansAsync(
         Guid runId,
         IReadOnlyCollection<ExpectedRuntimeFact> expected,
-        IReadOnlyCollection<int> activeTeamLabOwners,
         IReadOnlyDictionary<Guid, NodeInventory> inventories,
         CancellationToken token)
     {
@@ -572,8 +334,7 @@ public sealed partial class RuntimeFactReconciliationService(
             .Where(item => item.Availability == InventoryAvailability.Available)
             .SelectMany(item => item.AllResources())
             .Where(item => !expectedKeys.Contains(item.IdentityKey) &&
-                           (!item.Resource.RuntimeId.HasValue ||
-                            !activeTeamLabOwners.Contains(item.Resource.RuntimeId.Value)))
+                           !item.Resource.RuntimeId.HasValue)
             .ToArray();
         if (candidates.Length == 0)
             return 0;
@@ -632,21 +393,7 @@ public sealed partial class RuntimeFactReconciliationService(
                 vm.Status = VmInstanceStatus.Error;
                 return true;
         }
-        if (fact.TeamLabAsset is not { } asset || asset.Status == TeamLabRuntimeStatus.Failed)
-            return false;
-
-        asset.Status = TeamLabRuntimeStatus.Failed;
-        asset.LastError = reasonCode;
-        if (asset.Shard is not null)
-        {
-            asset.Shard.Status = TeamLabRuntimeStatus.Failed;
-            asset.Shard.LastError = reasonCode;
-        }
-        asset.Runtime.Status = TeamLabRuntimeStatus.Failed;
-        asset.Runtime.IsOpenToPlayers = false;
-        asset.Runtime.LastError = reasonCode;
-        asset.Runtime.UpdatedAt = DateTimeOffset.UtcNow;
-        return true;
+        return false;
     }
 
     private void AppendFactCorrection(
@@ -679,7 +426,6 @@ public sealed partial class RuntimeFactReconciliationService(
                 ["reasonCode"] = reasonCode
             },
             WorkerNodeId: fact.WorkerNodeId,
-            TeamLabRuntimeId: fact.TeamLabAsset?.RuntimeId,
             VmInstanceId: fact.Vm?.Id,
             SubjectType: fact.SubjectType,
             SubjectId: fact.SubjectId,
@@ -700,7 +446,6 @@ public sealed partial class RuntimeFactReconciliationService(
                 ["reasonCode"] = reasonCode
             },
             WorkerNodeId: fact.WorkerNodeId,
-            TeamLabRuntimeId: fact.TeamLabAsset?.RuntimeId,
             VmInstanceId: fact.Vm?.Id,
             SubjectType: fact.SubjectType,
             SubjectId: fact.SubjectId,
@@ -715,31 +460,17 @@ public sealed partial class RuntimeFactReconciliationService(
         IReadOnlyDictionary<Guid, NodeInventory> inventories,
         CancellationToken token)
     {
-        if (ticket.Kind == DeploymentQueueKind.TeamLabRuntime && ticket.Operation == RuntimeOperationKind.AssetControl)
-            return ticket.ProtectedPayload is null
-                ? TicketInspection.FailClosed("Asset control checkpoint is missing.", OperationalErrorCodes.RuntimeIdentityConflict)
-                : TicketInspection.SafeReplay("Resume the retained asset-control checkpoint; the executor revalidates plan and resource identity.");
-        if (ticket.Kind == DeploymentQueueKind.TeamLabRuntime &&
-            ticket.Operation == RuntimeOperationKind.Reset)
-            return await InspectTeamLabResetTicketAsync(ticket, token);
-
         if (ticket.Operation != RuntimeOperationKind.Create)
-            return ticket.Operation is RuntimeOperationKind.Stop or RuntimeOperationKind.Destroy
-                ? ticket.Kind == DeploymentQueueKind.TeamLabRuntime
-                    ? await InspectTeamLabControlTicketAsync(ticket, inventories, token)
-                    : await InspectControlTicketAsync(ticket, inventories, token)
+            return ticket.Operation is RuntimeOperationKind.Destroy or RuntimeOperationKind.Stop
+                ? await InspectControlTicketAsync(ticket, inventories, token)
                 : TicketInspection.FailClosed("Operation cannot be proven safe to replay.",
                     OperationalErrorCodes.RuntimeIdentityConflict);
-
-        if (ticket.Kind == DeploymentQueueKind.TeamLabRuntime)
-            return await InspectTeamLabTicketAsync(ticket, inventories, token);
         if (ticket.TargetNodeId is not { } nodeId)
             return TicketInspection.FailClosed("Deployment ticket has no target node.",
                 OperationalErrorCodes.NodeNotFound);
         if (!inventories.TryGetValue(nodeId, out var inventory))
             return TicketInspection.Deferred("Assigned node inventory is unavailable.",
                 OperationalErrorCodes.NodeOffline);
-
         var resource = await ResolveTicketResourceAsync(ticket, token);
         if (inventory.Availability is not (InventoryAvailability.Available or InventoryAvailability.Local))
             return TicketInspection.Deferred(inventory.Error ?? "Assigned node inventory is unavailable.",
@@ -779,56 +510,6 @@ public sealed partial class RuntimeFactReconciliationService(
         return IsActive(resource.Kind, actual.State)
             ? TicketInspection.Completed("Agent inventory confirms the runtime resource.", resource)
             : TicketInspection.SafeReplay("Runtime resource is not running; create is safe to replay.", resource);
-    }
-
-    private async Task<TicketInspection> InspectTeamLabResetTicketAsync(
-        DeploymentQueueTicket ticket,
-        CancellationToken token)
-    {
-        if (ticket.TeamLabRuntimeId is not { } runtimeId)
-            return TicketInspection.FailClosed(
-                "TeamLab reset ticket has no runtime identity.",
-                OperationalErrorCodes.RuntimeIdentityConflict);
-        var runtime = await context.TeamLabRuntimes
-            .Include(item => item.Events)
-            .SingleOrDefaultAsync(item => item.Id == runtimeId, token);
-        if (runtime is null)
-            return TicketInspection.FailClosed(
-                "TeamLab runtime no longer exists.",
-                OperationalErrorCodes.RuntimeIdentityConflict);
-
-        var checkpoint = TeamLabResetCheckpointFacts.Get(runtime, ticket.Id);
-        if (runtime.Generation == ticket.Generation && runtime.Status == TeamLabRuntimeStatus.Running)
-            return TicketInspection.Completed(
-                "Runtime facts confirm the reset target generation is running.");
-        if (runtime.Generation < ticket.Generation - 1 || runtime.Generation > ticket.Generation)
-            return TicketInspection.FailClosed(
-                "TeamLab reset checkpoint conflicts with the persisted runtime generation.",
-                OperationalErrorCodes.RuntimeIdentityConflict);
-
-        return checkpoint switch
-        {
-            TeamLabResetCheckpoint.CleaningPreviousGeneration
-                when runtime.Generation == ticket.Generation - 1 =>
-                TicketInspection.SafeReplay(
-                    "Reset cleanup checkpoint can resume without advancing generation."),
-            TeamLabResetCheckpoint.PlanningNextGeneration
-                when runtime.Generation is var generation &&
-                     (generation == ticket.Generation - 1 || generation == ticket.Generation) =>
-                TicketInspection.SafeReplay(
-                    "Reset planning checkpoint can resume from persisted generation facts."),
-            TeamLabResetCheckpoint.ReservingNextGeneration or
-                TeamLabResetCheckpoint.DeployingNextGeneration
-                when runtime.Generation == ticket.Generation =>
-                TicketInspection.SafeReplay(
-                    "Reset reservation or deployment checkpoint can resume idempotently."),
-            null when runtime.Generation == ticket.Generation - 1 =>
-                TicketInspection.SafeReplay(
-                    "Reset has not persisted its first checkpoint and can start idempotently."),
-            _ => TicketInspection.FailClosed(
-                "TeamLab reset checkpoint cannot be reconciled with runtime state.",
-                OperationalErrorCodes.RuntimeIdentityConflict)
-        };
     }
 
     private async Task<TicketInspection> InspectControlTicketAsync(
@@ -879,348 +560,6 @@ public sealed partial class RuntimeFactReconciliationService(
         resource.BackfillNativeIdentity(actual);
         resource.MarkRunning(nodeId);
         return TicketInspection.SafeReplay("Agent inventory confirms the exact control target; replay is safe.", resource);
-    }
-
-    private async Task<TicketInspection> InspectTeamLabTicketAsync(
-        DeploymentQueueTicket ticket,
-        IReadOnlyDictionary<Guid, NodeInventory> inventories,
-        CancellationToken token)
-    {
-        if (ticket.TeamLabRuntimeId is not { } runtimeId)
-            return TicketInspection.FailClosed("TeamLab ticket has no runtime identity.",
-                OperationalErrorCodes.RuntimeIdentityConflict);
-        var runtime = await context.TeamLabRuntimes
-            .Include(item => item.Assets)
-            .Include(item => item.Shards)
-            .Include(item => item.Infrastructure).ThenInclude(item => item.Fragments)
-            .Include(item => item.AccessGrants)
-            .Include(item => item.PublicUdpMapping)
-            .SingleOrDefaultAsync(item => item.Id == runtimeId, token);
-        if (runtime is null)
-            return TicketInspection.FailClosed("TeamLab runtime no longer exists.",
-                OperationalErrorCodes.RuntimeIdentityConflict);
-        var assets = runtime.Assets.Where(item => item.Generation == runtime.Generation &&
-                                                  (item.Kind == TeamLabResourceKind.Docker ||
-                                                   item.Kind == TeamLabResourceKind.Vm)).ToArray();
-        var now = DateTimeOffset.UtcNow;
-        var activeReservationNodes = await context.FleetCapacityReservations.AsNoTracking()
-            .Where(item => item.DeploymentQueueTicketId == ticket.Id &&
-                           item.Status == CapacityReservationStatus.Active && item.ExpiresAt > now)
-            .Select(item => item.WorkerNodeId)
-            .ToHashSetAsync(token);
-        if (assets.Length == 0)
-            return runtime.Status == TeamLabRuntimeStatus.Running
-                ? TicketInspection.FailClosed("Running TeamLab runtime has no runtime assets.",
-                    OperationalErrorCodes.RuntimeIdentityConflict)
-                : TicketInspection.SafeReplay("TeamLab runtime has no created assets and can be replayed.");
-
-        foreach (var asset in assets)
-        {
-            if (asset.WorkerNodeId is not { } nodeId || string.IsNullOrWhiteSpace(asset.RuntimeResourceId))
-            {
-                if (runtime.Status == TeamLabRuntimeStatus.Running)
-                    return TicketInspection.FailClosed("Running TeamLab runtime has incomplete asset identity.",
-                        OperationalErrorCodes.RuntimeIdentityConflict);
-                var resume = teamLabRecovery.CanResumeExistingGeneration(runtime, ticket, now);
-                return resume.Allowed && asset.ExecutionStage == TeamLabAssetExecutionStage.Pending
-                    ? TicketInspection.SafeReplay("TeamLab asset was not created; persisted DAG execution can resume.")
-                    : TicketInspection.Deferred(resume.Reason, OperationalErrorCodes.RecoveryDeferred);
-            }
-            if (!inventories.TryGetValue(nodeId, out var inventory) ||
-                inventory.Availability is InventoryAvailability.Offline or InventoryAvailability.Unavailable or InventoryAvailability.Unsupported)
-                return TicketInspection.Deferred(inventory?.Error ?? "TeamLab shard inventory is unavailable.",
-                    inventory?.Availability == InventoryAvailability.Unsupported
-                        ? OperationalErrorCodes.AgentFeatureMissing
-                        : OperationalErrorCodes.NodeOffline);
-            var fact = ExpectedRuntimeFact.FromTeamLabAsset(asset);
-            if (!inventory.Supports(fact.Kind))
-                return TicketInspection.Deferred("TeamLab shard cannot report the required runtime kind.",
-                    OperationalErrorCodes.AgentFeatureMissing);
-            if (inventory.Availability == InventoryAvailability.Local)
-                continue;
-            var actual = inventory.Find(fact);
-            if (actual is null || !IsActive(fact.Kind, actual.State))
-            {
-                var rebuild = teamLabRecovery.CanRebuildMissingAsset(
-                    runtime, ticket, asset, inventoryProvesMissing: true,
-                    activeReservationNodes.Contains(nodeId), now);
-                if (!rebuild.Allowed)
-                {
-                    events.Append(RuntimeOperationalEvents.Ticket(
-                        ticket,
-                        OperationalEventCodes.TeamLab.GuardedRebuildBlocked,
-                        OperationalEventOutcome.Blocked,
-                        "Automatic TeamLab workload rebuild was blocked by recovery policy.",
-                        OperationalEventSeverity.Warning,
-                        new OperationalError(
-                            OperationalErrorCategory.Conflict,
-                            OperationalErrorCodes.RuntimeIdentityConflict,
-                            "Guarded workload rebuild was denied.",
-                            false,
-                            WorkerNodeId: nodeId,
-                            Operation: "teamlab.recovery.rebuild"),
-                        nodeId,
-                        TeamLabRecoveryDetail(runtime, asset, "blocked", rebuild.Reason)));
-                    PlatformTelemetry.RecordTeamLabRecovery(
-                        "guarded-rebuild", asset.Kind.ToString(), "blocked");
-                    return TicketInspection.FailClosed(
-                        $"TeamLab asset is absent and cannot be rebuilt automatically: {rebuild.Reason}",
-                        OperationalErrorCodes.RuntimeIdentityConflict);
-                }
-                events.Append(RuntimeOperationalEvents.Ticket(
-                    ticket,
-                    OperationalEventCodes.TeamLab.GuardedRebuildAllowed,
-                    OperationalEventOutcome.Recovered,
-                    "Automatic rebuild was allowed for a stateless TeamLab workload.",
-                    workerNodeId: nodeId,
-                    detail: TeamLabRecoveryDetail(runtime, asset, "allowed", rebuild.Reason)));
-                PlatformTelemetry.RecordTeamLabRecovery(
-                    "guarded-rebuild", asset.Kind.ToString(), "allowed");
-                asset.RuntimeResourceId = null;
-                asset.ExecutionStage = TeamLabAssetExecutionStage.Pending;
-                asset.Status = TeamLabRuntimeStatus.Deploying;
-                asset.LastError = null;
-                return TicketInspection.SafeReplay(rebuild.Reason);
-            }
-            if (actual.Generation != runtime.Generation)
-                return TicketInspection.FailClosed("TeamLab asset generation conflicts with the runtime generation.",
-                    OperationalErrorCodes.RuntimeIdentityConflict);
-            if (asset.ExecutionStage == TeamLabAssetExecutionStage.Pending)
-            {
-                asset.ExecutionStage = TeamLabAssetExecutionStage.GuestReady;
-                asset.Status = TeamLabRuntimeStatus.Probing;
-                asset.ExecutionUpdatedAt = now;
-            }
-        }
-
-        var infrastructureDrift = false;
-        var routeFactsComplete = true;
-        foreach (var shard in runtime.Shards.Where(item => item.Generation == runtime.Generation))
-        {
-            var expectedDigests = runtime.Infrastructure
-                .SelectMany(item => item.Fragments)
-                .Where(item => item.ShardId == shard.Id)
-                .Select(item => item.DesiredStateDigest)
-                .Where(item => !string.IsNullOrWhiteSpace(item))
-                .Distinct(StringComparer.Ordinal)
-                .ToArray();
-            routeFactsComplete &= shard.RouteVersion > 0 && expectedDigests.Length == 1;
-            TeamLabInfrastructureStateResponse state;
-            try
-            {
-                state = await agentClient.GetTeamLabInfrastructureStateAsync(
-                    shard.WorkerNodeId, runtime.Id, runtime.Generation, token);
-            }
-            catch (Exception exception) when (
-                exception is AgentClientException or HttpRequestException or TaskCanceledException)
-            {
-                return TicketInspection.Deferred(
-                    $"TeamLab infrastructure inventory is unavailable: {exception.Message}",
-                    OperationalErrorCodes.NodeOffline);
-            }
-            if (!state.Exists || state.RouteVersion != shard.RouteVersion || expectedDigests.Length != 1 ||
-                !string.Equals(state.DesiredStateDigest, expectedDigests[0], StringComparison.Ordinal))
-                infrastructureDrift = true;
-        }
-        if (infrastructureDrift)
-        {
-            events.Append(RuntimeOperationalEvents.Ticket(
-                ticket,
-                OperationalEventCodes.TeamLab.InfrastructureDriftDetected,
-                OperationalEventOutcome.Observed,
-                "TeamLab infrastructure desired-state drift was detected.",
-                OperationalEventSeverity.Warning,
-                new OperationalError(
-                    OperationalErrorCategory.Network,
-                    OperationalErrorCodes.NetworkOperationFailed,
-                    "Infrastructure desired state differs from WorkerNode facts.",
-                    true,
-                    Operation: "teamlab.infrastructure.reconcile"),
-                detail: new Dictionary<string, object?>
-                {
-                    ["generation"] = runtime.Generation,
-                    ["stage"] = "infrastructure-recovery",
-                    ["decision"] = "drift-detected"
-                }));
-            PlatformTelemetry.RecordTeamLabInfrastructure("drift", "mixed");
-            var activeGrants = runtime.AccessGrants.Where(item =>
-                item.Generation == runtime.Generation && !item.Revoked).ToArray();
-            var accessFactsIntact = activeGrants.All(item =>
-                                        item.PublicId != Guid.Empty &&
-                                        !string.IsNullOrWhiteSpace(item.ClientAddress) &&
-                                        !string.IsNullOrWhiteSpace(item.PublicKey) &&
-                                        !string.IsNullOrWhiteSpace(item.ServerPublicKey) &&
-                                        !string.IsNullOrWhiteSpace(item.ProtectedServerPrivateKey)) &&
-                                    (runtime.PublicUdpMapping is null ||
-                                     runtime.PublicUdpMapping.Generation == runtime.Generation &&
-                                     runtime.PublicUdpMapping.PublicUdpPort > 0 &&
-                                     runtime.PublicUdpMapping.WorkerWireGuardPort > 0);
-            var replay = teamLabRecovery.CanReplayInfrastructure(
-                runtime, ticket, inventoryProvesDrift: true, routeFactsComplete, accessFactsIntact, now);
-            if (!replay.Allowed)
-            {
-                events.Append(RuntimeOperationalEvents.Ticket(
-                    ticket,
-                    OperationalEventCodes.TeamLab.GuardedRebuildBlocked,
-                    OperationalEventOutcome.Blocked,
-                    "Infrastructure replay was blocked by recovery policy.",
-                    OperationalEventSeverity.Warning,
-                    detail: new Dictionary<string, object?>
-                    {
-                        ["generation"] = runtime.Generation,
-                        ["stage"] = "infrastructure-recovery",
-                        ["decision"] = "blocked",
-                        ["reason"] = replay.Reason
-                    }));
-                PlatformTelemetry.RecordTeamLabRecovery("infrastructure-replay", "infrastructure", "blocked");
-                return TicketInspection.FailClosed(
-                    $"TeamLab infrastructure drift cannot be replayed: {replay.Reason}",
-                    OperationalErrorCodes.RuntimeIdentityConflict);
-            }
-            events.Append(RuntimeOperationalEvents.Ticket(
-                ticket,
-                OperationalEventCodes.TeamLab.InfrastructureReplayQueued,
-                OperationalEventOutcome.Recovered,
-                "Infrastructure replay was queued with stable WireGuard identity.",
-                detail: new Dictionary<string, object?>
-                {
-                    ["generation"] = runtime.Generation,
-                    ["stage"] = "infrastructure-recovery",
-                    ["decision"] = "replay",
-                    ["reason"] = replay.Reason
-                }));
-            PlatformTelemetry.RecordTeamLabRecovery("infrastructure-replay", "infrastructure", "allowed");
-            runtime.Status = TeamLabRuntimeStatus.Deploying;
-            foreach (var shard in runtime.Shards.Where(item => item.Generation == runtime.Generation))
-                shard.Status = TeamLabRuntimeStatus.Deploying;
-            return TicketInspection.SafeReplay(replay.Reason);
-        }
-
-        if (assets.Any(item => item.ExecutionStage != TeamLabAssetExecutionStage.ServiceReady))
-        {
-            var resume = teamLabRecovery.CanResumeExistingGeneration(runtime, ticket, now);
-            return resume.Allowed
-                ? TicketInspection.SafeReplay("Agent inventory confirms native assets; persisted DAG stages can resume.")
-                : TicketInspection.Deferred(resume.Reason, OperationalErrorCodes.RecoveryDeferred);
-        }
-
-        runtime.Status = TeamLabRuntimeStatus.Running;
-        foreach (var shard in runtime.Shards.Where(item => item.Generation == runtime.Generation))
-            shard.Status = TeamLabRuntimeStatus.Running;
-        foreach (var asset in assets)
-            asset.Status = TeamLabRuntimeStatus.Running;
-        return TicketInspection.Completed("Agent inventory confirms every TeamLab runtime asset.");
-    }
-
-    private static IReadOnlyDictionary<string, object?> TeamLabRecoveryDetail(
-        TeamLabRuntime runtime,
-        TeamLabRuntimeAsset asset,
-        string decision,
-        string reason) => new Dictionary<string, object?>
-    {
-        ["generation"] = runtime.Generation,
-        ["stage"] = "workload-recovery",
-        ["decision"] = decision,
-        ["assetKind"] = asset.Kind.ToString(),
-        ["reason"] = reason
-    };
-
-    private async Task<TicketInspection> InspectTeamLabControlTicketAsync(
-        DeploymentQueueTicket ticket,
-        IReadOnlyDictionary<Guid, NodeInventory> inventories,
-        CancellationToken token)
-    {
-        if (ticket.TeamLabRuntimeId is not { } runtimeId)
-            return TicketInspection.FailClosed("TeamLab control ticket has no runtime identity.",
-                OperationalErrorCodes.RuntimeIdentityConflict);
-        var runtime = await context.TeamLabRuntimes
-            .Include(item => item.Assets)
-            .Include(item => item.Shards)
-            .Include(item => item.Infrastructure).ThenInclude(item => item.Fragments)
-            .Include(item => item.ObservationPoints)
-            .Include(item => item.AccessGrants)
-            .Include(item => item.VpnPeers)
-            .Include(item => item.SecretEnvelopes)
-            .Include(item => item.PublicUdpMapping)
-            .Include(item => item.TrafficCaptureJobs).ThenInclude(item => item.Segments)
-            .SingleOrDefaultAsync(item => item.Id == runtimeId, token);
-        if (runtime is null)
-            return TicketInspection.Completed("TeamLab runtime no longer exists; control operation is complete.");
-        if (runtime.Generation != ticket.Generation)
-            return TicketInspection.FailClosed("TeamLab control ticket generation is stale.",
-                OperationalErrorCodes.RuntimeIdentityConflict);
-
-        var generation = runtime.Generation;
-        var assets = runtime.Assets.Where(item => item.Generation == generation &&
-                                                  (item.Kind == TeamLabResourceKind.Docker ||
-                                                   item.Kind == TeamLabResourceKind.Vm)).ToArray();
-        var hasPhysicalResource = false;
-        var shardNodeIds = runtime.Shards
-            .Where(item => item.Generation == generation)
-            .Select(item => item.WorkerNodeId)
-            .Concat(assets.Where(item => item.WorkerNodeId.HasValue)
-                .Select(item => item.WorkerNodeId!.Value))
-            .Distinct()
-            .ToArray();
-        foreach (var nodeId in shardNodeIds)
-        {
-            if (!inventories.TryGetValue(nodeId, out var inventory) ||
-                inventory.Availability is InventoryAvailability.Offline or InventoryAvailability.Unavailable or
-                    InventoryAvailability.Unsupported)
-                return TicketInspection.Deferred(inventory?.Error ?? "TeamLab shard inventory is unavailable.",
-                    inventory?.Availability == InventoryAvailability.Unsupported
-                        ? OperationalErrorCodes.AgentFeatureMissing
-                        : OperationalErrorCodes.NodeOffline);
-            if (inventory.Availability == InventoryAvailability.Local)
-            {
-                hasPhysicalResource |= assets.Any(item => item.WorkerNodeId == nodeId &&
-                    item.Status != TeamLabRuntimeStatus.Destroyed);
-                continue;
-            }
-
-            hasPhysicalResource |= inventory.Containers.Any(item =>
-                                       item.RuntimeId == runtime.Id && item.Generation == generation) ||
-                                   inventory.Vms.Any(item =>
-                                       item.RuntimeId == runtime.Id && item.Generation == generation) ||
-                                   inventory.TeamLabResources.Any(item =>
-                                       item.RuntimeId == runtime.Id && item.Generation == generation);
-            foreach (var asset in assets.Where(item => item.WorkerNodeId == nodeId &&
-                                                        !string.IsNullOrWhiteSpace(item.RuntimeResourceId)))
-            {
-                var fact = ExpectedRuntimeFact.FromTeamLabAsset(asset);
-                if (!inventory.Supports(fact.Kind))
-                    return TicketInspection.Deferred(
-                        "TeamLab shard cannot report the required runtime kind.",
-                        OperationalErrorCodes.AgentFeatureMissing);
-                var actual = inventory.Find(fact);
-                if (actual is not null)
-                {
-                    if (actual.Generation != generation)
-                        return TicketInspection.FailClosed(
-                            "TeamLab control target generation has changed.",
-                            OperationalErrorCodes.RuntimeIdentityConflict);
-                    hasPhysicalResource = true;
-                    continue;
-                }
-                if (inventory.FindIdentityConflict(fact) is not null)
-                    return TicketInspection.FailClosed("TeamLab control target native identity has changed.",
-                        OperationalErrorCodes.RuntimeIdentityConflict);
-            }
-        }
-
-        if (hasPhysicalResource)
-            return TicketInspection.SafeReplay(
-                "Agent inventory confirms workload or control resources remain; cleanup replay is safe.");
-
-        if (await TeamLabRuntimeCleanupService.HasPendingSideEffectsAsync(
-                context, runtime, generation, token))
-            return TicketInspection.SafeReplay(
-                "Database cleanup side effects remain; cleanup replay is safe.");
-
-        await TeamLabRuntimeCleanupService.FinalizeGenerationAsync(
-            context, runtime, generation, markRuntimeDestroyed: true, token);
-        return TicketInspection.Completed(
-            "Agent and database facts confirm TeamLab cleanup is complete.");
     }
 
     private async Task<TicketResource?> ResolveTicketResourceAsync(
@@ -1435,24 +774,12 @@ public sealed partial class RuntimeFactReconciliationService(
 
     private async Task ConfirmTicketCapacityAsync(DeploymentQueueTicket ticket, CancellationToken token)
     {
-        if (ticket.Kind == DeploymentQueueKind.TeamLabRuntime && ticket.TeamLabRuntimeId is { } runtimeId)
-        {
-            foreach (var slot in await TeamLabCapacityFacts.LoadAsync(context, runtimeId, token))
-                await capacity.ConfirmAsync(ticket.Id, slot.WorkerNodeId, token);
-            return;
-        }
         if (ticket.TargetNodeId is { } nodeId)
             await capacity.ConfirmAsync(ticket.Id, nodeId, token);
     }
 
     private async Task ReleaseTicketCapacityAsync(DeploymentQueueTicket ticket, CancellationToken token)
     {
-        if (ticket.Kind == DeploymentQueueKind.TeamLabRuntime && ticket.TeamLabRuntimeId is { } runtimeId)
-        {
-            foreach (var slot in await TeamLabCapacityFacts.LoadAsync(context, runtimeId, token))
-                await capacity.ReleaseAsync(ticket.Id, slot.WorkerNodeId, token);
-            return;
-        }
         if (ticket.TargetNodeId is { } nodeId)
             await capacity.ReleaseAsync(ticket.Id, nodeId, token);
     }
@@ -1492,7 +819,6 @@ public sealed partial class RuntimeFactReconciliationService(
         bool KvmSupported,
         IReadOnlyList<AgentRuntimeInventoryResource> Containers,
         IReadOnlyList<AgentRuntimeInventoryResource> Vms,
-        IReadOnlyList<AgentRuntimeInventoryResource> TeamLabResources,
         string? Error)
     {
         public bool Supports(RuntimeFactKind kind) => kind switch
@@ -1545,35 +871,6 @@ public sealed partial class RuntimeFactReconciliationService(
         }
     }
 
-    private sealed record ExpectedTeamLabControlFact(
-        Guid WorkerNodeId,
-        int RuntimeId,
-        int Generation,
-        string ResourceKind,
-        string StableName,
-        string? NativeId,
-        string? DesiredStateDigest)
-    {
-        public string IdentityKey =>
-            $"{WorkerNodeId:D}|{RuntimeId}|{Generation}|{ResourceKind}|{StableName}";
-
-        public static string IdentityKeyFor(Guid workerNodeId, AgentRuntimeInventoryResource resource) =>
-            $"{workerNodeId:D}|{resource.RuntimeId}|{resource.Generation}|" +
-            $"{resource.ResourceKind}|{resource.StableName}";
-    }
-
-    private sealed record TeamLabControlReconciliation(
-        int Matched,
-        int Missing,
-        int Conflicts,
-        int Orphans,
-        int Deferred);
-
-    private static string NormalizeDigest(string value) =>
-        value.StartsWith("sha256:", StringComparison.OrdinalIgnoreCase)
-            ? value[7..].ToLowerInvariant()
-            : value.ToLowerInvariant();
-
     private sealed record ActualRuntimeFact(
         Guid WorkerNodeId,
         RuntimeFactKind Kind,
@@ -1599,8 +896,7 @@ public sealed partial class RuntimeFactReconciliationService(
         string PreviousStatus,
         string CorrectedStatus,
         GZCTF.Models.Data.Container? Container,
-        VmInstance? Vm,
-        TeamLabRuntimeAsset? TeamLabAsset)
+        VmInstance? Vm)
     {
         public string IdentityKey => Kind == RuntimeFactKind.Docker
             ? $"{WorkerNodeId:D}|docker|{NativeId}|g{Generation}"
@@ -1620,7 +916,6 @@ public sealed partial class RuntimeFactReconciliationService(
             item.Status.ToString(),
             ContainerStatus.Destroyed.ToString(),
             item,
-            null,
             null);
 
         public static ExpectedRuntimeFact FromVm(VmInstance item) => new(
@@ -1634,22 +929,6 @@ public sealed partial class RuntimeFactReconciliationService(
             item.VmName,
             item.Status.ToString(),
             VmInstanceStatus.Error.ToString(),
-            null,
-            item,
-            null);
-
-        public static ExpectedRuntimeFact FromTeamLabAsset(TeamLabRuntimeAsset item) => new(
-            item.WorkerNodeId!.Value,
-            item.Kind == TeamLabResourceKind.Docker ? RuntimeFactKind.Docker : RuntimeFactKind.Vm,
-            item.Kind == TeamLabResourceKind.Docker ? item.RuntimeResourceId! : item.NativeIdentity ?? string.Empty,
-            item.Kind == TeamLabResourceKind.Vm ? item.RuntimeResourceId! : string.Empty,
-            item.Generation,
-            "teamlab-asset",
-            item.Id.ToString(),
-            item.Name,
-            item.Status.ToString(),
-            TeamLabRuntimeStatus.Failed.ToString(),
-            null,
             null,
             item);
 

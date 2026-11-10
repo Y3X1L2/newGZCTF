@@ -16,7 +16,6 @@ public sealed class RuntimeSchedulingService(
     AppDbContext context,
     FleetCapacityReservationService capacity,
     RuntimeQueueSelector selector,
-    TeamLabPhysicalPlacementService teamLabPlacement,
     IDeploymentQueueWakeup wakeup,
     IOperationalEventWriter events,
     OperationalCorrelation correlation,
@@ -102,35 +101,13 @@ public sealed class RuntimeSchedulingService(
             await context.SaveChangesAsync(token);
             PlatformTelemetry.RecordRuntimeTransition(ticket.Kind.ToString(), ticket.Stage.ToString(), "started");
 
-            if (!await IsTicketStillDeployableAsync(ticket, token))
-            {
-                if (!await OwnsSchedulingClaimAsync(context, ticket.Id, claimOwner, token))
-                {
-                    context.ChangeTracker.Clear();
-                    return false;
-                }
-                ticket.Status = DeploymentQueueTicketStatus.Cancelled;
-                ticket.Stage = DeploymentStage.Cancelled;
-                ticket.CompletedAt = DateTimeOffset.UtcNow;
-                ticket.ErrorMessage = "Deployment queue ticket is not deployable anymore.";
-                events.Append(RuntimeOperationalEvents.Ticket(
-                    ticket,
-                    OperationalEventCodes.Runtime.TicketCancelled,
-                    OperationalEventOutcome.Cancelled,
-                    "Runtime scheduling cancelled a non-deployable ticket."));
-                await context.SaveChangesAsync(token);
-                activity?.SetStatus(System.Diagnostics.ActivityStatusCode.Error, "not_deployable");
-                return false;
-            }
-
             var reservation = await ReserveCapacityAsync(ticket, token);
             if (!await OwnsSchedulingClaimAsync(context, ticket.Id, claimOwner, token))
             {
                 context.ChangeTracker.Clear();
                 return false;
             }
-            var controlPlaneTicket = IsTeamLabControlPlaneTicket(ticket);
-            if (!reservation.Success || (!controlPlaneTicket && reservation.NodeId is null))
+            if (!reservation.Success || reservation.NodeId is null)
             {
                 ticket.Status = DeploymentQueueTicketStatus.Pending;
                 ticket.Stage = DeploymentStage.CapacityWaiting;
@@ -176,9 +153,7 @@ public sealed class RuntimeSchedulingService(
             ticket.TargetNodeId = nodeId;
             ticket.Status = DeploymentQueueTicketStatus.Scheduled;
             ticket.Stage = DeploymentStage.NodeExecutionWaiting;
-            ticket.StageMessage = controlPlaneTicket
-                ? "Waiting for platform control-plane execution capacity."
-                : "Waiting for node execution capacity.";
+            ticket.StageMessage = "Waiting for node execution capacity.";
             ticket.BlockedReasonCode = null;
             ticket.NotBeforeAt = null;
             ticket.ClaimOwner = null;
@@ -192,9 +167,7 @@ public sealed class RuntimeSchedulingService(
                 ticket,
                 OperationalEventCodes.Runtime.SchedulingAssigned,
                 OperationalEventOutcome.Succeeded,
-                controlPlaneTicket
-                    ? "Runtime scheduling assigned the platform control plane."
-                    : "Runtime scheduling assigned a worker node.",
+                "Runtime scheduling assigned a worker node.",
                 workerNodeId: nodeId));
             await context.SaveChangesAsync(token);
             PlatformTelemetry.RecordRuntimeTransition(ticket.Kind.ToString(), ticket.Stage.ToString(), "assigned");
@@ -300,15 +273,6 @@ public sealed class RuntimeSchedulingService(
     async Task<FleetCapacityReservationResult> ReserveCapacityAsync(DeploymentQueueTicket ticket,
         CancellationToken token)
     {
-        if (ticket.Kind == DeploymentQueueKind.TeamLabRuntime &&
-            ticket.Operation == RuntimeOperationKind.Create &&
-            ticket.TeamLabRuntimeId is { } teamLabRuntimeId)
-            return await teamLabPlacement.BindAndReserveAsync(ticket.Id, teamLabRuntimeId, token);
-
-        if (IsTeamLabControlPlaneTicket(ticket))
-            return new FleetCapacityReservationResult(
-                true, null, null, 0, 0, "TeamLab control operation scheduled on the platform control plane.");
-
         if (ticket.Operation != RuntimeOperationKind.Create)
         {
             var controlNodeId = await ResolvePreferredNodeIdAsync(ticket, token);
@@ -381,9 +345,6 @@ public sealed class RuntimeSchedulingService(
 
     sealed record RuntimeResourceSpecification(int CpuUnits, int MemoryMiB, int StorageMiB);
 
-    internal static bool IsTeamLabControlPlaneTicket(DeploymentQueueTicket ticket) =>
-        ticket.Kind == DeploymentQueueKind.TeamLabRuntime && ticket.Operation != RuntimeOperationKind.Create;
-
     async Task<Guid?> ResolvePreferredNodeIdAsync(DeploymentQueueTicket ticket, CancellationToken token)
     {
         if (ticket.TargetNodeId is { } nodeId)
@@ -430,29 +391,7 @@ public sealed class RuntimeSchedulingService(
                 .Select(candidate => candidate.TargetNodeId)
                 .FirstOrDefaultAsync(token);
         }
-        if (ticket.Kind != DeploymentQueueKind.TeamLabRuntime || ticket.TeamLabRuntimeId is not { } runtimeId)
-            return null;
-
-        return await context.TeamLabRuntimes.AsNoTracking()
-            .Where(runtime => runtime.Id == runtimeId)
-            .Select(runtime => runtime.Shards
-                .Where(shard => shard.Generation == runtime.Generation && shard.Id == runtime.EntryShardId)
-                .Select(shard => (Guid?)shard.WorkerNodeId)
-                .FirstOrDefault())
-            .SingleOrDefaultAsync(token);
-    }
-
-    async Task<bool> IsTicketStillDeployableAsync(DeploymentQueueTicket ticket, CancellationToken token)
-    {
-        if (ticket.Kind != DeploymentQueueKind.TeamLabRuntime ||
-            ticket.Operation != RuntimeOperationKind.Create ||
-            ticket.TeamLabRuntimeId is not { } runtimeId)
-            return true;
-        return await context.TeamLabRuntimes.AsNoTracking()
-            .Where(runtime => runtime.Id == runtimeId)
-            .Select(runtime => runtime.Status)
-            .AnyAsync(status => status == TeamLabRuntimeStatus.Scheduled || status == TeamLabRuntimeStatus.Deploying,
-                token);
+        return null;
     }
 
     static NodeCapability RequiredCapability(DeploymentQueueTicket ticket)

@@ -9,7 +9,6 @@ namespace GZCTF.Agent.Controllers;
 public sealed class RuntimeController(
     DockerService docker,
     KvmService kvm,
-    TeamLabNetworkService teamLab,
     AgentCapabilityService capabilities,
     ILogger<RuntimeController> logger) : ControllerBase
 {
@@ -23,7 +22,6 @@ public sealed class RuntimeController(
 
         var containers = await ReadComputeAsync(dockerSupported, docker.GetManagedRuntimeInventoryAsync, "Docker", logger, token);
         var vms = await ReadComputeAsync(kvmSupported, kvm.GetManagedRuntimeInventoryAsync, "KVM", logger, token);
-        var teamLabResources = await teamLab.GetManagedRuntimeInventoryAsync(token);
 
         return Ok(new RuntimeInventoryResponse(
             containers.Available,
@@ -31,7 +29,7 @@ public sealed class RuntimeController(
             containers.Resources,
             vms.Resources,
             DateTimeOffset.UtcNow,
-            teamLabResources));
+            []));
     }
 
     internal static async Task<(bool Available, IReadOnlyList<RuntimeInventoryResource> Resources)> ReadComputeAsync(

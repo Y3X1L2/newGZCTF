@@ -222,25 +222,16 @@ public class NodesControllerTests
         Assert.Contains("docker info", script);
         Assert.Contains("install_kvm", script);
         Assert.Contains("kvm_ready()", script);
-        Assert.Contains("teamlab_tools_ready()", script);
+        Assert.Contains("guest_management_tools_ready()", script);
         Assert.Contains("install_missing_pkgs", script);
         Assert.Contains("qemu-system-x86", script);
         Assert.DoesNotContain("apt)\n      install_pkgs qemu-kvm", script);
         Assert.Contains("libvirt", script);
-        Assert.Contains("install_teamlab_network_tools", script);
-        Assert.Contains("wireguard-tools", script);
+        Assert.Contains("install_guest_management_tools", script);
         Assert.Contains("nftables", script);
-        Assert.Contains("tcpdump", script);
         Assert.Contains("genisoimage", script);
         Assert.Contains("xorriso", script);
         Assert.Contains("cloud-image-utils", script);
-        Assert.Contains("openvswitch-switch", script);
-        Assert.Contains("ovn-host", script);
-        Assert.Contains("need_cmd ovs-vsctl", script);
-        Assert.Contains("need_cmd ovsdb-client", script);
-        Assert.Contains("need_cmd ovn-controller", script);
-        Assert.Contains("need_cmd ovn-nbctl", script);
-        Assert.Contains("need_cmd ovn-sbctl", script);
         Assert.Contains("cmp -s \"$tmp\" /etc/docker/daemon.json", script);
         Assert.Contains("KVM hardware: unavailable", script);
         Assert.Contains("install_dotnet_runtime", script);
@@ -278,45 +269,6 @@ public class NodesControllerTests
         Assert.Contains("\"AuthToken\": \"token\"", json);
         Assert.Contains("\"ListenPort\": 5101", json);
         Assert.DoesNotContain("AgentPort", json);
-    }
-
-    [Fact]
-    public void BuildAgentConfigJson_IncludesTeamLabNetworkMutationConfig()
-    {
-        var node = new WorkerNode
-        {
-            Id = Guid.Parse("2e361192-0b30-4244-ad7c-fa7947ea8f41"),
-            AuthToken = "token",
-            AgentPort = 5101
-        };
-
-        var json = NodeDeployService.BuildAgentConfigJson(
-            "http://server:18082/",
-            node,
-            teamLabEnable: true,
-            teamLabDryRun: false);
-
-        Assert.Contains("\"TeamLab\"", json);
-        Assert.Contains("\"Enable\": true", json);
-        Assert.Contains("\"DryRun\": false", json);
-    }
-
-    [Fact]
-    public void BuildAgentConfigJson_DefaultsToExecutableTeamLabMutation()
-    {
-        var node = new WorkerNode
-        {
-            Id = Guid.Parse("2e361192-0b30-4244-ad7c-fa7947ea8f41"),
-            AuthToken = "token",
-            AgentPort = 5101
-        };
-
-        var json = NodeDeployService.BuildAgentConfigJson("http://server:18082/", node);
-
-        using var doc = JsonDocument.Parse(json);
-        var teamLab = doc.RootElement.GetProperty("TeamLab");
-        Assert.True(teamLab.GetProperty("Enable").GetBoolean());
-        Assert.False(teamLab.GetProperty("DryRun").GetBoolean());
     }
 
     [Fact]
@@ -897,7 +849,7 @@ public class NodesControllerTests
     }
 
     [Fact]
-    public async Task AgentFleetUpdate_AllowsExplicitlyDisabledFabricAfterManagedVmSync()
+    public async Task AgentFleetUpdate_UpdatesManagedVmConfiguration()
     {
         await using var context = CreateContext();
         var agentDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "agent");
@@ -938,8 +890,7 @@ public class NodesControllerTests
             context,
             agent,
             new EfOperationalEventWriter(context, NullLogger<EfOperationalEventWriter>.Instance),
-            NullLogger<AgentFleetUpdateCoordinator>.Instance,
-            Options.Create(new TeamLabNetworkConfig()));
+            NullLogger<AgentFleetUpdateCoordinator>.Instance);
 
         var result = await coordinator.SyncAsync(
             nodeId, "http://10.24.0.27", Guid.NewGuid(), CancellationToken.None);
@@ -950,7 +901,7 @@ public class NodesControllerTests
         Assert.Equal(2, agent.Requests.Count);
         Assert.Null(agent.Requests[0].VmControlPlane);
         Assert.NotNull(agent.Requests[1].VmControlPlane);
-        Assert.False(agent.Requests[1].TeamLabDataPlane?.Enabled);
+        Assert.Null(agent.Requests[1].TeamLabDataPlane);
     }
 
     [Fact]
@@ -1004,8 +955,7 @@ public class NodesControllerTests
             context,
             services.GetRequiredService<AgentClient>(),
             services.GetRequiredService<IOperationalEventWriter>(),
-            NullLogger<AgentFleetUpdateCoordinator>.Instance,
-            Options.Create(new TeamLabNetworkConfig()));
+            NullLogger<AgentFleetUpdateCoordinator>.Instance);
 
         await coordinator.RecoverPendingAsync(CancellationToken.None);
 

@@ -17,7 +17,6 @@ using GZCTF.Modules.Provisioning.Contracts;
 using GZCTF.Modules.Runtime.Contracts;
 using GZCTF.Repositories.Interface;
 using GZCTF.Services.Container.Provider;
-using GZCTF.Services.TeamLab;
 using Namotion.Reflection;
 using NJsonSchema;
 using NJsonSchema.Generation;

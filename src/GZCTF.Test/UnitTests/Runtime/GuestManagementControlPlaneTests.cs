@@ -11,7 +11,6 @@ using GZCTF.Agent.Middlewares;
 using GZCTF.Agent.Models;
 using GZCTF.Agent.Services;
 using GZCTF.Agent.Services.GuestControl;
-using GZCTF.Agent.Services.TeamLab;
 using GZCTF.Agent.Services.Vm;
 using GZCTF.GuestControl.Contracts;
 using Microsoft.AspNetCore.Http;
@@ -30,13 +29,9 @@ public sealed class GuestManagementControlPlaneTests
         {
             GuestManagement = new GuestManagementConfig { Enabled = true }
         });
-        var runner = new TeamLabCommandRunner(NullLogger<TeamLabCommandRunner>.Instance);
-        var executor = new TeamLabCommandExecutor(
-            Options.Create(new AgentTeamLabConfig { Enable = true, DryRun = true }),
-            runner,
-            NullLogger<TeamLabCommandExecutor>.Instance);
+        var runner = new HostCommandRunner(NullLogger<HostCommandRunner>.Instance);
         var service = new GuestManagementNetworkService(
-            options, executor, runner, new AgentResourceLock());
+            options, runner, new AgentResourceLock());
 
         var plan = service.BuildPlan();
 
@@ -52,11 +47,11 @@ public sealed class GuestManagementControlPlaneTests
     }
 
     [Fact]
-    public async Task TeamLabCommandRunner_NormalizesStandardInputForLinuxTools()
+    public async Task HostCommandRunner_NormalizesStandardInputForLinuxTools()
     {
         if (OperatingSystem.IsWindows()) return;
 
-        var runner = new TeamLabCommandRunner(NullLogger<TeamLabCommandRunner>.Instance);
+        var runner = new HostCommandRunner(NullLogger<HostCommandRunner>.Instance);
         var result = await runner.RunAsync("cat", "first\r\nsecond\r\n", CancellationToken.None);
 
         Assert.True(result.Success);
@@ -64,7 +59,7 @@ public sealed class GuestManagementControlPlaneTests
     }
 
     [Fact]
-    public async Task GuestEnrollment_UsesEncryptedOneTimeStateAndJournalsBeforeAcknowledge()
+    public async Task GuestEnrollment_UsesEncryptedOneTimeStateAndPersistsAcceptedEvents()
     {
         var root = Path.Combine(Path.GetTempPath(), $"gzctf-guest-control-{Guid.NewGuid():N}");
         try
@@ -125,7 +120,6 @@ public sealed class GuestManagementControlPlaneTests
                 authority.IssueClientCertificate,
                 CancellationToken.None));
 
-            var journaled = 0;
             var guestEvent = new GuestLifecycleEvent(
                 GuestControlProtocol.SchemaVersion,
                 identity,
@@ -137,21 +131,15 @@ public sealed class GuestManagementControlPlaneTests
             var accepted = await store.AcceptEventAsync(
                 certificate.Thumbprint,
                 guestEvent,
-                _ =>
-                {
-                    journaled++;
-                    return Task.CompletedTask;
-                },
                 CancellationToken.None);
             var duplicate = await store.AcceptEventAsync(
                 certificate.Thumbprint,
                 guestEvent,
-                _ => throw new InvalidOperationException("duplicate must not be journaled"),
                 CancellationToken.None);
 
             Assert.Equal(GuestEventDisposition.Accepted, accepted);
             Assert.Equal(GuestEventDisposition.Duplicate, duplicate);
-            Assert.Equal(1, journaled);
+            Assert.Equal(1, (await store.GetStatusAsync(identity, CancellationToken.None))!.LastSequence);
 
             var enrolled = guestEvent with
             {
@@ -160,7 +148,7 @@ public sealed class GuestManagementControlPlaneTests
                 PayloadDigest = "sha256:event-2"
             };
             await store.AcceptEventAsync(
-                certificate.Thumbprint, enrolled, _ => Task.CompletedTask, CancellationToken.None);
+                certificate.Thumbprint, enrolled, CancellationToken.None);
             var networkApplied = enrolled with
             {
                 Sequence = 3,
@@ -168,7 +156,7 @@ public sealed class GuestManagementControlPlaneTests
                 PayloadDigest = "sha256:event-3"
             };
             await store.AcceptEventAsync(
-                certificate.Thumbprint, networkApplied, _ => Task.CompletedTask, CancellationToken.None);
+                certificate.Thumbprint, networkApplied, CancellationToken.None);
             var bootstrapRunning = networkApplied with
             {
                 Sequence = 4,
@@ -176,7 +164,7 @@ public sealed class GuestManagementControlPlaneTests
                 PayloadDigest = "sha256:event-4"
             };
             await store.AcceptEventAsync(
-                certificate.Thumbprint, bootstrapRunning, _ => Task.CompletedTask, CancellationToken.None);
+                certificate.Thumbprint, bootstrapRunning, CancellationToken.None);
             var rebootRequested = bootstrapRunning with
             {
                 Sequence = 5,
@@ -184,7 +172,7 @@ public sealed class GuestManagementControlPlaneTests
                 PayloadDigest = "sha256:event-5"
             };
             await store.AcceptEventAsync(
-                certificate.Thumbprint, rebootRequested, _ => Task.CompletedTask, CancellationToken.None);
+                certificate.Thumbprint, rebootRequested, CancellationToken.None);
             var afterBootIdentity = identity with { BootEpoch = 1 };
             var afterBoot = rebootRequested with
             {
@@ -194,7 +182,7 @@ public sealed class GuestManagementControlPlaneTests
                 PayloadDigest = "sha256:event-6"
             };
             await store.AcceptEventAsync(
-                certificate.Thumbprint, afterBoot, _ => Task.CompletedTask, CancellationToken.None);
+                certificate.Thumbprint, afterBoot, CancellationToken.None);
             var secrets = await store.GetSecretsAsync(
                 certificate.Thumbprint,
                 new GuestSecretRequest(afterBootIdentity, ["secret:flag"]),

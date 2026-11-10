@@ -1,6 +1,5 @@
 using GZCTF.Models.Data;
 using GZCTF.Models.Internal;
-using GZCTF.Modules.TeamLab.Application;
 using GZCTF.Modules.Audit.Contracts;
 using GZCTF.Modules.Audit.Domain;
 using GZCTF.Repositories.Interface;
@@ -27,8 +26,6 @@ public class DeploymentExecutionService
     readonly INginxProxySyncService? _nginxProxySync;
     readonly DeploymentExecutionContextAccessor _executionContext;
     readonly FleetVmService? _fleetVmService;
-    readonly ITeamLabRuntimeApplicationService? _teamLabRuntime;
-    readonly TeamLabAssetControlService? _assetControls;
     readonly AwdpInstanceService? _awdpInstances;
     readonly ILogger<DeploymentExecutionService> _logger;
 
@@ -42,10 +39,8 @@ public class DeploymentExecutionService
         INginxProxySyncService nginxProxySync,
         DeploymentExecutionContextAccessor executionContext,
         FleetVmService fleetVmService,
-        ITeamLabRuntimeApplicationService teamLabRuntime,
         AwdpInstanceService awdpInstances,
-        ILogger<DeploymentExecutionService> logger,
-        TeamLabAssetControlService? assetControls = null)
+        ILogger<DeploymentExecutionService> logger)
     {
         _context = context;
         _gameInstances = gameInstances;
@@ -56,8 +51,6 @@ public class DeploymentExecutionService
         _nginxProxySync = nginxProxySync;
         _executionContext = executionContext;
         _fleetVmService = fleetVmService;
-        _teamLabRuntime = teamLabRuntime;
-        _assetControls = assetControls;
         _awdpInstances = awdpInstances;
         _logger = logger;
     }
@@ -73,7 +66,6 @@ public class DeploymentExecutionService
         _nginxProxySync = null;
         _executionContext = new DeploymentExecutionContextAccessor();
         _fleetVmService = null;
-        _teamLabRuntime = null;
         _awdpInstances = null;
         _logger = logger;
     }
@@ -91,7 +83,6 @@ public class DeploymentExecutionService
         _nginxProxySync = null;
         _executionContext = executionContext;
         _fleetVmService = fleetVmService;
-        _teamLabRuntime = null;
         _awdpInstances = null;
         _logger = logger;
     }
@@ -130,7 +121,6 @@ public class DeploymentExecutionService
                 DeploymentQueueKind.AwdpContainer => await ExecuteAwdpContainerAsync(ticket, token),
                 DeploymentQueueKind.ChallengeTestContainer => await ExecuteChallengeTestContainerAsync(ticket, token),
                 DeploymentQueueKind.VirtualMachine => await ExecuteVmAsync(ticket, token),
-                DeploymentQueueKind.TeamLabRuntime => await ExecuteTeamLabRuntimeAsync(ticket, token),
                 _ => DeploymentExecutionResult.Failed($"Unsupported deployment queue kind {ticket.Kind}.")
             }
             : await ExecuteControlAsync(ticket, token);
@@ -143,7 +133,6 @@ public class DeploymentExecutionService
             DeploymentQueueKind.ExerciseContainer or DeploymentQueueKind.TrainingContainer =>
                 await ExecuteExerciseContainerControlAsync(ticket, token),
             DeploymentQueueKind.VirtualMachine => await ExecuteVmControlAsync(ticket, token),
-            DeploymentQueueKind.TeamLabRuntime => await ExecuteTeamLabControlAsync(ticket, token),
             DeploymentQueueKind.AwdpContainer => await ExecuteAwdpControlAsync(ticket, token),
             DeploymentQueueKind.ChallengeTestContainer => ticket.SubjectType == "challenge-test-container"
                 ? await ExecuteChallengeTestContainerControlAsync(ticket, token)
@@ -297,58 +286,6 @@ public class DeploymentExecutionService
         return vm.Status == VmInstanceStatus.Destroyed
             ? DeploymentExecutionResult.Completed()
             : DeploymentExecutionResult.Failed("VM destruction failed.");
-    }
-
-    async Task<DeploymentExecutionResult> ExecuteTeamLabControlAsync(DeploymentQueueTicket ticket,
-        CancellationToken token)
-    {
-        if (_teamLabRuntime is null || ticket.TeamLabRuntimeId is not { } runtimeId)
-            return DeploymentExecutionResult.Failed("TeamLab control ticket has invalid identity.");
-        var runtimeGeneration = await _context.TeamLabRuntimes.AsNoTracking()
-            .Where(item => item.Id == runtimeId)
-            .Select(item => (int?)item.Generation)
-            .SingleOrDefaultAsync(token);
-        if (runtimeGeneration is not null && !TeamLabGenerationMatches(
-                ticket.Operation, ticket.Generation, runtimeGeneration.Value))
-            return DeploymentExecutionResult.Failed("TeamLab control ticket has a stale runtime generation.");
-        return ticket.Operation switch
-        {
-            RuntimeOperationKind.AssetControl when _assetControls is not null =>
-                await ExecuteAssetControlAsync(ticket, token),
-            RuntimeOperationKind.Pause or RuntimeOperationKind.Resume =>
-                (await _teamLabRuntime.ExecuteQueuedLifecycleAsync(runtimeId, ticket.Generation,
-                    ticket.Operation == RuntimeOperationKind.Pause, token, ticket.ProtectedPayload)).Success
-                    ? DeploymentExecutionResult.Completed()
-                    : DeploymentExecutionResult.Failed("TeamLab lifecycle operation failed."),
-            RuntimeOperationKind.Reset => await _teamLabRuntime.ExecuteQueuedResetAsync(
-                runtimeId, ticket.Id, ticket.ProtectedPayload, token) is { } result && result.Success
-                ? DeploymentExecutionResult.Completed()
-                : DeploymentExecutionResult.Failed("TeamLab reset deployment failed."),
-            RuntimeOperationKind.Update => await _teamLabRuntime.ExecuteQueuedUpdateAsync(
-                runtimeId, ticket.Id, ticket.ProtectedPayload, token) is { Success: true }
-                ? DeploymentExecutionResult.Completed()
-                : DeploymentExecutionResult.Failed("TeamLab runtime update failed."),
-            RuntimeOperationKind.Stop or RuntimeOperationKind.Destroy =>
-                (await _teamLabRuntime.ExecuteQueuedDestroyAsync(runtimeId, token)).Success
-                    ? DeploymentExecutionResult.Completed()
-                    : DeploymentExecutionResult.Failed("TeamLab cleanup failed."),
-            _ => DeploymentExecutionResult.Failed($"TeamLab operation {ticket.Operation} is not supported.")
-        };
-    }
-
-    internal static bool TeamLabGenerationMatches(
-        RuntimeOperationKind operation,
-        int ticketGeneration,
-        int runtimeGeneration) => operation == RuntimeOperationKind.Reset
-        ? ticketGeneration == runtimeGeneration || ticketGeneration == runtimeGeneration + 1
-        : ticketGeneration == runtimeGeneration;
-
-    async Task<DeploymentExecutionResult> ExecuteAssetControlAsync(DeploymentQueueTicket ticket, CancellationToken token)
-    {
-        var result = await _assetControls!.ExecuteAsync(ticket, token);
-        if (result.Success) return DeploymentExecutionResult.Completed();
-        var error = TeamLabAssetControlService.DescribeFailure(result.Message);
-        return DeploymentExecutionResult.Failed(error.Message, error);
     }
 
     async Task<DeploymentExecutionResult> ExecuteAwdpControlAsync(DeploymentQueueTicket ticket,
@@ -517,27 +454,6 @@ public class DeploymentExecutionService
         }
 
         return DeploymentExecutionResult.Completed();
-    }
-
-    async Task<DeploymentExecutionResult> ExecuteTeamLabRuntimeAsync(DeploymentQueueTicket ticket,
-        CancellationToken token)
-    {
-        if (ticket.TeamLabRuntimeId is not { } runtimeId)
-            return DeploymentExecutionResult.Failed("TeamLab runtime queue ticket is missing its runtime identity.");
-
-        var runtime = await _context.TeamLabRuntimes
-            .AsNoTracking()
-            .SingleOrDefaultAsync(r => r.Id == runtimeId, token);
-        if (runtime is null)
-            return DeploymentExecutionResult.Failed($"TeamLab runtime {runtimeId} was not found.");
-
-        if (_teamLabRuntime is null)
-            return DeploymentExecutionResult.Failed("TeamLab runtime queue executor is not available.");
-
-        var result = await _teamLabRuntime.ExecuteQueuedAsync(runtimeId, token);
-        return result.Success
-            ? DeploymentExecutionResult.Completed()
-            : DeploymentExecutionResult.Failed(result.Message);
     }
 
     static int? ResolveVmMemory(int? memoryLimit) => memoryLimit is >= 1024 ? memoryLimit : null;

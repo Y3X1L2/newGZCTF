@@ -78,38 +78,7 @@ public sealed class TeamLabContractMigrationTests : IAsyncLifetime
             var frozen = await context.TeamLabTopologyReleases.SingleAsync(item => item.TopologyId == 9551);
             Assert.Equal("legacy-hash", frozen.ContentHash);
             Assert.True(System.Text.Json.JsonDocument.Parse(frozen.CanonicalJson).RootElement.GetProperty("legacy").GetBoolean());
-            context.ChangeTracker.Clear();
-            var service = new TeamLabTopologyApplicationService(context, new TeamLabTopologyValidator(), null!,
-                new TeamLabControlScopeService(context), new NodeCapacitySnapshotService(context));
-            var topologyId = await context.TeamLabTopologies.Where(item => item.Id == 9551).Select(item => item.PublicId).SingleAsync();
-            var detail = await service.GetAsync(topologyId, owner, false, CancellationToken.None);
-            var original = detail.Definition.Assets[0];
-            var requested = original with { VmNetworkMode = VmNetworkMode.ManagedStatic, Interfaces = [original.Interfaces[0] with
-            {
-                GuestInterfaceName = "lan0", UseDefaultGateway = false, DnsServers = [],
-                StaticRoutes = [new TeamLabGuestRouteModel("10.50.0.0/24", "10.48.0.1", 7)]
-            }] };
-            var update = await service.UpdateDraftAsync(topologyId, new UpdateTeamLabTopologyModel(
-                detail.Revision, detail.Definition.Name, detail.Definition.Networks, [requested], []), owner, false, CancellationToken.None);
-            Assert.Equal(2, update.Revision);
-            Assert.Equal(VmNetworkMode.ManagedStatic, update.Definition.Assets[0].VmNetworkMode);
-            Assert.Empty(update.Definition.Assets[0].Interfaces[0].DnsServers!);
-            Assert.False(update.Definition.Assets[0].Interfaces[0].UseDefaultGateway);
-            Assert.Equal(7, update.Definition.Assets[0].Interfaces[0].StaticRoutes![0].Metric);
-            context.ChangeTracker.Clear();
-            var persisted = await service.GetAsync(topologyId, owner, false, CancellationToken.None);
-            Assert.Equal("lan0", persisted.Definition.Assets[0].Interfaces[0].GuestInterfaceName);
-            var clear = requested with { VmNetworkMode = null, Interfaces = [original.Interfaces[0]] };
-            var cleared = await service.UpdateDraftAsync(topologyId, new UpdateTeamLabTopologyModel(
-                update.Revision, detail.Definition.Name, detail.Definition.Networks, [clear], []), owner, false, CancellationToken.None);
-            Assert.Null(cleared.Definition.Assets[0].VmNetworkMode);
-            Assert.Null(cleared.Definition.Assets[0].Interfaces[0].DnsServers);
-            Assert.Null(cleared.Definition.Assets[0].Interfaces[0].StaticRoutes);
-            Assert.False(context.Database.HasPendingModelChanges());
-            await context.Database.GetService<IMigrator>().MigrateAsync(previous);
-            Assert.Equal(1, await ScalarAsync<long>(context, """SELECT count(*) FROM "TeamLabTopologyAssets" WHERE "Key" = 'vm'"""));
-            await context.Database.GetService<IMigrator>().MigrateAsync();
-            Assert.Empty(await context.Database.GetPendingMigrationsAsync());
+
         }
     }
 

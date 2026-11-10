@@ -61,5 +61,5 @@ public sealed class PenetrationObjectiveSecurityTests
     }
 
     private static PenetrationObjectiveService Service(AppDbContext context, IConfigService config) =>
-        new(context, null!, null!, null!, null!, null!, config);
+        new(context, null!, null!, null!, null!, null!, null!, null!, config);
 }

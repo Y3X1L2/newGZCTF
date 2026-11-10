@@ -30,15 +30,12 @@ public class HeartbeatWorker : BackgroundService
 
                 var cpuLoad = await GetCpuLoadAsync();
                 var memLoad = GetMemoryLoad();
-                var teamLab = scope.ServiceProvider.GetRequiredService<TeamLabNetworkService>();
-                var teamLabStatus = await teamLab.GetStatusAsync(token);
                 var capabilityService = scope.ServiceProvider.GetRequiredService<AgentCapabilityService>();
                 var manifest = await capabilityService.GetManifestAsync(
                     await capabilityService.GetBinarySha256Async(), token);
                 var containers = await ReadCountAsync(manifest.Features.Contains(AgentFeatureIds.Docker, StringComparer.Ordinal),
                     docker.GetContainerCountAsync, "Docker", _logger, token);
-                var vms = await ReadCountAsync(teamLabStatus.Capabilities.Kvm &&
-                    teamLabStatus.Capabilities.KvmDevice && teamLabStatus.Capabilities.CpuVirtualization,
+                var vms = await ReadCountAsync(manifest.Features.Contains(AgentFeatureIds.Kvm, StringComparer.Ordinal),
                     kvm.GetVmCountAsync, "KVM", _logger, token);
 
                 var payload = new
@@ -50,10 +47,7 @@ public class HeartbeatWorker : BackgroundService
                     CurrentContainers = containers,
                     CurrentVms = vms,
                     UsedPorts = 0,
-                    CapabilityManifest = manifest,
-                    TeamLabFabricIp = teamLabStatus.FabricIp,
-                    TeamLabFabricStatus = teamLabStatus.Available && teamLabStatus.Enable && teamLabStatus.FabricReady ? 3 :
-                        teamLabStatus.Available ? 1 : 4
+                    CapabilityManifest = manifest
                 };
 
                 var url = $"{_config.ServerUrl}/api/v1/nodes/{_config.NodeId}/heartbeat";

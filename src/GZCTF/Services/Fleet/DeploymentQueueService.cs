@@ -317,8 +317,7 @@ public class DeploymentQueueService
         string subjectKey,
         CancellationToken token)
     {
-        if (request.Operation != RuntimeOperationKind.Create ||
-            request.Kind == DeploymentQueueKind.TeamLabRuntime)
+        if (request.Operation != RuntimeOperationKind.Create)
             return request with { Generation = Math.Max(1, request.Generation) };
 
         var latest = await _context.DeploymentQueueTickets
@@ -417,19 +416,6 @@ public class DeploymentQueueService
             TaskStatus.Exit, LogLevel.Information);
     }
 
-    public async Task CancelTeamLabRuntimeAsync(int runtimeId, string reason, CancellationToken token)
-    {
-        var tickets = await _context.DeploymentQueueTickets
-            .Where(t => t.Kind == DeploymentQueueKind.TeamLabRuntime &&
-                        t.TeamLabRuntimeId == runtimeId &&
-                        ActiveStatuses.Contains(t.Status))
-            .Select(t => t.Id)
-            .ToListAsync(token);
-
-        foreach (var ticketId in tickets)
-            await CancelAsync(ticketId, reason, token);
-    }
-
     async Task ReleaseTicketCapacityAsync(
         DeploymentQueueTicket ticket,
         Guid? nodeId,
@@ -438,17 +424,6 @@ public class DeploymentQueueService
         CancellationToken token)
     {
         if (_capacity is null) return;
-        if (ticket.Kind == DeploymentQueueKind.TeamLabRuntime && ticket.TeamLabRuntimeId is { } runtimeId)
-        {
-            var shardSlots = await TeamLabCapacityFacts.LoadAsync(_context, runtimeId, token);
-            if (shardSlots.Length > 0)
-            {
-                foreach (var slot in shardSlots)
-                    await _capacity.ReleaseAsync(ticket.Id, slot.WorkerNodeId, token);
-                return;
-            }
-        }
-
         if (nodeId is { } reservedNodeId)
             await _capacity.ReleaseAsync(ticket.Id, reservedNodeId, token);
     }

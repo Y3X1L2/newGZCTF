@@ -1,23 +1,13 @@
 using GZCTF.Agent.Models;
 using GZCTF.Agent.Middlewares;
 using GZCTF.Agent.Services;
-using GZCTF.Agent.Services.Observation;
-using GZCTF.Agent.Services.RuntimeSignals;
-using GZCTF.Agent.Services.TeamLab;
 using GZCTF.Agent.Services.Vm;
 using GZCTF.Agent.Services.GuestControl;
-using GZCTF.Agent.Services.RemoteAccess;
 using Microsoft.AspNetCore.Server.Kestrel.Https;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using System.Net;
-
-if (AgentNetworkProbe.IsInvocation(args))
-{
-    Environment.ExitCode = await AgentNetworkProbe.RunAsync(args, CancellationToken.None);
-    return;
-}
 
 var builder = WebApplication.CreateBuilder(args);
 var agentConfig = builder.Configuration.GetSection("Agent").Get<AgentConfig>() ?? new AgentConfig();
@@ -49,44 +39,9 @@ builder.Services.AddSingleton<DockerService>();
 builder.Services.AddSingleton<KvmService>();
 builder.Services.AddSingleton<VmGuestAgentService>();
 builder.Services.AddSingleton<IVmGuestAgentClient>(provider => provider.GetRequiredService<VmGuestAgentService>());
-builder.Services.AddSingleton<TeamLabVmNetworkService>();
 builder.Services.AddSingleton<VmBootstrapService>();
 builder.Services.AddSingleton<VmImageBackingChainInspector>();
-builder.Services.AddSingleton<VmRuntimeReadinessCoordinator>();
-builder.Services.AddHostedService(serviceProvider =>
-    serviceProvider.GetRequiredService<VmRuntimeReadinessCoordinator>());
-builder.Services.AddSingleton<TeamLabCommandRunner>();
-builder.Services.AddSingleton<OvsdbJsonRpcClient>();
-builder.Services.AddSingleton<TeamLabDataPlanePreparationService>();
-builder.Services.AddSingleton<TeamLabOvnNetworkProvider>();
-builder.Services.AddSingleton<TeamLabOvsAttachmentProvider>();
-builder.Services.AddSingleton<TeamLabHostGatewayProvider>();
-builder.Services.AddSingleton<TeamLabManagedNicProvider>();
-builder.Services.AddSingleton<LinuxNetworkAttachmentService>();
-builder.Services.AddSingleton<TeamLabExecutionEventJournal>();
-builder.Services.AddSingleton<TeamLabExecutionPlanExecutor>();
-builder.Services.AddSingleton<TeamLabCommandExecutor>();
-builder.Services.AddSingleton<TeamLabBridgeService>();
-builder.Services.AddSingleton<TeamLabRouterService>();
-builder.Services.AddSingleton<TeamLabFirewallService>();
-builder.Services.AddSingleton<TeamLabFabricRouteStore>();
-builder.Services.AddSingleton<TeamLabFabricService>();
-builder.Services.AddHostedService(serviceProvider => serviceProvider.GetRequiredService<TeamLabFabricService>());
-builder.Services.AddSingleton<TeamLabLinkPolicyService>();
-builder.Services.AddSingleton<TeamLabServiceAccessService>();
-builder.Services.AddSingleton<ObservationPointRegistry>();
-builder.Services.AddSingleton<ObservationBatchSpool>();
-builder.Services.AddHostedService(serviceProvider => serviceProvider.GetRequiredService<ObservationBatchSpool>());
-builder.Services.AddSingleton<TeamLabPacketObserver>();
-builder.Services.AddHostedService(serviceProvider => serviceProvider.GetRequiredService<TeamLabPacketObserver>());
-builder.Services.AddSingleton<PcapSegmentUploader>();
-builder.Services.AddSingleton<TeamLabPcapService>();
-builder.Services.AddSingleton<TeamLabRuntimeGenerationStore>();
-builder.Services.AddSingleton<TeamLabContainerNetworkFinalizeService>();
-builder.Services.AddSingleton<AgentRuntimeSignalJournal>();
-builder.Services.AddSingleton<AgentRuntimeSignalPublisher>();
-builder.Services.AddHostedService<AgentRuntimeSignalPublisherWorker>();
-builder.Services.AddSingleton<TeamLabNetworkService>();
+builder.Services.AddSingleton<HostCommandRunner>();
 builder.Services.AddSingleton<AgentMaintenanceService>();
 builder.Services.AddSingleton<AgentCapabilityService>();
 builder.Services.AddSingleton<AgentOperationGate>();
@@ -101,9 +56,6 @@ builder.Services.AddSingleton<GuestEventIngestor>();
 builder.Services.AddSingleton<AgentOciArtifactUploader>();
 builder.Services.AddSingleton<AgentOperationReceiptStore>();
 builder.Services.AddSingleton<VmScenarioArtifactService>();
-builder.Services.AddSingleton<LibvirtTeamLabProvider>();
-builder.Services.AddSingleton<TeamLabTerminalSessionRegistry>();
-builder.Services.AddSingleton<RemoteAccessRelayService>();
 builder.Services.AddHostedService<HeartbeatWorker>();
 
 builder.Services.AddControllers()

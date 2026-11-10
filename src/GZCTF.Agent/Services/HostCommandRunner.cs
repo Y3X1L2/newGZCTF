@@ -2,7 +2,7 @@ using System.Diagnostics;
 
 namespace GZCTF.Agent.Services;
 
-public class TeamLabCommandRunner(ILogger<TeamLabCommandRunner> logger)
+public class HostCommandRunner(ILogger<HostCommandRunner> logger)
 {
     internal const string StableWorkingDirectory = "/";
 
@@ -32,7 +32,7 @@ public class TeamLabCommandRunner(ILogger<TeamLabCommandRunner> logger)
         var output = string.Join('\n', new[] { stdout, stderr }.Where(s => !string.IsNullOrWhiteSpace(s)));
         output = NormalizeFailureOutput(process.ExitCode, output);
         if (process.ExitCode != 0)
-            logger.LogWarning("TeamLab command failed with exit code {ExitCode}: {Command}\n{Output}",
+            logger.LogWarning("Host command failed with exit code {ExitCode}: {Command}\n{Output}",
                 process.ExitCode, command, output);
 
         return (process.ExitCode == 0, output);
