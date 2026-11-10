@@ -18,6 +18,7 @@ public sealed class NetlabProxy(NetlabConnection connection, IHttpClientFactory 
     {
         ValidateRequest(context.Request, path);
         var token = context.RequestAborted;
+        using var headersDeadline = CancellationTokenSource.CreateLinkedTokenSource(token);
         using var request = connection.Request(new HttpMethod(context.Request.Method), path + context.Request.QueryString, workspace.Scope);
         if (context.WebSockets.IsWebSocketRequest)
         {
@@ -28,7 +29,7 @@ public sealed class NetlabProxy(NetlabConnection connection, IHttpClientFactory 
             request.Headers.TryAddWithoutValidation(header.Key, header.Value.ToArray());
         if (context.Request.ContentLength > 0 || context.Request.Headers.ContainsKey("Transfer-Encoding"))
         {
-            request.Content = new StreamContent(context.Request.Body);
+            request.Content = new UploadContent(context.Request.Body, () => headersDeadline.CancelAfter(TimeSpan.FromSeconds(30)));
             if (context.Request.ContentType is { } contentType)
                 request.Content.Headers.TryAddWithoutValidation("Content-Type", contentType);
             if (context.Request.ContentLength is { } length) request.Content.Headers.ContentLength = length;
@@ -40,7 +41,9 @@ public sealed class NetlabProxy(NetlabConnection connection, IHttpClientFactory 
                 request.Content = JsonContent.Create(input, options: NetlabClient.Json);
             }
         }
-        using var response = await clients.CreateClient("NetlabStream").SendAsync(request, HttpCompletionOption.ResponseHeadersRead, token);
+        if (request.Content is not UploadContent) headersDeadline.CancelAfter(TimeSpan.FromSeconds(30));
+        using var response = await clients.CreateClient("NetlabStream").SendAsync(request, HttpCompletionOption.ResponseHeadersRead, headersDeadline.Token);
+        headersDeadline.CancelAfter(Timeout.InfiniteTimeSpan);
         var html = !path.StartsWith("api/", StringComparison.Ordinal) && response.Content.Headers.ContentType?.MediaType == "text/html";
         context.Response.StatusCode = (int)response.StatusCode;
         foreach (var header in response.Headers.Concat(response.Content.Headers))
@@ -72,6 +75,7 @@ public sealed class NetlabProxy(NetlabConnection connection, IHttpClientFactory 
         var decoded = Uri.UnescapeDataString(path);
         if (decoded.IndexOfAny(['\\', ':', '?', '#']) >= 0 || decoded.Split('/').Any(segment => segment is "." or "..") || decoded.StartsWith('/'))
             throw new TeamLabApiContractException("invalid_path", "请求路径无效。", 400);
+        path = decoded;
         if (path.StartsWith("api/") && !path.StartsWith("api/v1/"))
             throw new TeamLabApiContractException("invalid_api", "请使用底座公共接口。", 404);
         if (path.StartsWith("api/v1/principals") || path.StartsWith("api/v1/service-tokens") ||
@@ -95,8 +99,9 @@ public sealed class NetlabProxy(NetlabConnection connection, IHttpClientFactory 
         using var closed = CancellationTokenSource.CreateLinkedTokenSource(token);
         var upstream = RelayAsync(local, remote, closed.Token);
         var downstream = RelayAsync(remote, local, closed.Token);
-        await Task.WhenAny(upstream, downstream);
-        await closed.CancelAsync();
+        var finished = await Task.WhenAny(upstream, downstream);
+        if (finished.IsFaulted || finished.IsCanceled) await closed.CancelAsync();
+        else closed.CancelAfter(TimeSpan.FromSeconds(5));
         try { await Task.WhenAll(upstream, downstream); }
         catch (OperationCanceledException) when (closed.IsCancellationRequested) { }
     }
@@ -109,11 +114,29 @@ public sealed class NetlabProxy(NetlabConnection connection, IHttpClientFactory 
             var frame = await source.ReceiveAsync(buffer.AsMemory(), token);
             if (frame.MessageType == WebSocketMessageType.Close)
             {
-                if (target.State == WebSocketState.Open)
+                if (target.State is WebSocketState.Open or WebSocketState.CloseReceived)
                     await target.CloseOutputAsync(source.CloseStatus ?? WebSocketCloseStatus.NormalClosure, source.CloseStatusDescription, token);
                 return;
             }
             await target.SendAsync(buffer.AsMemory(0, frame.Count), frame.MessageType, frame.EndOfMessage, token);
+        }
+    }
+
+    private sealed class UploadContent(Stream source, Action sent) : HttpContent
+    {
+        protected override async Task SerializeToStreamAsync(Stream stream, TransportContext? context) =>
+            await SerializeToStreamAsync(stream, context, CancellationToken.None);
+
+        protected override async Task SerializeToStreamAsync(Stream stream, TransportContext? context, CancellationToken token)
+        {
+            await source.CopyToAsync(stream, token);
+            sent();
+        }
+
+        protected override bool TryComputeLength(out long length)
+        {
+            length = 0;
+            return false;
         }
     }
 }
