@@ -1,7 +1,6 @@
 import useSWR from 'swr'
 import { useAdminCursorState } from '../../shared/useAdminCursorState'
 import { teamLabGameAdminApi, teamLabGameAdminKeys } from '../../api/teamlabGameAdminApi'
-import { teamLabAdminApi, teamLabAdminKeys } from '../../teamlab/api/teamlabAdminApi'
 import { rolloutPollInterval } from './teamLabGamePresentation'
 
 const targetPageSize = 30
@@ -22,9 +21,9 @@ export function useGameTeamLab(gameId: number) {
     { revalidateOnFocus: true }
   )
   const topologyId = state.data?.binding?.topologyId
-  const topology = useSWR(
-    valid && topologyId ? teamLabAdminKeys.topology(topologyId) : null,
-    () => teamLabAdminApi.getTopology(topologyId!),
+  const assets = useSWR(
+    valid && topologyId ? ['teamlab:game-assets', gameId, state.data?.binding?.activeReleaseId] : null,
+    () => teamLabGameAdminApi.assets(gameId),
     { revalidateOnFocus: false }
   )
   const cursor = useAdminCursorState(`${gameId}:${state.data?.rollout?.id ?? 'unbound'}`)
@@ -44,11 +43,11 @@ export function useGameTeamLab(gameId: number) {
     stateError: state.error,
     releases: releases.data ?? [],
     releasesError: releases.error,
-    topology: topology.data,
-    topologyError: topology.error,
-    topologyLoading: Boolean(topologyId) && !topology.data && !topology.error,
+    assets: assets.data ?? [],
+    assetsError: assets.error,
+    assetsLoading: Boolean(topologyId) && !assets.data && !assets.error,
     isLoading: (!state.data && !state.error) || (!releases.data && !releases.error),
-    isRefreshing: state.isValidating || releases.isValidating || topology.isValidating,
+    isRefreshing: state.isValidating || releases.isValidating || assets.isValidating,
     mutateState: state.mutate,
     targets: {
       page: targets.data,

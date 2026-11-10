@@ -1,3 +1,0 @@
-.content { display: grid; gap: var(--yn-space-3); }
-.content p { margin: 0; overflow-wrap: anywhere; }
-.note { color: var(--yn-color-muted); font-size: var(--yn-font-sm); line-height: 1.6; }

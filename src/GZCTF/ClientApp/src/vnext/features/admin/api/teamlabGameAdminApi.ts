@@ -1,7 +1,9 @@
-import { teamLabContractFailure } from '../teamlab/api/teamlabErrors'
-import { teamLabParsing as parse } from '../teamlab/api/teamlabParsers'
-import type { TeamLabRuntimeStatus } from '../teamlab/api/teamlabContracts'
+import { teamLabContractFailure, teamLabParsing as parse } from './teamlabGameParsing'
 import { runtimeJsonClient, type RuntimeJsonClient } from './runtimeJsonClient'
+
+export interface TeamLabGameAsset { id: string; name: string; kind: 'vm' | 'container' | 'router' | 'external' }
+
+type TeamLabRuntimeStatus = typeof runtimeStatuses[keyof typeof runtimeStatuses]
 
 export type TeamLabGameRolloutStatus =
   | 'draft'
@@ -302,6 +304,7 @@ export const teamLabGameAdminKeys = {
 export function createTeamLabGameAdminApi(client: RuntimeJsonClient = runtimeJsonClient) {
   const root = (gameId: number) => `/api/admin/pentest/games/${gameId}`
   return {
+    assets: (gameId: number) => client.get(`${root(gameId)}/teamlab/assets`) as Promise<TeamLabGameAsset[]>,
     async state(gameId: number) {
       return parseTeamLabGameState(await client.get(`${root(gameId)}/teamlab`))
     },

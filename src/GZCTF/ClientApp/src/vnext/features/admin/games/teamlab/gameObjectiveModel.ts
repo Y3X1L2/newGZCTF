@@ -3,7 +3,7 @@ import type {
   TeamLabGameBinding,
   TeamLabGameObjectiveWrite,
 } from '../../api/teamlabGameAdminApi'
-import type { TeamLabTopologyAsset } from '../../teamlab/api/teamlabContracts'
+import type { TeamLabGameAsset } from '../../api/teamlabGameAdminApi'
 
 let draftSequence = 0
 
@@ -25,7 +25,7 @@ export function objectivesFromBinding(binding: TeamLabGameBinding): GameObjectiv
 }
 
 export function createObjectiveDraft(
-  assets: readonly TeamLabTopologyAsset[],
+  assets: readonly TeamLabGameAsset[],
   existing: readonly GameObjectiveDraft[]
 ): GameObjectiveDraft {
   let ordinal = existing.length + 1
@@ -36,7 +36,7 @@ export function createObjectiveDraft(
     clientId: `draft-${++draftSequence}`,
     persistedDynamic: null,
     key,
-    assetKey: assets[0]?.key ?? '',
+    assetKey: assets[0]?.id ?? '',
     title: `得分目标 ${ordinal}`,
     description: null,
     category: 'General',
@@ -54,14 +54,14 @@ export function createObjectiveDraft(
 
 export function validateObjectiveDrafts(
   objectives: readonly GameObjectiveDraft[],
-  assets: readonly TeamLabTopologyAsset[],
+  assets: readonly TeamLabGameAsset[],
   maxResetCount: number
 ): string | null {
   if (!Number.isInteger(maxResetCount) || maxResetCount < 0 || maxResetCount > 100)
     return '最大重置次数必须是 0 到 100 之间的整数。'
   if (objectives.length > 256) return '单场比赛最多配置 256 个得分目标。'
 
-  const assetKeys = new Set(assets.map((asset) => asset.key))
+  const assetKeys = new Set(assets.map((asset) => asset.id))
   const objectiveKeys = new Set<string>()
   for (const objective of objectives) {
     const key = objective.key.trim()

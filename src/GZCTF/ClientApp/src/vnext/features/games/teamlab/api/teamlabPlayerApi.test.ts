@@ -4,7 +4,6 @@ import { createTeamLabPlayerApi } from './teamlabPlayerApi'
 import { TeamLabPlayerContractError } from './teamlabPlayerParsers'
 
 const runtimeId = '019f0000-0000-7000-8000-000000000001'
-const grantId = '019f0000-0000-7000-8000-000000000002'
 
 function client(overrides: Partial<RuntimeJsonClient>): RuntimeJsonClient {
   const unexpected = async () => {
@@ -74,25 +73,13 @@ describe('TeamLab player API boundary', () => {
     await expect(api.getWorkspace(12)).rejects.toBeInstanceOf(TeamLabPlayerContractError)
   })
 
-  it('uses the player access, reset and submit contracts without generated API calls', async () => {
+  it('uses the player reset and submit contracts without generated API calls', async () => {
     const postJson = vi
       .fn()
-      .mockResolvedValueOnce({
-        id: grantId,
-        type: 'WireGuard',
-        clientAddress: '10.99.0.2/32',
-        endpoint: 'vpn.example:51820',
-        allowedIps: '10.20.0.0/24',
-        dns: '10.20.0.1',
-        createdAt: 1_790_000_000_000,
-        expiresAt: null,
-        configurationDownloadUrl: `/api/pentest/games/12/access-grants/${grantId}/download?token=token`,
-      })
       .mockResolvedValueOnce({ runtimeId })
       .mockResolvedValueOnce({ accepted: true, score: 100, message: 'Flag correct.' })
     const api = createTeamLabPlayerApi(client({ postJson }))
 
-    await expect(api.createAccessGrant(12)).resolves.toMatchObject({ id: grantId, type: 'WireGuard' })
     await expect(api.resetWorkspace(12)).resolves.toEqual({ runtimeId })
     await expect(api.submitObjective(12, 7, 'encrypted-flag')).resolves.toEqual({
       accepted: true,
@@ -100,9 +87,8 @@ describe('TeamLab player API boundary', () => {
       message: 'Flag correct.',
     })
 
-    expect(postJson).toHaveBeenNthCalledWith(1, '/api/pentest/games/12/access-grants')
-    expect(postJson).toHaveBeenNthCalledWith(2, '/api/pentest/games/12/reset')
-    expect(postJson).toHaveBeenNthCalledWith(3, '/api/pentest/games/12/submit', {
+    expect(postJson).toHaveBeenNthCalledWith(1, '/api/pentest/games/12/reset')
+    expect(postJson).toHaveBeenNthCalledWith(2, '/api/pentest/games/12/submit', {
       objectiveId: 7,
       flag: 'encrypted-flag',
     })

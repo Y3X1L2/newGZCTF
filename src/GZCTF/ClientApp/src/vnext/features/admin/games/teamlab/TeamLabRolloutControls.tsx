@@ -27,7 +27,7 @@ export function TeamLabRolloutControls({
   const preparing = rollout?.status === 'preparing' || rollout?.status === 'rollingout'
   return (
     <section className={styles.controlSection} aria-labelledby="teamlab-controls-title">
-      <header className={styles.sectionHeader}><div><span>ROLLOUT CONTROL</span><h2 id="teamlab-controls-title">比赛环境控制</h2></div></header>
+      <header className={styles.sectionHeader}><div><h2 id="teamlab-controls-title">比赛环境控制</h2></div></header>
       <div className={styles.controlActions}>
         <ActionButton disabled={!binding?.activeReleaseId || busy || configurationDirty || finished || preparing} icon={<PackageCheck size={16} />} onClick={() => onPrepare()} tone="primary" type="button">提前准备环境</ActionButton>
         {rollout?.desiredAccessOpen ? (
@@ -39,12 +39,12 @@ export function TeamLabRolloutControls({
       </div>
       <VNextConfirmDialog
         confirmLabel="开始清理"
-        description="选手入口会立即关闭，各队运行环境随后进入受控销毁流程。"
-        message="此操作用于比赛结束或场景版本切换前的完整回收。"
+        description="关闭选手入口并删除所有队伍环境。"
+        message="各队环境中的修改将被清除。"
         onClose={() => setDrainOpen(false)}
         onConfirm={async () => { await onDrain(); return true }}
         open={drainOpen}
-        title="结束 TeamLab rollout"
+        title="结束比赛环境"
       />
     </section>
   )

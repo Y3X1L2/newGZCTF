@@ -27,8 +27,8 @@ describe('AdminGameTeamLabPage', () => {
       state: { binding, rollout }, stateError: undefined,
       releases: [{ topologyId: 'topology-1', topologyName: '企业网络', releaseId: 'release-1', version: 3, networkCount: 4, assetCount: 9, publishedAt: 1 }],
       releasesError: undefined,
-      topology: { id: 'topology-1', revision: 1, schemaVersion: 2, definition: { name: '企业网络', networks: [], infrastructure: [], assets: [], connections: [], observation: { flowMetadataEnabled: true, onDemandPcapEnabled: true } }, editor: { networks: {}, assets: {}, infrastructure: {} }, createdAt: 1, updatedAt: 1 },
-      topologyError: undefined, topologyLoading: false,
+      assets: [],
+      assetsError: undefined, assetsLoading: false,
       isLoading: false, isRefreshing: false, mutateState: vi.fn(),
       targets: { page: { items: [target], nextCursor: null }, error: undefined, isLoading: false, isRefreshing: false, cursor: { cursor: null, page: 1, canGoBack: false, next: vi.fn(), previous: vi.fn(), reset: vi.fn() }, mutate: vi.fn() },
     })
@@ -45,11 +45,11 @@ describe('AdminGameTeamLabPage', () => {
       </MemoryRouter>
     )
 
-    expect(screen.getByRole('heading', { name: 'TeamLab 编排' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '比赛环境' })).toBeInTheDocument()
     expect(screen.getByText('企业网络 v3')).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: '得分目标' })).toBeInTheDocument()
     expect(screen.getByText('Alpha')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('row', { name: /Alpha/ }))
-    expect(screen.getByRole('link', { name: '打开运行时详情' })).toHaveAttribute('href', '/admin/teamlab/topology-1/runtimes/runtime-1')
+    expect(screen.getByRole('link', { name: '打开环境' })).toHaveAttribute('href', '/admin/teamlab?runtime=runtime-1')
   })
 })

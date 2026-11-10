@@ -368,3 +368,5 @@
     animation: none;
   }
 }
+
+.objectives { padding-top: var(--yn-space-4); }

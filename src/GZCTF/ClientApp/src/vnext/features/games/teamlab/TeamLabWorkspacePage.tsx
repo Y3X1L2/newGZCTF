@@ -4,11 +4,9 @@ import { ActionButton, InlineFeedback } from '../../../shared/Interaction'
 import { DataState } from '../../../shared/Primitives'
 import { errorMessage } from '../../../shared/errors'
 import { useGameWorkspace } from '../workspace/GameWorkspaceShell'
-import { PlayerAccessPanel } from './PlayerAccessPanel'
+import { NetlabWorkspace } from '../../teamlab/NetlabWorkspace'
 import { PlayerObjectiveList } from './PlayerObjectiveList'
 import { PlayerResetDialog } from './PlayerResetDialog'
-import { PlayerRuntimeStages } from './PlayerRuntimeStages'
-import { PlayerRuntimeStatus } from './PlayerRuntimeStatus'
 import styles from './TeamLabWorkspacePage.module.css'
 import { usePlayerTeamLab } from './usePlayerTeamLab'
 
@@ -39,8 +37,7 @@ export function TeamLabWorkspacePage() {
     <div className={styles.page}>
       <header className={styles.pageHeader}>
         <div>
-          <span>PENETRATION WORKSPACE</span>
-          <h1>渗透演练</h1>
+          <h1>队伍环境</h1>
         </div>
         <ActionButton
           disabled={workspace.resetAllowance.remaining <= 0 || workspace.status === 'destroying'}
@@ -55,11 +52,9 @@ export function TeamLabWorkspacePage() {
       {workspace.status === 'failed' ? (
         <InlineFeedback tone="danger">环境部署失败，请联系比赛管理员查看运行日志。</InlineFeedback>
       ) : null}
-      <PlayerRuntimeStatus workspace={workspace} />
-      <PlayerRuntimeStages workspace={workspace} />
-      <div className={styles.contentGrid}>
+      <NetlabWorkspace target={{ gameId }} title="队伍环境画布" />
+      <div className={styles.objectives}>
         <PlayerObjectiveList gameId={gameId} onSubmitted={() => void request.mutate()} workspace={workspace} />
-        <PlayerAccessPanel gameId={gameId} ready={workspace.status === 'running'} runtimeId={workspace.runtimeId} />
       </div>
       <PlayerResetDialog
         gameId={gameId}

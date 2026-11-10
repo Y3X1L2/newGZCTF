@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { TeamLabGameBinding } from '../../api/teamlabGameAdminApi'
-import type { TeamLabTopologyAsset } from '../../teamlab/api/teamlabContracts'
+import type { TeamLabGameAsset } from '../../api/teamlabGameAdminApi'
 import { objectivesFromBinding, toReplaceObjectivesRequest, validateObjectiveDrafts } from './gameObjectiveModel'
 
-const asset = { key: 'web', name: 'Web', kind: 'docker' } as TeamLabTopologyAsset
+const asset = { id: 'web', name: 'Web', kind: 'container' } as TeamLabGameAsset
 const binding: TeamLabGameBinding = {
   gameId: 8,
   topologyId: 'topology-1',
