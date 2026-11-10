@@ -25,6 +25,9 @@ public enum PenetrationRuntimeBindingStatus : byte
 
 public sealed class PenetrationGameLabBinding
 {
+    public string? BlueprintId { get; set; }
+    public string? BlueprintVersionId { get; set; }
+    public bool AccessOpen { get; set; }
     public int GameId { get; set; }
     public int TopologyId { get; set; }
     public Guid? ActiveReleaseId { get; set; }
@@ -37,6 +40,9 @@ public sealed class PenetrationGameLabBinding
 
 public sealed class PenetrationTeamRuntimeBinding
 {
+    public string? EnvironmentId { get; set; }
+    public string? BlueprintVersionId { get; set; }
+    public int BlueprintVersion { get; set; }
     public int GameId { get; set; }
     public int TeamId { get; set; }
     public int RuntimeId { get; set; }
