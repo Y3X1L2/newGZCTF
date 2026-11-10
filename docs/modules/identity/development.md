@@ -49,7 +49,7 @@
 
 ## API token 签发、验证与授权
 
-组网接入使用底座签发的平台集成令牌，在场景连接设置中保存。上层用户沿用现有账号，按角色和比赛关系生成本次请求范围；API token 页面保留普通业务授权。接入机制见 [TeamLab](../teamlab/netlab-integration.md#权限与实时状态)。
+组网接入使用底座已有的普通服务 Token，在场景连接设置中加密保存。上层用户沿用现有账号，入口根据角色、资源归属和比赛关系授权；API token 页面保留普通业务授权。接入机制见 [TeamLab](../teamlab/netlab-integration.md#权限与实时状态)。
 
 [ApiTokensController](../../../src/GZCTF/Modules/Identity/Api/ApiTokensController.cs)
 暴露浏览器管理入口 `/api/tokens`；创建、列表和撤销本身需要教师权限。

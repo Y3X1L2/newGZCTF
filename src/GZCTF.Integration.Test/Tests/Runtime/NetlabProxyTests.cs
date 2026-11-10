@@ -31,35 +31,19 @@ public sealed class NetlabProxyTests : IAsyncLifetime
     private readonly TaskCompletionSource _continueEvents = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly TaskCompletionSource _eventsClosed = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly CancellationTokenSource _deadline = new(TimeSpan.FromSeconds(20));
-    private readonly NetlabWorkspaceContext _workspace = new(Prefix, "practice/games/8", "environment-8",
-        new RequestScope
-        {
-            Name = "队伍一",
-            Grants = [new ScopeGrant { ScopeKind = ScopeGrantScopeKind.Environment, ScopeId = "environment-8", Permissions = [Permission.Read, Permission.Session, Permission.Observe] }]
-        });
+    private readonly NetlabWorkspaceContext _workspace = new(Prefix, "practice", "environment-8",
+        Guid.NewGuid(), "队伍一", false, []);
     private WebApplication _upstream = null!;
     private WebApplication _gateway = null!;
     private NetlabConnection _connection = null!;
     private HttpClient _browser = null!;
 
     [Fact]
-    public async Task WorkspaceDocument_UsesContextBaseAndServerIdentity()
+    public async Task Proxy_AcceptsApiRoutesOnly()
     {
-        using var request = new HttpRequestMessage(HttpMethod.Get, Prefix + "/environments/environment-8");
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", "browser-identity");
-        request.Headers.Add("Cookie", "session=browser-session");
-        request.Headers.Add("X-Netlab-Context", "browser-context");
-        using var response = await _browser.SendAsync(request, _deadline.Token);
-        response.EnsureSuccessStatusCode();
-        var html = await response.Content.ReadAsStringAsync(_deadline.Token);
-        Assert.Contains($"<base href=\"{Prefix}/\" data-netlab-base/>", html);
-        Assert.Contains("\"environmentOnly\":true", html);
-        Assert.Contains("\"basePath\":\"" + Prefix + "\"", html);
-        Assert.False(response.Headers.Contains("Set-Cookie"));
-        Assert.Equal("frame-ancestors 'self'", response.Headers.GetValues("Content-Security-Policy").Single());
-        var received = await _requests.Reader.ReadAsync(_deadline.Token);
-        AssertServerIdentity(received);
-        Assert.Equal("/base/environments/environment-8", received.Path);
+        using var response = await _browser.GetAsync(Prefix + "/environments/environment-8", _deadline.Token);
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.False(_requests.Reader.TryRead(out _));
     }
 
     [Fact]
@@ -86,20 +70,6 @@ public sealed class NetlabProxyTests : IAsyncLifetime
     }
 
     [Theory]
-    [InlineData("api/v1/environments")]
-    [InlineData("api%2Fv1%2Fenvironments")]
-    public async Task EnvironmentCreation_UsesAuthorizedProjectAndPreservesPayload(string path)
-    {
-        using var response = await _browser.PostAsJsonAsync(Prefix + "/" + path,
-            new { name = "风电演练", projectId = "another-project", spec = new { assets = Array.Empty<object>(), networks = Array.Empty<object>() } }, _deadline.Token);
-        response.EnsureSuccessStatusCode();
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>(_deadline.Token);
-        Assert.Equal(_workspace.ProjectId, body.GetProperty("projectId").GetString());
-        Assert.Equal("风电演练", body.GetProperty("name").GetString());
-        Assert.Equal(JsonValueKind.Array, body.GetProperty("spec").GetProperty("assets").ValueKind);
-    }
-
-    [Theory]
     [InlineData("https://outside.example/api/v1/templates", 400)]
     [InlineData("%2F%2Foutside.example/api/v1/templates", 400)]
     [InlineData("api/v1/%2e%2e%2Fprincipals", 400)]
@@ -119,7 +89,7 @@ public sealed class NetlabProxyTests : IAsyncLifetime
     {
         foreach (var path in new[] { "https://outside.example/", "//outside.example/", "../api/v1/identity", "/api/v1/identity" })
         {
-            var error = Assert.Throws<TeamLabApiContractException>(() => _connection.Request(HttpMethod.Get, path, _workspace.Scope));
+            var error = Assert.Throws<TeamLabApiContractException>(() => _connection.Request(HttpMethod.Get, path));
             Assert.Equal(400, error.StatusCode);
         }
     }
@@ -152,11 +122,11 @@ public sealed class NetlabProxyTests : IAsyncLifetime
         using var stream = await response.Content.ReadAsStreamAsync(_deadline.Token);
         using var reader = new StreamReader(stream);
         Assert.Equal("event: runtime.changed", await reader.ReadLineAsync(_deadline.Token));
-        Assert.Equal("data: first", await reader.ReadLineAsync(_deadline.Token));
+        Assert.Equal("data: {}", await reader.ReadLineAsync(_deadline.Token));
         Assert.Equal("", await reader.ReadLineAsync(_deadline.Token));
         _continueEvents.SetResult();
         Assert.Equal("event: runtime.changed", await reader.ReadLineAsync(_deadline.Token));
-        Assert.Equal("data: second", await reader.ReadLineAsync(_deadline.Token));
+        Assert.Equal("data: {}", await reader.ReadLineAsync(_deadline.Token));
         var received = await _requests.Reader.ReadAsync(_deadline.Token);
         Assert.Equal("previous-event", received.LastEventId);
         AssertServerIdentity(received);
@@ -219,7 +189,7 @@ public sealed class NetlabProxyTests : IAsyncLifetime
         var proxy = new NetlabProxy(_connection, clients);
         _gateway.Map(Prefix + "/{**path}", async context =>
         {
-            try { await proxy.ForwardAsync(context, _workspace, context.Request.RouteValues["path"]?.ToString() ?? ""); }
+            try { await proxy.ForwardAsync(context, _workspace, NetlabProxy.ValidateRequest(context.Request, context.Request.RouteValues["path"]?.ToString() ?? "")); }
             catch (TeamLabApiContractException error)
             {
                 context.Response.StatusCode = error.StatusCode;
@@ -252,10 +222,7 @@ public sealed class NetlabProxyTests : IAsyncLifetime
     {
         Assert.Equal("Bearer " + _credential, received.Authorization);
         Assert.Empty(received.Cookie);
-        var scope = JsonSerializer.Deserialize<RequestScope>(WebEncoders.Base64UrlDecode(received.Scope), NetlabClient.Json)!;
-        Assert.Equal(_workspace.Scope.Name, scope.Name);
-        Assert.NotEqual(true, scope.Administrator);
-        Assert.Equal("environment-8", Assert.Single(scope.Grants).ScopeId);
+        Assert.Empty(received.Scope);
     }
 
     private async Task ServeUpstreamAsync(HttpContext context)

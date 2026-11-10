@@ -1,5 +1,4 @@
 using System.Net.Http.Headers;
-using System.Text.Json;
 using GZCTF.Services.Config;
 using GZCTF.Modules.TeamLab.Application;
 using Microsoft.AspNetCore.DataProtection;
@@ -20,7 +19,7 @@ public sealed class NetlabConnection(IConfiguration configuration, IConfigServic
 
     public NetlabConnectionInfo Info() => new(configuration["Netlab:Endpoint"] ?? "", ProjectId, Configured);
 
-    public HttpRequestMessage Request(HttpMethod method, string path, RequestScope? scope = null)
+    public HttpRequestMessage Request(HttpMethod method, string path)
     {
         if (!Configured) throw new TeamLabApiContractException("netlab_not_connected", "请先连接组网底座。", 503);
         var root = Endpoint;
@@ -29,8 +28,6 @@ public sealed class NetlabConnection(IConfiguration configuration, IConfigServic
             throw new TeamLabApiContractException("invalid_path", "请求路径无效。", 400);
         var request = new HttpRequestMessage(method, target);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _protector.Unprotect(configuration["Netlab:Credential"]!));
-        if (scope is not null)
-            request.Headers.Add("X-Netlab-Context", Microsoft.AspNetCore.WebUtilities.WebEncoders.Base64UrlEncode(System.Text.Encoding.UTF8.GetBytes(NetlabClient.Serialize(scope))));
         return request;
     }
 
@@ -42,15 +39,13 @@ public sealed class NetlabConnection(IConfiguration configuration, IConfigServic
             throw new TeamLabApiContractException("invalid_connection", "请填写底座 HTTP 地址和项目名称。", 400);
         var credential = input.Token ?? (Configured ? _protector.Unprotect(configuration["Netlab:Credential"]!) : "");
         var root = endpoint.AbsoluteUri.TrimEnd('/') + "/";
-        using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(new Uri(root), "api/v1/capabilities"));
+        using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(new Uri(root), "api/v1/identity"));
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", credential);
-        request.Headers.Add("X-Netlab-Context", Microsoft.AspNetCore.WebUtilities.WebEncoders.Base64UrlEncode(
-            System.Text.Encoding.UTF8.GetBytes(NetlabClient.Serialize(new RequestScope { Name = "连接检查", Grants = [] }))));
         using var response = await clients.CreateClient("Netlab").SendAsync(request, token);
         await NetlabClient.EnsureSuccessAsync(response, token);
-        var capabilities = await response.Content.ReadFromJsonAsync<Capabilities>(NetlabClient.Json, token);
-        if (capabilities?.WorkspaceProtocol != 1)
-            throw new TeamLabApiContractException("workspace_protocol_required", "请更新底座以支持工作区接入。", 400);
+        var identity = Newtonsoft.Json.JsonConvert.DeserializeObject<Identity>(await response.Content.ReadAsStringAsync(token))!;
+        if (!(identity.Grants ?? []).Any(grant => grant.ScopeKind == ScopeGrantScopeKind.Project && grant.ScopeId == input.ProjectName.Trim()))
+            throw new TeamLabApiContractException("project_not_granted", "请填写此服务 Token 已授权的项目名称。", 400);
         await configs.SaveConfigSet([
             new("Netlab:Endpoint", root), new("Netlab:ProjectId", input.ProjectName.Trim()),
             new("Netlab:Credential", _protector.Protect(credential))

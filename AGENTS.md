@@ -41,7 +41,7 @@
 - 主仓库：`https://github.com/Y3X1L2/newGZCTF.git`
 - 稳定分支：`main`
 - 后端：`.NET 10 / ASP.NET Core / EF Core / PostgreSQL / Redis`
-- 前端：`React 19 / TypeScript / Vite / pnpm；正式 vNext 使用本仓库 shared/design，不新增 Mantine 依赖`
+- 前端：`React 19 / TypeScript / Vite / pnpm；正式 vNext 使用本仓库 shared/design；迁入的 TeamLab 组件保留原有 Mantine 依赖`
 - 执行面：`GZCTF.Agent / Docker / KVM / libvirt / Guacamole`
 - 架构形态：模块化单体主站加独立 Agent 执行面
 
@@ -68,6 +68,7 @@ TeamLab/Penetration -> Netlab public API -> Netlab execution nodes
 当前正式前端位于 `src/GZCTF/ClientApp/src/vnext`。新增或重构页面必须：
 
 - 使用 vNext 壳层、语义 Token、CSS Module 和 feature API adapter。
+- `features/teamlab/workspace` 为直接迁入的底座组件，保留现有组件依赖和局部样式；主题由上层传入，样式限定在场景区域。其余 vNext 页面继续使用 shared/design。
 - 遵循 `Route -> feature controller/hook -> feature panel -> foundation component` 依赖方向。
 - 页面不直接访问生成 API 文件，不把请求、DTO 转换和视觉状态堆在一个大组件中。
 - 通用展示组件不得包含业务请求、路由 ID 或权限逻辑。

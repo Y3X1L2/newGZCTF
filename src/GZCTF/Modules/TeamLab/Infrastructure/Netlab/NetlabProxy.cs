@@ -1,7 +1,5 @@
 using System.Net;
 using System.Net.WebSockets;
-using System.Text.Json;
-using System.Text.Json.Nodes;
 using GZCTF.Modules.TeamLab.Application;
 using Microsoft.AspNetCore.Http.Features;
 
@@ -16,11 +14,10 @@ public sealed class NetlabProxy(NetlabConnection connection, IHttpClientFactory 
 
     public async Task ForwardAsync(HttpContext context, NetlabWorkspaceContext workspace, string path, CancellationToken session = default)
     {
-        path = ValidateRequest(context.Request, path);
         using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted, session);
         var token = lifetime.Token;
         using var headersDeadline = CancellationTokenSource.CreateLinkedTokenSource(token);
-        using var request = connection.Request(new HttpMethod(context.Request.Method), path + context.Request.QueryString, workspace.Scope);
+        using var request = connection.Request(new HttpMethod(context.Request.Method), path + context.Request.QueryString);
         if (context.WebSockets.IsWebSocketRequest)
         {
             await SocketAsync(context, request, token);
@@ -34,35 +31,13 @@ public sealed class NetlabProxy(NetlabConnection connection, IHttpClientFactory 
             if (context.Request.ContentType is { } contentType)
                 request.Content.Headers.TryAddWithoutValidation("Content-Type", contentType);
             if (context.Request.ContentLength is { } length) request.Content.Headers.ContentLength = length;
-            if (path == "api/v1/environments" && HttpMethods.IsPost(context.Request.Method))
-            {
-                const long maximum = 16 * 1024 * 1024;
-                if (context.Request.ContentLength > maximum)
-                    throw new TeamLabApiContractException("environment_too_large", "环境配置超过 16 MiB。", 413);
-                if (context.Features.Get<IHttpMaxRequestBodySizeFeature>() is { IsReadOnly: false } size)
-                    size.MaxRequestBodySize = maximum;
-                JsonObject input;
-                try
-                {
-                    input = await JsonNode.ParseAsync(context.Request.Body, cancellationToken: token) as JsonObject
-                        ?? throw new TeamLabApiContractException("invalid_environment", "请提供环境配置对象。", 400);
-                }
-                catch (JsonException)
-                {
-                    throw new TeamLabApiContractException("invalid_environment", "环境配置不是有效的 JSON。", 400);
-                }
-                input["projectId"] = workspace.ProjectId;
-                request.Content.Dispose();
-                request.Content = JsonContent.Create(input, options: NetlabClient.Json);
-            }
         }
         if (request.Content is not UploadContent) headersDeadline.CancelAfter(TimeSpan.FromSeconds(30));
         using var response = await clients.CreateClient("NetlabStream").SendAsync(request, HttpCompletionOption.ResponseHeadersRead, headersDeadline.Token);
         headersDeadline.CancelAfter(Timeout.InfiniteTimeSpan);
-        var html = !path.StartsWith("api/", StringComparison.Ordinal) && response.Content.Headers.ContentType?.MediaType == "text/html";
         context.Response.StatusCode = (int)response.StatusCode;
         foreach (var header in response.Headers.Concat(response.Content.Headers))
-            if (!ExcludedResponseHeaders.Contains(header.Key) && !(html && header.Key.Equals("Content-Length", StringComparison.OrdinalIgnoreCase)))
+            if (!ExcludedResponseHeaders.Contains(header.Key))
                 context.Response.Headers[header.Key] = header.Value.ToArray();
         foreach (var header in new[] { "Location", "Operation-Location" })
         {
@@ -75,27 +50,26 @@ public sealed class NetlabProxy(NetlabConnection connection, IHttpClientFactory 
                 (root.IsBaseOf(target) ? root.MakeRelativeUri(target).ToString() : target.PathAndQuery.TrimStart('/'));
         }
         context.Response.Headers.CacheControl = "private, no-store";
-        if (html)
-        {
-            var document = await response.Content.ReadAsStringAsync(token);
-            var host = JsonSerializer.Serialize(new { basePath = workspace.BasePath, theme = "light", environmentOnly = workspace.EnvironmentId is not null }, NetlabClient.Json);
-            document = document.Replace("<base href=\"/\" data-netlab-base/>", $"<base href=\"{workspace.BasePath}/\" data-netlab-base/>", StringComparison.Ordinal)
-                .Replace("</head>", $"<script type=\"application/json\" id=\"netlab-host\">{host}</script></head>", StringComparison.Ordinal);
-            context.Response.Headers["Content-Security-Policy"] = "frame-ancestors 'self'";
-            await context.Response.WriteAsync(document, token);
-            return;
-        }
         context.Features.Get<IHttpResponseBodyFeature>()?.DisableBuffering();
-        await response.Content.CopyToAsync(context.Response.Body, token);
+        if (workspace.EnvironmentId is not null && response.Content.Headers.ContentType?.MediaType == "text/event-stream")
+        {
+            using var reader = new StreamReader(await response.Content.ReadAsStreamAsync(token));
+            while (await reader.ReadLineAsync(token) is { } line)
+            {
+                await context.Response.WriteAsync((line.StartsWith("data:", StringComparison.Ordinal) ? "data: {}" : line) + "\n", token);
+                if (line.Length == 0) await context.Response.Body.FlushAsync(token);
+            }
+        }
+        else await response.Content.CopyToAsync(context.Response.Body, token);
     }
 
-    private static string ValidateRequest(HttpRequest request, string path)
+    public static string ValidateRequest(HttpRequest request, string path)
     {
         var decoded = Uri.UnescapeDataString(path);
         if (decoded.IndexOfAny(['\\', ':', '?', '#', '%']) >= 0 || decoded.Split('/').Any(segment => segment is "." or "..") || decoded.StartsWith('/'))
             throw new TeamLabApiContractException("invalid_path", "请求路径无效。", 400);
         path = decoded;
-        if (path.StartsWith("api/") && !path.StartsWith("api/v1/"))
+        if (!path.StartsWith("api/v1/", StringComparison.Ordinal))
             throw new TeamLabApiContractException("invalid_api", "请使用底座公共接口。", 404);
         if (path.StartsWith("api/v1/principals") || path.StartsWith("api/v1/service-tokens") ||
             path.StartsWith("api/v1/sessions") || path == "api/v1/identity/password" || path.EndsWith("/grants"))

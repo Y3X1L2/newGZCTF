@@ -1,6 +1,4 @@
-using System.Net.Http.Json;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using GZCTF.Modules.TeamLab.Application;
 using System.Text;
 using Newtonsoft.Json;
@@ -9,39 +7,31 @@ namespace GZCTF.Modules.TeamLab.Infrastructure.Netlab;
 
 public sealed class NetlabClient(NetlabConnection connection, IHttpClientFactory clients)
 {
-    public static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
-    {
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
-    };
-
-    public async Task<T> SendAsync<T>(HttpMethod method, string path, object? body, CancellationToken token,
-        RequestScope? scope = null)
+    public async Task<T> SendAsync<T>(HttpMethod method, string path, object? body, CancellationToken token)
     {
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(token);
         deadline.CancelAfter(TimeSpan.FromSeconds(30));
         token = deadline.Token;
-        using var request = connection.Request(method, "api/v1/" + path, scope);
+        using var request = connection.Request(method, "api/v1/" + path);
         if (body is not null) request.Content = new StringContent(Serialize(body), Encoding.UTF8, "application/json");
         using var response = await clients.CreateClient("Netlab").SendAsync(request, HttpCompletionOption.ResponseHeadersRead, token);
         await EnsureSuccessAsync(response, token);
         return JsonConvert.DeserializeObject<T>(await response.Content.ReadAsStringAsync(token))!;
     }
 
-    public Task<T> GetAsync<T>(string path, CancellationToken token, RequestScope? scope = null) =>
-        SendAsync<T>(HttpMethod.Get, path, null, token, scope);
+    public Task<T> GetAsync<T>(string path, CancellationToken token) =>
+        SendAsync<T>(HttpMethod.Get, path, null, token);
 
     internal static string Serialize(object value) => JsonConvert.SerializeObject(value,
         new JsonSerializerSettings { NullValueHandling = NullValueHandling.Ignore });
 
-    public async Task<IReadOnlyList<T>> ListAsync<T>(string path, Func<T, string> id, CancellationToken token,
-        RequestScope? scope = null)
+    public async Task<IReadOnlyList<T>> ListAsync<T>(string path, Func<T, string> id, CancellationToken token)
     {
         List<T> result = [];
         string? cursor = null;
         do
         {
-            var page = await GetAsync<List<T>>($"{path}{(path.Contains('?') ? '&' : '?')}limit=100&cursor={Uri.EscapeDataString(cursor ?? "")}", token, scope);
+            var page = await GetAsync<List<T>>($"{path}{(path.Contains('?') ? '&' : '?')}limit=100&cursor={Uri.EscapeDataString(cursor ?? "")}", token);
             result.AddRange(page);
             cursor = page.Count == 100 ? id(page[^1]) : null;
         } while (cursor is not null);

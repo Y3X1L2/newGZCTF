@@ -7,7 +7,7 @@
 
 | 项目 | 最新已知事实 | 依据与时效 |
 | --- | --- | --- |
-| 未合并候选：Netlab 接入 | [PR #42](https://github.com/Y3X1L2/newGZCTF/pull/42) 将组网执行与工作区接入独立底座；生产保持 11-09 版本，现有场景与镜像在上线时迁移 | [本次调用链与验证](records/2026-11-10-netlab-integration.md) |
+| 未合并候选：Netlab 接入 | [PR #42](https://github.com/Y3X1L2/newGZCTF/pull/42) 使用原有服务 Token 调用独立底座，场景组件源码迁入上层；底座仅保留 VM 初始化文件扩展。生产保持 11-09 版本，数据在上线时迁移 | [本次调用链与验证](records/2026-11-10-netlab-integration.md) |
 | 开发主线 | `main`；新任务从实时 fetch 后的 `origin/main` 创建分支 | SHA 以 Git 为准，本页不追写每次文档提交 |
 | 培训实例修复 | PR #24 合入 `60170a52`，PR #25 为后续部署记录；课程默认每用户 3 实例，公共练习和课程额度隔离 | [主线修复与发布](records/2026-10-11-training-runtime-mainline.md)、[课程生命周期](modules/training/reference/container-lifecycle.md) |
 | 培训动态设置 / 练习分页 | PR #26 已合入 `b1812d15`，PR #27记录已部署；管理员可动态设置培训额度，练习/管理题库使用服务端分页 | Git 合入事实与[新任务记录](records/2026-10-11-training-quota-settings.md)、[分页说明](modules/exercise/reference/catalog-pagination.md)；10-11发布交接已确认API与页面分页验收；本轮未重新实测 |

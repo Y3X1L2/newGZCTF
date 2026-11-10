@@ -25,7 +25,7 @@ public sealed class PenetrationTeamLabAdapter(AppDbContext context, NetlabClient
     public async Task<PenetrationGameLabBindingModel> BindAsync(int gameId, string blueprintId,
         Guid actorUserId, CancellationToken token)
     {
-        await netlab.GetAsync<Blueprint>($"blueprints/{Uri.EscapeDataString(blueprintId)}", token, await ManagerScopeAsync(actorUserId, token));
+        await access.BlueprintAsync(await ManagerAsync(actorUserId, token), blueprintId, token);
         await using var lease = await locks.AcquireAsync(PenetrationObjectiveService.ConfigurationLeaseKey(gameId),
             TimeSpan.FromSeconds(10), cancellationToken: token);
         var binding = await context.PenetrationGameLabBindings.SingleOrDefaultAsync(x => x.GameId == gameId, token);
@@ -53,7 +53,8 @@ public sealed class PenetrationTeamLabAdapter(AppDbContext context, NetlabClient
         Guid actorUserId, CancellationToken token)
     {
         var version = await netlab.GetAsync<BlueprintVersion>($"blueprint-versions/{Uri.EscapeDataString(versionId)}",
-            token, await ManagerScopeAsync(actorUserId, token));
+            token);
+        await access.BlueprintAsync(await ManagerAsync(actorUserId, token), version.BlueprintId, token);
         await using var lease = await locks.AcquireAsync(PenetrationObjectiveService.ConfigurationLeaseKey(gameId),
             TimeSpan.FromSeconds(10), cancellationToken: token);
         var binding = await SettingsAsync(gameId, token);
@@ -68,12 +69,11 @@ public sealed class PenetrationTeamLabAdapter(AppDbContext context, NetlabClient
     public async Task<IReadOnlyList<PenetrationReleaseOptionModel>> ListAvailableReleasesAsync(
         Guid actorUserId, CancellationToken token)
     {
-        var scope = await ManagerScopeAsync(actorUserId, token);
-        var blueprints = await netlab.ListAsync<Blueprint>("blueprints", x => x.Id, token, scope);
+        var blueprints = await access.BlueprintsAsync(await ManagerAsync(actorUserId, token), token);
         List<PenetrationReleaseOptionModel> result = [];
         foreach (var blueprint in blueprints)
         {
-            var versions = await netlab.ListAsync<BlueprintVersionSummary>($"blueprints/{Uri.EscapeDataString(blueprint.Id)}/versions", x => x.Id, token, scope);
+            var versions = await netlab.ListAsync<BlueprintVersionSummary>($"blueprints/{Uri.EscapeDataString(blueprint.Id)}/versions", x => x.Id, token);
             result.AddRange(versions.Select(v => new PenetrationReleaseOptionModel(blueprint.Id, blueprint.Name,
                 v.Id, v.Version, v.NetworkCount, v.AssetCount, v.CreatedAt)));
         }
@@ -181,7 +181,7 @@ public sealed class PenetrationTeamLabAdapter(AppDbContext context, NetlabClient
             .Select(x => new { Game = x.Game.Title, Team = x.Team.Name }).FirstAsync(token);
         var environment = await netlab.SendAsync<NetlabEnvironment>(HttpMethod.Post, "environments", new CreateEnvironment
         {
-            Name = $"{names.Game} · {names.Team}", ProjectId = GameProject(gameId),
+            Name = $"{names.Game} · {names.Team}", ProjectId = connection.ProjectId,
             ExternalReference = $"game:{gameId}/team:{teamId}", ClientRequestId = binding.CreationRequestId.ToString(),
             Spec = version.Spec, Run = true
         }, token);
@@ -378,12 +378,11 @@ public sealed class PenetrationTeamLabAdapter(AppDbContext context, NetlabClient
             ?? throw Conflict("本队环境尚未创建。");
     private Task<EnvironmentState> StateAsync(string id, CancellationToken token) =>
         netlab.GetAsync<EnvironmentState>($"environments/{Uri.EscapeDataString(id)}/state", token);
-    private async Task<RequestScope> ManagerScopeAsync(Guid id, CancellationToken token) =>
-        (await access.AuthorizeAsync(await context.Users.SingleAsync(x => x.Id == id, token), null, token)).Scope;
-    private string GameProject(int gameId) => $"{connection.ProjectId}/games/{gameId}";
-    private Task<IReadOnlyList<EnvironmentSummary>> EnvironmentsAsync(int gameId, CancellationToken token) =>
-        netlab.ListAsync<EnvironmentSummary>("environments", x => x.Id, token, new RequestScope { Name = "比赛环境",
-            Grants = [new ScopeGrant { ScopeKind = ScopeGrantScopeKind.Project, ScopeId = GameProject(gameId), Permissions = [Permission.Read] }] });
+    private async Task<NetlabWorkspaceContext> ManagerAsync(Guid id, CancellationToken token) =>
+        await access.AuthorizeAsync(await context.Users.SingleAsync(x => x.Id == id, token), null, token);
+    private async Task<IReadOnlyList<EnvironmentSummary>> EnvironmentsAsync(int gameId, CancellationToken token) =>
+        (await netlab.ListAsync<EnvironmentSummary>("environments", item => item.Id, token))
+            .Where(item => item.ProjectId == connection.ProjectId && item.ExternalReference?.StartsWith($"game:{gameId}/team:", StringComparison.Ordinal) == true).ToArray();
     private Task<Operation> ActionAsync(string id, int revision, ActionRequestAction action, CancellationToken token) =>
         netlab.SendAsync<Operation>(HttpMethod.Post, $"environments/{Uri.EscapeDataString(id)}/actions",
             new ActionRequest { Action = action, ExpectedRevision = revision, ClientRequestId = $"{id}:{action}:{revision}" }, token);

@@ -1,3 +1,8 @@
+using System.Security.Claims;
+using System.Text;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Identity;
+using GZCTF.Modules.TeamLab.Api;
 using System.Net;
 using System.Text.Json.Nodes;
 using GZCTF.Infrastructure.Concurrency;
@@ -90,14 +95,22 @@ public sealed class NetlabCompetitionTests
         var spec = new { assets, networks = Array.Empty<object>() };
         upstream.Run(async http =>
         {
+            Assert.False(http.Request.Headers.ContainsKey("X-Netlab-Context"));
             object response = http.Request.Path.Value switch
             {
+                "/api/v1/blueprints/scene" => new { id = "scene", name = "场景模板", projectId = "test", latestVersionId = "version",
+                    latestVersion = 2, assetCount = 2, networkCount = 0, createdAt = now, updatedAt = now },
                 "/api/v1/blueprint-versions/version" => new { id = "version", blueprintId = "scene", version = 2,
-                    assetCount = 2, networkCount = 0, createdAt = now, spec, view = new { }, sourceEnvironmentId = "author", sourceRevision = 1 },
+                    assetCount = 2, networkCount = 0, createdAt = now, spec, view = new { }, sourceEnvironmentId = "environment", sourceRevision = 1 },
                 "/api/v1/templates" => new object[] {
                     new { id = "container", name = "Linux", kind = "container", os = "linux", version = 1, source = "", resources },
                     new { id = "vm", name = "Windows", kind = "vm", os = "windows", version = 1, source = "", resources }
                 },
+                "/api/v1/environments/environment" => new { id = "environment", name = "队伍环境", projectId = "test",
+                    externalReference = $"game:{game.Id}/team:{team.Id}", revision = 7, status = "running", view = new { }, createdAt = now, updatedAt = now,
+                    spec = new { networks = Array.Empty<object>(), assets = new[] { new { id = "web", name = "门户", templateId = "container",
+                        resources, interfaces = Array.Empty<object>(), parameters = new { GZCTF_FLAG = "private-flag" } } } },
+                    permissions = new[] { "read", "compose", "operate", "session", "observe", "access" } },
                 "/api/v1/environments/environment/state" => new { id = "environment", status = state, revision = 7, assets = Array.Empty<object>(), updatedAt = now },
                 "/api/v1/operations/rebuild" => new { id = "rebuild", scopeKind = "environment", scopeId = "environment",
                     kind = "rebuild", state = operationState, phase = "execute", completed = 0, total = 1, retryable = false, createdAt = now, updatedAt = now },
@@ -128,7 +141,7 @@ public sealed class NetlabCompetitionTests
                 else throw new InvalidOperationException("Unexpected lifecycle endpoint");
             }
             else if (http.Request.Path == "/api/v1/environments")
-                response = state == "destroyed" ? Array.Empty<object>() : new[] { new { id = "environment", projectId = "test/games/" + game.Id, name = "组网比赛 · 队伍一",
+                response = state == "destroyed" ? Array.Empty<object>() : new[] { new { id = "environment", projectId = "test", externalReference = $"game:{game.Id}/team:{team.Id}", name = "组网比赛 · 队伍一",
                     revision = 7, status = state, assetCount = 2, networkCount = 0, createdAt = now, updatedAt = now } };
             http.Response.ContentType = "application/json";
             await http.Response.WriteAsync(JsonConvert.SerializeObject(response));
@@ -151,7 +164,7 @@ public sealed class NetlabCompetitionTests
         Assert.Equal("environment", deployed.RuntimePublicId);
         Assert.True((await scenes.DeployTeamAsync(game.Id, team.Id, default)).Reused);
         var create = Assert.Single(creates);
-        Assert.Equal("test/games/" + game.Id, create["projectId"]!.GetValue<string>());
+        Assert.Equal("test", create["projectId"]!.GetValue<string>());
         var webFlag = create["spec"]!["assets"]![0]!["parameters"]!["GZCTF_FLAG"]!.GetValue<string>();
         Assert.StartsWith("flag{", webFlag);
         Assert.NotNull(create["spec"]!["assets"]![1]!["guest"]!["files"]![@"C:\ProgramData\GZCTF\Runtime\secrets\GZCTF_FLAG"]);
@@ -187,20 +200,49 @@ public sealed class NetlabCompetitionTests
         services.AddScoped(_ => database.CreateContext());
         services.AddIdentityCore<UserInfo>().AddEntityFrameworkStores<AppDbContext>();
         services.AddSingleton(connection);
+        services.AddSingleton(client);
         services.AddScoped<IParticipationRepository>(s => new ParticipationRepository(null!, null!, s.GetRequiredService<AppDbContext>()));
         services.AddScoped<NetlabWorkspaceAccess>();
         await using var provider = services.BuildServiceProvider();
         await using var accessScope = provider.CreateAsyncScope();
         var access = accessScope.ServiceProvider.GetRequiredService<NetlabWorkspaceAccess>();
+        scenes = new PenetrationTeamLabAdapter(db, client, connection, access, objectives, leases);
+        Assert.Equal("scene", (await scenes.BindAsync(game.Id, "scene", owner.Id, default)).TopologyId);
+        Assert.Equal("version", (await scenes.ActivateReleaseAsync(game.Id, "version", owner.Id, default)).ActiveReleaseId);
         var teacher = await access.AuthorizeAsync(owner, null, default);
-        Assert.False(teacher.Scope.Administrator);
-        Assert.Equal(2, teacher.Scope.Grants.Count);
+        Assert.False(teacher.Administrator);
+        Assert.Equal(game.Id, Assert.Single(teacher.Games));
         await Assert.ThrowsAsync<TeamLabApiContractException>(() => access.AuthorizeAsync(new UserInfo(), null, default));
         var player = await access.AuthorizeAsync(owner, game.Id, default);
-        var grant = Assert.Single(player.Scope.Grants);
-        Assert.Equal("environment", grant.ScopeId);
-        Assert.DoesNotContain(Permission.Compose, grant.Permissions);
-        Assert.DoesNotContain(Permission.Operate, grant.Permissions);
+        Assert.Equal("environment", player.EnvironmentId);
+        Assert.True(player.CanRead("test", "environment", null));
+        Assert.False(player.CanRead("test", "other-team", null));
+        var http = new DefaultHttpContext { RequestServices = accessScope.ServiceProvider,
+            User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, owner.Id.ToString())], "test")) };
+        http.Response.Body = new MemoryStream();
+        var controller = new NetlabWorkspaceController(accessScope.ServiceProvider.GetRequiredService<UserManager<UserInfo>>(),
+            connection, access, new NetlabProxy(connection, clients), client) { ControllerContext = new ControllerContext { HttpContext = http } };
+        http.Request.Method = "POST";
+        await Assert.ThrowsAsync<TeamLabApiContractException>(() => controller.GameProxy(game.Id, "api/v1/environments/other-team/actions", default));
+        await Assert.ThrowsAsync<TeamLabApiContractException>(() => controller.GameProxy(game.Id, "api/v1/environments/environment/actions", default));
+        http.Request.Method = "GET";
+        await controller.GameProxy(game.Id, "api/v1/environments/environment", default);
+        var visible = Encoding.UTF8.GetString(((MemoryStream)http.Response.Body).ToArray());
+        Assert.DoesNotContain("private-flag", visible);
+        Assert.DoesNotContain("compose", visible);
+        Assert.Contains("session", visible);
+        http.Response.Body.SetLength(0);
+        await controller.GameProxy(game.Id, "api/v1/environments/environment/assets/web/files", default);
+        Assert.Equal(StatusCodes.Status200OK, http.Response.StatusCode);
+        http.Response.Body.SetLength(0);
+        http.Request.Method = "POST";
+        var payload = JsonConvert.SerializeObject(new { name = "新场景", projectId = "foreign", externalReference = "other-user", spec });
+        http.Request.Body = new MemoryStream(Encoding.UTF8.GetBytes(payload));
+        http.Request.ContentLength = http.Request.Body.Length;
+        await controller.AdminProxy("api/v1/environments", default);
+        Assert.Equal("test", creates[^1]["projectId"]!.GetValue<string>());
+        Assert.Equal($"user:{owner.Id:D}", creates[^1]["externalReference"]!.GetValue<string>());
+
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(45));
         var session = access.RunSessionAsync(owner, game.Id, player,
             cancellation => Task.Delay(Timeout.Infinite, cancellation), deadline.Token);

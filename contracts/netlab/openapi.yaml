@@ -3,11 +3,6 @@ info: {title: Netlab API, version: 1.0.0}
 servers: [{url: /api/v1}]
 security: [{bearer: []}]
 paths:
-  /capabilities:
-    get:
-      operationId: getCapabilities
-      responses:
-        '200': {description: Public integration contract, content: {application/json: {schema: {$ref: '#/components/schemas/Capabilities'}}}}
   /templates/{id}/references:
     parameters: [{$ref: '#/components/parameters/Id'}]
     get:
@@ -853,21 +848,6 @@ components:
   securitySchemes:
     bearer: {type: http, scheme: bearer}
   schemas:
-    Capabilities:
-      type: object
-      required: [apiVersion, workspaceProtocol, permissions]
-      properties:
-        apiVersion: {type: string}
-        workspaceProtocol: {type: integer}
-        permissions: {type: array, items: {$ref: '#/components/schemas/Permission'}}
-    RequestScope:
-      type: object
-      description: Request-only authority supplied by an administrator service token using the base64url JSON X-Netlab-Context header. The caller authenticates its users; Netlab keeps the service identity and applies these resource grants without creating users.
-      required: [name, grants]
-      properties:
-        name: {type: string, minLength: 1, maxLength: 100}
-        administrator: {type: boolean, x-go-type-skip-optional-pointer: true}
-        grants: {type: array, items: {$ref: '#/components/schemas/ScopeGrant'}}
     SystemUpdate:
       type: object
       required: [currentVersion, available, canApply]
@@ -1026,8 +1006,7 @@ components:
       required: [name, grants]
       properties:
         name: {type: string, minLength: 1, maxLength: 100}
-        grants: {type: array, items: {$ref: '#/components/schemas/ScopeGrant'}}
-        administrator: {type: boolean, x-go-type-skip-optional-pointer: true, description: Explicit server integration authority; only a Netlab administrator may issue this token.}
+        grants: {type: array, minItems: 1, items: {$ref: '#/components/schemas/ScopeGrant'}}
         expiresAt: {type: string, format: date-time}
     IssuedServiceToken:
       type: object

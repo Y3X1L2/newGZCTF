@@ -8,8 +8,8 @@
 | --- | --- |
 | 工作区与连接设置入口 | [NetlabWorkspaceController](../../../src/GZCTF/Modules/TeamLab/Api/NetlabWorkspaceController.cs) |
 | 用户、比赛和队伍访问范围 | [NetlabWorkspaceAccess](../../../src/GZCTF/Modules/TeamLab/Application/NetlabWorkspaceAccess.cs) |
-| 配置、服务凭据与能力检查 | [NetlabConnection](../../../src/GZCTF/Modules/TeamLab/Infrastructure/Netlab/NetlabConnection.cs) |
-| 同源 HTML、API、SSE、WebSocket 和文件流 | [NetlabProxy](../../../src/GZCTF/Modules/TeamLab/Infrastructure/Netlab/NetlabProxy.cs) |
+| 配置、服务凭据与项目授权检查 | [NetlabConnection](../../../src/GZCTF/Modules/TeamLab/Infrastructure/Netlab/NetlabConnection.cs) |
+| 同源 API、SSE、WebSocket 和文件流 | [NetlabProxy](../../../src/GZCTF/Modules/TeamLab/Infrastructure/Netlab/NetlabProxy.cs) |
 | 业务使用的底座 API | [NetlabClient](../../../src/GZCTF/Modules/TeamLab/Infrastructure/Netlab/NetlabClient.cs) |
 | 比赛绑定、部署、重建与退出清理 | [PenetrationTeamLabAdapter](../../../src/GZCTF/Modules/Penetration/Application/PenetrationTeamLabAdapter.cs) |
 | 目标与动态 Flag | [PenetrationObjectiveService](../../../src/GZCTF/Modules/Penetration/Application/PenetrationObjectiveService.cs) |
@@ -24,11 +24,13 @@
 
 底座 OpenAPI 保存在 [contracts/netlab/openapi.yaml](../../../contracts/netlab/openapi.yaml)。更新源契约后执行 [generate.ps1](../../../contracts/netlab/generate.ps1)，生成 `NetlabContract.g.cs`。上层公开 API 变化按仓库 NSwag 流程重新生成前端客户端。
 
-工作区使用能力接口声明的 `workspaceProtocol`；底座页面按实际权限显示入口。上层实现业务需要的 API 调用，其余工作区请求由受控代理转发。
+场景组件源码位于 `features/teamlab/workspace`，随上层构建。API 实例按管理或比赛入口创建，HTTP、SSE、下载和 WebSocket 使用同一个上层地址前缀。业务入口校验用户与资源归属，底座收到配置的普通服务 Token。
+
+教师资源归属读取环境的创建者和比赛关联，蓝图归属读取版本的来源环境；选手范围直接读取比赛队伍绑定。选手详情清除初始化参数和文件，SSE 作为失效通知驱动重新查询。资源状态、模板和可用操作来自底座公开接口。
 
 ## 验证
 
-- [NetlabProxyTests](../../../src/GZCTF.Integration.Test/Tests/Runtime/NetlabProxyTests.cs)：真实 HTTP/WebSocket，覆盖路径、权限头、HTML 基址、上传、SSE、文件下载与响应重定向。
+- [NetlabProxyTests](../../../src/GZCTF.Integration.Test/Tests/Runtime/NetlabProxyTests.cs)：真实 HTTP/WebSocket，覆盖 API 路径、凭据边界、上传、SSE、文件下载与响应重定向。
 - [NetlabCompetitionTests](../../../src/GZCTF.Integration.Test/Tests/Runtime/NetlabCompetitionTests.cs)：真实 PostgreSQL 前向迁移、历史绑定保留、创建复用、队伍 Flag、重建重试及删除前资源清理。
 - 前端执行 locale、lint、TypeScript、架构检查、测试、构建及工作区日夜/宽窄屏检查。
 

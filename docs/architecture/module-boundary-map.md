@@ -72,7 +72,7 @@ src/GZCTF/
 | Theory | 理论题库、tag、试卷、答题卡、答案 | 理论题检索、组卷、判题 | 用题库名代替 tag |
 | Runtime | DeploymentQueueTicket、容量预留、部署阶段、运行操作 | 统一排队、取消、状态、恢复和容量接口 | 题目计分、课程权限 |
 | VM | VmInstance、VmAccessEndpoint、VM 初始化和探测状态 | VM 创建、访问、停止、销毁 | Windows 专属类型代表全部 VM |
-| TeamLab | 底座连接配置、委托访问上下文；保留待迁移历史数据 | Netlab 工作区、API/SSE/WebSocket 代理与生成契约 | 物理执行、调度、比赛计分 |
+| TeamLab | 底座连接配置、用户与资源归属检查；保留待迁移历史数据 | 迁入的场景组件、API/SSE/WebSocket 代理与生成契约 | 物理执行、调度、比赛计分 |
 | Penetration | PenetrationObjective、Submission、ResetPolicy、Workspace projection、TeamLab binding | 渗透赛制、目标、Flag、提交、计分 | 拥有 TeamLab 拓扑和 runtime 执行 |
 | AWDP | Service、Instance、Round、Flag、Checker、Patch、Reset、Recovery | AWDP 轮次和态势事件 | 普通 CTF 或 TeamLab runtime |
 | Audit | SystemLog、ApiOperation、治理审计、恢复记录 | 审计写入和可读查询 | 业务状态的唯一事实来源 |

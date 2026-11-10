@@ -60,10 +60,8 @@ public sealed class PenetrationObjectiveService(
             ?? throw new InvalidOperationException("The game has no TeamLab topology binding.");
         if (binding.ObjectiveRevision != model.Revision)
             throw new DbUpdateConcurrencyException("The scoring objective configuration changed. Reload it and try again.");
-        var environments = await netlab.ListAsync<EnvironmentSummary>("environments", x => x.Id, cancellationToken,
-            new RequestScope { Name = "比赛配置", Grants = [new ScopeGrant { ScopeKind = ScopeGrantScopeKind.Project,
-                ScopeId = $"{connection.ProjectId}/games/{gameId}", Permissions = [Permission.Read] }] });
-        if (environments.Any(x => x.Status != GZCTF.Modules.TeamLab.Infrastructure.Netlab.EnvironmentStatus.Destroyed))
+        var environments = await netlab.ListAsync<EnvironmentSummary>("environments", x => x.Id, cancellationToken);
+        if (environments.Any(item => item.ProjectId == connection.ProjectId && item.ExternalReference?.StartsWith($"game:{gameId}/team:", StringComparison.Ordinal) == true))
             throw new InvalidOperationException("请先清理比赛环境，再调整得分目标。");
         if (binding.BlueprintVersionId is null) throw new InvalidOperationException("请先选择场景版本。");
         var version = await netlab.GetAsync<BlueprintVersion>($"blueprint-versions/{Uri.EscapeDataString(binding.BlueprintVersionId)}", cancellationToken);

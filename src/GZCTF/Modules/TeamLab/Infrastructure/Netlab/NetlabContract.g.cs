@@ -29,57 +29,6 @@ namespace GZCTF.Modules.TeamLab.Infrastructure.Netlab
 
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.6.3.0 (NJsonSchema v11.5.2.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class Capabilities
-    {
-
-        [Newtonsoft.Json.JsonProperty("apiVersion", Required = Newtonsoft.Json.Required.Always)]
-        public string ApiVersion { get; set; } = default!;
-
-        [Newtonsoft.Json.JsonProperty("workspaceProtocol", Required = Newtonsoft.Json.Required.Always)]
-        public int WorkspaceProtocol { get; set; } = default!;
-
-        [Newtonsoft.Json.JsonProperty("permissions", Required = Newtonsoft.Json.Required.Always, ItemConverterType = typeof(Newtonsoft.Json.Converters.StringEnumConverter))]
-        public System.Collections.Generic.List<Permission> Permissions { get; set; } = new System.Collections.Generic.List<Permission>();
-
-        private System.Collections.Generic.IDictionary<string, object>? _additionalProperties;
-
-        [Newtonsoft.Json.JsonExtensionData]
-        public System.Collections.Generic.IDictionary<string, object> AdditionalProperties
-        {
-            get { return _additionalProperties ?? (_additionalProperties = new System.Collections.Generic.Dictionary<string, object>()); }
-            set { _additionalProperties = value; }
-        }
-
-    }
-
-    /// <summary>
-    /// Request-only authority supplied by an administrator service token using the base64url JSON X-Netlab-Context header. The caller authenticates its users; Netlab keeps the service identity and applies these resource grants without creating users.
-    /// </summary>
-    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.6.3.0 (NJsonSchema v11.5.2.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class RequestScope
-    {
-
-        [Newtonsoft.Json.JsonProperty("name", Required = Newtonsoft.Json.Required.Always)]
-        public string Name { get; set; } = default!;
-
-        [Newtonsoft.Json.JsonProperty("administrator", Required = Newtonsoft.Json.Required.Default, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
-        public bool? Administrator { get; set; } = default!;
-
-        [Newtonsoft.Json.JsonProperty("grants", Required = Newtonsoft.Json.Required.Always)]
-        public System.Collections.Generic.List<ScopeGrant> Grants { get; set; } = new System.Collections.Generic.List<ScopeGrant>();
-
-        private System.Collections.Generic.IDictionary<string, object>? _additionalProperties;
-
-        [Newtonsoft.Json.JsonExtensionData]
-        public System.Collections.Generic.IDictionary<string, object> AdditionalProperties
-        {
-            get { return _additionalProperties ?? (_additionalProperties = new System.Collections.Generic.Dictionary<string, object>()); }
-            set { _additionalProperties = value; }
-        }
-
-    }
-
-    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.6.3.0 (NJsonSchema v11.5.2.0 (Newtonsoft.Json v13.0.0.0))")]
     public partial class SystemUpdate
     {
 
@@ -650,12 +599,6 @@ namespace GZCTF.Modules.TeamLab.Infrastructure.Netlab
 
         [Newtonsoft.Json.JsonProperty("grants", Required = Newtonsoft.Json.Required.Always)]
         public System.Collections.Generic.List<ScopeGrant> Grants { get; set; } = new System.Collections.Generic.List<ScopeGrant>();
-
-        /// <summary>
-        /// Explicit server integration authority; only a Netlab administrator may issue this token.
-        /// </summary>
-        [Newtonsoft.Json.JsonProperty("administrator", Required = Newtonsoft.Json.Required.Default, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
-        public bool? Administrator { get; set; } = default!;
 
         [Newtonsoft.Json.JsonProperty("expiresAt", Required = Newtonsoft.Json.Required.Default, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
         public System.DateTimeOffset? ExpiresAt { get; set; } = default!;
