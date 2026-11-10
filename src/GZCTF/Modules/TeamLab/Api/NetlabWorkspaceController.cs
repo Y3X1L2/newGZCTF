@@ -21,10 +21,7 @@ public sealed class NetlabWorkspaceController(UserManager<UserInfo> users, Netla
     {
         var workspace = await access.AuthorizeAsync((await users.GetUserAsync(User))!, gameId, token);
         if (!connection.Configured) return Ok(new { available = false, error = "尚未连接组网底座" });
-        var id = workspace.EnvironmentId ?? environmentId ?? runtimeId;
-        var permissions = id is not null ? (await access.EnvironmentAsync(workspace, id, token)).Permissions :
-            (await IdentityAsync(workspace, token)).Grants!.SelectMany(grant => grant.Permissions).Distinct().ToList();
-        return Content(NetlabClient.Serialize(new { available = true, environmentId = id, permissions }), "application/json");
+        return Ok(new { available = true, environmentId = workspace.EnvironmentId ?? environmentId ?? runtimeId });
     }
 
     [RequireAdmin]

@@ -10,7 +10,6 @@ export interface WorkspaceTarget {
 export interface WorkspaceConnection {
   available: boolean
   environmentId?: string
-  permissions?: string[]
   error?: string
 }
 
