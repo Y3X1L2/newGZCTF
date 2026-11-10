@@ -13,7 +13,7 @@ Authorization: Bearer gzctf_pat_...
 ```
 
 Token 必须包含接口要求的 scope。资源授权可进一步限制到具体比赛、镜像、
-练习、培训、理论题库、战队或 TeamLab 资源。平台不会因为调用者拥有写 scope
+练习、培训、理论题库或战队资源。平台不会因为调用者拥有写 scope
 而绕过资源授权。
 
 ## 2. 幂等异步操作
@@ -307,65 +307,13 @@ Flag 模板）”条件的题会被禁用或跳过。
 `theory-paper` 或 `team` 资源类型。调用方必须保存该映射；`externalId` 不会替代
 平台主键，重复提交必须复用原幂等键。
 
-## 7. TeamLab 组网 API
+## 7. 组网底座接入
 
-| 能力 | 路径前缀 | Scope |
-| --- | --- | --- |
-| 能力查询 | `/teamlab/capabilities` | `teamlab.topologies:read` |
-| 拓扑与发布 | `/teamlab/topologies` | `teamlab.topologies:read/write` |
-| Runtime 生命周期 | `/teamlab/runtimes` | `teamlab.runtimes:read/write` |
-| 运行资产编排 | `/teamlab/runtimes/{id}/asset-changes` | `teamlab.runtimes:write` + `AssetCompose` |
-| 运行环境授权 | `/teamlab/runtimes/{id}/grants` | `teamlab.runtimes:read/write` + `RuntimeManage` |
-| 模板批量预热 | `/teamlab/preparations/templates` | `teamlab.runtimes:write` + 全部 TeamLab 控制范围 |
-| 流量与路径 | `/teamlab/runtimes/{id}/traffic` | `teamlab.traffic:read` |
-| PCAP | `/teamlab/runtimes/{id}/captures` | `teamlab.capture:read/write` |
+组网通过独立 Netlab API 提供。管理员在连接设置填写底座地址、项目名称和平台集成令牌；上层管理比赛、队伍与授权，底座执行场景、资产、网络和观测操作。
 
-Topology v2 只表达逻辑资产、交换机、路由器、网段、连接、Bootstrap 和观测
-意图，不接受 WorkerNode ID、bridge、namespace、Fabric IP 或宿主机命令。
+浏览器使用上层登录，经同源 `/api/teamlab/netlab/` 工作区访问底座。服务令牌留在上层服务端，每个请求携带当前用户的资源授权。自动化系统直接使用 [Netlab OpenAPI 契约](../../contracts/netlab/openapi.yaml) 和底座签发的资源令牌。
 
-Runtime 可拆分为多个 shard。一个逻辑网段归属一个 Worker，跨节点通过 L3 Fabric
-路由；未声明连接的网段保持隔离。Docker 只调度到 Docker 节点，VM 只调度到 KVM
-节点，缺少 KVM 不影响 Docker 组网。
-
-写操作返回 operation。创建成功后可查询 runtime 聚合状态、创建一次性 WireGuard
-访问授权、读取流量与有序 path、按需启动 PCAP。销毁后授权立即失效，平台清理所有
-shard、路由、capture 和镜像运行引用。
-
-`GET /teamlab/runtimes` 支持按 `controlScopeId`、精确 `externalReference`、数字状态和 cursor 分页找回当前 token 可管理的 runtime。`GET /teamlab/runtimes/{id}/access-grants` 只返回当前代未撤销的授权元数据，不返回私钥、配置正文、一次性 token 或下载 URL。
-
-运行中的环境可先调用 `GET /teamlab/runtimes/{id}/updates/preview?releaseId=...`
-比较目标发布版本。预览会列出新增、移除和替换的资产；只有网段、路由、基础设施、
-现场连接器和资产节点归属均未改变时，才允许调用
-`POST /teamlab/runtimes/{id}/updates` 在线更新。写接口需要 `Idempotency-Key`，返回的
-operation 继续使用原部署队列执行。结构变化必须使用 reset，不会在热更新中重建整场。
-
-不切换发布版本时，调用 `POST /teamlab/runtimes/{id}/asset-changes`，携带当前
-`expectedPlanRevision` 和一组 `add`、`replace`、`remove`。新增或替换资产使用拓扑资产
-结构，只能选择已登记模板和该环境已有网段。成功后运行代次不变，计划修订号加一：
-
-```json
-{
-  "expectedPlanRevision": 3,
-  "add": [{
-    "key": "analysis-01",
-    "name": "Analysis 01",
-    "kind": "Docker",
-    "imageTemplateId": 42,
-    "resources": { "cpuUnits": 10, "memoryMiB": 512, "storageMiB": 2048 },
-    "interfaces": [{ "key": "eth0", "networkKey": "core", "hostOffset": 31, "primary": true, "orderIndex": 0 }],
-    "orderIndex": 30
-  }],
-  "replace": [],
-  "remove": []
-}
-```
-
-`GET/PUT /teamlab/runtimes/{id}/grants` 统一管理用户和 API Token 的运行权限。`PUT`
-每次提交完整授权集合；`assetKey` 为空表示整个环境，填写后只作用于该资产。API Token
-不会继承创建者的管理员或环境所有者权限。
-
-活动开始前可以调用 `POST /teamlab/preparations/templates` 批量预热镜像模板。请求只含
-`templateIds`，平台继续使用现有镜像分发记录和 Worker 缓存，不创建新的资源池。
+本次迁移退役 `/api/open/v1/teamlab/` 旧接口。现有调用方按 [接入与使用](../modules/teamlab/netlab-integration.md) 更新，其他开放 API 继续执行向后兼容检查。
 
 ## 8. 自动化建议
 
@@ -388,31 +336,15 @@ Flag 更新可提交现有 `id` 保留身份，同 hash 更新不会销毁原附
 `exposePort`，以及所需的资源限制和 `flagTemplate`。公共练习不接受 Windows VM 模板。
 教师后台使用独立管理列表，能查看停用题；学生列表仍只展示可见且启用的题目。
 
-### TeamLab 远程会话
+### 组网与远程会话
 
-Token 需要 `teamlab.remote-sessions:read`、`teamlab.remote-sessions:write` 和用于轮询的 `operations:read`，以及目标运行时的控制范围授权。控制范围授权就是外部调用的资源边界，不再额外要求 Token 创建者成为运行时属主；Token 创建者即使是管理员，也不能绕过资源授权。
-
-1. `GET /api/open/v1/teamlab/runtimes/{runtimeId}/remote-access` 查询资产协议及不可用原因。
-2. `GET /api/open/v1/teamlab/remote-sessions` 查询当前 Token 获授权范围内的会话；可使用 `runtimeId`、`query`、`protocol`、`abnormalOnly` 和 `status` 筛选。调用方遗失会话号时从这里找回。
-3. `POST /api/open/v1/teamlab/runtimes/{runtimeId}/assets/{assetId}/remote-sessions`，携带 `Idempotency-Key`，正文为 `{"reason":"故障排查与验证"}`，返回 `202` 和 operation。
-4. 轮询 operation；成功结果含 `sessionId` 和 `runtimeId`。通过 `GET /api/open/v1/teamlab/remote-sessions/{sessionId}` 查询实时状态，不把创建结果当作当前连接状态。
-5. VM 使用 `POST .../remote-sessions/{sessionId}/connect` 获取一次性 URL。该响应禁止缓存，URL 不写入 operation；重复消费返回冲突，链接遗失或到期需先关闭旧会话再重新创建。该消费接口不是可重放的异步资源创建命令。
-6. 容器使用 `GET .../remote-sessions/{sessionId}/terminal` 升级 WebSocket，Bearer 身份必须通过 Authorization 头发送。Binary 消息承载 PTY 字节；Text 消息支持 `{"type":"resize","cols":120,"rows":40}`，尺寸范围为列 2-500、行 1-300，单条消息最多 64 KiB。浏览器原生 WebSocket 无法设置该头，不应把 Token 拼入 URL；浏览器产品使用站内会话认证入口。
-7. `DELETE .../remote-sessions/{sessionId}` 携带 `Idempotency-Key`，返回 `202`。operation 等待基础设施清理；清理尚未完成时保持等待，不会提前报告已结束。
-
-创建进程中断后，已成功创建的稳定会话可被原 operation 或会话列表回读；外部资源结果不确定时清理原会话并返回 `remote_session_creation_interrupted`，不创建替代会话。服务重启时活动会话标记为连接中断，调用方关闭旧会话后再创建新会话；产品不恢复已断开的交互连接。
-
-### TeamLab 运行状态
-
-- `GET /api/open/v1/teamlab/runtimes/{runtimeId}/device-health` 返回设备模板资产的健康状态、观测时间、错误码和下一次检查时间。
-- `GET /api/open/v1/teamlab/runtimes/{runtimeId}/status-check` 对比当前代资产和现场资源，返回 `matched`、`missing`、`power-drift`、`identity-conflict` 或 `unavailable`。
-- 有 `suggestedAction` 时，将该动作和返回的 generation 交给 `/assets/{assetId}/control`。状态检查本身不修改资源。
+场景版本、环境生命周期、远程会话与观测使用 Netlab 公共契约。写操作返回底座操作记录，调用方通过操作状态和环境 SSE 取得实际结果；浏览器在嵌入工作区直接打开控制台、文件和流量视图。比赛部署与重建先经过上层业务权限和次数规则，再调用底座。
 
 ### 通用流水线约定
 
 1. 为流水线签发最小 scope、短有效期 Token。
 2. 使用稳定业务 ID 生成 `Idempotency-Key`。
-3. 先导入并认证镜像，再发布 Bootstrap 和 TeamLab topology。
+3. 先导入并认证镜像，再准备对应业务配置。
 4. 轮询 operation 到终态，记录 `traceId` 和资源 ID。
 5. 仅在契约明确可重试时重试；未知结果先查询原 operation。
 6. 流式处理大文件上传和 PCAP 下载，避免完整载入内存。

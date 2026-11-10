@@ -9,7 +9,7 @@ YINYU 是面向教师、赛事组织者、学员和平台运维人员的安全�
 | [理论考试](modules/theory/README.md) | 维护题库、组卷、答题和看成绩 | 保存答卷快照与提交，再依据题型判分 |
 | [培训](modules/training/README.md) | 按课程与章节学习、做实验 | 课程管理教师/报名/进度，课程实验使用独立题目实例 |
 | [自主练习](modules/exercise/README.md) | 随时筛选题目、开实例与提交 | 保存公共练习和每位用户的实例，与课程和比赛分开 |
-| [TeamLab组网](modules/teamlab/README.md) | 把多台资产组成可重复运行的场景 | 草稿发布为不可变版本，再创建隔离运行环境，由节点执行网络与资产操作 |
+| [TeamLab组网](modules/teamlab/README.md) | 把多台资产组成可重复运行的场景 | 上层管理业务与权限，Netlab 提供场景版本、运行环境和同源工作区 |
 | [身份与权限](modules/identity/README.md) | 登录、管理账号和对接授权 | 本地/SSO身份、角色、Token及资源授权共同限定可执行操作 |
 
 平台还包含 [内容与镜像](modules/content/README.md)、[运行与节点](modules/runtime/README.md)、[审计与异步操作](modules/audit/README.md) 和 [批量导入](modules/provisioning/README.md)。这些能力为多个功能提供共用的容器、文件和运行管理。
@@ -22,7 +22,8 @@ flowchart TB
   Main --> Queue[统一部署队列与节点调度]
   Queue --> Agent[Agent：节点本机执行]
   Agent --> Docker[Docker容器]
-  Agent --> VM[KVM虚拟机与场景网络]
+  Agent --> VM[KVM虚拟机]
+  Main --> Netlab[Netlab API：组网场景与工作区]
   Store[镜像制品来源] --> Agent
 ```
 

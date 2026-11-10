@@ -2,6 +2,7 @@
 param(
     [string]$BaselinePath,
     [string]$CurrentPath,
+    [string[]]$RetiredPathPrefixes = @(),
     [switch]$SkipSelfTest,
     [switch]$SelfTestOnly
 )
@@ -550,6 +551,52 @@ function Compare-Operation {
     }
 }
 
+function Add-ContractReferences {
+    param($Root, $Node, [Collections.Generic.HashSet[string]]$References)
+
+    if ($Node -is [array]) {
+        foreach ($item in $Node) { Add-ContractReferences $Root $item $References }
+    } elseif ($Node -is [pscustomobject]) {
+        $reference = Get-PropertyValue $Node '$ref'
+        if ($reference -is [string] -and $reference.StartsWith('#/') -and $References.Add($reference)) {
+            Add-ContractReferences $Root (Resolve-LocalReference $Root $Node) $References
+        }
+        foreach ($property in $Node.PSObject.Properties) {
+            Add-ContractReferences $Root $property.Value $References
+        }
+    }
+}
+
+function Remove-RetiredContractPaths {
+    param($Baseline, $Current, [string[]]$Prefixes)
+
+    $retired = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    $retained = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    foreach ($prefix in $Prefixes) {
+        if (!$prefix.StartsWith('/') -or !$prefix.EndsWith('/') -or $prefix -eq '/') {
+            throw "Retired path prefixes must identify a complete API namespace: $prefix"
+        }
+        foreach ($path in Get-PropertyNames $Current.paths) {
+            if ($path.StartsWith($prefix, [StringComparison]::Ordinal)) {
+                throw "Retired API namespace is still present: $path"
+            }
+        }
+        foreach ($path in Get-PropertyNames $Baseline.paths) {
+            if ($path.StartsWith($prefix, [StringComparison]::Ordinal)) {
+                Add-ContractReferences $Baseline (Get-PropertyValue $Baseline.paths $path) $retired
+                Remove-PropertyValue $Baseline.paths $path
+            }
+        }
+    }
+    Add-ContractReferences $Baseline $Baseline.paths $retained
+    foreach ($reference in $retired) {
+        if ($reference.StartsWith('#/components/schemas/') -and !$retained.Contains($reference)) {
+            $name = $reference.Substring('#/components/schemas/'.Length).Replace('~1', '/').Replace('~0', '~')
+            Remove-PropertyValue $Baseline.components.schemas $name
+        }
+    }
+}
+
 function Compare-OpenApiContract {
     param($Baseline, $Current)
 
@@ -1087,7 +1134,25 @@ function Invoke-ComparatorSelfTest {
         }
     }
 
-    Write-Host "OpenAPI comparator self-tests passed ($($cases.Count) breaking cases, $($additiveCases.Count) additive cases)."
+    $retirement = ConvertFrom-ContractJson @'
+{"paths":{"/legacy/items":{"get":{"responses":{"200":{"schema":{"$ref":"#/components/schemas/Legacy"}}}}},"/items":{"get":{"responses":{"200":{"schema":{"$ref":"#/components/schemas/Shared"}}}}}},"components":{"schemas":{"Legacy":{"type":"object","properties":{"shared":{"$ref":"#/components/schemas/Shared"}}},"Shared":{"type":"string"}}}}
+'@ "retirement self-test"
+    $current = Copy-ContractDocument $retirement
+    $rejected = $false
+    try { Remove-RetiredContractPaths (Copy-ContractDocument $retirement) $current @('/legacy/') }
+    catch { $rejected = $true }
+    if (!$rejected) { throw "Retirement self-test accepted an active namespace." }
+
+    Remove-PropertyValue $current.paths '/legacy/items'
+    Remove-PropertyValue $current.components.schemas 'Legacy'
+    Remove-RetiredContractPaths $retirement $current @('/legacy/')
+    $changes = @(Compare-OpenApiContract $retirement $current)
+    if ($changes.Count -ne 0) { throw "Retirement self-test rejected exclusive schema removal: $changes" }
+    $current.components.schemas.Shared.type = 'integer'
+    $changes = @(Compare-OpenApiContract $retirement $current)
+    if ($changes.Count -eq 0) { throw "Retirement self-test allowed a shared schema change." }
+
+    Write-Host "OpenAPI comparator self-tests passed ($($cases.Count) breaking cases, $($additiveCases.Count) additive cases, 3 retirement cases)."
 }
 
 function Resolve-FullPath {
@@ -1167,13 +1232,17 @@ if (!(Test-Path -LiteralPath $currentFullPath -PathType Leaf)) {
 try {
     $baseline = ConvertFrom-ContractJson ([IO.File]::ReadAllText($baselineFullPath)) $baselineFullPath
     $current = ConvertFrom-ContractJson ([IO.File]::ReadAllText($currentFullPath)) $currentFullPath
+    if ($RetiredPathPrefixes.Count -gt 0) {
+        Remove-RetiredContractPaths $baseline $current $RetiredPathPrefixes
+        Write-Host "Retired API namespaces: $($RetiredPathPrefixes -join ', ')"
+    }
     $breakingChanges = @(Compare-OpenApiContract $baseline $current)
     if ($breakingChanges.Count -gt 0) {
         Write-Error ("Breaking OpenAPI changes detected:`n - " + ($breakingChanges -join "`n - "))
         exit 1
     }
 
-    Write-Host "OpenAPI contract is backward compatible."
+    Write-Host "Retained OpenAPI contract is backward compatible."
     Write-Host "Baseline: $baselineFullPath"
     Write-Host "Current:  $currentFullPath"
     exit 0
