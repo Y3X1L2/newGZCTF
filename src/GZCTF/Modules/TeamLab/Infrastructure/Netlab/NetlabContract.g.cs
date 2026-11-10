@@ -1652,6 +1652,12 @@ namespace GZCTF.Modules.TeamLab.Infrastructure.Netlab
         [Newtonsoft.Json.JsonProperty("sshAuthorizedKeys", Required = Newtonsoft.Json.Required.Default, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
         public System.Collections.Generic.List<string>? SshAuthorizedKeys { get; set; } = default!;
 
+        /// <summary>
+        /// UTF-8 files written once when a new VM starts, through QEMU Guest Agent. Keys are absolute guest paths. Reboot preserves later guest changes.
+        /// </summary>
+        [Newtonsoft.Json.JsonProperty("files", Required = Newtonsoft.Json.Required.Default, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
+        public System.Collections.Generic.Dictionary<string, string>? Files { get; set; } = default!;
+
         private System.Collections.Generic.IDictionary<string, object>? _additionalProperties;
 
         [Newtonsoft.Json.JsonExtensionData]

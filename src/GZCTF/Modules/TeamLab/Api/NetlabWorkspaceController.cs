@@ -49,6 +49,7 @@ public sealed class NetlabWorkspaceController(UserManager<UserInfo> users, Netla
     {
         var user = (await users.GetUserAsync(User))!;
         var workspace = await access.AuthorizeAsync(user, gameId, token);
-        await proxy.ForwardAsync(HttpContext, workspace, path ?? "");
+        await access.RunSessionAsync(user, gameId, workspace,
+            session => proxy.ForwardAsync(HttpContext, workspace, path ?? "", session), token);
     }
 }

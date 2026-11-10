@@ -14,10 +14,11 @@ public sealed class NetlabProxy(NetlabConnection connection, IHttpClientFactory 
     private static readonly HashSet<string> ExcludedResponseHeaders = new(StringComparer.OrdinalIgnoreCase)
         { "Connection", "Transfer-Encoding", "Keep-Alive", "Proxy-Authenticate", "Proxy-Authorization", "Trailer", "Upgrade", "Set-Cookie" };
 
-    public async Task ForwardAsync(HttpContext context, NetlabWorkspaceContext workspace, string path)
+    public async Task ForwardAsync(HttpContext context, NetlabWorkspaceContext workspace, string path, CancellationToken session = default)
     {
-        ValidateRequest(context.Request, path);
-        var token = context.RequestAborted;
+        path = ValidateRequest(context.Request, path);
+        using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted, session);
+        var token = lifetime.Token;
         using var headersDeadline = CancellationTokenSource.CreateLinkedTokenSource(token);
         using var request = connection.Request(new HttpMethod(context.Request.Method), path + context.Request.QueryString, workspace.Scope);
         if (context.WebSockets.IsWebSocketRequest)
@@ -35,9 +36,23 @@ public sealed class NetlabProxy(NetlabConnection connection, IHttpClientFactory 
             if (context.Request.ContentLength is { } length) request.Content.Headers.ContentLength = length;
             if (path == "api/v1/environments" && HttpMethods.IsPost(context.Request.Method))
             {
-                var input = await JsonNode.ParseAsync(context.Request.Body, cancellationToken: token)
-                    ?? throw new TeamLabApiContractException("invalid_environment", "环境配置不能为空。", 400);
+                const long maximum = 16 * 1024 * 1024;
+                if (context.Request.ContentLength > maximum)
+                    throw new TeamLabApiContractException("environment_too_large", "环境配置超过 16 MiB。", 413);
+                if (context.Features.Get<IHttpMaxRequestBodySizeFeature>() is { IsReadOnly: false } size)
+                    size.MaxRequestBodySize = maximum;
+                JsonObject input;
+                try
+                {
+                    input = await JsonNode.ParseAsync(context.Request.Body, cancellationToken: token) as JsonObject
+                        ?? throw new TeamLabApiContractException("invalid_environment", "请提供环境配置对象。", 400);
+                }
+                catch (JsonException)
+                {
+                    throw new TeamLabApiContractException("invalid_environment", "环境配置不是有效的 JSON。", 400);
+                }
                 input["projectId"] = workspace.ProjectId;
+                request.Content.Dispose();
                 request.Content = JsonContent.Create(input, options: NetlabClient.Json);
             }
         }
@@ -49,11 +64,15 @@ public sealed class NetlabProxy(NetlabConnection connection, IHttpClientFactory 
         foreach (var header in response.Headers.Concat(response.Content.Headers))
             if (!ExcludedResponseHeaders.Contains(header.Key) && !(html && header.Key.Equals("Content-Length", StringComparison.OrdinalIgnoreCase)))
                 context.Response.Headers[header.Key] = header.Value.ToArray();
-        if (response.Headers.Location is { } location)
+        foreach (var header in new[] { "Location", "Operation-Location" })
         {
-            if (location.IsAbsoluteUri && location.GetLeftPart(UriPartial.Authority) != request.RequestUri!.GetLeftPart(UriPartial.Authority))
+            if (!response.Headers.TryGetValues(header, out var values)) continue;
+            var target = new Uri(request.RequestUri!, values.Single());
+            var root = connection.Endpoint;
+            if (root.GetLeftPart(UriPartial.Authority) != target.GetLeftPart(UriPartial.Authority))
                 throw new TeamLabApiContractException("unexpected_redirect", "底座返回了其他站点的跳转。", 502);
-            context.Response.Headers.Location = workspace.BasePath + "/" + (location.IsAbsoluteUri ? location.PathAndQuery : location.ToString()).TrimStart('/');
+            context.Response.Headers[header] = workspace.BasePath + "/" +
+                (root.IsBaseOf(target) ? root.MakeRelativeUri(target).ToString() : target.PathAndQuery.TrimStart('/'));
         }
         context.Response.Headers.CacheControl = "private, no-store";
         if (html)
@@ -70,10 +89,10 @@ public sealed class NetlabProxy(NetlabConnection connection, IHttpClientFactory 
         await response.Content.CopyToAsync(context.Response.Body, token);
     }
 
-    private static void ValidateRequest(HttpRequest request, string path)
+    private static string ValidateRequest(HttpRequest request, string path)
     {
         var decoded = Uri.UnescapeDataString(path);
-        if (decoded.IndexOfAny(['\\', ':', '?', '#']) >= 0 || decoded.Split('/').Any(segment => segment is "." or "..") || decoded.StartsWith('/'))
+        if (decoded.IndexOfAny(['\\', ':', '?', '#', '%']) >= 0 || decoded.Split('/').Any(segment => segment is "." or "..") || decoded.StartsWith('/'))
             throw new TeamLabApiContractException("invalid_path", "请求路径无效。", 400);
         path = decoded;
         if (path.StartsWith("api/") && !path.StartsWith("api/v1/"))
@@ -86,6 +105,7 @@ public sealed class NetlabProxy(NetlabConnection connection, IHttpClientFactory 
             (!Uri.TryCreate(origin.ToString(), UriKind.Absolute, out var uri) ||
              !string.Equals(uri.Authority, request.Host.Value, StringComparison.OrdinalIgnoreCase)))
             throw new TeamLabApiContractException("cross_origin_denied", "跨站请求被拒绝。", 403);
+        return path;
     }
 
     private static async Task SocketAsync(HttpContext context, HttpRequestMessage request, CancellationToken token)
@@ -94,7 +114,11 @@ public sealed class NetlabProxy(NetlabConnection connection, IHttpClientFactory 
         foreach (var header in request.Headers) remote.Options.SetRequestHeader(header.Key, string.Join(",", header.Value));
         foreach (var protocol in context.WebSockets.WebSocketRequestedProtocols) remote.Options.AddSubProtocol(protocol);
         var address = new UriBuilder(request.RequestUri!) { Scheme = request.RequestUri!.Scheme == "https" ? "wss" : "ws" };
-        await remote.ConnectAsync(address.Uri, token);
+        using (var deadline = CancellationTokenSource.CreateLinkedTokenSource(token))
+        {
+            deadline.CancelAfter(TimeSpan.FromSeconds(30));
+            await remote.ConnectAsync(address.Uri, deadline.Token);
+        }
         using var local = await context.WebSockets.AcceptWebSocketAsync(remote.SubProtocol);
         using var closed = CancellationTokenSource.CreateLinkedTokenSource(token);
         var upstream = RelayAsync(local, remote, closed.Token);

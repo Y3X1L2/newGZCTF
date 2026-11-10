@@ -1307,6 +1307,10 @@ components:
         hostname: {type: string}
         username: {type: string}
         sshAuthorizedKeys: {type: array, items: {type: string}}
+        files:
+          type: object
+          description: UTF-8 files written once when a new VM starts, through QEMU Guest Agent. Keys are absolute guest paths. Reboot preserves later guest changes.
+          additionalProperties: {type: string}
     RouterInterface:
       type: object
       required: [id, networkId, address]

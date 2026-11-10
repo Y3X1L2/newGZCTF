@@ -13,6 +13,7 @@ public sealed class NetlabConnection(IConfiguration configuration, IConfigServic
     IDataProtectionProvider protection, IHttpClientFactory clients)
 {
     private readonly IDataProtector _protector = protection.CreateProtector("Netlab.ServiceCredential");
+    public Uri Endpoint => new(configuration["Netlab:Endpoint"]!);
     public string ProjectId => configuration["Netlab:ProjectId"] ?? "";
     public bool Configured => !string.IsNullOrEmpty(configuration["Netlab:Endpoint"]) &&
                               !string.IsNullOrEmpty(configuration["Netlab:Credential"]) && ProjectId.Length > 0;
@@ -22,7 +23,7 @@ public sealed class NetlabConnection(IConfiguration configuration, IConfigServic
     public HttpRequestMessage Request(HttpMethod method, string path, RequestScope? scope = null)
     {
         if (!Configured) throw new TeamLabApiContractException("netlab_not_connected", "请先连接组网底座。", 503);
-        var root = new Uri(configuration["Netlab:Endpoint"]!);
+        var root = Endpoint;
         var target = new Uri(root, path);
         if (!root.IsBaseOf(target))
             throw new TeamLabApiContractException("invalid_path", "请求路径无效。", 400);

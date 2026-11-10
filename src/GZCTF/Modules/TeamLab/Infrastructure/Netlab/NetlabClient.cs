@@ -18,6 +18,9 @@ public sealed class NetlabClient(NetlabConnection connection, IHttpClientFactory
     public async Task<T> SendAsync<T>(HttpMethod method, string path, object? body, CancellationToken token,
         RequestScope? scope = null)
     {
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(token);
+        deadline.CancelAfter(TimeSpan.FromSeconds(30));
+        token = deadline.Token;
         using var request = connection.Request(method, "api/v1/" + path, scope);
         if (body is not null) request.Content = new StringContent(Serialize(body), Encoding.UTF8, "application/json");
         using var response = await clients.CreateClient("Netlab").SendAsync(request, HttpCompletionOption.ResponseHeadersRead, token);

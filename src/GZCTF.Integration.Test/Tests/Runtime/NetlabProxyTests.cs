@@ -85,10 +85,12 @@ public sealed class NetlabProxyTests : IAsyncLifetime
         Assert.Equal("?path=%2Fetc%2Fconfig.html", received.Query);
     }
 
-    [Fact]
-    public async Task EnvironmentCreation_UsesAuthorizedProjectAndPreservesPayload()
+    [Theory]
+    [InlineData("api/v1/environments")]
+    [InlineData("api%2Fv1%2Fenvironments")]
+    public async Task EnvironmentCreation_UsesAuthorizedProjectAndPreservesPayload(string path)
     {
-        using var response = await _browser.PostAsJsonAsync(Prefix + "/api/v1/environments",
+        using var response = await _browser.PostAsJsonAsync(Prefix + "/" + path,
             new { name = "风电演练", projectId = "another-project", spec = new { assets = Array.Empty<object>(), networks = Array.Empty<object>() } }, _deadline.Token);
         response.EnsureSuccessStatusCode();
         var body = await response.Content.ReadFromJsonAsync<JsonElement>(_deadline.Token);
@@ -104,6 +106,7 @@ public sealed class NetlabProxyTests : IAsyncLifetime
     [InlineData("api/v1/service-tokens", 403)]
     [InlineData("api%2Fv1%2Fservice-tokens", 403)]
     [InlineData("api%2Fprivate", 404)]
+    [InlineData("api/v1/%2573ervice-tokens", 400)]
     public async Task Proxy_RejectsEscapingOrHostManagedPaths(string path, int status)
     {
         using var response = await _browser.GetAsync(Prefix + "/" + path, _deadline.Token);
@@ -129,6 +132,14 @@ public sealed class NetlabProxyTests : IAsyncLifetime
         using var response = await _browser.SendAsync(request, _deadline.Token);
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
         Assert.False(_requests.Reader.TryRead(out _));
+    }
+
+    [Fact]
+    public async Task ResourceHeaders_UseWorkspacePrefixBehindUpstreamBasePath()
+    {
+        using var response = await _browser.GetAsync(Prefix + "/api/v1/created", _deadline.Token);
+        Assert.Equal(Prefix + "/api/v1/environments/new", response.Headers.Location!.ToString());
+        Assert.Equal(Prefix + "/api/v1/operations/start", response.Headers.GetValues("Operation-Location").Single());
     }
 
     [Fact]
@@ -285,6 +296,13 @@ public sealed class NetlabProxyTests : IAsyncLifetime
         {
             context.Response.ContentType = request.ContentType;
             await request.Body.CopyToAsync(context.Response.Body, context.RequestAborted);
+            return;
+        }
+        if (request.Path == "/base/api/v1/created")
+        {
+            context.Response.StatusCode = StatusCodes.Status201Created;
+            context.Response.Headers.Location = "/api/v1/environments/new";
+            context.Response.Headers["Operation-Location"] = "/base/api/v1/operations/start";
             return;
         }
         context.Response.ContentType = "text/html; charset=utf-8";
