@@ -73,8 +73,8 @@ public sealed class PenetrationAdminController(
         }
     }
 
-    [HttpPost("games/{gameId:int}/releases/{releaseId:guid}/activate")]
-    public async Task<IActionResult> ActivateRelease(int gameId, Guid releaseId, CancellationToken cancellationToken)
+    [HttpPost("games/{gameId:int}/releases/{releaseId}/activate")]
+    public async Task<IActionResult> ActivateRelease(int gameId, string releaseId, CancellationToken cancellationToken)
     {
         var (_, actor, error) = await RequireManageableGameAsync(gameId, cancellationToken);
         if (error is not null) return error;
@@ -114,6 +114,13 @@ public sealed class PenetrationAdminController(
         if (error is not null) return error;
         return Ok(await adapter.ListAvailableReleasesAsync(
             actor!.Id, actor.Role >= Role.Admin, cancellationToken));
+    }
+
+    [HttpGet("games/{gameId:int}/teamlab/assets")]
+    public async Task<IActionResult> ListSceneAssets(int gameId, CancellationToken cancellationToken)
+    {
+        var (_, _, error) = await RequireManageableGameAsync(gameId, cancellationToken);
+        return error ?? Ok(await adapter.ListAssetsAsync(gameId, cancellationToken));
     }
 
     [HttpPost("games/{gameId:int}/teamlab/prepare")]
@@ -260,4 +267,4 @@ public sealed class PenetrationAdminController(
     }
 }
 
-public sealed record BindPenetrationTopologyModel(Guid TopologyId);
+public sealed record BindPenetrationTopologyModel(string TopologyId);

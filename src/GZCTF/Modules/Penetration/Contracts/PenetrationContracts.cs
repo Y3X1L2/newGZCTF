@@ -43,16 +43,16 @@ public sealed record PenetrationObjectiveModel(
 
 public sealed record PenetrationGameLabBindingModel(
     int GameId,
-    Guid TopologyId,
-    Guid? ActiveReleaseId,
+    string TopologyId,
+    string? ActiveReleaseId,
     int MaxResetCount,
     long ObjectiveRevision,
     IReadOnlyList<PenetrationObjectiveModel> Objectives);
 
 public sealed record PenetrationReleaseOptionModel(
-    Guid TopologyId,
+    string TopologyId,
     string TopologyName,
-    Guid ReleaseId,
+    string ReleaseId,
     int Version,
     int NetworkCount,
     int AssetCount,
@@ -60,7 +60,7 @@ public sealed record PenetrationReleaseOptionModel(
 
 public sealed record PenetrationGameTeamLabModel(
     PenetrationGameLabBindingModel? Binding,
-    TeamLabRolloutModel? Rollout);
+    PenetrationSceneSummary? Rollout);
 
 public sealed record PenetrationWorkspaceObjectiveModel(
     int Id,
@@ -80,7 +80,7 @@ public sealed record PenetrationWorkspaceModel(
     int GameId,
     int TeamId,
     string TeamName,
-    Guid RuntimeId,
+    string RuntimeId,
     TeamLabRuntimeStatus Status,
     string Stage,
     int ResetCount,
@@ -120,7 +120,7 @@ public sealed record PenetrationSubmissionPageModel(
 public sealed record PenetrationRuntimeBindingModel(
     int TeamId,
     string TeamName,
-    Guid RuntimeId,
+    string RuntimeId,
     int Generation,
     TeamLabRuntimeStatus Status,
     string Stage,
@@ -133,6 +133,17 @@ public sealed record PenetrationRuntimeBindingModel(
 public sealed record PenetrationWorkspaceUpdateModel(
     int GameId,
     int TeamId,
-    Guid RuntimeId,
+    string RuntimeId,
     DateTimeOffset Time);
 
+
+public sealed record PenetrationSceneAsset(string Id, string Name, string Kind);
+public sealed record PenetrationDeploymentResult(string RuntimePublicId, bool Reused);
+public sealed record PenetrationSceneCounts(int Total, int Pending, int Provisioning, int Ready, int AccessOpen, int Failed, int Draining, int Destroyed, int Paused);
+public sealed record PenetrationSceneSummary(string Id, string ReleaseId, string Status, bool PreparationRequested,
+    bool DesiredAccessOpen, bool DrainRequested, bool PauseRequested, PenetrationSceneCounts Counts,
+    DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt);
+public sealed record PenetrationSceneTarget(string Id, string ExternalSubject, string DisplayName, string RuntimeId,
+    string Status, string? OperationId, TeamLabRuntimeStatus RuntimeStatus, string RuntimeStage,
+    DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt, string? Error);
+public sealed record PenetrationTargetPage(IReadOnlyList<PenetrationSceneTarget> Items, string? NextCursor);

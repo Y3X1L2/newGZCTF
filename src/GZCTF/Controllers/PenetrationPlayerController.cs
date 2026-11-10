@@ -21,11 +21,9 @@ public sealed class PenetrationPlayerController(
     UserManager<UserInfo> users,
     IGameRepository games,
     IParticipationRepository participations,
-    AppDbContext context,
     PenetrationWorkspaceService workspaces,
     PenetrationObjectiveService objectives,
     PenetrationTeamLabAdapter adapter,
-    TeamLabAccessGrantService access,
     IConfigService config) : ControllerBase
 {
     [RequireUser]
@@ -38,40 +36,6 @@ public sealed class PenetrationPlayerController(
         return workspace is null
             ? NotFound(new RequestResponse("Penetration environment is not deployed."))
             : Ok(workspace);
-    }
-
-    [RequireUser]
-    [HttpPost("games/{gameId:int}/access-grants")]
-    public async Task<IActionResult> CreateAccessGrant(int gameId, CancellationToken cancellationToken)
-    {
-        var actor = await GetContextAsync(gameId, true, cancellationToken);
-        if (actor.Error is not null) return actor.Error;
-        if (!await adapter.IsPlayerAccessOpenAsync(gameId, cancellationToken))
-            return StatusCode(StatusCodes.Status403Forbidden,
-                new RequestResponse("The TeamLab environment is not open to players.", StatusCodes.Status403Forbidden));
-        var runtimeId = await ResolveRuntimePublicIdAsync(gameId, actor.Participation!.TeamId, cancellationToken);
-        var grant = await access.CreateAsync(runtimeId, cancellationToken);
-        var downloadToken = grant.ConfigurationDownloadUrl?.Split("token=", 2, StringSplitOptions.None).ElementAtOrDefault(1);
-        var playerDownloadUrl = string.IsNullOrWhiteSpace(downloadToken)
-            ? null
-            : $"/api/pentest/games/{gameId}/access-grants/{grant.Id:D}/download?token={Uri.EscapeDataString(downloadToken)}";
-        return Created(string.Empty, grant with { ConfigurationDownloadUrl = playerDownloadUrl });
-    }
-
-    [RequireUser]
-    [HttpGet("games/{gameId:int}/access-grants/{grantId:guid}/download")]
-    public async Task<IActionResult> DownloadAccessGrant(
-        int gameId,
-        Guid grantId,
-        [FromQuery] string token,
-        CancellationToken cancellationToken)
-    {
-        var actor = await GetContextAsync(gameId, true, cancellationToken);
-        if (actor.Error is not null) return actor.Error;
-        var runtimeId = await ResolveRuntimePublicIdAsync(gameId, actor.Participation!.TeamId, cancellationToken);
-        var download = await access.ConsumeConfigurationAsync(runtimeId, grantId, token, cancellationToken);
-        return File(System.Text.Encoding.UTF8.GetBytes(download.Configuration),
-            "application/x-wireguard-profile", download.FileName);
     }
 
     [RequireUser]
@@ -111,13 +75,6 @@ public sealed class PenetrationPlayerController(
         var actor = await GetContextAsync(gameId, false, cancellationToken);
         return actor.Error ?? Ok(await objectives.GetScoreboardAsync(gameId, cancellationToken));
     }
-
-    private async Task<Guid> ResolveRuntimePublicIdAsync(int gameId, int teamId, CancellationToken cancellationToken) =>
-        await context.PenetrationTeamRuntimeBindings.AsNoTracking()
-            .Where(item => item.GameId == gameId && item.TeamId == teamId)
-            .Select(item => context.TeamLabRuntimes.Where(runtime => runtime.Id == item.RuntimeId)
-                .Select(runtime => runtime.PublicId).Single())
-            .SingleAsync(cancellationToken);
 
     private async Task<PlayerContext> GetContextAsync(
         int gameId,

@@ -8,7 +8,7 @@ using GZCTF.Models.Data;
 using GZCTF.Modules.Penetration.Contracts;
 using GZCTF.Modules.Penetration.Domain;
 using GZCTF.Modules.TeamLab.Contracts;
-using GZCTF.Modules.TeamLab.Domain;
+using GZCTF.Modules.TeamLab.Infrastructure.Netlab;
 using GZCTF.Repositories.Interface;
 using GZCTF.Services.Config;
 using GZCTF.Infrastructure.Cache;
@@ -20,6 +20,8 @@ namespace GZCTF.Modules.Penetration.Application;
 
 public sealed class PenetrationObjectiveService(
     AppDbContext context,
+    NetlabClient netlab,
+    NetlabConnection connection,
     IPlatformCache cache,
     IDistributedLeaseProvider locks,
     IGameEventRepository events,
@@ -58,20 +60,14 @@ public sealed class PenetrationObjectiveService(
             ?? throw new InvalidOperationException("The game has no TeamLab topology binding.");
         if (binding.ObjectiveRevision != model.Revision)
             throw new DbUpdateConcurrencyException("The scoring objective configuration changed. Reload it and try again.");
-        if (binding.ActiveRolloutId is { } rolloutId)
-        {
-            var rolloutStatus = await context.TeamLabRollouts.AsNoTracking()
-                .Where(item => item.Id == rolloutId)
-                .Select(item => (TeamLabRolloutStatus?)item.Status)
-                .SingleOrDefaultAsync(cancellationToken);
-            if (rolloutStatus is not null and not TeamLabRolloutStatus.Completed)
-                throw new InvalidOperationException("Drain the active rollout before changing scoring objectives.");
-        }
-
-        var assetKeys = await context.TeamLabTopologyAssets.AsNoTracking()
-            .Where(item => item.TopologyId == binding.TopologyId)
-            .Select(item => item.Key)
-            .ToHashSetAsync(cancellationToken);
+        var environments = await netlab.ListAsync<EnvironmentSummary>("environments", x => x.Id, cancellationToken,
+            new RequestScope { Name = "比赛配置", Grants = [new ScopeGrant { ScopeKind = ScopeGrantScopeKind.Project,
+                ScopeId = $"{connection.ProjectId}/games/{gameId}", Permissions = [Permission.Read] }] });
+        if (environments.Any(x => x.Status != GZCTF.Modules.TeamLab.Infrastructure.Netlab.EnvironmentStatus.Destroyed))
+            throw new InvalidOperationException("请先清理比赛环境，再调整得分目标。");
+        if (binding.BlueprintVersionId is null) throw new InvalidOperationException("请先选择场景版本。");
+        var version = await netlab.GetAsync<BlueprintVersion>($"blueprint-versions/{Uri.EscapeDataString(binding.BlueprintVersionId)}", cancellationToken);
+        var assetKeys = version.Spec.Assets.Select(x => x.Id).ToHashSet(StringComparer.Ordinal);
         var existing = await context.PenetrationObjectives
             .Where(item => item.GameId == gameId)
             .ToArrayAsync(cancellationToken);
@@ -146,30 +142,26 @@ public sealed class PenetrationObjectiveService(
         return await ListAsync(gameId, cancellationToken);
     }
 
-    public async Task<IReadOnlyList<TeamLabRuntimeOverlayModel>> BuildOverlaysAsync(
+    public async Task<IReadOnlyDictionary<string, Dictionary<string, string>>> BuildOverlaysAsync(
         int gameId,
         int teamId,
-        Guid releaseId,
+        int version,
         CancellationToken cancellationToken)
     {
-        var version = await context.TeamLabTopologyReleases.AsNoTracking()
-            .Where(item => item.Id == releaseId)
-            .Select(item => item.Version)
-            .SingleAsync(cancellationToken);
         var objectives = await context.PenetrationObjectives.AsNoTracking()
             .Where(item => item.GameId == gameId)
             .OrderBy(item => item.OrderIndex)
             .ToArrayAsync(cancellationToken);
         return objectives.GroupBy(item => item.TopologyAssetKey, StringComparer.Ordinal)
-            .Select(group =>
+            .ToDictionary(group => group.Key, group =>
             {
                 var values = group.ToDictionary(
                     item => $"GZCTF_FLAG_{NormalizeEnvironmentKey(item.Key)}",
                     item => BuildFlag(item, gameId, teamId, version),
                     StringComparer.Ordinal);
                 if (values.Count > 0) values["GZCTF_FLAG"] = values.Values.First();
-                return new TeamLabRuntimeOverlayModel(group.Key, values);
-            }).ToArray();
+                return values;
+            }, StringComparer.Ordinal);
     }
 
     public async Task<PenetrationSubmitResultModel> SubmitAsync(
@@ -184,19 +176,15 @@ public sealed class PenetrationObjectiveService(
             .SingleOrDefaultAsync(item => item.GameId == gameId && item.TeamId == teamId, cancellationToken);
         if (binding is null)
             return new(false, 0, "本队渗透环境尚未创建。");
-        var runtime = await context.TeamLabRuntimes.AsNoTracking()
-            .SingleOrDefaultAsync(item => item.Id == binding.RuntimeId, cancellationToken);
-        if (runtime is null || runtime.Status != TeamLabRuntimeStatus.Running || runtime.TopologyReleaseId == Guid.Empty)
-            return new(false, 0, "本队渗透环境尚未运行。");
+        if (binding.EnvironmentId is null) return new(false, 0, "本队环境正在迁移。");
+        var state = await netlab.GetAsync<EnvironmentState>($"environments/{Uri.EscapeDataString(binding.EnvironmentId)}/state", cancellationToken);
+        if (state.Status != "running") return new(false, 0, "本队渗透环境尚未运行。");
         var objective = await context.PenetrationObjectives.AsNoTracking()
             .SingleOrDefaultAsync(item => item.Id == model.ObjectiveId && item.GameId == gameId, cancellationToken);
         if (objective is null || !objective.IsVisible)
             return new(false, 0, "得分目标不存在或不可提交。");
 
-        var releaseVersion = await context.TeamLabTopologyReleases.AsNoTracking()
-            .Where(item => item.Id == runtime.TopologyReleaseId)
-            .Select(item => item.Version)
-            .SingleAsync(cancellationToken);
+        var releaseVersion = binding.BlueprintVersion;
         await using var submissionLease = await locks.AcquireAsync(
             $"penetration:submit:{gameId}:{teamId}:{objective.Id}",
             TimeSpan.FromSeconds(5), cancellationToken: cancellationToken);
@@ -254,7 +242,7 @@ public sealed class PenetrationObjectiveService(
             await context.SaveChangesAsync(cancellationToken);
             if (accepted)
                 await cache.InvalidateAsync(CachePolicyCatalog.Scoreboard, gameId.ToString(), cancellationToken);
-            await PublishSideEffectsAsync(submission, objective, runtime.PublicId, cancellationToken);
+            await PublishSideEffectsAsync(submission, objective, binding.EnvironmentId, cancellationToken);
             return new(accepted, submission.Score, accepted ? "Flag 正确。" : "Flag 错误。");
         }
     }
@@ -323,7 +311,7 @@ public sealed class PenetrationObjectiveService(
     private async Task PublishSideEffectsAsync(
         PenetrationSubmission submission,
         PenetrationObjective objective,
-        Guid runtimeId,
+        string runtimeId,
         CancellationToken cancellationToken)
     {
         try

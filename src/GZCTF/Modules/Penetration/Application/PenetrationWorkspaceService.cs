@@ -2,14 +2,14 @@ using GZCTF.Models;
 using GZCTF.Models.Data;
 using GZCTF.Modules.Penetration.Contracts;
 using GZCTF.Modules.Penetration.Domain;
-using GZCTF.Modules.TeamLab.Application;
+using GZCTF.Modules.TeamLab.Infrastructure.Netlab;
 using Microsoft.EntityFrameworkCore;
 
 namespace GZCTF.Modules.Penetration.Application;
 
 public sealed class PenetrationWorkspaceService(
     AppDbContext context,
-    ITeamLabRuntimeApplicationService runtimes)
+    NetlabClient netlab, PenetrationTeamLabAdapter scenes)
 {
     public async Task<PenetrationWorkspaceModel?> GetAsync(
         int gameId,
@@ -18,12 +18,8 @@ public sealed class PenetrationWorkspaceService(
     {
         var binding = await context.PenetrationTeamRuntimeBindings.AsNoTracking()
             .SingleOrDefaultAsync(item => item.GameId == gameId && item.TeamId == teamId, cancellationToken);
-        if (binding is null) return null;
-        var runtimePublicId = await context.TeamLabRuntimes.AsNoTracking()
-            .Where(item => item.Id == binding.RuntimeId)
-            .Select(item => item.PublicId)
-            .SingleAsync(cancellationToken);
-        var runtime = await runtimes.GetAsync(runtimePublicId, cancellationToken);
+        if (binding?.EnvironmentId is null) return null;
+        var state = await netlab.GetAsync<EnvironmentState>($"environments/{Uri.EscapeDataString(binding.EnvironmentId)}/state", cancellationToken);
         var metadata = await context.PenetrationGameLabBindings.AsNoTracking()
             .Where(item => item.GameId == gameId)
             .Select(item => new { item.MaxResetCount })
@@ -47,16 +43,10 @@ public sealed class PenetrationWorkspaceService(
                 Attempts = group.Count(),
                 Solved = group.Any(item => item.Status == AnswerResult.Accepted)
             }).ToDictionaryAsync(item => item.ObjectiveId, cancellationToken);
-        var resetCount = await context.PenetrationResetRecords.AsNoTracking()
-            .CountAsync(item => item.RuntimeId == binding.RuntimeId && !item.ByAdmin &&
-                                (item.Status == PenetrationResetStatus.Pending ||
-                                 item.Status == PenetrationResetStatus.Running ||
-                                 item.Status == PenetrationResetStatus.Succeeded ||
-                                 item.Status == PenetrationResetStatus.Failed &&
-                                 item.FailureClass == PenetrationResetFailureClass.Scenario),
-                cancellationToken);
+        var resets = await scenes.RefreshResetsAsync(binding.EnvironmentId, cancellationToken);
+        var resetCount = resets.Count(x => !x.ByAdmin && x.Status != PenetrationResetStatus.Failed);
         return new PenetrationWorkspaceModel(
-            gameId, teamId, teamName, runtime.Id, runtime.Status, runtime.Stage, resetCount, metadata.MaxResetCount,
+            gameId, teamId, teamName, binding.EnvironmentId, PenetrationTeamLabAdapter.Status(state.Status), state.Status, resetCount, metadata.MaxResetCount,
             objectives.Select(item =>
             {
                 states.TryGetValue(item.Id, out var state);

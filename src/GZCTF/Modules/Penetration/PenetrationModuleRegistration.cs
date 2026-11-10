@@ -12,10 +12,6 @@ public static class PenetrationModuleRegistration
         services.AddScoped<PenetrationObjectiveService>();
         services.AddScoped<PenetrationWorkspaceService>();
         services.AddScoped<PenetrationTeamLabAdapter>();
-        services.AddScoped<ITeamLabRolloutTargetProvider>(provider =>
-            provider.GetRequiredService<PenetrationTeamLabAdapter>());
-        services.AddScoped<IRuntimeTicketLifecycleObserver, PenetrationTeamLabLifecycleObserver>();
-        services.AddScoped<ITeamLabUsageProjectionProvider, PenetrationUsageProjectionProvider>();
         return services;
     }
 }

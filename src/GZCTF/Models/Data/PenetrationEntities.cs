@@ -44,6 +44,8 @@ public class PenetrationSubmission
 [Index(nameof(RuntimeId))]
 public class PenetrationResetRecord
 {
+    public string? EnvironmentId { get; set; }
+    public string? RemoteOperationId { get; set; }
     [Key]
     public int Id { get; set; }
 

@@ -41,6 +41,7 @@ public sealed class PenetrationGameLabBinding
 public sealed class PenetrationTeamRuntimeBinding
 {
     public string? EnvironmentId { get; set; }
+    public Guid CreationRequestId { get; set; }
     public string? BlueprintVersionId { get; set; }
     public int BlueprintVersion { get; set; }
     public int GameId { get; set; }
