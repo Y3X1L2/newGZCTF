@@ -18,7 +18,7 @@
 - 前端边界：`docs/architecture/frontend/component-boundary.md`
 - 前端视觉契约：`docs/architecture/frontend/style-tokens.md`
 - vNext 设计与开发边界：`docs/architecture/frontend/development.md`
-- 组网/TeamLab 执行面：`docs/modules/teamlab/reference/networking-practices.md`
+- 组网/TeamLab 执行面：`docs/modules/teamlab/netlab-integration.md`
 - 生产发布：`docs/operations/vnext-maintenance-window-rollout.md`
 
 `docs/archive/` 只保存历史材料，不是当前设计或实现依据。历史计划中的路径、分支、测试数量和部署状态不得直接当作当前事实。
@@ -49,7 +49,8 @@
 
 ```text
 HTTP/Frontend -> Contracts -> Application -> Domain -> Infrastructure ports
-Business Application -> Runtime Application -> Fleet/VM/TeamLab ports -> AgentClient -> Agent
+CTF/Training/AWDP -> Runtime Application -> Fleet/VM ports -> AgentClient -> Agent
+TeamLab/Penetration -> Netlab public API -> Netlab execution nodes
 ```
 
 约束：
@@ -57,7 +58,7 @@ Business Application -> Runtime Application -> Fleet/VM/TeamLab ports -> AgentCl
 - Controller 只处理协议、授权、用例调用和 HTTP 映射，不直接编排 Agent 命令。
 - 跨模块读取使用公开 query contract，跨模块写入使用 application command。
 - PostgreSQL 是业务和运行状态事实源；Redis 只承载缓存、协调和高频缓冲。
-- `DeploymentQueueTicket` 是 Docker、VM、培训、AWDP 和 TeamLab 运行任务的统一事实，不建立第二套队列。
+- `DeploymentQueueTicket` 是普通 Docker、VM、培训和 AWDP 运行任务的统一事实。组网任务由 Netlab 执行，上层保存业务绑定并读取底座状态。
 - Agent 只执行已经校验的本机操作，不读取比赛、课程、计分或权限实体。
 - 运行恢复读取数据库当前事实和 Agent inventory，不从日志文本反推业务状态。
 - 具体允许依赖以 `module-boundary-map.md` 为准。

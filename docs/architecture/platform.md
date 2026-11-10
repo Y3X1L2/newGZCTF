@@ -1,6 +1,6 @@
 # YINYU 平台架构与产品总纲
 
-维护日期：2026-10-11
+维护日期：2026-11-10
 
 本文是当前平台的架构边界、产品范围和后续建设依据。已经完成的工作以源码、迁移和测试为准；后续目标不得写成已完成能力。阶段计划和审查原文保存在 `docs/archive/implementation-records/`，不作为当前实现依据。
 
@@ -42,17 +42,19 @@ HTTP / Frontend
   -> Application
   -> Domain
   -> Infrastructure ports
-  -> Runtime / Fleet / VM / TeamLab ports
+  -> Runtime / Fleet / VM ports
   -> AgentClient
   -> GZCTF.Agent
 ```
+
+组网场景单独通过 `TeamLab/Penetration -> Netlab public API -> Netlab nodes` 执行，上层管理业务关系与用户权限。
 
 ### 3.1 事实源
 
 - PostgreSQL 保存用户、比赛、课程、题目、提交、镜像、节点、队列、实例、运行事件和审计事实。
 - Redis 只承担缓存、租约、协调和高频缓冲，不能作为业务事实源。
 - Agent inventory 是节点本机资源和运行状态的观测来源，主站负责业务归属和状态投影。
-- `DeploymentQueueTicket` 是 Docker、VM、培训实验、AWDP 和 TeamLab 运行任务的统一队列事实。
+- `DeploymentQueueTicket` 是普通 Docker、VM、培训实验和 AWDP 运行任务的统一队列事实。Netlab 保存组网环境的运行与调度事实。
 
 ### 3.2 模块依赖
 
@@ -72,7 +74,9 @@ HTTP / Frontend
 | 管理层 | 用户、战队、学员组、节点、镜像、日志、系统设置 | 权限、审计、运维操作和配置 |
 | 集成层 | Portal SSO、Open API、Token、幂等 operation、Webhook | 外部调用和异步操作状态 |
 
-## 5. 统一运行链路
+## 5. 运行链路
+
+普通 CTF、培训、练习和 AWDP 使用以下执行链；组网调用链见 [TeamLab](../modules/teamlab/development.md)。
 
 1. 业务模块提交创建、重置或销毁 command。
 2. Application service 校验权限、资源归属、镜像能力和业务状态。
@@ -89,7 +93,7 @@ HTTP / Frontend
 - **Training**：课程、章节、资源、报名、教师、实验、课后理论和学习进度；运行实例通过统一运行底座创建。
 - **Exercise**：公共练习题库、来源导入、标签/难度、附件、Flag、容器实例、提交和统计；不共享比赛实例或比赛 Flag 状态。
 - **AWDP**：服务、轮次、Checker、攻击/修补、阶段计分和人工验收；运行资源仍走统一队列。
-- **TeamLab / Penetration**：TeamLab 管理拓扑、发布和 runtime；Penetration 只负责比赛绑定、目标、提交、得分和重置策略。
+- **TeamLab / Penetration**：TeamLab 接入 Netlab 工作区与 API；Penetration 负责比赛绑定、目标、提交、得分和重建策略。网络、镜像、运行实例与观测由 Netlab 管理。
 - **Identity**：本地登录、Portal SSO、角色和组织关系；统一认证对接方源码不属于本仓库。
 
 ## 7. 前端开发契约

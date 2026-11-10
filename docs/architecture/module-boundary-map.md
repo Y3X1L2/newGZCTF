@@ -1,8 +1,8 @@
 # 平台模块边界图
 
-版本：1.0
+版本：1.1
 
-生效时间：2026-08-16
+维护日期：2026-11-10
 
 架构形态：模块化单体主站 + 独立 Agent 执行面
 
@@ -14,7 +14,9 @@
 
 运行能力调用方向固定为：
 
-`Business Application -> Runtime Application -> Fleet/VM/TeamLab ports -> AgentClient -> Agent`
+`CTF/Training/AWDP -> Runtime Application -> Fleet/VM ports -> AgentClient -> Agent`
+
+`TeamLab/Penetration -> Netlab public API -> Netlab execution nodes`
 
 约束：
 
@@ -70,7 +72,7 @@ src/GZCTF/
 | Theory | 理论题库、tag、试卷、答题卡、答案 | 理论题检索、组卷、判题 | 用题库名代替 tag |
 | Runtime | DeploymentQueueTicket、容量预留、部署阶段、运行操作 | 统一排队、取消、状态、恢复和容量接口 | 题目计分、课程权限 |
 | VM | VmInstance、VmAccessEndpoint、VM 初始化和探测状态 | VM 创建、访问、停止、销毁 | Windows 专属类型代表全部 VM |
-| TeamLab | Topology、Release、Plan、Runtime、Shard、RuntimeNetwork、RuntimeAsset、Traffic、Capture | 组网验证、发布、计划、部署、访问、观测和清理 | Penetration 计分、比赛参与关系 |
+| TeamLab | 底座连接配置、委托访问上下文；保留待迁移历史数据 | Netlab 工作区、API/SSE/WebSocket 代理与生成契约 | 物理执行、调度、比赛计分 |
 | Penetration | PenetrationObjective、Submission、ResetPolicy、Workspace projection、TeamLab binding | 渗透赛制、目标、Flag、提交、计分 | 拥有 TeamLab 拓扑和 runtime 执行 |
 | AWDP | Service、Instance、Round、Flag、Checker、Patch、Reset、Recovery | AWDP 轮次和态势事件 | 普通 CTF 或 TeamLab runtime |
 | Audit | SystemLog、ApiOperation、治理审计、恢复记录 | 审计写入和可读查询 | 业务状态的唯一事实来源 |
@@ -89,7 +91,7 @@ src/GZCTF/
 | Theory | Identity、Content、Audit |
 | Runtime | Identity、Content query contracts、Audit |
 | VM | Runtime contracts、Content image catalog、Audit |
-| TeamLab | Runtime contracts、VM contracts、Content image catalog、Identity 账号撤销 contract、Audit |
+| TeamLab | Identity、配置、Netlab 公共 API、Audit；历史镜像引用只读查询 |
 | Penetration | Ctf contracts、TeamLab contracts、Identity、Audit |
 | AWDP | Ctf contracts、Runtime contracts、Identity、Audit |
 
@@ -120,9 +122,9 @@ src/GZCTF/
 
 ### 5.3 TeamLab
 
-- TeamLab release 只保存 ImageTemplate ID 和发布时摘要，不持有镜像文件。
-- Penetration 使用 binding 表关联 Game/Team 与 TeamLab runtime。
-- 删除比赛先销毁所有绑定 runtime，再删除 Penetration binding 和玩法事实；TeamLab release 的删除按独立引用计数处理。
+- 新场景与镜像由 Netlab 管理，旧场景实体保留历史数据与镜像引用供上线迁移。
+- Penetration 使用 binding 表关联比赛、队伍与 Netlab 场景版本和环境。
+- 删除比赛或队伍先请求销毁关联环境，确认底座返回 destroyed 后再删除业务记录。
 
 ## 6. API 与事件边界
 
@@ -132,7 +134,7 @@ src/GZCTF/
 | Content | ImportImage、DeleteImage | GetImage、CheckImageReferences | image.import、image.delete |
 | Ctf | ImportGameChallenges、DeleteGameChallenges | ListGameChallenges、GetGameChallenge | ctf.challenge-mutation.v1 |
 | Runtime | EnqueueDeployment、CancelDeployment | GetQueueStatus | deployment lifecycle |
-| TeamLab | PublishTopology、CreateRuntime、DestroyRuntime | GetPlan、GetRuntime、GetTraffic | TeamLabEvent + ApiOperation |
+| TeamLab | 配置连接、代理底座命令 | 工作区、能力、环境状态与 SSE | 底座 operation；上层业务绑定 |
 | Penetration | SubmitObjective、ResetWorkspace | GetWorkspace、GetScoreboard | submission + gameplay audit |
 
 事件命名只用于持久化审计或异步恢复，不要求引入消息中间件。进程内同步流程直接调用 application contract。

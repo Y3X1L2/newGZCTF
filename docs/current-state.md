@@ -7,6 +7,7 @@
 
 | 项目 | 最新已知事实 | 依据与时效 |
 | --- | --- | --- |
+| 未合并候选：Netlab 接入 | [PR #42](https://github.com/Y3X1L2/newGZCTF/pull/42) 将组网执行与工作区接入独立底座；生产保持 11-09 版本，现有场景与镜像在上线时迁移 | [本次调用链与验证](records/2026-11-10-netlab-integration.md) |
 | 开发主线 | `main`；新任务从实时 fetch 后的 `origin/main` 创建分支 | SHA 以 Git 为准，本页不追写每次文档提交 |
 | 培训实例修复 | PR #24 合入 `60170a52`，PR #25 为后续部署记录；课程默认每用户 3 实例，公共练习和课程额度隔离 | [主线修复与发布](records/2026-10-11-training-runtime-mainline.md)、[课程生命周期](modules/training/reference/container-lifecycle.md) |
 | 培训动态设置 / 练习分页 | PR #26 已合入 `b1812d15`，PR #27记录已部署；管理员可动态设置培训额度，练习/管理题库使用服务端分页 | Git 合入事实与[新任务记录](records/2026-10-11-training-quota-settings.md)、[分页说明](modules/exercise/reference/catalog-pagination.md)；10-11发布交接已确认API与页面分页验收；本轮未重新实测 |
@@ -26,7 +27,7 @@
 | --- | --- | --- |
 | 历史负载 | 概览与节点详情读取后台持续保存的负载记录，支持 1 小时 / 24 小时 / 7 天；关闭页面不影响采集 | [Runtime](modules/runtime/development.md)、[生产验证](records/2026-11-09-history-rollout.md) |
 | CTF / 理论 / 培训 / 练习 | 已有业务入口；11-09 课程4题88 Docker 创建、入口 HTTP 200、销毁与空态通过；Flag 提交最近实测仍为 10-18 | [模块索引](modules/README.md)、[课程生命周期](modules/training/reference/container-lifecycle.md)、[课程业务验收](records/2026-11-09-history-rollout.md) |
-| TeamLab | 场景、发布、runtime、逐资产操作、受管网络、文件/会话、流量/抓包；10-18拓扑正交避障、双网卡分线、卡片类型标签和版本启动层级已发布，原四机场景浏览器复验 | [制作导入](modules/teamlab/guides/authoring.md)、[运行事实契约](modules/teamlab/reference/runtime-capabilities.md)；既有四机生命周期与删除验收仍见各自历史记录 |
+| TeamLab | 场景、发布、runtime、逐资产操作、受管网络、文件/会话、流量/抓包；10-18拓扑正交避障、双网卡分线、卡片类型标签和版本启动层级已发布，原四机场景浏览器复验 | [制作导入](archive/teamlab-internal-20261110/guides/authoring.md)、[运行事实契约](archive/teamlab-internal-20261110/reference/runtime-capabilities.md)；既有四机生命周期与删除验收仍见各自历史记录 |
 | 镜像与运行底座 | 统一队列、按需节点准备、下载容量守卫、最后消费者缓存释放；历史来源迁移、模板退役和受控 Registry GC 已执行 | [第二批发布](records/2026-10-09-image-lifecycle-second-rollout.md)；自动 GC、冷缓存 TTL 不由该次手工回收证明 |
 | 身份 / AWDP | 管理员删除队长会退队/交接并匿名保留历史，凭据和会话撤销；10-18临时队长真实删除、旧会话401、新登录401及SQL清理断言通过；未删除既有用户 | [Identity](modules/identity/development.md)；Portal SSO和AWDP仍需专门真实验收，见[Open API](operations/open-api-integration.md)、[AWDP手册](modules/awdp/guides/manual-acceptance.md) |
 | 管理日志 | 列表显示操作者、动作、对象与结果；详情无二级折叠，正常事件不展示空错误；例行ACK/HTTP明细降噪，历史缺失身份/结果显示未知；真实请求记录User/admin/IP，后台标System | [日志改造](records/2026-10-14-logs-readability.md)、[现场验收](records/2026-10-16-logs-browser-acceptance.md)、[Audit](modules/audit/README.md)；正常/失败详情通过，Docker完整链路因题目镜像缺Ready模板未通过，无活动容器残留 |

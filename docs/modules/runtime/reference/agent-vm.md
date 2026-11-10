@@ -12,7 +12,7 @@ Docker 与 KVM 单独判断；只有 Docker 的节点仍能承载容器。能力
 
 镜像来源和 backing 链由 Content 与 Fleet 制品存储管理；VM provider 创建域和磁盘，Agent VmDomainBuilder 生成受控定义，VmBootstrapService 与 VmGuestAgentService 完成声明的来宾初始化。VmRuntimeReadinessCoordinator 汇集就绪条件，TeamLabVmNetworkService 按计划处理来宾网卡、路由、DNS 和回读。
 
-受管静态网络有独立 feature 门禁。Windows 依赖受管来宾网络能力，Linux 还需 cloud-init；DHCP 策略与原系统配置配合的制作要求见 [受管网络指南](../../teamlab/guides/managed-network-authoring.md)。平台分配的地址必须与可信当前代回读区别标识，QGA 存在或计划成功不代表真实网络已通。
+受管静态网络有独立 feature 门禁。Windows 依赖受管来宾网络能力，Linux 还需 cloud-init；DHCP 策略与原系统配置配合的制作要求见 [受管网络指南](../../../archive/teamlab-internal-20261110/guides/managed-network-authoring.md)。平台分配的地址必须与可信当前代回读区别标识，QGA 存在或计划成功不代表真实网络已通。
 
 访问条件分别判断：VNC 是 libvirt 图形控制台，不依赖来宾 IP 或账号，但需要匹配的活动域与 loopback 图形监听；RDP/SSH 需要相应来宾服务和管理网络。Linux VM 的 SFTP 使用受控模板账号和 SSH 主机身份；Windows/unknown VM 不能因为配置了远程账号就使用 Linux 文件能力。Docker 使用终端与容器文件通道。
 

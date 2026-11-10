@@ -175,18 +175,14 @@
       "development": "docs/modules/teamlab/development.md",
       "code": [
         "src/GZCTF/Modules/TeamLab/**",
-        "src/GZCTF/Services/TeamLab/**",
-        "src/GZCTF/ClientApp/src/vnext/features/admin/teamlab/**",
-        "src/GZCTF.Agent/Services/TeamLab/**",
         "src/GZCTF.Agent/**/TeamLab*.cs",
         "src/GZCTF.Test/**/TeamLab*.cs",
         "src/GZCTF.Integration.Test/**/TeamLab*.cs",
-        "scripts/validation/teamlab/**",
-        "scripts/validation/teamlab-match/**",
         "src/GZCTF.TeamLab.Contracts/**",
-        "src/GZCTF.Agent/Services/Observation/**",
-        "src/GZCTF.Agent/Controllers/TeamLab*.cs",
-        "src/GZCTF/ClientApp/src/vnext/features/games/teamlab/**"
+        "src/GZCTF/ClientApp/src/vnext/features/games/teamlab/**",
+        "src/GZCTF/ClientApp/src/vnext/features/teamlab/**",
+        "contracts/netlab/**",
+        "src/GZCTF.Integration.Test/Tests/Runtime/Netlab*.cs"
       ],
       "docs": [
         "docs/modules/teamlab/**"

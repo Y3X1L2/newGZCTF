@@ -4,6 +4,7 @@
 
 | 用途 | 记录 |
 | --- | --- |
+| 未合并候选：TeamLab 接入 Netlab | [调用链、权限和工作区](2026-11-10-netlab-integration.md)，[PR #42](https://github.com/Y3X1L2/newGZCTF/pull/42) |
 | 最新主站发布、备份与回退 | [2026-11-09 图表与页面文案](2026-11-09-ui-polish-rollout.md) |
 | 前次主站发布 | [2026-11-09 历史负载与界面文案](2026-11-09-history-rollout.md) |
 | 开发验证：历史负载、文案与开源复用 | [任务记录](2026-11-09-platform-history.md)、[开源复用审计](2026-11-09-open-source-reuse-audit.md) |
