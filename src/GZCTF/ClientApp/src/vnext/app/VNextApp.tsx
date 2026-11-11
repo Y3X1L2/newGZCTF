@@ -154,6 +154,9 @@ const TeamLabWorkspacePage = lazy(() =>
 const TeamLabPage = lazy(() =>
   import('../features/teamlab/TeamLabPage').then((module) => ({ default: module.TeamLabPage }))
 )
+const TeamLabConsolePage = lazy(() =>
+  import('../features/teamlab/TeamLabConsolePage').then((module) => ({ default: module.TeamLabConsolePage }))
+)
 const GameAdminShell = lazy(() =>
   import('../features/admin/games/GameAdminShell').then((module) => ({ default: module.GameAdminShell }))
 )
@@ -211,6 +214,11 @@ export function VNextApp() {
   return (
     <Suspense fallback={<VNextRouteLoading />}>
       <Routes>
+        <Route
+          path="admin/teamlab/environments/:environmentId/console/:assetId/:kind"
+          element={<TeamLabConsolePage />}
+        />
+        <Route path="games/:gameId/pentest/console/:assetId/:kind" element={<TeamLabConsolePage />} />
         <Route element={<AuthShell />}>
           <Route path="account/login" element={<LoginPage />} />
           <Route path="account/register" element={<RegisterPage />} />

@@ -9,7 +9,15 @@ import { useNetlabWorkspace } from './useNetlabWorkspace'
 
 const Workspace = lazy(() => import('./workspace/Workspace').then((module) => ({ default: module.Workspace })))
 
-export function NetlabWorkspace({ target, title = '组网环境' }: { target: WorkspaceTarget; title?: string }) {
+export function NetlabWorkspace({
+  target,
+  title = '组网环境',
+  consoleMode = false,
+}: {
+  target: WorkspaceTarget
+  title?: string
+  consoleMode?: boolean
+}) {
   const state = useNetlabWorkspace(target)
   if (state.isLoading) return <DataState loading title="正在连接环境" />
   if (state.error || !state.data?.available)
@@ -22,9 +30,14 @@ export function NetlabWorkspace({ target, title = '组网环境' }: { target: Wo
       </section>
     )
   return (
-    <section className={styles.workspace} aria-label={title}>
+    <section className={consoleMode ? styles.consoleWorkspace : styles.workspace} aria-label={title}>
       <Suspense fallback={<DataState loading title="正在加载环境" />}>
-        <Workspace key={target.gameId ?? 'admin'} gameId={target.gameId} environmentId={state.data.environmentId} />
+        <Workspace
+          key={target.gameId ?? 'admin'}
+          gameId={target.gameId}
+          environmentId={state.data.environmentId ?? target.environmentId}
+          consoleMode={consoleMode}
+        />
       </Suspense>
     </section>
   )

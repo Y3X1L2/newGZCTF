@@ -20,8 +20,17 @@ const WorkbenchPage = lazy(() =>
 const TemplatesPage = lazy(() =>
   import('./features/templates/TemplatesPage').then((module) => ({ default: module.TemplatesPage }))
 )
+const ConsolePage = lazy(() => import('./features/workbench/ConsolePage'))
 
-export function Workspace({ gameId, environmentId }: { gameId?: number; environmentId?: string }) {
+export function Workspace({
+  gameId,
+  environmentId,
+  consoleMode = false,
+}: {
+  gameId?: number
+  environmentId?: string
+  consoleMode?: boolean
+}) {
   const { theme } = useVNextTheme()
   const root = useRef<HTMLDivElement>(null)
   const portalId = useId()
@@ -46,39 +55,50 @@ export function Workspace({ gameId, environmentId }: { gameId?: number; environm
     <>
       {/* Keep overlays outside the animated route while retaining workspace-scoped styles. */}
       {createPortal(
-        <div id={portalId} className={styles.root} data-netlab-workspace data-mantine-color-scheme={theme} />,
+        <div className={styles.root} data-netlab-workspace>
+          <div id={portalId} data-netlab-theme data-mantine-color-scheme={theme} />
+        </div>,
         document.body
       )}
-      <div ref={root} className={styles.root} data-netlab-workspace data-mantine-color-scheme={theme}>
-        <style>{`@scope ([data-netlab-workspace]) { ${flowStyles} }`}</style>
-        <MantineProvider
-          theme={{
-            ...workspaceTheme,
-            components: { ...workspaceTheme.components, Portal: { defaultProps: { target: `[id="${portalId}"]` } } },
-          }}
-          forceColorScheme={theme}
-          cssVariablesSelector="[data-netlab-workspace]"
-          cssVariablesResolver={() => ({
-            variables: {
-              '--mantine-primary-color-filled': 'var(--yn-color-control-strong)',
-              '--mantine-primary-color-filled-hover': 'var(--yn-color-control-strong-hover)',
-              '--mantine-color-error': 'var(--yn-color-danger)',
-            },
-            light: {},
-            dark: {},
-          })}
-          getRootElement={() => root.current ?? undefined}
-          deduplicateCssVariables={false}
-          withGlobalClasses={false}
-        >
-          <QueryClientProvider client={client}>
-            <WorkspaceApiContext.Provider value={api}>
-              <WorkspaceRouteContext.Provider value={route}>
-                <WorkspaceContent environmentOnly={Boolean(gameId)} environmentId={environmentId} />
-              </WorkspaceRouteContext.Provider>
-            </WorkspaceApiContext.Provider>
-          </QueryClientProvider>
-        </MantineProvider>
+      <div className={`${styles.root} ${consoleMode ? styles.console : ''}`} data-netlab-workspace>
+        {/* Mantine's theme ancestor must be inside the CSS scope, not on its boundary. */}
+        <div ref={root} className={styles.content} data-netlab-theme data-mantine-color-scheme={theme}>
+          <style>{`@scope ([data-netlab-workspace]) { ${flowStyles} }`}</style>
+          <MantineProvider
+            theme={{
+              ...workspaceTheme,
+              components: { ...workspaceTheme.components, Portal: { defaultProps: { target: `[id="${portalId}"]` } } },
+            }}
+            forceColorScheme={theme}
+            cssVariablesSelector="[data-netlab-theme]"
+            cssVariablesResolver={() => ({
+              variables: {
+                '--mantine-primary-color-filled': 'var(--yn-color-control-strong)',
+                '--mantine-primary-color-filled-hover': 'var(--yn-color-control-strong-hover)',
+                '--mantine-color-error': 'var(--yn-color-danger)',
+              },
+              light: {},
+              dark: {},
+            })}
+            getRootElement={() => root.current ?? undefined}
+            deduplicateCssVariables={false}
+            withGlobalClasses={false}
+          >
+            <QueryClientProvider client={client}>
+              <WorkspaceApiContext.Provider value={api}>
+                <WorkspaceRouteContext.Provider value={route}>
+                  {consoleMode ? (
+                    <Suspense fallback={<Loading />}>
+                      <ConsolePage />
+                    </Suspense>
+                  ) : (
+                    <WorkspaceContent environmentOnly={Boolean(gameId)} environmentId={environmentId} />
+                  )}
+                </WorkspaceRouteContext.Provider>
+              </WorkspaceApiContext.Provider>
+            </QueryClientProvider>
+          </MantineProvider>
+        </div>
       </div>
     </>
   )

@@ -31,3 +31,7 @@
   gap: var(--yn-space-4);
   padding: var(--yn-space-8);
 }
+.consoleWorkspace {
+  height: 100dvh;
+  min-width: 0;
+}

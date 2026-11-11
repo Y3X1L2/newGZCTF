@@ -679,6 +679,13 @@
   background: transparent;
   flex-shrink: 0;
 }
+.content {
+  display: contents;
+}
+.console {
+  height: 100%;
+  min-height: 0;
+}
 .navigation a {
   display: inline-flex;
   gap: 8px;

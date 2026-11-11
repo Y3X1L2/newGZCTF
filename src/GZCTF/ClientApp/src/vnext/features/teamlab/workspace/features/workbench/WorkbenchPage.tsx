@@ -24,7 +24,7 @@ import {
   Router,
 } from 'lucide-react'
 import { lazy, Suspense, useMemo, useState } from 'react'
-import { useWorkspaceApi, ApiError, type Asset, type Network as NetworkModel, type Schema } from '../../api/client'
+import { useWorkspaceApi, type Asset, type Network as NetworkModel, type Schema } from '../../api/client'
 import { Empty, ErrorMessage, Loading } from '../../foundation/Feedback'
 import { Status } from '../../foundation/Status'
 import { randomUUID } from '../../foundation/id'
@@ -46,14 +46,13 @@ import { TaskTray } from './TaskTray'
 import { TopologyCanvas } from './TopologyCanvas'
 import { VPNDrawer } from './VPNDrawer'
 import styles from './WorkbenchPage.module.css'
-import { consoleKey, type ConsoleTab } from './consoles'
+import { consoleHref } from './consoles'
 import { routerGateways } from './networking'
 import { connectAsset, connectRouter, networkColors } from './topology'
 import { useTopology } from './useTopology'
 import { useVPNAccess } from './useVPNAccess'
 import { useWorkbench } from './useWorkbench'
 
-const ConsoleWorkspace = lazy(() => import('./ConsoleWorkspace'))
 const ObservationWorkspace = lazy(() => import('./ObservationWorkspace'))
 const TrafficWorkspace = lazy(() => import('./TrafficWorkspace'))
 const PerformanceWorkspace = lazy(() => import('./PerformanceWorkspace'))
@@ -66,7 +65,8 @@ export function WorkbenchPage() {
 
 function Workbench({ id }: { id: string }) {
   const api = useWorkspaceApi()
-  const { environmentOnly } = useWorkspaceRoute()
+  const route = useWorkspaceRoute()
+  const { environmentOnly } = route
   const workbench = useWorkbench(id)
   const queryClient = useQueryClient()
   const identity = useQuery({ queryKey: ['identity'], queryFn: api.identity })
@@ -101,8 +101,6 @@ function Workbench({ id }: { id: string }) {
   const [rebuilding, setRebuilding] = useState<Asset>()
   const [migrating, setMigrating] = useState<Asset>()
   const [savingBlueprint, setSavingBlueprint] = useState(false)
-  const [connections, setConnections] = useState<ConsoleTab[]>([])
-  const [selectedConnection, setSelectedConnection] = useState('')
   const [logging, setLogging] = useState<Asset>()
   const [observationOpened, setObservationOpened] = useState(false)
   const [serving, setServing] = useState<string>()
@@ -111,9 +109,7 @@ function Workbench({ id }: { id: string }) {
   const [connectionSettings, setConnectionSettings] = useState<{
     asset: Asset
     kind: 'ssh' | 'rdp'
-    connect: boolean
   }>()
-  const [connectionError, setConnectionError] = useState<Error | null>(null)
   const [context, setContext] = useState<{
     x: number
     y: number
@@ -177,37 +173,8 @@ function Workbench({ id }: { id: string }) {
   const servedAsset = spec.assets.find((item) => item.id === serving)
   const observedAsset =
     !workbench.editing && observationOpened && asset && allows(environment, 'observe', asset.id) ? asset : undefined
-  const openConnection = (target: Asset, kind: Schema<'ConsoleKind'>, reconnect = false) => {
-    const connection = { id: target.id, name: target.name, kind }
-    const key = consoleKey(connection)
-    setConnections((items) =>
-      items.some((item) => consoleKey(item) === key)
-        ? reconnect
-          ? items.map((item) => (consoleKey(item) === key ? { ...item, revision: (item.revision ?? 0) + 1 } : item))
-          : items
-        : [...items, connection]
-    )
-    setSelectedConnection(key)
-  }
-  const connect = async (kind: Schema<'ConsoleKind'>) => {
-    if (!asset) return
-    setConnectionError(null)
-    if (kind === 'ssh' || kind === 'rdp') {
-      try {
-        await (kind === 'ssh' ? api.sshSettings : api.rdpSettings)(id, asset.id)
-      } catch (error) {
-        if (error instanceof ApiError && error.status === 404) setConnectionSettings({ asset, kind, connect: true })
-        else setConnectionError(error as Error)
-        return
-      }
-    }
-    openConnection(asset, kind)
-  }
-  const closeConnection = (key: string) => {
-    const remaining = connections.filter((item) => consoleKey(item) !== key)
-    setConnections(remaining)
-    if (selectedConnection === key)
-      setSelectedConnection(remaining.length ? consoleKey(remaining[remaining.length - 1]) : '')
+  const connect = (kind: Schema<'ConsoleKind'>) => {
+    if (asset) window.open(consoleHref(route, id, asset.id, kind), '_blank', 'noopener,noreferrer')
   }
   const network = spec.networks.find((item) => item.id === selection)
   const status = workbench.state.data?.status ?? environment?.status ?? 'unknown'
@@ -777,7 +744,6 @@ function Workbench({ id }: { id: string }) {
                       setConnectionSettings({
                         asset: fileAsset,
                         kind: 'ssh',
-                        connect: false,
                       })
                   : undefined
               }
@@ -962,7 +928,6 @@ function Workbench({ id }: { id: string }) {
           />
         )}
       </div>
-      <ErrorMessage error={connectionError} />
       {migrating && (
         <MigrationDialog
           id={id}
@@ -979,7 +944,6 @@ function Workbench({ id }: { id: string }) {
           kind={connectionSettings.kind}
           onClose={() => setConnectionSettings(undefined)}
           onSaved={() => {
-            if (connectionSettings.connect) openConnection(connectionSettings.asset, connectionSettings.kind, true)
             void queryClient.invalidateQueries({
               queryKey: [connectionSettings.kind, id, connectionSettings.asset.id],
             })
@@ -989,26 +953,6 @@ function Workbench({ id }: { id: string }) {
             setConnectionSettings(undefined)
           }}
         />
-      )}
-      {connections.length > 0 && (
-        <Suspense fallback={<Loading />}>
-          <ConsoleWorkspace
-            environmentId={id}
-            tabs={connections}
-            selected={selectedConnection}
-            onSelect={setSelectedConnection}
-            onSettings={(tab) => {
-              const target = spec.assets.find((item) => item.id === tab.id)
-              if (target && (tab.kind === 'ssh' || tab.kind === 'rdp'))
-                setConnectionSettings({
-                  asset: target,
-                  kind: tab.kind,
-                  connect: true,
-                })
-            }}
-            onClose={closeConnection}
-          />
-        </Suspense>
       )}
       <TaskTray
         opened={tasksOpened}
