@@ -1,6 +1,6 @@
 # 组网页面布局调整
 
-状态：本地已验收，用户已授权合入 `main` 并发布主站。负责人：Codex。
+状态：已验收、合入 `main` 并部署主站。负责人：Codex。
 
 ## 目标与基线
 
@@ -50,4 +50,23 @@
 - 本地预览：`http://127.0.0.1:63000/admin/teamlab/environments`。
 - 样例服务和截图位于仓库外 `D:\Work\teamlab-layout-preview-20261111`，不进入提交。
 - [TeamLab 开发地图](../modules/teamlab/development.md)记录布局和动效细节，[UX-01](../backlog.md)将这一版作为全平台交互优化的参考，仍需分模块验收。
-- 合并和发布结果分别回填本记录；生产基线以[当前状态](../current-state.md)和实际回读为准。
+
+## 生产发布
+
+[PR #44](https://github.com/Y3X1L2/newGZCTF/pull/44) 合并为 `f800a987dbcde6b9411144ae61c5ee913ef8e96f`。北京时间 2026-11-11 17:27:09 开始切换，17:27:53 完成主站冒烟。前端取自[该主线提交的 CI 制品](https://github.com/Y3X1L2/newGZCTF/actions/runs/42994446474)，校验 272 个前端文件，并保留旧静态资源供已有标签页继续使用。后端仍为 `8d9efc7c0fe39bed08f604913a460a221d1e70fd`；复用的 148 个后端文件逐个比对，Agent 未重启。`.40` 的 Netlab、场景版本、数据和机器状态未操作。
+
+- [PR Quality](https://github.com/Y3X1L2/newGZCTF/actions/runs/42993454326) 与 Documentation 全部通过，包括后端编译、单元和集成测试、前端检查、全量测试与构建。主线前端门禁和文档通过。开发机未重跑后端全量或数据迁移验证，本次未修改后端或数据库模型。
+- 首页、`/api/config`、组网路由均为 HTTP 200；回读前端版本、校验 33 个首页引用文件，以及一份 15,872 字节的现有附件。迁移保持 153 条、头为 `20261110070457_IntegrateNetlabSceneBindings`。3 节点在线，活跃队列为 0，534 模板 Ready，分发 240 Ready / 1 既有 Failed；没有活动的公网映射待验 ACK。主站启动错误数为 0，健康保持既有 Degraded。网关配置和服务均未改动。
+- 浏览器从生产入口读取原 release-v2 场景，确认 4 资产、2 网段，两台机器运行、两台停止。普通选择 ubuntu-web01、切换 DC01 时视口一直为 `translate(0px, 0px) scale(1)`，打开的属性栏直接换内容。搜索 YINYU-OA01 后用方向键和 Enter 定位，视口改为 `translate(243.5px, -43.5px) scale(1)`。切到资产列表可见原机器，定位入口隐藏。
+- 进入模板目录时已有管理员会话失效，目录未完成本轮复验。未重做 Portal SSO、桌面连接、机器启停、Docker 创建销毁或动态公网入口。流量解析仍按 [NETLAB-02](../backlog.md) 处理；本地样例数据没有进入生产。
+
+## 备份与回退
+
+| 内容 | 位置或身份 |
+| --- | --- |
+| 当前发布 | `/srv/yinyu-data/releases/teamlab-layout-f800a987dbcde6b9411144ae61c5ee913ef8e96f-20261111/publish` |
+| 上一版 | `/srv/yinyu-data/releases/netlab-8d9efc7c0fe39bed08f604913a460a221d1e70fd-20261110/publish` |
+| 本轮备份 | `/srv/yinyu-data/backups/teamlab-layout-20261111-pre-20261111T091915Z` |
+| 前端包 SHA-256 | `7ab1cae462c1441e994e7b5e5a6bb53951016f138939b8acb60ebb40c51b9ac3` |
+
+备份包括 PostgreSQL 双库、共享附件、加密配置和加密的旧发布包，共约 911 MiB，均检查非空、摘要和归档可读性；本轮未重做整库恢复，[11-10 恢复演练](2026-11-10-netlab-rollout.md)保留。当前发布的上一级目录保存 `rollback.sh` 和验收证据。脚本可原子切回旧目录并检查首页、配置和制品身份，语法已核对，未实际回退；本次无数据库迁移。
