@@ -41,6 +41,16 @@
   text-overflow: ellipsis;
   overflow: hidden;
 }
+.list[data-compact='true'] th:nth-child(6),
+.list[data-compact='true'] td:nth-child(6),
+.list[data-compact='true'] th:nth-child(7),
+.list[data-compact='true'] td:nth-child(7) {
+  display: none;
+}
+.list[data-compact='true'] th,
+.list[data-compact='true'] td {
+  padding: 7px 8px;
+}
 .list tr:hover td {
   background: var(--surface-hover);
 }

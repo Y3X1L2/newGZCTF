@@ -2,6 +2,7 @@ import { Modal, SegmentedControl } from '@mantine/core'
 import { useState } from 'react'
 import type { Schema } from '../../api/client'
 import { ErrorMessage } from '../../foundation/Feedback'
+import { dateTime } from '../../foundation/format'
 import { PacketBytes, PacketProtocols, type Field } from './PacketWorkspace'
 import styles from './TrafficWorkspace.module.css'
 
@@ -46,6 +47,8 @@ export function PacketDetailDialog({
             {detail.packet.destinationPort}
           </span>
           <span>{detail.packet.length} 字节</span>
+          <span>{dateTime(detail.packet.time)}</span>
+          <span>{detail.packet.summary}</span>
           <span>{interfaceName}</span>
         </div>
       )}

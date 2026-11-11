@@ -25,6 +25,7 @@ export function PacketList({
   onOlder,
   fetching,
   live,
+  compact = false,
 }: {
   packets: Packet[]
   selectedId?: string
@@ -35,13 +36,14 @@ export function PacketList({
   onOlder?: () => void
   fetching: boolean
   live: boolean
+  compact?: boolean
 }) {
   const host = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (live && selectedId === packets.at(-1)?.id) host.current?.scrollTo({ top: host.current.scrollHeight })
   }, [packets, live, selectedId])
   return (
-    <div className={styles.list} ref={host}>
+    <div className={styles.list} data-compact={compact} ref={host}>
       {onOlder && (
         <button className={styles.older} onClick={onOlder} disabled={fetching}>
           {fetching ? '读取中…' : '更早报文'}
@@ -87,6 +89,7 @@ export function PacketList({
             return (
               <tr
                 key={packet.id}
+                title={compact ? packet.summary : undefined}
                 aria-selected={selectedId === packet.id}
                 data-risk={risk?.value}
                 data-protocol={packet.protocol.toLowerCase()}

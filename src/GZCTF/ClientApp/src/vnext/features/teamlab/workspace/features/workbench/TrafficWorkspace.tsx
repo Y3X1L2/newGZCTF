@@ -103,7 +103,8 @@ export default function TrafficWorkspace({
     [roles, setRoles] = useState<Record<string, string>>({})
   const [graphTools, setGraphTools] = useState<HTMLSpanElement | null>(null)
   const graphVisible = recordView === 'overview'
-  const packetsVisible = recordView === 'packets'
+  const inlinePackets = graphVisible && Boolean(selection)
+  const packetsVisible = recordView === 'packets' || inlinePackets
   const spec = environment.appliedSpec ?? environment.spec
   const client = useQueryClient()
   const names = useMemo(() => new Map(spec.assets.map((asset) => [asset.id, asset.name])), [spec.assets])
@@ -253,6 +254,7 @@ export default function TrafficWorkspace({
     setSelection(value)
     setChosenAlert(undefined)
     setSelectedId(undefined)
+    setDetailOpen(false)
   }
   const peak =
     data.history.data?.series.reduce(
@@ -448,7 +450,7 @@ export default function TrafficWorkspace({
           </Tooltip>
         </div>
       )}
-      {(selectionName || chosenAlert || timeRange || filter || protocol || level) && (
+      {(chosenAlert || timeRange || filter || protocol || level) && (
         <div className={styles.filterbar}>
           {filter && (
             <button className={styles.selection} onClick={() => setInput('')} title={filter}>
@@ -465,12 +467,6 @@ export default function TrafficWorkspace({
           {level && (
             <button className={styles.selection} onClick={() => setLevel(undefined)}>
               {riskLevels.find((risk) => risk.value === level)?.label}
-              <X size={12} />
-            </button>
-          )}
-          {selectionName && (
-            <button className={styles.selection} onClick={() => select()} title={selectionName}>
-              {selectionName}
               <X size={12} />
             </button>
           )}
@@ -534,105 +530,142 @@ export default function TrafficWorkspace({
           />
         )}
       </section>
-      <section className={styles.graphPane} hidden={!graphVisible}>
-        <header className={styles.paneHeading}>
-          <strong>{timeRange || filter ? '所示报文关系' : '通信关系'}</strong>
-          <span>
-            {timeRange || filter
-              ? `${data.packets.length} 帧`
-              : `${new Set(graphLinks.map((link) => [link.source, link.target].sort().join('/'))).size} 组关系`}
-          </span>
-          {selection && (
-            <Button size="compact-xs" variant="default" onClick={() => setRecordView('packets')}>
-              查看相关报文
-            </Button>
+      <div className={styles.analysisPanes} data-overview={graphVisible} data-split={inlinePackets}>
+        <section className={styles.graphPane} hidden={!graphVisible}>
+          <header className={styles.paneHeading}>
+            <strong>{timeRange || filter ? '所示报文关系' : '通信关系'}</strong>
+            <span>
+              {timeRange || filter
+                ? `${data.packets.length} 帧`
+                : `${new Set(graphLinks.map((link) => [link.source, link.target].sort().join('/'))).size} 组关系`}
+            </span>
+            {selectionName && (
+              <button
+                className={styles.selectedEndpoint}
+                onClick={() => select()}
+                title="取消选择"
+                aria-label={`取消选择 ${selectionName}`}
+              >
+                {selectionName}
+                <X size={12} />
+              </button>
+            )}
+            <span ref={setGraphTools} className={styles.graphTools} />
+          </header>
+          <div className={styles.paneBody}>
+            {!data.traffic.isPending && (
+              <TrafficGraph
+                spec={spec}
+                links={graphLinks}
+                groups={groups}
+                colors={colors}
+                selection={selection}
+                onSelect={select}
+                toolsTarget={graphTools}
+              />
+            )}
+          </div>
+        </section>
+        <section
+          className={styles.packetPane}
+          aria-label="所选对象报文"
+          aria-hidden={graphVisible && !inlinePackets}
+          inert={graphVisible && !inlinePackets}
+        >
+          {chosenAlert && recordView === 'packets' && (
+            <details className={styles.alertDetails}>
+              <summary>告警详情 · {chosenAlert.signature}</summary>
+              <p>
+                {chosenAlert.category} · {chosenAlert.count} 次
+              </p>
+              <p>
+                {chosenAlert.source}:{chosenAlert.sourcePort} → {chosenAlert.destination}:{chosenAlert.destinationPort}{' '}
+                · {chosenAlert.protocol}
+              </p>
+              <p>
+                {dateTime(chosenAlert.firstSeen)} – {dateTime(chosenAlert.lastSeen)}
+              </p>
+              <p>
+                规则 {chosenAlert.generatorId}:{chosenAlert.signatureId}:{chosenAlert.revision}
+              </p>
+            </details>
           )}
-          <span ref={setGraphTools} className={styles.graphTools} />
-        </header>
-        <div className={styles.paneBody}>
-          {!data.traffic.isPending && (
-            <TrafficGraph
-              spec={spec}
-              links={graphLinks}
-              groups={groups}
-              colors={colors}
-              selection={selection}
-              onSelect={select}
-              toolsTarget={graphTools}
-            />
-          )}
-        </div>
-      </section>
-      <section className={styles.packetPane} hidden={graphVisible}>
-        {chosenAlert && recordView === 'packets' && (
-          <details className={styles.alertDetails}>
-            <summary>告警详情 · {chosenAlert.signature}</summary>
-            <p>
-              {chosenAlert.category} · {chosenAlert.count} 次
-            </p>
-            <p>
-              {chosenAlert.source}:{chosenAlert.sourcePort} → {chosenAlert.destination}:{chosenAlert.destinationPort} ·{' '}
-              {chosenAlert.protocol}
-            </p>
-            <p>
-              {dateTime(chosenAlert.firstSeen)} – {dateTime(chosenAlert.lastSeen)}
-            </p>
-            <p>
-              规则 {chosenAlert.generatorId}:{chosenAlert.signatureId}:{chosenAlert.revision}
-            </p>
-          </details>
-        )}
-        <header className={styles.paneHeading}>
-          <strong>{recordView === 'alerts' ? '告警记录' : '报文列表'}</strong>
-          <span>
-            {recordView === 'alerts'
-              ? `${visibleAlerts.length} 条`
-              : `${data.packets.length.toLocaleString('zh-CN')} 帧`}
-          </span>
-          {data.fetching && <i className={styles.fetching} />}
-        </header>
-        <div className={styles.paneBody}>
-          {recordView === 'alerts' ? (
-            <RiskRecords
-              alerts={visibleAlerts}
-              more={security.hasNextPage}
-              fetching={security.isFetching}
-              onMore={() => {
-                setPaused(true)
-                void security.fetchNextPage()
-              }}
-              onSelect={(alert) => {
-                setChosenAlert(alert)
-                setSelectedId(undefined)
-                setPaused(true)
-                setRecordView('packets')
-              }}
-            />
-          ) : (
-            <PacketList
-              packets={data.packets}
-              selectedId={selected}
-              onSelect={(id) => {
-                setSelectedId(id)
-                setPaused(true)
-              }}
-              onOpen={() => setDetailOpen(true)}
-              alerts={alerts}
-              loading={data.loading}
-              fetching={data.fetching}
-              onOlder={
-                data.loadOlder
-                  ? () => {
-                      setPaused(true)
-                      data.loadOlder!()
-                    }
-                  : undefined
-              }
-              live={!paused}
-            />
-          )}
-        </div>
-      </section>
+          <header className={styles.paneHeading}>
+            <strong>
+              {recordView === 'alerts' ? '告警记录' : selectionName ? `${selectionName} · 报文` : '报文列表'}
+            </strong>
+            <span>
+              {recordView === 'alerts'
+                ? `${visibleAlerts.length} 条`
+                : `${data.packets.length.toLocaleString('zh-CN')} 帧`}
+            </span>
+            {inlinePackets && (
+              <Button size="compact-xs" variant="subtle" onClick={() => setRecordView('packets')}>
+                筛选与导出
+              </Button>
+            )}
+            {!graphVisible && selectionName && (
+              <ActionIcon size="sm" variant="subtle" aria-label="清除对象筛选" onClick={() => select()}>
+                <X size={14} />
+              </ActionIcon>
+            )}
+            {data.fetching && <i className={styles.fetching} />}
+            {inlinePackets && (
+              <ActionIcon
+                className={styles.closePackets}
+                size="sm"
+                variant="subtle"
+                aria-label="关闭报文"
+                onClick={() => select()}
+              >
+                <X size={16} />
+              </ActionIcon>
+            )}
+          </header>
+          <div className={styles.paneBody}>
+            {recordView === 'alerts' ? (
+              <RiskRecords
+                alerts={visibleAlerts}
+                more={security.hasNextPage}
+                fetching={security.isFetching}
+                onMore={() => {
+                  setPaused(true)
+                  void security.fetchNextPage()
+                }}
+                onSelect={(alert) => {
+                  setChosenAlert(alert)
+                  setSelectedId(undefined)
+                  setPaused(true)
+                  setRecordView('packets')
+                }}
+              />
+            ) : (
+              <PacketList
+                compact={inlinePackets}
+                packets={data.packets}
+                selectedId={selected}
+                onSelect={(id) => {
+                  setSelectedId(id)
+                  setPaused(true)
+                }}
+                onOpen={() => setDetailOpen(true)}
+                alerts={alerts}
+                loading={data.loading}
+                fetching={data.fetching}
+                onOlder={
+                  data.loadOlder
+                    ? () => {
+                        setPaused(true)
+                        data.loadOlder!()
+                      }
+                    : undefined
+                }
+                live={!paused}
+              />
+            )}
+          </div>
+        </section>
+      </div>
       <PacketDetailDialog
         key={selected}
         opened={detailOpen && Boolean(selected)}

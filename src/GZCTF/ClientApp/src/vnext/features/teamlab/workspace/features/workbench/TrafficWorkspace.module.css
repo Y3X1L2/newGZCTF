@@ -232,6 +232,53 @@
 .graphPane > .paneBody {
   height: clamp(420px, 55vh, 680px);
 }
+.analysisPanes {
+  --analysis-height: clamp(420px, 55vh, 680px);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0fr);
+  column-gap: 0;
+  align-items: start;
+  transition:
+    grid-template-columns 280ms ease,
+    column-gap 280ms ease;
+}
+.analysisPanes[data-split='true'] {
+  grid-template-columns: minmax(0, 0.42fr) minmax(0, 0.58fr);
+  column-gap: 12px;
+}
+.analysisPanes[data-overview='false'] {
+  grid-template-columns: minmax(0, 1fr);
+}
+.analysisPanes[data-overview='true'] .packetPane {
+  display: flex;
+  flex-direction: column;
+  height: calc(var(--analysis-height) + 38px);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateX(16px);
+  transition:
+    opacity 240ms ease,
+    transform 280ms ease,
+    visibility 280ms;
+}
+.analysisPanes[data-split='true'] .packetPane {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(0);
+}
+.paneHeading .selectedEndpoint {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 55%;
+  padding: 3px 7px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface);
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
 .workspace [hidden] {
   display: none;
 }
@@ -300,6 +347,10 @@
 .paneHeading .graphTools {
   margin-left: auto;
   overflow: visible;
+}
+.paneHeading .closePackets {
+  margin-left: auto;
+  flex-shrink: 0;
 }
 .paneHeading button {
   padding: 0;
@@ -379,6 +430,15 @@
   align-self: flex-end;
 }
 @media (max-width: 900px) {
+  .analysisPanes[data-overview='true'] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .analysisPanes[data-overview='true']:not([data-split='true']) .packetPane {
+    display: none;
+  }
+  .analysisPanes[data-split='true'] {
+    row-gap: 12px;
+  }
   .toolbar {
     gap: 8px;
   }
@@ -407,5 +467,11 @@
   .statusbar {
     gap: 8px;
     padding-block: 8px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .analysisPanes,
+  .analysisPanes .packetPane {
+    transition: none;
   }
 }
