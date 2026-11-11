@@ -21,7 +21,9 @@ import {
   type OnConnect,
 } from '@xyflow/react'
 import { Box, Maximize, Minimize, Monitor, Network, Router, Scan, ZoomIn, ZoomOut } from 'lucide-react'
+import { animate } from 'motion/react'
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { workspaceMotionDuration } from '../../foundation/AnimatedPanel'
 import { stateLabel } from '../../foundation/format'
 import styles from './TopologyCanvas.module.css'
 import type { TopologyNode } from './topology'
@@ -33,6 +35,7 @@ type Props = {
   nodes: TopologyNode[]
   edges: Edge[]
   selection?: string
+  focusRequest?: { id: string }
   onSelect: (id?: string) => void
   editing: boolean
   onConnect: OnConnect
@@ -51,6 +54,7 @@ function Canvas({
   nodes: initialNodes,
   edges: initialEdges,
   selection,
+  focusRequest,
   onSelect,
   editing,
   onConnect,
@@ -91,7 +95,7 @@ function Canvas({
   const container = useRef<HTMLDivElement>(null)
   const [fullscreen, setFullscreen] = useState(false)
   const [error, setError] = useState<string>()
-  const { fitView, getNodes, getNode, getViewport, setCenter, zoomIn, zoomOut } = useReactFlow<TopologyNode>()
+  const { fitView, getNodes, getNode, getViewport, setViewport, zoomIn, zoomOut } = useReactFlow<TopologyNode>()
   const store = useStoreApi()
   const initialized = useNodesInitialized()
   const fitted = useRef(false)
@@ -102,35 +106,41 @@ function Canvas({
   }, [initialized, fitView])
   useEffect(() => {
     if (!selection) return
-    const frame = requestAnimationFrame(() => {
-      const node = getNode(selection)
-      if (!node) return
-      const positions = absolutePositions(getNodes()),
-        point = positions[selection]
-      const { width, height } = store.getState(),
-        viewport = getViewport()
-      const size = node.measured ?? topologyNodeSize[node.type!]
-      const selectionZoom =
-        node.type === 'network'
-          ? Math.min(1, (width - 48) / (size.width ?? 236), (height - 48) / (size.height ?? 84))
-          : Math.max(viewport.zoom, 0.6)
-      const left = point.x * viewport.zoom + viewport.x,
-        top = point.y * viewport.zoom + viewport.y
-      if (
-        left >= 24 &&
-        top >= 24 &&
-        left + (size.width ?? 184) * viewport.zoom <= width - 24 &&
-        top + (size.height ?? 64) * viewport.zoom <= height - 24 &&
-        viewport.zoom >= 0.6
-      )
-        return
-      void setCenter(point.x + (size.width ?? 184) / 2, point.y + (size.height ?? 64) / 2, {
-        zoom: selectionZoom,
-        duration: reducedMotion ? 0 : 180,
-      })
+    const node = getNode(selection)
+    const point = absolutePositions(getNodes())[selection]
+    if (!node || !point) return
+    const viewport = getViewport()
+    const size = node.measured ?? topologyNodeSize[node.type!]
+    const nodeWidth = size.width ?? 184,
+      nodeHeight = size.height ?? 64
+    // Read the changing canvas size on the same Motion clock as the inspector.
+    // This keeps the target visible without a second pan after the panel opens.
+    const animation = animate(0, 1, {
+      duration: reducedMotion ? 0 : workspaceMotionDuration / 1000,
+      ease: 'easeOut',
+      onUpdate: (progress) => {
+        const { width, height } = store.getState()
+        const targetZoom =
+          node.type === 'network'
+            ? Math.min(viewport.zoom, Math.max(1, width - 48) / nodeWidth, Math.max(1, height - 48) / nodeHeight)
+            : viewport.zoom
+        const zoom = viewport.zoom + (targetZoom - viewport.zoom) * progress
+        const locate = focusRequest?.id === selection
+        const x = locate
+          ? width / 2 - (point.x + nodeWidth / 2) * zoom
+          : Math.min(24 - point.x * zoom, Math.max(width - 24 - (point.x + nodeWidth) * zoom, viewport.x))
+        const y = locate
+          ? height / 2 - (point.y + nodeHeight / 2) * zoom
+          : Math.min(24 - point.y * zoom, Math.max(height - 24 - (point.y + nodeHeight) * zoom, viewport.y))
+        void setViewport({
+          x: viewport.x + (x - viewport.x) * progress,
+          y: viewport.y + (y - viewport.y) * progress,
+          zoom,
+        })
+      },
     })
-    return () => cancelAnimationFrame(frame)
-  }, [selection, getNode, getNodes, getViewport, setCenter, store, reducedMotion])
+    return () => animation.stop()
+  }, [selection, focusRequest, getNode, getNodes, getViewport, setViewport, store, reducedMotion])
   useEffect(() => {
     const changed = () => setFullscreen(document.fullscreenElement === container.current)
     document.addEventListener('fullscreenchange', changed)

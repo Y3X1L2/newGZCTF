@@ -7,11 +7,6 @@
 .spacing {
   display: flex;
   width: max-content;
-}
-.spacing[data-side='left'] {
-  padding-right: var(--yn-space-4);
-}
-.spacing[data-side='right'] {
   padding-left: var(--yn-space-4);
 }
 @media (max-width: 760px) {
@@ -20,14 +15,7 @@
   }
   .spacing {
     width: 100%;
-  }
-  .spacing[data-side] {
     padding-inline: 0;
-  }
-  .spacing[data-side='left'] {
-    padding-bottom: var(--yn-space-4);
-  }
-  .spacing[data-side='right'] {
     padding-top: var(--yn-space-4);
   }
 }

@@ -10,12 +10,10 @@ export function AnimatedPanel({
   children,
   className,
   label,
-  direction = 1,
 }: {
   children: ReactNode
   className: string
   label: string
-  direction?: 1 | -1
 }) {
   const present = useIsPresent()
   const stacked = useMediaQuery('(max-width: 760px)')
@@ -27,11 +25,11 @@ export function AnimatedPanel({
       animate={{ opacity: 1, width: stacked ? '100%' : 'auto', height: 'auto' }}
       exit={{ opacity: 0, [dimension]: 0 }}
     >
-      <div className={styles.spacing} data-side={direction === -1 ? 'left' : 'right'}>
+      <motion.div className={styles.spacing} initial={{ x: 12 }} animate={{ x: 0 }} exit={{ x: 12 }}>
         <aside className={className} aria-label={label} aria-hidden={!present} inert={!present}>
           {children}
         </aside>
-      </div>
+      </motion.div>
     </motion.div>
   )
 }

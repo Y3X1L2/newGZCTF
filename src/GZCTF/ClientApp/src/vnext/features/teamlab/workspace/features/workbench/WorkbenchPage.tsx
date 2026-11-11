@@ -4,7 +4,6 @@ import {
   ArrowLeft,
   Box,
   ChevronDown,
-  Columns3,
   GitBranch,
   LayoutGrid,
   List,
@@ -26,7 +25,6 @@ import {
 import { AnimatePresence } from 'motion/react'
 import { lazy, Suspense, useMemo, useState } from 'react'
 import { useWorkspaceApi, type Asset, type Network as NetworkModel, type Schema } from '../../api/client'
-import { AnimatedPanel } from '../../foundation/AnimatedPanel'
 import { Empty, ErrorMessage, Loading } from '../../foundation/Feedback'
 import motionStyles from '../../foundation/Motion.module.css'
 import { Status } from '../../foundation/Status'
@@ -42,6 +40,7 @@ import { MigrationDialog } from './MigrationDialog'
 import { NetworkList } from './NetworkList'
 import { AssetEditor, NetworkEditor } from './ObjectEditors'
 import { ObjectInspector } from './ObjectInspector'
+import { ObjectLocator } from './ObjectLocator'
 import { RecoveryDrawer } from './RecoveryDrawer'
 import { RouterEditor } from './RouterEditor'
 import { ServiceDrawer } from './ServiceDrawer'
@@ -52,7 +51,7 @@ import { VPNDrawer } from './VPNDrawer'
 import styles from './WorkbenchPage.module.css'
 import { consoleHref } from './consoles'
 import { routerGateways } from './networking'
-import { connectAsset, connectRouter, networkColors } from './topology'
+import { connectAsset, connectRouter } from './topology'
 import { useTopology } from './useTopology'
 import { useVPNAccess } from './useVPNAccess'
 import { useWorkbench } from './useWorkbench'
@@ -75,7 +74,7 @@ function Workbench({ id }: { id: string }) {
   const queryClient = useQueryClient()
   const identity = useQuery({ queryKey: ['identity'], queryFn: api.identity })
   const [selection, setSelection] = useState<string>()
-  const [tree, setTree] = useState(false)
+  const [focusRequest, setFocusRequest] = useState<{ id: string }>()
   const [tasksOpened, setTasksOpened] = useState(false)
   const [searchParams, setSearchParams] = useSearchParams()
   const requestedView = searchParams.get('view')
@@ -514,109 +513,10 @@ function Workbench({ id }: { id: string }) {
         </div>
       )}
       <div className={styles.body}>
-        <AnimatePresence initial={false}>
-          {tree && view === 'topology' && !fileAsset && !observedAsset && (
-            <AnimatedPanel className={styles.tree} label="对象列表" direction={-1}>
-              <TextInput
-                aria-label="查找对象"
-                placeholder="查找对象"
-                leftSection={<Search size={15} />}
-                value={query}
-                onChange={(event) => setQuery(event.currentTarget.value)}
-              />
-              <div className={styles.treeHeading}>
-                资产<span>{spec.assets.length}</span>
-              </div>
-              {spec.assets
-                .filter((item) => item.name.toLocaleLowerCase().includes(query.toLocaleLowerCase()))
-                .map((item) => (
-                  <button
-                    className={styles.treeItem}
-                    aria-current={selection === item.id}
-                    key={item.id}
-                    onClick={() => setSelection(item.id)}
-                  >
-                    {templatesById.get(item.templateId)?.kind === 'vm' ? <Monitor size={16} /> : <Box size={16} />}
-                    <span>{item.name}</span>
-                    <span className={styles.treeState} data-state={assetStates.get(item.id)} />
-                  </button>
-                ))}
-              {externalDevices.length > 0 && (
-                <>
-                  <div className={styles.treeHeading}>
-                    外部设备<span>{externalDevices.length}</span>
-                  </div>
-                  {externalDevices
-                    .filter(({ device }) =>
-                      `${device.name} ${device.address}`.toLocaleLowerCase().includes(query.toLocaleLowerCase())
-                    )
-                    .map(({ device }) => (
-                      <button
-                        className={styles.treeItem}
-                        aria-current={selection === device.id}
-                        key={device.id}
-                        onClick={() => setSelection(device.id)}
-                      >
-                        <Router size={16} />
-                        <span>{device.name}</span>
-                      </button>
-                    ))}
-                </>
-              )}
-              {Boolean(spec.routers?.length) && (
-                <>
-                  <div className={styles.treeHeading}>
-                    路由器<span>{spec.routers?.length}</span>
-                  </div>
-                  {spec.routers
-                    ?.filter((item) => item.name.toLocaleLowerCase().includes(query.toLocaleLowerCase()))
-                    .map((item) => (
-                      <button
-                        className={styles.treeItem}
-                        aria-current={selection === item.id}
-                        key={item.id}
-                        onClick={() => setSelection(item.id)}
-                      >
-                        <Router size={16} />
-                        <span>{item.name}</span>
-                      </button>
-                    ))}
-                </>
-              )}
-              <div className={styles.treeHeading}>
-                交换机与网段<span>{spec.networks.length}</span>
-              </div>
-              {spec.networks
-                .filter((item) => item.name.toLocaleLowerCase().includes(query.toLocaleLowerCase()))
-                .map((item, index) => (
-                  <button
-                    className={styles.treeItem}
-                    aria-current={selection === item.id}
-                    key={item.id}
-                    onClick={() => setSelection(item.id)}
-                  >
-                    <Network size={16} color={networkColors[index % networkColors.length]} />
-                    <span>{item.name}</span>
-                  </button>
-                ))}
-            </AnimatedPanel>
-          )}
-        </AnimatePresence>
         <section className={styles.canvas} data-view={view} aria-label="环境拓扑">
           {!observedAsset && (
             <div className={styles.toolbar}>
               <div className={styles.viewControls}>
-                {!fileAsset && view === 'topology' && (
-                  <ActionIcon
-                    variant={tree ? 'light' : 'subtle'}
-                    color={tree ? 'blue' : 'gray'}
-                    aria-label="对象列表"
-                    aria-pressed={tree}
-                    onClick={() => setTree(!tree)}
-                  >
-                    <Columns3 size={17} />
-                  </ActionIcon>
-                )}
                 <SegmentedControl
                   className={styles.views}
                   aria-label="工作区视图"
@@ -680,6 +580,18 @@ function Workbench({ id }: { id: string }) {
                   {Boolean(spec.routers?.length) && ` · ${spec.routers?.length} 路由器`}
                   {externalDevices.length > 0 && ` · ${externalDevices.length} 外部设备`}
                 </span>
+                {!fileAsset && view === 'topology' && (
+                  <ObjectLocator
+                    spec={spec}
+                    templates={templates}
+                    states={assetStates}
+                    selection={selection}
+                    onSelect={(id) => {
+                      setSelection(id)
+                      setFocusRequest({ id })
+                    }}
+                  />
+                )}
                 <button
                   className={styles.taskButton}
                   aria-label="运行任务"
@@ -887,6 +799,7 @@ function Workbench({ id }: { id: string }) {
               <Loading />
             ) : (
               <TopologyCanvas
+                focusRequest={focusRequest}
                 nodes={graph.nodes}
                 edges={graph.edges}
                 selection={selection}
