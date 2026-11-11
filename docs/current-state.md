@@ -1,23 +1,22 @@
 # YINYU 当前开发状态
 
-整理日期为 2026-11-10。北京时间 21:34，PR #42 已合入并部署至主站 `.27`，组网接入 `.40` 的独立 YINYU 项目。原 release-v2 四机场景已迁入，真实启停通过；流量解析异常仍待修复。详见[最新发布](records/2026-11-10-netlab-rollout.md)。
+整理日期为 2026-11-11。北京时间 17:27，PR #44 的组网前端已部署至主站 `.27`，真实场景的拓扑、资产和键盘定位通过。主站后端仍是 PR #42，`.40` 的 Netlab 执行面未更新。详见[组网布局发布](records/2026-11-11-teamlab-page-layout.md#生产发布)。
 本页只保留当前摘要，更新时替换旧事实；完整测试、部署过程和授权边界放在任务记录中。目标120行以内，超长时提炼摘要。
 
 ## 代码与部署基线
 
 | 项目 | 最新已知事实 | 依据与时效 |
 | --- | --- | --- |
-| Netlab 接入 | PR #42 已合入 `8d9efc7c` 并上线；原四机场景进入独立 YINYU 项目，底座仍为 v1.2.2 | [调用链](records/2026-11-10-netlab-integration.md)、[上线证据](records/2026-11-10-netlab-rollout.md) |
+| Netlab 接入 | 原 release-v2 四机场景在独立 YINYU 项目，底座仍为 v1.2.2；11-11 回读为两台运行、两台停止，发布未操作虚拟机 | [接入上线](records/2026-11-10-netlab-rollout.md)、[最新场景回读](records/2026-11-11-teamlab-page-layout.md#生产发布) |
 | 开发主线 | `main`；新任务从实时 fetch 后的 `origin/main` 创建分支 | SHA 以 Git 为准，本页不追写每次文档提交 |
 | 培训实例修复 | PR #24 合入 `60170a52`，PR #25 为后续部署记录；课程默认每用户 3 实例，公共练习和课程额度隔离 | [主线修复与发布](records/2026-10-11-training-runtime-mainline.md)、[课程生命周期](modules/training/reference/container-lifecycle.md) |
 | 培训动态设置 / 练习分页 | PR #26 已合入 `b1812d15`，PR #27记录已部署；管理员可动态设置培训额度，练习/管理题库使用服务端分页 | Git 合入事实与[新任务记录](records/2026-10-11-training-quota-settings.md)、[分页说明](modules/exercise/reference/catalog-pagination.md)；10-11发布交接已确认API与页面分页验收；本轮未重新实测 |
-| 主站发布 | 前后端均来自 `8d9efc7c`（PR #42） | 发布目录和身份见[最新发布](records/2026-11-10-netlab-rollout.md) |
-| 前端 / Agent | 前端制品共 271 个文件，原 Agent 二进制和进程保持不变 | [最新发布](records/2026-11-10-netlab-rollout.md) |
-| 数据库 | 153 条迁移，头为 `20261110070457_IntegrateNetlabSceneBindings` | [最新发布](records/2026-11-10-netlab-rollout.md) |
-| 应用回退 | 上一版为 `ui-polish-cf473cad…/publish`；回退脚本先检查新增比赛绑定，未实际回退 | [回退条件](records/2026-11-10-netlab-rollout.md) |
-| 备份 | 11-10 双库、附件和加密配置通过校验；双库恢复用时 8 分 9 秒，临时恢复环境已清理 | [备份位置](records/2026-11-10-netlab-rollout.md) |
-| 服务与页面 | 主站约 14 秒恢复，首页、配置接口和附件通过；健康检查保持既有降级；组网启停通过，流量页报文解析失败 | [验收边界](records/2026-11-10-netlab-rollout.md) |
-| 节点与调度 | 3 节点在线，活跃队列为 0；530 模板 Ready，分发 240 Ready / 1 既有 Failed | [本轮核验](records/2026-11-10-netlab-rollout.md)；Docker 创建、HTTP 入口和销毁仍见[11-09 验收](records/2026-11-09-history-rollout.md) |
+| 主站发布 | 前端 `f800a987`（PR #44，272 个文件），后端沿用 `8d9efc7c`（PR #42），Agent 未更新或重启 | [发布身份](records/2026-11-11-teamlab-page-layout.md#生产发布) |
+| 数据库 | 153 条迁移，头为 `20261110070457_IntegrateNetlabSceneBindings`；本次无迁移 | [现场核验](records/2026-11-11-teamlab-page-layout.md#生产发布) |
+| 应用回退 | 上一版 `netlab-8d9efc7c…/publish` 保留，回退脚本已准备，未实际回退 | [备份与回退](records/2026-11-11-teamlab-page-layout.md#备份与回退) |
+| 备份 | 11-11 双库、附件、加密配置和旧发布包通过校验；双库实际恢复演练见 11-10 记录 | [最新备份](records/2026-11-11-teamlab-page-layout.md#备份与回退)、[恢复演练](records/2026-11-10-netlab-rollout.md) |
+| 服务与页面 | 首页、配置接口、静态资源和附件通过；健康检查保持既有 Degraded；真实场景拓扑和资产列表通过，流量解析仍见 NETLAB-02 | [验收边界](records/2026-11-11-teamlab-page-layout.md#生产发布) |
+| 节点与调度 | 3 节点在线，活跃队列为 0；534 模板 Ready，分发 240 Ready / 1 既有 Failed | [现场核验](records/2026-11-11-teamlab-page-layout.md#生产发布)；Docker 创建、HTTP 入口和销毁见[11-09 验收](records/2026-11-09-history-rollout.md) |
 
 `stable-20260908` 保留用于历史复现，现网身份以最新发布记录和现场回读为准。生产操作前重新核对现场、授权、候选身份、备份和回退；[10-11文档核验记录](records/2026-10-11-docs-collaboration-audit.md)与既有发布证据分别记录。
 
