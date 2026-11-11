@@ -29,13 +29,13 @@ export function AnimatedPanel({
       initial={{ opacity: 0, [dimension]: 0 }}
       animate={{ opacity: 1, width: stacked ? '100%' : 'auto', height: 'auto' }}
       exit={{ opacity: 0, [dimension]: 0 }}
-      transition={transition}
+      transition={{ ...transition, [dimension]: { duration: reducedMotion ? 0 : 0.1, ease: 'easeOut' } }}
     >
       <motion.div
         className={styles.spacing}
-        initial={{ x: 20 }}
+        initial={{ x: 8 }}
         animate={{ x: 0 }}
-        exit={{ x: 20 }}
+        exit={{ x: 8 }}
         transition={transition}
       >
         <aside className={className} aria-label={label} aria-hidden={!present} inert={!present}>

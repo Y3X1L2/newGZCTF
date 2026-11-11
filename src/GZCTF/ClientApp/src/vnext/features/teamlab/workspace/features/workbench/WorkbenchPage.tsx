@@ -75,6 +75,10 @@ function Workbench({ id }: { id: string }) {
   const identity = useQuery({ queryKey: ['identity'], queryFn: api.identity })
   const [selection, setSelection] = useState<string>()
   const [focusRequest, setFocusRequest] = useState<{ id: string }>()
+  const selectObject = (id?: string) => {
+    setSelection(id)
+    setFocusRequest(undefined)
+  }
   const [tasksOpened, setTasksOpened] = useState(false)
   const [searchParams, setSearchParams] = useSearchParams()
   const requestedView = searchParams.get('view')
@@ -191,6 +195,7 @@ function Workbench({ id }: { id: string }) {
   const operation = workbench.state.data?.operation
   const latestOperation = operation ?? workbench.operations.data?.[0]
   const switchView = (value: typeof view) => {
+    setFocusRequest(undefined)
     setView(value)
     setFilesOpened(false)
     setObservationOpened(false)
@@ -217,7 +222,7 @@ function Workbench({ id }: { id: string }) {
         ? current.assets.map((item) => (item.id === value.id ? value : item))
         : [...current.assets, value],
     }))
-    setSelection(value.id)
+    selectObject(value.id)
     setEditor(undefined)
   }
   const updateNetwork = (value: NetworkModel, routerIds?: string[]) => {
@@ -257,7 +262,7 @@ function Workbench({ id }: { id: string }) {
         ),
       }
     })
-    setSelection(value.id)
+    selectObject(value.id)
     setEditor(editor === 'external-network' ? 'external' : undefined)
   }
   const updateRouter = (value: Schema<'LogicalRouter'>, routes: Schema<'Route'>[]) => {
@@ -272,7 +277,7 @@ function Workbench({ id }: { id: string }) {
         routes: [...(current.routes ?? []).filter((route) => route.routerId !== value.id), ...routes],
       }
     })
-    setSelection(value.id)
+    selectObject(value.id)
     setEditor(undefined)
   }
   const remove = () => {
@@ -314,7 +319,7 @@ function Workbench({ id }: { id: string }) {
         ),
       }
     })
-    setSelection(undefined)
+    selectObject(undefined)
   }
   const duplicate = () => {
     if (asset)
@@ -546,7 +551,7 @@ function Workbench({ id }: { id: string }) {
                 spec={spec}
                 templates={templates}
                 onSelect={(id) => {
-                  setSelection(id)
+                  selectObject(id)
                   setFocusRequest({ id })
                 }}
               />
@@ -613,7 +618,7 @@ function Workbench({ id }: { id: string }) {
                   environmentId={id}
                   assets={spec.assets}
                   onAsset={(item) => {
-                    setSelection(item.id)
+                    selectObject(item.id)
                     setObservationOpened(true)
                     setFilesOpened(false)
                   }}
@@ -670,7 +675,7 @@ function Workbench({ id }: { id: string }) {
                     value={listKind}
                     onChange={(value) => {
                       setListKind(value)
-                      setSelection(undefined)
+                      selectObject(undefined)
                     }}
                     data={[
                       { value: 'assets', label: '资产' },
@@ -704,7 +709,7 @@ function Workbench({ id }: { id: string }) {
                 </div>
                 <div key={listKind} className={motionStyles.enter}>
                   {listKind === 'networks' ? (
-                    <NetworkList spec={spec} query={query} selection={selection} onSelect={setSelection} />
+                    <NetworkList spec={spec} query={query} selection={selection} onSelect={selectObject} />
                   ) : (
                     <div className={styles.tableScroll}>
                       <table className={styles.assetTable} aria-label="运行资产">
@@ -721,10 +726,10 @@ function Workbench({ id }: { id: string }) {
                             <tr
                               key={item.id}
                               aria-selected={selection === item.id}
-                              onClick={() => setSelection(item.id)}
+                              onClick={() => selectObject(item.id)}
                               onContextMenu={(event) => {
                                 event.preventDefault()
-                                setSelection(item.id)
+                                selectObject(item.id)
                                 setContext({
                                   id: item.id,
                                   x: event.clientX,
@@ -733,7 +738,7 @@ function Workbench({ id }: { id: string }) {
                               }}
                             >
                               <td>
-                                <button className={styles.assetName} onClick={() => setSelection(item.id)}>
+                                <button className={styles.assetName} onClick={() => selectObject(item.id)}>
                                   {templatesById.get(item.templateId)?.kind === 'vm' ? (
                                     <Monitor size={17} />
                                   ) : (
@@ -762,10 +767,10 @@ function Workbench({ id }: { id: string }) {
                             <tr
                               key={device.id}
                               aria-selected={selection === device.id}
-                              onClick={() => setSelection(device.id)}
+                              onClick={() => selectObject(device.id)}
                             >
                               <td>
-                                <button className={styles.assetName} onClick={() => setSelection(device.id)}>
+                                <button className={styles.assetName} onClick={() => selectObject(device.id)}>
                                   <Router size={17} />
                                   {device.name}
                                 </button>
@@ -801,7 +806,7 @@ function Workbench({ id }: { id: string }) {
                 nodes={graph.nodes}
                 edges={graph.edges}
                 selection={selection}
-                onSelect={setSelection}
+                onSelect={selectObject}
                 editing={workbench.editing}
                 onConnect={({ source, target }) => {
                   const routerId = spec.routers?.find((item) => item.id === source || item.id === target)?.id
@@ -816,7 +821,7 @@ function Workbench({ id }: { id: string }) {
                     workbench.setSpec((value) => connectAsset(value, assetId, networkId))
                 }}
                 onContext={(objectId, x, y) => {
-                  setSelection(objectId)
+                  selectObject(objectId)
                   setContext({ id: objectId, x, y })
                 }}
               />
@@ -852,7 +857,7 @@ function Workbench({ id }: { id: string }) {
                 canObserve={allows(environment, 'observe', asset?.id)}
                 canAccess={allows(environment, 'access', asset?.id)}
                 services={workbench.services.data ?? []}
-                onClose={() => setSelection(undefined)}
+                onClose={() => selectObject(undefined)}
                 onEdit={editObject}
                 onRemove={remove}
                 onDuplicate={duplicate}
@@ -870,7 +875,7 @@ function Workbench({ id }: { id: string }) {
                   workbench.revokeService.reset()
                   setServing(asset?.id)
                 }}
-                onSelect={setSelection}
+                onSelect={selectObject}
                 onDiscover={identity.data?.administrator && canCompose ? () => adding('external') : undefined}
               />
             )}

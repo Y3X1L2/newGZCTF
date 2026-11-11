@@ -1,11 +1,13 @@
 .slot {
+  display: flex;
+  justify-content: flex-end;
   flex: 0 0 auto;
   min-width: 0;
   max-width: 100%;
-  overflow: hidden;
 }
 .spacing {
   display: flex;
+  flex-shrink: 0;
   width: max-content;
   padding-left: var(--yn-space-4);
 }

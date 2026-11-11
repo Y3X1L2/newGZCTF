@@ -1,6 +1,3 @@
-.content {
-  --workspace-motion-duration: 120ms;
-}
 .inspector {
   width: 340px;
   flex: 0 0 340px;

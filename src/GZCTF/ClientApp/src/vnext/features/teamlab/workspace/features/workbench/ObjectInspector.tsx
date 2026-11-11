@@ -30,7 +30,6 @@ import type {
   Template,
 } from '../../api/client'
 import { AnimatedPanel } from '../../foundation/AnimatedPanel'
-import motionStyles from '../../foundation/Motion.module.css'
 import { Status } from '../../foundation/Status'
 import { memory } from '../../foundation/format'
 import styles from './ObjectInspector.module.css'
@@ -107,10 +106,7 @@ export function ObjectInspector({
   const assetServices = services.filter((item) => item.assetId === asset?.id)
   return (
     <AnimatedPanel className={styles.inspector} label="对象详情">
-      <div
-        key={asset?.id ?? network?.id ?? router?.id ?? device?.id}
-        className={`${motionStyles.enter} ${styles.content}`}
-      >
+      <div key={asset?.id ?? network?.id ?? router?.id ?? device?.id}>
         <header className={styles.header}>
           <span className={styles.symbol}>
             {device || router ? (

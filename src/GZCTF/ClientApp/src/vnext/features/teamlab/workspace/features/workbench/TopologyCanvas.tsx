@@ -105,9 +105,9 @@ function Canvas({
     void fitView({ padding: 0.12, maxZoom: 1, minZoom: 0.05 })
   }, [initialized, fitView])
   useEffect(() => {
-    if (!selection) return
-    const node = getNode(selection)
-    const point = absolutePositions(getNodes())[selection]
+    if (!focusRequest) return
+    const node = getNode(focusRequest.id)
+    const point = absolutePositions(getNodes())[focusRequest.id]
     if (!node || !point) return
     const viewport = getViewport()
     const size = node.measured ?? topologyNodeSize[node.type!]
@@ -125,13 +125,8 @@ function Canvas({
             ? Math.min(viewport.zoom, Math.max(1, width - 48) / nodeWidth, Math.max(1, height - 48) / nodeHeight)
             : viewport.zoom
         const zoom = viewport.zoom + (targetZoom - viewport.zoom) * progress
-        const locate = focusRequest?.id === selection
-        const x = locate
-          ? width / 2 - (point.x + nodeWidth / 2) * zoom
-          : Math.min(24 - point.x * zoom, Math.max(width - 24 - (point.x + nodeWidth) * zoom, viewport.x))
-        const y = locate
-          ? height / 2 - (point.y + nodeHeight / 2) * zoom
-          : Math.min(24 - point.y * zoom, Math.max(height - 24 - (point.y + nodeHeight) * zoom, viewport.y))
+        const x = width / 2 - (point.x + nodeWidth / 2) * zoom
+        const y = height / 2 - (point.y + nodeHeight / 2) * zoom
         void setViewport({
           x: viewport.x + (x - viewport.x) * progress,
           y: viewport.y + (y - viewport.y) * progress,
@@ -140,7 +135,7 @@ function Canvas({
       },
     })
     return () => animation.stop()
-  }, [selection, focusRequest, getNode, getNodes, getViewport, setViewport, store, reducedMotion])
+  }, [focusRequest, getNode, getNodes, getViewport, setViewport, store, reducedMotion])
   useEffect(() => {
     const changed = () => setFullscreen(document.fullscreenElement === container.current)
     document.addEventListener('fullscreenchange', changed)
