@@ -512,99 +512,97 @@ function Workbench({ id }: { id: string }) {
           <button onClick={() => setTasksOpened(true)}>查看任务</button>
         </div>
       )}
+      {!observedAsset && (
+        <div className={styles.toolbar}>
+          <div className={styles.viewControls}>
+            <SegmentedControl
+              className={styles.views}
+              aria-label="工作区视图"
+              value={view}
+              onChange={(value) => switchView(value as WorkbenchView)}
+              data={[
+                { value: 'topology', label: '拓扑', icon: LayoutGrid },
+                { value: 'assets', label: '资产', icon: List },
+                { value: 'traffic', label: '流量', icon: Activity },
+                { value: 'performance', label: '性能', icon: Gauge },
+              ]
+                .filter(
+                  (item) =>
+                    ['topology', 'assets'].includes(item.value) ||
+                    (!workbench.editing && allows(environment, 'observe'))
+                )
+                .map(({ value, label, icon: Icon }) => ({
+                  value,
+                  label: (
+                    <span className={styles.viewLabel}>
+                      <Icon size={15} />
+                      <span>{label}</span>
+                    </span>
+                  ),
+                }))}
+            />
+            {!fileAsset && view === 'topology' && (
+              <ObjectLocator
+                spec={spec}
+                templates={templates}
+                onSelect={(id) => {
+                  setSelection(id)
+                  setFocusRequest({ id })
+                }}
+              />
+            )}
+          </div>
+          <div className={styles.addControls}>
+            {workbench.editing && (
+              <Menu position="bottom-end">
+                <Menu.Target>
+                  <Button
+                    variant="default"
+                    size="xs"
+                    leftSection={<Plus size={14} />}
+                    rightSection={<ChevronDown size={13} />}
+                  >
+                    添加
+                  </Button>
+                </Menu.Target>
+                <Menu.Dropdown>
+                  <Menu.Item leftSection={<Box size={16} />} onClick={() => adding('asset')}>
+                    资产
+                  </Menu.Item>
+                  <Menu.Item leftSection={<Network size={16} />} onClick={() => adding('network')}>
+                    交换机
+                  </Menu.Item>
+                  <Menu.Item leftSection={<Router size={16} />} onClick={() => adding('router')}>
+                    路由器
+                  </Menu.Item>
+                  {identity.data?.administrator && (
+                    <Menu.Item leftSection={<Router size={16} />} onClick={() => adding('external')}>
+                      外部设备
+                    </Menu.Item>
+                  )}
+                </Menu.Dropdown>
+              </Menu>
+            )}
+            <span className={styles.count}>
+              {spec.assets.length} 资产 · {spec.networks.length} 网段
+              {Boolean(spec.routers?.length) && ` · ${spec.routers?.length} 路由器`}
+              {externalDevices.length > 0 && ` · ${externalDevices.length} 外部设备`}
+            </span>
+            <button
+              className={styles.taskButton}
+              aria-label="运行任务"
+              aria-expanded={tasksOpened}
+              onClick={() => setTasksOpened(true)}
+            >
+              <ListChecks size={16} />
+              <span>任务</span>
+              {latestOperation && <Status value={latestOperation.state} />}
+            </button>
+          </div>
+        </div>
+      )}
       <div className={styles.body}>
         <section className={styles.canvas} data-view={view} aria-label="环境拓扑">
-          {!observedAsset && (
-            <div className={styles.toolbar}>
-              <div className={styles.viewControls}>
-                <SegmentedControl
-                  className={styles.views}
-                  aria-label="工作区视图"
-                  value={view}
-                  onChange={(value) => switchView(value as WorkbenchView)}
-                  data={[
-                    { value: 'topology', label: '拓扑', icon: LayoutGrid },
-                    { value: 'assets', label: '资产', icon: List },
-                    { value: 'traffic', label: '流量', icon: Activity },
-                    { value: 'performance', label: '性能', icon: Gauge },
-                  ]
-                    .filter(
-                      (item) =>
-                        ['topology', 'assets'].includes(item.value) ||
-                        (!workbench.editing && allows(environment, 'observe'))
-                    )
-                    .map(({ value, label, icon: Icon }) => ({
-                      value,
-                      label: (
-                        <span className={styles.viewLabel}>
-                          <Icon size={15} />
-                          <span>{label}</span>
-                        </span>
-                      ),
-                    }))}
-                />
-              </div>
-              <div className={styles.addControls}>
-                {workbench.editing && (
-                  <Menu position="bottom-end">
-                    <Menu.Target>
-                      <Button
-                        variant="default"
-                        size="xs"
-                        leftSection={<Plus size={14} />}
-                        rightSection={<ChevronDown size={13} />}
-                      >
-                        添加
-                      </Button>
-                    </Menu.Target>
-                    <Menu.Dropdown>
-                      <Menu.Item leftSection={<Box size={16} />} onClick={() => adding('asset')}>
-                        资产
-                      </Menu.Item>
-                      <Menu.Item leftSection={<Network size={16} />} onClick={() => adding('network')}>
-                        交换机
-                      </Menu.Item>
-                      <Menu.Item leftSection={<Router size={16} />} onClick={() => adding('router')}>
-                        路由器
-                      </Menu.Item>
-                      {identity.data?.administrator && (
-                        <Menu.Item leftSection={<Router size={16} />} onClick={() => adding('external')}>
-                          外部设备
-                        </Menu.Item>
-                      )}
-                    </Menu.Dropdown>
-                  </Menu>
-                )}
-                <span className={styles.count}>
-                  {spec.assets.length} 资产 · {spec.networks.length} 网段
-                  {Boolean(spec.routers?.length) && ` · ${spec.routers?.length} 路由器`}
-                  {externalDevices.length > 0 && ` · ${externalDevices.length} 外部设备`}
-                </span>
-                {!fileAsset && view === 'topology' && (
-                  <ObjectLocator
-                    spec={spec}
-                    templates={templates}
-                    states={assetStates}
-                    selection={selection}
-                    onSelect={(id) => {
-                      setSelection(id)
-                      setFocusRequest({ id })
-                    }}
-                  />
-                )}
-                <button
-                  className={styles.taskButton}
-                  aria-label="运行任务"
-                  aria-expanded={tasksOpened}
-                  onClick={() => setTasksOpened(true)}
-                >
-                  <ListChecks size={16} />
-                  <span>任务</span>
-                  {latestOperation && <Status value={latestOperation.state} />}
-                </button>
-              </div>
-            </div>
-          )}
           <div
             key={fileAsset ? `files-${fileAsset.id}` : observedAsset ? `observe-${observedAsset.id}` : view}
             className={`${styles.viewContent} ${motionStyles.enter}`}

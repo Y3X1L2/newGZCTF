@@ -107,7 +107,10 @@ export function ObjectInspector({
   const assetServices = services.filter((item) => item.assetId === asset?.id)
   return (
     <AnimatedPanel className={styles.inspector} label="对象详情">
-      <div key={asset?.id ?? network?.id ?? router?.id ?? device?.id} className={motionStyles.enter}>
+      <div
+        key={asset?.id ?? network?.id ?? router?.id ?? device?.id}
+        className={`${motionStyles.enter} ${styles.content}`}
+      >
         <header className={styles.header}>
           <span className={styles.symbol}>
             {device || router ? (

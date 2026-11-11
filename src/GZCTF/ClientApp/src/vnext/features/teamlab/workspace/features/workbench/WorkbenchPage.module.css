@@ -127,11 +127,6 @@
   gap: 10px;
   overflow: visible;
 }
-.canvas[data-view='traffic'] .toolbar {
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  box-shadow: var(--shadow);
-}
 .toolbar {
   min-height: 50px;
   display: flex;
@@ -141,7 +136,9 @@
   padding: var(--yn-space-2) var(--yn-space-4);
   flex-wrap: wrap;
   background: var(--surface);
-  border-bottom: 1px solid var(--line);
+  border: 1px solid var(--line);
+  border-radius: var(--yn-radius-lg);
+  margin-top: var(--yn-space-4);
   flex-shrink: 0;
   z-index: 2;
 }
@@ -150,9 +147,13 @@
   display: flex;
   align-items: center;
   gap: 12px;
+  flex-wrap: wrap;
 }
 .views {
   flex-shrink: 0;
+}
+.addControls {
+  margin-left: auto;
 }
 .viewLabel {
   display: flex;
@@ -307,8 +308,7 @@
     margin: 0;
   }
   .toolbar {
-    padding: 0 8px;
-    overflow-x: auto;
+    padding: 8px;
   }
   .viewLabel {
     font-size: 12px;

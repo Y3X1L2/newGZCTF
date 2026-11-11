@@ -1,10 +1,11 @@
 import { MantineProvider } from '@mantine/core'
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { EnvironmentSpec } from '../../api/client'
 import { ObjectLocator } from './ObjectLocator'
 
-beforeAll(() =>
+beforeAll(() => {
+  Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { configurable: true, value: vi.fn() })
   vi.stubGlobal(
     'ResizeObserver',
     class {
@@ -13,8 +14,11 @@ beforeAll(() =>
       disconnect() {}
     }
   )
-)
-afterAll(() => vi.unstubAllGlobals())
+})
+afterAll(() => {
+  Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView')
+  vi.unstubAllGlobals()
+})
 
 const spec: EnvironmentSpec = {
   assets: [
@@ -40,7 +44,7 @@ function setup() {
   const select = vi.fn()
   render(
     <MantineProvider env="test">
-      <ObjectLocator spec={spec} templates={[]} states={new Map([['web', 'running']])} onSelect={select} />
+      <ObjectLocator spec={spec} templates={[]} onSelect={select} />
     </MantineProvider>
   )
   fireEvent.click(screen.getByRole('button', { name: '定位对象' }))
@@ -48,36 +52,33 @@ function setup() {
 }
 
 describe('object locator', () => {
-  it('offers selection immediately, lists each object once, and resets filters on reopen', async () => {
+  it('starts compact, locates using keyboard, and offers the recent object on reopen', async () => {
     const select = setup()
-    const dialog = await screen.findByRole('dialog', { name: '定位对象' })
-    expect(within(dialog).getAllByRole('button')).toHaveLength(4)
-    expect(within(dialog).getByRole('button', { name: /unexpected-container-name/ })).toHaveTextContent(
-      '10.0.0.2 · 172.22.1.2'
-    )
-    await waitFor(() => expect(screen.getByRole('textbox')).not.toHaveFocus())
-    fireEvent.click(within(dialog).getByRole('radio', { name: '资产' }))
-    expect(within(dialog).getAllByRole('button')).toHaveLength(1)
-    fireEvent.click(within(dialog).getByRole('button', { name: /unexpected-container-name/ }))
-    expect(select).toHaveBeenCalledWith('web')
-    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
-    fireEvent.click(screen.getByRole('button', { name: '定位对象' }))
-    expect(within(await screen.findByRole('dialog')).getAllByRole('button')).toHaveLength(4)
-  })
-
-  it('finds a machine by its second address or network and keeps routers reachable', async () => {
-    setup()
-    const dialog = await screen.findByRole('dialog')
-    const search = within(dialog).getByRole('textbox')
+    expect(screen.queryByRole('option')).not.toBeInTheDocument()
+    const search = await screen.findByRole('textbox', { name: '搜索拓扑对象' })
     fireEvent.change(search, { target: { value: '172.22.1.2' } })
-    expect(within(dialog).getAllByRole('button')).toHaveLength(1)
+    expect(screen.getAllByRole('option')).toHaveLength(1)
+    fireEvent.keyDown(search, { key: 'ArrowDown', code: 'ArrowDown' })
+    fireEvent.keyDown(search, { key: 'Enter', code: 'Enter' })
+    expect(select).toHaveBeenCalledWith('web')
+    await waitFor(() => expect(screen.queryByRole('option')).not.toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: '定位对象' }))
+    expect(screen.getByText('最近定位')).toBeInTheDocument()
+    expect(screen.getAllByRole('option')).toHaveLength(1)
+  })
+  it('matches every connected network without duplicate results and closes with Escape', async () => {
+    setup()
+    const search = await screen.findByRole('textbox', { name: '搜索拓扑对象' })
     fireEvent.change(search, { target: { value: 'internal lan' } })
-    expect(within(dialog).getByRole('button', { name: /unexpected-container-name/ })).toBeInTheDocument()
-    fireEvent.change(search, { target: { value: '' } })
-    fireEvent.click(within(dialog).getByRole('radio', { name: '网段' }))
-    expect(within(dialog).getByRole('button', { name: /Gateway/ })).toBeInTheDocument()
-    expect(within(dialog).queryByRole('button', { name: /unexpected-container-name/ })).not.toBeInTheDocument()
+    expect(screen.getAllByRole('option')).toHaveLength(2)
+    expect(screen.getByRole('option', { name: /unexpected-container-name/ })).toHaveTextContent(
+      'Entry LAN · Internal LAN'
+    )
+    fireEvent.change(search, { target: { value: 'Gateway' } })
+    expect(screen.getAllByRole('option')).toHaveLength(1)
     fireEvent.change(search, { target: { value: 'missing' } })
-    expect(within(dialog).getByText('没有匹配的对象')).toBeInTheDocument()
+    expect(screen.getByText('没有匹配的对象')).toBeInTheDocument()
+    fireEvent.keyDown(search, { key: 'Escape' })
+    await waitFor(() => expect(screen.queryByRole('textbox', { name: '搜索拓扑对象' })).not.toBeInTheDocument())
   })
 })
