@@ -19,6 +19,7 @@ export function PacketList({
   packets,
   selectedId,
   onSelect,
+  onOpen,
   alerts,
   loading,
   onOlder,
@@ -28,6 +29,7 @@ export function PacketList({
   packets: Packet[]
   selectedId?: string
   onSelect: (id: string) => void
+  onOpen?: (id: string) => void
   alerts: Schema<'SecurityAlert'>[]
   loading: boolean
   onOlder?: () => void
@@ -89,11 +91,15 @@ export function PacketList({
                 data-risk={risk?.value}
                 data-protocol={packet.protocol.toLowerCase()}
                 tabIndex={selectedId === packet.id || (!selectedId && index === 0) ? 0 : -1}
-                onClick={() => onSelect(packet.id!)}
+                onClick={() => {
+                  onSelect(packet.id!)
+                  onOpen?.(packet.id!)
+                }}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter' || event.key === ' ') {
                     event.preventDefault()
                     onSelect(packet.id!)
+                    onOpen?.(packet.id!)
                   }
                 }}
               >

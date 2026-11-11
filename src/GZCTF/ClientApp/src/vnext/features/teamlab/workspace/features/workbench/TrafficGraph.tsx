@@ -375,6 +375,10 @@ function Graph({
           onPaneClick={() => onSelect(undefined)}
           nodesConnectable={false}
           nodesDraggable={false}
+          zoomOnScroll={false}
+          zoomActivationKeyCode="Control"
+          panOnScroll={false}
+          preventScrolling={false}
           deleteKeyCode={null}
           minZoom={0.1}
           maxZoom={2}

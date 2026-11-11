@@ -250,7 +250,7 @@
 .listTools {
   padding: 16px 20px;
   display: grid;
-  grid-template-columns: minmax(160px, 300px) 140px;
+  grid-template-columns: auto minmax(160px, 300px) 140px;
   gap: 10px;
   border-bottom: 1px solid var(--line);
 }
@@ -392,7 +392,7 @@
   }
   .listTools {
     padding: 12px;
-    grid-template-columns: minmax(0, 1fr) 120px;
+    grid-template-columns: minmax(0, 1fr);
   }
   .assetTable td,
   .assetTable th {
