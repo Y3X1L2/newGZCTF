@@ -203,20 +203,17 @@
   border-top: 1px solid var(--line);
   padding-top: 16px;
 }
-.details summary {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  list-style: none;
-  cursor: pointer;
+.details :global(.mantine-Accordion-item) {
+  border: 0;
+}
+.details :global(.mantine-Accordion-control) {
+  padding: 0;
   font-size: 12px;
   color: var(--muted);
 }
-.details summary::-webkit-details-marker {
-  display: none;
-}
-.details[open] summary svg {
-  transform: rotate(180deg);
+.details :global(.mantine-Accordion-label),
+.details :global(.mantine-Accordion-content) {
+  padding: 0;
 }
 .error {
   margin: 12px 16px;

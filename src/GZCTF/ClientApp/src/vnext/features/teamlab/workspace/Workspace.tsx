@@ -1,7 +1,9 @@
 import { MantineProvider } from '@mantine/core'
+import { useReducedMotion } from '@mantine/hooks'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import flowStyles from '@xyflow/react/dist/style.css?inline'
 import { Boxes, Layers3 } from 'lucide-react'
+import { MotionConfig } from 'motion/react'
 import { lazy, Suspense, useId, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Route, Routes } from 'react-router'
@@ -10,6 +12,7 @@ import { useVNextTheme } from '../../../app/VNextThemeProvider'
 import styles from './Workspace.module.css'
 import { createWorkspaceApi, WorkspaceApiContext } from './api/client'
 import { EnvironmentsPage } from './features/environments/EnvironmentsPage'
+import { workspaceMotionDuration } from './foundation/AnimatedPanel'
 import { Loading } from './foundation/Feedback'
 import { WorkspaceRouteContext, NavLink } from './routing'
 import { workspaceTheme } from './theme'
@@ -32,6 +35,7 @@ export function Workspace({
   consoleMode?: boolean
 }) {
   const { theme } = useVNextTheme()
+  const reducedMotion = useReducedMotion()
   const root = useRef<HTMLDivElement>(null)
   const portalId = useId()
   const [client] = useState(
@@ -52,7 +56,10 @@ export function Workspace({
     [gameId, environmentId]
   )
   return (
-    <>
+    <MotionConfig
+      reducedMotion="user"
+      transition={{ duration: reducedMotion ? 0 : workspaceMotionDuration / 1000, ease: 'easeOut' }}
+    >
       {/* Keep overlays outside the animated route while retaining workspace-scoped styles. */}
       {createPortal(
         <div className={styles.root} data-netlab-workspace>
@@ -73,6 +80,7 @@ export function Workspace({
             cssVariablesSelector="[data-netlab-theme]"
             cssVariablesResolver={() => ({
               variables: {
+                '--workspace-motion-duration': `${reducedMotion ? 0 : workspaceMotionDuration}ms`,
                 '--mantine-primary-color-filled': 'var(--yn-color-control-strong)',
                 '--mantine-primary-color-filled-hover': 'var(--yn-color-control-strong-hover)',
                 '--mantine-color-error': 'var(--yn-color-danger)',
@@ -100,7 +108,7 @@ export function Workspace({
           </MantineProvider>
         </div>
       </div>
-    </>
+    </MotionConfig>
   )
 }
 

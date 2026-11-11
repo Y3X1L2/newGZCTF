@@ -94,7 +94,6 @@
   min-width: 0;
   display: flex;
   position: relative;
-  gap: var(--yn-space-4);
   padding: var(--yn-space-4) 0;
   align-items: flex-start;
   flex-wrap: wrap;
@@ -173,7 +172,13 @@
   box-shadow: var(--shadow-panel);
   overflow: hidden;
 }
-.canvas > :global(.react-flow) {
+.viewContent {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+.viewContent > :global(.react-flow) {
   flex: 1;
 }
 .canvas[data-view='traffic'] {
@@ -208,32 +213,16 @@
   gap: 12px;
 }
 .views {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 3px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--surface-subtle);
+  flex-shrink: 0;
 }
-.views button {
+.viewLabel {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
-  height: 30px;
-  padding: 0 10px;
-  border: 0;
-  border-radius: 4px;
-  background: none;
-  color: var(--muted);
+  padding-inline: 2px;
   font-size: 13px;
-  cursor: pointer;
-}
-.views button[aria-pressed='true'] {
-  color: var(--text);
-  background: var(--surface);
-  box-shadow: 0 1px 3px #00000012;
-  font-weight: 600;
+  white-space: nowrap;
 }
 .count {
   font-size: 12px;
@@ -266,18 +255,6 @@
 }
 .listStatus {
   flex: 0 0 140px;
-}
-.listContent {
-  min-width: 0;
-  animation: listEnter 180ms ease-out;
-}
-@keyframes listEnter {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
 }
 .tableScroll {
   flex: 1;
@@ -397,13 +374,10 @@
     padding: 0 8px;
     overflow-x: auto;
   }
-  .views {
-    gap: 2px;
-  }
-  .views button {
+  .viewLabel {
     font-size: 12px;
-    padding: 0 7px;
-    white-space: nowrap;
+    gap: 4px;
+    padding: 0;
   }
   .count {
     display: none;
@@ -413,7 +387,6 @@
   }
   .body {
     padding: var(--yn-space-3) 0;
-    gap: var(--yn-space-3);
   }
   .listTools {
     padding: 12px;
@@ -571,7 +544,6 @@
   .listKind {
     --sc-transition-duration: 0ms;
   }
-  .listContent,
   .storageWaveMotion {
     animation: none;
   }

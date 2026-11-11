@@ -655,6 +655,13 @@
     display: none;
   }
 }
+.root :where(button, a, summary) {
+  transition:
+    color var(--workspace-motion-duration, 180ms) ease-out,
+    background-color var(--workspace-motion-duration, 180ms) ease-out,
+    border-color var(--workspace-motion-duration, 180ms) ease-out,
+    box-shadow var(--workspace-motion-duration, 180ms) ease-out;
+}
 @media (prefers-reduced-motion: reduce) {
   .root :global(*),
   .root :global(*::before),

@@ -1,6 +1,8 @@
 import { createTheme, defaultVariantColorsResolver } from '@mantine/core'
+import { workspaceMotionDuration } from './foundation/AnimatedPanel'
 
 export const workspaceTheme = createTheme({
+  respectReducedMotion: true,
   primaryColor: 'yinyu',
   colors: {
     yinyu: [
@@ -62,6 +64,9 @@ export const workspaceTheme = createTheme({
   },
   headings: { fontWeight: '600' },
   components: {
+    SegmentedControl: { defaultProps: { transitionDuration: workspaceMotionDuration } },
+    Accordion: { defaultProps: { transitionDuration: workspaceMotionDuration } },
+    Popover: { defaultProps: { transitionProps: { duration: workspaceMotionDuration } } },
     Button: {
       defaultProps: { size: 'sm' },
       styles: { root: { fontWeight: 500, letterSpacing: 0 } },
@@ -82,7 +87,10 @@ export const workspaceTheme = createTheme({
       },
     },
     Drawer: {
-      defaultProps: { closeButtonProps: { 'aria-label': '关闭抽屉' } },
+      defaultProps: {
+        closeButtonProps: { 'aria-label': '关闭抽屉' },
+        transitionProps: { duration: workspaceMotionDuration },
+      },
       styles: {
         content: { background: 'var(--surface)' },
         header: {
@@ -95,7 +103,11 @@ export const workspaceTheme = createTheme({
       },
     },
     Modal: {
-      defaultProps: { radius: 'md', closeButtonProps: { 'aria-label': '关闭对话框' } },
+      defaultProps: {
+        radius: 'md',
+        closeButtonProps: { 'aria-label': '关闭对话框' },
+        transitionProps: { duration: workspaceMotionDuration },
+      },
       styles: {
         content: { background: 'var(--surface)' },
         header: { background: 'var(--surface)' },
@@ -103,7 +115,7 @@ export const workspaceTheme = createTheme({
       },
     },
     Menu: {
-      defaultProps: { shadow: 'sm', offset: 6 },
+      defaultProps: { shadow: 'sm', offset: 6, transitionProps: { duration: workspaceMotionDuration } },
       styles: {
         dropdown: { background: 'var(--surface)', borderColor: 'var(--line)' },
         item: { fontSize: 14 },
