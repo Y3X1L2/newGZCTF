@@ -753,6 +753,8 @@ function Workbench({ id }: { id: string }) {
             <div className={styles.assetList}>
               <div className={styles.listTools}>
                 <SegmentedControl
+                  className={styles.listKind}
+                  size="sm"
                   aria-label="对象类型"
                   value={listKind}
                   onChange={(value) => {
@@ -765,6 +767,7 @@ function Workbench({ id }: { id: string }) {
                   ]}
                 />
                 <TextInput
+                  className={styles.listSearch}
                   aria-label={listKind === 'assets' ? '查找资产' : '查找网段'}
                   placeholder="名称或地址"
                   leftSection={<Search size={15} />}
@@ -773,6 +776,7 @@ function Workbench({ id }: { id: string }) {
                 />
                 {listKind === 'assets' && (
                   <Select
+                    className={styles.listStatus}
                     aria-label="资产状态"
                     value={assetFilter}
                     onChange={(value) => setAssetFilter(value!)}
@@ -787,85 +791,87 @@ function Workbench({ id }: { id: string }) {
                   />
                 )}
               </div>
-              {listKind === 'networks' ? (
-                <NetworkList spec={spec} query={query} selection={selection} onSelect={setSelection} />
-              ) : (
-                <div className={styles.tableScroll}>
-                  <table className={styles.assetTable} aria-label="运行资产">
-                    <thead>
-                      <tr>
-                        <th>资产</th>
-                        <th>状态</th>
-                        <th>连接网段</th>
-                        <th>地址</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {listedAssets.map((item) => (
-                        <tr
-                          key={item.id}
-                          aria-selected={selection === item.id}
-                          onClick={() => setSelection(item.id)}
-                          onContextMenu={(event) => {
-                            event.preventDefault()
-                            setSelection(item.id)
-                            setContext({
-                              id: item.id,
-                              x: event.clientX,
-                              y: event.clientY,
-                            })
-                          }}
-                        >
-                          <td>
-                            <button className={styles.assetName} onClick={() => setSelection(item.id)}>
-                              {templatesById.get(item.templateId)?.kind === 'vm' ? (
-                                <Monitor size={17} />
-                              ) : (
-                                <Box size={17} />
-                              )}
-                              {item.name}
-                            </button>
-                          </td>
-                          <td>
-                            <Status value={assetStates.get(item.id) ?? 'draft'} />
-                          </td>
-                          <td>
-                            {item.interfaces
-                              .map((iface) => spec.networks.find((network) => network.id === iface.networkId)?.name)
-                              .join('、')}
-                          </td>
-                          <td className="mono">
-                            {item.interfaces
-                              .map((iface) => iface.address)
-                              .filter(Boolean)
-                              .join('、')}
-                          </td>
+              <div key={listKind} className={styles.listContent}>
+                {listKind === 'networks' ? (
+                  <NetworkList spec={spec} query={query} selection={selection} onSelect={setSelection} />
+                ) : (
+                  <div className={styles.tableScroll}>
+                    <table className={styles.assetTable} aria-label="运行资产">
+                      <thead>
+                        <tr>
+                          <th>资产</th>
+                          <th>状态</th>
+                          <th>连接网段</th>
+                          <th>地址</th>
                         </tr>
-                      ))}
-                      {listedExternalDevices.map(({ device, network }) => (
-                        <tr
-                          key={device.id}
-                          aria-selected={selection === device.id}
-                          onClick={() => setSelection(device.id)}
-                        >
-                          <td>
-                            <button className={styles.assetName} onClick={() => setSelection(device.id)}>
-                              <Router size={17} />
-                              {device.name}
-                            </button>
-                          </td>
-                          <td>外部设备</td>
-                          <td>{network.name}</td>
-                          <td className="mono">{device.address}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  {!listedAssets.length && !listedExternalDevices.length && (
-                    <div className={styles.empty}>没有匹配的资产</div>
-                  )}
-                </div>
-              )}
+                      </thead>
+                      <tbody>
+                        {listedAssets.map((item) => (
+                          <tr
+                            key={item.id}
+                            aria-selected={selection === item.id}
+                            onClick={() => setSelection(item.id)}
+                            onContextMenu={(event) => {
+                              event.preventDefault()
+                              setSelection(item.id)
+                              setContext({
+                                id: item.id,
+                                x: event.clientX,
+                                y: event.clientY,
+                              })
+                            }}
+                          >
+                            <td>
+                              <button className={styles.assetName} onClick={() => setSelection(item.id)}>
+                                {templatesById.get(item.templateId)?.kind === 'vm' ? (
+                                  <Monitor size={17} />
+                                ) : (
+                                  <Box size={17} />
+                                )}
+                                {item.name}
+                              </button>
+                            </td>
+                            <td>
+                              <Status value={assetStates.get(item.id) ?? 'draft'} />
+                            </td>
+                            <td>
+                              {item.interfaces
+                                .map((iface) => spec.networks.find((network) => network.id === iface.networkId)?.name)
+                                .join('、')}
+                            </td>
+                            <td className="mono">
+                              {item.interfaces
+                                .map((iface) => iface.address)
+                                .filter(Boolean)
+                                .join('、')}
+                            </td>
+                          </tr>
+                        ))}
+                        {listedExternalDevices.map(({ device, network }) => (
+                          <tr
+                            key={device.id}
+                            aria-selected={selection === device.id}
+                            onClick={() => setSelection(device.id)}
+                          >
+                            <td>
+                              <button className={styles.assetName} onClick={() => setSelection(device.id)}>
+                                <Router size={17} />
+                                {device.name}
+                              </button>
+                            </td>
+                            <td>外部设备</td>
+                            <td>{network.name}</td>
+                            <td className="mono">{device.address}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {!listedAssets.length && !listedExternalDevices.length && (
+                      <div className={styles.empty}>没有匹配的资产</div>
+                    )}
+                  </div>
+                )}
+              </div>
               {workbench.editing && (
                 <Button
                   variant="subtle"

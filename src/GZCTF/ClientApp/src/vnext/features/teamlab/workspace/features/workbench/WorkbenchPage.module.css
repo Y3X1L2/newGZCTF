@@ -249,10 +249,35 @@
 }
 .listTools {
   padding: 16px 20px;
-  display: grid;
-  grid-template-columns: auto minmax(160px, 300px) 140px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 10px;
   border-bottom: 1px solid var(--line);
+}
+.listKind {
+  flex: 0 0 160px;
+  width: 160px;
+}
+.listSearch {
+  flex: 1 1 200px;
+  min-width: 0;
+  max-width: 300px;
+}
+.listStatus {
+  flex: 0 0 140px;
+}
+.listContent {
+  min-width: 0;
+  animation: listEnter 180ms ease-out;
+}
+@keyframes listEnter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 .tableScroll {
   flex: 1;
@@ -392,7 +417,6 @@
   }
   .listTools {
     padding: 12px;
-    grid-template-columns: minmax(0, 1fr);
   }
   .assetTable td,
   .assetTable th {
@@ -544,6 +568,10 @@
   font-weight: 500;
 }
 @media (prefers-reduced-motion: reduce) {
+  .listKind {
+    --sc-transition-duration: 0ms;
+  }
+  .listContent,
   .storageWaveMotion {
     animation: none;
   }
