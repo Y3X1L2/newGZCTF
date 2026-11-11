@@ -127,7 +127,6 @@ export default function ObservationWorkspace({
                       unit={unit.unit}
                       scale={unit.scale}
                       names={interfaces}
-                      group={'asset-performance-' + environmentId + '-' + asset.id}
                     />
                   </section>
                 )

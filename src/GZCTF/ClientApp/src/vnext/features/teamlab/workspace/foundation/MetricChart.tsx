@@ -60,7 +60,6 @@ export function MetricChart({
   names = emptyNames,
   seriesBy = 'interface',
   colors,
-  group,
   compact = false,
   timeline = false,
   onTimeRange,
@@ -76,7 +75,6 @@ export function MetricChart({
   names?: ReadonlyMap<string, string>
   seriesBy?: 'metric' | 'asset' | 'node' | 'interface'
   colors?: string[]
-  group?: string
   compact?: boolean
   timeline?: boolean
   onTimeRange?: (start: string, end: string) => void
@@ -101,10 +99,6 @@ export function MetricChart({
       if (zoom?.startValue !== undefined && zoom.endValue !== undefined)
         rangeCallback.current?.(new Date(zoom.startValue).toISOString(), new Date(zoom.endValue).toISOString())
     })
-    if (group) {
-      current.group = group
-      echarts.connect(group)
-    }
     const observer = new ResizeObserver(() => current.resize())
     observer.observe(host.current!)
     return () => {
@@ -112,7 +106,7 @@ export function MetricChart({
       current.dispose()
       chart.current = null
     }
-  }, [theme, group])
+  }, [theme])
   useEffect(() => {
     const css = getComputedStyle(host.current!)
     const muted = css.getPropertyValue('--muted').trim()
@@ -411,7 +405,6 @@ export function MetricChart({
     seriesBy,
     theme,
     colors,
-    group,
     compact,
     timeline,
     timeWindow,
