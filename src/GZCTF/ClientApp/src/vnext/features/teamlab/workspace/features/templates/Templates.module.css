@@ -1,6 +1,6 @@
 .catalog {
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--yn-radius-lg);
   background: var(--surface);
   box-shadow: var(--shadow-panel);
   overflow: hidden;
@@ -24,7 +24,7 @@
 }
 .library {
   display: grid;
-  grid-template-columns: minmax(300px, 31%) minmax(0, 1fr);
+  grid-template-columns: minmax(260px, 28%) minmax(0, 1fr);
   min-height: 530px;
 }
 .directory {
@@ -34,9 +34,7 @@
   padding: 12px;
 }
 .items {
-  max-height: calc(100dvh - 270px);
-  min-height: 300px;
-  overflow-y: auto;
+  min-width: 0;
   display: grid;
   align-content: start;
   gap: 6px;
@@ -44,7 +42,7 @@
 .item {
   width: 100%;
   border: 1px solid transparent;
-  border-radius: 7px;
+  border-radius: var(--yn-radius-md);
   background: none;
   color: var(--text);
   padding: 14px 12px;
@@ -86,7 +84,7 @@
 .symbol {
   color: var(--accent);
   background: var(--accent-soft);
-  border-radius: 7px;
+  border-radius: var(--yn-radius-md);
   height: 34px;
   display: grid;
   place-items: center;
@@ -127,7 +125,7 @@
   gap: 6px;
   background: var(--surface-subtle);
   border: 1px solid var(--line);
-  border-radius: 7px;
+  border-radius: var(--yn-radius-md);
   padding: 14px 16px;
 }
 .specs strong {
@@ -291,7 +289,6 @@
     border-bottom: 1px solid var(--line);
   }
   .items {
-    max-height: 250px;
     min-height: 0;
   }
   .detail {

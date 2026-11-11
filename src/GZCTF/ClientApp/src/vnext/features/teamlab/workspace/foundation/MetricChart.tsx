@@ -60,12 +60,13 @@ export function MetricChart({
   names = emptyNames,
   seriesBy = 'interface',
   colors,
-  group,
   compact = false,
   timeline = false,
   onTimeRange,
   timeWindow,
   annotations,
+  showLegend = true,
+  focusedAsset,
 }: {
   history: History
   measures: Metric[]
@@ -74,12 +75,13 @@ export function MetricChart({
   names?: ReadonlyMap<string, string>
   seriesBy?: 'metric' | 'asset' | 'node' | 'interface'
   colors?: string[]
-  group?: string
   compact?: boolean
   timeline?: boolean
   onTimeRange?: (start: string, end: string) => void
   timeWindow?: { start: string; end: string }
   annotations?: { time: string; label: string; color: string }[]
+  showLegend?: boolean
+  focusedAsset?: string
 }) {
   const host = useRef<HTMLDivElement>(null)
   const chart = useRef<echarts.EChartsType>(null)
@@ -97,10 +99,6 @@ export function MetricChart({
       if (zoom?.startValue !== undefined && zoom.endValue !== undefined)
         rangeCallback.current?.(new Date(zoom.startValue).toISOString(), new Date(zoom.endValue).toISOString())
     })
-    if (group) {
-      current.group = group
-      echarts.connect(group)
-    }
     const observer = new ResizeObserver(() => current.resize())
     observer.observe(host.current!)
     return () => {
@@ -108,7 +106,7 @@ export function MetricChart({
       current.dispose()
       chart.current = null
     }
-  }, [theme, group])
+  }, [theme])
   useEffect(() => {
     const css = getComputedStyle(host.current!)
     const muted = css.getPropertyValue('--muted').trim()
@@ -130,7 +128,7 @@ export function MetricChart({
       ),
     ]
     const series = plotted
-      .filter((item) => measures.includes(item.metric))
+      .filter((item) => measures.includes(item.metric) && (!focusedAsset || item.assetId === focusedAsset))
       .map((item, index) => {
         const identity = seriesBy === 'asset' ? item.assetId : seriesBy === 'node' ? item.nodeId : item.interfaceId
         const color = palette[(timeline ? identities.indexOf(identity) : index) % palette.length]
@@ -224,7 +222,7 @@ export function MetricChart({
         grid: {
           left: 12,
           right: 18,
-          top: timeline ? 30 : compact ? 25 : 30,
+          top: timeline && !showLegend ? 12 : compact ? 25 : 30,
           bottom: timeline ? 34 : compact ? 12 : 36,
           containLabel: true,
         },
@@ -313,7 +311,7 @@ export function MetricChart({
           },
         },
         legend: {
-          show: !compact && (measures.length > 1 || series.length > 1),
+          show: showLegend && !compact && (measures.length > 1 || series.length > 1),
           top: timeline ? 4 : undefined,
           bottom: timeline ? undefined : 0,
           left: 12,
@@ -407,11 +405,12 @@ export function MetricChart({
     seriesBy,
     theme,
     colors,
-    group,
     compact,
     timeline,
     timeWindow,
     annotations,
+    showLegend,
+    focusedAsset,
   ])
   return (
     <div

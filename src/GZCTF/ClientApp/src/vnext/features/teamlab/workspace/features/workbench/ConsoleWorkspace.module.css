@@ -1,65 +1,35 @@
 .workspace {
-  height: min(38dvh, 390px);
-  min-height: 230px;
-  flex: 0 0 auto;
+  height: 100%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   background: var(--surface);
-  border-top: 1px solid var(--line);
-  box-shadow: 0 -3px 12px #00000005;
+  overflow: hidden;
 }
 .workspace:fullscreen {
   height: 100dvh;
 }
-.workspace[data-collapsed='true'] {
-  height: 39px;
-  min-height: 39px;
-}
-.workspace[data-collapsed='true'] .toolbar {
-  border-bottom: 0;
-}
-.toolbar,
-.tabs,
-.tab {
-  display: flex;
-  align-items: center;
-}
 .toolbar {
-  padding: 0 12px;
-  height: 38px;
-  flex-shrink: 0;
-  justify-content: space-between;
-  border-bottom: 1px solid var(--line);
-  background: var(--surface-subtle);
-}
-.tabs {
-  height: 100%;
-  overflow-x: auto;
-  min-width: 0;
-}
-.tab {
-  height: 100%;
-  gap: 3px;
-  border-bottom: 2px solid transparent;
-  padding: 0 8px;
-  color: var(--muted);
-  flex-shrink: 0;
-}
-.tab.active {
-  color: var(--text);
-  border-bottom-color: var(--accent);
-  background: var(--canvas);
-}
-.tab button[role='tab'] {
-  border: 0;
-  background: transparent;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 7px 0;
-  color: inherit;
-  font-size: 13px;
-  white-space: nowrap;
+  justify-content: space-between;
+  gap: var(--yn-space-3);
+  padding: var(--yn-space-3) var(--yn-space-4);
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+}
+.title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--yn-space-2);
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: var(--yn-font-md);
+}
+.title span {
+  font-weight: 400;
+  color: var(--muted);
 }
 .connection {
   display: flex;

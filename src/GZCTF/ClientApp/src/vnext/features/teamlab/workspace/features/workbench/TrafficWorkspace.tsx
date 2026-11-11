@@ -1,12 +1,9 @@
-import { useWorkspaceRoute } from '../../routing'
 import { ActionIcon, Button, Menu, Modal, Select, TextInput, Tooltip, useComputedColorScheme } from '@mantine/core'
-import { useDebouncedValue, useMediaQuery } from '@mantine/hooks'
+import { useDebouncedValue } from '@mantine/hooks'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowLeft,
   Check,
-  ChevronDown,
-  ChevronUp,
   Download,
   Ellipsis,
   Filter,
@@ -18,12 +15,14 @@ import {
   Play,
   X,
 } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useWorkspaceApi, type Environment, type Schema } from '../../api/client'
-import { MetricChart } from '../../foundation/MetricChart'
 import { byteUnit, clockTime, dateTime, reading } from '../../foundation/format'
-import { PacketBytes, PacketList, PacketProtocols, RiskRecords, type Field } from './PacketWorkspace'
+import { useSearchParams, useWorkspaceRoute } from '../../routing'
+import { PacketDetailDialog } from './PacketDetailDialog'
+import { PacketList, RiskRecords } from './PacketWorkspace'
 import { TrafficGraph, riskLevels, riskLevel, type TrafficSelection } from './TrafficGraph'
+import { TrafficTimeline } from './TrafficTimeline'
 import styles from './TrafficWorkspace.module.css'
 import {
   buildTrafficLinks,
@@ -58,11 +57,9 @@ const saveBlob = (blob: Blob, name: string) => {
 
 export default function TrafficWorkspace({
   environment,
-  onClose,
   onView,
 }: {
   environment: Environment
-  onClose: () => void
   onView?: (view: Schema<'CanvasView'>) => Promise<unknown>
 }) {
   const api = useWorkspaceApi()
@@ -72,8 +69,7 @@ export default function TrafficWorkspace({
     const css = getComputedStyle(element.current!)
     return Array.from({ length: 8 }, (_, i) => css.getPropertyValue(`--chart-${i + 1}`).trim())
   }, [scheme, element])
-  const host = useRef<HTMLElement>(null),
-    panes = useRef<HTMLDivElement>(null)
+  const host = useRef<HTMLElement>(null)
   const [fullscreen, setFullscreen] = useState(false)
   const [fullscreenError, setFullscreenError] = useState<string>()
   useEffect(() => {
@@ -88,27 +84,27 @@ export default function TrafficWorkspace({
   const [selection, setSelection] = useState<TrafficSelection>(),
     [level, setLevel] = useState<string>(),
     [protocol, setProtocol] = useState<string | null>(null)
-  const [timeRange, setTimeRange] = useState<{ start: string; end: string }>(),
-    [timeline, setTimeline] = useState(() => window.matchMedia('(min-height: 960px) and (min-width: 901px)').matches)
+  const [timeRange, setTimeRange] = useState<{ start: string; end: string }>()
   const [packetTimeWindow] = useDebouncedValue(timeRange, 250)
-  const [selectedId, setSelectedId] = useState<string>(),
-    [field, setField] = useState<Field>()
-  const [recordView, setRecordView] = useState('packets'),
-    [chosenAlert, setChosenAlert] = useState<Schema<'SecurityAlert'>>()
-  const [columns, setColumns] = useState(42),
-    [rows, setRows] = useState(58),
-    [mobilePane, setMobilePane] = useState('packets'),
-    [mobileDetail, setMobileDetail] = useState('protocol')
+  const [selectedId, setSelectedId] = useState<string>()
+  const [detailOpen, setDetailOpen] = useState(false)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const requestedView = searchParams.get('traffic')
+  const recordView = requestedView === 'packets' || requestedView === 'alerts' ? requestedView : 'overview'
+  const setRecordView = (value: 'overview' | 'packets' | 'alerts') =>
+    setSearchParams((params) => {
+      if (value === 'overview') params.delete('traffic')
+      else params.set('traffic', value)
+      return params
+    })
+  const [chosenAlert, setChosenAlert] = useState<Schema<'SecurityAlert'>>()
   const [filesOpen, setFilesOpen] = useState(false),
     [rolesOpen, setRolesOpen] = useState(false),
     [roles, setRoles] = useState<Record<string, string>>({})
-  const dragging = useRef<'column' | 'row' | null>(null)
   const [graphTools, setGraphTools] = useState<HTMLSpanElement | null>(null)
-  const narrow = useMediaQuery('(max-width: 900px)', undefined, {
-    getInitialValueInEffect: false,
-  })
-  const graphVisible = !narrow || mobilePane === 'graph'
-  const packetsVisible = (!narrow || mobilePane === 'packets') && recordView === 'packets'
+  const graphVisible = recordView === 'overview'
+  const inlinePackets = graphVisible && Boolean(selection)
+  const packetsVisible = recordView === 'packets' || inlinePackets
   const spec = environment.appliedSpec ?? environment.spec
   const client = useQueryClient()
   const names = useMemo(() => new Map(spec.assets.map((asset) => [asset.id, asset.name])), [spec.assets])
@@ -202,14 +198,14 @@ export default function TrafficWorkspace({
     paused,
     filters,
     packets: packetsVisible || (graphVisible && Boolean(timeRange || filter)),
-    history: timeline,
+    history: graphVisible,
     graph: graphVisible,
   })
   const selected = selectedId
   const packet = useQuery({
     queryKey: ['environment-packet', environment.id, selected],
     queryFn: ({ signal }) => api.environmentPacket(environment.id, selected!, signal),
-    enabled: !!selected,
+    enabled: detailOpen && !!selected,
     staleTime: Infinity,
   })
   const exportPackets = useMutation({
@@ -236,8 +232,8 @@ export default function TrafficWorkspace({
   const errors = [
     ...(fullscreenError ? [fullscreenError] : []),
     ...data.errors,
-    ...[security.error, packet.error, exportPackets.error, saveRoles.error, filesOpen ? files.error : null].flatMap(
-      (error) => (error ? [error.message] : [])
+    ...[security.error, exportPackets.error, saveRoles.error, filesOpen ? files.error : null].flatMap((error) =>
+      error ? [error.message] : []
     ),
     ...(data.retention?.error ? [data.retention.error] : []),
     ...(security.data?.pages[0]?.sensors
@@ -258,24 +254,7 @@ export default function TrafficWorkspace({
     setSelection(value)
     setChosenAlert(undefined)
     setSelectedId(undefined)
-    setField(undefined)
-  }
-  const inspectField = (value: Field) => {
-    setSelectedId(selected)
-    setField(value)
-    setPaused(true)
-  }
-  const adjust = (kind: 'column' | 'row', value: number) =>
-    kind === 'column' ? setColumns(Math.max(28, Math.min(65, value))) : setRows(Math.max(30, Math.min(78, value)))
-  const move = (event: PointerEvent<HTMLElement>) => {
-    if (!dragging.current || !panes.current) return
-    const rect = panes.current.getBoundingClientRect()
-    adjust(
-      dragging.current,
-      dragging.current === 'column'
-        ? ((event.clientX - rect.left) / rect.width) * 100
-        : ((event.clientY - rect.top) / rect.height) * 100
-    )
+    setDetailOpen(false)
   }
   const peak =
     data.history.data?.series.reduce(
@@ -292,79 +271,46 @@ export default function TrafficWorkspace({
   return (
     <section ref={host} className={styles.workspace} aria-label="流量分析" data-traffic-workspace>
       <header className={styles.toolbar}>
-        <ActionIcon variant="subtle" aria-label="返回画布" onClick={onClose}>
-          <ArrowLeft size={17} />
-        </ActionIcon>
+        {recordView !== 'overview' && (
+          <Button
+            size="compact-xs"
+            variant="subtle"
+            leftSection={<ArrowLeft size={15} />}
+            onClick={() => setRecordView('overview')}
+          >
+            返回流量概览
+          </Button>
+        )}
         <Network size={16} />
-        <strong>流量分析</strong>
-        <TextInput
-          className={styles.filter}
-          aria-label="报文过滤器"
-          placeholder="显示过滤器 · tcp.port == 443"
-          leftSection={<Filter size={14} />}
-          value={input}
-          onChange={(event) => {
-            setInput(event.currentTarget.value)
-            setSelectedId(undefined)
-            setField(undefined)
-            setChosenAlert(undefined)
-          }}
-          size="xs"
-          rightSection={
-            input ? (
-              <ActionIcon
-                size="xs"
-                variant="subtle"
-                aria-label="清空过滤器"
-                onClick={() => {
-                  setInput('')
-                  setSelectedId(undefined)
-                  setField(undefined)
-                }}
-              >
-                <X size={12} />
-              </ActionIcon>
-            ) : undefined
-          }
-        />
+        <strong>{recordView === 'overview' ? '流量分析' : recordView === 'packets' ? '报文分析' : '告警记录'}</strong>
         <Select
-          comboboxProps={{ withinPortal: false }}
-          aria-label="协议筛选"
-          placeholder="全部协议"
-          clearable
-          data={['TCP', 'UDP', 'ICMP', 'ARP']}
-          value={protocol}
-          onChange={(value) => {
-            setProtocol(value)
-            setChosenAlert(undefined)
-            setSelectedId(undefined)
-            setField(undefined)
-          }}
+          aria-label="趋势范围"
+          value={range}
+          data={ranges}
+          allowDeselect={false}
+          className={styles.rangeSelect}
           size="xs"
-          className={styles.protocolSelect}
+          onChange={(value) => {
+            if (value) setRange(value)
+            setTimeRange(undefined)
+            setSelectedId(undefined)
+            setChosenAlert(undefined)
+          }}
         />
-        <div className={styles.risks} aria-label="风险筛选">
-          {riskLevels.map((risk) => (
-            <button
-              key={risk.value}
-              aria-label={risk.label}
-              aria-pressed={level === risk.value}
-              onClick={() => {
-                setLevel(level === risk.value ? undefined : risk.value)
-                setRecordView('alerts')
-                setChosenAlert(undefined)
-                setSelection(undefined)
-                setSelectedId(undefined)
-                setField(undefined)
-              }}
-              style={{ '--risk': risk.color } as CSSProperties}
-            >
-              <i />
-              {risk.label.slice(0, 1)}
-              <b>{counts ? counts[risk.value] : '—'}</b>
-            </button>
-          ))}
-        </div>
+        <Button
+          size="compact-xs"
+          variant={recordView === 'packets' ? 'filled' : 'default'}
+          onClick={() => setRecordView('packets')}
+        >
+          查看报文
+        </Button>
+        <Button
+          size="compact-xs"
+          variant={recordView === 'alerts' ? 'filled' : 'default'}
+          onClick={() => setRecordView('alerts')}
+        >
+          告警 {counts ? Object.values(counts).reduce((sum, count) => sum + count, 0) : '—'}
+        </Button>
         <div className={styles.spacer} />
         <Button
           className={styles.liveToggle}
@@ -386,23 +332,12 @@ export default function TrafficWorkspace({
                   : undefined
               )
               setSelectedId(undefined)
-              setField(undefined)
             }
             setPaused(!paused)
           }}
         >
           <span className={styles.liveLabel}>{paused ? '继续实时' : '暂停'}</span>
         </Button>
-        <Tooltip label="导出筛选后的报文">
-          <ActionIcon
-            variant="subtle"
-            aria-label="导出报文"
-            loading={exportPackets.isPending}
-            onClick={() => exportPackets.mutate()}
-          >
-            <Download size={15} />
-          </ActionIcon>
-        </Tooltip>
         <ActionIcon
           variant="subtle"
           aria-label={fullscreen ? '退出全屏' : '全屏分析'}
@@ -434,15 +369,104 @@ export default function TrafficWorkspace({
                 资产角色
               </Menu.Item>
             )}
-            <Menu.Item onClick={() => setTimeline(!timeline)}>{timeline ? '收起时间轴' : '展开时间轴'}</Menu.Item>
           </Menu.Dropdown>
         </Menu>
       </header>
-      {(selectionName || chosenAlert || timeRange) && (
+      {recordView !== 'overview' && (
+        <div className={styles.toolbar}>
+          <TextInput
+            className={styles.filter}
+            aria-label="报文过滤器"
+            placeholder="显示过滤器 · tcp.port == 443"
+            leftSection={<Filter size={14} />}
+            value={input}
+            onChange={(event) => {
+              setInput(event.currentTarget.value)
+              setSelectedId(undefined)
+              setChosenAlert(undefined)
+            }}
+            size="xs"
+            rightSection={
+              input ? (
+                <ActionIcon
+                  size="xs"
+                  variant="subtle"
+                  aria-label="清空过滤器"
+                  onClick={() => {
+                    setInput('')
+                    setSelectedId(undefined)
+                  }}
+                >
+                  <X size={12} />
+                </ActionIcon>
+              ) : undefined
+            }
+          />
+          <Select
+            comboboxProps={{ withinPortal: false }}
+            aria-label="协议筛选"
+            placeholder="全部协议"
+            clearable
+            data={['TCP', 'UDP', 'ICMP', 'ARP']}
+            value={protocol}
+            onChange={(value) => {
+              setProtocol(value)
+              setChosenAlert(undefined)
+              setSelectedId(undefined)
+            }}
+            size="xs"
+            className={styles.protocolSelect}
+          />
+          <div className={styles.risks} aria-label="风险筛选">
+            {riskLevels.map((risk) => (
+              <button
+                key={risk.value}
+                aria-label={risk.label}
+                aria-pressed={level === risk.value}
+                onClick={() => {
+                  setLevel(level === risk.value ? undefined : risk.value)
+                  setRecordView('alerts')
+                  setChosenAlert(undefined)
+                  setSelection(undefined)
+                  setSelectedId(undefined)
+                }}
+                style={{ '--risk': risk.color } as CSSProperties}
+              >
+                <i />
+                {risk.label.slice(0, 1)}
+                <b>{counts ? counts[risk.value] : '—'}</b>
+              </button>
+            ))}
+          </div>
+          <Tooltip label="导出筛选后的报文">
+            <ActionIcon
+              variant="subtle"
+              aria-label="导出报文"
+              loading={exportPackets.isPending}
+              onClick={() => exportPackets.mutate()}
+            >
+              <Download size={15} />
+            </ActionIcon>
+          </Tooltip>
+        </div>
+      )}
+      {(chosenAlert || timeRange || filter || protocol || level) && (
         <div className={styles.filterbar}>
-          {selectionName && (
-            <button className={styles.selection} onClick={() => select()} title={selectionName}>
-              {selectionName}
+          {filter && (
+            <button className={styles.selection} onClick={() => setInput('')} title={filter}>
+              {filter}
+              <X size={12} />
+            </button>
+          )}
+          {protocol && (
+            <button className={styles.selection} onClick={() => setProtocol(null)}>
+              {protocol}
+              <X size={12} />
+            </button>
+          )}
+          {level && (
+            <button className={styles.selection} onClick={() => setLevel(undefined)}>
+              {riskLevels.find((risk) => risk.value === level)?.label}
               <X size={12} />
             </button>
           )}
@@ -452,7 +476,6 @@ export default function TrafficWorkspace({
               onClick={() => {
                 setChosenAlert(undefined)
                 setSelectedId(undefined)
-                setField(undefined)
               }}
               title={chosenAlert.signature}
             >
@@ -466,7 +489,6 @@ export default function TrafficWorkspace({
               onClick={() => {
                 setTimeRange(undefined)
                 setSelectedId(undefined)
-                setField(undefined)
               }}
             >
               {clockTime(timeRange.start)} – {clockTime(timeRange.end)}
@@ -482,82 +504,34 @@ export default function TrafficWorkspace({
           ))}
         </div>
       )}
-      {timeline && (
-        <section className={styles.timeline} aria-label="环境流量时间轴">
-          <header>
-            <button onClick={() => setTimeline(false)}>
-              <ChevronUp size={13} />
-              流量趋势
-            </button>
-            <span>接收 ┄　发送 ━</span>
-            <span>{unit.unit}/s</span>
-            <div className={styles.spacer} />
-            <Select
-              comboboxProps={{ withinPortal: false }}
-              aria-label="趋势范围"
-              value={range}
-              data={ranges}
-              onChange={(value) => {
-                setRange(value!)
-                setTimeRange(undefined)
-                setSelectedId(undefined)
-                setField(undefined)
-                setChosenAlert(undefined)
-              }}
-              size="xs"
-              w={100}
-            />
-          </header>
-          <div className={styles.chart}>
-            {data.history.data && (
-              <MetricChart
-                history={data.history.data}
-                measures={measures}
-                unit={`${unit.unit}/s`}
-                scale={unit.scale}
-                names={names}
-                seriesBy="asset"
-                colors={palette}
-                timeline
-                timeWindow={timeRange}
-                annotations={alerts.map((alert) => ({
-                  time: alert.lastSeen,
-                  label: alert.signature,
-                  color: riskLevel(alert.severity).color,
-                }))}
-                onTimeRange={(start, end) => {
-                  setTimeRange({ start, end })
-                  setSelectedId(undefined)
-                  setField(undefined)
-                }}
-              />
-            )}
-          </div>
-        </section>
-      )}
-      {!timeline && (
-        <button className={styles.collapsedTimeline} onClick={() => setTimeline(true)}>
-          <ChevronDown size={12} />
-          流量趋势
-        </button>
-      )}
-      <div className={styles.mobileTabs}>
-        <button aria-pressed={mobilePane === 'graph'} onClick={() => setMobilePane('graph')}>
-          通信图
-        </button>
-        <button aria-pressed={mobilePane === 'packets'} onClick={() => setMobilePane('packets')}>
-          报文
-        </button>
-      </div>
-      <div
-        ref={panes}
-        className={styles.panes}
-        data-mobile={mobilePane}
-        data-detail={mobileDetail}
-        data-inspecting={Boolean(selected || chosenAlert)}
-        style={{ '--columns': `${columns}%`, '--rows': `${rows}%` } as CSSProperties}
-      >
-        <section className={styles.graphPane}>
+      <section className={styles.timeline} aria-label="环境流量时间轴" hidden={!graphVisible}>
+        <header>
+          <strong>流量趋势</strong>
+          <span>接收 ┄　发送 ━</span>
+          <span>{unit.unit}/s</span>
+        </header>
+        {data.history.data && (
+          <TrafficTimeline
+            history={data.history.data}
+            unit={`${unit.unit}/s`}
+            scale={unit.scale}
+            names={names}
+            colors={palette}
+            timeWindow={timeRange}
+            annotations={alerts.map((alert) => ({
+              time: alert.lastSeen,
+              label: alert.signature,
+              color: riskLevel(alert.severity).color,
+            }))}
+            onTimeRange={(start, end) => {
+              setTimeRange({ start, end })
+              setSelectedId(undefined)
+            }}
+          />
+        )}
+      </section>
+      <div className={styles.analysisPanes} data-overview={graphVisible} data-split={inlinePackets}>
+        <section className={styles.graphPane} hidden={!graphVisible}>
           <header className={styles.paneHeading}>
             <strong>{timeRange || filter ? '所示报文关系' : '通信关系'}</strong>
             <span>
@@ -565,6 +539,17 @@ export default function TrafficWorkspace({
                 ? `${data.packets.length} 帧`
                 : `${new Set(graphLinks.map((link) => [link.source, link.target].sort().join('/'))).size} 组关系`}
             </span>
+            {selectionName && (
+              <button
+                className={styles.selectedEndpoint}
+                onClick={() => select()}
+                title="取消选择"
+                aria-label={`取消选择 ${selectionName}`}
+              >
+                {selectionName}
+                <X size={12} />
+              </button>
+            )}
             <span ref={setGraphTools} className={styles.graphTools} />
           </header>
           <div className={styles.paneBody}>
@@ -581,16 +566,61 @@ export default function TrafficWorkspace({
             )}
           </div>
         </section>
-        <section className={styles.packetPane}>
+        <section
+          className={styles.packetPane}
+          aria-label="所选对象报文"
+          aria-hidden={graphVisible && !inlinePackets}
+          inert={graphVisible && !inlinePackets}
+        >
+          {chosenAlert && recordView === 'packets' && (
+            <details className={styles.alertDetails}>
+              <summary>告警详情 · {chosenAlert.signature}</summary>
+              <p>
+                {chosenAlert.category} · {chosenAlert.count} 次
+              </p>
+              <p>
+                {chosenAlert.source}:{chosenAlert.sourcePort} → {chosenAlert.destination}:{chosenAlert.destinationPort}{' '}
+                · {chosenAlert.protocol}
+              </p>
+              <p>
+                {dateTime(chosenAlert.firstSeen)} – {dateTime(chosenAlert.lastSeen)}
+              </p>
+              <p>
+                规则 {chosenAlert.generatorId}:{chosenAlert.signatureId}:{chosenAlert.revision}
+              </p>
+            </details>
+          )}
           <header className={styles.paneHeading}>
-            <button aria-pressed={recordView === 'packets'} onClick={() => setRecordView('packets')}>
-              报文
-            </button>
-            <button aria-pressed={recordView === 'alerts'} onClick={() => setRecordView('alerts')}>
-              告警 <span>{visibleAlerts.length}</span>
-            </button>
-            <span>{data.packets.length.toLocaleString('zh-CN')} 帧</span>
+            <strong>
+              {recordView === 'alerts' ? '告警记录' : selectionName ? `${selectionName} · 报文` : '报文列表'}
+            </strong>
+            <span>
+              {recordView === 'alerts'
+                ? `${visibleAlerts.length} 条`
+                : `${data.packets.length.toLocaleString('zh-CN')} 帧`}
+            </span>
+            {inlinePackets && (
+              <Button size="compact-xs" variant="subtle" onClick={() => setRecordView('packets')}>
+                筛选与导出
+              </Button>
+            )}
+            {!graphVisible && selectionName && (
+              <ActionIcon size="sm" variant="subtle" aria-label="清除对象筛选" onClick={() => select()}>
+                <X size={14} />
+              </ActionIcon>
+            )}
             {data.fetching && <i className={styles.fetching} />}
+            {inlinePackets && (
+              <ActionIcon
+                className={styles.closePackets}
+                size="sm"
+                variant="subtle"
+                aria-label="关闭报文"
+                onClick={() => select()}
+              >
+                <X size={16} />
+              </ActionIcon>
+            )}
           </header>
           <div className={styles.paneBody}>
             {recordView === 'alerts' ? (
@@ -605,20 +635,20 @@ export default function TrafficWorkspace({
                 onSelect={(alert) => {
                   setChosenAlert(alert)
                   setSelectedId(undefined)
-                  setField(undefined)
                   setPaused(true)
                   setRecordView('packets')
                 }}
               />
             ) : (
               <PacketList
+                compact={inlinePackets}
                 packets={data.packets}
                 selectedId={selected}
                 onSelect={(id) => {
                   setSelectedId(id)
-                  setField(undefined)
                   setPaused(true)
                 }}
+                onOpen={() => setDetailOpen(true)}
                 alerts={alerts}
                 loading={data.loading}
                 fetching={data.fetching}
@@ -635,95 +665,18 @@ export default function TrafficWorkspace({
             )}
           </div>
         </section>
-        <div
-          className={styles.columnDivider}
-          role="separator"
-          aria-label="调整分析栏宽"
-          aria-orientation="vertical"
-          aria-valuemin={28}
-          aria-valuemax={65}
-          aria-valuenow={columns}
-          tabIndex={0}
-          onPointerDown={(event) => {
-            dragging.current = 'column'
-            event.currentTarget.setPointerCapture(event.pointerId)
-          }}
-          onPointerMove={move}
-          onPointerUp={() => {
-            dragging.current = null
-          }}
-          onKeyDown={(event) => {
-            if (['ArrowLeft', 'ArrowRight'].includes(event.key)) {
-              event.preventDefault()
-              adjust('column', columns + (event.key === 'ArrowRight' ? 2 : -2))
-            }
-          }}
-        />
-        <div
-          className={styles.rowDivider}
-          role="separator"
-          aria-label="调整报文详情高度"
-          aria-orientation="horizontal"
-          aria-valuemin={30}
-          aria-valuemax={78}
-          aria-valuenow={rows}
-          tabIndex={0}
-          onPointerDown={(event) => {
-            dragging.current = 'row'
-            event.currentTarget.setPointerCapture(event.pointerId)
-          }}
-          onPointerMove={move}
-          onPointerUp={() => {
-            dragging.current = null
-          }}
-          onKeyDown={(event) => {
-            if (['ArrowUp', 'ArrowDown'].includes(event.key)) {
-              event.preventDefault()
-              adjust('row', rows + (event.key === 'ArrowDown' ? 2 : -2))
-            }
-          }}
-        />
-        <section className={styles.protocolPane}>
-          <header className={styles.paneHeading}>
-            <button onClick={() => setMobileDetail('protocol')} aria-pressed={mobileDetail === 'protocol'}>
-              协议层
-            </button>
-            {packet.data?.packet.interfaceId && <span>{interfaceNames.get(packet.data.packet.interfaceId)}</span>}
-            <button className={styles.mobileOnly} onClick={() => setMobileDetail('bytes')}>
-              原始字节
-            </button>
-          </header>
-          <div className={styles.paneBody}>
-            <PacketProtocols
-              key={selected}
-              detail={packet.data}
-              field={field}
-              onSelect={inspectField}
-              alerts={alerts}
-              loading={packet.isFetching}
-              alert={chosenAlert}
-            />
-          </div>
-        </section>
-        <section className={styles.bytesPane}>
-          <header className={styles.paneHeading}>
-            <button className={styles.mobileOnly} onClick={() => setMobileDetail('protocol')}>
-              协议层
-            </button>
-            <button onClick={() => setMobileDetail('bytes')} aria-pressed={mobileDetail === 'bytes'}>
-              原始字节
-            </button>
-            {field && (
-              <span>
-                {field.name} · {field.offset}–{field.offset + field.length - 1}
-              </span>
-            )}
-          </header>
-          <div className={styles.paneBody}>
-            <PacketBytes detail={packet.data} field={field} onSelect={inspectField} />
-          </div>
-        </section>
       </div>
+      <PacketDetailDialog
+        key={selected}
+        opened={detailOpen && Boolean(selected)}
+        onClose={() => setDetailOpen(false)}
+        detail={packet.data}
+        error={packet.error}
+        loading={packet.isFetching}
+        alerts={alerts}
+        alert={chosenAlert}
+        interfaceName={packet.data?.packet.interfaceId ? interfaceNames.get(packet.data.packet.interfaceId) : undefined}
+      />
       <footer className={styles.statusbar}>
         <span>
           <i data-recording={retention?.status === 'recording'} />
@@ -755,7 +708,15 @@ export default function TrafficWorkspace({
         </span>
         {paused && <span>视图已暂停</span>}
       </footer>
-      <Modal withinPortal={false} opened={filesOpen} onClose={() => setFilesOpen(false)} title="已保存抓包" size="lg">
+      <Modal
+        portalProps={{
+          target: document.fullscreenElement instanceof HTMLElement ? document.fullscreenElement : undefined,
+        }}
+        opened={filesOpen}
+        onClose={() => setFilesOpen(false)}
+        title="已保存抓包"
+        size="lg"
+      >
         <div className={styles.files}>
           {files.data?.segments.map((segment) => (
             <div key={`${segment.id}:${segment.nodeId}`}>
@@ -770,7 +731,15 @@ export default function TrafficWorkspace({
           {!files.isPending && !files.data?.segments.length && <p>没有已保存抓包</p>}
         </div>
       </Modal>
-      <Modal withinPortal={false} opened={rolesOpen} onClose={() => setRolesOpen(false)} title="资产角色" size="sm">
+      <Modal
+        portalProps={{
+          target: document.fullscreenElement instanceof HTMLElement ? document.fullscreenElement : undefined,
+        }}
+        opened={rolesOpen}
+        onClose={() => setRolesOpen(false)}
+        title="资产角色"
+        size="sm"
+      >
         <div className={styles.roles}>
           {spec.assets.map((asset) => (
             <TextInput

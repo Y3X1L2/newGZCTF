@@ -3,7 +3,7 @@
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  height: 100%;
+  height: auto;
   background: var(--page);
   overflow: hidden;
 }
@@ -67,7 +67,7 @@
 .metric {
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--yn-radius-lg);
   box-shadow: var(--shadow-panel);
   padding: 14px 16px;
   min-width: 0;
@@ -125,9 +125,10 @@
 }
 .details {
   display: flex;
+  flex-wrap: wrap;
   flex: 1;
   min-height: 0;
-  overflow: auto;
+  overflow: visible;
   background: var(--page);
   padding: 12px;
   gap: 12px;
@@ -137,7 +138,7 @@
   min-width: 0;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-template-rows: repeat(2, minmax(210px, 1fr));
+  grid-template-rows: repeat(2, 260px);
   gap: 12px;
   padding: 0;
 }
@@ -153,7 +154,7 @@
   background: var(--surface);
   padding: 16px 18px 12px;
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--yn-radius-lg);
   box-shadow: var(--shadow-panel);
 }
 .chartHeading {
@@ -187,7 +188,7 @@
   display: flex;
   flex-direction: column;
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--yn-radius-lg);
   box-shadow: var(--shadow-panel);
   padding: 16px 14px;
   background: var(--surface);
@@ -199,7 +200,7 @@
 }
 .assetList {
   min-height: 0;
-  overflow-y: auto;
+  overflow: visible;
 }
 .asset {
   width: 100%;
@@ -254,7 +255,7 @@
 }
 @media (max-width: 740px) {
   .workspace {
-    overflow-y: auto;
+    overflow: visible;
   }
   .toolbar {
     padding: 12px;
@@ -285,7 +286,7 @@
   }
   .ranking {
     flex: none;
-    max-height: 320px;
+    max-height: none;
   }
   .trend {
     padding: 12px;

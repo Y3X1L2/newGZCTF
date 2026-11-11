@@ -1,0 +1,56 @@
+.dropdown {
+  width: 340px;
+  max-width: calc(100vw - 24px);
+  display: flex;
+  flex-direction: column;
+  gap: var(--yn-space-3);
+  color: var(--text);
+  background: var(--surface);
+  outline: none;
+}
+.results {
+  max-height: min(300px, 50dvh);
+}
+.recent {
+  padding: 8px 8px 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.object {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--yn-space-2);
+  padding: 10px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--yn-radius-md);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.object > svg {
+  flex-shrink: 0;
+  color: var(--accent);
+}
+.object:hover {
+  background: var(--surface-hover);
+}
+.object[data-combobox-selected] {
+  background: var(--accent-soft);
+  color: var(--text);
+}
+.identity {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+  overflow-wrap: anywhere;
+}
+.identity > span {
+  color: var(--muted);
+  font: 11px var(--font-mono);
+}

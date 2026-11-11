@@ -1,0 +1,23 @@
+.slot {
+  display: flex;
+  justify-content: flex-end;
+  flex: 0 0 auto;
+  min-width: 0;
+  max-width: 100%;
+}
+.spacing {
+  display: flex;
+  flex-shrink: 0;
+  width: max-content;
+  padding-left: var(--yn-space-4);
+}
+@media (max-width: 760px) {
+  .slot {
+    width: 100%;
+  }
+  .spacing {
+    width: 100%;
+    padding-inline: 0;
+    padding-top: var(--yn-space-4);
+  }
+}

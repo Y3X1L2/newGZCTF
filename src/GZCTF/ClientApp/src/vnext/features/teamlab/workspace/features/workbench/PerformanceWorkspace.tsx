@@ -265,7 +265,6 @@ export default function PerformanceWorkspace(props: Scope) {
                         scale={item.scale}
                         seriesBy="metric"
                         colors={[item.color, 'var(--chart-6)']}
-                        group={'performance-' + (environmentId ?? node?.id ?? 'cluster')}
                       />
                     </section>
                   )
