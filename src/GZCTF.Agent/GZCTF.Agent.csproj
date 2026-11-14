@@ -17,6 +17,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="../Shared/DockerHostPort.cs" Link="DockerRuntime/DockerHostPort.cs" />
     <ProjectReference Include="..\GZCTF.GuestControl.Contracts\GZCTF.GuestControl.Contracts.csproj" />
     <ProjectReference Include="..\GZCTF.TeamLab.Contracts\GZCTF.TeamLab.Contracts.csproj" />
   </ItemGroup>

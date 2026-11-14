@@ -23,6 +23,7 @@ Redis 观测缓存与 PostgreSQL 回退实现管理观测读路径，数据库�
 - VM 访问、就绪与制品存储位于 Services/Fleet/；provider 接口及旧适配在 [Services/Vm/IVirtualMachineProvider](../../../src/GZCTF/Services/Vm/IVirtualMachineProvider.cs)。当前 VM 实现集中在上述服务目录。
 - [Agent VM 接口](../../../src/GZCTF.Agent/Controllers/VmController.cs) 调用 Services/Vm/ 中的 libvirt provider、域定义、来宾初始化、就绪检查和网络服务。
 - Agent Docker 在 [Docker 执行服务](../../../src/GZCTF.Agent/Services/DockerService.cs)；组网网络由独立 Netlab 执行。所有 Agent 调用经机器接口鉴权与能力检查。
+- 主站本地 Docker 和远程 Agent 创建容器时都将宿主机端口范围交给 Docker。Docker 在启动时选取并占用一个端口，主站读取实际端口，再交给网关转发。若范围内无可绑定端口，清理本次失败的容器后允许 Docker 自动分配一次。显式指定的端口要求按原值绑定。
 - 前端节点页面在 `ClientApp/src/vnext/features/admin/nodes/`，玩家实例展示在 `features/challenge-runtime/`；API adapter 在对应 feature 目录。
 
 节点心跳的完整 manifest/hash 保留实测可用磁盘，容量变化仍更新；日志中的 `node.capability.changed` 只表示稳定能力变化，不再随磁盘波动或 Fabric 健康变化产生。能力比较和协议 hash 的职责见 [能力协商](../../architecture/agent-capability-protocol.md)；修改时同时验证容量刷新与事件触发，不能为降噪停掉真实容量更新。
