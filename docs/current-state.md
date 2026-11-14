@@ -1,6 +1,6 @@
 # YINYU 当前开发状态
 
-整理日期为 2026-11-11。北京时间 17:27，PR #44 的组网前端已部署至主站 `.27`，真实场景的拓扑、资产和键盘定位通过。主站后端仍是 PR #42，`.40` 的 Netlab 执行面未更新。详见[组网布局发布](records/2026-11-11-teamlab-page-layout.md#生产发布)。
+整理日期为 2026-11-14。PR #47 的 Docker 并发端口修复已部署到 `.27` 主站后端与 `.30`、`.31` 的 Agent。赛事 23 逐台并发验收，6 个容器和 6 个公网入口通过。详见[本次发布](records/2026-11-14-docker-host-port.md#生产发布)与[逐台记录](records/2026-11-14-docker-host-port.md#赛事-23-验收)。
 本页只保留当前摘要，更新时替换旧事实；完整测试、部署过程和授权边界放在任务记录中。目标120行以内，超长时提炼摘要。
 
 ## 代码与部署基线
@@ -11,10 +11,10 @@
 | 开发主线 | `main`；新任务从实时 fetch 后的 `origin/main` 创建分支 | SHA 以 Git 为准，本页不追写每次文档提交 |
 | 培训实例修复 | PR #24 合入 `60170a52`，PR #25 为后续部署记录；课程默认每用户 3 实例，公共练习和课程额度隔离 | [主线修复与发布](records/2026-10-11-training-runtime-mainline.md)、[课程生命周期](modules/training/reference/container-lifecycle.md) |
 | 培训动态设置 / 练习分页 | PR #26 已合入 `b1812d15`，PR #27记录已部署；管理员可动态设置培训额度，练习/管理题库使用服务端分页 | Git 合入事实与[新任务记录](records/2026-10-11-training-quota-settings.md)、[分页说明](modules/exercise/reference/catalog-pagination.md)；10-11发布交接已确认API与页面分页验收；本轮未重新实测 |
-| 主站发布 | 前端 `f800a987`（PR #44，272 个文件），后端沿用 `8d9efc7c`（PR #42），Agent 未更新或重启 | [发布身份](records/2026-11-11-teamlab-page-layout.md#生产发布) |
-| 数据库 | 153 条迁移，头为 `20261110070457_IntegrateNetlabSceneBindings`；本次无迁移 | [现场核验](records/2026-11-11-teamlab-page-layout.md#生产发布) |
-| 应用回退 | 上一版 `netlab-8d9efc7c…/publish` 保留，回退脚本已准备，未实际回退 | [备份与回退](records/2026-11-11-teamlab-page-layout.md#备份与回退) |
-| 备份 | 11-11 双库、附件、加密配置和旧发布包通过校验；双库实际恢复演练见 11-10 记录 | [最新备份](records/2026-11-11-teamlab-page-layout.md#备份与回退)、[恢复演练](records/2026-11-10-netlab-rollout.md) |
+| 主站发布 | 前端 `f800a987`（PR #44，272 个文件），后端 `d7784845`（PR #47）；`.27` 本机 Agent 保持原版本 | [最新发布](records/2026-11-14-docker-host-port.md#生产发布)、[前端发布](records/2026-11-11-teamlab-page-layout.md#生产发布) |
+| 数据库 | 153 条迁移，头为 `20261110070457_IntegrateNetlabSceneBindings`；本次无迁移 | [现场核验](records/2026-11-14-docker-host-port.md#生产发布) |
+| 应用回退 | 主站保留切换前的 `teamlab-layout-f800a987…/publish`，两台子节点保留旧 Agent；回退脚本已核对 | [发布和回退](records/2026-11-14-docker-host-port.md#生产发布) |
+| 备份 | 11-14 双库、附件、加密配置和旧发布通过校验；双库实际恢复演练见 11-10 记录 | [最新备份](records/2026-11-14-docker-host-port.md#生产发布)、[恢复演练](records/2026-11-10-netlab-rollout.md) |
 | 服务与页面 | 首页、配置接口、静态资源和附件通过；健康检查保持既有 Degraded；真实场景拓扑和资产列表通过，流量解析仍见 NETLAB-02 | [验收边界](records/2026-11-11-teamlab-page-layout.md#生产发布) |
 | 节点与调度 | 3 节点在线，活跃队列为 0；534 模板 Ready，分发 240 Ready / 1 既有 Failed | [现场核验](records/2026-11-11-teamlab-page-layout.md#生产发布)；Docker 创建、HTTP 入口和销毁见[11-09 验收](records/2026-11-09-history-rollout.md) |
 

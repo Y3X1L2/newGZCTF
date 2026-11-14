@@ -1,10 +1,10 @@
 using System.Net;
 using System.IO.Compression;
-using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text;
 using Docker.DotNet;
 using Docker.DotNet.Models;
+using GZCTF.DockerRuntime;
 using GZCTF.Models.Internal;
 using GZCTF.Services.Container.Provider;
 using ContainerStatus = GZCTF.Utils.ContainerStatus;
@@ -94,8 +94,19 @@ public class DockerManager : IContainerManager, IContainerPatchApplicator, ICont
             await EnsureCustomNetworksAsync(config, attachments, token);
 
         var publishHostPort = _meta.ExposePort && config.PublishPort;
+        PortBinding? binding = null;
+        var canFallBack = false;
         if (publishHostPort)
-            ApplyHostPortBinding(parameters, config.ExposedPort, config.PreferredHostPort);
+        {
+            var portKey = GetTcpPortKey(config.ExposedPort);
+            binding = new PortBinding
+            {
+                HostPort = DockerHostPort.GetBinding(config.PreferredHostPort, _meta.Config.PublicPortStart,
+                    _meta.Config.PublicPortEnd, out canFallBack)
+            };
+            parameters.ExposedPorts = new Dictionary<string, EmptyStruct> { [portKey] = new() };
+            parameters.HostConfig.PortBindings = new Dictionary<string, IList<PortBinding>> { [portKey] = [binding] };
+        }
 
         CreateContainerResponse? containerRes;
         var retry = 0;
@@ -114,9 +125,6 @@ public class DockerManager : IContainerManager, IContainerPatchApplicator, ICont
                     config.CPUCount, config.MemoryLimit);
                 return null;
             }
-
-            if (publishHostPort)
-                ApplyHostPortBinding(parameters, config.ExposedPort, config.PreferredHostPort);
 
             containerRes = await _client.Containers.CreateContainerAsync(parameters, token);
         }
@@ -206,8 +214,33 @@ public class DockerManager : IContainerManager, IContainerPatchApplicator, ICont
                 return null;
             }
 
-            var started = await _client.Containers.StartContainerAsync(container.ContainerId,
-                new(), token);
+            bool started;
+            try
+            {
+                started = await _client.Containers.StartContainerAsync(container.ContainerId, new(), token);
+            }
+            catch (DockerApiException ex) when (binding is not null && DockerHostPort.IsAllocationFailure(ex.ResponseBody))
+            {
+                using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+                try
+                {
+                    await _client.Containers.RemoveContainerAsync(container.ContainerId, new() { Force = true }, cleanup.Token);
+                }
+                catch (DockerApiException gone) when (gone.StatusCode == HttpStatusCode.NotFound)
+                {
+                    // Already removed.
+                }
+
+                if (!canFallBack)
+                    throw;
+
+                _logger.LogWarning("Docker could not publish a port in {HostPort}; retrying with a dynamic port",
+                    binding.HostPort);
+                binding.HostPort = DockerHostPort.Dynamic;
+                canFallBack = false;
+                retry = 0;
+                goto CreateDockerContainer;
+            }
 
             if (started)
                 break;
@@ -701,53 +734,6 @@ public class DockerManager : IContainerManager, IContainerPatchApplicator, ICont
         catch (Exception ex)
         {
             _logger.LogDebug(ex, "Failed to determine Docker daemon OS type; using Linux-compatible CPU limits.");
-            return false;
-        }
-    }
-
-    private void ApplyHostPortBinding(CreateContainerParameters parameters, int exposedPort, int? preferredHostPort = null)
-    {
-        var exposedPortBindingKey = GetTcpPortKey(exposedPort);
-        parameters.ExposedPorts = new Dictionary<string, EmptyStruct> { [exposedPortBindingKey] = new() };
-        parameters.HostConfig.PortBindings = new Dictionary<string, IList<PortBinding>>
-        {
-            [exposedPortBindingKey] = [new PortBinding { HostPort = ResolveHostPortBinding(preferredHostPort) }]
-        };
-    }
-
-    private string ResolveHostPortBinding(int? preferredHostPort = null)
-    {
-        if (preferredHostPort is > 0 and <= ushort.MaxValue)
-            return preferredHostPort.Value.ToString();
-
-        var start = _meta.Config.PublicPortStart;
-        var end = _meta.Config.PublicPortEnd;
-
-        if (start is null || end is null || start <= 0 || end < start || end > ushort.MaxValue)
-            return "0";
-
-        for (var port = start.Value; port <= end.Value; port++)
-        {
-            if (IsTcpPortAvailable(port))
-                return port.ToString();
-        }
-
-        _logger.LogWarning(
-            "No available Docker public port in configured range {Start}-{End}; falling back to Docker random port",
-            start, end);
-        return "0";
-    }
-
-    static bool IsTcpPortAvailable(int port)
-    {
-        try
-        {
-            using var listener = new TcpListener(IPAddress.Any, port);
-            listener.Start();
-            return true;
-        }
-        catch (SocketException)
-        {
             return false;
         }
     }

@@ -1,10 +1,10 @@
 using Docker.DotNet;
 using Docker.DotNet.Models;
 using GZCTF.Agent.Models;
+using GZCTF.DockerRuntime;
 using GZCTF.TeamLab.Contracts;
 using Microsoft.Extensions.Options;
 using System.Net;
-using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -82,6 +82,8 @@ public class DockerService
             await EnsureNetworkAsync(attachment, token);
 
         var portSpec = $"{request.ExposedPort}/tcp";
+        var hostPort = DockerHostPort.GetBinding(request.PreferredHostPort,
+            _config.PublicPortStart, _config.PublicPortEnd, out var canFallBack);
         var env = request.EnvironmentVariables
             .Where(kv => !string.IsNullOrWhiteSpace(kv.Key))
             .Select(kv => $"{kv.Key}={kv.Value}")
@@ -120,7 +122,7 @@ public class DockerService
                 PortBindings = request.PublishPort
                     ? new Dictionary<string, IList<PortBinding>>
                     {
-                        [portSpec] = new List<PortBinding> { new() { HostPort = ResolveHostPortBinding(request.PreferredHostPort) } }
+                        [portSpec] = new List<PortBinding> { new() { HostPort = hostPort } }
                     }
                     : null,
                 NetworkMode = isolatedHostNetwork
@@ -182,7 +184,10 @@ public class DockerService
                 throw new InvalidOperationException(
                     $"runtime_identity_conflict: container {containerName} exists with a different image or generation.");
             if (request.StartImmediately && existing.State?.Running != true)
+            {
                 await _client.Containers.StartContainerAsync(existing.ID, new ContainerStartParameters(), token);
+                existing = await _client.Containers.InspectContainerAsync(existing.ID, token);
+            }
             return BuildContainerResponse(existing, primaryNetwork, portSpec, request.ExposedPort);
         }
         catch (DockerContainerNotFoundException)
@@ -192,18 +197,8 @@ public class DockerService
         {
         }
 
-        Docker.DotNet.Models.CreateContainerResponse createResult;
-        try
-        {
-            createResult = await _client.Containers.CreateContainerAsync(createParams, token);
-        }
-        catch (DockerApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
-        {
-            throw new InvalidOperationException($"image_not_ready: Docker image {request.Image} is not present.", ex);
-        }
-
-        if (request.StartImmediately)
-            await _client.Containers.StartContainerAsync(createResult.ID, new ContainerStartParameters(), token);
+        var containerId = await CreateAndStartAsync(createParams, request.StartImmediately,
+            createParams.HostConfig.PortBindings?[portSpec][0], canFallBack, token);
 
         foreach (var attachment in attachments
                      .Where(n => !n.NetworkName.Equals(primaryNetwork, StringComparison.Ordinal))
@@ -214,7 +209,7 @@ public class DockerService
                 await _client.Networks.ConnectNetworkAsync(attachment.NetworkName,
                     new NetworkConnectParameters
                     {
-                        Container = createResult.ID,
+                        Container = containerId,
                         EndpointConfig = string.IsNullOrWhiteSpace(attachment.IPAddress)
                             ? null
                             : new EndpointSettings
@@ -226,21 +221,21 @@ public class DockerService
             catch (DockerApiException ex) when (ex.StatusCode is System.Net.HttpStatusCode.Conflict)
             {
                 _logger.LogDebug(ex, "Container {ContainerId} already connected to {NetworkName}",
-                    createResult.ID, attachment.NetworkName);
+                    containerId, attachment.NetworkName);
             }
             catch (DockerApiException ex) when (ex.StatusCode is System.Net.HttpStatusCode.Forbidden or
                                                System.Net.HttpStatusCode.NotFound)
             {
                 _logger.LogWarning(ex, "Failed to connect container {ContainerId} to required network {NetworkName}",
-                    createResult.ID, attachment.NetworkName);
-                await DestroyContainerAsync(createResult.ID, CancellationToken.None);
+                    containerId, attachment.NetworkName);
+                await DestroyContainerAsync(containerId, CancellationToken.None);
                 return null;
             }
         }
 
         if (request.RemoveDefaultRoute && !isolatedHostNetwork)
         {
-            var routeResult = await ExecuteContainerCommandAsync(createResult.ID,
+            var routeResult = await ExecuteContainerCommandAsync(containerId,
                 ["sh", "-c", "command -v ip >/dev/null 2>&1 || { echo 'missing iproute2/ip command'; exit 127; }; ip route del default 2>/dev/null || true; ip route show"],
                 TimeSpan.FromSeconds(10), token);
 
@@ -248,13 +243,13 @@ public class DockerService
             {
                 _logger.LogWarning(
                     "Failed to remove default route from container {ContainerId}. Exit={ExitCode}, Message={Message}",
-                    createResult.ID, routeResult.ExitCode, routeResult.Message);
-                await DestroyContainerAsync(createResult.ID, CancellationToken.None);
+                    containerId, routeResult.ExitCode, routeResult.Message);
+                await DestroyContainerAsync(containerId, CancellationToken.None);
                 return null;
             }
         }
 
-        var inspect = await _client.Containers.InspectContainerAsync(createResult.ID, token);
+        var inspect = await _client.Containers.InspectContainerAsync(containerId, token);
         return BuildContainerResponse(inspect, primaryNetwork, portSpec, request.ExposedPort);
     }
 
@@ -837,40 +832,49 @@ public class DockerService
         }
     }
 
-    private string ResolveHostPortBinding(int? preferredHostPort = null)
+    private async Task<string> CreateAndStartAsync(CreateContainerParameters parameters, bool startImmediately,
+        PortBinding? binding, bool canFallBack, CancellationToken token)
     {
-        if (preferredHostPort is > 0 and <= ushort.MaxValue)
-            return preferredHostPort.Value.ToString();
-
-        var start = _config.PublicPortStart;
-        var end = _config.PublicPortEnd;
-
-        if (start is null || end is null || start <= 0 || end < start || end > ushort.MaxValue)
-            return "0";
-
-        for (var port = start.Value; port <= end.Value; port++)
+        while (true)
         {
-            if (IsTcpPortAvailable(port))
-                return port.ToString();
-        }
+            Docker.DotNet.Models.CreateContainerResponse created;
+            try
+            {
+                created = await _client.Containers.CreateContainerAsync(parameters, token);
+            }
+            catch (DockerApiException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+            {
+                throw new InvalidOperationException($"image_not_ready: Docker image {parameters.Image} is not present.", ex);
+            }
 
-        _logger.LogWarning(
-            "No available Docker public port in configured range {Start}-{End}; falling back to Docker random port",
-            start, end);
-        return "0";
-    }
+            if (!startImmediately)
+                return created.ID;
 
-    static bool IsTcpPortAvailable(int port)
-    {
-        try
-        {
-            using var listener = new TcpListener(IPAddress.Any, port);
-            listener.Start();
-            return true;
-        }
-        catch (SocketException)
-        {
-            return false;
+            try
+            {
+                await _client.Containers.StartContainerAsync(created.ID, new ContainerStartParameters(), token);
+                return created.ID;
+            }
+            catch (DockerApiException ex) when (binding is not null && DockerHostPort.IsAllocationFailure(ex.ResponseBody))
+            {
+                using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+                try
+                {
+                    await _client.Containers.RemoveContainerAsync(created.ID, new() { Force = true }, cleanup.Token);
+                }
+                catch (DockerApiException gone) when (gone.StatusCode == HttpStatusCode.NotFound)
+                {
+                    // Already removed.
+                }
+
+                if (!canFallBack)
+                    throw;
+
+                _logger.LogWarning("Docker could not publish a port in {HostPort}; retrying with a dynamic port",
+                    binding.HostPort);
+                binding.HostPort = DockerHostPort.Dynamic;
+                canFallBack = false;
+            }
         }
     }
 
