@@ -216,6 +216,7 @@ public class TrainingCourseController(
         {
             CourseId = course.Id,
             UserId = user.Id,
+            TotalChapterCount = course.Chapters.Count(chapter => chapter.IsPublished),
             StartedAt = DateTimeOffset.UtcNow
         };
         context.TrainingCourseProgresses.Add(progress);
@@ -264,11 +265,7 @@ public class TrainingCourseController(
         progress.CompletedChapterCount = completedChapters;
         progress.ChallengeTotalCount = challengeIds.Length;
         progress.ChallengeSolvedCount = solvedCount;
-        progress.Status = publishedChapterIds.Length > 0 && completedChapters >= publishedChapterIds.Length
-            ? TrainingCourseProgressStatus.Completed
-            : completedChapters > 0 || solvedCount > 0
-                ? TrainingCourseProgressStatus.Learning
-                : TrainingCourseProgressStatus.NotStarted;
+        progress.Status = CourseProgressStatus(publishedChapterIds.Length, completedChapters, solvedCount);
         progress.StartedAt ??= DateTimeOffset.UtcNow;
         progress.CompletedAt = progress.Status == TrainingCourseProgressStatus.Completed
             ? progress.CompletedAt ?? DateTimeOffset.UtcNow
@@ -277,6 +274,14 @@ public class TrainingCourseController(
 
         return progress;
     }
+
+    private static TrainingCourseProgressStatus CourseProgressStatus(int totalChapters, int completedChapters,
+        int solvedCount) =>
+        totalChapters > 0 && completedChapters >= totalChapters
+            ? TrainingCourseProgressStatus.Completed
+            : completedChapters > 0 || solvedCount > 0
+                ? TrainingCourseProgressStatus.Learning
+                : TrainingCourseProgressStatus.NotStarted;
 
     private async Task<TrainingChapterProgress> EnsureChapterProgress(
         UserInfo user,
@@ -637,7 +642,12 @@ public class TrainingCourseController(
         var canManageTeachers = await CanManageTeachers(user, course, token);
         var canLearn = await CanLearnCourse(user, course, token);
         var progress = await context.TrainingCourseProgresses
+            .AsNoTracking()
             .SingleOrDefaultAsync(p => p.UserId == user.Id && p.CourseId == courseId, token);
+        var chapterProgresses = await context.TrainingChapterProgresses
+            .AsNoTracking()
+            .Where(p => p.UserId == user.Id && p.CourseId == courseId)
+            .ToDictionaryAsync(p => p.ChapterId, token);
 
         var includeDetail = canLearn || canEdit || user.Role >= Role.Admin;
         var model = TrainingCourseModel.FromCourse(
@@ -651,9 +661,29 @@ public class TrainingCourseController(
             canDelete: false,
             includeDetail: includeDetail);
 
+        var publishedChapters = course.Chapters.Where(chapter => chapter.IsPublished).ToArray();
+        model.TotalChapterCount = publishedChapters.Length;
+        model.CompletedChapterCount = publishedChapters.Count(chapter =>
+            chapterProgresses.GetValueOrDefault(chapter.Id)?.Status == TrainingCourseProgressStatus.Completed);
+        if (progress is not null || model.CompletedChapterCount > 0)
+            model.ProgressStatus = CourseProgressStatus(model.TotalChapterCount, model.CompletedChapterCount,
+                progress?.ChallengeSolvedCount ?? 0);
+
         if (model.Chapters.Count > 0)
         {
             var chapterIds = model.Chapters.Select(c => c.Id).ToArray();
+            var links = await context.TrainingCourseChapterChallenges
+                .AsNoTracking()
+                .Where(link => link.CourseId == courseId && chapterIds.Contains(link.ChapterId))
+                .OrderBy(link => link.Order)
+                .ThenBy(link => link.ChapterId)
+                .ToArrayAsync(token);
+            var linksByChapterId = links.ToLookup(link => link.ChapterId);
+            var linksByChallengeId = links.ToLookup(link => link.ExerciseChallengeId);
+            var courseChallenges = course.Challenges.ToDictionary(challenge => challenge.ExerciseChallengeId);
+            foreach (var challenge in model.Challenges)
+                challenge.ChapterId = linksByChallengeId[challenge.ExerciseChallengeId].FirstOrDefault()?.ChapterId;
+
             var papers = await context.TrainingCourseChapterTheoryPapers
                 .AsNoTracking()
                 .Include(p => p.Questions)
@@ -679,6 +709,14 @@ public class TrainingCourseController(
 
             foreach (var chapter in model.Chapters)
             {
+                var chapterProgress = chapterProgresses.GetValueOrDefault(chapter.Id);
+                chapter.ProgressStatus = chapterProgress?.Status;
+                chapter.ReadPercent = chapterProgress?.ReadPercent ?? 0;
+                chapter.CompletedAt = chapterProgress?.CompletedAt;
+                chapter.Challenges = linksByChapterId[chapter.Id]
+                    .Select(link => TrainingCourseChallengeModel.FromChallenge(
+                        courseChallenges[link.ExerciseChallengeId], chapter.Id))
+                    .ToList();
                 chapter.TheoryPaper = papersByChapterId.GetValueOrDefault(chapter.Id);
             }
         }

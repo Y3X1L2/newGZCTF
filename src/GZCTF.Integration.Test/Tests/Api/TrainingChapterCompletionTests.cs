@@ -66,4 +66,58 @@ public sealed class TrainingChapterCompletionTests(GZCTFApplicationFactory facto
         Assert.Equal(TrainingCourseProgressStatus.Completed, courseProgress.Status);
         Assert.Equal(1, courseProgress.CompletedChapterCount);
     }
+
+    [Fact]
+    public async Task CourseDetail_UsesChapterProgressAndSavedChallengeBindings()
+    {
+        const string password = "Training@Test123";
+        var learner = await TestDataSeeder.CreateUserAsync(factory.Services,
+            TestDataSeeder.RandomName(), password, role: Role.Student);
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var course = new TrainingCourse { Title = "Course detail regression", Status = TrainingCourseStatus.Published };
+        var completed = new TrainingCourseChapter { Course = course, Title = "Completed chapter" };
+        var remaining = new TrainingCourseChapter { Course = course, Title = "Remaining chapter" };
+        var bound = new ExerciseChallenge { TrainingCourse = course, Title = "Bound challenge" };
+        var unbound = new ExerciseChallenge { TrainingCourse = course, Title = "Unbound challenge" };
+        db.AddRange(completed, remaining, bound, unbound);
+        await db.SaveChangesAsync();
+
+        db.AddRange(
+            new TrainingCourseEnrollment
+                { CourseId = course.Id, UserId = learner.Id, Status = TrainingCourseEnrollmentStatus.Approved },
+            new TrainingCourseProgress { CourseId = course.Id, UserId = learner.Id, TotalChapterCount = 9 },
+            new TrainingChapterProgress
+            {
+                CourseId = course.Id, ChapterId = completed.Id, UserId = learner.Id,
+                Status = TrainingCourseProgressStatus.Completed, ReadPercent = 100, CompletedAt = DateTimeOffset.UtcNow
+            },
+            new TrainingCourseChallenge { CourseId = course.Id, ExerciseChallengeId = bound.Id },
+            new TrainingCourseChallenge { CourseId = course.Id, ExerciseChallengeId = unbound.Id },
+            new TrainingCourseChapterChallenge
+                { CourseId = course.Id, ChapterId = completed.Id, ExerciseChallengeId = bound.Id });
+        await db.SaveChangesAsync();
+
+        using var client = factory.CreateClient();
+        using var login = await client.PostAsJsonAsync("/api/account/login",
+            new LoginModel { UserName = learner.UserName, Password = password });
+        login.EnsureSuccessStatusCode();
+
+        using var result = await client.GetFromJsonAsync<JsonDocument>($"/api/training/courses/{course.Id}");
+        var detail = result!.RootElement;
+        Assert.Equal(1, detail.GetProperty("completedChapterCount").GetInt32());
+        Assert.Equal(2, detail.GetProperty("totalChapterCount").GetInt32());
+        Assert.Equal("Learning", detail.GetProperty("progressStatus").GetString());
+        var chapter = detail.GetProperty("chapters").EnumerateArray()
+            .Single(item => item.GetProperty("id").GetInt32() == completed.Id);
+        Assert.Equal("Completed", chapter.GetProperty("progressStatus").GetString());
+        Assert.Equal(100, chapter.GetProperty("readPercent").GetInt32());
+        Assert.NotEqual(JsonValueKind.Null, chapter.GetProperty("completedAt").ValueKind);
+        Assert.Equal(bound.Id, chapter.GetProperty("challenges")[0].GetProperty("exerciseChallengeId").GetInt32());
+        var challenges = detail.GetProperty("challenges").EnumerateArray()
+            .ToDictionary(item => item.GetProperty("exerciseChallengeId").GetInt32());
+        Assert.Equal(completed.Id, challenges[bound.Id].GetProperty("chapterId").GetInt32());
+        Assert.True(!challenges[unbound.Id].TryGetProperty("chapterId", out var unboundChapter) ||
+            unboundChapter.ValueKind == JsonValueKind.Null);
+    }
 }
