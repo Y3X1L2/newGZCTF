@@ -4,8 +4,9 @@
 
 | 用途 | 记录 |
 | --- | --- |
-| 最新主站后端与 Agent 发布：Docker 同节点并发启动 | [端口冲突、发布与逐台验收](2026-11-14-docker-host-port.md) |
-| 最新主站发布：组网页面布局与交互 | [2026-11-11 布局发布、验收、备份和回退](2026-11-11-teamlab-page-layout.md) |
+| 最新主站后端发布：培训章节完成与课程详情 | [2026-11-25 培训发布、备份和浏览器验收](2026-11-25-training-course-progress.md) |
+| 子节点 Agent 发布：Docker 同节点并发启动 | [端口冲突、发布与逐台验收](2026-11-14-docker-host-port.md) |
+| 主站前端发布：组网页面布局与交互 | [2026-11-11 布局发布、验收、备份和回退](2026-11-11-teamlab-page-layout.md) |
 | 已合入：TeamLab 接入 Netlab | [调用链、权限和工作区](2026-11-10-netlab-integration.md)，[PR #42](https://github.com/Y3X1L2/newGZCTF/pull/42) |
 | 前次主站发布：Netlab 接入与场景迁移 | [2026-11-10 Netlab 与原四机场景迁移](2026-11-10-netlab-rollout.md) |
 | 前次主站发布 | [2026-11-09 图表与页面文案](2026-11-09-ui-polish-rollout.md)、[历史负载](2026-11-09-history-rollout.md) |

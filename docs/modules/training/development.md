@@ -56,6 +56,10 @@
 `CompleteChapter` 和 `MarkChapterCompletedIfReady` 检查必做实验与课后测试，
 `RecalculateProgress` 由已保存事实汇总课程状态。
 
+课程详情 `GET /api/training/courses/{courseId}` 批量读取当前用户的章节进度和可见章节的题目绑定。
+课程总章数取已发布章节，完成数取其中该用户实际完成的章节，两处章节列表和课程汇总共用这些记录。
+题目绑定来自 `TrainingCourseChapterChallenges`，未绑定的题保留空章节。课后试卷独立按章节读取，只有已发布的试卷参与章节完成判定。
+
 课程理论使用独立 Paper/Sheet；`ChapterTheory`、`SaveChapterTheoryDraft`、
 `SubmitChapterTheory`、`RetryChapterTheory` 是四个不同用例。
 题目规范与判分复用 [TheoryExamService](../../../src/GZCTF/Services/TheoryExamService.cs)，
@@ -81,9 +85,11 @@
 | 改动 | 现有定向测试 |
 | --- | --- |
 | 权限与题目响应 | [TrainingCourseAccessPolicyTests](../../../src/GZCTF.Test/UnitTests/Training/TrainingCourseAccessPolicyTests.cs)、[TrainingCourseChallengeDetailModelTests](../../../src/GZCTF.Test/UnitTests/Training/TrainingCourseChallengeDetailModelTests.cs) |
+| 首次确认阅读与课程详情 | [TrainingChapterCompletionTests](../../../src/GZCTF.Integration.Test/Tests/Api/TrainingChapterCompletionTests.cs)，覆盖章节进度、课程汇总和题目绑定 |
 | 额度与旧 Flag 修复 | [TrainingContainerLifecycleTests](../../../src/GZCTF.Test/UnitTests/Training/TrainingContainerLifecycleTests.cs)、[TrainingContainerQuotaTests](../../../src/GZCTF.Integration.Test/Tests/Api/TrainingContainerQuotaTests.cs) |
 | 真实 Docker 隔离 | [TrainingContainerDockerTests](../../../src/GZCTF.Integration.Test/Tests/Repository/TrainingContainerDockerTests.cs) |
 | 章节实例前端状态 | `chapter/useTrainingInstance.test.tsx`、`chapter/trainingChapterDomain.test.ts` |
 
 示例：`dotnet test src/GZCTF.Integration.Test/GZCTF.Integration.Test.csproj -c Release --filter FullyQualifiedName~TrainingContainerQuotaTests`。
 10月11日发布与限定验收见[记录](../../records/2026-10-11-training-quota-settings.md)；本页没有重新执行生产验收。
+11 月 25 日培训进度修复的验证见[发布记录](../../records/2026-11-25-training-course-progress.md#验收)。

@@ -1,6 +1,6 @@
 # YINYU 当前开发状态
 
-整理日期为 2026-11-14。PR #47 的 Docker 并发端口修复已部署到 `.27` 主站后端与 `.30`、`.31` 的 Agent。赛事 23 逐台并发验收，6 个容器和 6 个公网入口通过。详见[本次发布](records/2026-11-14-docker-host-port.md#生产发布)与[逐台记录](records/2026-11-14-docker-host-port.md#赛事-23-验收)。
+整理日期为 2026-11-25。主站后端已发布培训首次确认阅读和课程详情修复。《Misc 基础》线上验收为 3/7（43%），8 道题显示已有的章节绑定。详见[培训发布与验收](records/2026-11-25-training-course-progress.md)。
 本页只保留当前摘要，更新时替换旧事实；完整测试、部署过程和授权边界放在任务记录中。目标120行以内，超长时提炼摘要。
 
 ## 代码与部署基线
@@ -11,10 +11,10 @@
 | 开发主线 | `main`；新任务从实时 fetch 后的 `origin/main` 创建分支 | SHA 以 Git 为准，本页不追写每次文档提交 |
 | 培训实例修复 | PR #24 合入 `60170a52`，PR #25 为后续部署记录；课程默认每用户 3 实例，公共练习和课程额度隔离 | [主线修复与发布](records/2026-10-11-training-runtime-mainline.md)、[课程生命周期](modules/training/reference/container-lifecycle.md) |
 | 培训动态设置 / 练习分页 | PR #26 已合入 `b1812d15`，PR #27记录已部署；管理员可动态设置培训额度，练习/管理题库使用服务端分页 | Git 合入事实与[新任务记录](records/2026-10-11-training-quota-settings.md)、[分页说明](modules/exercise/reference/catalog-pagination.md)；10-11发布交接已确认API与页面分页验收；本轮未重新实测 |
-| 主站发布 | 前端 `f800a987`（PR #44，272 个文件），后端 `d7784845`（PR #47）；`.27` 本机 Agent 保持原版本 | [最新发布](records/2026-11-14-docker-host-port.md#生产发布)、[前端发布](records/2026-11-11-teamlab-page-layout.md#生产发布) |
-| 数据库 | 153 条迁移，头为 `20261110070457_IntegrateNetlabSceneBindings`；本次无迁移 | [现场核验](records/2026-11-14-docker-host-port.md#生产发布) |
-| 应用回退 | 主站保留切换前的 `teamlab-layout-f800a987…/publish`，两台子节点保留旧 Agent；回退脚本已核对 | [发布和回退](records/2026-11-14-docker-host-port.md#生产发布) |
-| 备份 | 11-14 双库、附件、加密配置和旧发布通过校验；双库实际恢复演练见 11-10 记录 | [最新备份](records/2026-11-14-docker-host-port.md#生产发布)、[恢复演练](records/2026-11-10-netlab-rollout.md) |
+| 主站发布 | 前端 `f800a987`（PR #44），后端 `e629b795`（PR #50，包含首次确认阅读修复）。`.27` 本机 Agent 保持原版本，`.30`、`.31` 为 PR #47 的 Agent | [后端发布](records/2026-11-25-training-course-progress.md#生产发布)、[前端发布](records/2026-11-11-teamlab-page-layout.md#生产发布)、[子节点发布](records/2026-11-14-docker-host-port.md#生产发布) |
+| 数据库 | 迁移头为 `20261110070457_IntegrateNetlabSceneBindings`。按章节记录校正已发布课程的 54 条进度汇总，复核计数不一致为 0 | [发布与数据校正](records/2026-11-25-training-course-progress.md#生产发布) |
+| 应用回退 | 主站保留上一个后端版本 `935aa63f`，两台子节点保留 PR #47 发布前的 Agent | [主站回退点](records/2026-11-25-training-course-progress.md#生产发布)、[Agent 回退](records/2026-11-14-docker-host-port.md#生产发布) |
+| 备份 | 11-25 双库、附件、加密配置和旧发布通过校验。双库实际恢复演练见 11-10 记录 | [最新备份](records/2026-11-25-training-course-progress.md#生产发布)、[恢复演练](records/2026-11-10-netlab-rollout.md) |
 | 服务与页面 | 首页、配置接口、静态资源和附件通过；健康检查保持既有 Degraded；真实场景拓扑和资产列表通过，流量解析仍见 NETLAB-02 | [验收边界](records/2026-11-11-teamlab-page-layout.md#生产发布) |
 | 节点与调度 | 3 节点在线，活跃队列为 0；534 模板 Ready，分发 240 Ready / 1 既有 Failed | [现场核验](records/2026-11-11-teamlab-page-layout.md#生产发布)；Docker 创建、HTTP 入口和销毁见[11-09 验收](records/2026-11-09-history-rollout.md) |
 
@@ -26,6 +26,7 @@
 | --- | --- | --- |
 | 历史负载 | 概览与节点详情读取后台持续保存的负载记录，支持 1 小时 / 24 小时 / 7 天；关闭页面不影响采集 | [Runtime](modules/runtime/development.md)、[生产验证](records/2026-11-09-history-rollout.md) |
 | CTF / 理论 / 培训 / 练习 | 已有业务入口；11-09 课程4题88 Docker 创建、入口 HTTP 200、销毁与空态通过；Flag 提交最近实测仍为 10-18 | [模块索引](modules/README.md)、[课程生命周期](modules/training/reference/container-lifecycle.md)、[课程业务验收](records/2026-11-09-history-rollout.md) |
+| 培训学习进度 | 首次确认阅读可保存完成记录，课程详情按当前用户的章节记录显示进度，课程题目按已有绑定显示 | [开发定位](modules/training/development.md#提交课后测试和学习进度)、[线上验收](records/2026-11-25-training-course-progress.md#验收) |
 | TeamLab | 正式接入独立 Netlab，原 release-v2 四机场景及版本保留；真实启停和来宾代理响应通过；流量解析异常，VM 动态 Flag 文件注入依赖未部署补丁 | [接入说明](modules/teamlab/netlab-integration.md)、[上线记录](records/2026-11-10-netlab-rollout.md) |
 | 镜像与运行底座 | 统一队列、按需节点准备、下载容量守卫、最后消费者缓存释放；历史来源迁移、模板退役和受控 Registry GC 已执行 | [第二批发布](records/2026-10-09-image-lifecycle-second-rollout.md)；自动 GC、冷缓存 TTL 不由该次手工回收证明 |
 | 身份 / AWDP | 管理员删除队长会退队/交接并匿名保留历史，凭据和会话撤销；10-18临时队长真实删除、旧会话401、新登录401及SQL清理断言通过；未删除既有用户 | [Identity](modules/identity/development.md)；Portal SSO和AWDP仍需专门真实验收，见[Open API](operations/open-api-integration.md)、[AWDP手册](modules/awdp/guides/manual-acceptance.md) |
