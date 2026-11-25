@@ -240,7 +240,11 @@ public class TrainingCourseController(
                         p.Status == TrainingCourseProgressStatus.Completed)
             .Select(p => p.ChapterId)
             .ToArrayAsync(token);
-        var completedChapters = completedChapterIds.Length;
+        var pendingCompletedChapterIds = context.TrainingChapterProgresses.Local
+            .Where(p => p.UserId == user.Id && p.CourseId == course.Id &&
+                        publishedChapterIds.Contains(p.ChapterId) && p.Status == TrainingCourseProgressStatus.Completed)
+            .Select(p => p.ChapterId);
+        var completedChapters = completedChapterIds.Union(pendingCompletedChapterIds).Count();
 
         var challengeIds = await context.TrainingCourseChallenges
             .Where(c => c.CourseId == course.Id)
@@ -281,7 +285,7 @@ public class TrainingCourseController(
         CancellationToken token)
     {
         var progress = await context.TrainingChapterProgresses
-            .SingleOrDefaultAsync(item => item.ChapterId == chapterId && item.UserId == user.Id, token);
+            .FindAsync([chapterId, user.Id], token);
         if (progress is not null)
             return progress;
 
